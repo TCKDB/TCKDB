@@ -131,20 +131,15 @@ __all__ = [
 # ORCA input -- a different job with a different input shape (it never
 # sees "wb97xd" or "m062x" written without a hyphen, both of which a
 # depositor's `level_of_theory.method` field legitimately holds), so it
-# is not reused here. This recogniser is deliberately small and explicit
-# instead. It lower-cases and maps ``_`` to ``-``; it does NOT strip hyphens, so
-# the hyphen and no-hyphen spellings a depositor may write ("wb97x-d", "wb97xd",
-# "pbe0-dh", "pbe0dh") are each listed as prefixes where they matter.
+# is not reused here. Method tokens are lower-cased with ``_`` mapped to ``-``;
+# hyphen and no-hyphen spellings are separate prefixes.
 # ---------------------------------------------------------------------------
 
 
 def _normalize(value: str | None) -> str | None:
     if value is None:
         return None
-    # Method tokens are lower-cased and ``_`` becomes ``-``, so "wb97x_d" and
-    # "wb97x-d" match the same prefix. Hyphens are NOT removed: "wb97xd" and
-    # "wb97x-d" are separate prefixes in the lists below, since free-text
-    # `level_of_theory.method` values are not normalised at write time.
+    # Lower-case; ``_`` becomes ``-``. Hyphens are kept.
     stripped = value.strip().lower()
     if not stripped:
         return None
@@ -420,11 +415,9 @@ _GAUSSIAN_FINITE_DIFFERENCE_ENERGY = frozenset({
 
 #: ORCA families whose default frequency job is analytic.
 _ORCA_ANALYTIC = frozenset({MethodFamily.HF, MethodFamily.DFT})
-#: ORCA MP2 (default frozen core): no analytic Hessian, so `NumFreq`
-#: differentiates the analytic MP2 gradient.
+#: ORCA MP2: finite differences of the analytic gradient.
 _ORCA_FINITE_DIFFERENCE_GRADIENT = frozenset({MethodFamily.MP2})
-#: ORCA coupled cluster behind the plain keywords: no analytic gradient, so
-#: `NumFreq` differentiates numerical gradients (finite differences of energies).
+#: ORCA methods with no analytic gradient: finite differences of energies.
 _ORCA_FINITE_DIFFERENCE_ENERGY = frozenset({MethodFamily.CCSD, MethodFamily.CCSD_T, MethodFamily.MP2_F12})
 
 # ---------------------------------------------------------------------------
@@ -587,8 +580,7 @@ _SOFTWARE_TABLE: dict[str, tuple[tuple[frozenset[str], TauBasis], ...]] = {
 }
 
 
-#: The Gaussian double hybrids whose analytic frequencies the G09 MP page documents,
-#: compared with hyphens, underscores and case removed ("B2PLYP-D3" is "b2plypd3").
+#: Gaussian double hybrids with analytic frequencies (Gaussian MP keyword page), compared without hyphens.
 _GAUSSIAN_ANALYTIC_DOUBLE_HYBRIDS = frozenset({
     "b2plyp", "b2plypd", "b2plypd3", "b2plypd3bj", "b2plypd3(bj)", "mpw2plyp", "mpw2plypd",
 })
@@ -669,9 +661,7 @@ def infer_hessian_method(
         and (_normalize(method) or "").startswith(_DOUBLE_HYBRID_PREFIXES)
         and not _is_gaussian_documented_double_hybrid(method)
     ):
-        # Only the double hybrids the G09 MP-methods page names (B2PLYP[D],
-        # mPW2PLYP[D], and B2PLYPD3) are documented analytic; every other double
-        # hybrid has no documented Gaussian answer, so nothing is assumed.
+        # Other Gaussian double hybrids: nothing is assumed.
         return None
     if software_token == "orca" and family == MethodFamily.DFT:
         functional = _orca_functional_class(_normalize(method) or "")
@@ -917,9 +907,7 @@ def resolve_tau_with_assumption(
             return replace(echoed, refined_from=recorded_exact.value)
         return echoed
     if deck_method is not None and refines(deck_method):
-        # A recorded finite difference of gradients and a deck asking ORCA for NumFreq on a method with no analytic
-        # gradient are one statement: the gradients are numerical, so the Hessian is built from energies. Refined,
-        # not contradicted, and said so (``hessian_method_refined``).
+        # Recorded gradient method plus ORCA NumFreq on a method without a gradient: refined to energies.
         deck_refined = resolve_tau_from_parameters([*pairs, ("freq.hessian_method", deck_method.value)])
         return replace(deck_refined, refined_from=recorded_exact.value)
     resolved = resolve_tau_from_parameters(pairs)

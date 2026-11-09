@@ -257,3 +257,28 @@ def test_a_bare_numfreq_energy_reading_refines_even_when_the_level_of_theory_sta
     assert resolved.refined_from == "finite_difference_gradient"
     refused = resolve_tau_with_assumption(_REC_GRAD, "ORCA", "DLPNO-MP2", "6.1.0", deck_method=_STATED_ENERGY)
     assert refused.refined_from is None
+
+
+@pytest.mark.parametrize(
+    "coords",
+    [
+        "* xyzfile 0 2 geom.xyz\n",
+        "* intfile 0 2 geom.int\n",
+        "* gzmtfile 0 3 geom.gzmt\n",
+        "* pdbfile 0 2 geom.pdb\n",
+        "%coords\n  CTyp xyz\n  Charge 0\n  Mult 2\n  Units Angs\nend\n",
+    ],
+)
+def test_deck_multiplicity_above_one_marks_open_shell_dlpno_mp2(coords) -> None:
+    from tckdb_schemas.hessian_method_detection import detect_hessian_method
+
+    deck = "! DLPNO-MP2 def2-SVP NumFreq\n" + coords
+    assert detect_hessian_method("orca", deck) is HessianMethod.finite_difference_energy
+
+
+def test_deck_multiplicity_one_keeps_closed_shell_dlpno_mp2() -> None:
+    from tckdb_schemas.hessian_method_detection import detect_hessian_method
+
+    for coords in ("* xyzfile 0 1 geom.xyz\n", "%coords\n  Mult 1\nend\n"):
+        deck = "! DLPNO-MP2 def2-SVP NumFreq\n" + coords
+        assert detect_hessian_method("orca", deck) is HessianMethod.finite_difference_gradient

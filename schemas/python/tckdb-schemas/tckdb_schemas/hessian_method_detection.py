@@ -408,28 +408,35 @@ def orca_numfreq_refines_gradient_to_energy(
     )
 
 
-_ORCA_COORDINATE_LINE = re.compile(r"^\*\s*(?:xyz|int|gzmt|xyzfile)\s+(-?\d+)\s+(\d+)", re.I)
+_ORCA_COORDINATE_LINE = re.compile(
+    r"^\*\s*(?:xyzfile|intfile|gzmtfile|pdbfile|xyz|int|gzmt)\s+(-?\d+)\s+(\d+)", re.I
+)
+_ORCA_COORDS_MULT = re.compile(r"^mult(?:iplicity)?\s+(\d+)", re.I)
 
 
 def _orca_multiplicity(text: str) -> int | None:
-    """The multiplicity on the ``* xyz <charge> <mult>`` (or ``*xyzfile``) line, else ``None``."""
-    for line in text.splitlines():
-        match = _ORCA_COORDINATE_LINE.match(re.sub(r"^\|\s*\d+>\s*", "", line.strip()))
+    """The multiplicity from the ``* xyz <charge> <mult>`` style line or a ``%coords`` block ``Mult``, else ``None``."""
+    in_coords = False
+    for raw in text.splitlines():
+        line = re.sub(r"^\|\s*\d+>\s*", "", raw.strip())
+        match = _ORCA_COORDINATE_LINE.match(line)
         if match:
             return int(match.group(2))
+        if line.lower().startswith("%coords"):
+            in_coords = True
+        elif in_coords and line.lower() == "end":
+            in_coords = False
+        elif in_coords:
+            mult = _ORCA_COORDS_MULT.match(line)
+            if mult:
+                return int(mult.group(1))
     return None
 
 
 def orca_freq_hessian(
     keywords: Iterable[str], multiplicity: int | None = None
 ) -> tuple[str, HessianMethod] | None:
-    """The Hessian method the ORCA keywords state, as ``(directive as written, method)``.
-
-    ``NumFreq`` wins over ``AnFreq``. ``NumFreq`` reads as finite differences of gradients, or of energies with
-    ``NumGrad`` or for a method with no analytic gradient (:func:`orca_lacks_analytic_gradient`).
-    The directive text is the deck's own: ``NumFreq``, ``NumFreq NumGrad`` or ``AnFreq``    directive text is exactly what the deck says: ``NumFreq``, ``NumFreq NumGrad``
-    (each as written) or ``AnFreq``.
-    """
+    """The Hessian method the ORCA keywords state, as ``(directive as written, method)``."""
     written = list(keywords)
 
     def first(name: str) -> str | None:
