@@ -38,6 +38,14 @@ Export now orders those keys by codepoint, which is the order restore checks.
 Older archives written with the mismatched order are refused; there is no
 legacy path. No schema or migration change.
 
+## A build script for the demonstration snapshot (2026-11-09)
+
+- **What changed:**
+  - `scripts/paper_snapshot/` builds a snapshot on an empty local instance from a sources config: the E2 conformer study through the client builders, the formic acid RMG model through the CHEMKIN adapter, curator approval, the archive and the expected outputs.
+  - `backend/scripts/paper/`: `hessian_reanalysis` is registered; new generators `conformer_basins`, `calculation_evidence`, `deposit_warnings`, `thermo_selection_outcomes` and `structure_selection_outcomes`; `mechanism_roundtrip_counts` and `mechanism_fixture_provenance` report on the formic acid model.
+  - `tckdb-chemkin` keys a species record (thermo, transport) by SMILES, multiplicity and charge (when not zero), so singlet and triplet CH2 or O no longer share an idempotency key. Species that still share all three are keyed by their CHEMKIN label, with a warning in the import report.
+- **Schema and migration:** none. **Versions:** `tckdb-chemkin` 0.6.1.
+
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 
 - **What changed:**

@@ -16,7 +16,7 @@ the importer's final report note).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .ast import Mechanism, ThermoEntry, TransportEntry
 from .duplicates import duplicate_flag_warnings
@@ -304,6 +304,10 @@ class BuiltPayloads:
     transport: list[dict]
     kinetics: list[dict]
     warnings: list[str]
+    #: The CHEMKIN species name of each ``thermo`` / ``transport`` payload, in the same order. The uploader keys a
+    #: record by structure and spin and falls back to this label only when two species share both.
+    thermo_names: list[str] = field(default_factory=list)
+    transport_names: list[str] = field(default_factory=list)
 
     def counts(self) -> dict[str, int]:
         return {
@@ -333,17 +337,21 @@ def build_all_payloads(
     warnings: list[str] = duplicate_flag_warnings(mech.reactions)
 
     thermo_payloads: list[dict] = []
+    thermo_names: list[str] = []
     for name, entry in mech.thermo.items():
         if name not in resolved:
             continue
+        thermo_names.append(name)
         thermo_payloads.append(
             build_thermo_payload(entry, resolved[name], config)
         )
 
     transport_payloads: list[dict] = []
+    transport_names: list[str] = []
     for name, entry in mech.transport.items():
         if name not in resolved:
             continue
+        transport_names.append(name)
         transport_payloads.append(
             build_transport_payload(entry, resolved[name], config)
         )
@@ -362,4 +370,6 @@ def build_all_payloads(
         transport=transport_payloads,
         kinetics=kinetics_payloads,
         warnings=warnings,
+        thermo_names=thermo_names,
+        transport_names=transport_names,
     )

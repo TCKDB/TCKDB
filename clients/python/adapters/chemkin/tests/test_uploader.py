@@ -68,6 +68,39 @@ def test_idempotency_keys_are_deterministic_and_unique(built):
     assert len(set(keys1)) == len(keys1)  # unique per record (DUP disambiguated)
 
 
+def _thermo_run(thermo, names):
+    from types import SimpleNamespace
+
+    payloads = SimpleNamespace(
+        thermo=thermo, transport=[], kinetics=[], warnings=[], thermo_names=names, transport_names=[]
+    )
+    client = _StubClient()
+    report = upload_payloads(payloads, client=client, mechanism_id="mech-1")
+    return [c[2] for c in client.calls], report
+
+
+def test_species_sharing_a_smiles_are_keyed_by_spin_not_by_file_order(built):
+    """Singlet and triplet CH2 share a SMILES; the key carries the multiplicity, so file order does not matter."""
+    import copy
+
+    singlet = copy.deepcopy(built.thermo[0])
+    triplet = copy.deepcopy(built.thermo[0])
+    triplet["species_entry"] = {**triplet["species_entry"], "multiplicity": 3}
+    forward, _ = _thermo_run([singlet, triplet], ["A", "B"])
+    backward, _ = _thermo_run([triplet, singlet], ["B", "A"])
+    assert len(set(forward)) == 2
+    assert dict(zip(["singlet", "triplet"], forward)) == dict(zip(["singlet", "triplet"], backward[::-1]))
+
+
+def test_species_sharing_smiles_and_spin_fall_back_to_the_chemkin_label_and_say_so(built):
+    import copy
+
+    one, two = copy.deepcopy(built.thermo[0]), copy.deepcopy(built.thermo[0])
+    keys, report = _thermo_run([one, two], ["CO2(12)", "CO2(99)"])
+    assert len(set(keys)) == 2
+    assert any("keyed by their CHEMKIN label" in w for w in report.warnings)
+
+
 def test_dry_run_builds_keys_without_client(built):
     report = upload_payloads(built, client=None, mechanism_id="mech-1", dry_run=True)
     assert report.summary()["errored_total"] == 0
