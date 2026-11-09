@@ -84,31 +84,21 @@ ORCA (``Software.name == "ORCA"``):
 * **Analytic** (`TauBasis.assumed_analytic_default`): HF, any DFT
   functional. ORCA computes analytic Hessians for both by default.
 * **Finite-difference-from-gradients**
-  (`TauBasis.assumed_finite_difference_gradient`): the MP2 variants
-  (MP2, RI-MP2, DLPNO-MP2, SCS-MP2). ORCA's default `NumFreq` differentiates
-  the analytic MP2 gradient. The analytic (RI-)MP2 Hessian exists only
+  (`TauBasis.assumed_finite_difference_gradient`): correlated wavefunction
+  methods without an analytic Hessian in ORCA: the MP2 variants (MP2, RI-MP2,
+  DLPNO-MP2, SCS-MP2), coupled cluster (CCSD, CCSD(T)), and every ``DLPNO-*``
+  method. ORCA's default `NumFreq` differentiates gradients. For MP2 that is the
+  analytic MP2 gradient. The analytic (RI-)MP2 Hessian exists only
   without frozen core (ORCA 5.0.4 section 8.1.2.4: "Frequencies can be
   calculated analytically in all-electron calculations. With frozen core
   orbitals, second derivatives of any kind are currently only available
   numerically"), and the 6.1 manual says "the analytical (RI-)MP2-Hessians
   are no longer available". So "numerical on every version" holds for the
   default, frozen-core job; an all-electron ORCA 5 MP2 job can be analytic and
-  that is not assumed here.
-* **Finite-difference-from-energies**
-  (`TauBasis.assumed_finite_difference_energy`): coupled cluster, which has
-  no analytic gradient behind the plain keyword: CCSD, CCSD(T), their F12
-  variants, F12-MP2 (including RI-MP2-F12), and DLPNO-CCSD / DLPNO-CCSD(T). The
-  ORCA 6.1 DLPNO section says "Analytic gradients are not available" (chunk
-  16228), which covers plain DLPNO-CCSD as well as DLPNO-CCSD(T). The ORCA 6.1 manual's example of a
-  method whose "analytic gradient is not available" is ``! CCSD(T)`` with
-  ``! Opt NumGrad`` (p. 224); its frequency section lists analytic frequencies
-  for "HF, DFT" only (p. 677); ORCA 5.0.4 says "Gradients are not available" for
-  F12 methods (F12-MP2 as well as F12 coupled cluster). So a frequency job differentiates numerical gradients, which
-  is finite differences of energies. ORCA 6.1 does have analytic CCSD and
-  CCSD(T) gradients behind the separate ``AUTOCI-`` keyword prefix (manual
-  section 3.11); that prefix is not recognised here, so such a method string gets no
-  assumption. Any other ``DLPNO-*`` string (DLPNO-CEPA and the like) has no
-  documented answer and gets no assumption.
+  that is not assumed here. For coupled cluster the manuals say the analytic
+  gradient is not available behind the plain keywords (see the source notes
+  below); whether those methods belong in the finite-difference-from-energies
+  row is held for the owner's confirmation and they stay in this row for now.
 
 Why some things stay ``None``
 ------------------------------
@@ -233,9 +223,9 @@ _QCISD_PREFIXES = ("qcisd",)
 #: same reason as QCISD(T)/QCISD.
 _CCSD_T_PREFIXES = (
     "ccsd(t)", "dlpno-ccsd(t)", "dlpno-ccsd(t1)", "ccsd(t)-f12",
-    "dlpno-ccsd(t)-f12", "f12-ccsd(t)", "f12/ri-ccsd(t)",
+    "dlpno-ccsd(t)-f12",
 )
-_CCSD_PREFIXES = ("ccsd", "dlpno-ccsd", "f12-ccsd", "f12/ri-ccsd")
+_CCSD_PREFIXES = ("ccsd", "dlpno-ccsd")
 
 #: DLPNO-tagged local correlation methods not already matched above by a
 #: more specific CC/MP2 prefix -- e.g. DLPNO-CEPA, DLPNO-QCISD(T) should
@@ -298,8 +288,6 @@ class MethodFamily:
     CCSD = "ccsd"
     CCSD_T = "ccsd(t)"
     DLPNO_OTHER = "dlpno_other"
-    #: F12-MP2 (ORCA): no analytic gradient.
-    MP2_F12 = "mp2-f12"
 
 
 def is_dft_functional(method: str | None) -> bool:
@@ -428,8 +416,6 @@ def classify_method_family(method: str | None) -> str | None:
         return MethodFamily.MP5
     if _startswith_any(token, _MP3_PREFIXES):
         return MethodFamily.MP3
-    if "f12" in token and "mp2" in token:
-        return MethodFamily.MP2_F12
     if _startswith_any(token, _MP2_PREFIXES):
         return MethodFamily.MP2
     if is_dft_functional(token):
@@ -464,12 +450,14 @@ _GAUSSIAN_FINITE_DIFFERENCE_ENERGY = frozenset({
 
 #: ORCA families whose default frequency job is analytic.
 _ORCA_ANALYTIC = frozenset({MethodFamily.HF, MethodFamily.DFT})
-#: ORCA MP2 (default frozen core): no analytic Hessian, so `NumFreq`
-#: differentiates the analytic MP2 gradient.
-_ORCA_FINITE_DIFFERENCE_GRADIENT = frozenset({MethodFamily.MP2})
-#: ORCA coupled cluster behind the plain keywords: no analytic gradient, so
-#: `NumFreq` differentiates numerical gradients (finite differences of energies).
-_ORCA_FINITE_DIFFERENCE_ENERGY = frozenset({MethodFamily.CCSD, MethodFamily.CCSD_T, MethodFamily.MP2_F12})
+#: ORCA's correlated-wavefunction families: no analytic Hessian, so the default
+#: `NumFreq` differentiates gradients. MP2 (default frozen core) has an analytic
+#: gradient. Coupled cluster and DLPNO are kept here unchanged while the owner
+#: confirms whether they belong with finite differences of energies.
+_ORCA_FINITE_DIFFERENCE_GRADIENT = frozenset({
+    MethodFamily.MP2, MethodFamily.CCSD, MethodFamily.CCSD_T,
+    MethodFamily.DLPNO_OTHER,
+})
 
 # ---------------------------------------------------------------------------
 # ORCA: functional class and release gate
@@ -506,14 +494,13 @@ _ORCA_FINITE_DIFFERENCE_ENERGY = frozenset({MethodFamily.CCSD, MethodFamily.CCSD
 #   ``! CCSD(T)`` with ``! Opt NumGrad`` as the example of a method whose
 #   analytic gradient is not available; 4.6.4 (p. 677) lists analytic
 #   frequencies for HF and DFT only; ORCA 5.0.4 8.1.3.6 says "Gradients are not
-#   available" for F12 methods (F12-MP2 too, so RI-MP2-F12 is in the energy
-#   row, not the MP2 row); ORCA 6.1 (chunk 16228) says "Analytic gradients are
-#   not available" for DLPNO, which covers plain DLPNO-CCSD. ORCA 5.0.4 8.3.2
-#   (chunk 13502) repeats the CCSD(T) / NumGrad example. Frequencies are therefore differences of
-#   numerical gradients: finite differences of energies. The AUTOCI- prefixed
-#   keywords (6.1, sections 3.11.2-3.11.3) have analytic CCSD/CCSD(T) gradients
-#   and so would be finite-difference-from-gradients; the plain keywords do not,
-#   and ``AUTOCI-*`` strings are not recognised, so they get no assumption.
+#   available" for F12 methods; ORCA 6.1 (chunk 16228) says "Analytic gradients
+#   are not available" for DLPNO; ORCA 5.0.4 8.3.2 (chunk 13502) repeats the
+#   CCSD(T) / NumGrad example. HELD: whether ORCA coupled cluster and DLPNO-CCSD
+#   should therefore be finite differences of energies (80) is awaiting the
+#   owner's confirmation, so they keep the finite-difference-from-gradients row
+#   they had. The AUTOCI- prefixed keywords (6.1, sections 3.11.2-3.11.3) have
+#   analytic CCSD/CCSD(T) gradients; ``AUTOCI-*`` strings are not recognised.
 #
 # * Gaussian double hybrids: the Gaussian 09 MP-methods keyword page
 #   ("MP2, B2PLYP[D], mPW2PLYP[D]: Energies, analytic gradients, and analytic
@@ -603,7 +590,6 @@ _FAMILY_LABEL: dict[str, str] = {
     MethodFamily.MP3: "MP3",
     MethodFamily.MP4: "MP4",
     MethodFamily.MP4_SDQ: "MP4(DQ/SDQ)",
-    MethodFamily.MP2_F12: "F12-MP2",
     MethodFamily.MP4_SDTQ: "MP4(SDTQ)",
     MethodFamily.MP5: "MP5",
     MethodFamily.CIS: "CIS",
@@ -652,10 +638,6 @@ _SOFTWARE_TABLE: dict[str, tuple[tuple[frozenset[str], TauBasis], ...]] = {
         (
             _ORCA_FINITE_DIFFERENCE_GRADIENT,
             TauBasis.assumed_finite_difference_gradient,
-        ),
-        (
-            _ORCA_FINITE_DIFFERENCE_ENERGY,
-            TauBasis.assumed_finite_difference_energy,
         ),
     ),
 }

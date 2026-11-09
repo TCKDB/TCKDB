@@ -72,11 +72,12 @@ def test_other_gaussian_double_hybrids_still_assume_nothing(method) -> None:
 
 @pytest.mark.parametrize(
     "method",
-    ["CCSD", "CCSD(T)", "CCSD(T)-F12", "F12-CCSD(T)", "DLPNO-CCSD", "DLPNO-CCSD(T)", "DLPNO-CCSD(T1)"],
+    ["CCSD", "CCSD(T)", "CCSD(T)-F12", "DLPNO-CCSD", "DLPNO-CCSD(T)", "DLPNO-CCSD(T1)", "DLPNO-CEPA/1"],
 )
 @pytest.mark.parametrize("version", ["5.0.4", "6.1.0", None])
-def test_orca_coupled_cluster_differentiates_energies(method, version) -> None:
-    assert _got("ORCA", method, version) == _ENERGY
+def test_orca_coupled_cluster_rows_are_held_at_todays_gradient_row(method, version) -> None:
+    """The ORCA coupled-cluster rule (energies, 80) is held for the owner: these rows are as on main."""
+    assert _got("ORCA", method, version) == _GRADIENT
 
 
 @pytest.mark.parametrize("method", ["MP2", "RI-MP2", "DLPNO-MP2", "SCS-MP2"])
@@ -85,7 +86,7 @@ def test_orca_mp2_stays_at_gradients(method, version) -> None:
     assert _got("ORCA", method, version) == _GRADIENT
 
 
-@pytest.mark.parametrize("method", ["DLPNO-CEPA/1", "AUTOCI-CCSD", "DLPNO-QCISD(T)"])
+@pytest.mark.parametrize("method", ["AUTOCI-CCSD", "F12-CCSD(T)"])
 def test_orca_methods_without_a_documented_answer_assume_nothing(method) -> None:
     assert infer_hessian_method("ORCA", method, "6.1.0") is None
 
@@ -166,7 +167,8 @@ def test_unknown_tails_ro_and_ccsdt_assume_nothing(method) -> None:
 
 
 def test_f12_suffix_is_not_an_option() -> None:
-    assert _got("ORCA", "CCSD(T)-F12", "6.1.0") == _ENERGY
+    assert _got("ORCA", "CCSD(T)-F12", "6.1.0") == _GRADIENT
+    assert _got("Gaussian", "CCSD(T)-F12") == _ENERGY
 
 
 @pytest.mark.parametrize("method", ["PBE0DH", "pbe0-dh", "PBEQIDH", "PBE0-QIDH", "wB97X-2", "wB97X2"])
@@ -186,12 +188,7 @@ def test_gaussian_b2plyp_d3bj_spellings_are_analytic(method) -> None:
     assert _got("Gaussian", method) == _ANALYTIC
 
 
-@pytest.mark.parametrize("method", ["DLPNO-CCSD", "RI-MP2-F12", "F12-MP2", "F12-RI-MP2", "MP2-F12", "F12/RI-CCSD(T)"])
-def test_orca_methods_with_no_analytic_gradient_differentiate_energies(method) -> None:
-    assert _got("ORCA", method, "6.1.0") == _ENERGY
-
-
-@pytest.mark.parametrize("method", ["MP2", "RI-MP2", "DLPNO-MP2", "SCS-MP2"])
+@pytest.mark.parametrize("method", ["MP2", "RI-MP2", "DLPNO-MP2", "SCS-MP2", "RI-MP2-F12"])
 def test_orca_mp2_without_f12_stays_at_gradients(method) -> None:
     assert _got("ORCA", method, "6.1.0") == _GRADIENT
 
@@ -210,22 +207,8 @@ def test_legacy_mp4_label_is_kept_and_the_new_token_is_labelled() -> None:
 _ORCA_DECK = "! {method} def2-TZVP {freq}\n* xyz 0 1\nH 0 0 0\nH 0 0 0.74\n*\n"
 
 
-@pytest.mark.parametrize(
-    "method",
-    ["CCSD", "CCSD(T)", "CCSD(T)-F12", "DLPNO-CCSD", "DLPNO-CCSD(T)", "RI-MP2-F12", "F12-CCSD(T)"],
-)
-def test_orca_numfreq_deck_on_a_method_without_a_gradient_agrees_with_the_assumption(method) -> None:
-    from tckdb_schemas.hessian_method_detection import detect_hessian_method
-
-    deck = detect_hessian_method("orca", _ORCA_DECK.format(method=method, freq="NumFreq"))
-    assumed = resolve_tau_with_assumption([], "ORCA", method, "6.1.0")
-    assert deck is HessianMethod.finite_difference_energy
-    assert assumed.basis is TauBasis.assumed_finite_difference_energy
-    assert resolve_tau_with_assumption([], "ORCA", method, "6.1.0", deck_method=deck).tau_cm1 == assumed.tau_cm1
-
-
-@pytest.mark.parametrize("method", ["MP2", "RI-MP2", "DLPNO-MP2", "B3LYP", "AUTOCI-CCSD"])
-def test_orca_numfreq_deck_on_a_method_with_a_gradient_stays_at_gradients(method) -> None:
+@pytest.mark.parametrize("method", ["MP2", "RI-MP2", "DLPNO-MP2", "B3LYP", "CCSD(T)", "DLPNO-CCSD(T)"])
+def test_orca_numfreq_deck_stays_at_gradients_for_now(method) -> None:
     from tckdb_schemas.hessian_method_detection import detect_hessian_method
 
     assert (
@@ -244,7 +227,7 @@ def test_orca_numfreq_numgrad_and_anfreq_decks_are_unchanged() -> None:
     assert detect_hessian_method("orca", _ORCA_DECK.format(method="B3LYP", freq="AnFreq")) is HessianMethod.analytic
 
 
-@pytest.mark.parametrize("method", ["MP5", "UMP5", "F12-CCSD(T)", "F12/RI-CCSD(T)"])
+@pytest.mark.parametrize("method", ["MP5", "UMP5"])
 def test_newly_recognised_methods_are_scf_based_so_they_get_the_assumed_scf_default(method) -> None:
     """Side effect of recognising them: ``uses_scf`` follows the family classifier (MPn and coupled cluster are
     SCF-based), so a Gaussian job in one of these methods now has an assumed ``scf_convergence``."""

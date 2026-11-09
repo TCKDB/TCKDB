@@ -596,7 +596,6 @@ ASSUMED_FAMILY = {
     "ccsd": "CCSD",
     "ccsd(t)": "CCSD(T)",
     "dlpno_other": "DLPNO",
-    "mp2-f12": "F12-MP2",
 }
 ASSUMPTION_RULES = (
     "program_default",
