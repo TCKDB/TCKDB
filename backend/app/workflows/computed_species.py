@@ -1146,6 +1146,7 @@ def _persist_thermo_block(
         update={
             "source_calculations": resolved_sources,
             "thermodynamic_target_kind": declarations.thermodynamic_target_kind,
+            "thermodynamic_target_declared_by": declarations.thermodynamic_target_declared_by,
             "target_conformer_group_id": declarations.target_conformer_group_id,
             "protocol_declaration": declarations.protocol_declaration,
             # Stored as declared, after ``assert_role_consistency`` above.

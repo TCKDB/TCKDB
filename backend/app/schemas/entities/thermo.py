@@ -25,6 +25,7 @@ from app.db.models.common import (
     ScientificOriginKind,
     ThermoCalculationRole,
     ThermoModelKind,
+    ThermoDeclarationSource,
     ThermoTargetKind,
 )
 from app.schemas.common import (
@@ -170,6 +171,8 @@ class ThermoBase(BaseModel):
     :param thermodynamic_target_kind: What the values are claimed to describe
         (``equilibrium_ensemble`` or ``single_conformer``); None when no
         target was declared. Never inferred.
+    :param thermodynamic_target_declared_by: Who made the target claim
+        (``depositor`` or ``chemkin_format``); meaningful only with a target.
     :param target_conformer_group_id: The conformer group a ``single_conformer``
         target names; set exactly when the kind is ``single_conformer`` and
         owned by ``species_entry_id``.
@@ -191,6 +194,7 @@ class ThermoBase(BaseModel):
     statmech_id: int | None = None
     energy_level_of_theory_id: int | None = None
     thermodynamic_target_kind: ThermoTargetKind | None = None
+    thermodynamic_target_declared_by: ThermoDeclarationSource = ThermoDeclarationSource.depositor
     target_conformer_group_id: int | None = None
     protocol_declaration: StoredThermoProtocolDeclaration | None = None
 

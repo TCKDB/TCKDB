@@ -38,7 +38,7 @@ from pydantic import Field, StrictInt, StringConstraints, ValidationError, field
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
-from tckdb_schemas.enums import ThermoTargetKind
+from tckdb_schemas.enums import ThermoDeclarationSource, ThermoTargetKind
 from tckdb_schemas.producer_rule import producer_rule
 
 __all__ = [
@@ -117,9 +117,14 @@ class ThermoTargetDeclaration(SchemaBase):
     :param kind: The target kind.
     :param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.
     :param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.
+    :param declared_by: Who made the claim: ``depositor`` (the default, and what a client states
+        about its own record) or ``chemkin_format`` (the CHEMKIN importer, for a gas-phase
+        NASA-7 entry, whose polynomial means the standard ideal-gas ensemble by definition of
+        the format). Stored and read back with the target.
     """
 
     kind: ThermoTargetKind
+    declared_by: ThermoDeclarationSource = ThermoDeclarationSource.depositor
     conformer_group_ref: str | None = Field(default=None, min_length=1)
     conformer_key: str | None = Field(default=None, min_length=1)
 

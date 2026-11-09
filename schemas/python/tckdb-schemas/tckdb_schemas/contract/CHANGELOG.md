@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.162.0 - 2026-11-09
+
+One optional field is added: `thermodynamic_target.declared_by` on a thermo record's target declaration, with the new enum `ThermoDeclarationSource` (`depositor`, `chemkin_format`). It says who made the claim: the depositor about their own record (the default when the field is omitted, and what every target declared before it existed is), or the CHEMKIN importer, which declares the standard ideal-gas ensemble (`equilibrium_ensemble`) for a gas-phase NASA-7 entry because that is what the format means by definition. The server stores it with the target and returns it in the thermo read's `thermodynamic_target` block. No field is removed and no existing payload changes meaning.
+
 ## 0.161.0 - 2026-11-07
 
 One refusal is narrowed and gains a `reason`; no field is added or removed. A kinetics record's `energy_level_of_theory` names method, basis and qualifiers, and its spin treatment is judged per participant against the linked reactant, product and transition-state energies:

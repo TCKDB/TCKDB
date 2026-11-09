@@ -892,6 +892,11 @@ enum ThermoCalculationRole {
   imported
 }
 
+enum ThermoDeclarationSource {
+  depositor
+  chemkin_format
+}
+
 enum ThermoModelKind {
   nasa7
   nasa9
@@ -4235,6 +4240,7 @@ Table thermo {
   energy_level_of_theory_id bigint [ref: > level_of_theory.id]
   enthalpy_reference_kind EnthalpyReferenceKind
   thermodynamic_target_kind ThermoTargetKind
+  thermodynamic_target_declared_by ThermoDeclarationSource [not null, default: 'depositor']
   target_conformer_group_id bigint [ref: > conformer_group.id]
   protocol_declaration jsonb
   h298_kj_mol double

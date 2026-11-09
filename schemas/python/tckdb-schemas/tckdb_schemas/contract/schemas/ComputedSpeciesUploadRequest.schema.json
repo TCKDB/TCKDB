@@ -6078,6 +6078,15 @@
       "title": "ThermoCalculationRole",
       "type": "string"
     },
+    "ThermoDeclarationSource": {
+      "description": "Who made a thermo record's thermodynamic-target declaration.\n\n``depositor`` is a claim the depositor made about their own record, and\nis what every target declared before this field existed is, because only\na depositor could declare one then. ``chemkin_format`` is a claim the\nCHEMKIN importer made on the record's behalf: a NASA-7 polynomial means\nthe standard ideal-gas ensemble by the definition of the format, not\nbecause the mechanism's author said so. Machine tokens, not labels. Never\ninferred: the importer names itself; nothing else sets it.",
+      "enum": [
+        "depositor",
+        "chemkin_format"
+      ],
+      "title": "ThermoDeclarationSource",
+      "type": "string"
+    },
     "ThermoDepartureComponent": {
       "description": "The part of a standard recipe a depositor departed from.",
       "enum": [
@@ -6800,7 +6809,7 @@
     },
     "ThermoTargetDeclaration": {
       "additionalProperties": false,
-      "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.",
+      "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.\n:param declared_by: Who made the claim: ``depositor`` (the default, and what a client states\n    about its own record) or ``chemkin_format`` (the CHEMKIN importer, for a gas-phase\n    NASA-7 entry, whose polynomial means the standard ideal-gas ensemble by definition of\n    the format). Stored and read back with the target.",
       "properties": {
         "conformer_group_ref": {
           "anyOf": [
@@ -6827,6 +6836,10 @@
           ],
           "default": null,
           "title": "Conformer Key"
+        },
+        "declared_by": {
+          "$ref": "#/$defs/ThermoDeclarationSource",
+          "default": "depositor"
         },
         "kind": {
           "$ref": "#/$defs/ThermoTargetKind"

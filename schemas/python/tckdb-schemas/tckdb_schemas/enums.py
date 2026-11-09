@@ -130,6 +130,22 @@ class ThermoTargetKind(str, Enum):
     single_conformer = "single_conformer"
 
 
+class ThermoDeclarationSource(str, Enum):
+    """Who made a thermo record's thermodynamic-target declaration.
+
+    ``depositor`` is a claim the depositor made about their own record, and
+    is what every target declared before this field existed is, because only
+    a depositor could declare one then. ``chemkin_format`` is a claim the
+    CHEMKIN importer made on the record's behalf: a NASA-7 polynomial means
+    the standard ideal-gas ensemble by the definition of the format, not
+    because the mechanism's author said so. Machine tokens, not labels. Never
+    inferred: the importer names itself; nothing else sets it.
+    """
+
+    depositor = "depositor"
+    chemkin_format = "chemkin_format"
+
+
 class PhaseKind(str, Enum):
     """Physical phase a thermochemistry record is referenced to.
 
