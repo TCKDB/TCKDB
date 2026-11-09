@@ -195,12 +195,13 @@ def validate_a_units_for_unstated_direction(
 CHECK_ARRHENIUS_A_UNITS_MATCH_MOLECULARITY = ScientificCheck(
     group="Rate coefficients",
     sort_key=1,
-    code=W_ARRHENIUS_A_UNITS_MISMATCH,
+    code=(W_ARRHENIUS_A_UNITS_MISMATCH, W_UNSUPPORTED_MOLECULARITY),
     asserts=(
         "An Arrhenius pre-exponential factor carries units of the "
         "dimensionality its reaction order requires — per-second for "
         "unimolecular, concentration^-1 time^-1 for bimolecular, "
-        "concentration^-2 time^-1 for termolecular."
+        "concentration^-2 time^-1 for termolecular — and a coefficient "
+        "of any other order has no units to check and is refused."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
@@ -241,6 +242,9 @@ CHECK_ARRHENIUS_A_UNITS_MATCH_MOLECULARITY = ScientificCheck(
         "and accepting one carrying the units of the next order up. A record "
         "whose sides differ in size and which states no direction is accepted "
         "with units of either side's order; stating ``direction`` makes the "
-        "check exact."
+        "check exact. A coefficient whose order is not 1, 2 or 3 (a "
+        "four-body reaction) is refused with its own code, "
+        "``unsupported_reaction_molecularity``, because no units of that "
+        "dimensionality are accepted."
     ),
 )

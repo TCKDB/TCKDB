@@ -4,9 +4,9 @@ Companion of :mod:`app.services.calculation_geometry_composition`, which counts
 elements and reads ``D``, ``T`` and ``[2H]`` as hydrogen (an element answer)
 and so cannot see an isotope disagreement; this rule reads the nuclide a ``D``/``T``
 spelling declares (#672). Not a separate register entry: it is the composition
-entry's claim ("this geometry is this species") extended to isotopes, and is
-recorded there (``CHECK_CALCULATION_GEOMETRY_COMPOSITION``); only its refusal
-code is its own.
+entry's claim ("this geometry is this species") extended to isotopes, so the one
+entry (``CHECK_CALCULATION_GEOMETRY_COMPOSITION``) is declared at the foot of this
+module, which can import both enforcing functions; only the refusal code is its own.
 """
 
 from __future__ import annotations
@@ -28,7 +28,12 @@ from app.db.models.calculation import Calculation
 from app.db.models.common import MoleculeKind
 from app.db.models.geometry import GeometryAtom
 from app.db.models.species import Species, SpeciesEntry
-from app.services.calculation_geometry_composition import _ts_entry_reactant_rows
+from app.scientific_checks import CheckTier, CodeChannel, PythonCheck, ScientificCheck
+from app.services.calculation_geometry_composition import (
+    W_CALCULATION_GEOMETRY_COMPOSITION_MISMATCH,
+    _ts_entry_reactant_rows,
+    assert_calculation_geometry_composition,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -274,3 +279,88 @@ def assert_isotopes(
         },
         message_prefix=False,
     )
+
+
+CHECK_CALCULATION_GEOMETRY_COMPOSITION = ScientificCheck(
+    group="A structure against its own label",
+    sort_key=3,
+    code=(W_CALCULATION_GEOMETRY_COMPOSITION_MISMATCH, W_CALCULATION_GEOMETRY_ISOTOPE_MISMATCH),
+    asserts=(
+        "Every geometry linked to a calculation is made of the atoms of the "
+        "subject that calculation is filed under -- the species entry's own "
+        "formula, or, for a transition state, the sum of its reaction's "
+        "reactants -- and of the same isotopes of them."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "Definitional. A calculation's numbers are computed from its geometry "
+        "and attributed to its subject; a geometry made of different atoms "
+        "than the subject makes that attribution false rather than weak. No "
+        "correct calculation can produce one, because no electronic-structure "
+        "program adds or removes a nucleus -- which is also why this holds for "
+        "output geometries and not only input ones: dissociation, "
+        "isomerisation and proton transfer all conserve element counts."
+    ),
+    adr="0008",
+    enforced_by=(
+        PythonCheck(
+            assert_calculation_geometry_composition,
+            note=(
+                "Called from every site that attaches a geometry to a "
+                "calculation: the ``calculation_input_geometry`` and "
+                "``calculation_output_geometry`` inserts, on both the "
+                "producer-explicit branch and the ``geometry_key``/fallback "
+                "branch, and the geometry-bearing children -- a Hessian's "
+                "geometry (upload and best-effort artifact hook), scan points "
+                "and every IRC point (#680). A guard test fails if a "
+                "construction is unchecked or a site disappears. ``calc_isotopes.assert_isotopes`` "
+                "extends the claim to isotopes (own code, by count). The best-effort artifact hook "
+                "is the one site that does not refuse: it never fails an upload, so a refusal "
+                "there is the warning ``hessian_not_stored_geometry_mismatch``, which carries the block code "
+                "as ``context.refusal_code`` and in its sentence (#744, #840)."
+            ),
+        ),
+        PythonCheck(
+            assert_isotopes,
+            note=(
+                "The isotope half of the claim, with its own code. It counts the "
+                "nuclide each atom of the geometry declares (``D``, ``T`` and "
+                "``[2H]`` are 2H and 3H, #672) and compares the count of each "
+                "substituted element with the subject's; which atom carries the "
+                "label is not checked. Called beside the composition check at "
+                "every site that attaches a geometry to a calculation."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "Declare the structure's real composition: give the calculation the "
+        "geometry it was run on, or file it under the subject that geometry "
+        "belongs to. Absence does not block -- a ``pseudo`` owner, a "
+        "transition state whose reaction records no reactants or a pseudo "
+        "reactant, and an unparseable stored SMILES are all left unjudged. "
+        "Only atom counts are compared, so a scan or IRC point at stretched "
+        "or rearranged coordinates passes -- scan and IRC points are "
+        "themselves checked, and a point of a different molecule is refused "
+        "-- as do constitutional isomers and dissociated optimisations. "
+        "Isotopologues pass the element count; the isotope half "
+        "(``calculation_geometry_isotope_mismatch``) judges them by the "
+        "count of each substituted element. Declare the same substitution on "
+        "the species and on the geometry, or file the calculation under the "
+        "isotopologue it was run on."
+    ),
+    divergence=(
+        "A documented false *acceptance*, restated because a referee will "
+        "ask: counts alone cannot tell a constitutional isomer from its "
+        "partner, so an ethanol calculation carrying dimethyl ether "
+        "coordinates passes. Catching that needs bond perception from XYZ, "
+        "which fails silently on exactly the strained, radical and stretched "
+        "structures where it would matter -- the same reasoning that keeps "
+        "``species_geometry_composition_mismatch`` to counts. It also refuses "
+        "a geometry carrying ghost or dummy centres (counterpoise/BSSE), "
+        "because ``Bq`` appears in no SMILES; that refusal is correct while "
+        "``geometry_atom`` has no way to say 'no nucleus here', since such a "
+        "row is already miscounted by ``natoms`` and every "
+        "degrees-of-freedom read downstream."
+    ),
+)

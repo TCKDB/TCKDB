@@ -84,30 +84,30 @@ disagree, this one is right by construction.
 
 | Tier | Entries | Meaning |
 | --- | --- | --- |
-| `block` | 25 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
-| `warn` | 13 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
+| `block` | 43 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
+| `warn` | 24 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
 | `label` | 1 | Labels a stored record at read time without refusing anything — a `HardFailReason` in the trust evaluator. For facts TCKDB observes about a record after it was accepted, which no upload-time check could have refused because they did not exist yet. |
 | `review` | 8 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
-| `structural` | 5 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
-| **total** | **52** | |
+| `structural` | 6 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
+| **total** | **82** | |
 
 ## Where a check's code reaches a client
 
 | Channel | Entries | What a consumer can do with it |
 | --- | --- | --- |
-| `error_envelope` | 26 | the `code` field of the 422 error body — a client can branch on it |
-| `upload_warning` | 14 | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| `error_envelope` | 44 | the `code` field of the 422 error body — a client can branch on it |
+| `upload_warning` | 25 | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
 | `trust_label` | 1 | a read-time trust label (`HardFailReason`), not any refusal |
-| `database_constraint` | 1 | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
+| `database_constraint` | 2 | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
 | `none` | 10 | *nothing carries a code* |
-| **total** | **52** | |
+| **total** | **82** | |
 
 ## Recorded divergences
 
 Where a check's documentation and its behaviour disagree, or where a guarantee is narrower than its name suggests. Every one of these is reported, never silently fixed — the register changes no check behaviour.
 
 - **[9]** The multiset of isotopic substitutions declared in a species entry's SMILES equals the multiset carried by the geometry deposited under it.
-- **[10]** Every geometry linked to a calculation is made of the atoms of the subject that calculation is filed under -- the species entry's own formula, or, for a transition state, the sum of its reaction's reactants.
+- **[10]** Every geometry linked to a calculation is made of the atoms of the subject that calculation is filed under -- the species entry's own formula, or, for a transition state, the sum of its reaction's reactants -- and of the same isotopes of them.
 - **[13]** An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
 - **[17]** A transition state's imaginary modes other than the reaction coordinate, and every imaginary mode on a species entry declared a minimum, are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
 - **[37]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
@@ -282,12 +282,12 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Recorded divergence.** Not a divergence but a documented false *acceptance*, restated here because a referee will ask: only the multiset is compared, so isotopomers are not distinguished. An identity of `[2H]OC` (CH3-OD) accepts a geometry labelling a methyl hydrogen instead (CH2D-OH) — different molecules with different zero-point energies. Closing it needs an atom-level SMILES-to-XYZ correspondence the repository does not have. Where the two disagree invisibly, the geometry is authoritative for masses and the SMILES only for identity.
 
-### 10. Every geometry linked to a calculation is made of the atoms of the subject that calculation is filed under -- the species entry's own formula, or, for a transition state, the sum of its reaction's reactants.
+### 10. Every geometry linked to a calculation is made of the atoms of the subject that calculation is filed under -- the species entry's own formula, or, for a transition state, the sum of its reaction's reactants -- and of the same isotopes of them.
 
 | Field | Value |
 | --- | --- |
 | **Tier** | `block` |
-| **Code** | `calculation_geometry_composition_mismatch` |
+| **Code** | `calculation_geometry_composition_mismatch`, `calculation_geometry_isotope_mismatch` |
 | **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
 | **Governing ADR** | 0008 |
 
@@ -297,8 +297,10 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 - `assert_calculation_geometry_composition` — `backend/app/services/calculation_geometry_composition.py::assert_calculation_geometry_composition`
   *Called from every site that attaches a geometry to a calculation: the `calculation_input_geometry` and `calculation_output_geometry` inserts, on both the producer-explicit branch and the `geometry_key`/fallback branch, and the geometry-bearing children -- a Hessian's geometry (upload and best-effort artifact hook), scan points and every IRC point (#680). A guard test fails if a construction is unchecked or a site disappears. `calc_isotopes.assert_isotopes` extends the claim to isotopes (own code, by count). The best-effort artifact hook is the one site that does not refuse: it never fails an upload, so a refusal there is the warning `hessian_not_stored_geometry_mismatch`, which carries the block code as `context.refusal_code` and in its sentence (#744, #840).*
+- `assert_isotopes` — `backend/app/services/calc_isotopes.py::assert_isotopes`
+  *The isotope half of the claim, with its own code. It counts the nuclide each atom of the geometry declares (`D`, `T` and `[2H]` are 2H and 3H, #672) and compares the count of each substituted element with the subject's; which atom carries the label is not checked. Called beside the composition check at every site that attaches a geometry to a calculation.*
 
-**Escape hatch.** Declare the structure's real composition: give the calculation the geometry it was run on, or file it under the subject that geometry belongs to. Absence does not block -- a `pseudo` owner, a transition state whose reaction records no reactants or a pseudo reactant, and an unparseable stored SMILES are all left unjudged. Only atom counts are compared, so a scan or IRC point at stretched or rearranged coordinates passes -- scan and IRC points are themselves checked, and a point of a different molecule is refused -- as do constitutional isomers and dissociated optimisations. Isotopologues pass this check; the isotope check (`calculation_geometry_isotope_mismatch`) judges them separately.
+**Escape hatch.** Declare the structure's real composition: give the calculation the geometry it was run on, or file it under the subject that geometry belongs to. Absence does not block -- a `pseudo` owner, a transition state whose reaction records no reactants or a pseudo reactant, and an unparseable stored SMILES are all left unjudged. Only atom counts are compared, so a scan or IRC point at stretched or rearranged coordinates passes -- scan and IRC points are themselves checked, and a point of a different molecule is refused -- as do constitutional isomers and dissociated optimisations. Isotopologues pass the element count; the isotope half (`calculation_geometry_isotope_mismatch`) judges them by the count of each substituted element. Declare the same substitution on the species and on the geometry, or file the calculation under the isotopologue it was run on.
 
 **Recorded divergence.** A documented false *acceptance*, restated because a referee will ask: counts alone cannot tell a constitutional isomer from its partner, so an ethanol calculation carrying dimethyl ether coordinates passes. Catching that needs bond perception from XYZ, which fails silently on exactly the strained, radical and stretched structures where it would matter -- the same reasoning that keeps `species_geometry_composition_mismatch` to counts. It also refuses a geometry carrying ghost or dummy centres (counterpoise/BSSE), because `Bq` appears in no SMILES; that refusal is correct while `geometry_atom` has no way to say 'no nucleus here', since such a row is already miscounted by `natoms` and every degrees-of-freedom read downstream.
 
@@ -320,21 +322,23 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** A free electron short-circuits before the comparison, returning a pinned identity pair. Multiplicity is deliberately **not** validated against the SMILES at all: standard SMILES does not encode spin state, so RDKit's inferred radical count is only a hint and the uploaded multiplicity is authoritative — which is what lets singlet CH2 (whose SMILES `[CH2]` implies a triplet) and the singlet and triplet states of O2 be represented.
 
-### 12. The charge and spin multiplicity a depositor declares agree with the electronic-structure log of the calculation; the ground-or-excited state and term symbol they declare agree with what the calculation's declared method, multiplicity and statmech point group and linearity imply.
+### 12. The charge and spin multiplicity a depositor declares agree with the electronic-structure log of the calculation; the ground-or-excited state and term symbol they declare agree with what the calculation's declared method, multiplicity and statmech point group and linearity imply; and a term symbol agrees with the spin multiplicity declared beside it.
 
 | Field | Value |
 | --- | --- |
 | **Tier** | `warn` |
-| **Code** | `charge_mismatch`, `multiplicity_mismatch`, `term_symbol_mismatch`, `electronic_state_contradicts_method` |
+| **Code** | `charge_mismatch`, `multiplicity_mismatch`, `term_symbol_mismatch`, `electronic_state_contradicts_method`, `term_symbol_contradicts_multiplicity` |
 | **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
 | **Governing ADR** | 0008 |
 
-**Why this tier.** **Placed against the ADR's own reasoning, deliberately.** ADR 0008 names both findings as direct contradictions between a declaration and the parsed evidence, therefore definitional, therefore belonging at the blocking tier — and then defers the promotion, because promoting a warning to a blocker rejects payloads that are accepted today. These checks have never fired on real data, so their false-positive rate is unknown and promoting them first would be unsafe. The register records the gap rather than hiding it: this is the clearest case in TCKDB of a check sitting one tier below where its own governing decision puts it. **The two deduction codes are warnings for a different reason.** Charge and multiplicity are read from the log, so a disagreement is a contradiction between a declaration and a parsed statement. The other two compare one declaration with another: no log is read; the method and multiplicity come from the payload itself and the point group and linearity from its statmech block. An EOM, CIS or spin-flip TDDFT method (the `EXCITED_STATE_METHODS` list) deduces an excited state definitively (that rule covers the `EXCITED_STATE_METHODS` names only); on this path job types are calculation types (opt, freq, sp ...) and say nothing, so plain TDDFT is not on the list and reads as the ground default, which is only a default for a single-reference method (confidence heuristic). Only the method names casscf, caspt2, nevpt2, mrci, dlpno-nevpt2 and dlpno-steom-ccsd, compared without regard to case (so CASSCF counts), deduce nothing. Any other name (for example MRCI+Davidson, or Molpro's RS2) is read as single-reference and gets the ground default, so a ground state declared for such a calculation can read as a contradiction. A term symbol is compared with the one derived from the multiplicity (and the point group and linearity where there are any), a derivation and not a reading. A heuristic default cannot block.
+**Why this tier.** **Placed against the ADR's own reasoning, deliberately.** ADR 0008 names both findings as direct contradictions between a declaration and the parsed evidence, therefore definitional, therefore belonging at the blocking tier — and then defers the promotion, because promoting a warning to a blocker rejects payloads that are accepted today. These checks have never fired on real data, so their false-positive rate is unknown and promoting them first would be unsafe. The register records the gap rather than hiding it: this is the clearest case in TCKDB of a check sitting one tier below where its own governing decision puts it. **The two deduction codes are warnings for a different reason.** Charge and multiplicity are read from the log, so a disagreement is a contradiction between a declaration and a parsed statement. The other two compare one declaration with another: no log is read; the method and multiplicity come from the payload itself and the point group and linearity from its statmech block. An EOM, CIS or spin-flip TDDFT method (the `EXCITED_STATE_METHODS` list) deduces an excited state definitively (that rule covers the `EXCITED_STATE_METHODS` names only); on this path job types are calculation types (opt, freq, sp ...) and say nothing, so plain TDDFT is not on the list and reads as the ground default, which is only a default for a single-reference method (confidence heuristic). Only the method names casscf, caspt2, nevpt2, mrci, dlpno-nevpt2 and dlpno-steom-ccsd, compared without regard to case (so CASSCF counts), deduce nothing. Any other name (for example MRCI+Davidson, or Molpro's RS2) is read as single-reference and gets the ground default, so a ground state declared for such a calculation can read as a contradiction. A term symbol is compared with the one derived from the multiplicity (and the point group and linearity where there are any), a derivation and not a reading. A heuristic default cannot block. **The two term-symbol codes are declaration against declaration too.** The leading digit of a term symbol is 2S+1, so `3P` beside `multiplicity=2` is a contradiction no correct deposit can contain, which the ADR would put at the blocking tier; it warns here for the reason above (a species-entry payload is shared by every upload route, and promoting a warning is a migration). A one-atom entry's term against the NIST ground term is entry 79's.
 
 **Enforced at.**
 
 - `reconcile_charge_multiplicity` — `backend/app/services/charge_multiplicity_reconciliation.py::reconcile_charge_multiplicity`
   *Re-reads charge and multiplicity from the uploaded artifact using the wired Gaussian, ORCA, Psi4 and Molpro parsers.*
+- `term_symbol_warnings` — `backend/app/services/upload_reconciliation.py::term_symbol_warnings`
+  *The term symbol against the multiplicity beside it (`term_symbol_contradicts_multiplicity`), read only from symbols that start with the multiplicity digit. No log is read.*
 - `_reconcile_deduction` — `backend/app/services/upload_reconciliation.py::_reconcile_deduction`
   *The deduction path, for `term_symbol_mismatch` and `electronic_state_contradicts_method`: the declared term symbol and ground-or-excited state are compared with what `deduce_all` derives from the calculation's own declared method and spin multiplicity and, from the statmech block, the point group and linearity; no log is read. **Only the ground-state default is a heuristic**: an EOM, CIS or spin-flip TDDFT method (`EXCITED_STATE_METHODS`) deduces an excited state definitively, while any other method, plain TDDFT included, deduces the ground state by default; only the method names casscf, caspt2, nevpt2, mrci, dlpno-nevpt2 and dlpno-steom-ccsd, compared without regard to case (so CASSCF counts), deduce nothing; any other name (for example MRCI+Davidson, or Molpro's RS2) is read as single-reference, so a legitimately excited state computed another way reads as a contradiction. The deduction carries its own confidence and the evidence it rests on in the warning's context, and a stationary-point-kind deduction is not compared here at all (Layer 1's n_imag warnings own it).*
 
@@ -412,7 +416,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   | finite-difference Hessian from energies | 80 |
   | Hessian method not recorded and program or method family not in the assumed-default table | 50 |
 
-  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — validation resolves tau from the producing program's documented default for the level of theory's method family (ADR 0012's 2026-09-04 amendment, applied at validation since 2026-10-31; the table is `tckdb_schemas.hessian_method_assumption`). Before assuming anything, validation reads the frequency directive of an inline input deck attached to the calculation (Gaussian `Freq=Numer` / `EnOnly`, ORCA `NumFreq` / `AnFreq`, where `NumFreq` with `NumGrad` is a Hessian from energies): a method the deposit states beats an assumed one (a recorded value that contradicts the deck is its own refusal, `hessian_method_contradicts_input_deck`, declared in register entry 50). A deck that carries no such directive says nothing. Failing that, Gaussian HF, DFT (double-hybrid functionals excepted: only B2PLYP, B2PLYPD, B2PLYPD3, mPW2PLYP and mPW2PLYPD, which the Gaussian manual documents as analytic, are assumed; nothing is assumed for the others), MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic default (30 cm-1). ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals and are assumed numerical (50 cm-1); ORCA double-hybrid and VV10 (non-local) functionals are assumed numerical on any version, because the manuals document numerical frequencies for them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4(DQ), MP4(SDQ), QCISD, CCSD, CISD and CID, and ORCA MP2 (closed-shell DLPNO-MP2 included) and, from ORCA 6, the `AUTOCI-` CCSD, CCSD(T), MP2, MP3 and MP4 methods when the level of theory states no frozen core and no RI (otherwise nothing is assumed for them), resolve to finite differences of gradients (50 cm-1). Gaussian CCSD(T), QCISD(T), MP4(SDTQ) (the bare MP4 keyword) and MP5, and ORCA CCSD, CCSD(T), their F12 variants (F12-MP2 included), every DLPNO coupled-cluster method, and open-shell DLPNO-MP2 and ROHF MP2 (read from the stated spin treatment or a UHF/ROHF prefix), which have no analytic gradient, resolve to finite differences of energies (80 cm-1), which is looser than the conservative row: a minimum at 50 to 80 cm-1 that was refused without a recorded method is now accepted with a warning, and a transition-state extra mode in that band is no longer flagged. Other DLPNO methods (DLPNO-CEPA and the like) assume nothing. The record stores the matching `assumed_*` basis so an assumption is never confusable with a recorded statement. A recorded method always wins (a recorded finite difference of gradients on an ORCA `NumFreq` deck for a method with no analytic gradient is refined to finite differences of energies and `hessian_method_refined` says so), and a `freq.hessian_method` that is present but not recognised is kept at the conservative row rather than replaced by an assumption. Only where the software or the method family is not in that table, or the payload names no software, is tau 50 cm-1 with `protocol_not_recorded` as the basis; that fallback is deliberately the *conservative* row, because assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so the resolution changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, and it is the same tau that is stored with the record.
+  *When the provenance is missing.* Tau is resolved in a fixed order (`resolve_tau_with_assumption`, since #864): (1) the method an attached output log reports the frequency job ran; else (2) the method the input echoed in that log requests (what the job read outranks what was recorded about it); else (3) the recorded `freq.hessian_method` or the method the calculation's own input deck states; else (4) the producing program's assumed default for the level of theory's method family; else (5) 50 cm-1. A reported method outranks a recorded one because it is what ran; a request only says what was asked for, and the input a log echoes is what the job actually read, so it outranks a method recorded or typed about the job. When no log reports a method, no echoed input requests one and nothing is recorded or stated in a deck — which is the common case, because most outputs do not say — validation resolves tau from the producing program's documented default for the level of theory's method family (ADR 0012's 2026-09-04 amendment, applied at validation since 2026-10-31; the table is `tckdb_schemas.hessian_method_assumption`). Before assuming anything, validation reads the frequency directive of an inline input deck attached to the calculation (Gaussian `Freq=Numer` / `EnOnly`, ORCA `NumFreq` / `AnFreq`, where `NumFreq` with `NumGrad` is a Hessian from energies): a method the deposit states beats an assumed one (a recorded value that contradicts the deck is its own refusal, `hessian_method_contradicts_input_deck`, declared in register entry 50). A deck that carries no such directive says nothing. Failing that, Gaussian HF, DFT (double-hybrid functionals excepted: only B2PLYP, B2PLYPD, B2PLYPD3, mPW2PLYP and mPW2PLYPD, which the Gaussian manual documents as analytic, are assumed; nothing is assumed for the others), MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic default (30 cm-1). ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals and are assumed numerical (50 cm-1); ORCA double-hybrid and VV10 (non-local) functionals are assumed numerical on any version, because the manuals document numerical frequencies for them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4(DQ), MP4(SDQ), QCISD, CCSD, CISD and CID, and ORCA MP2 (closed-shell DLPNO-MP2 included) and, from ORCA 6, the `AUTOCI-` CCSD, CCSD(T), MP2, MP3 and MP4 methods when the level of theory states no frozen core and no RI (otherwise nothing is assumed for them), resolve to finite differences of gradients (50 cm-1). Gaussian CCSD(T), QCISD(T), MP4(SDTQ) (the bare MP4 keyword) and MP5, and ORCA CCSD, CCSD(T), their F12 variants (F12-MP2 included), every DLPNO coupled-cluster method, and open-shell DLPNO-MP2 and ROHF MP2 (read from the stated spin treatment or a UHF/ROHF prefix), which have no analytic gradient, resolve to finite differences of energies (80 cm-1), which is looser than the conservative row: a minimum at 50 to 80 cm-1 that was refused without a recorded method is now accepted with a warning, and a transition-state extra mode in that band is no longer flagged. Other DLPNO methods (DLPNO-CEPA and the like) assume nothing. The record stores the matching `assumed_*` basis so an assumption is never confusable with a recorded statement. An assumption never replaces a statement (a recorded finite difference of gradients on an ORCA `NumFreq` deck for a method with no analytic gradient is refined to finite differences of energies and `hessian_method_refined` says so): a `freq.hessian_method` that is present but not recognised is kept at the conservative row rather than replaced by an assumption. Only where the software or the method family is not in that table, or the payload names no software, is tau 50 cm-1 with `protocol_not_recorded` as the basis; that fallback is deliberately the *conservative* row, because assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so the resolution changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, and it is the same tau that is stored with the record.
 
 **Escape hatch.** Declare `species_entry_kind='vdw_complex'`, which records the same mode with a warning instead, or deposit the structure through a transition-state payload if the single imaginary mode is real. A mode below tau needs no escape: it is accepted with a warning.
 
@@ -465,7 +469,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   | finite-difference Hessian from energies | 80 |
   | Hessian method not recorded and program or method family not in the assumed-default table | 50 |
 
-  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — validation resolves tau from the producing program's documented default for the level of theory's method family (ADR 0012's 2026-09-04 amendment, applied at validation since 2026-10-31; the table is `tckdb_schemas.hessian_method_assumption`). Before assuming anything, validation reads the frequency directive of an inline input deck attached to the calculation (Gaussian `Freq=Numer` / `EnOnly`, ORCA `NumFreq` / `AnFreq`, where `NumFreq` with `NumGrad` is a Hessian from energies): a method the deposit states beats an assumed one (a recorded value that contradicts the deck is its own refusal, `hessian_method_contradicts_input_deck`, declared in register entry 50). A deck that carries no such directive says nothing. Failing that, Gaussian HF, DFT (double-hybrid functionals excepted: only B2PLYP, B2PLYPD, B2PLYPD3, mPW2PLYP and mPW2PLYPD, which the Gaussian manual documents as analytic, are assumed; nothing is assumed for the others), MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic default (30 cm-1). ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals and are assumed numerical (50 cm-1); ORCA double-hybrid and VV10 (non-local) functionals are assumed numerical on any version, because the manuals document numerical frequencies for them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4(DQ), MP4(SDQ), QCISD, CCSD, CISD and CID, and ORCA MP2 (closed-shell DLPNO-MP2 included) and, from ORCA 6, the `AUTOCI-` CCSD, CCSD(T), MP2, MP3 and MP4 methods when the level of theory states no frozen core and no RI (otherwise nothing is assumed for them), resolve to finite differences of gradients (50 cm-1). Gaussian CCSD(T), QCISD(T), MP4(SDTQ) (the bare MP4 keyword) and MP5, and ORCA CCSD, CCSD(T), their F12 variants (F12-MP2 included), every DLPNO coupled-cluster method, and open-shell DLPNO-MP2 and ROHF MP2 (read from the stated spin treatment or a UHF/ROHF prefix), which have no analytic gradient, resolve to finite differences of energies (80 cm-1), which is looser than the conservative row: a minimum at 50 to 80 cm-1 that was refused without a recorded method is now accepted with a warning, and a transition-state extra mode in that band is no longer flagged. Other DLPNO methods (DLPNO-CEPA and the like) assume nothing. The record stores the matching `assumed_*` basis so an assumption is never confusable with a recorded statement. A recorded method always wins (a recorded finite difference of gradients on an ORCA `NumFreq` deck for a method with no analytic gradient is refined to finite differences of energies and `hessian_method_refined` says so), and a `freq.hessian_method` that is present but not recognised is kept at the conservative row rather than replaced by an assumption. Only where the software or the method family is not in that table, or the payload names no software, is tau 50 cm-1 with `protocol_not_recorded` as the basis; that fallback is deliberately the *conservative* row, because assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so the resolution changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, and it is the same tau that is stored with the record.
+  *When the provenance is missing.* Tau is resolved in a fixed order (`resolve_tau_with_assumption`, since #864): (1) the method an attached output log reports the frequency job ran; else (2) the method the input echoed in that log requests (what the job read outranks what was recorded about it); else (3) the recorded `freq.hessian_method` or the method the calculation's own input deck states; else (4) the producing program's assumed default for the level of theory's method family; else (5) 50 cm-1. A reported method outranks a recorded one because it is what ran; a request only says what was asked for, and the input a log echoes is what the job actually read, so it outranks a method recorded or typed about the job. When no log reports a method, no echoed input requests one and nothing is recorded or stated in a deck — which is the common case, because most outputs do not say — validation resolves tau from the producing program's documented default for the level of theory's method family (ADR 0012's 2026-09-04 amendment, applied at validation since 2026-10-31; the table is `tckdb_schemas.hessian_method_assumption`). Before assuming anything, validation reads the frequency directive of an inline input deck attached to the calculation (Gaussian `Freq=Numer` / `EnOnly`, ORCA `NumFreq` / `AnFreq`, where `NumFreq` with `NumGrad` is a Hessian from energies): a method the deposit states beats an assumed one (a recorded value that contradicts the deck is its own refusal, `hessian_method_contradicts_input_deck`, declared in register entry 50). A deck that carries no such directive says nothing. Failing that, Gaussian HF, DFT (double-hybrid functionals excepted: only B2PLYP, B2PLYPD, B2PLYPD3, mPW2PLYP and mPW2PLYPD, which the Gaussian manual documents as analytic, are assumed; nothing is assumed for the others), MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic default (30 cm-1). ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals and are assumed numerical (50 cm-1); ORCA double-hybrid and VV10 (non-local) functionals are assumed numerical on any version, because the manuals document numerical frequencies for them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4(DQ), MP4(SDQ), QCISD, CCSD, CISD and CID, and ORCA MP2 (closed-shell DLPNO-MP2 included) and, from ORCA 6, the `AUTOCI-` CCSD, CCSD(T), MP2, MP3 and MP4 methods when the level of theory states no frozen core and no RI (otherwise nothing is assumed for them), resolve to finite differences of gradients (50 cm-1). Gaussian CCSD(T), QCISD(T), MP4(SDTQ) (the bare MP4 keyword) and MP5, and ORCA CCSD, CCSD(T), their F12 variants (F12-MP2 included), every DLPNO coupled-cluster method, and open-shell DLPNO-MP2 and ROHF MP2 (read from the stated spin treatment or a UHF/ROHF prefix), which have no analytic gradient, resolve to finite differences of energies (80 cm-1), which is looser than the conservative row: a minimum at 50 to 80 cm-1 that was refused without a recorded method is now accepted with a warning, and a transition-state extra mode in that band is no longer flagged. Other DLPNO methods (DLPNO-CEPA and the like) assume nothing. The record stores the matching `assumed_*` basis so an assumption is never confusable with a recorded statement. An assumption never replaces a statement (a recorded finite difference of gradients on an ORCA `NumFreq` deck for a method with no analytic gradient is refined to finite differences of energies and `hessian_method_refined` says so): a `freq.hessian_method` that is present but not recognised is kept at the conservative row rather than replaced by an assumption. Only where the software or the method family is not in that table, or the payload names no software, is tau 50 cm-1 with `protocol_not_recorded` as the basis; that fallback is deliberately the *conservative* row, because assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so the resolution changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, and it is the same tau that is stored with the record.
 
 **Escape hatch.** None is needed — the check never refuses. Its cost runs the other way: a genuine higher-order saddle, a torsional maximum and a valley-ridge inflection are all accepted, and only the structural flag separates them from a clean first-order saddle for a consumer who reads it.
 
@@ -502,7 +506,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   | finite-difference Hessian from energies | 80 |
   | Hessian method not recorded and program or method family not in the assumed-default table | 50 |
 
-  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — validation resolves tau from the producing program's documented default for the level of theory's method family (ADR 0012's 2026-09-04 amendment, applied at validation since 2026-10-31; the table is `tckdb_schemas.hessian_method_assumption`). Before assuming anything, validation reads the frequency directive of an inline input deck attached to the calculation (Gaussian `Freq=Numer` / `EnOnly`, ORCA `NumFreq` / `AnFreq`, where `NumFreq` with `NumGrad` is a Hessian from energies): a method the deposit states beats an assumed one (a recorded value that contradicts the deck is its own refusal, `hessian_method_contradicts_input_deck`, declared in register entry 50). A deck that carries no such directive says nothing. Failing that, Gaussian HF, DFT (double-hybrid functionals excepted: only B2PLYP, B2PLYPD, B2PLYPD3, mPW2PLYP and mPW2PLYPD, which the Gaussian manual documents as analytic, are assumed; nothing is assumed for the others), MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic default (30 cm-1). ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals and are assumed numerical (50 cm-1); ORCA double-hybrid and VV10 (non-local) functionals are assumed numerical on any version, because the manuals document numerical frequencies for them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4(DQ), MP4(SDQ), QCISD, CCSD, CISD and CID, and ORCA MP2 (closed-shell DLPNO-MP2 included) and, from ORCA 6, the `AUTOCI-` CCSD, CCSD(T), MP2, MP3 and MP4 methods when the level of theory states no frozen core and no RI (otherwise nothing is assumed for them), resolve to finite differences of gradients (50 cm-1). Gaussian CCSD(T), QCISD(T), MP4(SDTQ) (the bare MP4 keyword) and MP5, and ORCA CCSD, CCSD(T), their F12 variants (F12-MP2 included), every DLPNO coupled-cluster method, and open-shell DLPNO-MP2 and ROHF MP2 (read from the stated spin treatment or a UHF/ROHF prefix), which have no analytic gradient, resolve to finite differences of energies (80 cm-1), which is looser than the conservative row: a minimum at 50 to 80 cm-1 that was refused without a recorded method is now accepted with a warning, and a transition-state extra mode in that band is no longer flagged. Other DLPNO methods (DLPNO-CEPA and the like) assume nothing. The record stores the matching `assumed_*` basis so an assumption is never confusable with a recorded statement. A recorded method always wins (a recorded finite difference of gradients on an ORCA `NumFreq` deck for a method with no analytic gradient is refined to finite differences of energies and `hessian_method_refined` says so), and a `freq.hessian_method` that is present but not recognised is kept at the conservative row rather than replaced by an assumption. Only where the software or the method family is not in that table, or the payload names no software, is tau 50 cm-1 with `protocol_not_recorded` as the basis; that fallback is deliberately the *conservative* row, because assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so the resolution changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, and it is the same tau that is stored with the record.
+  *When the provenance is missing.* Tau is resolved in a fixed order (`resolve_tau_with_assumption`, since #864): (1) the method an attached output log reports the frequency job ran; else (2) the method the input echoed in that log requests (what the job read outranks what was recorded about it); else (3) the recorded `freq.hessian_method` or the method the calculation's own input deck states; else (4) the producing program's assumed default for the level of theory's method family; else (5) 50 cm-1. A reported method outranks a recorded one because it is what ran; a request only says what was asked for, and the input a log echoes is what the job actually read, so it outranks a method recorded or typed about the job. When no log reports a method, no echoed input requests one and nothing is recorded or stated in a deck — which is the common case, because most outputs do not say — validation resolves tau from the producing program's documented default for the level of theory's method family (ADR 0012's 2026-09-04 amendment, applied at validation since 2026-10-31; the table is `tckdb_schemas.hessian_method_assumption`). Before assuming anything, validation reads the frequency directive of an inline input deck attached to the calculation (Gaussian `Freq=Numer` / `EnOnly`, ORCA `NumFreq` / `AnFreq`, where `NumFreq` with `NumGrad` is a Hessian from energies): a method the deposit states beats an assumed one (a recorded value that contradicts the deck is its own refusal, `hessian_method_contradicts_input_deck`, declared in register entry 50). A deck that carries no such directive says nothing. Failing that, Gaussian HF, DFT (double-hybrid functionals excepted: only B2PLYP, B2PLYPD, B2PLYPD3, mPW2PLYP and mPW2PLYPD, which the Gaussian manual documents as analytic, are assumed; nothing is assumed for the others), MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic default (30 cm-1). ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals and are assumed numerical (50 cm-1); ORCA double-hybrid and VV10 (non-local) functionals are assumed numerical on any version, because the manuals document numerical frequencies for them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4(DQ), MP4(SDQ), QCISD, CCSD, CISD and CID, and ORCA MP2 (closed-shell DLPNO-MP2 included) and, from ORCA 6, the `AUTOCI-` CCSD, CCSD(T), MP2, MP3 and MP4 methods when the level of theory states no frozen core and no RI (otherwise nothing is assumed for them), resolve to finite differences of gradients (50 cm-1). Gaussian CCSD(T), QCISD(T), MP4(SDTQ) (the bare MP4 keyword) and MP5, and ORCA CCSD, CCSD(T), their F12 variants (F12-MP2 included), every DLPNO coupled-cluster method, and open-shell DLPNO-MP2 and ROHF MP2 (read from the stated spin treatment or a UHF/ROHF prefix), which have no analytic gradient, resolve to finite differences of energies (80 cm-1), which is looser than the conservative row: a minimum at 50 to 80 cm-1 that was refused without a recorded method is now accepted with a warning, and a transition-state extra mode in that band is no longer flagged. Other DLPNO methods (DLPNO-CEPA and the like) assume nothing. The record stores the matching `assumed_*` basis so an assumption is never confusable with a recorded statement. An assumption never replaces a statement (a recorded finite difference of gradients on an ORCA `NumFreq` deck for a method with no analytic gradient is refined to finite differences of energies and `hessian_method_refined` says so): a `freq.hessian_method` that is present but not recognised is kept at the conservative row rather than replaced by an assumption. Only where the software or the method family is not in that table, or the payload names no software, is tau 50 cm-1 with `protocol_not_recorded` as the basis; that fallback is deliberately the *conservative* row, because assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so the resolution changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, and it is the same tau that is stored with the record.
 
 **Escape hatch.** None is needed — the check never refuses. A referee should read the threshold as a tunable reporting line, not a claim about physics.
 
@@ -651,16 +655,16 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None needed: the warning is the accommodation. Deposit the cited energy (and the ZPE, at the electronic energy's geometry) to compare; for a network state energy, cite every participant with an sp, opt or composite calculation and state `energy_precision_kj_mol`.
 
-### 26. A calculation cited as the source of a stated energy should be of a type that carries that kind of energy: an electronic energy from an `sp`, `opt` or `composite`, an E0 from a `freq` or `composite`, never from an IRC point, scan, path search or conformer search; and a network `well_freq` or `barrier_freq` source must be a `freq`.
+### 26. A calculation cited as the source of a stated energy should be of a type that carries that kind of energy: an electronic energy from an `sp`, `opt` or `composite`, an E0 from a `freq` or `composite`, never from an IRC point, scan, path search or conformer search; a network `well_freq` or `barrier_freq` source must be a `freq`; and a thermo or statmech source link gives a calculation a role its type can take.
 
 | Field | Value |
 | --- | --- |
 | **Tier** | `block` |
-| **Code** | `ts_energy_ordering_source_type_mismatch`, `network_energy_source_type_mismatch` |
+| **Code** | `ts_energy_ordering_source_type_mismatch`, `network_energy_source_type_mismatch`, `thermo_source_role_type_mismatch`, `statmech_source_role_type_mismatch` |
 | **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
 | **Governing ADR** | 0008 |
 
-**Why this tier.** Definitional. An energy taken from an IRC point, or from a bare single point labelled as an E0, is not the quantity it is labelled as, and an ordering or a master equation built on it compares unlike things; the master equation reads the modes of its frequency roles, which a `composite` (a ZPE only) does not store. The table of types is one table shared by the transition-state and network rules (`app.services.energy_source_types`, #669), so the two cannot disagree about what carries an energy; it is a position a referee could dispute, which is why it is registered. A network energy on a composed convention (`electronic_plus_zpe` and the like) is held only to the floor of stationary-point types, because its one source slot cites the electronic part and the frequency goes in the frequency role: tightening it would refuse every producer and fixture in the repository, a decision recorded here rather than hidden.
+**Why this tier.** Definitional. An energy taken from an IRC point, or from a bare single point labelled as an E0, is not the quantity it is labelled as, and an ordering or a master equation built on it compares unlike things; the master equation reads the modes of its frequency roles, which a `composite` (a ZPE only) does not store. The table of types is one table shared by the transition-state and network rules (`app.services.energy_source_types`), so the two cannot disagree about what carries an energy; it is a position a referee could dispute, which is why it is registered. A network energy on a composed convention (`electronic_plus_zpe` and the like) is held only to the floor of stationary-point types, because its one source slot cites the electronic part and the frequency goes in the frequency role: tightening it would refuse every producer and fixture in the repository. The thermo and statmech role tables (`opt`, `freq`, `sp` and, for statmech, `composite`) are the same rule for the products' own links.
 
 **Enforced at.**
 
@@ -670,6 +674,8 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   *Network state and barrier energy sources, read off the persisted row.*
 - `assert_network_source_role_type` — `backend/app/services/network_energy_sources.py::assert_network_source_role_type`
   *The `well_energy` / `barrier_energy` and the frequency roles of the solve's `source_calculations`.*
+- `assert_thermo_role_matches_calculation_type` — `backend/app/workflows/thermo.py::assert_thermo_role_matches_calculation_type`
+- `assert_statmech_role_compatible` — `backend/app/services/statmech_resolution.py::assert_statmech_role_compatible`
 
 **Escape hatch.** Cite the calculation that carries the energy: the `sp`, `opt` or `composite` for an electronic energy, the `freq` (or a `composite`) for an E0, and put the `freq` in the `well_freq` / `barrier_freq` role.
 
@@ -720,12 +726,12 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Per leg, not globally: the reactant and product legs each claim the whole saddle point, which is the point of storing two maps both pointing at it. A `side` column exists on the pair row purely so this can be a unique constraint, because SQL cannot dereference the participant to find its role.
 
-### 29. Every atom index in a map is counted against a named geometry that the participant actually owns, and names an atom that geometry actually has.
+### 29. Every atom index in a map is counted against a named geometry that the participant actually owns, and names an atom that geometry actually has; and a map belongs to a reaction that has a saddle point and names only participants that reaction declares.
 
 | Field | Value |
 | --- | --- |
 | **Tier** | `block` |
-| **Code** | `atom_map_indices_not_geometry_relative` |
+| **Code** | `atom_map_indices_not_geometry_relative`, `atom_map_participant_not_declared`, `atom_map_without_transition_state` |
 | **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
 | **Governing ADR** | 0011, 0008 |
 
@@ -840,12 +846,12 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Rate coefficients
 
-### 35. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
+### 35. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular — and a coefficient of any other order has no units to check and is refused.
 
 | Field | Value |
 | --- | --- |
 | **Tier** | `block` |
-| **Code** | `arrhenius_a_units_molecularity_mismatch` |
+| **Code** | `arrhenius_a_units_molecularity_mismatch`, `unsupported_reaction_molecularity` |
 | **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
 | **Governing ADR** | 0008 |
 
@@ -856,7 +862,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - `validate_a_units_for_molecularity` — `backend/app/chemistry/units.py::validate_a_units_for_molecularity`
   *Called from the kinetics upload schema, so it refuses at the wire boundary. The order is not simply `len(reactants)`: it counts the side the coefficient is a rate of (reactants for a forward record, products for a reverse one; a `net` record is not checked). A record that states no direction is checked against both sides and refused only when the units match neither (`validate_a_units_for_unstated_direction`), so no direction is assumed. A simple `+M` third-body reaction carries a `[M]` term on the main line and validates one order higher, while a falloff reaction's main line is the high-pressure limit k-infinity, whose order is the side's count, its low-pressure limit k0 being validated separately one order up.*
 
-**Escape hatch.** None, and the refinements are the reason it can block without firing on correct science: PLOG and Chebyshev are refused the `is_third_body` flag outright, because both already encode the full pressure dependence and the flag would otherwise inflate the expected order by one — rejecting a PLOG entry carrying the *correct* units and accepting one carrying the units of the next order up. A record whose sides differ in size and which states no direction is accepted with units of either side's order; stating `direction` makes the check exact.
+**Escape hatch.** None, and the refinements are the reason it can block without firing on correct science: PLOG and Chebyshev are refused the `is_third_body` flag outright, because both already encode the full pressure dependence and the flag would otherwise inflate the expected order by one — rejecting a PLOG entry carrying the *correct* units and accepting one carrying the units of the next order up. A record whose sides differ in size and which states no direction is accepted with units of either side's order; stating `direction` makes the check exact. A coefficient whose order is not 1, 2 or 3 (a four-body reaction) is refused with its own code, `unsupported_reaction_molecularity`, because no units of that dimensionality are accepted.
 
 ## Statistical mechanics
 
@@ -1256,6 +1262,623 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   Compares the ideal <S^2> a program printed with S(S+1) of the declared multiplicity. Programs print it to four to six decimals, so 1e-3 is well above print noise, and the nearest distinct spin states differ by at least 0.75, so it cannot hide a different multiplicity.
 
 **Escape hatch.** None needed -- no check here refuses. A calculation whose T1 is above 0.02, or whose <S^2> is more than 0.1 from S(S+1), for a reason the depositor understands is stored as sent; the warning only reports the value against the conventional criterion. A printed ideal <S^2> that contradicts the declared multiplicity is cleared by correcting whichever of the two is wrong.
+
+## Bath gas of a rate
+
+### 53. A bath gas a rate or a network solve states is a composition: its mole fractions sum to one, and for a rate each species appears once and no bath gas is given at the high-pressure limit, where there is no collider.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `kinetics_bath_gas_mole_fraction_sum`, `kinetics_bath_gas_duplicate_species`, `kinetics_bath_gas_at_high_pressure_limit` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** Definitional. A mole-fraction set that does not sum to one, or that names one species twice, is not a composition, and no correct measurement or calculation can have been obtained in it. The high-pressure limit is the rate with collisional energy transfer removed, so a bath gas attached to it contradicts the pressure context the same record states. A network solve's bath gas is held to the same sum, with the same tolerance. All three are contradictions inside one payload, not expectations about a result. Nothing is refused for an absent bath gas: it reads as 'not stated' and is never inferred, which is why the check is a block and not a demand.
+
+**Enforced at.**
+
+- `check_kinetics_bath_gas` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/kinetics_bath_gas.py::check_kinetics_bath_gas`
+  *Shared by the kinetics upload and the computed-reaction bundle, so the two routes cannot disagree about what a valid bath gas is.*
+- `check_bath_gas_mole_fraction_sum` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/kinetics_bath_gas.py::check_bath_gas_mole_fraction_sum`
+  *The sum rule alone, which the network solve's bath gas also calls.*
+
+**Thresholds.**
+
+- `bath_gas_mole_fraction_sum_tolerance` = **1e-09 absolute, on the sum** — a constant fixed in code.
+  Tight on purpose: fractions are stated, not measured, so a sum that is off by more than rounding means a component is missing or doubled.
+
+**Escape hatch.** Omit the bath gas (it then reads as not stated), merge repeated components into one with their total mole fraction, or state the pressure context the rate was obtained in.
+
+## Network composition and sources
+
+### 54. The kind of a network channel (isomerization, association, dissociation, exchange) is the one its source and sink states imply, so a stated kind that disagrees is refused.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `network_channel_kind_mismatch` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** Definitional. Whether a channel is an association or a dissociation follows from whether each end is a well or a set of separated fragments, by one rule applied to every pair (`derive_channel_kind`). A stated kind is only ever a claim to check, and one that disagrees contradicts the states the same payload declares. No correct network can contain it, and storing it would let two readers disagree about the direction of the same channel.
+
+**Enforced at.**
+
+- `derive_channel_kind` — `schemas/python/tckdb-schemas/tckdb_schemas/network_channel_kind.py::derive_channel_kind`
+  *The one place the rule lives; the upload validator and the persisting workflow both call it.*
+- `NetworkPDepUploadRequest.validate_channel_kind_from_states` — `backend/app/schemas/workflows/network_pdep_upload.py::NetworkPDepUploadRequest.validate_channel_kind_from_states`
+  *Fills an omitted kind and refuses a stated one that differs; the workflow repeats the comparison.*
+
+**Escape hatch.** Omit the kind and it is derived from the states.
+
+### 55. A network state is the multiset of its participants' species entries, a state lists a species entry once (with a stoichiometry), and a network holds one state per composition.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `network_state_duplicate_composition`, `network_state_duplicate_participant` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** Definitional. A well or a separated-fragment set is identified by what it is made of; two states with the same composition are one state declared twice, and a state naming one entry twice states a stoichiometry the wrong way. Both are refused before any row is written. Stereoisomers are different species entries, so a network that really holds two isomers is not refused.
+
+**Enforced at.**
+
+- `refuse_duplicate_state_compositions` — `backend/app/workflows/network_pdep.py::refuse_duplicate_state_compositions`
+  *Runs before any state row is written and names the depositor's local state keys.*
+
+**Escape hatch.** Declare each state once. If two states are meant to differ, say how (stereo marks, a stereo label or a geometry on the species) so they resolve to different entries.
+
+## Levels and geometries of linked calculations
+
+### 56. One record has one energy level and the declared level matches it: the linked single points or composites share one level, which the declaration names (the optimisations' when none is linked); for kinetics, each linked energy, modulo spin treatment per participant.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `thermo_energy_level_contradiction`, `statmech_energy_level_contradiction`, `kinetics_energy_level_contradiction`, `thermo_energy_level_ambiguous`, `statmech_energy_level_ambiguous`, `thermo_energy_level_requires_sp`, `statmech_energy_level_requires_sp` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008, 0021 |
+
+**Why this tier.** A contract between statements of one record, not an expectation about a result. A depositor may legitimately run the optimisation and the single point at different levels (a legitimate shape), which is why the record must say which level its energy stands at, once: linked energies at two levels give no single answer (`*_energy_level_ambiguous`), a declared level that contradicts the linked energies is a false label (`*_energy_level_contradiction`), and a declared level that differs from the optimisation's with no energy calculation at it linked has nothing behind it (`*_energy_level_requires_sp`, the declared-level branch; its coverage branch is entry 57). No re-run decides which statement was meant. Kinetics is compared per participant and modulo spin treatment, so a restricted and an unrestricted calculation of closed-shell species do not contradict each other.
+
+**Enforced at.**
+
+- `assert_role_consistency` — `backend/app/services/calculation_levels.py::assert_role_consistency`
+  *Thermo and statmech, on every upload shape; the codes arrive as arguments, one set per product.*
+- `assert_kinetics_energy_level_consistency` — `backend/app/services/calculation_levels.py::assert_kinetics_energy_level_consistency`
+  *Kinetics, by `kinetics_energy_level_violation`.*
+
+**Escape hatch.** Omit the declaration (the level is then derived from the links at read time), link every energy at one level, or declare the level the linked calculations ran at.
+
+### 57. Energy calculations and optimisations pair one-to-one by geometry: each energy sits on a linked optimisation's geometry, each optimisation has one energy, and an SCF stability source is on the verdict's conformer.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `thermo_sp_geometry_mismatch`, `statmech_sp_geometry_mismatch`, `thermo_role_duplicate`, `statmech_role_duplicate`, `thermo_energy_sp_and_composite_linked`, `statmech_energy_sp_and_composite_linked`, `thermo_energy_level_requires_sp`, `statmech_energy_level_requires_sp`, `scf_stability_source_geometry_mismatch`, `scf_stability_source_conformer_unanchored` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008, 0021 |
+
+**Why this tier.** Definitional. A single-point energy belongs to the structure it was computed at; paired with another conformer's optimisation it is a different molecule's energy, two energies on one optimisation (or a single point and a composite) are two answers to one question, and an ensemble that gives some conformers a refined energy and not others is the 'forgot the single point' deposit. A stability analysis describes one wavefunction at one geometry. For thermo and statmech silence is kept where either side declares no geometry (absence of evidence is not evidence of a mismatch, and with at most one optimisation an energy with no geometry is assumed to belong to it). The stability half is stricter: a verdict and its source that are tied to different conformers are refused here, exactly one of them unanchored is refused (`scf_stability_source_conformer_unanchored`), and only when neither is tied to any conformer is it the warning of entry 80.
+
+**Enforced at.**
+
+- `assert_role_consistency` — `backend/app/services/calculation_levels.py::assert_role_consistency`
+  *Rules R2' (distinctness), R3' (geometry) and Coverage, run once per product with that product's codes.*
+- `scf_source_geometry_error` — `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py::scf_source_geometry_error`
+  *Builds the stability-source refusal for both the request schema and the workflow (ADR 0017).*
+- `scf_source_unanchored_error` — `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py::scf_source_unanchored_error`
+  *Exactly one of verdict and source is tied to a conformer.*
+
+**Escape hatch.** Link the optimisation whose geometry the energy was computed at, one energy per optimisation.
+
+### 58. A calculation is evidence for one conformer and ran on one structure: its conformer key and its geometry key name the same conformer, and the geometry it states it ran on is one of its input geometries; a transition-state calculation did not run on a species minimum's geometry.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `calculation_geometry_conformer_mismatch`, `calculation_input_geometry_mismatch`, `transition_state_calculation_species_geometry` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008, 0017 |
+
+**Why this tier.** A contract between two statements of one calculation. Neither key overrides the other and neither can be chosen for the depositor, so storing both would attribute the same numbers to two conformers. A freq or single point runs on one structure; a stated geometry outside its own input list is a contradiction, not an unusual result.
+
+**Enforced at.**
+
+- `assert_calculation_geometry_matches_conformer` — `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py::assert_calculation_geometry_matches_conformer`
+- `attach_calculation_input_geometries` — `backend/app/services/calculation_resolution.py::attach_calculation_input_geometries`
+- `assert_transition_state_calculations_unanchored` — `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py::assert_transition_state_calculations_unanchored`
+
+**Escape hatch.** State one conformer, or omit the redundant key; list the geometry the calculation ran on.
+
+## Composite and single-point arithmetic
+
+### 59. The numbers a composite energy states agree with each other and with its recipe: E0 is the electronic energy plus the recipe's zero-point energy, the stated terms sum to the electronic energy, and an assembled composite's total is what its scheme gives for the energies of its inputs.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `composite_e0_inconsistent`, `composite_terms_do_not_sum`, `composite_total_mismatch` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008, 0021 |
+
+**Why this tier.** Definitional, and a comparison only: TCKDB forms the sums to compare them with the numbers sent and stores none of them. A total that does not follow from the inputs it cites contradicts its own recipe; an E0 that is not electronic plus zero-point contradicts what the three quantities are. The tolerance scales with the number of rounded quantities in the comparison, so printed precision never trips it.
+
+**Enforced at.**
+
+- `assert_composite_result_arithmetic` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py::assert_composite_result_arithmetic`
+  *Run by the wire model on parse and again by the backend on persist, so the tolerance cannot differ.*
+- `assert_composite_total_recomputes` — `schemas/python/tckdb-schemas/tckdb_schemas/composite_total.py::assert_composite_total_recomputes`
+
+**Thresholds.**
+
+- `composite_arithmetic_tolerance` = **1e-06 hartree (floor; 5e-7 per rounded quantity above two)** — a constant fixed in code.
+  An equation among n numbers printed to six decimals can disagree by n half-units of the last place without anything being wrong; the floor protects short equations.
+- `composite_total_recomputation_tolerance` = **1e-06 hartree (floor; 5e-7 times 1 + the summed sensitivity weights)** — a constant fixed in code.
+  The recomputed total is max(1e-6, 5e-7 * (1 + sum_i |d total / d x_i|)) hartree over every stored number the recomputation consumed: a larger-basis energy enters an inverse-power extrapolation with a weight above 1, so a total computed from inputs printed to six decimals stays inside the tolerance it earns. The deposited total counts as one number of weight 1.
+
+**Escape hatch.** Send the values the program printed, or omit the number you did not read.
+
+### 60. Each input of an assembled composite ran at the level of theory its slot in the scheme names, and the inputs and the composite itself declare one geometry between them.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `composite_input_level_mismatch`, `composite_input_geometry_mismatch` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008, 0021 |
+
+**Why this tier.** Definitional. A recipe that sums energies taken at different geometries describes no single molecule, and a slot filled by a calculation at another level is a different recipe from the one the scheme names. Spellings of one level are followed through merges, so only a genuinely different level refuses. An input that declares no geometry is a warning, not this refusal: absence of a geometry does not show a mismatch.
+
+**Enforced at.**
+
+- `_finalize_one` — `backend/app/services/composite_input_resolution.py::_finalize_one`
+  *Also runs the one-geometry rule (`_check_geometries`).*
+
+**Escape hatch.** Cite the calculation at the slot's level, all computed at the one geometry.
+
+### 61. The parts of a single point's electronic energy do not contradict the energy they are parts of: each component is stated once, a stated total is the energy, and reference plus correlation (plus triples, where the program prints it separately) is the energy.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `sp_energy_component_total_mismatch`, `sp_energy_components_do_not_sum`, `sp_energy_component_duplicate` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008, 0021 |
+
+**Why this tier.** Definitional. A composite level consumes these parts, so a part from a different run than the energy poisons every number built on it. A component stated twice has two values and no way to say which is the energy's part (the same shape as a bath-gas species named twice, entry 53). Either convention for the triples is accepted and both sums are reported when neither matches, so a producer using ORCA's or Molpro's printing is not refused. TCKDB forms the sums only to compare them and never fills an absent part.
+
+**Enforced at.**
+
+- `check_sp_energy_components` — `schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py::check_sp_energy_components`
+
+**Thresholds.**
+
+- `sp_energy_component_sum_tolerance` = **1e-06 hartree** — a constant fixed in code.
+  The tolerance the single-point log reconciliation uses: tight enough to catch a part from a different run, loose enough for the digits a program prints.
+
+**Escape hatch.** Send the parts the program printed with its energy, or omit the components.
+
+### 62. A frequency calculation linked beside a composite runs at the level of theory the composite's scheme prescribes for frequencies, because the recipe's zero-point energy is scaled for that level; and the composite role is given only to a calculation of type composite.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `composite_frequency_level_differs_from_recipe`, `composite_role_on_non_composite_calculation` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| **Governing ADR** | 0008, 0021 |
+
+**Why this tier.** An expectation, so a warning. A depositor may legitimately link the frequencies they have, at another level, and say so; the record's frequencies and its energy then describe different levels, which is worth telling the depositor and the reader but cannot be shown to be wrong. The composite role on a calculation of another type is the legacy shape from before the composite type existed: a warning now, to be refused once producers can send the new shape.
+
+**Enforced at.**
+
+- `collect_composite_link_warnings` — `backend/app/services/calculation_levels.py::collect_composite_link_warnings`
+
+**Escape hatch.** None needed: the link is stored as stated. Link the frequency calculation at the recipe's level.
+
+### 63. A named composite method (CBS-QB3, G4, W1U) is one program run and is deposited as a calculation of type composite, not as an optimisation or a single point at its level.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `named_composite_deposited_as_opt`, `named_composite_deposited_as_sp` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| **Governing ADR** | 0008, 0021 |
+
+**Why this tier.** The legacy shape from before the composite type existed, so a warning (refused once producers can send the new shape). A composite's number is a recipe's, not an optimisation's or a single point's, and storing it under the wrong type lets every reader take it for one; the deposit is kept as sent because the energy it carries is still true.
+
+**Enforced at.**
+
+- `collect_named_composite_deposit_warnings` — `backend/app/services/composite_result_resolution.py::collect_named_composite_deposit_warnings`
+
+**Escape hatch.** None needed: the deposit is accepted. Send it as type composite with a composite_result block.
+
+### 64. An assembled composite's inputs each declare the geometry their energy is at, and the deposited total can be recomputed from them, so the checks of entries 59 and 60 can run.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `composite_input_geometry_undeclared`, `composite_total_unverifiable` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| **Governing ADR** | 0008, 0021 |
+
+**Why this tier.** The absence sibling of entries 59 and 60. An input with no declared geometry cannot show that all inputs share one, and a total whose energies, components or correlation convention are not stated cannot be recomputed; an incomplete record is still a true record, so these warn (ADR 0008) and the deposit is kept.
+
+**Enforced at.**
+
+- `_unverifiable_warning` — `backend/app/services/composite_input_resolution.py::_unverifiable_warning`
+  *The geometry-undeclared warning is raised in `_check_geometries`.*
+
+**Escape hatch.** None needed: the deposit is accepted. Declare each input's geometry and state the energies used.
+
+## Subject of a record
+
+### 65. What a record cites as evidence belongs to the record's own subject (its species, transition state or participant). A source of another subject's is that subject's evidence, not weaker evidence for this one.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `network_energy_source_subject_mismatch`, `thermo_source_calculation_owner_mismatch`, `statmech_source_calculation_owner_mismatch`, `transport_source_calculation_owner_mismatch`, `scf_stability_source_calculation_owner_mismatch`, `composite_input_owner_mismatch`, `statmech_torsion_scan_calculation_owner_mismatch`, `applied_energy_correction_source_calculation_owner_mismatch`, `thermo_statmech_owner_mismatch` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** Definitional, and the same claim wherever it is made: a number is attributed to a subject by the calculations behind it, so a source of another molecule's, another saddle point's or another reaction's is not weak evidence for this record but a different record's evidence, and borrowing it would put one subject's provenance on another's number. The refusals are separate codes because the repair differs (the wrong job, the wrong role and the wrong rotor scan are different fields), not because the rule does. A bimolecular network state accepts a calculation of any one of its participants.
+
+**Enforced at.**
+
+- `assert_owned_by` — `backend/app/services/calculation_ownership.py::assert_owned_by`
+  *The shared seam; every source-calculation and statmech owner code above arrives as its argument, through `assert_calculation_owned_by` and `assert_statmech_owned_by`.*
+- `owner_mismatch_error` — `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py::owner_mismatch_error`
+  *Transport and stability source links, built once for the request schema and the workflow (ADR 0017).*
+- `assert_state_energy_source_owner` — `backend/app/services/network_energy_sources.py::assert_state_energy_source_owner`
+- `assert_barrier_source_owner` — `backend/app/services/network_energy_sources.py::assert_barrier_source_owner`
+- `assert_network_role_source_owner` — `backend/app/services/network_energy_sources.py::assert_network_role_source_owner`
+- `assert_state_participant_source_owner` — `backend/app/services/network_energy_sources.py::assert_state_participant_source_owner`
+
+**Escape hatch.** Cite the calculation or statmech record of the subject the record is about.
+
+## Declarations against the record
+
+### 66. A kinetics applicability or protocol declaration does not contradict the columns the record already states (direction, pressure context, bath gas, scientific origin): the stored columns stay authoritative.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `kinetics_declaration_contradicts_record` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** A contract between two statements of one record. A declaration is a claim, stored as made, and is never reconciled with the columns: an 'experimental' method on a computed record, or a fixed-mixture collider whose species differ from the bath gas, cannot both be true of the same rate. A column that is not stated is not a contradiction; the declaration is then the only statement.
+
+**Enforced at.**
+
+- `kinetics_applicability_error` — `schemas/python/tckdb-schemas/tckdb_schemas/kinetics_declarations.py::kinetics_applicability_error`
+- `kinetics_protocol_origin_error` — `schemas/python/tckdb-schemas/tckdb_schemas/kinetics_declarations.py::kinetics_protocol_origin_error`
+- `assert_kinetics_declaration_columns` — `backend/app/services/kinetics_declaration_resolution.py::assert_kinetics_declaration_columns`
+
+**Escape hatch.** Correct whichever statement is wrong, or omit the declaration.
+
+### 67. A determination, statistical-model, structure, protocol or interpretation declaration describes the record that carries it. Its reaction, direction, source, subject, cited calculations, statmech record and conformer selection are that record's own.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `kinetics_determination_mismatch`, `statmech_model_declaration_mismatch`, `structure_determination_mismatch`, `kinetics_protocol_calculation_owner_mismatch`, `thermo_protocol_calculation_owner_mismatch`, `kinetics_interpretation_statmech_owner_mismatch`, `kinetics_interpretation_conformer_selection_owner_mismatch` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** A contract about what the record says, and the claim in this group closest to referential integrity: the same subject rule as entry 65, made about a declaration instead of a link. It is registered because the declarations are the evidence a later method-aware comparison reads, and a determination of another reaction, or a model of another species, would be read as evidence for this one. `context.reason` names which relation failed. A declaration that restates an existing key with different content is refused here too, because a determination is immutable.
+
+**Enforced at.**
+
+- `_mismatch` — `backend/app/services/kinetics_declaration_resolution.py::_mismatch`
+  *Also the kinetics protocol-calculation owner refusal.*
+- `_resolve_protocol` — `backend/app/services/thermo_declaration_resolution.py::_resolve_protocol`
+- `_mismatch` — `backend/app/services/statmech_declaration_resolution.py::_mismatch`
+- `_mismatch` — `backend/app/services/structure_determination_resolution.py::_mismatch`
+- `assert_statmech_owned_by` — `backend/app/services/calculation_ownership.py::assert_statmech_owned_by`
+
+**Escape hatch.** Declare it on the record it describes, with the calculations and sources of that record.
+
+## Observation identity
+
+### 68. A curator attaches an observation of unresolved identity only to a ground-state, minimum-energy entry of a species whose connectivity agrees with the observation's own identity hint.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `observation_identity_target_not_ground_state_minimum`, `observation_identity_hint_conflict` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** A contract on a curator action, not a claim about a result. An observation carries no stereochemical or excited-state resolution of its own, so attaching it to an excited-state or non-minimum entry would present it as that state's, and a hint naming another molecular skeleton than the target's species would present it as another molecule's. Only the connectivity block is compared, so a stereochemistry-only difference is accepted. The ground-state-minimum test is the one the automatic resolver uses.
+
+**Enforced at.**
+
+- `_assert_ground_state_minimum_entry` — `backend/app/services/observation_identity_attach.py::_assert_ground_state_minimum_entry`
+- `_assert_no_identity_hint_conflict` — `backend/app/services/observation_identity_attach.py::_assert_no_identity_hint_conflict`
+
+**Escape hatch.** Attach it to the ground-state minimum entry of the species it was measured on.
+
+## Corrections and scale factors
+
+### 69. A Petersson bond-additivity correction applied as a total carries at least one bond component, unless its target species has no bonds; a transition state has no bond assignment and so cannot take a componentless total.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `bac_total_requires_components` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** Definitional. A Petersson bond additivity correction is a sum over bonds; a total with nothing behind it cannot be shown to be one rather than an empty sum or an arbitrary number. A species with no bonds (an atom) has nothing to sum. A Melius total does not decompose into bond components and is not judged.
+
+**Enforced at.**
+
+- `assert_bac_total_has_required_components` — `backend/app/services/energy_correction_resolution.py::assert_bac_total_has_required_components`
+
+**Escape hatch.** Send the bond components, or apply the correction under another role.
+
+### 70. The frequency scale factor a statmech record applies was derived for the program that ran the frequency calculation it is applied to.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `statmech_frequency_scale_factor_software_mismatch` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** A harmonic scale factor is specific to the code and level it was fit against, but applying one across codes is a deliberate and sometimes documented choice (re-scaling frequencies computed elsewhere), so it could fire on a correct deposit and cannot block. Both softwares must be known and differ; 'nothing to compare' is a distinct state and never counts as agreement.
+
+**Enforced at.**
+
+- `collect_frequency_scale_factor_software_mismatch_warnings` — `backend/app/services/statmech_resolution.py::collect_frequency_scale_factor_software_mismatch_warnings`
+
+**Escape hatch.** None needed: the deposit is accepted. Confirm the choice, or attach a factor derived for that program.
+
+## Enthalpy reference
+
+### 71. A thermo record that carries an enthalpy states what the enthalpy is relative to, the only accepted reference is the standard enthalpy of formation at 298.15 K, and a declaration is made only for a record that carries enthalpy content.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `enthalpy_declaration_absent`, `enthalpy_reference_kind_unrecognized`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** A contract, and the most consequential one for downstream arithmetic. An enthalpy is a number that means something only against a chosen zero; TCKDB used to store the number and not the zero. Combining enthalpies of different references (a reaction enthalpy, a Hess cycle) gives nonsense that looks like a result, so an undeclared enthalpy is refused rather than defaulted, and a producer that does not know its own convention must refuse to emit it. A near-miss spelling of the one value gets its own refusal because it is a typo, not a different quantity.
+
+**Enforced at.**
+
+- `enthalpy_reference_error` — `schemas/python/tckdb-schemas/tckdb_schemas/enthalpy_reference.py::enthalpy_reference_error`
+  *The rule itself, shared with the client builder and the bundle export.*
+- `assert_enthalpy_reference` — `backend/app/workflows/thermo.py::assert_enthalpy_reference`
+  *Raises the refusal for the thermo upload.*
+
+**Escape hatch.** Declare `formation_298k` when the source states that convention. Sensible increments and absolute enthalpies belong to the molecular property observation route.
+
+## Calculation graph
+
+### 72. The graph of which calculation depends on which is acyclic: no calculation depends on itself through a chain of others.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `structural` |
+| **Code** | `calculation_dependency_cycle` |
+| **Code reaches a client via** | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** Held by the shape of the schema. A calculation that is an input to itself has no order in which it could have been run, so a record violating it cannot be represented. It is a trigger and not a Python check so that no write path can bypass it; the lock trigger beside it serialises concurrent inserts that would together close a cycle.
+
+**Enforced at.**
+
+- `trg_calculation_dependency_acyclic` (trigger on `calculation_dependency`)
+  `BEFORE INSERT OR UPDATE FOR EACH ROW: refuse an edge whose parent is already reachable from its child`
+- `ck_calculation_dependency_not_self` (check on `calculation_dependency`)
+  `parent_calculation_id <> child_calculation_id`
+
+**Escape hatch.** Drop or reverse the dependency that points back.
+
+### 73. SCF stability verdicts do not cite one another as the job that measured them in a ring: some job measured each.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `scf_stability_source_cycle` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** Definitional. A verdict that names, as its measuring job, a calculation whose own verdict names the first has no measuring job at all. It is the bundle-level sibling of the dependency graph rule (entry 72), refused before anything is stored.
+
+**Enforced at.**
+
+- `scf_source_cycle_error` — `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py::scf_source_cycle_error`
+  *The same refusal from the request schema and the workflow (ADR 0017).*
+
+**Escape hatch.** Name, as the measuring job, a calculation that is not itself measured by the first.
+
+## Energy comparison
+
+### 74. A lowest-energy selection compares energies of one level and one species entry, and a relative-energy comparison names two different protocols.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `lowest_energy_across_levels`, `unsafe_lowest_energy_comparison`, `relative_conformer_energy_compare_identical_protocols` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** Definitional, on the read side. Absolute energies from different levels differ by far more than the quantity a lowest-energy selection reports, so the answer would be an artefact of the levels; a protocol compared with itself compares nothing. The refusal names what to narrow rather than choosing for the reader.
+
+**Enforced at.**
+
+- `_refuse_mixed_levels` — `backend/app/api/routes/lookup.py::_refuse_mixed_levels`
+- `_validate_ranking` — `backend/app/services/scientific_read/species_calculations_search.py::_validate_ranking`
+- `identical_protocols` — `backend/app/services/relative_conformer_energy/compare.py::identical_protocols`
+
+**Escape hatch.** Filter to one level (method and basis) and one species entry, or use a select endpoint.
+
+## Evidence a result rests on
+
+### 75. An optimisation recorded as converged has an energy behind it: a single point of the same owner at any level, or its own final energy stated with an artifact.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `converged_opt_no_usable_energy` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** An absence, so a warning: a converged geometry is a claim about the energy, but an incomplete record is still a true one and trust and reproducibility grade it. The sibling of entry 19, which asks for evidence that a saddle point connects its endpoints.
+
+**Enforced at.**
+
+- `collect_converged_opt_energy_warnings` — `backend/app/services/calculation_resolution.py::collect_converged_opt_energy_warnings`
+
+**Escape hatch.** None needed: the deposit is accepted. Deposit a single point, or the optimisation's final energy with its artifact.
+
+## Declared against the uploaded evidence
+
+### 76. What a depositor typed about a calculation's settings and level of theory agrees with what the uploaded input deck and output log say, the deck agrees with the log, a later log agrees with an earlier one, and a value a log reports agrees with the value it was asked for.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `parameter_disagrees_with_artifact`, `input_deck_disagrees_with_output_log`, `output_log_disagrees_with_earlier_output_log`, `reported_setting_differs_from_requested`, `level_of_theory_disagrees_with_artifact` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** An expectation about evidence, so it warns. A deck that differs from a log is common and legitimate (the deck may not be the exact input that ran), a log legitimately reports a value the program chose rather than the one requested, and a parser reads only a subset of a log; any of these could fire on a correct deposit. It is compared only where both sides state a canonical value for a setting that can change the result, only for the program the calculation declares, and absence is never a disagreement. Nothing is refused or corrected, and the precedence (reported, echoed, deck, typed) decides which value is shown.
+
+**Enforced at.**
+
+- `declared_parameter_warnings` — `backend/app/services/parameter_reconciliation.py::declared_parameter_warnings`
+- `merge_artifact_observations` — `backend/app/services/parameter_reconciliation.py::merge_artifact_observations`
+- `level_of_theory_warnings` — `backend/app/services/parameter_reconciliation.py::level_of_theory_warnings`
+- `level_of_theory_qualifier_warnings` — `backend/app/services/parameter_reconciliation.py::level_of_theory_qualifier_warnings`
+- `reported_setting_warnings` — `backend/app/services/parameter_reconciliation.py::reported_setting_warnings`
+
+**Escape hatch.** None needed: the deposit is accepted. Correct the typed value, or attach the right deck.
+
+### 77. The electronic energy a tool states for a single point, and the E0, zero-point and electronic energies it states for a composite, agree with the output log attached to the same calculation, and the log is the composite method the level of theory names.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `sp_energy_payload_log_mismatch`, `composite_energy_log_mismatch`, `composite_log_method_mismatch` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| **Governing ADR** | 0008, 0021 |
+
+**Why this tier.** The log is evidence, not authority: a tool may store a value at reduced precision, a parser may read the wrong line, and a flagged mismatch is for a reviewer, not a reject. TCKDB keeps the number exactly as sent and never overwrites it. A log that is a different composite method from the level of theory is flagged and the energies are then not compared, because they answer different questions. Where nothing can be read from the log the deposit stands with a recorded reason, so an unparseable log is never a mismatch.
+
+**Enforced at.**
+
+- `reconcile_sp_energy` — `backend/app/services/sp_energy_reconciliation.py::reconcile_sp_energy`
+- `reconcile_composite_energy` — `backend/app/services/composite_energy_reconciliation.py::reconcile_composite_energy`
+
+**Thresholds.**
+
+- `composite_log_tolerance` = **1e-06 hartree (max(1e-6, 5e-7 * n), n the rounded quantities compared)** — a constant fixed in code.
+  Each log number was printed to six decimals and so was a deposited one copied from it: E0 against its 0 K line and the ZPE against E(ZPE) use n = 2, the electronic energy against E0 - E(ZPE) uses n = 3.
+- `sp_energy_log_tolerance` = **1e-06 hartree** — a constant fixed in code.
+  Tight because a mismatch is only a reviewer flag: a wrong line, a wrong method or a unit slip diverges by far more, while a tool storing reduced precision stays inside it.
+
+**Escape hatch.** None needed: the deposit is accepted. Send the value the log prints, or omit it and let the log speak.
+
+### 78. The Hessian method a deck or log attached after the deposit states is the method the calculation's stored imaginary-mode tolerance rests on.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `hessian_method_disagrees_with_stored_tau_basis` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| **Governing ADR** | 0008, 0012 |
+
+**Why this tier.** The sibling of the refusal in entry 50, for the case that refusal cannot reach. A deck or log attached through the artifact route is read after the deposit was judged, so the tolerance was already decided without it, and stored rows are append-only: nothing is relabelled. The contradiction is real but the record it concerns is already accepted, so the only available consequence is an annotation. Agreement, a deck with no frequency directive and a tolerance basis resting on no method warn nothing.
+
+**Enforced at.**
+
+- `try_hessian_method_disagreement_from_input_upload` — `backend/app/services/hessian_method_deck_check.py::try_hessian_method_disagreement_from_input_upload`
+
+**Escape hatch.** None needed: the record is annotated, not refused.
+
+### 79. What a neutral ground-state atom declares agrees with the NIST ground term of its element: its term symbol is the ground term, and the degeneracy of the lowest electronic level it deposits is one that term allows (the J-resolved ground level, or the lowest levels lumped up to the unsplit term).
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `atomic_electronic_degeneracy_contradicts_term`, `term_symbol_contradicts_ground_term` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** An atom's entropy and free energy depend on its electronic partition function, so a lowest degeneracy no ground term gives changes S(298 K) by several J/mol/K. It warns and does not block because the degeneracy is compared with a reference table (an expectation about a result), an atom in a non-ground configuration is a legitimate deposit, and the deposit is kept as sent. Absence of levels is a separate, unregistered absence warning.
+
+**Enforced at.**
+
+- `_degeneracy_warnings` — `backend/app/services/atomic_electronic_warnings.py::_degeneracy_warnings`
+- `term_symbol_warnings` — `backend/app/services/upload_reconciliation.py::term_symbol_warnings`
+  *The ground-term half; the multiplicity half is entry 12's.*
+
+**Escape hatch.** None needed: the deposit is accepted. Deposit the levels that match the declared term.
+
+### 80. The job named as having measured an SCF stability verdict ran at the level of theory of the calculation carrying the verdict, and the two can be shown to be on one conformer.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `scf_stability_source_level_mismatch`, `scf_stability_source_conformer_unverified` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** An expectation and an absence, so a warning. A producer may legitimately run the stability check at a cheaper level and say so, which is worth telling the depositor but not a reason to refuse the record. When neither calculation is tied to any conformer the same-conformer rule cannot be checked, and an incomplete record is still a true record; exactly one side unanchored is a refusal, and a different conformer is entry 57's refusal.
+
+**Enforced at.**
+
+- `link_scf_stability_sources` — `backend/app/services/scf_stability_sources.py::link_scf_stability_sources`
+
+**Escape hatch.** None needed: the link is stored as stated.
+
+## Thermo declarations
+
+### 81. A thermo declaration the file format defines describes what the format defines: a target declared by the CHEMKIN format is an equilibrium ensemble, on a gas-phase record that carries a NASA-7 block.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `thermo_declared_by_target_incoherent`, `thermo_declared_by_record_incoherent` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** Definitional. A CHEMKIN NASA-7 polynomial is the equilibrium-ensemble thermochemistry of a gas-phase species, so a depositor cannot make the format declare a single conformer, a liquid, or a record with no polynomial. The depositor's own declarations are unrestricted: the rule applies only where the format is the declarer.
+
+**Enforced at.**
+
+- `thermo_target_error` — `schemas/python/tckdb-schemas/tckdb_schemas/thermo_declarations.py::thermo_target_error`
+- `_declared_by_record_error` — `schemas/python/tckdb-schemas/tckdb_schemas/thermo_declarations.py::_declared_by_record_error`
+
+**Escape hatch.** Declare the target as depositor-defined, or send a gas-phase record with its NASA-7 block.
+
+## Hessian method of a stored tolerance
+
+### 82. A recorded finite difference of gradients on an ORCA NumFreq deck, for a method with no analytic gradient, is stored as finite differences of energies, and the record says so.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `hessian_method_refined` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| **Governing ADR** | 0008, 0012 |
+
+**Why this tier.** Not a contradiction with the deck (the sibling of entry 50): NumFreq differentiates gradients, and for a method with no analytic gradient those gradients are themselves numerical, so the recorded label and the deck agree about the program's procedure and differ only in what the label means. The tolerance stored with the record is the looser one for energies; the deposit is kept and the refinement is stated.
+
+**Enforced at.**
+
+- `_refinement_findings` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::_refinement_findings`
+
+**Escape hatch.** None needed: the deposit is accepted. Record finite_difference_energy to state it directly.
 
 ---
 
