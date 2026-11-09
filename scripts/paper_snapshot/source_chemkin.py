@@ -1,0 +1,115 @@
+"""Source 4: the formic acid RMG model, deposited unmodified through the CHEMKIN adapter.
+
+The adapter (``clients/python/adapters/chemkin``) parses ``chem_annotated.inp``,
+resolves every species name to a structure through RMG's own
+``species_dictionary.txt``, builds the thermo and kinetics payloads and, in its
+``upload_payloads``, posts them to ``/uploads/thermo`` and ``/uploads/kinetics``
+through ``tckdb_client``. This module only configures that run and records what
+came back: every response's warnings, every refusal, and the adapter's own
+import warnings (the wrong ``DUPLICATE`` flags, which the importer reports and
+does not repair).
+
+The model's transport data lives only in the authors' Cantera YAML, so no
+transport file is passed: transport is absent from the deposit, as it is from
+the CHEMKIN file.
+"""
+
+from __future__ import annotations
+
+import re
+from collections import Counter
+from pathlib import Path
+from typing import Any
+
+from tckdb_chemkin.identity import IdentityResolver, parse_species_dictionary
+from tckdb_chemkin.normalizer import normalize_mechanism
+from tckdb_chemkin.parser import parse_mechanism
+from tckdb_chemkin.payloads import ImportConfig, build_all_payloads
+from tckdb_chemkin.uploader import upload_payloads
+
+from common import REPO_ROOT, Report, Session, collect_response_warnings
+
+SOURCE = "chemkin_formic_acid"
+
+DEFAULT_LITERATURE = {
+    "kind": "article",
+    "title": "Using RMG Out-of-the-Box for Formic Acid Pyrolysis and Oxidation",
+    "journal": "ACS Omega",
+    "year": 2026,
+    "volume": "11",
+    "pages": "6371-6381",
+    "doi": "10.1021/acsomega.5c11182",
+}
+
+
+class _Recorder:
+    """Wraps the real client so every response the adapter's uploader gets is kept."""
+
+    def __init__(self, client: Any, report: Report) -> None:
+        self._client = client
+        self._report = report
+        self.submission_refs: list[str] = []
+        self.codes: Counter[str] = Counter()
+
+    def request_json(self, method: str, path: str, **kwargs: Any):
+        try:
+            response = self._client.request_json(method, path, **kwargs)
+        except Exception as exc:
+            self._report.refuse(SOURCE, f"{method} {path} {kwargs.get('idempotency_key', '')}", exc)
+            raise
+        data = response.data
+        collect_response_warnings(self._report, SOURCE, f"{method} {path}", data)
+        if isinstance(data, dict) and data.get("submission_ref"):
+            self.submission_refs.append(data["submission_ref"])
+        return response
+
+
+def _duplicate_code(message: str) -> str:
+    match = re.search(r"\b(orphan|undeclared)\b", message, flags=re.I)
+    return "chemkin_duplicate_" + (match.group(1).lower() if match else "flag")
+
+
+def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Path) -> None:
+    fixture = Path(cfg.get("fixture_dir", "backend/tests/integration/fixtures/rmg_formic_acid_wu2026"))
+    fixture = fixture if fixture.is_absolute() else REPO_ROOT / fixture
+    mechanism_file = cfg.get("mechanism_file", "chem_annotated.inp")
+    dictionary_file = cfg.get("species_dictionary", "species_dictionary.txt")
+    src = report.source(SOURCE)
+
+    mechanism = parse_mechanism((fixture / mechanism_file).read_text())
+    resolver = IdentityResolver(rmg_dict=parse_species_dictionary((fixture / dictionary_file).read_text()))
+    config = ImportConfig(
+        scientific_origin=cfg.get("scientific_origin", "estimated"),
+        mechanism_name=cfg.get("mechanism_name", "RMG formic acid pyrolysis and oxidation model (Wu and Grinberg Dana 2026)"),
+        mechanism_version=cfg.get("mechanism_version"),
+        literature=cfg.get("literature", DEFAULT_LITERATURE),
+    )
+    normalized = normalize_mechanism(mechanism)
+    payloads = build_all_payloads(mechanism, resolver, config, normalized=normalized)
+
+    src["parsed"] = {"species": len(mechanism.species), "reaction_rows": len(mechanism.reactions)}
+    src["payloads_built"] = payloads.counts()
+    dup = Counter(_duplicate_code(w) for w in payloads.warnings if "DUPLICATE" in w.upper())
+    src["adapter_import_warnings"] = {
+        "total": len(payloads.warnings),
+        "duplicate_flag_warnings": sum(dup.values()),
+        "by_kind": dict(sorted(dup.items())),
+        "messages": list(payloads.warnings),
+    }
+    for message in payloads.warnings:
+        report.warn(SOURCE, "adapter import report", {"code": _duplicate_code(message) if "DUPLICATE" in message.upper() else "chemkin_import_warning", "message": message})
+
+    mechanism_id = cfg.get("mechanism_id", "paper-snapshot:wu2026-formic-acid")
+    client = session.client()
+    try:
+        recorder = _Recorder(client, report)
+        upload = upload_payloads(payloads, recorder, mechanism_id=mechanism_id)
+    finally:
+        client.close()
+    summary = upload.summary()
+    src["upload"] = summary
+    src["distinct_submissions"] = len(set(recorder.submission_refs))
+    src["status"] = "deposited" if summary["errored_total"] == 0 else f"deposited with {summary['errored_total']} refused records"
+    for kind, counts in summary["by_kind"].items():
+        report.count(SOURCE, f"{kind}_accepted", counts["ok"])
+        report.count(SOURCE, f"{kind}_refused", counts["errored"])

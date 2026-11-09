@@ -1,0 +1,211 @@
+"""Build the paper's demonstration snapshot on an empty local TCKDB instance.
+
+    python scripts/paper_snapshot/build.py --sources scripts/paper_snapshot/sources.example.yml
+
+Steps, in order:
+
+1. refuse unless the instance is reachable and empty;
+2. register a depositor through the public route and mint its API key;
+3. deposit each configured source through its public route
+   (source 1 through the client builders, source 4 through the CHEMKIN adapter;
+   sources 2 and 3 are stubs that run only when configured);
+4. create a curator account (operator CLI) and approve the submissions through
+   ``POST /submissions/{id}/approve``, recording that this is a build-script
+   demonstration and not an independent review;
+5. export the archive (``backend/scripts/tckdb_archive.py``) and the expected
+   outputs (``backend/scripts/paper/generate_expected_outputs.py``);
+6. write ``build_report.json`` (every warning and refusal grouped by code) and
+   ``snapshot_record.json`` (what was built, from which commit, with what).
+
+Everything is deposited through HTTP. The only non-HTTP steps are the curator
+account creation (no public route grants the role) and the two exports, which
+read the instance's database the way a restore-and-regenerate reproducer does.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import time
+from importlib import metadata
+from pathlib import Path
+from typing import Any
+
+HERE = Path(__file__).resolve().parent
+REPO_ROOT = HERE.parents[1]
+PACKAGE_PATHS = [
+    REPO_ROOT / "schemas" / "python" / "tckdb-schemas",
+    REPO_ROOT / "clients" / "python" / "src",
+    REPO_ROOT / "clients" / "python" / "adapters" / "chemkin",
+    REPO_ROOT / "backend",
+]
+# Prefer this checkout's packages over any editable install that points at another checkout.
+for _path in reversed([HERE, *PACKAGE_PATHS]):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
+import yaml  # noqa: E402
+
+import curation  # noqa: E402
+import export  # noqa: E402
+import source_arc  # noqa: E402
+import source_chemkin  # noqa: E402
+import source_e2  # noqa: E402
+import source_pdep  # noqa: E402
+from common import Report, Session  # noqa: E402
+
+#: Deposit order (brief section 1): E2, formic acid, ARC runs, network.
+SOURCES = (
+    ("e2_conformers", source_e2),
+    ("chemkin_formic_acid", source_chemkin),
+    ("arc_runs", source_arc),
+    ("pdep_network", source_pdep),
+)
+
+
+def load_config(path: Path) -> dict[str, Any]:
+    config = yaml.safe_load(path.read_text()) or {}
+    config.setdefault("instance", {})
+    config.setdefault("sources", {})
+    return config
+
+
+def database_env(instance: dict[str, Any]) -> dict[str, str]:
+    db = instance.get("database") or {}
+    s3 = instance.get("s3") or {}
+    env = {
+        "DB_USER": str(db.get("user", os.environ.get("DB_USER", "tckdb"))),
+        "DB_PASSWORD": str(db.get("password", os.environ.get("DB_PASSWORD", "tckdb"))),
+        "DB_HOST": str(db.get("host", os.environ.get("DB_HOST", "127.0.0.1"))),
+        "DB_PORT": str(db.get("port", os.environ.get("DB_PORT", "5432"))),
+        "DB_NAME": str(db.get("name", os.environ.get("DB_NAME", "tckdb_dev"))),
+    }
+    for key, default in (
+        ("endpoint_url", "http://localhost:9000"),
+        ("access_key", "tckdb"),
+        ("secret_key", "tckdb_secret"),
+        ("bucket", "tckdb-artifacts"),
+    ):
+        env["S3_" + key.upper()] = str(s3.get(key, os.environ.get("S3_" + key.upper(), default)))
+    return env
+
+
+def assert_empty(env: dict[str, str]) -> None:
+    import psycopg
+
+    with psycopg.connect(
+        host=env["DB_HOST"], port=env["DB_PORT"], user=env["DB_USER"], password=env["DB_PASSWORD"], dbname=env["DB_NAME"]
+    ) as conn:
+        counts = {t: conn.execute(f"select count(*) from {t}").fetchone()[0] for t in ("submission", "species", "app_user")}
+    if counts["submission"] or counts["species"]:
+        raise SystemExit(f"instance {env['DB_NAME']} is not empty ({counts}); the snapshot is built from an empty instance")
+    if counts["app_user"]:
+        print(f"note: {counts['app_user']} account(s) already exist; they will be reused by name or the build will stop", file=sys.stderr)
+
+
+def git_commit() -> dict[str, Any]:
+    def run(*argv: str) -> str:
+        return subprocess.run(["git", *argv], cwd=REPO_ROOT, capture_output=True, text=True).stdout.strip()
+
+    return {"commit": run("rev-parse", "HEAD"), "dirty_tracked_files": len(run("status", "--porcelain", "--untracked-files=no").splitlines())}
+
+
+def package_versions() -> dict[str, str]:
+    versions = {}
+    for name in ("tckdb-client", "tckdb-schemas", "tckdb-chemkin"):
+        try:
+            versions[name] = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            versions[name] = "not installed (run from the checkout)"
+    return versions
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--sources", type=Path, required=True, help="sources config (see sources.example.yml)")
+    parser.add_argument("--out-dir", type=Path, default=None, help="where the snapshot is written (default: <work-dir>/snapshot)")
+    parser.add_argument("--work-dir", type=Path, default=REPO_ROOT / ".paper_snapshot_work")
+    parser.add_argument("--skip-approval", action="store_true")
+    parser.add_argument("--skip-export", action="store_true")
+    parser.add_argument("--allow-nonempty", action="store_true", help="skip the empty-instance check (reruns only)")
+    args = parser.parse_args(argv)
+
+    config = load_config(args.sources)
+    instance = config["instance"]
+    base_url = instance.get("api_url", "http://127.0.0.1:8010")
+    out_dir = (args.out_dir or args.work_dir / "snapshot").resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    db_env = database_env(instance)
+    accounts = config.get("accounts") or {}
+    depositor = {"username": "snapshot_depositor", "password": "snapshot-depositor-pass", "email": "depositor@snapshot.invalid",
+                 "full_name": "Snapshot build depositor", **(accounts.get("depositor") or {})}
+    curator = {"username": "snapshot_curator", "password": "snapshot-curator-pass", "email": "curator@snapshot.invalid",
+               "full_name": "Snapshot build curator (script)", **(accounts.get("curator") or {})}
+
+    session = Session(base_url)
+    status = session.health()
+    print(f"instance {session.base}: status={status.get('status')} revision={status['components']['database']['alembic_revision']}")
+    if not args.allow_nonempty:
+        assert_empty(db_env)
+
+    report = Report()
+    started = time.time()
+    session.register_depositor(**depositor)
+
+    for name, module in SOURCES:
+        entry = (config["sources"] or {}).get(name)
+        if not entry:
+            report.source(name)["status"] = "skipped: no entry in the sources config"
+            print(f"[{name}] skipped (no config entry)")
+            continue
+        if not entry.get("enabled", True):
+            report.source(name)["status"] = "skipped: enabled is false"
+            print(f"[{name}] skipped (enabled: false)")
+            continue
+        print(f"[{name}] depositing ...")
+        module.deposit(session, entry, report, args.work_dir)
+        print(f"[{name}] {report.source(name)['status']}: {report.source(name)['counts']}")
+
+    approval: dict[str, Any] = {"performed": False}
+    if not args.skip_approval:
+        print("[curation] creating curator and approving submissions ...")
+        created = curation.create_curator(db_env, curator["username"], curator["password"], curator["email"], curator["full_name"])
+        outcome = curation.approve_all(session, curator["username"], curator["password"], report)
+        approval = {"performed": True, "curator_account": created, **outcome,
+                    "statement": "approval was done by the build script for a demonstration; it is not an independent review"}
+        print(f"[curation] approved {outcome['approved_submissions']} submissions, {len(outcome['failed'])} failed")
+
+    exports: dict[str, Any] = {}
+    if not args.skip_export:
+        env = export.subprocess_env(db_env, PACKAGE_PATHS)
+        archive = out_dir / "tckdb.archive"
+        print("[export] archive ...")
+        exports["archive"] = export.create_archive(archive, env).strip().splitlines()
+        exports["archive_verify"] = export.verify_archive(archive, env).strip().splitlines()
+        print("[export] expected outputs ...")
+        exports["expected_outputs"] = export.expected_outputs(out_dir / "expected_outputs", env).strip().splitlines()
+        exports["archive_sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
+
+    report.write(out_dir / "build_report.json")
+    record = {
+        "snapshot": "TCKDB paper demonstration snapshot",
+        "source_commit": git_commit(),
+        "packages": package_versions(),
+        "sources_config": {k: {kk: vv for kk, vv in (v or {}).items()} for k, v in (config["sources"] or {}).items()},
+        "source_status": {k: v["status"] for k, v in report.sources.items()},
+        "approval": approval,
+        "exports": exports,
+        "built_at_unix": int(started),
+        "wall_seconds": round(time.time() - started, 1),
+    }
+    (out_dir / "snapshot_record.json").write_text(json.dumps(record, indent=2, sort_keys=True, default=str) + "\n")
+    print(f"done in {record['wall_seconds']} s; wrote {out_dir}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

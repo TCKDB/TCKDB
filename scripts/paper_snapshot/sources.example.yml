@@ -1,0 +1,55 @@
+# Sources for the paper snapshot build. Copy, edit the paths, pass with --sources.
+#
+# A source with no entry here is skipped, and the build says so. Large source
+# files are read from these paths; none is copied into the repository.
+
+instance:
+  api_url: http://127.0.0.1:8101
+  # The archive export and the curator account read/write the instance's database
+  # directly, so the build needs to know it. Defaults come from DB_* / S3_* in the environment.
+  database:
+    host: 127.0.0.1
+    port: 5432
+    name: tckdb_test_snapshot_a
+    user: tckdb
+    password: tckdb
+  s3:
+    endpoint_url: http://localhost:9000
+    access_key: tckdb
+    secret_key: tckdb_secret
+    bucket: tckdb-test-snapshot-a
+
+sources:
+  # Source 1: the E2 conformer study, deposited with the client builders.
+  e2_conformers:
+    enabled: true
+    root: /home/calvin/code/TCKDB_v2/paper/notes/conformer_basin_review_2026-10-25/E2
+    # GFN2-xTB is left out: xtb.out has no admissible artifact slot (see source_e2.py).
+    # Add "gfn2" to deposit it; set gfn2_log_as: ancillary to attach xtb.out as a byte-identical .txt copy.
+    levels: [b3lyp_d3bj, wb97xd]
+    # gfn2_log_as: ancillary
+
+  # Source 4: the formic acid RMG model (Wu and Grinberg Dana, ACS Omega 2026), unmodified,
+  # through the CHEMKIN adapter. Paths are relative to the repository root.
+  chemkin_formic_acid:
+    enabled: true
+    fixture_dir: backend/tests/integration/fixtures/rmg_formic_acid_wu2026
+    mechanism_file: chem_annotated.inp
+    species_dictionary: species_dictionary.txt
+    # RMG's thermo and rate rules are estimates, not measurements or this model's own calculations.
+    scientific_origin: estimated
+
+  # Source 2: ARC runs through the ARC adapter. Not implemented yet (waits on the Zeus re-runs).
+  # arc_runs:
+  #   enabled: true
+  #   adapter_path: ~/code/tckdb-adapters
+  #   runs_root: ~/runs/ARC/snapshot_reruns_20261108
+
+  # Source 3: the N2H3 pressure-dependent network. Not implemented yet (waits on a provenance check).
+  # pdep_network:
+  #   enabled: true
+  #   arkane_dir: ~/code/michal-keslin/N2H3_shared/Final_Final_CCSDT_F12_Aug_F12
+
+# accounts:                      # optional; throw-away local accounts, defaults shown in build.py
+#   depositor: {username: snapshot_depositor, password: ...}
+#   curator:   {username: snapshot_curator,   password: ...}
