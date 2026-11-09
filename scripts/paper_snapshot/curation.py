@@ -1,16 +1,8 @@
-"""Approval of the deposits by a curator account the build script creates.
+"""Curator approval of the deposits.
 
-This is a demonstration, not a review. The snapshot has one author and one
-build script; the curator account exists so that the curation overlay of the
-database (review state, submission approval, audit events) is populated and a
-reader can see what an approved record looks like. The approval summary
-written on every submission says so, and the snapshot record repeats it.
-
-Account creation is the one step that is not a public route: no endpoint
-grants the curator role, so the operator CLI (``backend/scripts/bootstrap_admin.py``)
-does it, exactly as the deployment runbook does for a real curator. The
-approvals themselves are ordinary ``POST /submissions/{id}/approve`` calls made
-with the curator's session.
+A curator account is created with the operator CLI (no public route grants the role) and approves every pending
+submission through ``POST /submissions/{id}/approve``. The summary written on each approval states that the build
+script approved it as a demonstration, not an independent review.
 """
 
 from __future__ import annotations

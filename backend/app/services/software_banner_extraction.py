@@ -78,6 +78,7 @@ from app.services import (
     gaussian_parameter_parser,
     molpro_parameter_parser,
     orca_parameter_parser,
+    xtb_banner,
 )
 from app.services.best_effort import isolated_best_effort
 from app.services.calculation_resolution import (
@@ -97,6 +98,7 @@ VERSION_PARSERS: dict[str, Callable[[str], dict | None]] = {
     "gaussian": gaussian_parameter_parser.parse_software_version,
     "orca": orca_parameter_parser.parse_software_version,
     "molpro": molpro_parameter_parser.parse_software_version,
+    "xtb": xtb_banner.parse_software_version,
 }
 
 #: Informational: the declared release had no version, the output log's

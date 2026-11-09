@@ -1,17 +1,9 @@
 """Source 4: the formic acid RMG model, deposited unmodified through the CHEMKIN adapter.
 
-The adapter (``clients/python/adapters/chemkin``) parses ``chem_annotated.inp``,
-resolves every species name to a structure through RMG's own
-``species_dictionary.txt``, builds the thermo and kinetics payloads and, in its
-``upload_payloads``, posts them to ``/uploads/thermo`` and ``/uploads/kinetics``
-through ``tckdb_client``. This module only configures that run and records what
-came back: every response's warnings, every refusal, and the adapter's own
-import warnings (the wrong ``DUPLICATE`` flags, which the importer reports and
-does not repair).
-
-The model's transport data lives only in the authors' Cantera YAML, so no
-transport file is passed: transport is absent from the deposit, as it is from
-the CHEMKIN file.
+The adapter parses ``chem_annotated.inp``, resolves species through ``species_dictionary.txt`` and posts thermo and
+kinetics to ``/uploads/thermo`` and ``/uploads/kinetics``. This module configures that run and records every response
+warning, refusal and import warning (the adapter reports wrong ``DUPLICATE`` flags and does not repair them). The model
+has no transport file, so no transport is deposited.
 """
 
 from __future__ import annotations
@@ -31,8 +23,7 @@ from common import REPO_ROOT, Report, Session, collect_response_warnings, digest
 
 SOURCE = "chemkin_formic_acid"
 
-#: The citation, as the paper states it. The literature payload has no author field, so none is sent; if the server
-#: resolves the DOI it records the authors the registry gives (see ``literature_record``).
+#: The cited publication. The literature payload has no author field.
 DEFAULT_LITERATURE = {
     "kind": "article",
     "title": "Using RMG Out-of-the-Box for Formic Acid Pyrolysis and Oxidation",

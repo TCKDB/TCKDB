@@ -1,33 +1,13 @@
 """Generators for the demonstration snapshot (``scripts/paper_snapshot``).
 
-Same rules as :mod:`scripts.paper.generators`: read the database through the
-ORM, order every collection by public ref (or by a value derived from refs),
-emit no wall-clock value, and never print a database id.
+* ``hessian_reanalysis``: every calculation with a stored Hessian or frequency list; a missing Hessian is counted.
+* ``conformer_basins``: per species entry, its conformer groups and the levels that observed each.
+* ``calculation_evidence``: job files, settings read from them, software and level per calculation.
+* ``deposit_warnings``: stored deposit warnings by code.
+* ``thermo_selection_outcomes``: the thermo selection answer per species entry (sole candidate, alternatives, none).
+* ``structure_selection_outcomes``: the calculation and conformer selection answers per species entry.
 
-What is here and what is not
-----------------------------
-Present, each checked against a real build of the snapshot:
-
-* :func:`hessian_reanalysis` -- a thin wrapper over
-  :func:`app.services.hessian_reanalysis.hessian_reanalysis`: every
-  calculation with a stored Hessian *or* a stored frequency list, so a record
-  whose Hessian was never stored is counted (``hessian_not_stored``), not left
-  out.
-* :func:`conformer_basins` -- per species entry: its conformer groups and how
-  many levels of theory observed each.
-* :func:`calculation_evidence` -- job files attached, settings read from the
-  files, and the software and level of theory behind each calculation.
-* :func:`deposit_warnings` -- every stored deposit warning, by code.
-* :func:`thermo_selection_outcomes` -- what the thermo selection route
-  (``POST .../thermo/select``) answers for each species entry that has a
-  thermo record: a sole eligible candidate, incomparable alternatives, or no
-  applicable candidate. It never names a best record.
-
-Not here, deliberately: the use-case generator (CH4 + OH -> CH3 + H2O and the
-choice among methyl-radical alternatives) and the pressure-dependent-network
-generator. Both need data the snapshot does not hold yet (the ARC runs and the
-N2H3 network); a generator written without its data cannot be tested against
-anything real.
+Rows are ordered by content, not by public ref; no wall-clock value or database id is emitted.
 """
 
 from __future__ import annotations
@@ -80,13 +60,8 @@ _REF = re.compile(r"\b[a-z]{2,6}_[a-z2-7]{26}\b")
 
 
 def _content_key(row: dict[str, Any]) -> str:
-    """The row as canonical JSON with every public ref blanked.
+    """The row as canonical JSON with public refs blanked, so ordering does not depend on them."""
 
-    Public refs are random per instance, so ordering by them gives a different
-    row order in two builds of the same data. Ordering by everything else makes
-    the order a function of the content; rows that tie are identical apart from
-    their refs.
-    """
     return _REF.sub("", json.dumps(row, sort_keys=True, default=str))
 
 

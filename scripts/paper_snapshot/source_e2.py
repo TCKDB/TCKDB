@@ -1,29 +1,16 @@
 """Source 1: the E2 conformer study, deposited through ``tckdb_client.builders``.
 
-One ``ComputedSpeciesUpload`` per optimised minimum (molecule x start x level):
-an ``opt`` and a ``freq`` calculation at that level, the final geometry, and
-the job's own files (Gaussian ``job.log`` and ``job.gjf``) attached in the
-builders' second phase. Nothing is inferred beyond what the files state; the
-server reads the route line and the SCF settings out of the log itself.
+One ``ComputedSpeciesUpload`` per optimised minimum (molecule x start x level): an ``opt`` and a ``freq`` calculation,
+the final geometry, and the job's ``job.log`` and ``job.gjf`` attached in the builders' second phase. Read from the
+files: final geometry, last SCF energy, zero-point correction, frequency list, convergence and the start coordinates
+in the input deck. The server reads the route line and SCF settings from the log.
 
-What is read from the files here (the builders are parser-free by design):
-final geometry, last SCF energy, zero-point correction, the frequency list,
-convergence, and the start coordinates in the input deck.
+Not deposited:
 
-What is deliberately not deposited, and why, is written to the report:
-
-* ``fort.7`` (the Gaussian punch file), xtb's ``hessian``/``vibspectrum`` and
-  the other xtb sidecars: no artifact kind admits those file names;
-* the GFN2-xTB level: the server does not yet accept an xtb log as an
-  ``output_log`` (no xtb header in its ESS signature list) and ``.out`` is not
-  an ``ancillary`` extension, so the level has no admissible job file, and
-  this build deposits no number without its job file. Listing ``gfn2`` in
-  ``levels`` is refused at validation until the server accepts xtb logs.
-
-A task with a repair directory (``ethylene_glycol/c02`` at B3LYP; the others
-are excluded or outside the deposited levels) deposits the continuation's
-output: its geometry is the restart geometry from ``repair1``, and the first
-attempt's log (which stopped at the step limit) is not deposited.
+* ``fort.7``: no artifact kind admits the name.
+* The GFN2-xTB level: listing ``gfn2`` in ``levels`` is refused at validation.
+* A task with a repair directory deposits the continuation's output (restart geometry); the first attempt's log is not
+  deposited.
 """
 
 from __future__ import annotations
@@ -147,7 +134,7 @@ def load_tasks(root: Path, levels: list[str]) -> tuple[list[Task], dict[str, Any
 
 
 def provenance_check(root: Path, tasks_all: list[Task]) -> dict[str, Any]:
-    """Does every task in the campaign table have its output? (Brief, provenance for source 1.)"""
+    """Check that every task in the campaign table has its output."""
     missing: list[str] = []
     empty: list[str] = []
     no_status: list[str] = []
@@ -297,10 +284,7 @@ def build_upload(task: Task, parsed: Parsed, levels: dict[str, Any]):
 
 
 LEVELS_AVAILABLE = ("b3lyp_d3bj", "wb97xd")
-GFN2_REFUSAL = (
-    "xtb output logs not yet accepted by the server (pending change); "
-    "the gfn2 level cannot be deposited with its job files"
-)
+GFN2_REFUSAL = "the gfn2 level is not deposited: xtb job files are not part of this build"
 
 
 def validate(cfg: dict[str, Any]) -> list[str]:
@@ -320,7 +304,7 @@ def validate(cfg: dict[str, Any]) -> list[str]:
         elif level not in LEVELS_AVAILABLE:
             problems.append(f"{SOURCE}: unknown level {level!r}; available: {list(LEVELS_AVAILABLE)}")
     if "gfn2_log_as" in cfg:
-        problems.append(f"{SOURCE}: 'gfn2_log_as' was removed; xtb logs are not deposited until the server accepts them")
+        problems.append(f"{SOURCE}: 'gfn2_log_as' is not an option")
     return problems
 
 

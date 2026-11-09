@@ -12,8 +12,7 @@ instance, and the script is the deliverable, not the database.
     `job.log` and `job.gjf` attached in the builders' second phase.
   - Read from the files: the final geometry, last SCF energy, zero-point correction, frequency list, convergence
     and the start coordinates in the input deck. The server reads the route line and SCF settings itself.
-  - Where to get it: the E2 tree is not in this repository. TODO(owner): say whether it ships with the Zenodo
-    archive or is available on request. It must hold `raw_outputs/manifest_union.json`, `raw_outputs/tasks.txt` and
+  - The E2 tree is not in this repository. It must hold `raw_outputs/manifest_union.json`, `raw_outputs/tasks.txt` and
     `raw_outputs/tasks/<level>/<molecule>/<start>/{job.log,job.gjf}`.
 - **Source 4, formic acid pyrolysis and oxidation model** (`source_chemkin.py`): Wu and Grinberg Dana,
   *ACS Omega* 2026, 11, 6371 (CC BY 4.0), 123 species and 3002 reactions, deposited unmodified.
@@ -71,11 +70,8 @@ Generators run for the snapshot: `corpus_counts`, `conformer_basins`, `calculati
 `hessian_reanalysis`, `thermo_selection_outcomes`, `structure_selection_outcomes`, `mechanism_roundtrip_counts`,
 `mechanism_fixture_provenance`.
 
-Registered but not run, because they would be empty: `selected_thermo_by_species` (reads dataset-release selections;
-the snapshot publishes no release), `candidate_lineage` (needs an entry with several thermo candidates) and
-`transition_state_evidence` (needs transition states). They return when the ARC runs are in. The use-case generator
-(CH4 + OH, the methyl-radical alternatives) and the network generator are not written: they need source 2 and
-source 3, and a generator cannot be tested without its data.
+Registered but not run (empty for these sources): `selected_thermo_by_species`, `candidate_lineage` and
+`transition_state_evidence`. The use-case and network generators are not written.
 
 ## The literature row depends on the network
 
@@ -92,7 +88,7 @@ After the deposits, the build creates a curator account and approves every submi
 `POST /submissions/{id}/approve`. It pages through the whole pending list, and stops with an error if any approval
 fails or anything is still pending at the end. The summary on every approval says the build script did it for a
 demonstration and that it is not an independent review. The curator account is created with the operator CLI
-(`backend/scripts/bootstrap_admin.py --role curator`) because no public route grants that role.
+(`backend/scripts/bootstrap_admin.py --role curator`) (no public route grants that role).
 
 ## Check it
 
@@ -110,14 +106,13 @@ python scripts/paper_snapshot/readback.py --api-url http://127.0.0.1:8103 --sour
 the expected outputs and, for the archive, timestamps, refs and the bucket name in artifact URIs. It re-sorts
 nothing, so a difference in row order is a difference.
 
-## What is left out, and why
+## What is not deposited
 
-- **GFN2-xTB level of E2.** The server does not yet accept an xtb log as an `output_log`, and this build does not
-  deposit a number without its job file. Listing `gfn2` in `levels` is refused until it does.
-- **`wb97xd/1_propyl/k00`.** The optimisation ends at a saddle point (one imaginary mode); the study excludes it
-  and so does the build.
-- **`ethylene_glycol/c02` (B3LYP).** The first attempt stopped at the step limit. The deposited calculation is the
-  continuation from `repair1`: its geometry is the restart geometry, and the first attempt's log is not deposited.
-- **Gaussian punch files (`fort.7`).** No artifact kind admits the name.
-- Every task of the campaign is checked for its output first; the result is in `build_report.json` under
-  `e2_conformers.provenance`. A log that cannot be read is recorded as a refusal and the build goes on.
+- The GFN2-xTB level of E2: listing `gfn2` in `levels` is refused.
+- `wb97xd/1_propyl/k00`: one imaginary mode, excluded as a non-minimum.
+- `ethylene_glycol/c02` (B3LYP): the continuation from `repair1` is deposited (restart geometry); the first
+  attempt's log is not.
+- Gaussian punch files (`fort.7`): no artifact kind admits the name.
+
+Every task of the campaign is checked for its output first (`build_report.json`, `e2_conformers.provenance`). A log
+that cannot be read is recorded as a refusal and the build goes on.

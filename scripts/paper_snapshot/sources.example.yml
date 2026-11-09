@@ -25,13 +25,11 @@ instance:
 
 sources:
   # Source 1: the E2 conformer study, deposited with the client builders.
-  # TODO(owner): say where a reader gets this tree. It is not in this repository; it ships with the Zenodo archive
-  # or is available on request. The directory must hold raw_outputs/manifest_union.json, raw_outputs/tasks.txt and
-  # raw_outputs/tasks/<level>/<molecule>/<start>/{job.log,job.gjf}.
+  # The directory must hold raw_outputs/manifest_union.json, raw_outputs/tasks.txt and
+  # raw_outputs/tasks/<level>/<molecule>/<start>/{job.log,job.gjf}. It is not in this repository.
   e2_conformers:
     enabled: true
     root: /path/to/E2
-    # GFN2-xTB ("gfn2") cannot be listed yet: the server does not accept xtb output files as output logs.
     levels: [b3lyp_d3bj, wb97xd]
 
   # Source 4: the formic acid RMG model (Wu and Grinberg Dana, ACS Omega 2026), unmodified, through the CHEMKIN
@@ -41,17 +39,15 @@ sources:
     fixture_dir: backend/tests/integration/fixtures/rmg_formic_acid_wu2026
     mechanism_file: chem_annotated.inp
     species_dictionary: species_dictionary.txt
-    # RMG's thermo and rate rules are estimates, not measurements or this model's own calculations.
     scientific_origin: estimated
 
-  # Source 2: ARC runs through the ARC adapter. Not implemented yet (waits on the Zeus re-runs); an enabled entry
-  # stops the build.
+  # Source 2: ARC runs through the ARC adapter. Not implemented; an enabled entry stops the build.
   # arc_runs:
   #   enabled: true
   #   adapter_path: /path/to/tckdb-adapters
   #   runs_root: /path/to/arc/runs
 
-  # Source 3: the N2H3 pressure-dependent network. Not implemented yet (waits on a provenance check).
+  # Source 3: the N2H3 pressure-dependent network. Not implemented.
   # pdep_network:
   #   enabled: true
   #   arkane_dir: /path/to/Final_Final_CCSDT_F12_Aug_F12

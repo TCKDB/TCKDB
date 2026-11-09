@@ -19,9 +19,7 @@ from tckdb_client.errors import TCKDBError, TCKDBHTTPError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-#: Where each package is expected to come from when the build is run from a
-#: checkout without installing it (a git worktree, for instance, where an
-#: editable install would resolve to a different checkout).
+#: Package source roots, put first on the path so a checkout runs without an install.
 PACKAGE_ROOTS = (
     REPO_ROOT / "schemas" / "python" / "tckdb-schemas",
     REPO_ROOT / "clients" / "python" / "src",

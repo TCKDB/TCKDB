@@ -81,7 +81,7 @@ NOT_RUN_UNTIL_FED = ("selected_thermo_by_species", "candidate_lineage", "transit
 PATH_KEYS = frozenset({"root", "fixture_dir", "adapter_path", "runs_root", "arkane_dir"})
 TOP_LEVEL_KEYS = frozenset({"instance", "sources", "accounts", "expected_outputs"})
 
-#: Deposit order (brief section 1): E2, formic acid, ARC runs, network.
+#: Deposit order.
 SOURCES = (
     ("e2_conformers", source_e2),
     ("chemkin_formic_acid", source_chemkin),

@@ -119,10 +119,7 @@ def upload_payloads(
                 RecordResult(kind=kind, key=key, ok=False, error=str(exc))
             )
 
-    # A species record is keyed by its structure and spin (SMILES, multiplicity, and charge when it is not zero),
-    # so the key does not depend on where the species sits in the file: singlet and triplet CH2 get two keys.
-    # If two species of one mechanism still share all of that, they are keyed by their CHEMKIN label instead, and
-    # the import report says so.
+    # Species records are keyed by SMILES, multiplicity and charge; species sharing all three use their CHEMKIN label.
     for kind, endpoint, items, names in (
         ("thermo", "/uploads/thermo", payloads.thermo, getattr(payloads, "thermo_names", [])),
         ("transport", "/uploads/transport", payloads.transport, getattr(payloads, "transport_names", [])),
