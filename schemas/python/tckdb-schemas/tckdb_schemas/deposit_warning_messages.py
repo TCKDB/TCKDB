@@ -1635,6 +1635,27 @@ _HESSIAN_NOT_STORED = {
             "A Hessian was found in an uploaded artifact but not stored: the log has a force-constant block but no "
             "complete, trustworthy matrix could be read from it (it may be truncated)."
         ),
+        "archive_block_unreadable": (
+            "A Hessian was found in an uploaded artifact but not stored: the log has no force-constant block, and "
+            "the matrix in its archive block is not a complete, readable lower triangle for the atoms the archive "
+            "lists (it may be truncated)."
+        ),
+        "archive_frame_inconsistent": (
+            "A Hessian was found in an uploaded artifact but not stored: the log has no force-constant block, and "
+            "the matrix in its archive block is not consistent with the archive's own atoms (it does not annihilate "
+            "their rigid translations and rotations), so it may be in a different frame from the atoms it would be "
+            "bound to."
+        ),
+        "archive_atoms_unsupported": (
+            "A Hessian was found in an uploaded artifact but not stored: the log has no force-constant block, and "
+            "the archive lists its atoms in a form that is not read (a Z-matrix, or atomic numbers instead of "
+            "element symbols), so the matrix cannot be tied to atoms."
+        ),
+        "archive_composite_geometry_mismatch": (
+            "A Hessian was found in an uploaded artifact but not stored: the log has no force-constant block, and "
+            "its archive block is a composite job's final one, whose atoms are at a different geometry from the "
+            "frequency step the matrix comes from, so the matrix does not belong to those atoms."
+        ),
     },
     "hessian_not_stored_failed": {
         "read_failed": "A Hessian was found in an uploaded artifact but not stored: reading it failed unexpectedly.",
@@ -2155,6 +2176,10 @@ _HESSIAN_REASONS = frozenset(
         "store_failed",
         "sent_as_hessian",
         "log_block_unreadable",
+        "archive_block_unreadable",
+        "archive_frame_inconsistent",
+        "archive_atoms_unsupported",
+        "archive_composite_geometry_mismatch",
         "input_geometry_count",
         "geometry_not_found",
         "atom_count",

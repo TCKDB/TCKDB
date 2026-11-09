@@ -22422,6 +22422,7 @@
           "parsed_fchk",
           "parsed_hess",
           "parsed_log",
+          "parsed_log_archive",
           "uploaded",
           "derived"
         ],
@@ -22434,6 +22435,7 @@
           "parsed_fchk",
           "parsed_hess",
           "parsed_log",
+          "parsed_log_archive",
           "uploaded",
           "derived"
         ],

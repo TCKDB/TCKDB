@@ -259,6 +259,12 @@ Other:
 - `tau_method_family` can be `mp4(sdq)`, `mp4(sdtq)`, `mp5`, `mp2-f12` or `autoci`; `mp4` is no longer written. `tau_assumption_rule` gains `orca_no_analytic_gradient`, `orca_open_shell_no_gradient` and `orca_autoci_gradient_from_6`.
 - `MP5`, `UMP5`, `F12-CCSD(T)`, `F12/RI-CCSD(T)` and the AUTOCI methods above now count as SCF-based, so a Gaussian `MP5` job gets the assumed `scf_convergence` of `tight`.
 
+### 0.164.0 - 2026-11-09
+
+`HessianSource` gains `parsed_log_archive`: a Cartesian Hessian read from a Gaussian log's archive block, for logs that print no `Force constants in Cartesian coordinates` block. The matrix is stored only when it is consistent with the archive's own atoms (rigid translations and rotations annihilated, using the archive gradient) and the atoms match the stored input geometry. No upload field changes.
+
+Four reasons join `hessian_not_stored_unparseable` (a warning; the artifact is stored either way): `archive_block_unreadable`, `archive_frame_inconsistent`, `archive_atoms_unsupported` and `archive_composite_geometry_mismatch` (a composite job whose final block is at a different geometry from its frequency step, as in G1, G2, G3 and CBS-APNO).
+
 ### 0.163.0 - 2026-11-09
 
 An xtb output file is recognised: `detect_software_from_text` returns `"xtb"` for `* xtb version N` and the boxed `x T B` title, and for xtb's `g98.out` (a Gaussian-98-layout file naming the xtb code). `SoftwareName` gains `"xtb"`. Nothing is parsed from an xtb log. An xtb file is accepted as an `output_log`.
@@ -281,10 +287,6 @@ One refusal is narrowed and gains a `reason`; no field is added or removed. A ki
 The same rule applies on `/uploads/kinetics` and bundle import, where it also decides which calculations a declared level finds: a calculation at the declared spin is preferred, a closed-shell one run restricted is eligible, and a radical with no calculation at the declared spin finds none. A violation refuses on the standalone route; on bundle import the level is stored without source calculations and `energy_level_stored_without_source_calculations` is returned, as when nothing matches. When an unrestricted singlet is counted as open-shell only because no `spin_diagnostic.s_squared` is stored for it, the refusal's context carries `s_squared_missing_for` (calculation refs) and its message asks for it. `energy_level_stored_without_source_calculations` gains the reason `contradiction` (calculations were found but contradict the declared level or each other on spin), distinct from `none` and `ambiguous`. A reaction mixing radicals computed unrestricted with closed-shell species computed restricted can therefore declare its method and basis (with or without `unrestricted`), and no longer draws `missing_level_of_theory_provenance`. Thermo and statmech declarations are unchanged. Sources: the 0.1 bound is the convention the wavefunction-reliability warning already uses (Williams et al. 2011, doi:10.1016/j.cplett.2011.01.020; Rettig et al. 2020, doi:10.1021/acs.jctc.0c00986; register entry 52). Restricted-open and unrestricted references are different levels for open-shell species (Wood et al. 2006 ROCBS-QB3, doi:10.1063/1.2335438; Henry, Sullivan and Radom 2003, G3-RAD).
 
 Contract text on the field: "The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant. When at least one participant is open-shell, closed-shell participants (singlets computed restricted, restricted-open, or unrestricted collapsing to restricted) do not constrain it; the open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference. When every participant is closed-shell, a stated spin treatment must match their spin treatment."
-
-### 0.160.0 - 2026-11-07
-
-One refusal code is added: `server_response_invalid` (500). The server failed its own response model, so the request was not at fault; nothing in it needs changing. Before this, that failure reached a client as a bare `text/plain` 500, or as a 422 that blamed the request. No model or payload shape changed.
 
 ## Every producer route
 
@@ -6567,7 +6569,7 @@ Unknown keys are refused.
 |---|---|---|---|---|---|---
 | `geometry` | [`GeometryPayload`](#m-geometrypayload) | yes |  |  |  | The geometry the Hessian was computed at.
 | `lower_triangle_hartree_bohr2` | array of number | yes |  | hartree/bohr^2 | length >= 1 | Packed lower triangle (with diagonal), row-major, length ``3N(3N+1)/2``, in hartree/bohr².
-| `source` | `HessianSource` | yes |  |  | `parsed_fchk`, `parsed_hess`, `parsed_log`, `uploaded`, `derived` | Where the matrix was obtained from.
+| `source` | `HessianSource` | yes |  |  | `parsed_fchk`, `parsed_hess`, `parsed_log`, `parsed_log_archive`, `uploaded`, `derived` | Where the matrix was obtained from.
 | `parser` | [`ParserStamp`](#m-parserstamp) \| null | no |  |  |  | Optional stamp (name and version) of the parser that produced the matrix.
 | `note` | string \| null | no |  |  |  | Optional free-text annotation.
 
