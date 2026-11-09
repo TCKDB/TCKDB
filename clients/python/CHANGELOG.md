@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.195.0 - 2026-11-09
+
+`RejectionCode.RECORD_SELF_APPROVAL` (403), `SUBMISSION_SELF_APPROVAL` (403), `RECORD_NOT_FOUND` (404) and `RECORD_TYPE_NOT_REVIEWABLE` (422) join the refusal codes: the record-review and submission-approval routes refuse a depositor approving what they deposited, a record that does not exist, and an artifact. No other client code changed. The `tckdb-schemas` window moves to `>=0.158,<0.167`.
+
 ## 0.194.0 - 2026-11-09
 
 The `tckdb-schemas` window is `>=0.158,<0.166`, for the schemas release that changes the assumed Hessian method (see its changelog). No client API changes.

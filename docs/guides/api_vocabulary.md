@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 363 | `backend/app/api/code_catalogue.py` |
-| **total** | **703** | |
+| Refusal codes a caller can receive | 367 | `backend/app/api/code_catalogue.py` |
+| **total** | **707** | |
 
 ## How a record is named
 
@@ -727,15 +727,17 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `invalid_idempotency_key` | a thing |
 
-### HTTP 403 (3 codes)
+### HTTP 403 (5 codes)
 
 | Code | Names |
 | --- | --- |
+| `record_self_approval` | a relationship — read `context` |
 | `rights_attestation_not_depositor` | a thing |
 | `rights_attestation_requires_curator` | a thing |
+| `submission_self_approval` | a relationship — read `context` |
 | `submission_supersede_not_owner` | a thing |
 
-### HTTP 404 (28 codes)
+### HTTP 404 (29 codes)
 
 | Code | Names |
 | --- | --- |
@@ -746,6 +748,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `manifest_not_frozen` | a thing |
 | `owner_missing` | a thing |
 | `path_search_result_not_found` | a thing |
+| `record_not_found` | a thing |
 | `scan_result_not_found` | a thing |
 | `structure_finding_reference_not_found` | a thing |
 | `structure_finding_subject_not_found` | a thing |
@@ -808,7 +811,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (297 codes)
+### HTTP 422 (298 codes)
 
 | Code | Names |
 | --- | --- |
@@ -991,6 +994,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `record_not_approved` | a thing |
 | `record_ref_not_selectable` | a thing |
 | `record_subject_mismatch` | a relationship — read `context` |
+| `record_type_not_reviewable` | a thing |
 | `record_type_not_selectable` | a thing |
 | `relative_conformer_energy_compare_identical_protocols` | a relationship — read `context` |
 | `relative_conformer_energy_population_too_large` | a relationship — read `context` |

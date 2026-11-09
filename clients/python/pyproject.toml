@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tckdb-client"
-version = "0.194.0"
+version = "0.195.0"
 description = "Synchronous Python HTTP client and scientific upload builders for the TCKDB API."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -51,7 +51,7 @@ dependencies = [
     # schemas release this client release was built and tested with; the
     # ceiling is five minors above it. Each client release moves the window.
     # See clients/python/docs/development.md ("The tckdb-schemas window").
-    "tckdb-schemas>=0.158,<0.166",
+    "tckdb-schemas>=0.158,<0.167",
 ]
 
 [project.optional-dependencies]

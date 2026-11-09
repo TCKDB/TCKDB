@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.166.0 - 2026-11-09
+
+Four refusal codes join the producer contract; no field is added or removed: `record_self_approval` (403), `submission_self_approval` (403), `record_not_found` (404) and `record_type_not_reviewable` (422). They come from the record-review and submission-approval routes, which a producer does not call; a client that lists the codes sees them.
+
 ## 0.165.0 - 2026-11-09
 
 The assumed Hessian method for an unrecorded `freq.hessian_method` changes for the methods below; a recorded, reported or echoed method still wins. One warning code is added, `hessian_method_refined`. No field or refusal code is added or removed.

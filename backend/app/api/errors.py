@@ -74,6 +74,22 @@ class RecordReviewConflict(DomainError):
         self.context = dict(context or {})
 
 
+class SelfApprovalForbidden(DomainError):
+    """A refusal (403) of an actor approving what they deposited; ``context`` holds refs only."""
+
+    def __init__(self, message: str, *, context: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.context = dict(context or {})
+
+
+class RecordSelfApprovalForbidden(SelfApprovalForbidden):
+    """``record_self_approval``: the actor deposited this record."""
+
+
+class SubmissionSelfApprovalForbidden(SelfApprovalForbidden):
+    """``submission_self_approval``: the actor uploaded this submission."""
+
+
 class NotFoundError(Exception):
     """Explicit 404 raised by service code.
 
@@ -281,6 +297,17 @@ def _record_review_conflict_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=409,
+        content=error_envelope(
+            str(exc), context=exc.context, fallback_code="domain_error"
+        ),
+    )
+
+
+def _self_approval_forbidden_handler(
+    _request: Request, exc: SelfApprovalForbidden
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=403,
         content=error_envelope(
             str(exc), context=exc.context, fallback_code="domain_error"
         ),
@@ -942,6 +969,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ValueError, _value_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DomainError, _domain_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RecordReviewConflict, _record_review_conflict_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(SelfApprovalForbidden, _self_approval_forbidden_handler)  # type: ignore[arg-type]
     app.add_exception_handler(NotFoundError, _not_found_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DataIntegrityError, _data_integrity_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(NoResultFound, _no_result_found_handler)  # type: ignore[arg-type]
