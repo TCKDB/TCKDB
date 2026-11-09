@@ -1,17 +1,4 @@
-"""Assumed Hessian methods that must agree with the program manuals.
-
-Each case is quoted from the manual page the table cites (see the table note in
-``tckdb_schemas.hessian_method_assumption``):
-
-* Gaussian 09 MP-methods page: "MP3, MP4(DQ) and MP4(SDQ): Energies, analytic
-  gradients, and numerical frequencies." / "MP4(SDTQ) and MP5: Analytic energies,
-  numerical gradients, and numerical frequencies." / "Just specifying MP4
-  defaults to MP4(SDTQ)." / "MP2, B2PLYP[D], mPW2PLYP[D]: Energies, analytic
-  gradients, and analytic frequencies."
-* ORCA 6.1 manual p. 224 (``! CCSD(T)`` with ``! Opt NumGrad`` as the example of
-  an unavailable analytic gradient), p. 677 (analytic frequencies for HF, DFT);
-  ORCA 5.0.4 8.1.3.6 (F12: "Gradients are not available").
-"""
+"""Assumed Hessian methods for Gaussian MP4/MP5, double hybrids, method options and ORCA coupled cluster."""
 
 from __future__ import annotations
 

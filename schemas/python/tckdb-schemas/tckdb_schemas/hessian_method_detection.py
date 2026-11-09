@@ -381,16 +381,7 @@ def gaussian_freq_hessian_option(text: str) -> tuple[str, HessianMethod] | None:
 
 
 def orca_lacks_analytic_gradient(method: str | None) -> bool:
-    """True for an ORCA method keyword with no analytic gradient behind it.
-
-    Coupled cluster behind the plain keywords (``CCSD``, ``CCSD(T)``, their F12 variants, ``DLPNO-CCSD`` and
-    ``DLPNO-CCSD(T)``) and the F12-MP2 methods. ORCA 5.0.4 8.3.2 "Numerical Gradients" (knowledge-base chunk
-    13502): "If the analytic gradient is not available, the numerical gradient can simply be requested via ! NumGrad",
-    with ``!CCSD(T) TZVPP`` / ``!Opt NumGrad`` as the example; 8.1.3.6 (13362): F12 "Gradients are not available";
-    ORCA 6.1 (16228): DLPNO "Analytic gradients are not available". The ``AUTOCI-`` prefixed methods of ORCA 6.1
-    do have analytic gradients and are not matched. ``tckdb_schemas.hessian_method_assumption`` assigns the same
-    methods to finite differences of energies when it assumes a method, so a deck and an assumption agree.
-    """
+    """True for an ORCA method keyword with no analytic gradient: CCSD, CCSD(T), DLPNO and F12 methods (not ``AUTOCI-``)."""
     token = (method or "").strip().lower().replace("_", "-")
     if not token or token.startswith("autoci"):
         return False
@@ -407,14 +398,7 @@ def orca_numfreq_refines_gradient_to_energy(
     *,
     lacks_gradient: bool | None = None,
 ) -> bool:
-    """True when a recorded ``finite_difference_gradient`` is refined to ``finite_difference_energy``, not contradicted.
-
-    ORCA's ``NumFreq`` always takes finite differences of gradients. For a method with no analytic gradient
-    (:func:`orca_lacks_analytic_gradient`) those gradients are themselves numerical, built from energies, so a deck
-    (or the input an output log echoes) that states finite differences of energies for such a method says the same
-    thing as a recorded finite difference of gradients, in more detail. Only that pair, only for ORCA: a recorded
-    ``analytic`` against ``NumFreq`` stays a contradiction.
-    """
+    """True when a recorded finite difference of gradients is refined to energies (ORCA ``NumFreq``, method without a gradient)."""
     return (
         recorded is HessianMethod.finite_difference_gradient
         and stated is HessianMethod.finite_difference_energy
@@ -426,15 +410,9 @@ def orca_numfreq_refines_gradient_to_energy(
 def orca_freq_hessian(keywords: Iterable[str]) -> tuple[str, HessianMethod] | None:
     """The Hessian method the ORCA keywords state, as ``(directive as written, method)``.
 
-    ``NumFreq`` wins over ``AnFreq`` when both are present (numerical, the
-    conservative tolerance). ``NumFreq`` differentiates gradients; with
-    ``NumGrad`` those gradients are numerical too, so the Hessian is built from
-    energies (ORCA 5.0.4 manual, 8.3.2 and 9.24.5 "Numerical Gradients":
-    ``! NumGrad`` requests numerical instead of analytic gradients). The same holds
-    when the deck names a method with no analytic gradient (:func:`orca_lacks_analytic_gradient`,
-    e.g. ``CCSD(T)``): ``NumFreq`` then differentiates numerical gradients, so it
-    reads as finite differences of energies even without ``NumGrad``. The
-    directive text is exactly what the deck says: ``NumFreq``, ``NumFreq NumGrad``
+    ``NumFreq`` wins over ``AnFreq``. ``NumFreq`` reads as finite differences of gradients, or of energies with
+    ``NumGrad`` or for a method with no analytic gradient (:func:`orca_lacks_analytic_gradient`).
+    The directive text is the deck's own: ``NumFreq``, ``NumFreq NumGrad`` or ``AnFreq``    directive text is exactly what the deck says: ``NumFreq``, ``NumFreq NumGrad``
     (each as written) or ``AnFreq``.
     """
     written = list(keywords)
@@ -619,9 +597,8 @@ def check_recorded_method_agrees_with_deck(
     "numerical"); neither the depositor's recorded string nor any deck text is
     echoed. The calculation's local key goes in ``context``.
 
-    A recorded ``finite_difference_gradient`` against a stated ``finite_difference_energy`` is not refused when
-    ``software`` is ORCA and ``lot_method`` has no analytic gradient
-    (:func:`orca_numfreq_refines_gradient_to_energy`); it is refined instead.
+    A recorded gradient method against a stated energy method is accepted for ORCA methods with no analytic gradient
+    (:func:`orca_numfreq_refines_gradient_to_energy`).
 
     :raises CodedValidationError: ``hessian_method_contradicts_input_deck``.
     """
@@ -646,8 +623,7 @@ def check_recorded_method_agrees_with_deck(
     if orca_numfreq_refines_gradient_to_energy(
         software, lot_method, exact, deck_method, lacks_gradient=lacks_gradient
     ):
-        # Not a contradiction: ORCA's NumFreq differences gradients, which for this method are numerical. The
-        # stored tau is refined to the energy basis and a ``hessian_method_refined`` warning says so.
+        # Refined to the energy basis, with a ``hessian_method_refined`` warning; not a contradiction.
         return
     # Both sides in TCKDB's vocabulary: the parsed method when the recorded value is
     # exactly a HessianMethod token, otherwise its analytic / numerical kind.

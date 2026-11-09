@@ -1,11 +1,4 @@
-"""ORCA assumed-Hessian rules settled by the 2026-11-09 web check, and the refinement of a recorded gradient method.
-
-Sources (ORCA 6.1 manual unless stated): DLPNO "Analytic gradients are not available"; F12 "Gradients are not
-available"; AUTOCI analytic CCSD and CCSD(T) gradients from ORCA 6.0, "there is no frozen core options implemented
-yet", RI refused from 6.0.1; "The analytical gradient has been implemented for the RHF variant of the DLPNO-MP2
-method. No gradient is presently implemented for the UHF-DLPNO-MP2 variant"; "for high-spin ROHF the gradients are
-not available".
-"""
+"""ORCA assumed-Hessian rules (coupled cluster, F12, AUTOCI, open-shell MP2) and the refinement of a recorded gradient method."""
 
 from __future__ import annotations
 

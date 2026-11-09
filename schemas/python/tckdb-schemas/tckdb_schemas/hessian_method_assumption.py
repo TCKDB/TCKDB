@@ -50,65 +50,24 @@ assumed.
 The table
 ---------
 
-Gaussian (``Software.name == "Gaussian"``, matched case-insensitively —
-see :func:`tckdb_schemas.software.normalize_software_name`):
+Gaussian (``Software.name == "Gaussian"``, matched case-insensitively):
 
-* **Analytic** (`TauBasis.assumed_analytic_default`): HF, any DFT
-  functional, MP2, CIS, CASSCF, and the double hybrids B2PLYP, B2PLYPD,
-  B2PLYPD3, mPW2PLYP and mPW2PLYPD. Gaussian has computed analytic second
-  derivatives for these method families by default since at least G03;
-  a user gets `Freq=Numer` only by asking for it. For the double hybrids
-  the G09 MP-methods page (the keyword page for MP2, MP3, MP4, MP5, B2PLYP
-  and mPW2PLYP) says "MP2, B2PLYP[D], mPW2PLYP[D]: Energies, analytic
-  gradients, and analytic frequencies", and the Freq page makes analytic the
-  default for "RHF, UHF, CIS, CASSCF, MP2, and all DFT methods". Other
-  double hybrids (B2GP-PLYP, DSD-*, PBE0-DH, ...) are still not assumed.
-* **Finite-difference-from-gradients**
-  (`TauBasis.assumed_finite_difference_gradient`): MP3, MP4(DQ),
-  MP4(SDQ), QCISD, CCSD, CISD, CID (exactly CIS is analytic;
-  CISD/CID have numerical frequencies only). None of these have an analytic
-  Hessian implementation in Gaussian; the default frequency job
-  numerically differentiates the analytic gradient, which these methods
-  do have. For MP3, MP4(DQ) and MP4(SDQ) the G09 MP page says "Energies,
-  analytic gradients, and numerical frequencies".
-* **Finite-difference-from-energies**
-  (`TauBasis.assumed_finite_difference_energy`): CCSD(T), QCISD(T), and
-  MP4(SDTQ) (which is what a bare ``MP4`` means) and MP5. None has an analytic
-  *or* semi-analytic (gradient-based) second derivative in Gaussian; the
-  default frequency job double-differentiates the energy. The G09 MP page
-  says "MP4(SDTQ) and MP5: Analytic energies, numerical gradients, and
-  numerical frequencies", and "Just specifying MP4 defaults to MP4(SDTQ)".
+* Analytic: HF, any DFT functional, MP2, CIS, CASSCF, B2PLYP, B2PLYPD,
+  B2PLYPD3, mPW2PLYP, mPW2PLYPD. Other double hybrids assume nothing.
+* Finite differences of gradients: MP3, MP4(DQ), MP4(SDQ), QCISD, CCSD, CISD, CID.
+* Finite differences of energies: CCSD(T), QCISD(T), MP4(SDTQ) (a bare ``MP4``), MP5.
 
 ORCA (``Software.name == "ORCA"``):
 
-* **Analytic** (`TauBasis.assumed_analytic_default`): HF, any DFT
-  functional. ORCA computes analytic Hessians for both by default.
-* **Finite-difference-from-gradients**
-  (`TauBasis.assumed_finite_difference_gradient`): the MP2 variants with an
-  analytic gradient (MP2 and RI-MP2 for RHF and UHF, closed-shell DLPNO-MP2,
-  SCS-MP2), and ORCA 6 ``AUTOCI-CCSD``, ``AUTOCI-CCSD(T)``, ``AUTOCI-MP2``, ``AUTOCI-MP3`` and ``AUTOCI-MP4`` without frozen core
-  and without RI. ORCA's `NumFreq` differentiates gradients. The analytic
-  (RI-)MP2 Hessian exists only without frozen core (ORCA 5.0.4 section 8.1.2.4:
-  "Frequencies can be calculated analytically in all-electron calculations.
-  With frozen core orbitals, second derivatives of any kind are currently only
-  available numerically") and was removed in 6.0 (changelog: "Removed the slow
-  and limited analytic (RI-)MP2 Hessian code"; 6.1 manual: "the analytical
-  (RI-)MP2-Hessians are no longer available"). So "numerical on every version"
-  holds for the default, frozen-core job; an all-electron ORCA 5 MP2 job can be
-  analytic and that is not assumed here. AUTOCI: see the source notes; the
-  version must be 6 or later and the level of theory must STATE
-  ``core_treatment`` all-electron and ``ri_approximation`` none, otherwise
-  nothing is assumed.
-* **Finite-difference-from-energies**
-  (`TauBasis.assumed_finite_difference_energy`): methods with no analytic
-  gradient, so `NumFreq` differentiates numerical gradients: CCSD, CCSD(T),
-  every DLPNO coupled-cluster method, every F12 method (F12-MP2 included), and
-  open-shell DLPNO-MP2 and high-spin ROHF MP2. Any other ``DLPNO-*`` string
-  (DLPNO-CEPA and the like) has no documented answer and gets no assumption.
-  Open shell is read from what the level of theory states: ``spin_treatment``
-  unrestricted or restricted open, or a ``UHF`` / ``ROHF`` prefix on the
-  method. The species' multiplicity is not visible to this table, so an
-  unstated spin treatment on DLPNO-MP2 keeps the closed-shell (gradient) row.
+* Analytic: HF, any DFT functional (exceptions below).
+* Finite differences of gradients: MP2, RI-MP2, SCS-MP2, closed-shell DLPNO-MP2;
+  ORCA 6 and later ``AUTOCI-CCSD``, ``-CCSD(T)``, ``-MP2``, ``-MP3``, ``-MP4`` when
+  the level of theory states ``core_treatment`` all-electron and ``ri_approximation``
+  none (otherwise nothing is assumed).
+* Finite differences of energies: CCSD, CCSD(T), DLPNO coupled cluster, F12 methods,
+  open-shell DLPNO-MP2 and ROHF MP2. Open shell is read from the level of theory's
+  ``spin_treatment`` or a ``UHF`` / ``ROHF`` method prefix; an unstated spin
+  treatment keeps the closed-shell row. Other ``DLPNO-*`` methods assume nothing.
 
 Why some things stay ``None``
 ------------------------------
@@ -285,8 +244,7 @@ class MethodFamily:
     DFT = "dft"
     MP2 = "mp2"
     MP3 = "mp3"
-    #: Legacy token, never returned by the classifier now. Warnings stored before 0.162.0 carry ``mp4`` for every
-    #: MP4 variant; keeping the token and its label ("MP4") means they read as they did.
+    #: Older warnings use this token for every MP4 variant.
     MP4 = "mp4"
     #: MP4(DQ) and MP4(SDQ): analytic gradients exist in Gaussian.
     MP4_SDQ = "mp4(sdq)"
@@ -325,11 +283,7 @@ def is_dft_functional(method: str | None) -> bool:
 #: ``MP4(SDTQ)-FC``, ``mp4(sdtq)/fc``.
 _OPTION_SPLIT = re.compile(r"[(),/\s=-]+")
 
-#: Options that change neither which method runs nor how its derivatives are computed. Gaussian 09: the frozen-core
-#: options "are available with this keyword" (FC, Full, ...); the CCSD page lists T, E4T, T1Diag, Conver=N, MaxCyc=N,
-#: SaveAmplitudes, ReadAmplitudes (knowledge-base chunk 10440). ``RO`` is deliberately not here: the restricted
-#: open-shell variant has energies only (G09 MP page, chunk 10828: "RO may be combined with MP2, MP3 and MP4 for
-#: energies only"; CCSD page, chunk 10441), so it is not a harmless option and the method is left unrecognised.
+#: Gaussian options that do not change the method (frozen core, CC page options). ``RO`` is excluded: energies only.
 _IGNORED_OPTION = re.compile(
     r"^(fc\d*|nofc|full|fu|window.*|active.*|t1diag|e4t|conver|maxcyc|saveamplitudes|readamplitudes|\d+)$"
 )
@@ -340,15 +294,7 @@ def _option_tokens(text: str) -> list[str]:
 
 
 def _mp4_variant(token: str) -> str | None:
-    """MP4 token -> ``MP4_SDQ`` (DQ/SDQ), ``MP4_SDTQ`` (SDTQ, or a bare ``mp4``), or ``None`` (unknown option).
-
-    ``mp4`` means MP4(SDTQ) (G09 MP page, chunk 10824: "Just specifying MP4 defaults to MP4(SDTQ)"). The text
-    after ``mp4`` is split on parentheses, commas, slashes, equals signs, hyphens and spaces; the first of
-    ``dq`` / ``sdq`` / ``sdtq`` names the truncation, and frozen-core and similar options are ignored, so
-    ``MP4(SDTQ,FC)``, ``MP4(FC)``, ``MP4(SDTQ)-FC``, ``mp4(sdtq)/fc``, ``MP4=FC``, ``MP4 FC`` and ``mp4sdtq`` all mean
-    SDTQ. A token that is neither a truncation nor a known option makes the method unrecognised (``None``,
-    no assumption), never the old gradient row.
-    """
+    """The MP4 family for ``token``: SDQ for DQ/SDQ, SDTQ for SDTQ or a bare ``mp4``, ``None`` for an unknown option."""
     tokens = _option_tokens(token[len("mp4"):])
     variant = next((t for t in tokens if t in ("dq", "sdq", "sdtq")), None)
     if any(t not in ("dq", "sdq", "sdtq") and not _IGNORED_OPTION.match(t) for t in tokens):
@@ -363,15 +309,9 @@ _CC_WITH_OPTIONS = re.compile(r"^(ccsd|qcisd)(?:\s*=?\s*\(([^()]*)\))?([^()]*)$"
 
 
 def _cc_with_options(token: str) -> tuple[bool, str | None]:
-    """Read Gaussian's ``CCSD``/``QCISD`` options: ``(handled, family)``.
+    """``(handled, family)`` for Gaussian ``CCSD``/``QCISD`` with options, e.g. ``CCSD(T,FC)``, ``CCSD-T``, ``QCISD(T,E4T)``.
 
-    ``CCSD(T,FC)`` is CCSD(T), ``CCSD(FC)`` is CCSD, ``CCSD-T`` is a synonym for ``CCSD(T)`` and ``QCISD(T,E4T)`` is
-    QCISD(T) (G09 CCSD page, chunk 10440: options FC, T, E4T, T1Diag, ...; "CCSD-T is a synonym for CCSD(T)").
-    Availability (chunks 10441 and 10973): "Analytic energies and gradients for CCD and CCSD, numerical gradients
-    for CCSD(T), and numerical frequencies for all methods"; "numerical gradients for QCISD(T)". Not handled (so the
-    prefix rules decide, as before): only a known suffix that is not an option, ``-f12`` and its variants
-    (``ccsd(t)-f12``). Any other tail (``ccsdt``, ``ccsd[t]``, ``ccsd/ri``) and any unknown option are handled as
-    unrecognised, ``(True, None)``: Gaussian has no CCSDT keyword and nothing is assumed for what it does not know.
+    ``-F12`` suffixes are left to the prefix rules; other tails and unknown options give ``(True, None)``.
     """
     m = _CC_WITH_OPTIONS.match(token)
     if m is None:
@@ -393,8 +333,7 @@ def _cc_with_options(token: str) -> tuple[bool, str | None]:
     return True, MethodFamily.QCISD_T if triples else MethodFamily.QCISD
 
 
-#: ORCA 6 AUTOCI methods with an analytic gradient that the owner asked for (6.1 manual, AUTOCI method table: RHF and
-#: UHF CCSD, CCSD(T), MP2, MP3 and MP4 tick the Gradient column). Other AUTOCI- methods are not recognised.
+#: ORCA 6.1 manual, AUTOCI chapter: these methods have analytic gradients.
 _AUTOCI_WITH_GRADIENT = frozenset({
     "autoci-ccsd", "autoci-ccsd(t)", "autoci-mp2", "autoci-mp3", "autoci-mp4",
 })
@@ -509,56 +448,12 @@ _ORCA_FINITE_DIFFERENCE_ENERGY = frozenset({MethodFamily.CCSD, MethodFamily.CCSD
 #   assumed ``assumed_finite_difference_gradient`` on any ORCA version. (No
 #   statement about an analytic double-hybrid Hessian was found in the 5.0.4
 #   or 6.1 manuals.)
-# * MP2: ORCA 5.0.4 manual 8.1.2.4 "MP2 and RI-MP2 Gradients and Hessians"
-#   (pp. 109-110): frequencies "can be calculated analytically in all-electron
-#   calculations. With frozen core orbitals, second derivatives of any kind are
-#   currently only available numerically"; ORCA 6.1 manual, "MP2 and RI-MP2
-#   Second Derivatives" (p. 290): "the analytical (RI-)MP2-Hessians are no
-#   longer available". The default is frozen core, so ORCA MP2 stays in the
-#   finite-difference-from-gradients row on every version; an all-electron
-#   ORCA 5 job could be analytic and is not assumed so.
-# * coupled cluster: ORCA 6.1 manual 2.23 "Numerical Gradients" (p. 224) gives
-#   ``! CCSD(T)`` with ``! Opt NumGrad`` as the example of a method whose
-#   analytic gradient is not available; 4.6.4 (p. 677) lists analytic
-#   frequencies for HF and DFT only; ORCA 5.0.4 8.1.3.6 says "Gradients are not
-#   available" for F12 methods (F12-MP2 too, so RI-MP2-F12 is in the energy
-#   row, not the MP2 row); ORCA 6.1 (chunk 16228) says "Analytic gradients are
-#   not available" for DLPNO; ORCA 5.0.4 8.3.2 (chunk 13502) repeats the
-#   CCSD(T) / NumGrad example. Frequencies are therefore differences of
-#   numerical gradients: finite differences of energies. Web check 2026-11-09
-#   (paper/notes/si_code_issues_2026-11-09/hessian_web_research.md, section 1):
-#   confirmed, from the ORCA 6.1 MDCI and Numerical Gradients pages.
-# * AUTOCI: ORCA 6.0 changelog lists "CCSD(T) gradients" under automatic code
-#   generation; 6.1 manual, AUTOCI "Analytic Nuclear Gradients": "The analytic
-#   gradients can even be used to perform semi-numerical frequency calculations"
-#   (``! AUTOCI-CCSD NumFreq``); the method table ticks Gradient for RHF and UHF
-#   CCSD and CCSD(T); "there is no frozen core options implemented yet"; the
-#   6.0.1 changelog aborts when RI is requested. The 6.1 changelog also fixes
-#   the UHF CCSD(T) gradient accuracy (missing disconnected 3rd and 4th order
-#   terms), so a UHF AUTOCI-CCSD(T) gradient from 6.0 is slightly wrong; the
-#   table still calls the Hessian one from gradients. Version-gated at 6 like
-#   meta-GGA; an unstated core treatment or RI approximation assumes nothing.
-# * open-shell MP2: ORCA 6.1 MP2 chapter, "The analytical gradient has been
-#   implemented for the RHF variant of the DLPNO-MP2 method. No gradient is
-#   presently implemented for the UHF-DLPNO-MP2 variant" and "for high-spin ROHF
-#   the gradients are not available". Web check section 2 (same note).
-#
-# * Gaussian double hybrids: the Gaussian 09 MP-methods keyword page
-#   ("MP2, B2PLYP[D], mPW2PLYP[D]: Energies, analytic gradients, and analytic
-#   frequencies"; "B2PLYPD3 requests the same but with Grimme's D3BJ
-#   dispersion. Energies, gradients and frequencies are available") and the
-#   Freq page (Freq=Analytic is the default for "RHF, UHF, CIS, CASSCF, MP2, and
-#   all DFT methods") settle B2PLYP, B2PLYPD, B2PLYPD3, mPW2PLYP and
-#   mPW2PLYPD as analytic. Other double hybrids are not documented and get no
-#   assumption. U-prefixed spellings (UB2PLYP, UMP4) are not in the pages read
-#   and are not recognised.
-#
-# * Method options: Gaussian accepts options after a method (``MP4(SDTQ,FC)``,
-#   ``CCSD(T,FC)``, ``QCISD(T,E4T)``, ``MP4=FC``). The classifier reads the
-#   truncation and the triples flag and ignores frozen-core style options
-#   (G09 CCSD page, chunk 10440). Availability for CCSD(T) and QCISD(T) is
-#   "numerical gradients" (chunks 10441, 10973), so frequencies are numerical
-#   differences of energies; an unknown option makes the method unrecognised.
+# * MP2: ORCA 5.0.4 manual 8.1.2.4: analytic MP2 Hessian only without frozen core; ORCA 6.0 removed it.
+# * Coupled cluster: ORCA 6.1 manual (Numerical Gradients, MDCI): no analytic gradient for CCSD(T), DLPNO or F12.
+# * AUTOCI: ORCA 6.1 manual, AUTOCI chapter: analytic CC and MPn gradients, no frozen core, no RI.
+# * Open-shell MP2: ORCA 6.1 manual, MP2 chapter: no gradient for UHF-DLPNO-MP2 or high-spin ROHF.
+# * Gaussian double hybrids: Gaussian 09/16 MP keyword page: analytic frequencies for B2PLYP[D] and mPW2PLYP[D].
+# * Gaussian MP4, CCSD, QCISD: Gaussian 09/16 MP, CC, QCISD pages: gradient and frequency availability.
 #
 # Name lists are explicit and conservative; a name in no list is a plain
 # GGA/hybrid only if the family classifier already calls it DFT. Overlaps take
@@ -713,11 +608,8 @@ def infer_hessian_method(
 ) -> TauResolution | None:
     """Assume a Hessian method's tau basis from software and LOT method.
 
-    ``spin_treatment``, ``core_treatment`` and ``ri_approximation`` are the level of theory's typed qualifiers (an
-    enum member or its string value); they are read only where the answer depends on them: ORCA open-shell DLPNO-MP2
-    and ROHF-MP2 (no analytic gradient), and ORCA 6 ``AUTOCI-CCSD`` / ``AUTOCI-CCSD(T)`` (analytic gradient only
-    without frozen core and without RI). A qualifier that is not stated never decides: the multiplicity of the
-    species is not visible here, so an unstated spin treatment on a DLPNO-MP2 job keeps the closed-shell row.
+    ``spin_treatment``, ``core_treatment`` and ``ri_approximation`` are the level of theory's qualifiers; they matter
+    only for ORCA open-shell MP2 and AUTOCI, and an unstated one never decides.
 
     Called only when the caller has already confirmed no
     ``freq.hessian_method`` was recorded for this calculation — this
@@ -830,12 +722,9 @@ def _token_value(value: object) -> str | None:
 
 
 def _orca_mp2_without_gradient(method: str | None, spin_treatment: object) -> bool:
-    """ORCA open-shell DLPNO-MP2, or high-spin ROHF MP2: no analytic gradient (ORCA 6.1 MP2 chapter).
+    """True for ORCA open-shell DLPNO-MP2 or ROHF MP2 (ORCA 6.1 manual, MP2 chapter: no analytic gradient).
 
-    "The analytical gradient has been implemented for the RHF variant of the DLPNO-MP2 method. No gradient is
-    presently implemented for the UHF-DLPNO-MP2 variant"; "for high-spin ROHF the gradients are not available".
-    Open shell is read from the stated ``spin_treatment`` (unrestricted or restricted open) or a ``UHF`` / ``ROHF``
-    prefix on the method; canonical and RI MP2 have an analytic UHF gradient, so only ROHF counts for them.
+    Open shell is read from the stated ``spin_treatment`` or a ``UHF`` / ``ROHF`` prefix on the method.
     """
     token = _normalize(method) or ""
     spin = _token_value(spin_treatment)
@@ -872,13 +761,8 @@ _ORCA_AUTOCI_GRADIENT_FROM = 6
 
 
 def _orca_autoci(software_version: str | None, core_treatment: object, ri_approximation: object) -> TauResolution | None:
-    """ORCA 6 ``AUTOCI-CCSD``, ``-CCSD(T)``, ``-MP2``, ``-MP3`` and ``-MP4``: analytic gradients, so ``NumFreq`` differences gradients.
-
-    The AUTOCI gradients exist from ORCA 6.0 and only without frozen core ("there is no frozen core options
-    implemented yet") and without RI (ORCA 6.0.1 aborts when RI is requested). Both must be stated on the level of
-    theory (``core_treatment`` all-electron, ``ri_approximation`` none) and the version must be 6 or later; if any of
-    the three cannot be determined from what is recorded, nothing is assumed.
-    """
+    """The AUTOCI assumption (finite differences of gradients), or ``None`` unless ORCA is 6 or later and the
+    level of theory states all-electron and no RI (ORCA 6.1 manual, AUTOCI chapter)."""
     major = _orca_major_version(software_version)
     if major is None or major < _ORCA_AUTOCI_GRADIENT_FROM:
         return None
@@ -958,8 +842,7 @@ def resolve_tau_with_assumption(
 ) -> TauResolution:
     """Resolve tau for one calculation: reported, echo, recorded, deck, assumed, conservative.
 
-    ``spin_treatment``, ``core_treatment`` and ``ri_approximation`` are the level of theory's typed qualifiers,
-    passed on to :func:`infer_hessian_method` (see there).
+    ``spin_treatment``, ``core_treatment`` and ``ri_approximation`` are passed to :func:`infer_hessian_method`.
 
     The single resolution every validation adapter and the persistence step
     share, so what a deposit is judged at is what is stored.
@@ -977,11 +860,8 @@ def resolve_tau_with_assumption(
     1. A recorded ``freq.hessian_method`` (and the grid / convergence
        parameters that refine it) resolves through
        :func:`~tckdb_schemas.stationary_point.resolve_tau_from_parameters`,
-       and always wins, with one refinement: a recorded ``finite_difference_gradient`` for an ORCA method with no
-       analytic gradient, against a deck (or echoed input) that asks for ``NumFreq`` (read as finite differences of
-       energies), resolves as ``finite_difference_energy`` (80 cm-1) and carries ``refined_from``; ORCA's
-       ``NumFreq`` differences gradients, and for such a method they are numerical. A recorded ``analytic`` against
-       ``NumFreq`` is still refused.
+       and wins, except that a recorded ``finite_difference_gradient`` against an ORCA ``NumFreq`` deck (or echoed
+       input) for a method with no analytic gradient resolves as ``finite_difference_energy`` with ``refined_from`` set.
     2. A method the calculation's own inline input deck states
        (:mod:`tckdb_schemas.hessian_method_detection`). A deposited deck is
        evidence, not an assumption; where it and a recorded parameter

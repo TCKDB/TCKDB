@@ -1,11 +1,4 @@
-"""A recorded finite difference of gradients against an ORCA ``NumFreq`` deck, for a method with no analytic gradient.
-
-ORCA's ``NumFreq`` always takes finite differences of gradients. For coupled cluster those gradients are themselves
-numerical (built from energies), so the recorded value and the deck say one thing: the record is accepted, the stored
-tau is the energy one (80 cm-1), and a ``hessian_method_refined`` warning says TCKDB refined the recorded value.
-A recorded ``analytic`` against ``NumFreq`` is still a contradiction, and so is a gradient record against a deck for
-a method that has an analytic gradient and says ``NumGrad``.
-"""
+"""A recorded gradient method against an ORCA ``NumFreq`` deck for a method with no analytic gradient is refined, not refused."""
 
 from __future__ import annotations
 
