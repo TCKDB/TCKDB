@@ -217,3 +217,46 @@ def test_hessian_reanalysis_and_basins_list_records_by_content_not_by_ref(db_ses
     smiles_in_order = [r["species_smiles"] for r in out["records"] if r["species_smiles"] in {"CCO", "C", "CC"}]
     assert smiles_in_order == sorted(smiles_in_order)
     assert all("species_smiles" in r and "level_of_theory" in r for r in out["records"])
+
+
+def _declared_world(db_session):
+    """An entry whose calculations carry the declaration that establishes a cohort, plus a conformer group."""
+    from tests.services.structure_selection._support import make_world
+
+    world = make_world(db_session)
+    make_conformer_group(db_session, world.entry)
+    return world
+
+
+def test_structure_selection_orders_values_inside_one_established_cohort_and_names_no_first_record(db_session):
+    from tests.services.structure_selection._support import declaration
+
+    world = _declared_world(db_session)
+    world.sp("a", -76.40, declared=declaration())
+    world.sp("b", -76.45, declared=declaration())
+    world.settle()
+
+    out = snapshot_generators.structure_selection_outcomes(db_session)
+    row = next(r for r in out["entries"] if r["species_entry_ref"] == world.entry.public_ref)
+    calculations = row["calculations"]
+    assert calculations["outcome"] == "recorded_minimum"  # ordered inside the one cohort the declarations establish
+    assert calculations["cohorts"] == 1 and calculations["unresolved"] == {}
+    assert calculations["administrative_first_named"] is False
+
+
+def test_structure_selection_reports_alternatives_when_declarations_establish_two_cohorts(db_session):
+    from tests.services.structure_selection._support import declaration
+
+    world = _declared_world(db_session)
+    other_level = make_lot(db_session, method="ccsd(t)", basis="cc-pvqz")
+    world.sp("a", -76.40, declared=declaration())
+    world.sp("b", -76.55, lot=other_level, declared=declaration())
+    world.settle()
+
+    out = snapshot_generators.structure_selection_outcomes(db_session)
+    row = next(r for r in out["entries"] if r["species_entry_ref"] == world.entry.public_ref)
+    calculations = row["calculations"]
+    # Two recipes: the lower absolute energy is not a method winner, so no single minimum is reported.
+    assert calculations["cohorts"] == 2
+    assert calculations["outcome"] != "recorded_minimum"
+    assert calculations["administrative_first_named"] is False

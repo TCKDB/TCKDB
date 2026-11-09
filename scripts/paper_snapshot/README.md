@@ -83,7 +83,7 @@ The CHEMKIN deposit cites the paper by DOI, and the server fetches the DOI's met
 the literature row. The row, and so the archive, therefore depends on whether that lookup was reachable and what the
 registry returned at the time. `snapshot_record.json` records what was stored: the title, whether the title came from
 the registry or from the sources file (`title_source`), and the number of authors. The literature payload has no
-author field, so the authors in the archive are the registry's. Rebuilding offline, or after the registry changes the
+author field, and in the build checked the stored row had no authors (`authors_stored` in the record). Rebuilding offline, or after the registry changes the
 record, can change that row and nothing else.
 
 ## Approval is a demonstration

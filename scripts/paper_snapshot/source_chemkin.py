@@ -90,7 +90,24 @@ def describe_inputs(cfg: dict[str, Any]) -> dict[str, Any]:
     return digest_files(fixture, [fixture / n for n in names])
 
 
-def literature_record(client: Any, literature: dict[str, Any] | None) -> dict[str, Any]:
+def _find_key(node: Any, key: str) -> Any:
+    """First value stored under ``key`` anywhere in a nested JSON document, in document order."""
+    if isinstance(node, dict):
+        if key in node and node[key]:
+            return node[key]
+        for value in node.values():
+            found = _find_key(value, key)
+            if found:
+                return found
+    elif isinstance(node, list):
+        for value in node:
+            found = _find_key(value, key)
+            if found:
+                return found
+    return None
+
+
+def literature_record(client: Any, literature: dict[str, Any] | None, reactant_smiles: str) -> dict[str, Any]:
     """What the instance stored for the cited DOI, and where its title came from.
 
     The server fetches metadata for a DOI from Crossref when it deposits a
@@ -98,32 +115,38 @@ def literature_record(client: Any, literature: dict[str, Any] | None) -> dict[st
     lookup was reachable and what it returned at the time. ``title_source``
     says which: ``resolved_metadata`` (fetched) or ``depositor_supplied``
     (typed by the depositor, here the title in the sources config).
+
+    The literature ref is read from a deposited kinetics record's provenance
+    (a public read, scoped by the first reactant of the first deposited reaction),
+    then the row is read by ref. Nothing is guessed and no
+    error is swallowed: an authentication or network failure, a deposit that
+    carries no literature ref, or a row whose DOI is not the one cited stops
+    the build.
     """
     if not literature or not literature.get("doi"):
         return {"literature_supplied": False}
-    for candidate in range(1, 8):  # a fresh instance holds the one row this deposit created
-        try:
-            detail = client.get_literature(candidate, include=["authors"])
-        except Exception:  # noqa: BLE001 - a missing id ends the scan; it is not an error
-            continue
-        record = detail["record"]
-        identifiers = record.get("identifiers") or {}
-        if (identifiers.get("doi") or "").lower() != literature["doi"].lower():
-            continue
-        core = record["literature"]
-        return {
-            "literature_supplied": True,
-            "doi": identifiers.get("doi"),
-            "title_stored": core.get("title"),
-            "title_supplied_in_config": literature.get("title"),
-            "title_source": core.get("title_source"),
-            "metadata_resolved_by_the_server": core.get("title_source") == "resolved_metadata",
-            "issue_stored": core.get("issue"),
-            "publisher_stored": core.get("publisher"),
-            "authors_stored": len(record.get("authors") or []),
-            "note": "Rebuilding offline, or after the registry changes the record, can change this row.",
-        }
-    return {"literature_supplied": True, "found_on_instance": False}
+    found = client.search_kinetics(reactants=[reactant_smiles], limit=1)
+    ref = _find_key(found.get("records") or [], "literature_ref")
+    if not ref:
+        raise RuntimeError("the deposited kinetics records carry no literature ref although a DOI was supplied")
+    detail = client.get_literature(ref, include=["authors"])
+    record = detail["record"]
+    identifiers = record.get("identifiers") or {}
+    if (identifiers.get("doi") or "").lower() != literature["doi"].lower():
+        raise RuntimeError(f"the literature row {ref} has DOI {identifiers.get('doi')!r}, not the cited {literature['doi']!r}")
+    core = record["literature"]
+    return {
+        "literature_supplied": True,
+        "doi": identifiers.get("doi"),
+        "title_stored": core.get("title"),
+        "title_supplied_in_config": literature.get("title"),
+        "title_source": core.get("title_source"),
+        "metadata_resolved_by_the_server": core.get("title_source") == "resolved_metadata",
+        "issue_stored": core.get("issue"),
+        "publisher_stored": core.get("publisher"),
+        "authors_stored": len(record.get("authors") or []),
+        "note": "Rebuilding offline, or after the registry changes the record, can change this row.",
+    }
 
 
 def _duplicate_code(message: str) -> str:
@@ -168,7 +191,8 @@ def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Pat
     finally:
         client.close()
     with session.client() as lit_client:
-        src["literature"] = literature_record(lit_client, config.literature)
+        first_reactant = payloads.kinetics[0]["reaction"]["reactants"][0]["species_entry"]["smiles"]
+        src["literature"] = literature_record(lit_client, config.literature, first_reactant)
     summary = upload.summary()
     src["upload"] = summary
     src["distinct_submissions"] = len(set(recorder.submission_refs))

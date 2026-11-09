@@ -241,45 +241,48 @@ def main(argv: list[str] | None = None) -> int:
     started = time.time()
     session.register_depositor(**depositor)
 
-    for name, module in SOURCES:
-        entry = (config["sources"] or {}).get(name)
-        if not entry:
-            report.source(name)["status"] = "skipped: no entry in the sources config"
-            print(f"[{name}] skipped (no config entry)")
-            continue
-        if not entry.get("enabled", True):
-            report.source(name)["status"] = "skipped: enabled is false"
-            print(f"[{name}] skipped (enabled: false)")
-            continue
-        print(f"[{name}] depositing ...")
-        module.deposit(session, entry, report, args.work_dir)
-        print(f"[{name}] {report.source(name)['status']}: {report.source(name)['counts']}")
-
     approval: dict[str, Any] = {"performed": False}
-    if not args.skip_approval:
-        print("[curation] creating curator and approving submissions ...")
-        created = curation.create_curator(db_env, curator["username"], curator["password"], curator["email"], curator["full_name"])
-        outcome = curation.approve_all(session, curator["username"], curator["password"], report)
-        approval = {"performed": True, "curator_account": created, **outcome,
-                    "statement": "approval was done by the build script for a demonstration; it is not an independent review"}
-        print(f"[curation] approved {outcome['approved_submissions']} submissions; none pending")
-
     exports: dict[str, Any] = {}
-    if not args.skip_export:
-        env = export.subprocess_env(db_env, PACKAGE_PATHS)
-        archive = out_dir / "tckdb.archive"
-        print("[export] archive ...")
-        written = export.create_archive(archive, env).strip().splitlines()
-        exports["archive_summary"] = written[-1] if written else ""
-        verified = export.verify_archive(archive, env).strip().splitlines()
-        exports["archive_verify"] = [ln for ln in verified if not ln.startswith("Checked ")]
-        print("[export] expected outputs ...")
-        wanted = list(config.get("expected_outputs") or EXPECTED_OUTPUTS)
-        printed = export.expected_outputs(out_dir / "expected_outputs", env, only=wanted).splitlines()
-        exports["expected_outputs"] = [ln for ln in printed if re.match(r"^[0-9a-f]{64}  ", ln)]
-        exports["archive_sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
+    try:
+        for name, module in SOURCES:
+            entry = (config["sources"] or {}).get(name)
+            if not entry:
+                report.source(name)["status"] = "skipped: no entry in the sources config"
+                print(f"[{name}] skipped (no config entry)")
+                continue
+            if not entry.get("enabled", True):
+                report.source(name)["status"] = "skipped: enabled is false"
+                print(f"[{name}] skipped (enabled: false)")
+                continue
+            print(f"[{name}] depositing ...")
+            module.deposit(session, entry, report, args.work_dir)
+            print(f"[{name}] {report.source(name)['status']}: {report.source(name)['counts']}")
 
-    report.write(out_dir / "build_report.json")
+        if not args.skip_approval:
+            print("[curation] creating curator and approving submissions ...")
+            created = curation.create_curator(db_env, curator["username"], curator["password"], curator["email"], curator["full_name"])
+            outcome = curation.approve_all(session, curator["username"], curator["password"], report)
+            approval = {"performed": True, "curator_account": created, **outcome,
+                        "statement": "approval was done by the build script for a demonstration; it is not an independent review"}
+            print(f"[curation] approved {outcome['approved_submissions']} submissions; none pending")
+
+        if not args.skip_export:
+            env = export.subprocess_env(db_env, PACKAGE_PATHS)
+            archive = out_dir / "tckdb.archive"
+            print("[export] archive ...")
+            written = export.create_archive(archive, env).strip().splitlines()
+            exports["archive_summary"] = written[-1] if written else ""
+            verified = export.verify_archive(archive, env).strip().splitlines()
+            exports["archive_verify"] = [ln for ln in verified if not ln.startswith("Checked ")]
+            print("[export] expected outputs ...")
+            wanted = list(config.get("expected_outputs") or EXPECTED_OUTPUTS)
+            printed = export.expected_outputs(out_dir / "expected_outputs", env, only=wanted).splitlines()
+            exports["expected_outputs"] = [ln for ln in printed if re.match(r"^[0-9a-f]{64}  ", ln)]
+            exports["archive_sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
+
+    finally:
+        # Written whether or not the build finished: a failed approval still leaves the refusals that explain it.
+        report.write(out_dir / "build_report.json")
     record = {
         "snapshot": "TCKDB paper demonstration snapshot",
         "source_commit": git_commit(),
