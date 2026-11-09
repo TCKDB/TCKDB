@@ -10,7 +10,6 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import pytest
 from sqlalchemy import create_engine, text
 
 from tests.db._migration_chain import revision_under_test

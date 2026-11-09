@@ -1610,11 +1610,16 @@ _HESSIAN_NOT_STORED = {
             "the matrix in its archive block is not a complete, readable lower triangle for the atoms the archive "
             "lists (it may be truncated)."
         ),
-        "archive_orientation_unverified": (
+        "archive_frame_inconsistent": (
             "A Hessian was found in an uploaded artifact but not stored: the log has no force-constant block, and "
-            "the matrix in its archive block could not be tied to a frame, because the archive's atoms do not "
-            "coincide with the log's input orientation. A matrix in another orientation would be bound to the wrong "
-            "geometry."
+            "the matrix in its archive block is not consistent with the archive's own atoms (it does not annihilate "
+            "their rigid translations and rotations), so it may be in a different frame from the atoms it would be "
+            "bound to."
+        ),
+        "archive_atoms_unsupported": (
+            "A Hessian was found in an uploaded artifact but not stored: the log has no force-constant block, and "
+            "the archive lists its atoms in a form that is not read (a Z-matrix, or atomic numbers instead of "
+            "element symbols), so the matrix cannot be tied to atoms."
         ),
     },
     "hessian_not_stored_failed": {
@@ -2120,7 +2125,8 @@ _HESSIAN_REASONS = frozenset(
         "sent_as_hessian",
         "log_block_unreadable",
         "archive_block_unreadable",
-        "archive_orientation_unverified",
+        "archive_frame_inconsistent",
+        "archive_atoms_unsupported",
         "input_geometry_count",
         "geometry_not_found",
         "atom_count",

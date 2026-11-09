@@ -45,8 +45,9 @@ matrix:
 * the Gaussian ``opt`` + ``>13 atoms`` + missing ``IOp(2/9=2000)`` case
   (Arkane's standard-orientation trap) is skipped;
 * a Gaussian log with no force-constant block is read from its archive block
-  (:mod:`app.services.gaussian_archive_hessian`), and only when the archive's
-  atoms are found in the log's ``Input orientation`` table;
+  (:mod:`app.services.gaussian_archive_hessian`), and only when the matrix is
+  self-consistent with the archive's own atoms (rigid translations and
+  rotations annihilated);
 * the ORCA ``$atoms`` block is surfaced so the hook can cross-check the
   matrix's frame against the bound geometry's coordinates.
 """

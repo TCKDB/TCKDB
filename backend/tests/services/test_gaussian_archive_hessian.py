@@ -13,9 +13,12 @@ import pytest
 from app.chemistry.normal_modes import atomic_mass, unpack_lower_triangle
 from app.db.models.common import HessianSource
 from app.services.gaussian_archive_hessian import (
-    REASON_ARCHIVE_ORIENTATION,
+    FRAME_CONSISTENCY_RTOL,
+    REASON_ARCHIVE_ATOMS,
+    REASON_ARCHIVE_FRAME,
     REASON_ARCHIVE_UNREADABLE,
     read_gaussian_archive_hessian,
+    rigid_motion_residual,
 )
 from app.services.hessian_parsing import (
     GAUSSIAN_HESSIAN_MARKER,
@@ -146,27 +149,83 @@ def test_a_block_that_never_terminates_is_not_read():
     assert read.reason is None
 
 
-def test_archive_atoms_not_in_the_input_orientation_are_refused():
-    """A rotated frame must not be bound as if it were the input orientation."""
-    lines = BUTANE.splitlines()
-    for i, line in enumerate(lines):
-        parts = line.split()
-        if len(parts) == 6 and parts[0] == "1" and parts[1] == "6":  # first row of the Input orientation table
-            parts[3] = f"{float(parts[3]) + 0.5:.6f}"
-            lines[i] = "      " + "          ".join(parts)
-            break
-    else:  # pragma: no cover
-        raise AssertionError("fixture has no Input orientation table")
-    read = read_gaussian_archive_hessian("\n".join(lines) + "\n")
+def _archive_text(text: str) -> tuple[str, str, str]:
+    """``(before, joined archive block, after)`` with the wrap removed, so a test can edit the block's fields."""
+    lines = text.splitlines()
+    start = _archive_line_index(text)
+    end = next(i for i in range(start, len(lines)) if not lines[i].strip() or "Normal termination" in lines[i])
+    joined = "".join(line[1:] for line in lines[start:end])
+    return "\n".join(lines[:start]) + "\n", joined, "\n" + "\n".join(lines[end:]) + "\n"
+
+
+def _replace_atoms(text: str, atoms_section: str) -> str:
+    before, joined, after = _archive_text(text)
+    sections = joined.split("\\\\")
+    sections[3] = atoms_section
+    return before + " " + "\\\\".join(sections) + after
+
+
+def _rotated_atoms_section(degrees: float) -> str:
+    atoms = read_gaussian_archive_hessian(BUTANE).parsed.reference_coords_angstrom
+    a = np.radians(degrees)
+    rows = []
+    for e, x, y, z in atoms:
+        rows.append(f"{e},{np.cos(a) * x - np.sin(a) * y:.10f},{np.sin(a) * x + np.cos(a) * y:.10f},{z:.10f}")
+    return "0,1\\" + "\\".join(rows)
+
+
+def test_the_consistent_archive_has_a_rigid_motion_residual_well_inside_the_bound():
+    parsed = read_gaussian_archive_hessian(BUTANE).parsed
+    residual = rigid_motion_residual(parsed.lower_triangle_hartree_bohr2, parsed.reference_coords_angstrom)
+    assert residual < FRAME_CONSISTENCY_RTOL / 5
+
+
+def test_a_hessian_whose_atoms_are_rotated_relative_to_it_is_refused():
+    """The failure the old Input-orientation guard was named for: matrix and atoms in different frames."""
+    read = read_gaussian_archive_hessian(_replace_atoms(BUTANE, _rotated_atoms_section(20.0)))
     assert read.parsed is None
-    assert read.reason == REASON_ARCHIVE_ORIENTATION
+    assert read.reason == REASON_ARCHIVE_FRAME
 
 
-def test_a_log_without_an_input_orientation_table_is_refused():
+def test_a_log_without_an_input_orientation_table_still_parses():
     lines = [line for line in BUTANE.splitlines() if "Input orientation" not in line]
     read = read_gaussian_archive_hessian("\n".join(lines) + "\n")
+    assert read.reason is None
+    assert read.parsed is not None
+
+
+def test_windows_line_endings_are_read_like_unix_ones():
+    assert "\r" not in BUTANE
+    again = read_gaussian_archive_hessian(BUTANE.replace("\n", "\r\n")).parsed
+    assert again is not None
+    assert again.lower_triangle_hartree_bohr2 == read_gaussian_archive_hessian(BUTANE).parsed.lower_triangle_hartree_bohr2
+
+
+def test_iso_and_fragment_labels_are_read_as_their_element():
+    atoms = read_gaussian_archive_hessian(BUTANE).parsed.reference_coords_angstrom
+    rows = [f"{e}{'(Iso=13,Fragment=1)' if k == 0 else ''},{x:.10f},{y:.10f},{z:.10f}" for k, (e, x, y, z) in enumerate(atoms)]
+    rows[1] = f"{atoms[1][0]}(Fragment=1),0,{atoms[1][1]:.10f},{atoms[1][2]:.10f},{atoms[1][3]:.10f}"
+    parsed = read_gaussian_archive_hessian(_replace_atoms(BUTANE, "0,1\\" + "\\".join(rows))).parsed
+    assert parsed is not None
+    assert [e for e, *_ in parsed.reference_coords_angstrom] == [e for e, *_ in atoms]
+
+
+def test_a_z_matrix_archive_is_refused_with_its_own_reason():
+    zmat = "0,1\\C\\C,1,1.5\\C,2,1.5,1,109.5\\C,3,1.5,2,109.5,1,180."
+    read = read_gaussian_archive_hessian(_replace_atoms(BUTANE, zmat))
     assert read.parsed is None
-    assert read.reason == REASON_ARCHIVE_ORIENTATION
+    assert read.reason == REASON_ARCHIVE_ATOMS
+
+
+def test_an_unreadable_last_block_does_not_fall_back_to_an_earlier_one():
+    before, joined, after = _archive_text(BUTANE)
+    broken = joined.replace("NImag=0\\\\0", "NImag=0\\\\x", 1)
+    assert broken != joined
+    text = before + " " + joined + "\n\n" + " " + broken + after
+    assert read_gaussian_archive_hessian(before + " " + joined + after).parsed is not None
+    read = read_gaussian_archive_hessian(text)
+    assert read.parsed is None
+    assert read.reason == REASON_ARCHIVE_UNREADABLE
 
 
 @pytest.mark.parametrize("text", ["", "no archive here\n", " 1\\1\\GINC-X\\Freq\\\\@\n"])

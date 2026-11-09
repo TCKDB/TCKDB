@@ -12,3 +12,6 @@ nothing inside a kept section was edited. Kept: the banner, the route, the last 
 
 Source: the E2 basin-tolerance study, `E2/raw_outputs/tasks/wb97xd/{n_butane,ethanethiol}/c00/job.log`
 (Zeus, 2026-10-26).
+
+The user name, scratch path and host in the original were replaced by `username`/`USERNAME`, `xxxx-master` and
+`NODE` (same lengths, so the 70-column archive wrap is unchanged).

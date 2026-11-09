@@ -23,12 +23,22 @@ freq log of a 12-atom radical; a CBS-QB3 G09 log):
 * An ``opt`` + ``freq`` log holds one archive block per job step (``FOpt``, then ``Freq``); only the one with an
   ``NImag=`` section followed by a Hessian counts, and the last such block wins, as for the force-constant block.
 
-Orientation. The archive's atoms are written in the frame the Hessian is in. Rather than assume which frame that is,
-this module finds the archive atoms in the log's own ``Input orientation`` table (the last one printed) and
-accepts the Hessian only when they coincide. A log whose archive atoms are only in the ``Standard orientation``
-table, or in neither, is refused with ``archive_orientation_unverified``: a symmetry-reoriented matrix bound to an
-input-orientation geometry is a wrong matrix that looks right. The archive atoms are returned as the matrix's
-reference frame, so the caller's frame check against the bound geometry runs as it does for an ORCA ``.hess``.
+Frame. The archive's atoms are written in the frame the Hessian is in; this was measured, not assumed, and the
+reader does not rely on it. A Hessian computed in one frame and paired with atoms in another is a wrong matrix
+that looks right, so the reader tests the pair for self-consistency: a Cartesian Hessian annihilates rigid
+translations and (at a stationary point, to the accuracy of the residual gradient) infinitesimal rigid rotations of
+the atoms it was computed at. ``max ||H v|| / (||v|| ||H||_F)`` over the three translations and three rotations
+(rotations about the centroid, atoms in bohr) is at most 1.1e-4 on the 123 logs measured here and 6.4e-4 on the
+reviewer's 64 non-NoSymm G03/G09/G16 logs, and at least 3.7e-3 when the atoms are rotated 5 degrees away from the
+Hessian's frame (1.8e-2 for a standard-versus-input orientation pair). The bound is
+:data:`FRAME_CONSISTENCY_RTOL` = 2e-3, three times the largest consistent value and below the 5 degree case. This
+catches a frame mismatch of more than a few degrees; it cannot see a pure translation, which no Hessian depends on.
+The archive atoms are returned as the matrix's reference frame, so the caller's check against the bound geometry
+still decides whether the matrix applies to that geometry.
+
+Atom labels. ``C(Iso=13)``, ``C(Fragment=1)`` and a frozen-atom flag are parsed (the element is the leading
+letters; the label does not change the Hessian). An atomic-number element or a Z-matrix geometry is not
+interpreted and is refused with ``archive_atoms_unsupported``.
 """
 
 from __future__ import annotations
@@ -36,21 +46,26 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+import numpy as np
+
 from app.db.models.common import HessianSource
 from app.services.hessian_parsing import ParsedHessian
 
 #: Reason tokens, the ``reason`` of a ``hessian_not_stored_unparseable`` warning.
 REASON_ARCHIVE_UNREADABLE = "archive_block_unreadable"
-REASON_ARCHIVE_ORIENTATION = "archive_orientation_unverified"
+REASON_ARCHIVE_FRAME = "archive_frame_inconsistent"
+REASON_ARCHIVE_ATOMS = "archive_atoms_unsupported"
 
-#: Tolerance (Angstrom) for finding the archive atoms in the ``Input orientation`` table: that table prints six
-#: decimals, the archive ten, so the rounding is 5e-7; this is loose enough for that and far tighter than any
-#: different orientation.
-_ORIENTATION_ATOL_ANGSTROM = 1e-5
+#: Bound on the rigid-motion residual of the archive Hessian against the archive atoms; see the module docstring.
+FRAME_CONSISTENCY_RTOL = 2e-3
+
+_BOHR_PER_ANGSTROM = 1.0 / 0.52917721067
 
 _ARCHIVE_START = re.compile(r" 1\\1\\")
 _FLOAT = re.compile(r"[+-]?\d+\.\d*(?:[eE][+-]?\d+)?")
-_ELEMENT = re.compile(r"[A-Za-z]{1,2}")
+_ATOM = re.compile(
+    r"(?P<el>[A-Za-z]{1,2})(?:\([^)]*\))?,(?:-?\d+,)?(?P<x>[^,]+),(?P<y>[^,]+),(?P<z>[^,]+)"
+)
 
 
 @dataclass(frozen=True)
@@ -87,22 +102,19 @@ def _archive_blocks(text: str) -> list[str]:
 
 
 def _read_atoms(section: str) -> list[tuple[str, float, float, float]] | None:
-    """The ``(element, x, y, z)`` rows of the charge/multiplicity-plus-atoms section, in Angstrom."""
+    """The ``(element, x, y, z)`` rows of the charge/multiplicity-plus-atoms section, in Angstrom.
+
+    ``None`` when a row is not in Cartesian form (a Z-matrix row, an atomic number as the element).
+    """
     fields = section.split("\\")
     if len(fields) < 2:
         return None
     atoms: list[tuple[str, float, float, float]] = []
     for field in fields[1:]:
-        parts = field.split(",")
-        if len(parts) not in (4, 5):  # element, [frozen/fragment flag,] x, y, z
+        match = _ATOM.fullmatch(field)
+        if match is None or not all(_FLOAT.fullmatch(match[c]) for c in "xyz"):
             return None
-        if not _ELEMENT.fullmatch(parts[0]):
-            return None  # an atomic number or a label this module does not interpret
-        try:
-            x, y, z = (float(v) for v in parts[-3:])
-        except ValueError:
-            return None
-        atoms.append((parts[0], x, y, z))
+        atoms.append((match["el"], float(match["x"]), float(match["y"]), float(match["z"])))
     return atoms or None
 
 
@@ -113,71 +125,53 @@ def _read_values(section: str) -> list[float] | None:
     return [float(t) for t in tokens]
 
 
-def _last_orientation_table(text: str, title: str) -> list[tuple[int, float, float, float]] | None:
-    """The last ``<title> orientation:`` table in the log as ``(atomic_number, x, y, z)`` rows."""
-    lines = text.splitlines()
-    found: list[tuple[int, float, float, float]] | None = None
-    for i, line in enumerate(lines):
-        if line.strip() != f"{title} orientation:":
-            continue
-        rows: list[tuple[int, float, float, float]] = []
-        dashes = 0
-        for row in lines[i + 1 :]:
-            if row.strip().startswith("-----"):
-                dashes += 1
-                if dashes == 3:
-                    break
-                continue
-            if dashes < 2:
-                continue
-            parts = row.split()
-            if len(parts) != 6:
-                rows = []
-                break
-            try:
-                rows.append((int(parts[1]), float(parts[3]), float(parts[4]), float(parts[5])))
-            except ValueError:
-                rows = []
-                break
-        if rows:
-            found = rows
-    return found
-
-
-def _atoms_match_table(
-    atoms: list[tuple[str, float, float, float]], table: list[tuple[int, float, float, float]] | None
-) -> bool:
-    if table is None or len(table) != len(atoms):
-        return False
-    return all(
-        abs(a[1] - t[1]) <= _ORIENTATION_ATOL_ANGSTROM
-        and abs(a[2] - t[2]) <= _ORIENTATION_ATOL_ANGSTROM
-        and abs(a[3] - t[3]) <= _ORIENTATION_ATOL_ANGSTROM
-        for a, t in zip(atoms, table, strict=True)
-    )
+def rigid_motion_residual(packed: list[float], atoms: list[tuple[str, float, float, float]]) -> float:
+    """``max ||H v|| / (||v|| ||H||_F)`` over the 3 translations and 3 rotations of ``atoms`` (Angstrom)."""
+    n3 = 3 * len(atoms)
+    matrix = np.zeros((n3, n3))
+    rows, cols = np.tril_indices(n3)
+    matrix[rows, cols] = packed
+    matrix = matrix + matrix.T - np.diag(np.diag(matrix))
+    scale = np.linalg.norm(matrix)
+    if scale == 0.0:
+        return float("inf")
+    xyz = np.array([[x, y, z] for _, x, y, z in atoms]) * _BOHR_PER_ANGSTROM
+    xyz = xyz - xyz.mean(axis=0)
+    worst = 0.0
+    for axis in range(3):
+        unit = np.zeros(3)
+        unit[axis] = 1.0
+        for vector in (np.tile(unit, len(atoms)), np.cross(unit, xyz).reshape(-1)):
+            norm = np.linalg.norm(vector)
+            if norm > 0.0:
+                worst = max(worst, float(np.linalg.norm(matrix @ vector) / (norm * scale)))
+    return worst
 
 
 def read_gaussian_archive_hessian(text: str) -> ArchiveHessianRead:
-    """Read the Hessian from the last archive block that has one; never return a matrix whose frame is unproven."""
+    """Read the Hessian from the last archive block that has an ``NImag=`` section.
+
+    Once that block is found it decides: an unreadable Hessian in it is a refusal, never a reason to read an
+    earlier block's matrix (which belongs to a different job step).
+    """
+    text = "\n".join(text.splitlines())  # one line ending, whatever the log was written with
     for block in reversed(_archive_blocks(text)):
         sections = block.split("\\\\")
         nimag = next((i for i, s in enumerate(sections) if "NImag=" in s), None)
-        if nimag is None or nimag + 1 >= len(sections) or len(sections) < 5:
+        if nimag is None:
             continue
-        hessian_section = sections[nimag + 1]
-        if not hessian_section.strip() or hessian_section[0] not in "+-0123456789.":
-            continue
+        if nimag + 1 >= len(sections) or not sections[nimag + 1].strip() or len(sections) < 5:
+            return ArchiveHessianRead()  # a freq step that printed no matrix
 
         atoms = _read_atoms(sections[3])
-        values = _read_values(hessian_section)
-        if atoms is None or values is None:
-            return ArchiveHessianRead(reason=REASON_ARCHIVE_UNREADABLE)
+        if atoms is None:
+            return ArchiveHessianRead(reason=REASON_ARCHIVE_ATOMS)
+        values = _read_values(sections[nimag + 1])
         n3 = 3 * len(atoms)
-        if len(values) != n3 * (n3 + 1) // 2:
+        if values is None or len(values) != n3 * (n3 + 1) // 2:
             return ArchiveHessianRead(reason=REASON_ARCHIVE_UNREADABLE)
-
-        if not _atoms_match_table(atoms, _last_orientation_table(text, "Input")):
-            return ArchiveHessianRead(reason=REASON_ARCHIVE_ORIENTATION)
+        if rigid_motion_residual(values, atoms) > FRAME_CONSISTENCY_RTOL:
+            return ArchiveHessianRead(reason=REASON_ARCHIVE_FRAME)
 
         return ArchiveHessianRead(
             parsed=ParsedHessian(

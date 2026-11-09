@@ -13,8 +13,8 @@ from app.schemas.fragments.artifact import ArtifactIn
 from app.services import hessian_extraction
 from app.services.gaussian_archive_hessian import read_gaussian_archive_hessian
 from tests.services.test_hessian_and_scan_geometry_checks import (
-    _SOFTWARE,
     _LOT,
+    _SOFTWARE,
     _USER_ID,
     _bundle,
     _geom,
@@ -93,8 +93,10 @@ def test_an_archive_hessian_is_not_bound_to_a_geometry_in_another_frame(db_conn)
         assert _hessian_rows(session) == 0
 
 
-def test_an_archive_whose_frame_cannot_be_established_warns(db_conn) -> None:
-    text = "\n".join(line for line in BUTANE.splitlines() if "Input orientation" not in line) + "\n"
+def test_an_archive_matrix_in_another_frame_than_its_atoms_warns(db_conn) -> None:
+    from tests.services.test_gaussian_archive_hessian import _replace_atoms, _rotated_atoms_section
+
+    text = _replace_atoms(BUTANE, _rotated_atoms_section(20.0))
     with _isolated_session(db_conn) as session:
         calc = _butane_freq_calc(session, _xyz())
 
@@ -102,7 +104,7 @@ def test_an_archive_whose_frame_cannot_be_established_warns(db_conn) -> None:
 
         assert warning is not None
         assert warning.code == "hessian_not_stored_unparseable"
-        assert warning.context["reason"] == "archive_orientation_unverified"
+        assert warning.context["reason"] == "archive_frame_inconsistent"
         assert "job.log" not in warning.message
         assert _hessian_rows(session) == 0
 
