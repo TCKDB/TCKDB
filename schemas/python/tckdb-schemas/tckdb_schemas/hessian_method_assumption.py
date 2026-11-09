@@ -93,6 +93,7 @@ from tckdb_schemas.hessian_method_detection import (
     check_recorded_method_agrees_with_deck,
     deck_hessian_method,
     echo_hessian_method,
+    numfreq_energy_implied,
     orca_lacks_analytic_gradient,
     orca_numfreq_refines_gradient_to_energy,
 )
@@ -194,10 +195,10 @@ _QCISD_PREFIXES = ("qcisd",)
 #: CCSD(T) (and its F12/DLPNO-tagged relatives) before bare CCSD, for the
 #: same reason as QCISD(T)/QCISD.
 _CCSD_T_PREFIXES = (
-    "ccsd(t)", "dlpno-ccsd(t)", "dlpno-ccsd(t1)", "ccsd(t)-f12",
+    "ccsd(t)", "dlpno-ccsd(t)", "dlpno2013-ccsd(t)", "dlpno-ccsd(t1)", "ccsd(t)-f12",
     "dlpno-ccsd(t)-f12", "f12-ccsd(t)", "f12/ri-ccsd(t)",
 )
-_CCSD_PREFIXES = ("ccsd", "dlpno-ccsd", "f12-ccsd", "f12/ri-ccsd")
+_CCSD_PREFIXES = ("ccsd", "dlpno-ccsd", "dlpno2013-ccsd", "f12-ccsd", "f12/ri-ccsd")
 
 #: DLPNO-tagged local correlation methods not already matched above by a
 #: more specific CC/MP2 prefix -- e.g. DLPNO-CEPA, DLPNO-QCISD(T) should
@@ -335,7 +336,7 @@ def _cc_with_options(token: str) -> tuple[bool, str | None]:
 
 #: ORCA 6.1 manual, AUTOCI chapter: these methods have analytic gradients.
 _AUTOCI_WITH_GRADIENT = frozenset({
-    "autoci-ccsd", "autoci-ccsd(t)", "autoci-mp2", "autoci-mp3", "autoci-mp4",
+    "autoci-ccsd", "autoci-ccsd(t)", "autoci-mp2", "autoci-mp3", "autoci-mp4", "autoci-mp4(sdq)",
 })
 
 
@@ -362,16 +363,17 @@ def classify_method_family(method: str | None) -> str | None:
         return MethodFamily.CISD
     if _startswith_any(token, _CASSCF_PREFIXES):
         return MethodFamily.CASSCF
-    handled, family = _cc_with_options(token)
+    cc_token = re.sub(r"^(rohf|uhf|rhf)-", "", token)
+    handled, family = _cc_with_options(cc_token)
     if handled:
         return family
-    if _startswith_any(token, _CCSD_T_PREFIXES):
+    if _startswith_any(cc_token, _CCSD_T_PREFIXES):
         return MethodFamily.CCSD_T
-    if _startswith_any(token, _QCISD_T_PREFIXES):
+    if _startswith_any(cc_token, _QCISD_T_PREFIXES):
         return MethodFamily.QCISD_T
-    if _startswith_any(token, _CCSD_PREFIXES):
+    if _startswith_any(cc_token, _CCSD_PREFIXES):
         return MethodFamily.CCSD
-    if _startswith_any(token, _QCISD_PREFIXES):
+    if _startswith_any(cc_token, _QCISD_PREFIXES):
         return MethodFamily.QCISD
     if _startswith_any(token, _MP4_PREFIXES):
         return _mp4_variant(token)
@@ -839,10 +841,13 @@ def resolve_tau_with_assumption(
     spin_treatment: object = None,
     core_treatment: object = None,
     ri_approximation: object = None,
+    numfreq_energy_implied: bool = False,
 ) -> TauResolution:
     """Resolve tau for one calculation: reported, echo, recorded, deck, assumed, conservative.
 
     ``spin_treatment``, ``core_treatment`` and ``ri_approximation`` are passed to :func:`infer_hessian_method`.
+    ``numfreq_energy_implied`` says a deck or echoed input has a bare ``NumFreq`` that reads as energies
+    (:func:`~tckdb_schemas.hessian_method_detection.numfreq_energy_implied`).
 
     The single resolution every validation adapter and the persistence step
     share, so what a deposit is judged at is what is stored.
@@ -899,7 +904,7 @@ def resolve_tau_with_assumption(
             lot_method,
             recorded_exact,
             stated,
-            lacks_gradient=_orca_lacks_gradient(lot_method, spin_treatment),
+            lacks_gradient=numfreq_energy_implied or _orca_lacks_gradient(lot_method, spin_treatment),
         )
 
     # The log's report, then the input the log echoes, outrank the recorded parameter and the deck: the same order
@@ -947,6 +952,12 @@ def calculation_deck_method(calc) -> HessianMethod | None:
     )
 
 
+def calculation_numfreq_energy_implied(calc) -> bool:
+    """Whether the calculation's inline deck or echoed input has a bare ORCA ``NumFreq`` that reads as energies."""
+    release = calc.software_release
+    return numfreq_energy_implied(release.name if release is not None else None, getattr(calc, "artifacts", None) or ())
+
+
 def calculation_reported_method(calc) -> HessianMethod | None:
     """The Hessian method the calculation's inline output logs REPORT, or ``None``.
 
@@ -988,6 +999,7 @@ def resolve_tau_for_calculation(calc) -> TauResolution:
         spin_treatment=getattr(calc.level_of_theory, "spin_treatment", None),
         core_treatment=getattr(calc.level_of_theory, "core_treatment", None),
         ri_approximation=getattr(calc.level_of_theory, "ri_approximation", None),
+        numfreq_energy_implied=calculation_numfreq_energy_implied(calc),
     )
 
 
@@ -1002,7 +1014,9 @@ def check_calculation_deck_agrees(calc) -> None:
     release = calc.software_release
     software = release.name if release is not None else None
     lot_method = calc.level_of_theory.method
-    lacks_gradient = _orca_lacks_gradient(lot_method, getattr(calc.level_of_theory, "spin_treatment", None))
+    lacks_gradient = _orca_lacks_gradient(
+        lot_method, getattr(calc.level_of_theory, "spin_treatment", None)
+    ) or calculation_numfreq_energy_implied(calc)
     check_recorded_method_agrees_with_deck(
         parameters,
         calculation_deck_method(calc),

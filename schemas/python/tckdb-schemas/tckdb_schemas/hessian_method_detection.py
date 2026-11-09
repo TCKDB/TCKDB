@@ -56,6 +56,7 @@ __all__ = [
     "orca_freq_hessian",
     "orca_lacks_analytic_gradient",
     "orca_numfreq_refines_gradient_to_energy",
+    "numfreq_energy_implied",
 ]
 
 #: Gaussian ``Freq`` options that name the second-derivative method. Only
@@ -382,10 +383,10 @@ def gaussian_freq_hessian_option(text: str) -> tuple[str, HessianMethod] | None:
 
 def orca_lacks_analytic_gradient(method: str | None) -> bool:
     """True for an ORCA method keyword with no analytic gradient: CCSD, CCSD(T), DLPNO and F12 methods (not ``AUTOCI-``)."""
-    token = (method or "").strip().lower().replace("_", "-")
+    token = re.sub(r"^(rohf|uhf|rhf)-", "", (method or "").strip().lower().replace("_", "-"))
     if not token or token.startswith("autoci"):
         return False
-    if token.startswith(("ccsd", "dlpno-ccsd", "f12-ccsd", "f12/ri-ccsd")):
+    if token.startswith(("ccsd", "dlpno-ccsd", "dlpno2013-ccsd", "f12-ccsd", "f12/ri-ccsd")):
         return True
     return "f12" in token and "mp2" in token
 
@@ -407,7 +408,21 @@ def orca_numfreq_refines_gradient_to_energy(
     )
 
 
-def orca_freq_hessian(keywords: Iterable[str]) -> tuple[str, HessianMethod] | None:
+_ORCA_COORDINATE_LINE = re.compile(r"^\*\s*(?:xyz|int|gzmt|xyzfile)\s+(-?\d+)\s+(\d+)", re.I)
+
+
+def _orca_multiplicity(text: str) -> int | None:
+    """The multiplicity on the ``* xyz <charge> <mult>`` (or ``*xyzfile``) line, else ``None``."""
+    for line in text.splitlines():
+        match = _ORCA_COORDINATE_LINE.match(re.sub(r"^\|\s*\d+>\s*", "", line.strip()))
+        if match:
+            return int(match.group(2))
+    return None
+
+
+def orca_freq_hessian(
+    keywords: Iterable[str], multiplicity: int | None = None
+) -> tuple[str, HessianMethod] | None:
     """The Hessian method the ORCA keywords state, as ``(directive as written, method)``.
 
     ``NumFreq`` wins over ``AnFreq``. ``NumFreq`` reads as finite differences of gradients, or of energies with
@@ -427,8 +442,9 @@ def orca_freq_hessian(keywords: Iterable[str]) -> tuple[str, HessianMethod] | No
             return f"{numfreq} {numgrad}", HessianMethod.finite_difference_energy
         lowered = [k.lower() for k in written]
         references = {k for k in lowered if k in ("uhf", "uks", "rohf")}
+        open_shell = bool(references) or (multiplicity or 1) > 1
         open_shell_mp2 = (
-            any(k.startswith("dlpno-mp2") for k in lowered) and bool(references)
+            any(k.startswith("dlpno-mp2") for k in lowered) and open_shell
         ) or ("rohf" in references and any(k.startswith(("mp2", "ri-mp2")) for k in lowered))
         if open_shell_mp2 or any(orca_lacks_analytic_gradient(k) for k in written):
             return numfreq, HessianMethod.finite_difference_energy
@@ -446,8 +462,38 @@ def _gaussian_method(text: str) -> HessianMethod | None:
 
 def _orca_method(text: str) -> HessianMethod | None:
     keywords = [kw for line in orca_keyword_lines(_extract_input_block(text)) for kw in line.split()]
-    found = orca_freq_hessian(keywords)
+    found = orca_freq_hessian(keywords, _orca_multiplicity(text))
     return found[1] if found is not None else None
+
+
+def _orca_numfreq_implies_energy(text: str) -> bool:
+    """True when a bare ``NumFreq`` (no ``NumGrad``) reads as finite differences of energies."""
+    keywords = [kw for line in orca_keyword_lines(_extract_input_block(text)) for kw in line.split()]
+    lowered = {k.lower() for k in keywords}
+    found = orca_freq_hessian(keywords, _orca_multiplicity(text))
+    return (
+        found is not None
+        and found[1] is HessianMethod.finite_difference_energy
+        and "numfreq" in lowered
+        and "numgrad" not in lowered
+    )
+
+
+def numfreq_energy_implied(declared_software: str | None, artifacts: Iterable[_ArtifactLike]) -> bool:
+    """True when an input deck or an ORCA log's echoed input has a bare ``NumFreq`` that reads as energies."""
+    declared = (declared_software or "").strip().lower() or None
+    for artifact in artifacts:
+        kind = getattr(artifact.kind, "value", artifact.kind)
+        if kind not in ("input", "output_log"):
+            continue
+        try:
+            text = base64.b64decode(artifact.content_base64, validate=True).decode("utf-8", errors="replace")
+        except (binascii.Error, ValueError):
+            continue
+        program = detect_software_from_text(text) or _PARSED_PROGRAMS.get(declared or "")
+        if program == "orca" and _orca_numfreq_implies_energy(text):
+            return True
+    return False
 
 
 def detect_hessian_method(software: str | None, text: str) -> HessianMethod | None:

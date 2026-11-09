@@ -193,3 +193,67 @@ def test_the_refinement_warning_is_rendered_from_its_code_and_values() -> None:
     }
     text = render_message(finding.code, finding.context)
     assert "finite_difference_gradient" in text and "finite_difference_energy" in text and "numerical" in text
+
+
+# ---------------------------------------------------------------------------
+# DLPNO2013, spin-prefixed coupled cluster, AUTOCI-MP4(SDQ), and what an ORCA deck shows about open shell
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("method", ["DLPNO2013-CCSD(T)", "DLPNO2013-CCSD", "UHF-CCSD(T)", "UHF-CCSD", "ROHF-CCSD(T)"])
+def test_dlpno2013_and_spin_prefixed_cc_are_energies(method) -> None:
+    assert _orca(method) == _ENERGY
+
+
+def test_autoci_mp4_sdq_follows_the_autoci_conditions() -> None:
+    assert _orca("AUTOCI-MP4(SDQ)", "6.1.0", **_ALL_ELECTRON_NO_RI) == _GRADIENT
+    assert _orca("AUTOCI-MP4(SDQ)", "6.1.0") is None
+
+
+def _deck(method: str, freq: str = "NumFreq", mult: int = 1) -> str:
+    return f"! {method} def2-SVP {freq}\n* xyz 0 {mult}\nH 0 0 0\n*\n"
+
+
+@pytest.mark.parametrize(
+    ("method", "mult"),
+    [
+        ("DLPNO2013-CCSD(T)", 1),
+        ("UHF DLPNO-MP2", 1),
+        ("UKS DLPNO-MP2", 1),
+        ("ROHF DLPNO-MP2", 1),
+        ("DLPNO-MP2", 2),
+        ("ROHF MP2", 1),
+    ],
+)
+def test_numfreq_decks_that_show_no_gradient_read_as_energies(method, mult) -> None:
+    from tckdb_schemas.hessian_method_detection import detect_hessian_method
+
+    assert detect_hessian_method("orca", _deck(method, mult=mult)) is HessianMethod.finite_difference_energy
+
+
+@pytest.mark.parametrize("method", [("DLPNO-MP2", 1), ("MP2", 2), ("RI-MP2", 1)])
+def test_numfreq_decks_with_a_gradient_stay_at_gradients(method) -> None:
+    from tckdb_schemas.hessian_method_detection import detect_hessian_method
+
+    deck = _deck(method[0], mult=method[1])
+    assert detect_hessian_method("orca", deck) is HessianMethod.finite_difference_gradient
+
+
+def test_a_bare_numfreq_energy_reading_refines_even_when_the_level_of_theory_states_no_spin() -> None:
+    import base64
+
+    from tckdb_schemas.hessian_method_detection import numfreq_energy_implied
+
+    def artifact(text):
+        return type("A", (), {"kind": "input", "content_base64": base64.b64encode(text.encode()).decode()})()
+
+    open_shell = artifact(_deck("UHF DLPNO-MP2"))
+    assert numfreq_energy_implied("ORCA", [open_shell]) is True
+    assert numfreq_energy_implied("ORCA", [artifact(_deck("DLPNO-MP2"))]) is False
+    assert numfreq_energy_implied("ORCA", [artifact(_deck("B3LYP", "NumFreq NumGrad"))]) is False
+    resolved = resolve_tau_with_assumption(
+        _REC_GRAD, "ORCA", "DLPNO-MP2", "6.1.0", deck_method=_STATED_ENERGY, numfreq_energy_implied=True
+    )
+    assert resolved.refined_from == "finite_difference_gradient"
+    refused = resolve_tau_with_assumption(_REC_GRAD, "ORCA", "DLPNO-MP2", "6.1.0", deck_method=_STATED_ENERGY)
+    assert refused.refined_from is None

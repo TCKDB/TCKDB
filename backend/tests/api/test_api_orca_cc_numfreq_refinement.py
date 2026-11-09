@@ -109,3 +109,14 @@ def test_a_method_with_an_analytic_gradient_is_not_refined(client):
     )
     assert resp.status_code == 422, resp.text[:600]
     assert resp.json()["code"] == "hessian_method_contradicts_input_deck"
+
+
+def test_an_open_shell_dlpno_mp2_deck_refines_a_recorded_gradient_method_without_a_stated_spin(client, db_session):
+    deck = "! UHF DLPNO-MP2 def2-SVP NumFreq\n* xyz 0 1\nC 0 0 0\n*\n"
+    resp = client.post(
+        "/api/v1/uploads/computed-species",
+        json=_payload(deck, 0.26, method="DLPNO-MP2", parameters=_recorded("finite_difference_gradient")),
+    )
+    assert resp.status_code == 201, resp.text[:600]
+    assert _stored(db_session).imaginary_mode_tau_basis == "finite_difference_energy"
+    assert [w["code"] for w in resp.json()["warnings"] if w["code"] == _CODE] == [_CODE]

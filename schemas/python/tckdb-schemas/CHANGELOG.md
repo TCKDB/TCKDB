@@ -12,16 +12,16 @@ Gaussian:
 
 ORCA:
 
-- CCSD, CCSD(T), DLPNO coupled cluster and F12 methods (including F12-MP2 and `RI-MP2-F12`) are finite differences of energies (80) on every version. Other `DLPNO-*` methods assume nothing.
+- CCSD, CCSD(T), DLPNO and DLPNO2013 coupled cluster, `UHF-` / `ROHF-` prefixed coupled cluster and F12 methods (including F12-MP2 and `RI-MP2-F12`) are finite differences of energies (80) on every version. Other `DLPNO-*` methods assume nothing.
 - Open-shell DLPNO-MP2 and ROHF MP2 are finite differences of energies (80). Open shell is read from the level of theory's `spin_treatment` or a `UHF` / `ROHF` method prefix; with neither, the closed-shell row (50) applies. MP2, RI-MP2, SCS-MP2 and closed-shell DLPNO-MP2 stay at 50.
-- From ORCA 6, `AUTOCI-CCSD`, `AUTOCI-CCSD(T)`, `AUTOCI-MP2`, `AUTOCI-MP3` and `AUTOCI-MP4` are finite differences of gradients (50) when the level of theory states `core_treatment` all-electron and `ri_approximation` none; otherwise, and for other AUTOCI methods, nothing is assumed.
+- From ORCA 6, `AUTOCI-CCSD`, `AUTOCI-CCSD(T)`, `AUTOCI-MP2`, `AUTOCI-MP3`, `AUTOCI-MP4` and `AUTOCI-MP4(SDQ)` are finite differences of gradients (50) when the level of theory states `core_treatment` all-electron and `ri_approximation` none; otherwise, and for other AUTOCI methods, nothing is assumed.
 - Double hybrids written without a hyphen (`PBE0DH`, `PBEQIDH`, `PBE0-QIDH`, `wB97X2`, `B2KPLYP`, `B2TPLYP`) resolve as double hybrids (50) instead of plain DFT (30).
-- An input deck or echoed input with `NumFreq` and no `NumGrad` for a method with no analytic gradient reads as finite differences of energies.
-- A recorded `finite_difference_gradient` against such a deck or echoed input is accepted, stored as `finite_difference_energy` (80), and returned with `hessian_method_refined` (context `recorded`, `stored_method`, `stored_basis`, `refined_because`). A recorded `analytic` against `NumFreq`, and a recorded gradient method against `NumGrad` for a method with an analytic gradient, are still refused.
+- An input deck or echoed input with `NumFreq` and no `NumGrad` for a method with no analytic gradient reads as finite differences of energies. For DLPNO-MP2 the deck's own open-shell evidence counts: a `UHF`, `UKS` or `ROHF` keyword, or a multiplicity above 1 on the coordinate line.
+- A recorded `finite_difference_gradient` against such a deck or echoed input is accepted (also when the level of theory states no spin treatment), stored as `finite_difference_energy` (80), and returned with `hessian_method_refined` (context `recorded`, `stored_method`, `stored_basis`, `refined_because`). A recorded `analytic` against `NumFreq`, and a recorded gradient method against `NumGrad` for a method with an analytic gradient, are still refused.
 
 Other:
 
-- `resolve_tau_with_assumption` and `infer_hessian_method` take `spin_treatment`, `core_treatment` and `ri_approximation` keyword arguments.
+- `resolve_tau_with_assumption` and `infer_hessian_method` take `spin_treatment`, `core_treatment` and `ri_approximation` keyword arguments; `resolve_tau_with_assumption` also takes `numfreq_energy_implied`.
 - `tau_method_family` can be `mp4(sdq)`, `mp4(sdtq)`, `mp5`, `mp2-f12` or `autoci`; `mp4` is no longer written. `tau_assumption_rule` gains `orca_no_analytic_gradient`, `orca_open_shell_no_gradient` and `orca_autoci_gradient_from_6`.
 - `MP5`, `UMP5`, `F12-CCSD(T)`, `F12/RI-CCSD(T)` and the AUTOCI methods above now count as SCF-based, so a Gaussian `MP5` job gets the assumed `scf_convergence` of `tight`.
 
