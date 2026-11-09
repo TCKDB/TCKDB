@@ -1320,3 +1320,136 @@ class TestARecordedHessianMethodAgainstItsInputDeck:
         body = _assert_code(response, "hessian_method_contradicts_input_deck")
         assert body["context"]["recorded"] == "analytic"
         assert body["context"]["input_deck"] == "finite_difference_gradient"
+
+
+# ---------------------------------------------------------------------------
+# Codes the register gained on 2026-11-09 (gap_declarations.py)
+# ---------------------------------------------------------------------------
+
+
+class TestAFrequencyListNumbersItsModesOnce:
+    def test_two_rows_with_one_mode_index_are_refused_by_name(self, client):
+        """``mode_index`` is the row's identity in the list; two rows with one index say which mode is which nowhere."""
+        calc = _freq_calc(n_imag=0, frequencies=[800.0, 1600.0])
+        calc["freq_result"]["modes"][1]["mode_index"] = 1
+        response = client.post(
+            "/api/v1/uploads/conformers",
+            json={
+                **_conformer_payload(species_entry=_METHANE, xyz_text=_METHANE_XYZ),
+                "calculation": calc,
+            },
+        )
+        body = _assert_code(response, "freq_mode_index_not_unique")
+        assert body["context"]["duplicate_mode_indices"] == [1]
+
+
+#: Envelope codes whose end-to-end proof already lives next to the feature's other tests, where the payload builders
+#: are. Each is a refusal posted through the test client whose ``code`` is asserted. The guard in
+#: ``test_scientific_check_register.py`` requires every envelope code to be named in this file; the test below makes
+#: the naming mean something, by opening the cited file and finding a test that posts a request and reads the code.
+PROVED_IN: dict[str, str] = {
+    "kinetics_bath_gas_mole_fraction_sum": "api/test_api_kinetics_bath_gas.py",
+    "kinetics_bath_gas_duplicate_species": "api/test_api_kinetics_bath_gas.py",
+    "kinetics_bath_gas_at_high_pressure_limit": "api/test_api_kinetics_bath_gas.py",
+    "network_channel_kind_mismatch": "workflows/test_network_channel_kind.py",
+    "network_state_duplicate_composition": "workflows/test_network_pdep_duplicate_states.py",
+    "network_state_duplicate_participant": "workflows/test_network_pdep_duplicate_states.py",
+    "network_energy_source_subject_mismatch": "api/test_api_network_pdep_energy_source_subjects.py::test_a_well_cannot_cite_another_wells_single_point",
+    "thermo_energy_level_contradiction": "api/test_api_composite_role_consistency.py",
+    "statmech_energy_level_contradiction": "api/test_api_statmech_thermo_levels.py",
+    "kinetics_energy_level_contradiction": "api/test_api_kinetics_declared_energy_level.py",
+    "thermo_sp_geometry_mismatch": "api/test_api_bundle_extras_622_sources.py",
+    "statmech_sp_geometry_mismatch": "api/test_api_statmech_thermo_levels.py",
+    "scf_stability_source_geometry_mismatch": "api/test_api_bundle_extras_622_sources.py",
+    "calculation_geometry_conformer_mismatch": "api/test_api_calculation_geometry_conformer_agreement.py",
+    "calculation_input_geometry_mismatch": "api/test_api_calculation_geometry_conformer_agreement.py",
+    "composite_e0_inconsistent": "api/test_api_composite_program_run.py::test_the_two_arithmetic_checks_block_at_the_api",
+    "composite_terms_do_not_sum": "api/test_api_composite_program_run.py::test_the_two_arithmetic_checks_block_at_the_api",
+    "composite_total_mismatch": "api/test_api_composite_assembled_review.py",
+    "composite_input_level_mismatch": "api/test_api_composite_assembled.py",
+    "composite_input_geometry_mismatch": "api/test_api_composite_assembled.py",
+    "sp_energy_component_total_mismatch": "api/test_api_sp_energy_components.py",
+    "sp_energy_components_do_not_sum": "api/test_api_sp_energy_components.py",
+    "kinetics_declaration_contradicts_record": "api/test_api_kinetics_declarations.py",
+    "kinetics_determination_mismatch": "api/test_api_kinetics_declarations.py",
+    "statmech_model_declaration_mismatch": "api/test_api_statmech_model_declaration.py",
+    "structure_determination_mismatch": "api/test_api_structure_declarations.py",
+    "enthalpy_declaration_absent": "api/test_enthalpy_reference.py",
+    "enthalpy_declaration_without_content": "api/test_enthalpy_reference.py",
+    "enthalpy_quantity_not_storable_here": "api/test_enthalpy_reference.py",
+    "enthalpy_reference_kind_unrecognized": "api/test_api_bundle_dry_run_submit_parity.py::test_dry_run_and_submit_refuse_identically",
+    "unsupported_reaction_molecularity": "api/test_api_untested_refusals_tier_de.py",
+    "atom_map_without_transition_state": "api/test_api_untested_refusals_tier_de.py",
+    "atom_map_participant_not_declared": "api/test_api_untested_refusals_tier_de.py",
+}
+
+
+def _tests_proving(path, code: str) -> list[str]:
+    """Names of the test functions in ``path`` that name ``code``, post a request, and read a response ``code``."""
+    import ast
+
+    source = path.read_text()
+    lines = source.splitlines()
+    tree = ast.parse(source)
+    # A test may name the code through a module-level constant (``CODE = "..."``) rather than inline.
+    names = [code] + [
+        target.id
+        for node in tree.body
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and node.value.value == code
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    ]
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or not node.name.startswith("test_"):
+            continue
+        first = min([node.lineno, *(decorator.lineno for decorator in node.decorator_list)])
+        body = "\n".join(lines[first - 1 : node.end_lineno])
+        posts = any(
+            call in body for call in ("client.post", "client.put", "client.patch", "_post(", "post_json", "_refused(")
+        )
+        reads_code = any(
+            marker in body for marker in ('["code"]', "_code(", "assert_code", '.get("code")', "_refused(")
+        )
+        if any(name in body for name in names) and posts and reads_code:
+            found.append(node.name)
+    return found
+
+
+def test_every_code_cited_as_proved_elsewhere_has_a_test_that_posts_and_reads_it():
+    """Naming a code in ``PROVED_IN`` is not proof; a test in the cited file that posts a request and reads it is."""
+    from pathlib import Path
+
+    tests_root = Path(__file__).resolve().parents[1]
+    assert len(PROVED_IN) >= 30, "the map lost its content, so this test would pass vacuously"
+    unproved = {}
+    for code, citation in sorted(PROVED_IN.items()):
+        relative, _, named_test = citation.partition("::")
+        path = tests_root / relative
+        assert path.exists(), f"{code}: {relative} does not exist"
+        if named_test:
+            # A parametrised or helper-driven test names the code away from its body, so the citation names the
+            # test; it must exist, take the ``client`` fixture, and the file must read a response ``code``.
+            import ast
+
+            source = path.read_text()
+            tests = {
+                node.name: node
+                for node in ast.walk(ast.parse(source))
+                if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
+            }
+            node = tests.get(named_test)
+            proved = (
+                node is not None
+                and "client" in {arg.arg for arg in node.args.args}
+                and code in source
+                and ('["code"]' in source or '.get("code")' in source)
+            )
+            if not proved:
+                unproved[code] = citation
+        elif not _tests_proving(path, code):
+            unproved[code] = citation
+    assert not unproved, (
+        "These codes are cited as proved in another file, but no test there posts a request and reads the code: "
+        f"{unproved}. Write one here, or fix the citation."
+    )

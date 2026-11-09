@@ -104,6 +104,8 @@ REGISTER_ENTRY: dict[str, int] = {
     "multiplicity_mismatch": 12,
     "term_symbol_mismatch": 12,
     "electronic_state_contradicts_method": 12,
+    "term_symbol_contradicts_multiplicity": 12,
+    "term_symbol_contradicts_ground_term": 12,
     "n_imag_contradicts_minimum": 16,
     "n_imag_higher_order_saddle": 16,
     "n_imag_suggests_transition_state": 16,
@@ -130,6 +132,18 @@ REGISTER_ENTRY: dict[str, int] = {
     "t1_diagnostic_above_closed_shell_threshold": 52,
     "spin_contamination_above_conventional_threshold": 52,
     "spin_expected_contradicts_multiplicity": 52,
+    "parameter_disagrees_with_artifact": 67,
+    "input_deck_disagrees_with_output_log": 67,
+    "output_log_disagrees_with_earlier_output_log": 67,
+    "reported_setting_differs_from_requested": 67,
+    "level_of_theory_disagrees_with_artifact": 67,
+    "sp_energy_payload_log_mismatch": 68,
+    "composite_energy_log_mismatch": 68,
+    "composite_log_method_mismatch": 68,
+    "hessian_method_disagrees_with_stored_tau_basis": 69,
+    "atomic_electronic_degeneracy_contradicts_term": 70,
+    "scf_stability_source_level_mismatch": 71,
+    "scf_stability_source_conformer_unverified": 71,
 }
 
 #: Codes whose subject is a shared, deduplicated identity row (a species, a reaction, a literature entry, a ref

@@ -134,9 +134,19 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # wavefunction diagnostics). No existing entry covers any of them:
     # entry 12 compares a declared state with an output log, these judge a stored diagnostic against a criterion or
     # against the entry. Different tier from every blocking entry.
-    assert 10 <= len(REGISTER) <= 52, (
+    #
+    # Raised 52 -> 71 (2026-11-09) by the catalogue/register audit: the code catalogue and the warning map were
+    # compared and scientific codes had no entry, and they are now 19 entries (bath gas, network composition and energy sources,
+    # declared energy levels, composite and single-point arithmetic, declarations against the record, the enthalpy
+    # reference, the calculation graph, and five families of warnings against the uploaded evidence). They are
+    # declared in ``app/scientific_checks/gap_declarations.py`` with a tier and a reason each. Seven further codes
+    # joined five existing entries instead (10, 12, 20, the Arrhenius A units entry and the atom-map indices
+    # entry), because they are the same check; the codes left out as not scientific are listed in the pull
+    # request. The ceiling is still a filter: it is now 71 because that is what the audit measured, and anything
+    # past it needs the same explicit argument.
+    assert 10 <= len(REGISTER) <= 71, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~52 the inclusion test ('could this check be wrong "
+        "the system; above ~71 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 
@@ -859,6 +869,25 @@ _OPENINGS: dict[int, str] = {
     50: "A calculation that records how its frequency job b",
     51: "A species entry states one stereo configuration: w",
     52: "A wavefunction reliability diagnostic that a calcu",
+    53: 'A bath gas a rate states is a composition: its mol',
+    54: 'The kind of a network channel (isomerization, asso',
+    55: 'A network state is the multiset of its participant',
+    56: 'A calculation cited as the source of a network ene',
+    57: 'The level of theory a record declares its energy s',
+    58: 'An energy calculation linked to a thermo or statme',
+    59: 'A calculation is evidence for one conformer and ra',
+    60: 'The numbers a composite energy states agree with e',
+    61: 'Each input of an assembled composite ran at the le',
+    62: "The parts of a single point's electronic energy do",
+    63: 'A kinetics applicability or protocol declaration d',
+    64: 'A determination, statistical-model or structure de',
+    65: 'A thermo record that carries an enthalpy states wh',
+    66: 'The graph of which calculation depends on which is',
+    67: "What a depositor typed about a calculation's setti",
+    68: 'The electronic energy a tool states for a single p',
+    69: 'The Hessian method a deck or log attached after th',
+    70: 'The degeneracy of the lowest electronic level a si',
+    71: 'The job named as having measured an SCF stability ',
 }
 
 

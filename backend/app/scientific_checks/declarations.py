@@ -34,6 +34,7 @@ from types import ModuleType
 
 from tckdb_schemas.fragments import reaction_atom_map as wire_atom_map
 from tckdb_schemas.fragments.calculation import (
+    W_FREQ_MODE_INDEX_NOT_UNIQUE,
     W_FREQ_N_IMAG_DISAGREES_WITH_MODES,
     FreqResultPayload,
 )
@@ -84,10 +85,11 @@ from app.scientific_checks import (
     ScientificCheck,
     collect_constraint_rejections,
     collect_registered_checks,
+    gap_declarations,
 )
 from app.scientific_checks import external_comparison as external_comparison_checks
 from app.services import (
-    calculation_geometry_composition,
+    calc_isotopes,
     charge_multiplicity_reconciliation,
     frequency_geometry_linearity,
     reaction_resolution,
@@ -564,11 +566,11 @@ CHECK_TRANSITION_STATE_SOFT_REACTION_COORDINATE = ScientificCheck(
 CHECK_FREQ_N_IMAG_AGREES_WITH_ITS_MODES = ScientificCheck(
     group="Stationary points",
     sort_key=7,
-    code=W_FREQ_N_IMAG_DISAGREES_WITH_MODES,
+    code=(W_FREQ_N_IMAG_DISAGREES_WITH_MODES, W_FREQ_MODE_INDEX_NOT_UNIQUE),
     asserts=(
         "A frequency result that deposits both a scalar imaginary-mode count "
         "and a frequency list agrees with itself about how many imaginary "
-        "modes it has."
+        "modes it has, and a frequency list numbers its modes uniquely."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
@@ -931,11 +933,16 @@ CHECK_ATOM_MAP_IS_A_BIJECTION = ScientificCheck(
 CHECK_ATOM_MAP_INDICES_ARE_GEOMETRY_RELATIVE = ScientificCheck(
     group="Atom mapping across a reaction",
     sort_key=3,
-    code=wire_atom_map.W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
+    code=(
+        wire_atom_map.W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
+        wire_atom_map.W_ATOM_MAP_PARTICIPANT_NOT_DECLARED,
+        wire_atom_map.W_ATOM_MAP_WITHOUT_TRANSITION_STATE,
+    ),
     asserts=(
         "Every atom index in a map is counted against a named geometry that "
         "the participant actually owns, and names an atom that geometry "
-        "actually has."
+        "actually has; and a map belongs to a reaction that has a saddle "
+        "point and names only participants that reaction declares."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
@@ -1450,13 +1457,14 @@ CHECK_REPRODUCIBILITY_IS_ITS_OWN_JUDGEMENT = ScientificCheck(
 #: listed here, so forgetting to register a module is caught rather than
 #: silently omitted from the register.
 DECLARING_MODULES: tuple[ModuleType, ...] = (
-    calculation_geometry_composition,
+    calc_isotopes,
     chemistry_species,
     chemistry_stereo,
     chemistry_units,
     charge_multiplicity_reconciliation,
     external_comparison_checks,
     frequency_geometry_linearity,
+    gap_declarations,
     geometry_validation_service,
     reaction_atom_map_service,
     reaction_resolution,

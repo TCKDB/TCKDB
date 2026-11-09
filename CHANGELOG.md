@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Every scientific refusal and warning code has a register entry, or is listed as not scientific (2026-11-09)
+
+- **What changed:** the scientific check register grew from 52 to 71 entries. Nineteen new entries cover codes the API and the stored warnings already carried: the bath gas of a rate, network channel kind, state composition and energy-source subject, declared energy levels and energy-calculation geometry, a calculation's own geometry statements, composite and single-point arithmetic, declarations against their record, the enthalpy reference, the calculation dependency graph, and five families of warnings against the uploaded evidence. Seven further codes joined five existing entries where they are the same check. Twelve stored warnings now carry the register number of their entry (`register_entry` on `record_warnings`); warnings stored before this change keep none. Entry 18's text now states the tolerance order since #864: reported log method, echoed input, recorded method or deck, assumed program default, 50 cm-1.
+- **Why:** a registry that omits checks the system makes is a smaller claim than the system makes. The code catalogue and the warning map were compared and the difference found.
+- **Unchanged:** no refusal, warning, tier or tolerance changed; every entry records what the code already did.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.162.0 (generated contract text only).
+
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 
 - **What changed:**
