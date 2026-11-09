@@ -28,6 +28,8 @@ the first time.
 
 from __future__ import annotations
 
+import pytest
+
 _SOFTWARE = {"name": "Gaussian", "version": "16"}
 _LOT = {"method": "B3LYP", "basis": "6-31G(d)"}
 
@@ -1323,7 +1325,7 @@ class TestARecordedHessianMethodAgainstItsInputDeck:
 
 
 # ---------------------------------------------------------------------------
-# Codes the register gained on 2026-11-09 (gap_declarations.py)
+# Codes declared in gap_declarations.py
 # ---------------------------------------------------------------------------
 
 
@@ -1343,14 +1345,42 @@ class TestAFrequencyListNumbersItsModesOnce:
         assert body["context"]["duplicate_mode_indices"] == [1]
 
 
+class TestABathGasThatIsNotACompositionIsRefusedByName:
+    @pytest.mark.parametrize(
+        ("case", "code"),
+        [
+            ("high_pressure_limit", "kinetics_bath_gas_at_high_pressure_limit"),
+            ("sum_above_one", "kinetics_bath_gas_mole_fraction_sum"),
+            ("one_species_twice", "kinetics_bath_gas_duplicate_species"),
+        ],
+    )
+    def test_the_response_carries_the_code(self, client, case, code):
+        from tests.api.test_api_kinetics_bath_gas import _APPARENT, HE, KINETICS, N2, _standalone
+
+        overrides = {
+            "high_pressure_limit": {
+                "pressure_context": "high_p_limit",
+                "bath_gas": [{"species_entry": HE, "mole_fraction": 1.0}],
+            },
+            "sum_above_one": {
+                **_APPARENT,
+                "bath_gas": [{"species_entry": HE, "mole_fraction": 0.8}, {"species_entry": N2, "mole_fraction": 0.5}],
+            },
+            "one_species_twice": {
+                **_APPARENT,
+                "bath_gas": [{"species_entry": HE, "mole_fraction": 0.5}, {"species_entry": HE, "mole_fraction": 0.5}],
+            },
+        }[case]
+        response = client.post(KINETICS, json=_standalone(**overrides))
+        assert response.status_code == 422, response.text
+        assert response.json()["code"] == code
+
+
 #: Envelope codes whose end-to-end proof already lives next to the feature's other tests, where the payload builders
 #: are. Each is a refusal posted through the test client whose ``code`` is asserted. The guard in
 #: ``test_scientific_check_register.py`` requires every envelope code to be named in this file; the test below makes
 #: the naming mean something, by opening the cited file and finding a test that posts a request and reads the code.
 PROVED_IN: dict[str, str] = {
-    "kinetics_bath_gas_mole_fraction_sum": "api/test_api_kinetics_bath_gas.py",
-    "kinetics_bath_gas_duplicate_species": "api/test_api_kinetics_bath_gas.py",
-    "kinetics_bath_gas_at_high_pressure_limit": "api/test_api_kinetics_bath_gas.py",
     "network_channel_kind_mismatch": "workflows/test_network_channel_kind.py",
     "network_state_duplicate_composition": "workflows/test_network_pdep_duplicate_states.py",
     "network_state_duplicate_participant": "workflows/test_network_pdep_duplicate_states.py",
@@ -1381,6 +1411,13 @@ PROVED_IN: dict[str, str] = {
     "unsupported_reaction_molecularity": "api/test_api_untested_refusals_tier_de.py",
     "atom_map_without_transition_state": "api/test_api_untested_refusals_tier_de.py",
     "atom_map_participant_not_declared": "api/test_api_untested_refusals_tier_de.py",
+    "scf_stability_source_cycle": "api/test_api_bundle_extras_622_sources.py",
+    "transition_state_calculation_species_geometry": "api/test_api_calculation_geometry_conformer_agreement.py",
+    "thermo_source_role_type_mismatch": "api/test_api_upload_key_and_role_contracts.py",
+    "statmech_source_role_type_mismatch": "api/test_api_upload_key_and_role_contracts.py",
+    "lowest_energy_across_levels": "api/test_lookup_visibility_and_selection.py",
+    "unsafe_lowest_energy_comparison": "api/test_api_untested_refusals_tier_a.py",
+    "relative_conformer_energy_compare_identical_protocols": "api/scientific/test_api_relative_conformer_energies.py",
     "thermo_energy_sp_and_composite_linked": "api/test_api_composite_role_consistency.py",
     "statmech_energy_sp_and_composite_linked": "api/test_api_composite_role_consistency.py",
     "thermo_energy_level_ambiguous": "api/test_api_composite_role_consistency.py",
@@ -1414,15 +1451,23 @@ PROVED_IN: dict[str, str] = {
 _HTTP_METHODS = frozenset({"post", "put", "patch", "get", "delete"})
 _HTTP_HELPERS = ("_refused", "_post", "post_json", "_deposit", "_upload")
 
+#: Codes no request can produce (``Reach.guard`` in the catalogue). They cannot have an end-to-end proof,
+#: so each is exempt here with the reason, and a test checks the catalogue still says so.
+UNREACHABLE_GUARDS: dict[str, str] = {
+    "ts_validation_source_calculation_owner_mismatch": (
+        "the request schemas refuse the same mistake earlier with calculation_key_undeclared"
+    ),
+}
+
 
 def _cites(source: str, code: str, named: str | None = None) -> list[str]:
     """Names of the tests in ``source`` that prove ``code`` over HTTP.
 
-    A test proves it only if, in code that runs (the docstring and comments are not code, so a mention
-    there does not count), it names the code inside a comparison or as a call argument (a parametrised
-    value counts, a constant that holds the code counts), sends a request, reads a response ``code``,
-    takes the ``client`` fixture, and is not skipped or expected to fail. ``named`` restricts the search
-    to one test; otherwise every test in the source is considered.
+    A test proves it when, in executable code (not the docstring or comments), a request is sent and the
+    response ``code`` is compared for equality (or membership) with this code, directly, through a
+    parametrised value, or through a module helper that compares a response ``code`` with its parameter. It
+    must take the ``client`` fixture and must not be skipped or expected to fail. ``named`` limits the search
+    to one test.
     """
     import ast
 
@@ -1435,73 +1480,95 @@ def _cites(source: str, code: str, named: str | None = None) -> list[str]:
         if isinstance(target, ast.Name)
     }
 
-    def mentions(node: ast.AST) -> bool:
+    def mentions(node: ast.AST, extra: frozenset[str] = frozenset()) -> bool:
         return any(
-            (isinstance(n, ast.Constant) and n.value == code) or (isinstance(n, ast.Name) and n.id in spellings)
+            (isinstance(n, ast.Constant) and n.value == code)
+            or (isinstance(n, ast.Name) and (n.id in spellings or n.id in extra))
             for n in ast.walk(node)
         )
 
-    helpers = {
-        node.name: node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef) and not node.name.startswith("test_")
+    def is_code_key(node: ast.AST) -> bool:
+        return isinstance(node, ast.Constant) and node.value == "code"
+
+    functions = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef) and not n.name.startswith("test_")}
+
+    def reads_a_response_code_directly(node: ast.AST) -> bool:
+        return any(
+            (isinstance(n, ast.Subscript) and is_code_key(n.slice))
+            or (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "get"
+                and n.args and is_code_key(n.args[0]))
+            for n in ast.walk(node)
+        )
+
+    #: Module helpers that return a response's ``code`` (``def code(response): return response.json()["code"]``).
+    code_readers = {
+        name
+        for name, func in functions.items()
+        if any(isinstance(n, ast.Return) and reads_a_response_code_directly(n) for n in ast.walk(func))
     }
 
-    def helper_checks_the_code(func: ast.FunctionDef) -> bool:
-        """A module-level helper that compares a response ``code`` with this code (a shared assertion)."""
-        compares = any(isinstance(n, ast.Compare) and mentions(n) for n in ast.walk(func))
-        reads = any(
-            (isinstance(n, ast.Subscript) and isinstance(n.slice, ast.Constant) and n.slice.value == "code")
-            or (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "get"
-                and n.args and isinstance(n.args[0], ast.Constant) and n.args[0].value == "code")
-            for n in ast.walk(func)
+    def reads_response_code(node: ast.AST) -> bool:
+        return reads_a_response_code_directly(node) or any(
+            isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in code_readers
+            for n in ast.walk(node)
         )
-        return compares and reads
+
+    def equality_with_code(compare: ast.Compare, extra: frozenset[str]) -> bool:
+        if not all(isinstance(op, (ast.Eq, ast.In)) for op in compare.ops):
+            return False
+        sides = [compare.left, *compare.comparators]
+        reading = [side for side in sides if reads_response_code(side)]
+        return bool(reading) and any(mentions(side, extra) for side in sides if side not in reading)
+
+    def helper_compares_its_parameter(helper: ast.FunctionDef) -> bool:
+        params = frozenset(arg.arg for arg in [*helper.args.args, *helper.args.kwonlyargs])
+        return any(
+            isinstance(n, ast.Compare)
+            and all(isinstance(op, (ast.Eq, ast.In)) for op in n.ops)
+            and any(reads_response_code(side) for side in [n.left, *n.comparators])
+            and any(
+                mentions(side, params) or (isinstance(side, ast.Name) and side.id in params)
+                for side in [n.left, *n.comparators]
+            )
+            for n in ast.walk(helper)
+        )
 
     def proves(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         body = list(func.body)
         if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
             body = body[1:]  # the docstring is prose
-        scope = ast.Module(body=[*body], type_ignores=[])
-        decorators = ast.Module(body=[ast.Expr(value=d) for d in func.decorator_list], type_ignores=[])
+        scope = ast.Module(body=body, type_ignores=[])
         if any("skip" in ast.unparse(d) or "xfail" in ast.unparse(d) for d in func.decorator_list):
             return False
-        if "client" not in {arg.arg for arg in func.args.args}:
+        if "client" not in {arg.arg for arg in [*func.args.args, *func.args.kwonlyargs]}:
             return False
-        names_it = False
+        # A parametrised value that carries the code counts as naming it where the body compares that value.
+        parametrised = (
+            frozenset(arg.arg for arg in [*func.args.args, *func.args.kwonlyargs])
+            if any(mentions(decorator) for decorator in func.decorator_list)
+            else frozenset()
+        )
         sends = False
-        reads = False
-        for tree_part in (scope, decorators):
-            for node in ast.walk(tree_part):
-                if isinstance(node, ast.Compare) and mentions(node):
-                    names_it = True
-                if isinstance(node, ast.Call):
-                    arguments = [*node.args, *(keyword.value for keyword in node.keywords)]
-                    if any(mentions(argument) for argument in arguments):
-                        names_it = True
+        proved = False
         for node in ast.walk(scope):
             if isinstance(node, ast.Call):
                 callee = node.func
-                if isinstance(callee, ast.Name) and callee.id in helpers and helper_checks_the_code(helpers[callee.id]):
-                    names_it = reads = True
                 if isinstance(callee, ast.Attribute) and callee.attr in _HTTP_METHODS:
                     sends = True
                 if isinstance(callee, ast.Name) and callee.id.startswith(_HTTP_HELPERS):
                     sends = True
-                if isinstance(callee, ast.Attribute) and callee.attr == "get" and node.args:
-                    first = node.args[0]
-                    if isinstance(first, ast.Constant) and first.value == "code":
-                        reads = True
-                name = callee.id if isinstance(callee, ast.Name) else getattr(callee, "attr", "")
-                if "code" in name or name == "_refused":
-                    reads = True
-            if (
-                isinstance(node, ast.Subscript)
-                and isinstance(node.slice, ast.Constant)
-                and node.slice.value == "code"
-            ):
-                reads = True
-        return names_it and sends and reads
+                if isinstance(callee, ast.Name) and callee.id in functions:
+                    helper = functions[callee.id]
+                    arguments = [*node.args, *(keyword.value for keyword in node.keywords)]
+                    if helper_compares_its_parameter(helper) and any(mentions(a) for a in arguments):
+                        proved = True
+                    if any(
+                        isinstance(n, ast.Compare) and equality_with_code(n, frozenset()) for n in ast.walk(helper)
+                    ):
+                        proved = True
+            if isinstance(node, ast.Compare) and equality_with_code(node, parametrised):
+                proved = True
+        return sends and proved
 
     found = []
     for node in ast.walk(tree):
@@ -1514,7 +1581,7 @@ def _cites(source: str, code: str, named: str | None = None) -> list[str]:
 
 
 def test_every_code_cited_as_proved_elsewhere_has_a_test_that_posts_and_reads_it():
-    """Naming a code in ``PROVED_IN`` is not proof; a test in the cited file that posts a request and reads it is."""
+    """Each cited file has a test that sends a request and compares the response code with the cited code."""
     from pathlib import Path
 
     tests_root = Path(__file__).resolve().parents[1]
@@ -1527,14 +1594,26 @@ def test_every_code_cited_as_proved_elsewhere_has_a_test_that_posts_and_reads_it
         if not _cites(path.read_text(), code, named_test or None):
             unproved[code] = citation
     assert not unproved, (
-        "These codes are cited as proved in another file, but no test there names the code in a comparison or "
-        "call, posts a request, reads the response code, takes the client fixture and runs (no skip or xfail): "
-        f"{unproved}. Write one here, or fix the citation."
+        "These codes are cited as proved in another file, but no test there sends a request and compares the "
+        f"response code with the code (not skipped, with the client fixture): {unproved}. "
+        "Write one here, or fix the citation."
     )
 
 
+def test_the_unreachable_guards_are_still_guards_in_the_catalogue():
+    """An exemption from the end-to-end proof holds only while no request can produce the code."""
+    from app.api.code_catalogue import CATALOGUE, Reach
+
+    by_code = {entry.code: entry for entry in CATALOGUE}
+    assert UNREACHABLE_GUARDS, "an empty exemption list would make this pass vacuously"
+    for code, reason in UNREACHABLE_GUARDS.items():
+        assert code in by_code and by_code[code].reach is Reach.guard, code
+        assert reason.strip(), code
+        assert code not in PROVED_IN, f"{code} is exempt and also cited"
+
+
 class TestTheCitationGuardIsNotVacuous:
-    """The guard that vouches for the citations must itself be shown to refuse the shapes it exists to refuse."""
+    """The guard that vouches for the citations must refuse the shapes it exists to refuse."""
 
     GOOD = (
         "def test_x(client):\n"
@@ -1565,8 +1644,42 @@ class TestTheCitationGuardIsNotVacuous:
         assert _cites(no_request, "some_code") == []
         assert _cites(no_read, "some_code") == []
 
+    def test_a_message_contains_assertion_is_not_a_proof(self):
+        source = (
+            "def test_x(client):\n"
+            '    resp = client.post("/u", json={})\n'
+            '    assert "some_code" in resp.text\n'
+            "    resp.content.decode()\n"
+        )
+        assert _cites(source, "some_code") == []
+
+    def test_a_negative_comparison_is_not_a_proof(self):
+        source = (
+            "def test_x(client):\n"
+            '    body = client.post("/u", json={}).json()\n'
+            '    assert body["code"] != "some_code"\n'
+        )
+        assert _cites(source, "some_code") == []
+
+    def test_a_mention_only_in_the_payload_is_not_a_proof(self):
+        source = (
+            "def test_x(client):\n"
+            '    body = client.post("/u", json={"k": "some_code"}).json()\n'
+            '    assert body["code"] == "another_code"\n'
+        )
+        assert _cites(source, "some_code") == []
+
+    def test_a_helper_that_compares_its_parameter_with_the_response_code_is_a_proof(self):
+        source = (
+            "def _assert_code(resp, expected):\n"
+            '    assert resp.json()["code"] == expected\n'
+            "def test_x(client):\n"
+            '    _assert_code(client.post("/u", json={}), "some_code")\n'
+        )
+        assert _cites(source, "some_code") == ["test_x"]
+
     def test_the_citation_that_was_wrong_in_the_first_draft_is_refused(self):
-        """``thermo_sp_geometry_mismatch`` was cited to a file whose only tests name it in prose or not at all."""
+        """``thermo_sp_geometry_mismatch`` was cited to a file whose tests do not prove it."""
         from pathlib import Path
 
         old = Path(__file__).resolve().parents[1] / "api/test_api_bundle_extras_622_sources.py"

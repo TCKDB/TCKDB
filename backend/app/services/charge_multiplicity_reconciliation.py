@@ -58,6 +58,7 @@ from app.services.upload_reconciliation import (
     W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY,
     W_TERM_SYMBOL_MISMATCH,
     _reconcile_deduction,
+    term_symbol_warnings,
 )
 
 #: Emitted when the declared charge and the log's charge disagree.
@@ -374,7 +375,7 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
         "``multiplicity=2`` is a contradiction no correct deposit can contain, which the ADR "
         "would put at the blocking tier; it warns here for the reason above (a species-entry "
         "payload is shared by every upload route, and promoting a warning is a migration). "
-        "A one-atom entry's term against the NIST ground term is entry 76's."
+        "A one-atom entry's term against the NIST ground term is entry 79's."
     ),
     adr="0008",
     enforced_by=(
@@ -383,6 +384,13 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
             note=(
                 "Re-reads charge and multiplicity from the uploaded artifact "
                 "using the wired Gaussian, ORCA, Psi4 and Molpro parsers."
+            ),
+        ),
+        PythonCheck(
+            term_symbol_warnings,
+            note=(
+                "The term symbol against the multiplicity beside it (``term_symbol_contradicts_multiplicity``), "
+                "read only from symbols that start with the multiplicity digit. No log is read."
             ),
         ),
         PythonCheck(

@@ -135,17 +135,10 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # entry 12 compares a declared state with an output log, these judge a stored diagnostic against a criterion or
     # against the entry. Different tier from every blocking entry.
     #
-    # Raised 52 -> 77 (2026-11-09) by the catalogue/register audit: the code catalogue and the warning map were
-    # compared and scientific codes had no entry, and they are now 25 entries (bath gas, network composition and energy sources,
-    # declared energy levels, composite and single-point arithmetic, declarations against the record, the enthalpy
-    # reference, the calculation graph, and five families of warnings against the uploaded evidence). They are
-    # declared in ``app/scientific_checks/gap_declarations.py`` with a tier and a reason each. Five further codes
-    # joined four existing entries instead (10, 12, 29 and the Arrhenius A units entry), because they are the same check; every code left out is in ``NOT_SCIENTIFIC`` with a reason, and a
-    # test below fails when one is in neither. The ceiling is still a filter: it is now 77 because that is what the audit measured, and anything
-    # past it needs the same explicit argument.
-    assert 10 <= len(REGISTER) <= 77, (
+    # 52 -> 80: the codes that had no entry are declared in gap_declarations.py (the rest are in NOT_SCIENTIFIC).
+    assert 10 <= len(REGISTER) <= 80, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~77 the inclusion test ('could this check be wrong "
+        "the system; above ~80 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 
@@ -882,17 +875,20 @@ _OPENINGS: dict[int, str] = {
     64: "An assembled composite's inputs each declare the g",
     65: 'What a record cites as evidence belongs to the rec',
     66: 'A kinetics applicability or protocol declaration d',
-    67: 'A determination, statistical-model, structure or p',
+    67: 'A determination, statistical-model, structure, pro',
     68: 'A curator attaches an observation of unresolved id',
-    69: 'A bond-additivity correction applied as a total ca',
+    69: 'A Petersson bond-additivity correction applied as ',
     70: 'The frequency scale factor a statmech record appli',
     71: 'A thermo record that carries an enthalpy states wh',
     72: 'The graph of which calculation depends on which is',
-    73: "What a depositor typed about a calculation's setti",
-    74: 'The electronic energy a tool states for a single p',
-    75: 'The Hessian method a deck or log attached after th',
-    76: 'What a neutral ground-state atom declares agrees w',
-    77: 'The job named as having measured an SCF stability ',
+    73: 'SCF stability verdicts do not cite one another as ',
+    74: 'Energies at different levels of theory or protocol',
+    75: 'An optimisation recorded as converged has an energ',
+    76: "What a depositor typed about a calculation's setti",
+    77: 'The electronic energy a tool states for a single p',
+    78: 'The Hessian method a deck or log attached after th',
+    79: 'What a neutral ground-state atom declares agrees w',
+    80: 'The job named as having measured an SCF stability ',
 }
 
 
@@ -945,13 +941,7 @@ def _register_codes() -> set[str]:
 
 
 def test_every_catalogue_and_warning_code_is_in_exactly_one_of_the_register_and_not_scientific() -> None:
-    """Classify everything: a code that is in neither list is a decision nobody made.
-
-    The register was found short of codes it should have claimed because nothing compared it with the
-    list of codes the system emits. This is that comparison, and it is two-sided: a scientific code
-    cannot hide in the catalogue, and a code named in ``NOT_SCIENTIFIC`` cannot also be claimed, nor
-    outlive its removal from the catalogue.
-    """
+    """Every emitted code is in the register or in NOT_SCIENTIFIC, never both, and nothing stale is listed."""
     from tckdb_schemas.deposit_warning_messages import RENDERED
 
     from app.api.code_catalogue import CATALOGUE

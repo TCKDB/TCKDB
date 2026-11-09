@@ -811,7 +811,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: "{field} names {what} that does not belong to this record's reaction."
 - Note: context.reason names reaction, direction, source, target or role.
-- Scientific check: [`_mismatch`](PRODUCER_CONTRACT.md#k-app-services-kinetics-declaration-resolution-mismatch).
+- Scientific check: [`assert_statmech_owned_by`](PRODUCER_CONTRACT.md#k-assert-statmech-owned-by).
 
 <a id="c-kinetics-energy-level-contradiction"></a>
 
@@ -834,7 +834,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: Two raise sites, one repair: cite a conformer record belonging to the right species entry.
-- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
+- Scientific check: [`assert_statmech_owned_by`](PRODUCER_CONTRACT.md#k-assert-statmech-owned-by).
 
 <a id="c-kinetics-interpretation-statmech-owner-mismatch"></a>
 
@@ -844,7 +844,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: One code, two comparisons: a reactant/product assignment is held to the participant's species entry and a transition-state one to the declared TS entry.
-- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
+- Scientific check: [`assert_statmech_owned_by`](PRODUCER_CONTRACT.md#k-assert-statmech-owned-by).
 
 <a id="c-kinetics-protocol-calculation-owner-mismatch"></a>
 
@@ -853,7 +853,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/kinetics_declaration_resolution.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
-- Scientific check: [`_mismatch`](PRODUCER_CONTRACT.md#k-app-services-kinetics-declaration-resolution-mismatch).
+- Scientific check: [`assert_statmech_owned_by`](PRODUCER_CONTRACT.md#k-assert-statmech-owned-by).
 
 <a id="c-level-of-theory-method-is-compound"></a>
 
@@ -947,7 +947,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/network_energy_sources.py`.
 - The body's `context` names the things involved.
 - Message: "{field}: a '{calculation.type.value}' calculation cannot be the source of an energy stated as {stated}='{stated_value}'. Cite a {' or '.join((repr(value) for value in accepted_values))} calculation."
-- Scientific check: [`_assert_energy_sources_are_comparable`](PRODUCER_CONTRACT.md#k-assert-energy-sources-are-comparable).
+- Scientific check: [`assert_statmech_role_compatible`](PRODUCER_CONTRACT.md#k-assert-statmech-role-compatible).
 
 <a id="c-network-export-body-too-large"></a>
 
@@ -1128,6 +1128,8 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: 'scf_stability.source_calculation_key forms a cycle: {ring}. A stability verdict cannot be measured by a job whose own verdict it measures.'
 - Note: scf_stability.source_calculation_key links close a ring (a says b measured it, b says a did). context.cycle lists the depositor's own keys in order.
+- Scientific check (block): SCF stability verdicts do not cite one another as the job that measured them in a ring: some job measured each.
+- If your chemistry is legitimate: Name, as the measuring job, a calculation that is not itself measured by the first.
 
 <a id="c-scf-stability-source-geometry-mismatch"></a>
 
@@ -1324,7 +1326,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: context.reason names owner, scope, basin, determination, member_owner, source_owner, source_geometry or source_type.
-- Scientific check: [`_mismatch`](PRODUCER_CONTRACT.md#k-app-services-kinetics-declaration-resolution-mismatch).
+- Scientific check: [`assert_statmech_owned_by`](PRODUCER_CONTRACT.md#k-assert-statmech-owned-by).
 
 <a id="c-statmech-model-declaration-version-unsupported"></a>
 
@@ -1358,6 +1360,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/statmech_resolution.py`.
 - The body's `context` names the things involved.
 - Message: "{context}: role='{role.value}' claims a '{expected.value}' calculation, but the calculation it names has type '{calculation.type.value}'. A statmech record must not claim evidence it does not have. Point the link at a {accepted_types_phrase(accepted)} calculation, or declare the role the named calculation actually played."
+- Scientific check: [`assert_statmech_role_compatible`](PRODUCER_CONTRACT.md#k-assert-statmech-role-compatible).
 
 <a id="c-statmech-sp-geometry-mismatch"></a>
 
@@ -1423,7 +1426,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: context.reason names target (the kind does not fit the upload's owner), owner (a pinned calculation belongs to another subject), observation (a basin claim pins a calculation anchored to another observation), geometry (the pinned calculation has no single geometry on the side named, or the evaluated geometry is read from a calculation the determination does not pin) or content (the same determination key was stated with different content).
-- Scientific check: [`_mismatch`](PRODUCER_CONTRACT.md#k-app-services-kinetics-declaration-resolution-mismatch).
+- Scientific check: [`assert_statmech_owned_by`](PRODUCER_CONTRACT.md#k-assert-statmech-owned-by).
 
 <a id="c-submission-supersede-not-owner"></a>
 
@@ -1518,7 +1521,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: A protocol's supporting calculation belongs to another species entry; distinct from the thermo source-link code.
-- Scientific check: [`_mismatch`](PRODUCER_CONTRACT.md#k-app-services-kinetics-declaration-resolution-mismatch).
+- Scientific check: [`assert_statmech_owned_by`](PRODUCER_CONTRACT.md#k-assert-statmech-owned-by).
 
 <a id="c-thermo-protocol-version-unsupported"></a>
 
@@ -1560,6 +1563,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/workflows/thermo.py`.
 - The body's `context` names the things involved.
 - Message: "{context}: role='{role.value}' is incompatible with the resolved calculation type '{calculation.type.value}'. A thermo record must not claim evidence it does not have. Point the link at a {accepted_types_phrase(accepted)} calculation, or declare the role the named calculation actually played."
+- Scientific check: [`assert_statmech_role_compatible`](PRODUCER_CONTRACT.md#k-assert-statmech-role-compatible).
 
 <a id="c-thermo-sp-geometry-mismatch"></a>
 
@@ -1666,6 +1670,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: "calculations[{calc.key}].geometry_key='{calc.geometry_key}' names a species conformer's geometry. A transition-state calculation ran on the saddle point, not on a species minimum."
 - Note: A calculation of a transition state has a geometry_key naming a species conformer's geometry.
+- Scientific check: [`attach_calculation_input_geometries`](PRODUCER_CONTRACT.md#k-attach-calculation-input-geometries).
 
 <a id="c-transition-state-charge-mismatch"></a>
 
@@ -1747,7 +1752,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: "Transition state '{subject_label}' {field_path}[{record_index}].energies[{energy_index}] takes a '{energy.energy_kind}' energy from a '{calculation.type.value}' calculation; a '{energy.energy_kind}' energy comes from a {' or '.join(accepted)} calculation."
 - Note: An energy_ordering energy is taken from a calculation of a type that does not carry that kind of energy (an E0 from a single point, any energy from an IRC point).
-- Scientific check: [`_assert_energy_sources_are_comparable`](PRODUCER_CONTRACT.md#k-assert-energy-sources-are-comparable).
+- Scientific check: [`assert_statmech_role_compatible`](PRODUCER_CONTRACT.md#k-assert-statmech-role-compatible).
 
 <a id="c-ts-energy-ordering-stated-energy-mismatch"></a>
 
@@ -1767,6 +1772,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: A transition-state validation record cites a calculation of something other than what it is about.
+- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
 
 <a id="c-unknown-calculation-artifact-ref"></a>
 

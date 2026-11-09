@@ -236,7 +236,7 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 ### 0.162.0 - 2026-11-09
 
-No refusal, warning or payload shape changes. The generated producer contract (`contract/`) now names the scientific check register entry for every refusal and warning code the register gained an entry for (the register has 77 entries, up from 52), and the text of register entry 18 states the tolerance order in force since #864: the method the output log reports, then the method the echoed input requests, then the recorded `freq.hessian_method` or the input deck, then the program's assumed default, then 50 cm-1.
+No refusal, warning or payload shape changes. The generated producer contract (`contract/`) now names the scientific check register entry for every refusal and warning code the register gained an entry for (the register has 80 entries, up from 52), and the text of register entry 18 states the tolerance order in force since #864: the method the output log reports, then the method the echoed input requests, then the recorded `freq.hessian_method` or the input deck, then the program's assumed default, then 50 cm-1.
 
 ### 0.161.0 - 2026-11-07
 
@@ -437,21 +437,41 @@ If your chemistry is legitimate: None needed: the link is stored as stated. Link
 
 ### `assert_owned_by`
 
-`app.services.calculation_ownership:assert_owned_by`. block; codes [`network_energy_source_subject_mismatch`](REFUSAL_CODES.md#c-network-energy-source-subject-mismatch), [`thermo_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-thermo-source-calculation-owner-mismatch), [`statmech_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-statmech-source-calculation-owner-mismatch), [`transport_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-transport-source-calculation-owner-mismatch), [`scf_stability_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-scf-stability-source-calculation-owner-mismatch), [`composite_input_owner_mismatch`](REFUSAL_CODES.md#c-composite-input-owner-mismatch), [`statmech_torsion_scan_calculation_owner_mismatch`](REFUSAL_CODES.md#c-statmech-torsion-scan-calculation-owner-mismatch), [`applied_energy_correction_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-applied-energy-correction-source-calculation-owner-mismatch), [`thermo_statmech_owner_mismatch`](REFUSAL_CODES.md#c-thermo-statmech-owner-mismatch), [`kinetics_interpretation_statmech_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-statmech-owner-mismatch), [`kinetics_interpretation_conformer_selection_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-conformer-selection-owner-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundle`](#s-contributionbundle).
+`app.services.calculation_ownership:assert_owned_by`. block; codes [`network_energy_source_subject_mismatch`](REFUSAL_CODES.md#c-network-energy-source-subject-mismatch), [`thermo_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-thermo-source-calculation-owner-mismatch), [`statmech_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-statmech-source-calculation-owner-mismatch), [`transport_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-transport-source-calculation-owner-mismatch), [`scf_stability_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-scf-stability-source-calculation-owner-mismatch), [`composite_input_owner_mismatch`](REFUSAL_CODES.md#c-composite-input-owner-mismatch), [`statmech_torsion_scan_calculation_owner_mismatch`](REFUSAL_CODES.md#c-statmech-torsion-scan-calculation-owner-mismatch), [`applied_energy_correction_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-applied-energy-correction-source-calculation-owner-mismatch), [`thermo_statmech_owner_mismatch`](REFUSAL_CODES.md#c-thermo-statmech-owner-mismatch), [`ts_validation_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-ts-validation-source-calculation-owner-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
 What a record cites as evidence belongs to the record's own subject (its species, transition state or participant). A source of another subject's is that subject's evidence, not weaker evidence for this one.
 
 If your chemistry is legitimate: Cite the calculation, record or selection of the subject the record is about.
 
+<a id="k-assert-statmech-owned-by"></a>
+
+### `assert_statmech_owned_by`
+
+`app.services.calculation_ownership:assert_statmech_owned_by`. block; codes [`kinetics_determination_mismatch`](REFUSAL_CODES.md#c-kinetics-determination-mismatch), [`statmech_model_declaration_mismatch`](REFUSAL_CODES.md#c-statmech-model-declaration-mismatch), [`structure_determination_mismatch`](REFUSAL_CODES.md#c-structure-determination-mismatch), [`kinetics_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-protocol-calculation-owner-mismatch), [`thermo_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-thermo-protocol-calculation-owner-mismatch), [`kinetics_interpretation_statmech_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-statmech-owner-mismatch), [`kinetics_interpretation_conformer_selection_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-conformer-selection-owner-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundle`](#s-contributionbundle).
+
+A determination, statistical-model, structure, protocol or interpretation declaration describes the record that carries it. Its reaction, direction, source, subject, cited calculations, statmech record and conformer selection are that record's own.
+
+If your chemistry is legitimate: Declare it on the record it describes, with the calculations and sources of that record.
+
 <a id="k-attach-calculation-input-geometries"></a>
 
 ### `attach_calculation_input_geometries`
 
-`app.services.calculation_resolution:attach_calculation_input_geometries`. block; codes [`calculation_geometry_conformer_mismatch`](REFUSAL_CODES.md#c-calculation-geometry-conformer-mismatch), [`calculation_input_geometry_mismatch`](REFUSAL_CODES.md#c-calculation-input-geometry-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`ContributionBundle`](#s-contributionbundle).
+`app.services.calculation_resolution:attach_calculation_input_geometries`. block; codes [`calculation_geometry_conformer_mismatch`](REFUSAL_CODES.md#c-calculation-geometry-conformer-mismatch), [`calculation_input_geometry_mismatch`](REFUSAL_CODES.md#c-calculation-input-geometry-mismatch), [`transition_state_calculation_species_geometry`](REFUSAL_CODES.md#c-transition-state-calculation-species-geometry). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
-A calculation is evidence for one conformer and ran on one structure: its conformer key and its geometry key name the same conformer, and the geometry it states it ran on is one of its input geometries.
+A calculation is evidence for one conformer and ran on one structure: its conformer key and its geometry key name the same conformer, and the geometry it states it ran on is one of its input geometries; a transition-state calculation did not run on a species minimum's geometry.
 
 If your chemistry is legitimate: State one conformer, or omit the redundant key; list the geometry the calculation ran on.
+
+<a id="k-collect-converged-opt-energy-warnings"></a>
+
+### `collect_converged_opt_energy_warnings`
+
+`app.services.calculation_resolution:collect_converged_opt_energy_warnings`. warn; codes `converged_opt_no_usable_energy` (advisory check flag, not a refusal code). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
+
+An optimisation recorded as converged has an energy behind it: a single point of the same owner at any level, or its own final energy stated with an artifact.
+
+If your chemistry is legitimate: None needed: the deposit is accepted. Deposit a single point, or the optimisation's final energy with its artifact.
 
 <a id="k-reconcile-charge-multiplicity"></a>
 
@@ -509,7 +529,7 @@ If your chemistry is legitimate: None needed: the deposit is accepted. Send it a
 
 `app.services.energy_correction_resolution:assert_bac_total_has_required_components`. block; codes [`bac_total_requires_components`](REFUSAL_CODES.md#c-bac-total-requires-components). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
-A bond-additivity correction applied as a total carries the bond components it is the sum of, unless its target has no bonds; a transition state has no bond assignment and so cannot take a componentless total.
+A Petersson bond-additivity correction applied as a total carries at least one bond component, unless its target species has no bonds; a transition state has no bond assignment and so cannot take a componentless total.
 
 If your chemistry is legitimate: Send the bond components, or apply the correction under another role.
 
@@ -537,11 +557,9 @@ If your chemistry is legitimate: The whole check is advisory, so there is nothin
 
 ### `_mismatch`
 
-`app.services.kinetics_declaration_resolution:_mismatch`. block; codes [`kinetics_determination_mismatch`](REFUSAL_CODES.md#c-kinetics-determination-mismatch), [`statmech_model_declaration_mismatch`](REFUSAL_CODES.md#c-statmech-model-declaration-mismatch), [`structure_determination_mismatch`](REFUSAL_CODES.md#c-structure-determination-mismatch), [`kinetics_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-protocol-calculation-owner-mismatch), [`thermo_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-thermo-protocol-calculation-owner-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ContributionBundle`](#s-contributionbundle).
+`app.services.kinetics_declaration_resolution:_mismatch`. block; codes [`kinetics_determination_mismatch`](REFUSAL_CODES.md#c-kinetics-determination-mismatch), [`statmech_model_declaration_mismatch`](REFUSAL_CODES.md#c-statmech-model-declaration-mismatch), [`structure_determination_mismatch`](REFUSAL_CODES.md#c-structure-determination-mismatch), [`kinetics_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-protocol-calculation-owner-mismatch), [`thermo_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-thermo-protocol-calculation-owner-mismatch), [`kinetics_interpretation_statmech_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-statmech-owner-mismatch), [`kinetics_interpretation_conformer_selection_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-conformer-selection-owner-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
-A determination, statistical-model, structure or protocol declaration describes the record that carries it. Its reaction, direction, source, subject and cited calculations are that record's own.
-
-If your chemistry is legitimate: Declare it on the record it describes, with the calculations and sources of that record.
+Same check as [`assert_statmech_owned_by`](#k-assert-statmech-owned-by).
 
 <a id="k-assert-kinetics-declaration-columns"></a>
 
@@ -744,9 +762,19 @@ If your chemistry is legitimate: Deposit no geometry. An explicitly declared *st
 
 ### `_mismatch`
 
-`app.services.statmech_declaration_resolution:_mismatch`. block; codes [`kinetics_determination_mismatch`](REFUSAL_CODES.md#c-kinetics-determination-mismatch), [`statmech_model_declaration_mismatch`](REFUSAL_CODES.md#c-statmech-model-declaration-mismatch), [`structure_determination_mismatch`](REFUSAL_CODES.md#c-structure-determination-mismatch), [`kinetics_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-protocol-calculation-owner-mismatch), [`thermo_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-thermo-protocol-calculation-owner-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest).
+`app.services.statmech_declaration_resolution:_mismatch`. block; codes [`kinetics_determination_mismatch`](REFUSAL_CODES.md#c-kinetics-determination-mismatch), [`statmech_model_declaration_mismatch`](REFUSAL_CODES.md#c-statmech-model-declaration-mismatch), [`structure_determination_mismatch`](REFUSAL_CODES.md#c-structure-determination-mismatch), [`kinetics_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-protocol-calculation-owner-mismatch), [`thermo_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-thermo-protocol-calculation-owner-mismatch), [`kinetics_interpretation_statmech_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-statmech-owner-mismatch), [`kinetics_interpretation_conformer_selection_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-conformer-selection-owner-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest).
 
-Same check as [`_mismatch`](#k-app-services-kinetics-declaration-resolution-mismatch).
+Same check as [`assert_statmech_owned_by`](#k-assert-statmech-owned-by).
+
+<a id="k-assert-statmech-role-compatible"></a>
+
+### `assert_statmech_role_compatible`
+
+`app.services.statmech_resolution:assert_statmech_role_compatible`. block; codes [`ts_energy_ordering_source_type_mismatch`](REFUSAL_CODES.md#c-ts-energy-ordering-source-type-mismatch), [`network_energy_source_type_mismatch`](REFUSAL_CODES.md#c-network-energy-source-type-mismatch), [`thermo_source_role_type_mismatch`](REFUSAL_CODES.md#c-thermo-source-role-type-mismatch), [`statmech_source_role_type_mismatch`](REFUSAL_CODES.md#c-statmech-source-role-type-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest).
+
+A calculation cited as the source of a stated energy should be of a type that carries that kind of energy: an electronic energy from an ``sp``, ``opt`` or ``composite``, an E0 from a ``freq`` or ``composite``, never from an IRC point, scan, path search or conformer search; a network ``well_freq`` or ``barrier_freq`` source must be a ``freq``; and a thermo or statmech source link gives a calculation a role its type can take.
+
+If your chemistry is legitimate: Cite the calculation that carries the energy: the ``sp``, ``opt`` or ``composite`` for an electronic energy, the ``freq`` (or a ``composite``) for an E0, and put the ``freq`` in the ``well_freq`` / ``barrier_freq`` role.
 
 <a id="k-collect-frequency-scale-factor-software-mismatch-warnings"></a>
 
@@ -762,27 +790,25 @@ If your chemistry is legitimate: None needed: the deposit is accepted. Confirm t
 
 ### `_mismatch`
 
-`app.services.structure_determination_resolution:_mismatch`. block; codes [`kinetics_determination_mismatch`](REFUSAL_CODES.md#c-kinetics-determination-mismatch), [`statmech_model_declaration_mismatch`](REFUSAL_CODES.md#c-statmech-model-declaration-mismatch), [`structure_determination_mismatch`](REFUSAL_CODES.md#c-structure-determination-mismatch), [`kinetics_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-protocol-calculation-owner-mismatch), [`thermo_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-thermo-protocol-calculation-owner-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
+`app.services.structure_determination_resolution:_mismatch`. block; codes [`kinetics_determination_mismatch`](REFUSAL_CODES.md#c-kinetics-determination-mismatch), [`statmech_model_declaration_mismatch`](REFUSAL_CODES.md#c-statmech-model-declaration-mismatch), [`structure_determination_mismatch`](REFUSAL_CODES.md#c-structure-determination-mismatch), [`kinetics_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-protocol-calculation-owner-mismatch), [`thermo_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-thermo-protocol-calculation-owner-mismatch), [`kinetics_interpretation_statmech_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-statmech-owner-mismatch), [`kinetics_interpretation_conformer_selection_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-conformer-selection-owner-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
-Same check as [`_mismatch`](#k-app-services-kinetics-declaration-resolution-mismatch).
+Same check as [`assert_statmech_owned_by`](#k-assert-statmech-owned-by).
 
 <a id="k-resolve-protocol"></a>
 
 ### `_resolve_protocol`
 
-`app.services.thermo_declaration_resolution:_resolve_protocol`. block; codes [`kinetics_determination_mismatch`](REFUSAL_CODES.md#c-kinetics-determination-mismatch), [`statmech_model_declaration_mismatch`](REFUSAL_CODES.md#c-statmech-model-declaration-mismatch), [`structure_determination_mismatch`](REFUSAL_CODES.md#c-structure-determination-mismatch), [`kinetics_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-protocol-calculation-owner-mismatch), [`thermo_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-thermo-protocol-calculation-owner-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundle`](#s-contributionbundle).
+`app.services.thermo_declaration_resolution:_resolve_protocol`. block; codes [`kinetics_determination_mismatch`](REFUSAL_CODES.md#c-kinetics-determination-mismatch), [`statmech_model_declaration_mismatch`](REFUSAL_CODES.md#c-statmech-model-declaration-mismatch), [`structure_determination_mismatch`](REFUSAL_CODES.md#c-structure-determination-mismatch), [`kinetics_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-protocol-calculation-owner-mismatch), [`thermo_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-thermo-protocol-calculation-owner-mismatch), [`kinetics_interpretation_statmech_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-statmech-owner-mismatch), [`kinetics_interpretation_conformer_selection_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-conformer-selection-owner-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
-Same check as [`_mismatch`](#k-app-services-kinetics-declaration-resolution-mismatch).
+Same check as [`assert_statmech_owned_by`](#k-assert-statmech-owned-by).
 
 <a id="k-assert-energy-sources-are-comparable"></a>
 
 ### `_assert_energy_sources_are_comparable`
 
-`app.services.transition_state_validation:_assert_energy_sources_are_comparable`. block; codes [`ts_energy_ordering_source_type_mismatch`](REFUSAL_CODES.md#c-ts-energy-ordering-source-type-mismatch), [`network_energy_source_type_mismatch`](REFUSAL_CODES.md#c-network-energy-source-type-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
+`app.services.transition_state_validation:_assert_energy_sources_are_comparable`. block; codes [`ts_energy_ordering_source_type_mismatch`](REFUSAL_CODES.md#c-ts-energy-ordering-source-type-mismatch), [`network_energy_source_type_mismatch`](REFUSAL_CODES.md#c-network-energy-source-type-mismatch), [`thermo_source_role_type_mismatch`](REFUSAL_CODES.md#c-thermo-source-role-type-mismatch), [`statmech_source_role_type_mismatch`](REFUSAL_CODES.md#c-statmech-source-role-type-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
-A calculation cited as the source of a stated energy should be of a type that carries that kind of energy: an electronic energy from an ``sp``, ``opt`` or ``composite``, an E0 from a ``freq`` or ``composite``, never from an IRC point, scan, path search or conformer search; and a network ``well_freq`` or ``barrier_freq`` source must be a ``freq``.
-
-If your chemistry is legitimate: Cite the calculation that carries the energy: the ``sp``, ``opt`` or ``composite`` for an electronic energy, the ``freq`` (or a ``composite``) for an E0, and put the ``freq`` in the ``well_freq`` / ``barrier_freq`` role.
+Same check as [`assert_statmech_role_compatible`](#k-assert-statmech-role-compatible).
 
 <a id="k-persist-transition-state-validation-evidence"></a>
 
@@ -803,9 +829,10 @@ If your chemistry is legitimate: Cite the calculation that carries the energy: t
 
 ### `term_symbol_warnings`
 
-`app.services.upload_reconciliation:term_symbol_warnings`. warn; codes `atomic_electronic_degeneracy_contradicts_term` (advisory check flag, not a refusal code), `term_symbol_contradicts_ground_term` (advisory check flag, not a refusal code). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundle`](#s-contributionbundle).
+`app.services.upload_reconciliation:term_symbol_warnings` enforces 2 checks. Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
-Same check as [`_degeneracy_warnings`](#k-degeneracy-warnings).
+- **warn; codes `charge_mismatch` (advisory check flag, not a refusal code), `multiplicity_mismatch` (advisory check flag, not a refusal code), `term_symbol_mismatch` (advisory check flag, not a refusal code), `electronic_state_contradicts_method` (advisory check flag, not a refusal code), `term_symbol_contradicts_multiplicity` (advisory check flag, not a refusal code).** Same check as [`reconcile_charge_multiplicity`](#k-reconcile-charge-multiplicity).
+- **warn; codes `atomic_electronic_degeneracy_contradicts_term` (advisory check flag, not a refusal code), `term_symbol_contradicts_ground_term` (advisory check flag, not a refusal code).** Same check as [`_degeneracy_warnings`](#k-degeneracy-warnings).
 
 <a id="k-collect-wavefunction-reliability-warnings"></a>
 
@@ -826,6 +853,14 @@ If your chemistry is legitimate: None needed -- no check here refuses. A calcula
 A thermo record that carries an enthalpy states what the enthalpy is relative to, the only accepted reference is the standard enthalpy of formation at 298.15 K, and a declaration is made only for a record that carries enthalpy content.
 
 If your chemistry is legitimate: Declare ``formation_298k`` when the source states that convention. Sensible increments and absolute enthalpies belong to the molecular property observation route.
+
+<a id="k-assert-thermo-role-matches-calculation-type"></a>
+
+### `assert_thermo_role_matches_calculation_type`
+
+`app.workflows.thermo:assert_thermo_role_matches_calculation_type`. block; codes [`ts_energy_ordering_source_type_mismatch`](REFUSAL_CODES.md#c-ts-energy-ordering-source-type-mismatch), [`network_energy_source_type_mismatch`](REFUSAL_CODES.md#c-network-energy-source-type-mismatch), [`thermo_source_role_type_mismatch`](REFUSAL_CODES.md#c-thermo-source-role-type-mismatch), [`statmech_source_role_type_mismatch`](REFUSAL_CODES.md#c-statmech-source-role-type-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundle`](#s-contributionbundle).
+
+Same check as [`assert_statmech_role_compatible`](#k-assert-statmech-role-compatible).
 
 <a id="k-assert-composite-total-recomputes"></a>
 
@@ -2055,7 +2090,9 @@ Nested models (110; fields and rules in the [model reference](#model-reference))
 - [`assert_role_consistency`](#k-assert-role-consistency) (block)
 - [`collect_composite_link_warnings`](#k-collect-composite-link-warnings) (warn)
 - [`assert_owned_by`](#k-assert-owned-by) (block)
+- [`assert_statmech_owned_by`](#k-assert-statmech-owned-by) (block)
 - [`attach_calculation_input_geometries`](#k-attach-calculation-input-geometries) (block)
+- [`collect_converged_opt_energy_warnings`](#k-collect-converged-opt-energy-warnings) (warn)
 - [`reconcile_charge_multiplicity`](#k-reconcile-charge-multiplicity) (warn)
 - [`reconcile_composite_energy`](#k-reconcile-composite-energy) (warn)
 - [`_finalize_one`](#k-finalize-one) (block)
@@ -2087,6 +2124,7 @@ Nested models (110; fields and rules in the [model reference](#model-reference))
 - [`assert_geometry_composition_matches_identity`](#k-assert-geometry-composition-matches-identity) (block)
 - [`assert_geometry_isotopes_match_identity`](#k-assert-geometry-isotopes-match-identity) (block)
 - [`_mismatch`](#k-app-services-statmech-declaration-resolution-mismatch) (block)
+- [`assert_statmech_role_compatible`](#k-assert-statmech-role-compatible) (block)
 - [`collect_frequency_scale_factor_software_mismatch_warnings`](#k-collect-frequency-scale-factor-software-mismatch-warnings) (warn)
 - [`_mismatch`](#k-app-services-structure-determination-resolution-mismatch) (block)
 - [`_resolve_protocol`](#k-resolve-protocol) (block)
@@ -2095,6 +2133,7 @@ Nested models (110; fields and rules in the [model reference](#model-reference))
 - [`term_symbol_warnings`](#k-term-symbol-warnings) (warn)
 - [`collect_wavefunction_reliability_warnings`](#k-collect-wavefunction-reliability-warnings) (warn)
 - [`assert_enthalpy_reference`](#k-assert-enthalpy-reference) (block)
+- [`assert_thermo_role_matches_calculation_type`](#k-assert-thermo-role-matches-calculation-type) (block)
 - [`assert_composite_total_recomputes`](#k-assert-composite-total-recomputes) (block)
 - [`enthalpy_reference_error`](#k-enthalpy-reference-error) (marked rule; reached from `POST /api/v1/uploads/computed-reaction`)
 - [`thermo_declaration_error`](#k-thermo-declaration-error) (marked rule; reached from `POST /api/v1/uploads/computed-reaction`)
@@ -2300,6 +2339,7 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 - [`collect_composite_link_warnings`](#k-collect-composite-link-warnings) (warn)
 - [`assert_owned_by`](#k-assert-owned-by) (block)
 - [`attach_calculation_input_geometries`](#k-attach-calculation-input-geometries) (block)
+- [`collect_converged_opt_energy_warnings`](#k-collect-converged-opt-energy-warnings) (warn)
 - [`reconcile_charge_multiplicity`](#k-reconcile-charge-multiplicity) (warn)
 - [`reconcile_composite_energy`](#k-reconcile-composite-energy) (warn)
 - [`_finalize_one`](#k-finalize-one) (block)
@@ -2321,12 +2361,14 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 - [`assert_geometry_composition_matches_identity`](#k-assert-geometry-composition-matches-identity) (block)
 - [`assert_geometry_isotopes_match_identity`](#k-assert-geometry-isotopes-match-identity) (block)
 - [`_mismatch`](#k-app-services-statmech-declaration-resolution-mismatch) (block)
+- [`assert_statmech_role_compatible`](#k-assert-statmech-role-compatible) (block)
 - [`collect_frequency_scale_factor_software_mismatch_warnings`](#k-collect-frequency-scale-factor-software-mismatch-warnings) (warn)
 - [`_mismatch`](#k-app-services-structure-determination-resolution-mismatch) (block)
 - [`_resolve_protocol`](#k-resolve-protocol) (block)
 - [`term_symbol_warnings`](#k-term-symbol-warnings) (warn)
 - [`collect_wavefunction_reliability_warnings`](#k-collect-wavefunction-reliability-warnings) (warn)
 - [`assert_enthalpy_reference`](#k-assert-enthalpy-reference) (block)
+- [`assert_thermo_role_matches_calculation_type`](#k-assert-thermo-role-matches-calculation-type) (block)
 - **`tckdb_schemas.bundle_source_rules:scf_source_unanchored_error`** (reached from `POST /api/v1/uploads/computed-species`; block; `thermo_sp_geometry_mismatch`, `statmech_sp_geometry_mismatch`, `thermo_role_duplicate`, `statmech_role_duplicate`, `thermo_energy_sp_and_composite_linked`, `statmech_energy_sp_and_composite_linked`, `thermo_energy_level_requires_sp`, `statmech_energy_level_requires_sp`, `scf_stability_source_geometry_mismatch`, `scf_stability_source_conformer_unanchored`): same check as [`assert_role_consistency`](#k-assert-role-consistency)
 - [`assert_composite_total_recomputes`](#k-assert-composite-total-recomputes) (block)
 - [`enthalpy_reference_error`](#k-enthalpy-reference-error) (marked rule; reached from `POST /api/v1/uploads/computed-species`)
@@ -2507,6 +2549,7 @@ Nested models (79; fields and rules in the [model reference](#model-reference)):
 - [`collect_composite_link_warnings`](#k-collect-composite-link-warnings) (warn)
 - [`assert_owned_by`](#k-assert-owned-by) (block)
 - [`attach_calculation_input_geometries`](#k-attach-calculation-input-geometries) (block)
+- [`collect_converged_opt_energy_warnings`](#k-collect-converged-opt-energy-warnings) (warn)
 - [`_finalize_one`](#k-finalize-one) (block)
 - [`_unverifiable_warning`](#k-unverifiable-warning) (warn)
 - [`collect_named_composite_deposit_warnings`](#k-collect-named-composite-deposit-warnings) (warn)
@@ -2518,6 +2561,7 @@ Nested models (79; fields and rules in the [model reference](#model-reference)):
 - [`assert_geometry_composition_matches_identity`](#k-assert-geometry-composition-matches-identity) (block)
 - [`assert_geometry_isotopes_match_identity`](#k-assert-geometry-isotopes-match-identity) (block)
 - [`_mismatch`](#k-app-services-statmech-declaration-resolution-mismatch) (block)
+- [`assert_statmech_role_compatible`](#k-assert-statmech-role-compatible) (block)
 - [`collect_frequency_scale_factor_software_mismatch_warnings`](#k-collect-frequency-scale-factor-software-mismatch-warnings) (warn)
 - [`_mismatch`](#k-app-services-structure-determination-resolution-mismatch) (block)
 - **`app.services.upload_reconciliation:_reconcile_deduction`** (reached from `POST /api/v1/uploads/conformers`; warn; `charge_mismatch`, `multiplicity_mismatch`, `term_symbol_mismatch`, `electronic_state_contradicts_method`, `term_symbol_contradicts_multiplicity`): same check as [`reconcile_charge_multiplicity`](#k-reconcile-charge-multiplicity)
@@ -2736,6 +2780,7 @@ Nested models (26; fields and rules in the [model reference](#model-reference)):
 - [`merge_sources`](#k-merge-sources) (block)
 - [`resolve_stereo`](#k-resolve-stereo) (block)
 - [`assert_owned_by`](#k-assert-owned-by) (block)
+- [`assert_statmech_owned_by`](#k-assert-statmech-owned-by) (block)
 - [`_mismatch`](#k-app-services-kinetics-declaration-resolution-mismatch) (block)
 - [`assert_kinetics_declaration_columns`](#k-assert-kinetics-declaration-columns) (block)
 - [`refuse_null_reaction_entry`](#k-refuse-null-reaction-entry) (block)
@@ -3096,12 +3141,12 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 - [`_unverifiable_warning`](#k-unverifiable-warning) (warn)
 - [`collect_named_composite_deposit_warnings`](#k-collect-named-composite-deposit-warnings) (warn)
 - [`evaluate_frequency_list_linearity`](#k-evaluate-frequency-list-linearity) (warn)
-- **`app.services.network_energy_sources:assert_barrier_source_owner`** (reached from `POST /api/v1/uploads/networks/pdep`; block; `network_energy_source_subject_mismatch`, `thermo_source_calculation_owner_mismatch`, `statmech_source_calculation_owner_mismatch`, `transport_source_calculation_owner_mismatch`, `scf_stability_source_calculation_owner_mismatch`, `composite_input_owner_mismatch`, `statmech_torsion_scan_calculation_owner_mismatch`, `applied_energy_correction_source_calculation_owner_mismatch`, `thermo_statmech_owner_mismatch`, `kinetics_interpretation_statmech_owner_mismatch`, `kinetics_interpretation_conformer_selection_owner_mismatch`): same check as [`assert_owned_by`](#k-assert-owned-by)
-- **`app.services.network_energy_sources:assert_network_energy_source_type`** (reached from `POST /api/v1/uploads/networks/pdep`; block; `ts_energy_ordering_source_type_mismatch`, `network_energy_source_type_mismatch`): same check as [`_assert_energy_sources_are_comparable`](#k-assert-energy-sources-are-comparable)
-- **`app.services.network_energy_sources:assert_network_role_source_owner`** (reached from `POST /api/v1/uploads/networks/pdep`; block; `network_energy_source_subject_mismatch`, `thermo_source_calculation_owner_mismatch`, `statmech_source_calculation_owner_mismatch`, `transport_source_calculation_owner_mismatch`, `scf_stability_source_calculation_owner_mismatch`, `composite_input_owner_mismatch`, `statmech_torsion_scan_calculation_owner_mismatch`, `applied_energy_correction_source_calculation_owner_mismatch`, `thermo_statmech_owner_mismatch`, `kinetics_interpretation_statmech_owner_mismatch`, `kinetics_interpretation_conformer_selection_owner_mismatch`): same check as [`assert_owned_by`](#k-assert-owned-by)
-- **`app.services.network_energy_sources:assert_network_source_role_type`** (reached from `POST /api/v1/uploads/networks/pdep`; block; `ts_energy_ordering_source_type_mismatch`, `network_energy_source_type_mismatch`): same check as [`_assert_energy_sources_are_comparable`](#k-assert-energy-sources-are-comparable)
-- **`app.services.network_energy_sources:assert_state_energy_source_owner`** (reached from `POST /api/v1/uploads/networks/pdep`; block; `network_energy_source_subject_mismatch`, `thermo_source_calculation_owner_mismatch`, `statmech_source_calculation_owner_mismatch`, `transport_source_calculation_owner_mismatch`, `scf_stability_source_calculation_owner_mismatch`, `composite_input_owner_mismatch`, `statmech_torsion_scan_calculation_owner_mismatch`, `applied_energy_correction_source_calculation_owner_mismatch`, `thermo_statmech_owner_mismatch`, `kinetics_interpretation_statmech_owner_mismatch`, `kinetics_interpretation_conformer_selection_owner_mismatch`): same check as [`assert_owned_by`](#k-assert-owned-by)
-- **`app.services.network_energy_sources:assert_state_participant_source_owner`** (reached from `POST /api/v1/uploads/networks/pdep`; block; `network_energy_source_subject_mismatch`, `thermo_source_calculation_owner_mismatch`, `statmech_source_calculation_owner_mismatch`, `transport_source_calculation_owner_mismatch`, `scf_stability_source_calculation_owner_mismatch`, `composite_input_owner_mismatch`, `statmech_torsion_scan_calculation_owner_mismatch`, `applied_energy_correction_source_calculation_owner_mismatch`, `thermo_statmech_owner_mismatch`, `kinetics_interpretation_statmech_owner_mismatch`, `kinetics_interpretation_conformer_selection_owner_mismatch`): same check as [`assert_owned_by`](#k-assert-owned-by)
+- **`app.services.network_energy_sources:assert_barrier_source_owner`** (reached from `POST /api/v1/uploads/networks/pdep`; block; `network_energy_source_subject_mismatch`, `thermo_source_calculation_owner_mismatch`, `statmech_source_calculation_owner_mismatch`, `transport_source_calculation_owner_mismatch`, `scf_stability_source_calculation_owner_mismatch`, `composite_input_owner_mismatch`, `statmech_torsion_scan_calculation_owner_mismatch`, `applied_energy_correction_source_calculation_owner_mismatch`, `thermo_statmech_owner_mismatch`, `ts_validation_source_calculation_owner_mismatch`): same check as [`assert_owned_by`](#k-assert-owned-by)
+- **`app.services.network_energy_sources:assert_network_energy_source_type`** (reached from `POST /api/v1/uploads/networks/pdep`; block; `ts_energy_ordering_source_type_mismatch`, `network_energy_source_type_mismatch`, `thermo_source_role_type_mismatch`, `statmech_source_role_type_mismatch`): same check as [`assert_statmech_role_compatible`](#k-assert-statmech-role-compatible)
+- **`app.services.network_energy_sources:assert_network_role_source_owner`** (reached from `POST /api/v1/uploads/networks/pdep`; block; `network_energy_source_subject_mismatch`, `thermo_source_calculation_owner_mismatch`, `statmech_source_calculation_owner_mismatch`, `transport_source_calculation_owner_mismatch`, `scf_stability_source_calculation_owner_mismatch`, `composite_input_owner_mismatch`, `statmech_torsion_scan_calculation_owner_mismatch`, `applied_energy_correction_source_calculation_owner_mismatch`, `thermo_statmech_owner_mismatch`, `ts_validation_source_calculation_owner_mismatch`): same check as [`assert_owned_by`](#k-assert-owned-by)
+- **`app.services.network_energy_sources:assert_network_source_role_type`** (reached from `POST /api/v1/uploads/networks/pdep`; block; `ts_energy_ordering_source_type_mismatch`, `network_energy_source_type_mismatch`, `thermo_source_role_type_mismatch`, `statmech_source_role_type_mismatch`): same check as [`assert_statmech_role_compatible`](#k-assert-statmech-role-compatible)
+- **`app.services.network_energy_sources:assert_state_energy_source_owner`** (reached from `POST /api/v1/uploads/networks/pdep`; block; `network_energy_source_subject_mismatch`, `thermo_source_calculation_owner_mismatch`, `statmech_source_calculation_owner_mismatch`, `transport_source_calculation_owner_mismatch`, `scf_stability_source_calculation_owner_mismatch`, `composite_input_owner_mismatch`, `statmech_torsion_scan_calculation_owner_mismatch`, `applied_energy_correction_source_calculation_owner_mismatch`, `thermo_statmech_owner_mismatch`, `ts_validation_source_calculation_owner_mismatch`): same check as [`assert_owned_by`](#k-assert-owned-by)
+- **`app.services.network_energy_sources:assert_state_participant_source_owner`** (reached from `POST /api/v1/uploads/networks/pdep`; block; `network_energy_source_subject_mismatch`, `thermo_source_calculation_owner_mismatch`, `statmech_source_calculation_owner_mismatch`, `transport_source_calculation_owner_mismatch`, `scf_stability_source_calculation_owner_mismatch`, `composite_input_owner_mismatch`, `statmech_torsion_scan_calculation_owner_mismatch`, `applied_energy_correction_source_calculation_owner_mismatch`, `thermo_statmech_owner_mismatch`, `ts_validation_source_calculation_owner_mismatch`): same check as [`assert_owned_by`](#k-assert-owned-by)
 - **`app.services.network_energy_sources:collect_state_energy_source_warnings`** (reached from `POST /api/v1/uploads/networks/pdep`; warn; `transition_state_energy_ordering_not_compared`, `network_state_energy_sum_not_compared`, `network_energy_zpe_source_absent`, `network_state_energy_sources_partial`): same check as [`persist_transition_state_validation_evidence`](#k-persist-transition-state-validation-evidence)
 - **`app.services.network_energy_sources:collect_zpe_source_absent_warnings`** (reached from `POST /api/v1/uploads/networks/pdep`; warn; `transition_state_energy_ordering_not_compared`, `network_state_energy_sum_not_compared`, `network_energy_zpe_source_absent`, `network_state_energy_sources_partial`): same check as [`persist_transition_state_validation_evidence`](#k-persist-transition-state-validation-evidence)
 - **`app.services.network_energy_sources:compare_state_energy_sums`** (reached from `POST /api/v1/uploads/networks/pdep`; block; `ts_energy_ordering_stated_energy_mismatch`, `network_state_energy_sum_mismatch`): same check as [`persist_transition_state_validation_evidence`](#k-persist-transition-state-validation-evidence)
@@ -3117,6 +3162,7 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 - [`assert_geometry_composition_matches_identity`](#k-assert-geometry-composition-matches-identity) (block)
 - [`assert_geometry_isotopes_match_identity`](#k-assert-geometry-isotopes-match-identity) (block)
 - [`_mismatch`](#k-app-services-statmech-declaration-resolution-mismatch) (block)
+- [`assert_statmech_role_compatible`](#k-assert-statmech-role-compatible) (block)
 - [`collect_frequency_scale_factor_software_mismatch_warnings`](#k-collect-frequency-scale-factor-software-mismatch-warnings) (warn)
 - [`_assert_energy_sources_are_comparable`](#k-assert-energy-sources-are-comparable) (block)
 - [`persist_transition_state_validation_evidence`](#k-persist-transition-state-validation-evidence) (warn/block)
@@ -3320,7 +3366,7 @@ Payload model `app.schemas.workflows.statmech_upload.StatmechUploadRequest`; JSO
 - [`statmech_model_declaration_mismatch`](REFUSAL_CODES.md#c-statmech-model-declaration-mismatch) (422)
 - [`statmech_role_duplicate`](REFUSAL_CODES.md#c-statmech-role-duplicate) (422)
 - [`statmech_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-statmech-source-calculation-owner-mismatch) (422)
-- [`statmech_sp_geometry_mismatch`](REFUSAL_CODES.md#c-statmech-sp-geometry-mismatch) (422)
+- [`statmech_source_role_type_mismatch`](REFUSAL_CODES.md#c-statmech-source-role-type-mismatch) (422): {context}: role='{role.value}' claims a '{expected.value}' calculation, but the calculation it names has type '{calculation.type.value}'.
 
 ### Routes
 
@@ -3474,6 +3520,7 @@ Nested models (68; fields and rules in the [model reference](#model-reference)):
 - [`assert_geometry_composition_matches_identity`](#k-assert-geometry-composition-matches-identity) (block)
 - [`assert_geometry_isotopes_match_identity`](#k-assert-geometry-isotopes-match-identity) (block)
 - [`_mismatch`](#k-app-services-statmech-declaration-resolution-mismatch) (block)
+- [`assert_statmech_role_compatible`](#k-assert-statmech-role-compatible) (block)
 - [`collect_frequency_scale_factor_software_mismatch_warnings`](#k-collect-frequency-scale-factor-software-mismatch-warnings) (warn)
 - [`term_symbol_warnings`](#k-term-symbol-warnings) (warn)
 - [`collect_wavefunction_reliability_warnings`](#k-collect-wavefunction-reliability-warnings) (warn)
@@ -3694,6 +3741,7 @@ Nested models (80; fields and rules in the [model reference](#model-reference)):
 - [`assert_role_consistency`](#k-assert-role-consistency) (block)
 - [`collect_composite_link_warnings`](#k-collect-composite-link-warnings) (warn)
 - [`assert_owned_by`](#k-assert-owned-by) (block)
+- [`assert_statmech_owned_by`](#k-assert-statmech-owned-by) (block)
 - [`attach_calculation_input_geometries`](#k-attach-calculation-input-geometries) (block)
 - [`_finalize_one`](#k-finalize-one) (block)
 - [`_unverifiable_warning`](#k-unverifiable-warning) (warn)
@@ -3709,6 +3757,7 @@ Nested models (80; fields and rules in the [model reference](#model-reference)):
 - [`term_symbol_warnings`](#k-term-symbol-warnings) (warn)
 - [`collect_wavefunction_reliability_warnings`](#k-collect-wavefunction-reliability-warnings) (warn)
 - [`assert_enthalpy_reference`](#k-assert-enthalpy-reference) (block)
+- [`assert_thermo_role_matches_calculation_type`](#k-assert-thermo-role-matches-calculation-type) (block)
 - [`assert_composite_total_recomputes`](#k-assert-composite-total-recomputes) (block)
 - [`enthalpy_reference_error`](#k-enthalpy-reference-error) (marked rule; reached from `POST /api/v1/uploads/thermo`)
 - [`evaluate_species_entry_frequency`](#k-evaluate-species-entry-frequency) (block/warn)
@@ -4014,6 +4063,7 @@ Nested models (75; fields and rules in the [model reference](#model-reference)):
 - [`assert_calculation_geometry_composition`](#k-assert-calculation-geometry-composition) (block)
 - [`assert_owned_by`](#k-assert-owned-by) (block)
 - [`attach_calculation_input_geometries`](#k-attach-calculation-input-geometries) (block)
+- [`collect_converged_opt_energy_warnings`](#k-collect-converged-opt-energy-warnings) (warn)
 - [`_finalize_one`](#k-finalize-one) (block)
 - [`_unverifiable_warning`](#k-unverifiable-warning) (warn)
 - [`collect_named_composite_deposit_warnings`](#k-collect-named-composite-deposit-warnings) (warn)
@@ -4426,6 +4476,7 @@ Nested models (105; fields and rules in the [model reference](#model-reference))
 - [`assert_role_consistency`](#k-assert-role-consistency) (block)
 - [`collect_composite_link_warnings`](#k-collect-composite-link-warnings) (warn)
 - [`assert_owned_by`](#k-assert-owned-by) (block)
+- [`assert_statmech_owned_by`](#k-assert-statmech-owned-by) (block)
 - [`attach_calculation_input_geometries`](#k-attach-calculation-input-geometries) (block)
 - [`_finalize_one`](#k-finalize-one) (block)
 - [`_unverifiable_warning`](#k-unverifiable-warning) (warn)
@@ -4446,6 +4497,7 @@ Nested models (105; fields and rules in the [model reference](#model-reference))
 - [`term_symbol_warnings`](#k-term-symbol-warnings) (warn)
 - [`collect_wavefunction_reliability_warnings`](#k-collect-wavefunction-reliability-warnings) (warn)
 - [`assert_enthalpy_reference`](#k-assert-enthalpy-reference) (block)
+- [`assert_thermo_role_matches_calculation_type`](#k-assert-thermo-role-matches-calculation-type) (block)
 - [`assert_composite_total_recomputes`](#k-assert-composite-total-recomputes) (block)
 - [`enthalpy_reference_error`](#k-enthalpy-reference-error) (marked rule; reached from `POST /api/v1/bundles/dry-run`, `POST /api/v1/bundles/submit`)
 - [`evaluate_species_entry_frequency`](#k-evaluate-species-entry-frequency) (block/warn)

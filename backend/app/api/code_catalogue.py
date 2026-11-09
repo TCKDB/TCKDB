@@ -3262,7 +3262,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "The backend or schemas package version resolved to unknown. "
                 "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
             )),
-    ApiCode("unsafe_lowest_energy_comparison", 422, Surface.message_prefix,
+    ApiCode("unsafe_lowest_energy_comparison", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/species_calculations_search.py"),
     ApiCode("unsupported_direction", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/reactions.py"),

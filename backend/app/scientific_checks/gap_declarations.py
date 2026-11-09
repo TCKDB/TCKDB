@@ -1,33 +1,13 @@
-"""Register entries for scientific codes that had a catalogue entry and no register entry.
+"""Register entries for scientific codes the catalogue and the warning map carry.
 
-Why this module exists
-----------------------
-``app.api.code_catalogue`` lists every code the API can put in an error body, and
-``app.services.deposit_warnings.REGISTER_ENTRY`` maps each stored warning to the register
-entry that declares it. Comparing the two on 2026-11-09 found scientific codes in both with
-no entry behind them: refusals and warnings that encode a position a referee could dispute
-(a bath gas that does not sum to one, a declared energy level that contradicts the
-calculations linked to it, a deposited composite energy that disagrees with its own log), and
-that the register therefore did not claim.
+Each entry holds the real function that enforces the check, so renaming or deleting one breaks the
+import of this module. The drift guard in ``tests/db/test_scientific_check_register.py`` checks every code
+against the source of the module that defines the enforcing function.
 
-The entries are declared together here, not beside each check, for one reason: they were
-found by a single audit and are reviewed as one set, with their tiers, in one place. A check
-that moves its module does not move its entry. Each entry still holds the real function
-object, so renaming or deleting a check breaks the import of this module, and the drift
-guard in ``backend/tests/db/test_scientific_check_register.py`` verifies every code against
-the source of the module that defines the enforcing function.
-
-Codes that were the same check as an existing entry were added to that entry instead (see
-the ``code`` tuples of entries 10, 12, 29 and the Arrhenius ``A`` units entry), and each
-group below is appended to ``numbering.READING_ORDER`` so no published entry is renumbered.
-
-What is deliberately not here
------------------------------
-Every other code is in ``not_scientific.NOT_SCIENTIFIC`` with a reason, and a test
-(``tests/db/test_scientific_check_register.py``) fails when a catalogue code or a rendered
-warning code is in neither the register nor that mapping, or in both. The one scientific-looking
-code kept out by an earlier decision is ``geometry_isotope_symbol_conflict``: it refuses an
-input-format contradiction ("D is 2H" is a spelling definition), recorded in the same test file.
+Codes that are the same check as an existing entry sit in that entry's ``code`` tuple (entries 10, 12, 29
+and the Arrhenius ``A`` units entry). Groups are appended to ``numbering.READING_ORDER``, so no published
+entry is renumbered. Every code not claimed by the register is in ``not_scientific.NOT_SCIENTIFIC`` with a
+reason; a test fails when a code is in neither, or in both.
 """
 
 from __future__ import annotations
@@ -36,10 +16,14 @@ from tckdb_schemas.bundle_source_rules import (
     W_CALCULATION_GEOMETRY_CONFORMER_MISMATCH,
     W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
     W_SCF_STABILITY_SOURCE_CONFORMER_UNANCHORED,
+    W_SCF_STABILITY_SOURCE_CYCLE,
     W_SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH,
+    W_TRANSITION_STATE_CALCULATION_SPECIES_GEOMETRY,
     W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
     assert_calculation_geometry_matches_conformer,
+    assert_transition_state_calculations_unanchored,
     owner_mismatch_error,
+    scf_source_cycle_error,
     scf_source_geometry_error,
     scf_source_unanchored_error,
 )
@@ -84,6 +68,7 @@ from tckdb_schemas.sp_energy_components import (
     check_sp_energy_components,
 )
 
+from app.api.routes import lookup as lookup_routes
 from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
 from app.scientific_checks import (
     CheckTier,
@@ -113,10 +98,91 @@ from app.services import (
     statmech_resolution,
     structure_determination_resolution,
     thermo_declaration_resolution,
+    transition_state_validation,
     upload_reconciliation,
 )
+from app.services.relative_conformer_energy import compare as relative_conformer_energy_compare
+from app.services.scientific_read import species_calculations_search
 from app.workflows import network_pdep
-from app.workflows.thermo import assert_enthalpy_reference
+from app.workflows.thermo import (
+    W_THERMO_SOURCE_ROLE_TYPE_MISMATCH,
+    assert_enthalpy_reference,
+    assert_thermo_role_matches_calculation_type,
+)
+
+# ---------------------------------------------------------------------------
+# Stationary points (entry 26 is declared here: it needs the thermo and statmech
+# modules, which import the module that declares the other entries of its group)
+# ---------------------------------------------------------------------------
+
+CHECK_ENERGY_SOURCE_TYPE = ScientificCheck(
+    group="Stationary points",
+    sort_key=13,
+    code=(
+        transition_state_validation.E_TS_ENERGY_ORDERING_SOURCE_TYPE_MISMATCH,
+        network_energy_sources.W_NETWORK_ENERGY_SOURCE_TYPE_MISMATCH,
+        W_THERMO_SOURCE_ROLE_TYPE_MISMATCH,
+        statmech_resolution.W_STATMECH_SOURCE_ROLE_TYPE_MISMATCH,
+    ),
+    asserts=(
+        "A calculation cited as the source of a stated energy should be of a "
+        "type that carries that kind of energy: an electronic energy from an "
+        "``sp``, ``opt`` or ``composite``, an E0 from a ``freq`` or "
+        "``composite``, never from an IRC point, scan, path search or "
+        "conformer search; a network ``well_freq`` or ``barrier_freq`` "
+        "source must be a ``freq``; and a thermo or statmech source link "
+        "gives a calculation a role its type can take."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "Definitional. An energy taken from an IRC point, or from a bare "
+        "single point labelled as an E0, is not the quantity it is labelled "
+        "as, and an ordering or a master equation built on it compares unlike "
+        "things; the master equation reads the modes of its frequency roles, "
+        "which a ``composite`` (a ZPE only) does not store. The table of types "
+        "is one table shared by the transition-state and network rules "
+        "(``app.services.energy_source_types``), so the two cannot "
+        "disagree about what carries an energy; it is a position a referee "
+        "could dispute, which is why it is registered. A network energy on a "
+        "composed convention (``electronic_plus_zpe`` and the like) is held "
+        "only to the floor of stationary-point types, because its one source "
+        "slot cites the electronic part and the frequency goes in the "
+        "frequency role: tightening it would refuse every producer and "
+        "fixture in the repository. The thermo and statmech role tables "
+        "(``opt``, ``freq``, ``sp`` and, for statmech, ``composite``) are "
+        "the same rule for the products' own links."
+    ),
+    adr="0008",
+    enforced_by=(
+        PythonCheck(
+            transition_state_validation._assert_energy_sources_are_comparable,
+            note=(
+                "The transition-state ``energy_ordering`` evidence, at the "
+                "shared evidence seam, so all three deposit paths refuse alike."
+            ),
+        ),
+        PythonCheck(
+            network_energy_sources.assert_network_energy_source_type,
+            note="Network state and barrier energy sources, read off the persisted row.",
+        ),
+        PythonCheck(
+            network_energy_sources.assert_network_source_role_type,
+            note=(
+                "The ``well_energy`` / ``barrier_energy`` and the frequency "
+                "roles of the solve's ``source_calculations``."
+            ),
+        ),
+        PythonCheck(assert_thermo_role_matches_calculation_type),
+        PythonCheck(statmech_resolution.assert_statmech_role_compatible),
+    ),
+    escape_hatch=(
+        "Cite the calculation that carries the energy: the ``sp``, ``opt`` or "
+        "``composite`` for an electronic energy, the ``freq`` (or a "
+        "``composite``) for an E0, and put the ``freq`` in the "
+        "``well_freq`` / ``barrier_freq`` role."
+    ),
+)
 
 # ---------------------------------------------------------------------------
 # Bath gas of a rate
@@ -225,8 +291,7 @@ CHECK_NETWORK_STATES_ARE_DISTINCT_COMPOSITIONS = ScientificCheck(
     tier_rationale=(
         "Definitional. A well or a separated-fragment set is identified by what it is made of; two "
         "states with the same composition are one state declared twice, and a state naming one entry "
-        "twice states a stoichiometry the wrong way. Both used to reach the database and surface as "
-        "an HTTP 500 from the uniqueness constraint. Stereoisomers are different species entries, so a "
+        "twice states a stoichiometry the wrong way. Both are refused before any row is written. Stereoisomers are different species entries, so a "
         "network that really holds two isomers is not refused."
     ),
     adr="0008",
@@ -268,7 +333,7 @@ CHECK_DECLARED_ENERGY_LEVEL_IS_HONEST = ScientificCheck(
     tier_rationale=(
         "A contract between statements of one record, not an expectation about a result. A "
         "depositor may legitimately run the optimisation and the single point at different levels "
-        "(owner decision, 2026-09), which is exactly why the record must say which level its energy "
+        "(a legitimate shape), which is why the record must say which level its energy "
         "stands at, once: linked energies at two levels give no single answer (``*_energy_level_"
         "ambiguous``), a declared level that contradicts the linked energies is a false label "
         "(``*_energy_level_contradiction``), and a declared level that differs from the "
@@ -328,7 +393,7 @@ CHECK_ENERGIES_AND_OPTIMISATIONS_PAIR_ONE_TO_ONE_BY_GEOMETRY = ScientificCheck(
         "assumed to belong to it). The stability half is stricter: a verdict and its source that are "
         "tied to different conformers are refused here, exactly one of them unanchored is refused "
         "(``scf_stability_source_conformer_unanchored``), and only when neither is tied to any "
-        "conformer is it the warning of entry 77."
+        "conformer is it the warning of entry 80."
     ),
     adr="0008, 0021",
     enforced_by=(
@@ -351,11 +416,12 @@ CHECK_CALCULATION_GEOMETRY_STATEMENTS_AGREE = ScientificCheck(
     code=(
         W_CALCULATION_GEOMETRY_CONFORMER_MISMATCH,
         calculation_resolution.W_CALCULATION_INPUT_GEOMETRY_MISMATCH,
+        W_TRANSITION_STATE_CALCULATION_SPECIES_GEOMETRY,
     ),
     asserts=(
         "A calculation is evidence for one conformer and ran on one structure: its conformer key and "
         "its geometry key name the same conformer, and the geometry it states it ran on is one of "
-        "its input geometries."
+        "its input geometries; a transition-state calculation did not run on a species minimum's geometry."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
@@ -369,6 +435,7 @@ CHECK_CALCULATION_GEOMETRY_STATEMENTS_AGREE = ScientificCheck(
     enforced_by=(
         PythonCheck(assert_calculation_geometry_matches_conformer),
         PythonCheck(calculation_resolution.attach_calculation_input_geometries),
+        PythonCheck(assert_transition_state_calculations_unanchored),
     ),
     escape_hatch="State one conformer, or omit the redundant key; list the geometry the calculation ran on.",
 )
@@ -391,7 +458,7 @@ CHECK_COMPOSITE_STATED_NUMBERS_AGREE = ScientificCheck(
     channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional, and a comparison only: TCKDB forms the sums to compare them with the numbers "
-        "sent and stores none of them (owner decision 5). A total that does not follow from the "
+        "sent and stores none of them. A total that does not follow from the "
         "inputs it cites contradicts its own recipe; an E0 that is not electronic plus zero-point "
         "contradicts what the three quantities are. The tolerance scales with the number of rounded "
         "quantities in the comparison, so printed precision never trips it."
@@ -511,7 +578,7 @@ CHECK_COMPOSITE_FREQUENCY_IS_AT_THE_RECIPE_LEVEL = ScientificCheck(
         "another level, and say so; the record's frequencies and its energy then describe different levels, "
         "which is worth telling the depositor and the reader but cannot be shown to be wrong. The composite "
         "role on a calculation of another type is the legacy shape from before the composite type existed: "
-        "a warning by owner decision (warn now, refuse once producers can send the new shape)."
+        "a warning now, to be refused once producers can send the new shape."
     ),
     adr="0008, 0021",
     enforced_by=(PythonCheck(calculation_levels.collect_composite_link_warnings),),
@@ -532,8 +599,8 @@ CHECK_NAMED_COMPOSITE_IS_A_COMPOSITE_CALCULATION = ScientificCheck(
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
     tier_rationale=(
-        "The legacy shape from before the composite type existed, so a warning by owner decision (warn "
-        "now, refuse once producers can send the new shape). A composite's number is a recipe's, not an "
+        "The legacy shape from before the composite type existed, so a warning (refused "
+        "once producers can send the new shape). A composite's number is a recipe's, not an "
         "optimisation's or a single point's, and storing it under the wrong type lets every reader take "
         "it for one; the deposit is kept as sent because the energy it carries is still true."
     ),
@@ -587,8 +654,7 @@ CHECK_A_CITED_THING_IS_OF_THE_RECORDS_OWN_SUBJECT = ScientificCheck(
         calculation_ownership.W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH,
         calculation_ownership.W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
         calculation_ownership.W_THERMO_STATMECH_OWNER_MISMATCH,
-        calculation_ownership.W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
-        calculation_ownership.W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
+        calculation_ownership.W_TS_VALIDATION_SOURCE_CALCULATION_OWNER_MISMATCH,
     ),
     asserts=(
         "What a record cites as evidence belongs to the record's own subject (its species, transition state "
@@ -667,10 +733,13 @@ CHECK_DECLARATION_IS_ABOUT_THE_RECORD_THAT_CARRIES_IT = ScientificCheck(
         structure_determination_resolution.W_STRUCTURE_DETERMINATION_MISMATCH,
         kinetics_declaration_resolution.W_KINETICS_PROTOCOL_CALCULATION_OWNER_MISMATCH,
         thermo_declaration_resolution.W_THERMO_PROTOCOL_CALCULATION_OWNER_MISMATCH,
+        calculation_ownership.W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
+        calculation_ownership.W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
     ),
     asserts=(
-        "A determination, statistical-model, structure or protocol declaration describes the record that "
-        "carries it. Its reaction, direction, source, subject and cited calculations are that record's own."
+        "A determination, statistical-model, structure, protocol or interpretation declaration describes the "
+        "record that carries it. Its reaction, direction, source, subject, cited calculations, statmech "
+        "record and conformer selection are that record's own."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
@@ -688,6 +757,7 @@ CHECK_DECLARATION_IS_ABOUT_THE_RECORD_THAT_CARRIES_IT = ScientificCheck(
         PythonCheck(thermo_declaration_resolution._resolve_protocol),
         PythonCheck(statmech_declaration_resolution._mismatch),
         PythonCheck(structure_determination_resolution._mismatch),
+        PythonCheck(calculation_ownership.assert_statmech_owned_by),
     ),
     escape_hatch="Declare it on the record it describes, with the calculations and sources of that record.",
 )
@@ -710,13 +780,12 @@ CHECK_OBSERVATION_IS_ATTACHED_TO_ITS_OWN_GROUND_STATE = ScientificCheck(
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
     tier_rationale=(
-        "Definitional. An observation carries no stereochemical or excited-state resolution of its own, so "
-        "a measured property attached to an excited-state or non-minimum entry would be read as that "
-        "state's; and an observation whose own InChIKey hint names a different molecular skeleton than the "
-        "target's species is a different molecule's. Only the connectivity block is compared, so a "
-        "stereochemistry-only difference is accepted: resolving it is what the curator is for. The rule "
-        "uses the same definition of a ground-state minimum as the automatic resolver, so the two cannot "
-        "drift apart."
+        "A contract on a curator action, not a claim about a result. An observation carries no "
+        "stereochemical or excited-state resolution of its own, so attaching it to an excited-state or "
+        "non-minimum entry would present it as that state's, and a hint naming another molecular skeleton "
+        "than the target's species would present it as another molecule's. Only the connectivity block is "
+        "compared, so a stereochemistry-only difference is accepted. The ground-state-minimum test is the "
+        "one the automatic resolver uses."
     ),
     adr="0008",
     enforced_by=(
@@ -735,16 +804,17 @@ CHECK_A_BOND_ADDITIVITY_TOTAL_HAS_ITS_COMPONENTS = ScientificCheck(
     sort_key=1,
     code=energy_correction_resolution.W_BAC_TOTAL_REQUIRES_COMPONENTS,
     asserts=(
-        "A bond-additivity correction applied as a total carries the bond components it is the sum of, "
-        "unless its target has no bonds; a transition state has no bond assignment and so cannot take a "
-        "componentless total."
+        "A Petersson bond-additivity correction applied as a total carries at least one bond component, "
+        "unless its target species has no bonds; a transition state has no bond assignment and so cannot "
+        "take a componentless total."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
     tier_rationale=(
-        "Definitional. A bond additivity correction is a sum over bonds; a total with nothing behind it "
-        "cannot be shown to be one rather than an empty sum or an arbitrary number, and every reader would "
-        "take it for the correction. A species with no bonds (an atom) legitimately has nothing to sum."
+        "Definitional. A Petersson bond additivity correction is a sum over bonds; a total with nothing "
+        "behind it cannot be shown to be one rather than an empty sum or an arbitrary number. A species "
+        "with no bonds (an atom) has nothing to sum. A Melius total does not decompose into bond components "
+        "and is not judged."
     ),
     adr="0008",
     enforced_by=(PythonCheck(energy_correction_resolution.assert_bac_total_has_required_components),),
@@ -796,7 +866,7 @@ CHECK_ENTHALPY_STATES_ITS_REFERENCE = ScientificCheck(
     channel=CodeChannel.error_envelope,
     tier_rationale=(
         "A contract, and the most consequential one for downstream arithmetic. An enthalpy is a number "
-        "that means something only against a chosen zero; until the decision of 2026-09-23 TCKDB stored "
+        "that means something only against a chosen zero; TCKDB used to store "
         "the number and not the zero. Combining enthalpies of different references (a reaction enthalpy, "
         "a Hess cycle) gives nonsense that looks like a result, so an undeclared enthalpy is refused "
         "rather than defaulted, and a producer that does not know its own convention must refuse to "
@@ -853,6 +923,84 @@ CHECK_CALCULATION_DEPENDENCIES_ARE_ACYCLIC = ScientificCheck(
         ),
     ),
     escape_hatch="Drop or reverse the dependency that points back.",
+)
+
+CHECK_STABILITY_VERDICTS_DO_NOT_CITE_EACH_OTHER_IN_A_RING = ScientificCheck(
+    group="Calculation graph",
+    sort_key=2,
+    code=W_SCF_STABILITY_SOURCE_CYCLE,
+    asserts=(
+        "SCF stability verdicts do not cite one another as the job that measured them in a ring: some job "
+        "measured each."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "Definitional. A verdict that names, as its measuring job, a calculation whose own verdict names "
+        "the first has no measuring job at all. It is the bundle-level sibling of the dependency graph rule "
+        "(entry 72), refused before anything is stored."
+    ),
+    adr="0008",
+    enforced_by=(PythonCheck(scf_source_cycle_error, note="The same refusal from the request schema and the workflow (ADR 0017)."),),
+    escape_hatch="Name, as the measuring job, a calculation that is not itself measured by the first.",
+)
+
+# ---------------------------------------------------------------------------
+# Energy comparison
+# ---------------------------------------------------------------------------
+
+CHECK_ENERGIES_AT_DIFFERENT_LEVELS_ARE_NOT_COMPARED = ScientificCheck(
+    group="Energy comparison",
+    sort_key=1,
+    code=(
+        "lowest_energy_across_levels",
+        "unsafe_lowest_energy_comparison",
+        "relative_conformer_energy_compare_identical_protocols",
+    ),
+    asserts=(
+        "Energies at different levels of theory or protocols are not compared: a lowest-energy selection "
+        "is refused across levels and without the exact species entry and level it needs, and a protocol "
+        "is not compared with itself."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "Definitional, on the read side. Absolute energies from different levels differ by far more than "
+        "the quantity a lowest-energy selection reports, so the answer would be an artefact of the levels; "
+        "a protocol compared with itself compares nothing. The refusal names what to narrow rather than "
+        "choosing for the reader."
+    ),
+    adr="0008",
+    enforced_by=(
+        PythonCheck(lookup_routes._refuse_mixed_levels),
+        PythonCheck(species_calculations_search._validate_ranking),
+        PythonCheck(relative_conformer_energy_compare.identical_protocols),
+    ),
+    escape_hatch="Filter to one level (method and basis) and one species entry, or use a select endpoint.",
+)
+
+# ---------------------------------------------------------------------------
+# Evidence a result rests on
+# ---------------------------------------------------------------------------
+
+CHECK_A_CONVERGED_OPTIMISATION_HAS_AN_ENERGY_BEHIND_IT = ScientificCheck(
+    group="Evidence a result rests on",
+    sort_key=1,
+    code=calculation_resolution.W_CONVERGED_OPT_NO_USABLE_ENERGY,
+    asserts=(
+        "An optimisation recorded as converged has an energy behind it: a single point of the same owner "
+        "at any level, or its own final energy stated with an artifact."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    tier_rationale=(
+        "An absence, so a warning: a converged geometry is a claim about the energy, but an incomplete record "
+        "is still a true one and trust and reproducibility grade it. The sibling of entry 19, which asks "
+        "for evidence that a saddle point connects its endpoints."
+    ),
+    adr="0008",
+    enforced_by=(PythonCheck(calculation_resolution.collect_converged_opt_energy_warnings),),
+    escape_hatch="None needed: the deposit is accepted. Deposit a single point, or the optimisation's final energy with its artifact.",
 )
 
 # ---------------------------------------------------------------------------

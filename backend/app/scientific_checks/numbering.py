@@ -37,8 +37,7 @@ READING_ORDER: tuple[str, ...] = (
     "Vibrational frequency provenance",
     "Stereochemistry of a species entry",
     "Wavefunction reliability diagnostics",
-    # Declared together in ``gap_declarations`` (the catalogue/register audit of 2026-11-09), appended in this order so
-    # no published entry is renumbered.
+    # Declared in ``gap_declarations``, appended in this order so no published entry is renumbered.
     "Bath gas of a rate",
     "Network composition and sources",
     "Levels and geometries of linked calculations",
@@ -49,6 +48,8 @@ READING_ORDER: tuple[str, ...] = (
     "Corrections and scale factors",
     "Enthalpy reference",
     "Calculation graph",
+    "Energy comparison",
+    "Evidence a result rests on",
     "Declared against the uploaded evidence",
 )
 
