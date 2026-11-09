@@ -150,14 +150,22 @@ def test_an_unknown_mp4_option_assumes_nothing(method) -> None:
         ("QCISD(T)", _ENERGY),
         ("CCSD", _GRADIENT),
         ("QCISD", _GRADIENT),
+        ("CCSD=(T,FC)", _ENERGY),
+        ("CCSD (T)", _ENERGY),
+        ("CCSD=FC", _GRADIENT),
+        ("QCISD=(T,E4T)", _ENERGY),
     ],
 )
 def test_gaussian_cc_and_qcisd_options(method, expected) -> None:
     assert _got("Gaussian", method) == expected
 
 
-def test_an_unknown_cc_option_assumes_nothing_and_f12_suffix_is_not_an_option() -> None:
-    assert infer_hessian_method("Gaussian", "CCSD(T,bogus)") is None
+@pytest.mark.parametrize("method", ["CCSD(T,bogus)", "CCSDT", "CCSD[T]", "CCSD/RI", "QCISDT", "CCSD(RO)", "MP4(RO)", "MP4(SDTQ,RO)"])
+def test_unknown_tails_ro_and_ccsdt_assume_nothing(method) -> None:
+    assert infer_hessian_method("Gaussian", method) is None
+
+
+def test_f12_suffix_is_not_an_option() -> None:
     assert _got("ORCA", "CCSD(T)-F12", "6.1.0") == _ENERGY
 
 

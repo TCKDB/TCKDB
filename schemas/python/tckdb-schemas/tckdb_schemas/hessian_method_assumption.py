@@ -322,9 +322,11 @@ _OPTION_SPLIT = re.compile(r"[(),/\s=-]+")
 
 #: Options that change neither which method runs nor how its derivatives are computed. Gaussian 09: the frozen-core
 #: options "are available with this keyword" (FC, Full, ...); the CCSD page lists T, E4T, T1Diag, Conver=N, MaxCyc=N,
-#: SaveAmplitudes, ReadAmplitudes (knowledge-base chunk 10440); RO marks the restricted open-shell variant.
+#: SaveAmplitudes, ReadAmplitudes (knowledge-base chunk 10440). ``RO`` is deliberately not here: the restricted
+#: open-shell variant has energies only (G09 MP page, chunk 10828: "RO may be combined with MP2, MP3 and MP4 for
+#: energies only"; CCSD page, chunk 10441), so it is not a harmless option and the method is left unrecognised.
 _IGNORED_OPTION = re.compile(
-    r"^(fc\d*|nofc|full|fu|ro|window.*|active.*|t1diag|e4t|conver|maxcyc|saveamplitudes|readamplitudes|\d+)$"
+    r"^(fc\d*|nofc|full|fu|window.*|active.*|t1diag|e4t|conver|maxcyc|saveamplitudes|readamplitudes|\d+)$"
 )
 
 
@@ -351,7 +353,8 @@ def _mp4_variant(token: str) -> str | None:
     return MethodFamily.MP4_SDTQ
 
 
-_CC_WITH_OPTIONS = re.compile(r"^(ccsd|qcisd)(?:\(([^()]*)\))?([^()]*)$")
+#: ``keyword(options)``, ``keyword (options)`` and ``keyword=(options)`` are the same Gaussian route item.
+_CC_WITH_OPTIONS = re.compile(r"^(ccsd|qcisd)(?:\s*=?\s*\(([^()]*)\))?([^()]*)$")
 
 
 def _cc_with_options(token: str) -> tuple[bool, str | None]:
@@ -361,18 +364,21 @@ def _cc_with_options(token: str) -> tuple[bool, str | None]:
     QCISD(T) (G09 CCSD page, chunk 10440: options FC, T, E4T, T1Diag, ...; "CCSD-T is a synonym for CCSD(T)").
     Availability (chunks 10441 and 10973): "Analytic energies and gradients for CCD and CCSD, numerical gradients
     for CCSD(T), and numerical frequencies for all methods"; "numerical gradients for QCISD(T)". Not handled (so the
-    prefix rules decide, as before): anything with a suffix that is not an option, such as ``ccsd(t)-f12``. An
-    unknown option inside the parentheses is handled as unrecognised, ``(True, None)``.
+    prefix rules decide, as before): only a known suffix that is not an option, ``-f12`` and its variants
+    (``ccsd(t)-f12``). Any other tail (``ccsdt``, ``ccsd[t]``, ``ccsd/ri``) and any unknown option are handled as
+    unrecognised, ``(True, None)``: Gaussian has no CCSDT keyword and nothing is assumed for what it does not know.
     """
     m = _CC_WITH_OPTIONS.match(token)
     if m is None:
         return False, None
     base, inner, tail = m.groups()
-    if tail and not _OPTION_SPLIT.match(tail):
-        return False, None  # "ccsdt" (full triples) is not "ccsd" plus an option
     tail_tokens = _option_tokens(tail)
+    if tail and not _OPTION_SPLIT.match(tail):
+        return True, None  # "ccsdt": not "ccsd" plus an option
     if any(t != "t" and not _IGNORED_OPTION.match(t) for t in tail_tokens):
-        return False, None
+        if tail_tokens[0].startswith("f12"):
+            return False, None  # a known suffix: the prefix rules read ``ccsd(t)-f12``
+        return True, None
     inner_tokens = _option_tokens(inner or "")
     if any(t != "t" and not _IGNORED_OPTION.match(t) for t in inner_tokens):
         return True, None
