@@ -181,7 +181,13 @@ def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
 def _request_validation_error_handler(
     _request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    details = exc.errors()
+    # ``input`` is the caller's own value, echoed by pydantic. A 55 MB body that
+    # failed validation came back as a 55 MB response; the caller already holds
+    # it, and the error's ``loc`` says where the problem is.
+    details = [
+        {key: value for key, value in error.items() if key != "input"}
+        for error in exc.errors()
+    ]
     return JSONResponse(
         status_code=422,
         content=jsonable_encoder(

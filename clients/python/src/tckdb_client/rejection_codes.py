@@ -287,6 +287,7 @@ class RejectionCode(str, Enum):
     RELEASE_SCOPING_NOT_IMPLEMENTED = "release_scoping_not_implemented"
     RELEASE_SELECTS_NOTHING = "release_selects_nothing"
     RELEASE_TAG_TAKEN = "release_tag_taken"
+    REQUEST_BODY_TOO_LARGE = "request_body_too_large"
     RIGHTS_ATTESTATION_NOT_DEPOSITOR = "rights_attestation_not_depositor"
     RIGHTS_ATTESTATION_REQUIRES_CURATOR = "rights_attestation_requires_curator"
     RIGHTS_BASIS_INCOMPATIBLE = "rights_basis_incompatible"
@@ -984,6 +985,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.RELEASE_SCOPING_NOT_IMPLEMENTED: frozenset({422}),
     RejectionCode.RELEASE_SELECTS_NOTHING: frozenset({422}),
     RejectionCode.RELEASE_TAG_TAKEN: frozenset({409}),
+    RejectionCode.REQUEST_BODY_TOO_LARGE: frozenset({413}),
     RejectionCode.RIGHTS_ATTESTATION_NOT_DEPOSITOR: frozenset({403}),
     RejectionCode.RIGHTS_ATTESTATION_REQUIRES_CURATOR: frozenset({403}),
     RejectionCode.RIGHTS_BASIS_INCOMPATIBLE: frozenset({422}),

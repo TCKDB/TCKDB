@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.190.0 - 2026-11-09
+
+A 413 with no TCKDB code (the HTML page of Cloudflare or nginx, or an empty body) now raises `TCKDBHTTPError` with a message that says the body was too large for the server or a proxy in front of it, that the hosted instance is limited by Cloudflare to 100,000,000 bytes (about 71.5 MiB of files after base64), and to send the artifacts separately (`upload_artifacts`, or `inline_artifacts=False` where a builder offers it) or split the deposit. A coded 413 (`request_body_too_large`, `anonymous_body_too_large`, `bundle_too_large`) keeps its code and message. `RejectionCode.REQUEST_BODY_TOO_LARGE` joins the refusal codes (see `tckdb-schemas` 0.162.0). The `tckdb-schemas` window is unchanged.
+
 ## 0.189.0 - 2026-11-07
 
 No client code changed. The server now judges a kinetics `energy_level_of_theory`'s spin treatment per participant (closed-shell links are exempt, open-shell links must share one reference), so a reaction mixing restricted closed-shell and unrestricted open-shell species can declare its method and basis (see `tckdb-schemas` 0.161.0). The `tckdb-schemas` window already contains 0.161.

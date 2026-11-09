@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.162.0 - 2026-11-09
+
+One refusal code is added: `request_body_too_large` (413). The frontend proxy refuses a request body over its size cap (100 MiB on the upload, job and calculation-artifact routes, 10 MiB on every other `/api/` route) with this code and `context.max_bytes`, where it used to send nginx's bare HTML 413. The API never sends it itself. A validation 422 no longer echoes the request body under each error's `input`. No model or payload shape changed.
+
 ## 0.161.0 - 2026-11-07
 
 One refusal is narrowed and gains a `reason`; no field is added or removed. A kinetics record's `energy_level_of_theory` names method, basis and qualifiers, and its spin treatment is judged per participant against the linked reactant, product and transition-state energies:
