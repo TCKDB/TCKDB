@@ -22,6 +22,15 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Archives with enum or text primary keys restore (2026-11-09)
+
+An archive containing a table whose primary key includes an enum or text column
+(for example a species that is both reactant and product of one reaction) is
+no longer refused on restore with "Primary keys are duplicated or unsorted".
+Export now orders those keys by codepoint, which is the order restore checks.
+Older archives written with the mismatched order are refused; there is no
+legacy path. No schema or migration change.
+
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 
 - **What changed:**
