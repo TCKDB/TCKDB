@@ -11,8 +11,11 @@ strings).
 from __future__ import annotations
 
 import io
+import json
 
-from sqlalchemy import select, text
+import pytest
+
+from sqlalchemy import Column, MetaData, Table, select, text
 from sqlalchemy.sql.sqltypes import CHAR, Enum, String, Text
 
 from app.db.base import Base
@@ -44,8 +47,6 @@ def test_every_enum_and_text_primary_key_is_ordered_like_python(db_session) -> N
 
     checked_enums = 0
     for table, column in exposed:
-        order = archive_core._pk_order_expression(column)
-        assert 'COLLATE "C"' in str(order.compile()), f"{table.name}.{column.name} is not codepoint-ordered"
         if isinstance(column.type, Enum):
             ordered = db_session.scalars(
                 text(
@@ -86,3 +87,34 @@ def test_round_trip_with_a_species_on_both_sides_of_a_reaction(db_session) -> No
     _empty_archive_tables(db_session)
     restore_archive(db_session, io.BytesIO(archive.getvalue()))
     assert participants() == expected
+
+
+def test_writer_orders_text_keys_by_codepoint_under_an_icu_collation(db_session) -> None:
+    """Behaviour, through the writer's own row path, for a column whose DB order is not codepoint order."""
+    collation = "en-US-x-icu"
+    if not db_session.scalar(text("SELECT count(*) FROM pg_collation WHERE collname = :n"), {"n": collation}):
+        pytest.skip(f"ICU collation {collation!r} is not available on this PostgreSQL server")
+
+    values = ["_x", "a", "B", "c-h", "CH", "C=O", "\u00e9"]
+    scratch = Table(
+        "zz_archive_pk_order_scratch",
+        MetaData(),
+        Column("k", Text(collation=collation), primary_key=True),
+    )
+    connection = db_session.connection()
+    scratch.create(connection)
+    try:
+        connection.execute(scratch.insert(), [{"k": value} for value in values])
+        # The premise: the database's own order differs from Python's.
+        db_order = list(connection.scalars(select(scratch.c.k).order_by(scratch.c.k)))
+        assert db_order != sorted(values)
+
+        spool, counts, _digest, total = archive_core._write_rows(db_session, [scratch])
+        try:
+            written = [json.loads(line)["values"]["k"] for line in spool.read().splitlines()]
+        finally:
+            spool.close()
+        assert total == len(values) == counts[scratch.name]
+        assert written == sorted(values)
+    finally:
+        scratch.drop(connection)

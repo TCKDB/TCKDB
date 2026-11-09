@@ -256,8 +256,17 @@ def _pk_order_expression(column):
     declaration position (``reactant`` < ``product``), and orders text by the
     database collation (``en_US`` is not codepoint order). Casting to text with
     the ``C`` collation orders by UTF-8 bytes, which is Python's codepoint
-    order, so writer and reader agree. Other key types (integers, UUIDs in
-    canonical lowercase form, dates) already order identically in both.
+    order, so writer and reader agree.
+
+    Integer keys already agree. So do the four Double key columns
+    (``network_kinetics_plog.pressure_bar``, ``network_kinetics_point``
+    ``temperature_k``/``pressure_bar``, ``thermo_point.temperature_k``); NaN
+    would order differently, but the reader's ``<=`` check is lenient about it
+    and these columns hold finite values.
+
+    The text cast assumes an enum's label equals its encoded archive value
+    (true today). It would break with ``values_callable`` or an enum whose
+    name differs from its value.
     """
 
     if isinstance(column.type, (Enum, CHAR, String, Text)):
