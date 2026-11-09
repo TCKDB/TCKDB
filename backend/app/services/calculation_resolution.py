@@ -1034,8 +1034,8 @@ def collect_converged_opt_energy_warnings(
             CalculationRecordKind.transition_state: ts_ids,
         },
     )
-    energy_calc_ids = [r.id for r in rows if r.final_energy_hartree is not None]
-    artifact_calc_ids = _load_calc_ids_with_artifacts(session, energy_calc_ids)
+    # Looked up for every row so the warning's ``has_artifact`` is accurate.
+    artifact_calc_ids = _load_calc_ids_with_artifacts(session, [r.id for r in rows])
 
     warnings: list[UploadWarning] = []
     for r in rows:

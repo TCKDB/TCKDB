@@ -35,6 +35,7 @@ from app.schemas.reads.scientific_calculation import (
     EffectiveSettingSummary,
     ReportedSettingValue,
 )
+from app.services.deposit_warnings import current_warnings
 from app.services.parameter_reconciliation import W_OUTPUT_LOG_JOB_NOT_BOUND
 
 #: setting -> (requested canonical key, reported canonical keys that set the state, raw keys listed but not deciding)
@@ -131,10 +132,12 @@ def load_settings_inputs(
     unbound = (
         set(
             session.scalars(
-                select(DepositWarning.record_id).where(
-                    DepositWarning.record_type == SubmissionRecordType.calculation,
-                    DepositWarning.record_id.in_(unread),
-                    DepositWarning.code == W_OUTPUT_LOG_JOB_NOT_BOUND,
+                current_warnings(
+                    select(DepositWarning.record_id).where(
+                        DepositWarning.record_type == SubmissionRecordType.calculation,
+                        DepositWarning.record_id.in_(unread),
+                        DepositWarning.code == W_OUTPUT_LOG_JOB_NOT_BOUND,
+                    )
                 )
             )
         )

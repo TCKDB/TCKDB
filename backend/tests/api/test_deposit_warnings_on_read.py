@@ -655,3 +655,44 @@ def test_a_nan_context_reads_exactly_as_the_upload_response_showed_it(client, db
     )
     (read,) = [i for i in fragment["items"] if i["code"] == "sp_energy_payload_log_mismatch"]
     assert returned["context"] == read["context"] == {"delta_hartree": None, "ok": 1.5, "nested": {"big": None}}
+
+
+# ---------------------------------------------------------------------------
+# A warning stored before its code had a register entry is numbered when read
+# ---------------------------------------------------------------------------
+
+
+def _unsaved_row(code: str, register_entry: int | None) -> DepositWarning:
+    return DepositWarning(
+        record_type=SubmissionRecordType.calculation,
+        record_id=1,
+        code=code,
+        register_entry=register_entry,
+        field="artifacts",
+        message="x",
+        context=None,
+        content_hash=content_hash(code, "artifacts", "x", None),
+        check_version=1,
+    )
+
+
+def test_a_row_stored_with_no_register_number_is_numbered_from_the_map_when_read():
+    from app.services.deposit_warnings import REGISTER_ENTRY, _item
+
+    code = "input_deck_disagrees_with_output_log"
+    assert code in REGISTER_ENTRY, "the code this test relies on lost its entry"
+    assert _item(_unsaved_row(code, None)).register_entry == REGISTER_ENTRY[code]
+
+
+def test_a_stored_register_number_is_not_overridden_by_the_map():
+    from app.services.deposit_warnings import _item
+
+    assert _item(_unsaved_row("input_deck_disagrees_with_output_log", 12)).register_entry == 12
+
+
+def test_a_code_with_no_entry_stays_unnumbered():
+    from app.services.deposit_warnings import REGISTER_ENTRY, _item
+
+    code = "output_log_job_not_bound"
+    assert code not in REGISTER_ENTRY
+    assert _item(_unsaved_row(code, None)).register_entry is None

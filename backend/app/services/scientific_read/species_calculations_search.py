@@ -483,9 +483,9 @@ def _validate_ranking(request: SpeciesCalculationsSearchRequest) -> None:
             "requires calculation_type=sp or calculation_type=opt."
         )
     if request.species_entry_ref is None or request.level_of_theory_ref is None:
-        raise ValueError(
-            "unsafe_lowest_energy_comparison: ranking=lowest_energy requires "
-            "exact species_entry_ref and level_of_theory_ref filters."
+        raise CodedValueError(
+            "unsafe_lowest_energy_comparison",
+            "ranking=lowest_energy requires exact species_entry_ref and level_of_theory_ref filters.",
         )
 
 

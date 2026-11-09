@@ -1701,6 +1701,24 @@ the gap.
 - `ck_deposit_warning_record_both_or_neither`: `(record_type IS NULL) = (record_id IS NULL)`
 - `ck_deposit_warning_submission_or_record_warning`: `submission_id IS NOT NULL OR (record_type IS NOT NULL AND code IS NOT NULL)`
 
+### `deposit_warning_retirement`
+
+**Role:** role not stated on the model
+
+**Purpose:** A deposit warning that no longer applies, with the reason, actor and time.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `deposit_warning_id` | BIGINT | no | — | deposit_warning.id | — | not documented |
+| `retired_reason_code` | TEXT | no | — | — | — | not documented |
+| `retired_by_user_id` | BIGINT | yes | — | app_user.id | — | not documented |
+| `retired_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_deposit_warning_retirement_reason_known`: `retired_reason_code IN ('artifact_attached', 'single_point_deposited', 'hessian_stored', 'superseded_by_recheck')`
+
 ### `energy_correction_scheme`
 
 **Role:** role not stated on the model

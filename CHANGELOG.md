@@ -28,6 +28,20 @@ dataset must never require a code release.
 - **Schema and migration:** none. The nginx change needs a frontend image deploy.
 - **Versions:** `tckdb-schemas` 0.170.0, `tckdb-client` 0.199.0.
 
+## Deposit warnings are retired when later events make them untrue (2026-11-09)
+
+- A warning whose condition stops holding is retired, not deleted: the append-only table `deposit_warning_retirement` records when and why, and the warning row stays.
+- Retiring events: a file attached to a calculation (`converged_opt_no_usable_energy` needs the opt's energy and a file when no single point exists), a single point deposited for the same owner (that warning on the owner's opts), and a Hessian stored (the calculation's `hessian_not_stored_*` warnings).
+- A converged opt with no energy that gets a file keeps a warning restated with the file counted; the replacement is stored first, then the old one is retired as `superseded_by_recheck`.
+- Reads show current warnings only; curators and admins also see retired ones with `retired_at` and `retired_reason` (`tckdb-schemas` 0.169.0, client 0.198.0).
+- `has_artifact` in the converged-opt warning now reports a file on an opt that has no energy; it was always false there.
+
+## Every scientific refusal and warning code has a register entry, or a stated reason it has none (2026-11-09)
+
+- **What changed:** the scientific check register grew from 52 to 80 entries. Twenty-eight new entries cover codes the API and the stored warnings already carried: the bath gas of a rate, network channel kind and state composition, declared energy levels and the one-to-one pairing of energies with optimisations, a calculation's own geometry statements, composite and single-point arithmetic, the subject a record's evidence and declarations belong to, curator identity attach, bond-additivity totals and scale factors, the enthalpy reference, the calculation dependency graph, and families of warnings against the uploaded evidence. Five further codes joined four existing entries where they are the same check. Every other catalogued code and rendered warning is now in `NOT_SCIENTIFIC` (`app/scientific_checks/not_scientific.py`) with a reason, and a test fails when a code is in neither the register nor that list. Twenty-two stored warnings now carry the register number of their entry (`record_warnings[].register_entry`), including those stored before this change, which are now numbered when read. Entry 18's text states the tolerance order since #864: reported log method, echoed input, recorded method or deck, assumed program default, 50 cm-1. Three refusals (`observation_identity_target_not_ground_state_minimum`, `observation_identity_hint_conflict`, `unsafe_lowest_energy_comparison`) are now coded errors; the two attach refusals no longer quote the observation's identity hint in their messages.
+- **Unchanged:** no refusal, warning, tier or tolerance changed.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.168.0 (generated contract text only), `tckdb-client` 0.197.0 (schemas window only).
+
 ## A thermo target says whose claim it is; imported CHEMKIN thermo declares its target (2026-11-09)
 
 - **What changed:**

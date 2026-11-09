@@ -92,6 +92,7 @@ from app.services.artifact_persistence import (
     link_artifacts_to_deposit_submission,
     persist_artifact_batch,
 )
+from app.services.artifact_warning_recheck import recheck_calculation_warnings
 from app.services.calculation_parameter_extraction import (
     inputs_first,
     try_extract_parameters_from_artifact_upload,
@@ -839,7 +840,9 @@ def upload_calculation_artifacts(
         )
         # Fill-when-absent: a freq log / ORCA .hess yields the Cartesian
         # force-constant matrix, bound to the calc's input geometry.
-        hessian_warning = try_extract_hessian_from_artifact_upload(session, calculation, art_in)
+        hessian_warning = try_extract_hessian_from_artifact_upload(
+            session, calculation, art_in, written_by=current_user.id
+        )
         if hessian_warning is not None:
             warnings.append(hessian_warning)
         # Fill-when-absent-or-degenerate: an opt calc's own input deck / log
@@ -868,6 +871,17 @@ def upload_calculation_artifacts(
             mark_checked=False,
             written_by=current_user.id,
         )
+
+    # Re-run the file-dependent checks; retirements commit or roll back with the attach.
+    warnings.extend(
+        recheck_calculation_warnings(
+            session,
+            calc_pk,
+            cause="artifact_attached",
+            submission_id=deposit_submission.id if deposit_submission is not None else None,
+            written_by=current_user.id,
+        )
+    )
 
     result = ArtifactsUploadResult(
         calculation_id=calc_pk,

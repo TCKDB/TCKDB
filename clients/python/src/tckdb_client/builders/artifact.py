@@ -15,10 +15,9 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import os
 import re
 import stat
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable
 
@@ -26,7 +25,6 @@ from tckdb_schemas.fragments.artifact import ArtifactIn
 
 from tckdb_client.builders.validation import (
     TCKDBBuilderValidationError,
-    ensure_non_empty_str,
     ensure_optional_non_empty_str,
 )
 
