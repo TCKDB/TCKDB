@@ -107,6 +107,16 @@ class RecordReviewRead(TimestampedCreatedByReadSchema):
         ),
     )
     status: RecordReviewStatus
+    #: Whether the reading actor may approve this record; set on the review queue only.
+    actor_may_approve: bool | None = Field(
+        default=None,
+        description=(
+            "Whether the signed-in reader may approve this record: false when "
+            "the self-approval rule would refuse them (record_self_approval). "
+            "Present on the review queue only; null on an approved or "
+            "rejected row and on every other route."
+        ),
+    )
     submission_id: int | None = None
     reviewed_by: int | None = None
     reviewed_at: datetime | None = None

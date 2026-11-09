@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.db.models.app_user import AppUser
-from app.db.models.common import RecordReviewStatus, ReproducibilityGrade, SubmissionRecordType
+from app.db.models.common import AppUserRole, RecordReviewStatus, ReproducibilityGrade, SubmissionRecordType
 from app.db.models.network import Network
 from app.db.models.reaction import ChemReaction
 from app.services.record_review import ensure_record_review, set_record_review_status
@@ -22,12 +22,16 @@ def _approved_network(db_session, *, name: str, actor: AppUser) -> Network:
         record_type=SubmissionRecordType.network,
         record_id=network.id,
     )
+    # Approved by someone else: ``actor`` created the network and may not approve it.
+    approver = AppUser(username=f"approver_of_{name}_{network.id}", role=AppUserRole.curator)
+    db_session.add(approver)
+    db_session.flush()
     set_record_review_status(
         db_session,
         record_type=SubmissionRecordType.network,
         record_id=network.id,
         status=RecordReviewStatus.approved,
-        actor=actor,
+        actor=approver,
     )
     return network
 

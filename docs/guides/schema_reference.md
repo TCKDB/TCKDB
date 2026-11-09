@@ -1166,7 +1166,7 @@ the gap.
 | `geometry_id` | BIGINT | no | — | geometry.id | — | not documented |
 | `natoms` | INTEGER | no | — | — | — | not documented |
 | `lower_triangle_hartree_bohr2` | FLOAT[] | no | — | — | — | not documented |
-| `source` | HessianSource (enum) | no | — | — | `parsed_fchk`, `parsed_hess`, `parsed_log`, `uploaded`, `derived` | not documented |
+| `source` | HessianSource (enum) | no | — | — | `parsed_fchk`, `parsed_hess`, `parsed_log`, `parsed_log_archive`, `uploaded`, `derived` | not documented |
 | `parser_name` | TEXT | yes | — | — | — | not documented |
 | `parser_version` | TEXT | yes | — | — | — | not documented |
 | `note` | TEXT | yes | — | — | — | not documented |

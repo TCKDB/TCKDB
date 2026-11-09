@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import DomainError, not_found
+from app.api.errors import DomainError, SubmissionSelfApprovalForbidden, not_found
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     AppUserRole,
@@ -551,7 +551,15 @@ def approve_submission(
     submission = _require_submission(session, submission_id)
 
     if submission.created_by == actor.id:
-        raise DomainError("Uploader cannot approve their own submission")
+        raise SubmissionSelfApprovalForbidden(
+            "submission_self_approval: You uploaded this submission, so you cannot "
+            "approve it; another curator or admin must.",
+            context=(
+                {"submission_ref": submission.public_ref}
+                if getattr(submission, "public_ref", None)
+                else {}
+            ),
+        )
 
     if submission.status not in _APPROVABLE_FROM:
         raise DomainError(

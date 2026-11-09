@@ -285,8 +285,11 @@ class RejectionCode(str, Enum):
     REACTION_REVERSIBLE_REQUIRED = "reaction_reversible_required"
     RECORD_HAS_NO_SUBJECT = "record_has_no_subject"
     RECORD_NOT_APPROVED = "record_not_approved"
+    RECORD_NOT_FOUND = "record_not_found"
     RECORD_REF_NOT_SELECTABLE = "record_ref_not_selectable"
+    RECORD_SELF_APPROVAL = "record_self_approval"
     RECORD_SUBJECT_MISMATCH = "record_subject_mismatch"
+    RECORD_TYPE_NOT_REVIEWABLE = "record_type_not_reviewable"
     RECORD_TYPE_NOT_SELECTABLE = "record_type_not_selectable"
     REFERENCE_CONFLICT = "reference_conflict"
     RELATIVE_CONFORMER_ENERGY_COMPARE_IDENTICAL_PROTOCOLS = "relative_conformer_energy_compare_identical_protocols"
@@ -369,6 +372,7 @@ class RejectionCode(str, Enum):
     STRUCTURE_SELECTION_TRAVERSAL_TOO_DEEP = "structure_selection_traversal_too_deep"
     STRUCTURE_SELECTION_UNSUPPORTED = "structure_selection_unsupported"
     SUBJECT_TYPE_MISMATCH = "subject_type_mismatch"
+    SUBMISSION_SELF_APPROVAL = "submission_self_approval"
     SUBMISSION_SUPERSEDE_NOT_OWNER = "submission_supersede_not_owner"
     SUPERSEDED_RECORD_NOT_APPROVABLE = "superseded_record_not_approvable"
     SUPERSEDES_SAME_RECORD = "supersedes_same_record"
@@ -632,6 +636,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.RECORD_NOT_APPROVED,
         RejectionCode.RECORD_REF_NOT_SELECTABLE,
         RejectionCode.RECORD_SUBJECT_MISMATCH,
+        RejectionCode.RECORD_TYPE_NOT_REVIEWABLE,
         RejectionCode.RECORD_TYPE_NOT_SELECTABLE,
         RejectionCode.RELATIVE_CONFORMER_ENERGY_COMPARE_IDENTICAL_PROTOCOLS,
         RejectionCode.RELATIVE_CONFORMER_ENERGY_POPULATION_TOO_LARGE,
@@ -1008,8 +1013,11 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.REACTION_REVERSIBLE_REQUIRED: frozenset({422}),
     RejectionCode.RECORD_HAS_NO_SUBJECT: frozenset({422}),
     RejectionCode.RECORD_NOT_APPROVED: frozenset({422}),
+    RejectionCode.RECORD_NOT_FOUND: frozenset({404}),
     RejectionCode.RECORD_REF_NOT_SELECTABLE: frozenset({422}),
+    RejectionCode.RECORD_SELF_APPROVAL: frozenset({403}),
     RejectionCode.RECORD_SUBJECT_MISMATCH: frozenset({422}),
+    RejectionCode.RECORD_TYPE_NOT_REVIEWABLE: frozenset({422}),
     RejectionCode.RECORD_TYPE_NOT_SELECTABLE: frozenset({422}),
     RejectionCode.REFERENCE_CONFLICT: frozenset({409}),
     RejectionCode.RELATIVE_CONFORMER_ENERGY_COMPARE_IDENTICAL_PROTOCOLS: frozenset({422}),
@@ -1092,6 +1100,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STRUCTURE_SELECTION_TRAVERSAL_TOO_DEEP: frozenset({422}),
     RejectionCode.STRUCTURE_SELECTION_UNSUPPORTED: frozenset({422}),
     RejectionCode.SUBJECT_TYPE_MISMATCH: frozenset({422}),
+    RejectionCode.SUBMISSION_SELF_APPROVAL: frozenset({403}),
     RejectionCode.SUBMISSION_SUPERSEDE_NOT_OWNER: frozenset({403}),
     RejectionCode.SUPERSEDED_RECORD_NOT_APPROVABLE: frozenset({409}),
     RejectionCode.SUPERSEDES_SAME_RECORD: frozenset({422}),

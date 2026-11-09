@@ -44,6 +44,10 @@ matrix:
   the final displacement (a complete Hessian);
 * the Gaussian ``opt`` + ``>13 atoms`` + missing ``IOp(2/9=2000)`` case
   (Arkane's standard-orientation trap) is skipped;
+* a Gaussian log with no force-constant block is read from its archive block
+  (:mod:`app.services.gaussian_archive_hessian`), and only when the matrix is
+  self-consistent with the archive's own atoms (rigid translations and
+  rotations annihilated);
 * the ORCA ``$atoms`` block is surfaced so the hook can cross-check the
   matrix's frame against the bound geometry's coordinates.
 """
@@ -464,6 +468,11 @@ def parse_hessian_from_artifact(
 
     result = parse_hessian(text)
     if result is None:
+        if software == "gaussian" and GAUSSIAN_HESSIAN_MARKER not in text:
+            # Only when the force-constant block is absent; a printed block that was declined is not second-guessed.
+            from app.services.gaussian_archive_hessian import read_gaussian_archive_hessian
+
+            return read_gaussian_archive_hessian(text).parsed
         return None
     natoms, packed = result
     return ParsedHessian(

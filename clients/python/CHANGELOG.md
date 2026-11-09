@@ -4,6 +4,18 @@
 
 `RejectionCode.THERMO_DECLARED_BY_TARGET_INCOHERENT` and `RejectionCode.THERMO_DECLARED_BY_RECORD_INCOHERENT` (422) join the refusal codes. Needs `tckdb-schemas` 0.167.0.
 
+## 0.195.0 - 2026-11-09
+
+`RejectionCode.RECORD_SELF_APPROVAL` (403), `SUBMISSION_SELF_APPROVAL` (403), `RECORD_NOT_FOUND` (404) and `RECORD_TYPE_NOT_REVIEWABLE` (422) join the refusal codes: the record-review and submission-approval routes refuse a depositor approving what they deposited, a record that does not exist, and an artifact. No other client code changed. The `tckdb-schemas` window moves to `>=0.158,<0.167`.
+
+## 0.194.0 - 2026-11-09
+
+The `tckdb-schemas` window is `>=0.158,<0.166`, for the schemas release that changes the assumed Hessian method (see its changelog). No client API changes.
+
+## 0.193.0 - 2026-11-09
+
+No client code changed. `HessianSource.parsed_log_archive` joins the enum and four reasons join `hessian_not_stored_unparseable` (see `tckdb-schemas` 0.164.0). The `tckdb-schemas` window now includes 0.164.
+
 ## 0.192.0 - 2026-11-09
 
 Ten `RejectionCode` members join the refusal codes for artifact uploads: `OUTPUT_LOG_SIGNATURE_UNRECOGNIZED`, `ARTIFACT_EMPTY`, `ARTIFACT_TOO_LARGE`, `ARTIFACT_SHA256_MISMATCH`, `ARTIFACT_SIZE_MISMATCH`, `ARTIFACT_NOT_UTF8_TEXT`, `ARTIFACT_INVALID_BASE64`, `ARTIFACT_TOTAL_SIZE_TOO_LARGE`, `ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE` and `ARTIFACT_TOTAL_ENCODED_PAYLOAD_TOO_LARGE` (see `tckdb-schemas` 0.163.0). The `tckdb-schemas` window moves to `>=0.158,<0.164`.

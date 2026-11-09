@@ -31,6 +31,18 @@ dataset must never require a code release.
   - Thermo selection of the formic acid model's 123 species answers `sole_eligible_candidate` instead of `no_applicable_candidate`.
 - **Schema and migration:** revision `e7a3c1d9f482` adds `thermo.thermodynamic_target_declared_by` (enum `thermo_declaration_source`, `NOT NULL DEFAULT 'depositor'`). **Versions:** `tckdb-schemas` 0.167.0, `tckdb-client` 0.196.0, `tckdb-chemkin` 0.7.0.
 
+## A depositor cannot approve their own record, and the record-review route checks what it is given (2026-11-09)
+
+- **What changed:** `PATCH /record-reviews/{record_type}/{record_id}` to `approved` compared the actor only with the review row's `created_by`, which is NULL when the curator's own request creates the row (a `species` or `reaction`, which no upload targets). The rule is now judged on every deposit signal: the review row's `created_by`, the record's own `created_by`, and the uploader of any submission linked to the record.
+  - Owned records (thermo, kinetics, statmech, transport, calculation, reaction entry, transition state and entry, network and solve, applied energy correction, conformer observation, molecular property observation) are refused to their depositor, judged on the record's own `created_by` and the review row's; linked-submission uploaders count only when both are NULL.
+  - Shared identities (`species`, `reaction`, `species_entry`, `conformer_group`) are refused only to their sole depositor, so who deposited first no longer decides. A `species` or `reaction` takes the signals of its entries.
+  - The bulk submission approval returns a record that is already approved untouched (reviewer, time and history stay), and does not judge it again.
+  - The review queue read carries `actor_may_approve` per row (false when the rule would refuse the reader; null on approved and rejected rows); the review page uses it to hide "approved" (it used to compare `created_by` with the signed-in user). Needs a frontend deploy.
+  - The refusal is now `record_self_approval`, HTTP 403 with `record_type` and `record_ref` in `context` (was an uncoded 400 `domain_error`).
+  - `POST /submissions/{id}/approve` by the submission's uploader now carries the code `submission_self_approval` (403, was an uncoded 400); the rule itself is unchanged.
+  - `PATCH /record-reviews` on a record that does not exist is a 404 `record_not_found`, and on `record_type=artifact` a 422 `record_type_not_reviewable`; before, either created a review row.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.166.0, `tckdb-client` 0.195.0.
+
 ## An xtb output file is accepted as an `output_log`, and artifact refusals carry codes (2026-11-09)
 
 - **What changed:**

@@ -238,32 +238,46 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 `thermodynamic_target.declared_by` is added to a thermo record's target declaration, with the enum `ThermoDeclarationSource` (`depositor`, the default, and `chemkin_format`). A `chemkin_format` target is refused unless it is `equilibrium_ensemble` (`thermo_declared_by_target_incoherent`) on a record with phase `gas` and a NASA-7 block (`thermo_declared_by_record_incoherent`). No field is removed.
 
+### 0.166.0 - 2026-11-09
+
+Four refusal codes join the producer contract; no field is added or removed: `record_self_approval` (403), `submission_self_approval` (403), `record_not_found` (404) and `record_type_not_reviewable` (422). They come from the record-review and submission-approval routes, which a producer does not call; a client that lists the codes sees them.
+
+### 0.165.0 - 2026-11-09
+
+The assumed Hessian method for an unrecorded `freq.hessian_method` changes for the methods below; a recorded, reported or echoed method still wins. One warning code is added, `hessian_method_refined`. No field or refusal code is added or removed.
+
+Gaussian:
+
+- `MP4`, `MP4(SDTQ)` and `MP5` are finite differences of energies (80 cm-1). `MP3`, `MP4(DQ)` and `MP4(SDQ)` stay finite differences of gradients (50).
+- `B2PLYP`, `B2PLYPD`, `B2PLYPD3`, `B2PLYPD3BJ`, `mPW2PLYP` and `mPW2PLYPD` are analytic (30). Other double hybrids assume nothing.
+- Method options are read: `MP4(SDTQ,FC)`, `MP4=FC`, `MP4 FC`, `CCSD(T,FC)`, `CCSD=(T,FC)`, `CCSD-T` and `QCISD(T,E4T)` map to the method without the option. `CCSD(T,FC)` was read as CCSD. `RO`, `CCSDT`, other tails and unknown options assume nothing.
+
+ORCA:
+
+- CCSD, CCSD(T), DLPNO and DLPNO2013 coupled cluster, `UHF-` / `ROHF-` prefixed coupled cluster and F12 methods (including F12-MP2 and `RI-MP2-F12`) are finite differences of energies (80) on every version. Other `DLPNO-*` methods assume nothing.
+- Open-shell DLPNO-MP2 and ROHF MP2 are finite differences of energies (80). Open shell is read from the level of theory's `spin_treatment` or a `UHF` / `ROHF` method prefix; with neither, the closed-shell row (50) applies. MP2, RI-MP2, SCS-MP2 and closed-shell DLPNO-MP2 stay at 50.
+- From ORCA 6, `AUTOCI-CCSD`, `AUTOCI-CCSD(T)`, `AUTOCI-MP2`, `AUTOCI-MP3`, `AUTOCI-MP4` and `AUTOCI-MP4(SDQ)` are finite differences of gradients (50) when the level of theory states `core_treatment` all-electron and `ri_approximation` none; otherwise, and for other AUTOCI methods, nothing is assumed.
+- Double hybrids written without a hyphen (`PBE0DH`, `PBEQIDH`, `PBE0-QIDH`, `wB97X2`, `B2KPLYP`, `B2TPLYP`) resolve as double hybrids: ORCA 50 instead of plain DFT 30, Gaussian nothing assumed.
+- An input deck or echoed input with `NumFreq` and no `NumGrad` for a method with no analytic gradient reads as finite differences of energies. For DLPNO-MP2 the deck's own open-shell evidence counts: a `UHF`, `UKS` or `ROHF` keyword, or a multiplicity above 1 on the coordinate line (`* xyz`, `*xyzfile`, `*intfile`, `*gzmtfile`, `*pdbfile`) or in a `%coords` block.
+- A recorded `finite_difference_gradient` against such a deck or echoed input is accepted (also when the level of theory states no spin treatment), stored as `finite_difference_energy` (80), and returned with `hessian_method_refined` (context `recorded`, `stored_method`, `stored_basis`, `refined_because`). A recorded `analytic` against `NumFreq`, and a recorded gradient method against `NumGrad` for a method with an analytic gradient, are still refused.
+
+Other:
+
+- `resolve_tau_with_assumption` and `infer_hessian_method` take `spin_treatment`, `core_treatment` and `ri_approximation` keyword arguments; `resolve_tau_with_assumption` also takes `numfreq_energy_implied`.
+- `tau_method_family` can be `mp4(sdq)`, `mp4(sdtq)`, `mp5`, `mp2-f12` or `autoci`; `mp4` is no longer written. `tau_assumption_rule` gains `orca_no_analytic_gradient`, `orca_open_shell_no_gradient` and `orca_autoci_gradient_from_6`.
+- `MP5`, `UMP5`, `F12-CCSD(T)`, `F12/RI-CCSD(T)` and the AUTOCI methods above now count as SCF-based, so a Gaussian `MP5` job gets the assumed `scf_convergence` of `tight`.
+
+### 0.164.0 - 2026-11-09
+
+`HessianSource` gains `parsed_log_archive`: a Cartesian Hessian read from a Gaussian log's archive block, for logs that print no `Force constants in Cartesian coordinates` block. The matrix is stored only when it is consistent with the archive's own atoms (rigid translations and rotations annihilated, using the archive gradient) and the atoms match the stored input geometry. No upload field changes.
+
+Four reasons join `hessian_not_stored_unparseable` (a warning; the artifact is stored either way): `archive_block_unreadable`, `archive_frame_inconsistent`, `archive_atoms_unsupported` and `archive_composite_geometry_mismatch` (a composite job whose final block is at a different geometry from its frequency step, as in G1, G2, G3 and CBS-APNO).
+
 ### 0.163.0 - 2026-11-09
 
 An xtb output file is recognised: `detect_software_from_text` returns `"xtb"` for `* xtb version N` and the boxed `x T B` title, and for xtb's `g98.out` (a Gaussian-98-layout file naming the xtb code). `SoftwareName` gains `"xtb"`. Nothing is parsed from an xtb log. An xtb file is accepted as an `output_log`.
 
 Ten artifact refusals gain codes (all 422, with `context`): `output_log_signature_unrecognized` (`supported`, `window_bytes`), `artifact_empty`, `artifact_too_large`, `artifact_sha256_mismatch`, `artifact_size_mismatch`, `artifact_not_utf8_text`, `artifact_invalid_base64` (the filename is in `context.depositor_supplied`), `artifact_total_size_too_large`, `artifact_encoded_payload_too_large` and `artifact_total_encoded_payload_too_large`.
-
-### 0.162.0 - 2026-11-09
-
-One refusal code is added, `reaction_family_conflict` (422), and one existing refusal gains a code. A reaction deposited under a family different from the one it is already recorded under was refused with an uncoded `validation_error` whose text quoted both family names, including depositor text. It is still refused; it now carries `reaction_family_conflict`, and the message names a family only when it comes from the seeded `reaction_family` vocabulary (as `context.recorded_family` and `context.supplied_family`; depositor text is never repeated). All three conflict shapes are refused: seeded against seeded, raw against raw, and seeded against raw in either order (before, a deposit that named a seeded family for a reaction recorded under raw text, or the reverse, was accepted). A computed-reaction bundle's `reaction_family` now applies to the bundle's own reaction only: a kinetics fit for another reaction no longer has it stamped on, or refused because of it. A network solve whose `bath_gas` mole fractions do not sum to 1 within 1e-9 now carries `kinetics_bath_gas_mole_fraction_sum`, the code a kinetics rate's bath gas already used, with the field `solve.bath_gas` and the sum and tolerance in `context`. One rule, one code, one tolerance. The message text changes; no model or payload shape changed.
-
-### 0.161.0 - 2026-11-07
-
-One refusal is narrowed and gains a `reason`; no field is added or removed. A kinetics record's `energy_level_of_theory` names method, basis and qualifiers, and its spin treatment is judged per participant against the linked reactant, product and transition-state energies:
-
-- every link must match the declared level on every identity field except spin (method, basis, aux/cabs basis, dispersion, solvent, solvent model, core treatment, relativistic Hamiltonian, PNO truncation, RI approximation);
-- a closed-shell link (multiplicity 1, computed restricted or restricted-open, or unrestricted with a stored ⟨S²⟩ at or below 0.1) never constrains spin;
-- the other links (every multiplicity above 1, and an unrestricted singlet with ⟨S²⟩ above 0.1 or none stored) must share one reference, unrestricted or restricted-open; a link of unknown spin is skipped. Otherwise `kinetics_energy_level_contradiction` carries `reason: open_shell_reference_mixed`;
-- a declaration that states no spin treatment is accepted; one that states it must equal that open-shell reference (or, with no open-shell link, every known link spin), else `reason: declared_spin_differs`.
-
-The same rule applies on `/uploads/kinetics` and bundle import, where it also decides which calculations a declared level finds: a calculation at the declared spin is preferred, a closed-shell one run restricted is eligible, and a radical with no calculation at the declared spin finds none. A violation refuses on the standalone route; on bundle import the level is stored without source calculations and `energy_level_stored_without_source_calculations` is returned, as when nothing matches. When an unrestricted singlet is counted as open-shell only because no `spin_diagnostic.s_squared` is stored for it, the refusal's context carries `s_squared_missing_for` (calculation refs) and its message asks for it. `energy_level_stored_without_source_calculations` gains the reason `contradiction` (calculations were found but contradict the declared level or each other on spin), distinct from `none` and `ambiguous`. A reaction mixing radicals computed unrestricted with closed-shell species computed restricted can therefore declare its method and basis (with or without `unrestricted`), and no longer draws `missing_level_of_theory_provenance`. Thermo and statmech declarations are unchanged. Sources: the 0.1 bound is the convention the wavefunction-reliability warning already uses (Williams et al. 2011, doi:10.1016/j.cplett.2011.01.020; Rettig et al. 2020, doi:10.1021/acs.jctc.0c00986; register entry 52). Restricted-open and unrestricted references are different levels for open-shell species (Wood et al. 2006 ROCBS-QB3, doi:10.1063/1.2335438; Henry, Sullivan and Radom 2003, G3-RAD).
-
-Contract text on the field: "The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant. When at least one participant is open-shell, closed-shell participants (singlets computed restricted, restricted-open, or unrestricted collapsing to restricted) do not constrain it; the open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference. When every participant is closed-shell, a stated spin treatment must match their spin treatment."
-
-### 0.160.0 - 2026-11-07
-
-One refusal code is added: `server_response_invalid` (500). The server failed its own response model, so the request was not at fault; nothing in it needs changing. Before this, that failure reached a client as a bare `text/plain` 500, or as a 422 that blamed the request. No model or payload shape changed.
 
 ## Every producer route
 
@@ -6549,7 +6563,7 @@ Unknown keys are refused.
 |---|---|---|---|---|---|---
 | `geometry` | [`GeometryPayload`](#m-geometrypayload) | yes |  |  |  | The geometry the Hessian was computed at.
 | `lower_triangle_hartree_bohr2` | array of number | yes |  | hartree/bohr^2 | length >= 1 | Packed lower triangle (with diagonal), row-major, length ``3N(3N+1)/2``, in hartree/bohr².
-| `source` | `HessianSource` | yes |  |  | `parsed_fchk`, `parsed_hess`, `parsed_log`, `uploaded`, `derived` | Where the matrix was obtained from.
+| `source` | `HessianSource` | yes |  |  | `parsed_fchk`, `parsed_hess`, `parsed_log`, `parsed_log_archive`, `uploaded`, `derived` | Where the matrix was obtained from.
 | `parser` | [`ParserStamp`](#m-parserstamp) \| null | no |  |  |  | Optional stamp (name and version) of the parser that produced the matrix.
 | `note` | string \| null | no |  |  |  | Optional free-text annotation.
 

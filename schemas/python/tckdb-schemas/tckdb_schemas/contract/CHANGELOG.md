@@ -4,6 +4,41 @@
 
 `thermodynamic_target.declared_by` is added to a thermo record's target declaration, with the enum `ThermoDeclarationSource` (`depositor`, the default, and `chemkin_format`). A `chemkin_format` target is refused unless it is `equilibrium_ensemble` (`thermo_declared_by_target_incoherent`) on a record with phase `gas` and a NASA-7 block (`thermo_declared_by_record_incoherent`). No field is removed.
 
+## 0.166.0 - 2026-11-09
+
+Four refusal codes join the producer contract; no field is added or removed: `record_self_approval` (403), `submission_self_approval` (403), `record_not_found` (404) and `record_type_not_reviewable` (422). They come from the record-review and submission-approval routes, which a producer does not call; a client that lists the codes sees them.
+
+## 0.165.0 - 2026-11-09
+
+The assumed Hessian method for an unrecorded `freq.hessian_method` changes for the methods below; a recorded, reported or echoed method still wins. One warning code is added, `hessian_method_refined`. No field or refusal code is added or removed.
+
+Gaussian:
+
+- `MP4`, `MP4(SDTQ)` and `MP5` are finite differences of energies (80 cm-1). `MP3`, `MP4(DQ)` and `MP4(SDQ)` stay finite differences of gradients (50).
+- `B2PLYP`, `B2PLYPD`, `B2PLYPD3`, `B2PLYPD3BJ`, `mPW2PLYP` and `mPW2PLYPD` are analytic (30). Other double hybrids assume nothing.
+- Method options are read: `MP4(SDTQ,FC)`, `MP4=FC`, `MP4 FC`, `CCSD(T,FC)`, `CCSD=(T,FC)`, `CCSD-T` and `QCISD(T,E4T)` map to the method without the option. `CCSD(T,FC)` was read as CCSD. `RO`, `CCSDT`, other tails and unknown options assume nothing.
+
+ORCA:
+
+- CCSD, CCSD(T), DLPNO and DLPNO2013 coupled cluster, `UHF-` / `ROHF-` prefixed coupled cluster and F12 methods (including F12-MP2 and `RI-MP2-F12`) are finite differences of energies (80) on every version. Other `DLPNO-*` methods assume nothing.
+- Open-shell DLPNO-MP2 and ROHF MP2 are finite differences of energies (80). Open shell is read from the level of theory's `spin_treatment` or a `UHF` / `ROHF` method prefix; with neither, the closed-shell row (50) applies. MP2, RI-MP2, SCS-MP2 and closed-shell DLPNO-MP2 stay at 50.
+- From ORCA 6, `AUTOCI-CCSD`, `AUTOCI-CCSD(T)`, `AUTOCI-MP2`, `AUTOCI-MP3`, `AUTOCI-MP4` and `AUTOCI-MP4(SDQ)` are finite differences of gradients (50) when the level of theory states `core_treatment` all-electron and `ri_approximation` none; otherwise, and for other AUTOCI methods, nothing is assumed.
+- Double hybrids written without a hyphen (`PBE0DH`, `PBEQIDH`, `PBE0-QIDH`, `wB97X2`, `B2KPLYP`, `B2TPLYP`) resolve as double hybrids: ORCA 50 instead of plain DFT 30, Gaussian nothing assumed.
+- An input deck or echoed input with `NumFreq` and no `NumGrad` for a method with no analytic gradient reads as finite differences of energies. For DLPNO-MP2 the deck's own open-shell evidence counts: a `UHF`, `UKS` or `ROHF` keyword, or a multiplicity above 1 on the coordinate line (`* xyz`, `*xyzfile`, `*intfile`, `*gzmtfile`, `*pdbfile`) or in a `%coords` block.
+- A recorded `finite_difference_gradient` against such a deck or echoed input is accepted (also when the level of theory states no spin treatment), stored as `finite_difference_energy` (80), and returned with `hessian_method_refined` (context `recorded`, `stored_method`, `stored_basis`, `refined_because`). A recorded `analytic` against `NumFreq`, and a recorded gradient method against `NumGrad` for a method with an analytic gradient, are still refused.
+
+Other:
+
+- `resolve_tau_with_assumption` and `infer_hessian_method` take `spin_treatment`, `core_treatment` and `ri_approximation` keyword arguments; `resolve_tau_with_assumption` also takes `numfreq_energy_implied`.
+- `tau_method_family` can be `mp4(sdq)`, `mp4(sdtq)`, `mp5`, `mp2-f12` or `autoci`; `mp4` is no longer written. `tau_assumption_rule` gains `orca_no_analytic_gradient`, `orca_open_shell_no_gradient` and `orca_autoci_gradient_from_6`.
+- `MP5`, `UMP5`, `F12-CCSD(T)`, `F12/RI-CCSD(T)` and the AUTOCI methods above now count as SCF-based, so a Gaussian `MP5` job gets the assumed `scf_convergence` of `tight`.
+
+## 0.164.0 - 2026-11-09
+
+`HessianSource` gains `parsed_log_archive`: a Cartesian Hessian read from a Gaussian log's archive block, for logs that print no `Force constants in Cartesian coordinates` block. The matrix is stored only when it is consistent with the archive's own atoms (rigid translations and rotations annihilated, using the archive gradient) and the atoms match the stored input geometry. No upload field changes.
+
+Four reasons join `hessian_not_stored_unparseable` (a warning; the artifact is stored either way): `archive_block_unreadable`, `archive_frame_inconsistent`, `archive_atoms_unsupported` and `archive_composite_geometry_mismatch` (a composite job whose final block is at a different geometry from its frequency step, as in G1, G2, G3 and CBS-APNO).
+
 ## 0.163.0 - 2026-11-09
 
 An xtb output file is recognised: `detect_software_from_text` returns `"xtb"` for `* xtb version N` and the boxed `x T B` title, and for xtb's `g98.out` (a Gaussian-98-layout file naming the xtb code). `SoftwareName` gains `"xtb"`. Nothing is parsed from an xtb log. An xtb file is accepted as an `output_log`.
