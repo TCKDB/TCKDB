@@ -2804,15 +2804,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship,
             note=(
                 "PATCH /record-reviews to approved, or the approval of a "
-                "submission whose linked record the actor deposited. A "
-                "depositor is any account named by the review row's "
-                "created_by, the record's own created_by, or the uploader of "
-                "a submission linked to it. Owned records (thermo, kinetics, "
-                "calculation and the like) are refused to any depositor; the "
-                "shared identities (species, reaction, species_entry, "
-                "conformer_group) only to their sole depositor, so deposit "
-                "order does not decide. A record the bulk submission path "
-                "re-stamps while already approved is not judged again. "
+                "submission whose linked record the actor deposited. Owned "
+                "records (thermo, kinetics, calculation and the like) are "
+                "judged on the record's own created_by and the review row's, "
+                "and on linked-submission uploaders only when both are NULL "
+                "(a link can merely cite another account's record); any "
+                "depositor is refused. The shared identities (species, "
+                "reaction, species_entry, conformer_group) are judged on "
+                "every signal and refused only to their sole depositor, so "
+                "deposit order does not decide. A record the bulk submission "
+                "path re-stamps while already approved is returned untouched "
+                "and not judged again. "
                 "context carries record_type and record_ref."
             )),
     ApiCode("record_type_not_reviewable", 422, Surface.coded_exception,

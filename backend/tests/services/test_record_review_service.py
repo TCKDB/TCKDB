@@ -591,10 +591,9 @@ class TestSelfApprovalRule:
         with pytest.raises(RecordSelfApprovalForbidden):
             self._approve(db_session, creator, SubmissionRecordType.species_entry, entry.id)
 
-    def test_owned_record_refuses_a_linked_uploader_even_when_row_creator_differs(self, db_session):
+    def test_owned_record_is_judged_on_its_creators_not_on_a_citing_link(self, db_session):
         row_creator = _user(db_session, "own_rowcreator", AppUserRole.curator)
-        uploader = _user(db_session, "own_uploader", AppUserRole.curator)
-        other = _user(db_session, "own_other", AppUserRole.curator)
+        citer = _user(db_session, "own_citer", AppUserRole.curator)
         _species, entry = self._entry(db_session)
         thermo = make_thermo_scalar(db_session, species_entry=entry)
         ensure_record_review(
@@ -603,12 +602,56 @@ class TestSelfApprovalRule:
             record_id=thermo.id,
             created_by=row_creator.id,
         )
-        self._deposit(db_session, uploader, SubmissionRecordType.thermo, thermo.id)
-        for actor in (row_creator, uploader):
-            with pytest.raises(RecordSelfApprovalForbidden):
-                self._approve(db_session, actor, SubmissionRecordType.thermo, thermo.id)
-        row = self._approve(db_session, other, SubmissionRecordType.thermo, thermo.id)
+        # The record names its creator, so another account's link only cites it.
+        self._deposit(db_session, citer, SubmissionRecordType.thermo, thermo.id)
+        with pytest.raises(RecordSelfApprovalForbidden):
+            self._approve(db_session, row_creator, SubmissionRecordType.thermo, thermo.id)
+        row = self._approve(db_session, citer, SubmissionRecordType.thermo, thermo.id)
         assert row.status is RecordReviewStatus.approved
+
+    def test_Q3_approving_a_submission_that_cites_anothers_record_is_allowed(self, db_session):
+        owner = _user(db_session, "q3_owner", AppUserRole.user)
+        citer = _user(db_session, "q3_citer", AppUserRole.user)
+        approver = _user(db_session, "q3_approver", AppUserRole.curator)
+        _species, entry = self._entry(db_session)
+        thermo = make_thermo_scalar(db_session, species_entry=entry)
+        thermo.created_by = owner.id
+        db_session.flush()
+        self._deposit(db_session, owner, SubmissionRecordType.thermo, thermo.id)
+        cite = self._deposit(db_session, citer, SubmissionRecordType.thermo, thermo.id)
+        # The citer, made a curator, may approve what they only cited.
+        citer.role = AppUserRole.curator
+        db_session.flush()
+        approve_submission(db_session, submission_id=cite.id, actor=approver)
+        row = self._approve(db_session, citer, SubmissionRecordType.thermo, thermo.id)
+        assert row.status is RecordReviewStatus.approved
+
+    def test_restamp_leaves_an_approved_record_untouched(self, db_session):
+        depositor_a = _user(db_session, "rs2_a", AppUserRole.curator)
+        approver_b = _user(db_session, "rs2_b", AppUserRole.curator)
+        uploader_c = _user(db_session, "rs2_c", AppUserRole.user)
+        _species, entry = self._entry(db_session)
+        thermo = make_thermo_scalar(db_session, species_entry=entry)
+        thermo.created_by = depositor_a.id
+        db_session.flush()
+        self._deposit(db_session, depositor_a, SubmissionRecordType.thermo, thermo.id)
+        self._approve(db_session, approver_b, SubmissionRecordType.thermo, thermo.id)
+        c_sub = self._deposit(db_session, uploader_c, SubmissionRecordType.thermo, thermo.id)
+        events_before = len(
+            list_record_review_events(
+                db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id
+            )
+        )
+        approve_submission(db_session, submission_id=c_sub.id, actor=depositor_a)
+        review = get_record_review(
+            db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id
+        )
+        assert review.reviewed_by == approver_b.id
+        assert len(
+            list_record_review_events(
+                db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id
+            )
+        ) == events_before
 
     def test_owned_record_refuses_its_own_created_by_with_no_link(self, db_session):
         depositor = _user(db_session, "dep_owner", AppUserRole.curator)

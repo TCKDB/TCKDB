@@ -78,6 +78,13 @@ export const RecordReviewSchema = z.object({
     reviewed_at: z.string().nullable().default(null),
     first_approved_at: z.string().nullable().default(null),
     note: z.string().nullable().default(null),
+    // Whether the signed-in reader may approve this row, computed by the
+    // server with the rule the PATCH enforces (`record_self_approval`): the
+    // page cannot reproduce it, because who deposited a record is not on the
+    // row (shared identities, linked submissions). `false` hides "approved";
+    // null (a server that predates the field, or a row already approved)
+    // offers it and leaves the refusal to the server.
+    actor_may_approve: z.boolean().nullable().default(null),
     created_at: z.string(),
     created_by: z.number().int().nullable().default(null),
 })

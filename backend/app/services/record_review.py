@@ -26,10 +26,12 @@ Disallowed by default — these intentionally route through
   ``deprecated`` → ``rejected``.
 
 Self-approval guard: an actor who deposited a record cannot transition it to
-``approved``. A depositor is any account named by the review row's
-``created_by``, the record's own ``created_by`` or the uploader of a
-submission linked to it. Shared identities (species, reaction, species entry,
-conformer group) are refused only to their sole depositor. Other transitions a
+``approved``. Shared identities (species, reaction, species entry, conformer
+group) are refused only to their sole depositor, judged on the review row's
+``created_by``, the record's own ``created_by`` and linked-submission
+uploaders. Every other record is refused to its depositor, judged on its own
+``created_by`` and the review row's (linked uploaders only when both are NULL,
+because a link can merely cite another account's record). Other transitions a
 creator can perform if they have the curator/admin role.
 """
 
@@ -528,35 +530,10 @@ _ENTRY_OF_IDENTITY: dict[SubmissionRecordType, tuple[SubmissionRecordType, str]]
 }
 
 
-def _depositor_ids(
+def _linked_uploaders(
     session: Session, *, record_type: SubmissionRecordType, record_id: int
 ) -> set[int]:
-    """Every account with a deposit signal on this record.
-
-    Three signals: the review row's ``created_by``, the record's own
-    ``created_by`` where its table has one, and the uploader of every
-    submission linked to it. A ``species`` or ``reaction`` has none of the
-    last two, so it takes the signals of its entries.
-    """
-    ids: set[int] = set()
-    review_creator = session.scalar(
-        select(RecordReview.created_by).where(
-            RecordReview.record_type == record_type,
-            RecordReview.record_id == record_id,
-        )
-    )
-    if review_creator is not None:
-        ids.add(review_creator)
-    if record_type in _ENTRY_OF_IDENTITY:
-        entry_type, fk = _ENTRY_OF_IDENTITY[record_type]
-        entry_model = RECORD_MODELS[entry_type]
-        entry_ids = list(
-            session.scalars(select(entry_model.id).where(getattr(entry_model, fk) == record_id))
-        )
-        for entry_id in entry_ids:
-            ids |= _depositor_ids(session, record_type=entry_type, record_id=entry_id)
-        return ids
-    ids.update(
+    return set(
         session.scalars(
             select(Submission.created_by)
             .join(SubmissionRecordLink, SubmissionRecordLink.submission_id == Submission.id)
@@ -566,12 +543,78 @@ def _depositor_ids(
             )
         )
     )
+
+
+def _own_creators(
+    session: Session, *, record_type: SubmissionRecordType, record_id: int
+) -> set[int]:
+    """The review row's ``created_by`` and the record's own ``created_by``."""
+    ids: set[int] = set()
+    review_creator = session.scalar(
+        select(RecordReview.created_by).where(
+            RecordReview.record_type == record_type,
+            RecordReview.record_id == record_id,
+        )
+    )
+    if review_creator is not None:
+        ids.add(review_creator)
     model = RECORD_MODELS.get(record_type)
     if model is not None and hasattr(model, "created_by"):
         owner = session.scalar(select(model.created_by).where(model.id == record_id))
         if owner is not None:
             ids.add(owner)
     return ids
+
+
+def _depositor_ids(
+    session: Session, *, record_type: SubmissionRecordType, record_id: int
+) -> set[int]:
+    """The accounts that deposited this record.
+
+    A shared identity takes every signal: the review row's ``created_by``,
+    the record's own ``created_by`` and the uploader of each linked
+    submission (a ``species`` or ``reaction`` takes those of its entries).
+
+    An owned record is judged on its own ``created_by`` and the review row's.
+    Linked-submission uploaders count only when both are NULL: a link can
+    merely cite a record another account deposited (a kinetics reusing a
+    reaction entry through its TS reference), and that citer is not its
+    depositor.
+    """
+    if record_type in _ENTRY_OF_IDENTITY:
+        entry_type, fk = _ENTRY_OF_IDENTITY[record_type]
+        entry_model = RECORD_MODELS[entry_type]
+        ids = _own_creators(session, record_type=record_type, record_id=record_id)
+        for entry_id in list(
+            session.scalars(select(entry_model.id).where(getattr(entry_model, fk) == record_id))
+        ):
+            ids |= _depositor_ids(session, record_type=entry_type, record_id=entry_id)
+        return ids
+    own = _own_creators(session, record_type=record_type, record_id=record_id)
+    if record_type in _SHARED_IDENTITIES:
+        return own | _linked_uploaders(session, record_type=record_type, record_id=record_id)
+    return own or _linked_uploaders(session, record_type=record_type, record_id=record_id)
+
+
+def actor_would_be_refused_approval(
+    session: Session,
+    *,
+    record_type: SubmissionRecordType,
+    record_id: int,
+    actor: AppUser,
+) -> bool:
+    """Whether the self-approval rule refuses ``actor`` approving this record.
+
+    Owned records are refused to any depositor; shared identities (species,
+    reaction, species entry, conformer group) only to their sole depositor,
+    so deposit order does not decide.
+    """
+    depositors = _depositor_ids(session, record_type=record_type, record_id=record_id)
+    if actor.id not in depositors:
+        return False
+    if record_type in _SHARED_IDENTITIES and depositors != {actor.id}:
+        return False
+    return True
 
 
 def _refuse_self_approval(
@@ -581,16 +624,10 @@ def _refuse_self_approval(
     record_id: int,
     actor: AppUser,
 ) -> None:
-    """Refuse approval by a depositor of the record (``record_self_approval``, 403).
-
-    Owned records are refused to any account with a deposit signal. Shared
-    identities are refused only when the actor is the sole depositor, so
-    deposit order does not decide who may approve.
-    """
-    depositors = _depositor_ids(session, record_type=record_type, record_id=record_id)
-    if actor.id not in depositors:
-        return
-    if record_type in _SHARED_IDENTITIES and depositors != {actor.id}:
+    """Refuse approval by a depositor of the record (``record_self_approval``, 403)."""
+    if not actor_would_be_refused_approval(
+        session, record_type=record_type, record_id=record_id, actor=actor
+    ):
         return
     context: dict[str, str] = {"record_type": record_type.value}
     refs = resolve_record_public_refs(session, [(record_type, record_id)])
@@ -623,12 +660,14 @@ def set_record_review_status(
 
     Self-approval guard (``record_self_approval``, 403) on a transition to
     :attr:`RecordReviewStatus.approved`: the actor is refused when they are a
-    depositor of the record, judged from the review row's ``created_by``, the
-    record's own ``created_by`` and the uploaders of its linked submissions.
-    Shared identities (``species``, ``reaction``, ``species_entry``,
-    ``conformer_group``) are refused only to their sole depositor; every other
-    record type to any depositor. ``restamp_exempt`` (the bulk submission
-    path) skips the guard for a record that is already approved. Other
+    depositor of the record. Shared identities (``species``, ``reaction``,
+    ``species_entry``, ``conformer_group``) are judged on every deposit signal
+    (review row ``created_by``, record ``created_by``, linked-submission
+    uploaders) and refused only to their sole depositor. Every other record
+    type is judged on its own ``created_by`` and the review row's, falling
+    back to linked uploaders only when both are NULL, and refused to any
+    depositor. ``restamp_exempt`` (the bulk submission path) returns an
+    already-approved record untouched. Other
     transitions are allowed for the creator if they meet the role check --
     self-deprecation and self-reopening are different trust problems than
     self-approval and are not blocked here.
@@ -663,6 +702,16 @@ def set_record_review_status(
                 actor_user_id=None,
             )
 
+    if (
+        restamp_exempt
+        and status is RecordReviewStatus.approved
+        and existing.status is RecordReviewStatus.approved
+    ):
+        # The bulk submission path re-stamping an approved record changes no
+        # trust state: the first approval was judged, and its reviewer, time
+        # and history stay as they were.
+        return existing
+
     previous_status = existing.status
     previous_reviewed_by = existing.reviewed_by
 
@@ -672,15 +721,12 @@ def set_record_review_status(
     )
 
     if status is RecordReviewStatus.approved:
-        # A restamp of an already-approved record by the bulk submission path
-        # changes no trust state; the first approval was judged.
-        if not (restamp_exempt and existing.status is RecordReviewStatus.approved):
-            _refuse_self_approval(
-                session,
-                record_type=record_type,
-                record_id=record_id,
-                actor=actor,
-            )
+        _refuse_self_approval(
+            session,
+            record_type=record_type,
+            record_id=record_id,
+            actor=actor,
+        )
         lock_scientific_records(session, (RecordRef(record_type, record_id),))
         # After the root lock, which ``supersede_scientific_record`` also takes,
         # so a concurrent supersession and approval serialize.

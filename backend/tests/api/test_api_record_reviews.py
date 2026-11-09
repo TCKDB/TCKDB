@@ -601,6 +601,19 @@ class TestRecordReviewApi:
         assert body["context"]["record_type"] == "species"
         assert body["context"]["record_ref"].startswith("spc_")
 
+    def test_the_queue_says_per_row_whether_the_reader_may_approve(
+        self, client, db_session, login_as, _api_curator_user
+    ):
+        login_as(_api_curator_user)
+        resp = client.post("/api/v1/uploads/conformers", json=_hydrogen_conformer_payload())
+        assert resp.status_code == 201, resp.text
+        queue = client.get("/api/v1/record-reviews/queue", params={"limit": 50})
+        assert queue.status_code == 200, queue.text
+        records = [r for s in queue.json()["subjects"] for r in s["records"]]
+        assert records
+        # The reader deposited all of it: nothing here is theirs to approve.
+        assert {r["actor_may_approve"] for r in records} == {False}
+
     def test_patch_on_a_record_that_does_not_exist_is_a_coded_404(
         self, client, login_as, _api_curator_user
     ):

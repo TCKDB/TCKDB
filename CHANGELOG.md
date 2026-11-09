@@ -25,9 +25,10 @@ dataset must never require a code release.
 ## A depositor cannot approve their own record, and the record-review route checks what it is given (2026-11-09)
 
 - **What changed:** `PATCH /record-reviews/{record_type}/{record_id}` to `approved` compared the actor only with the review row's `created_by`, which is NULL when the curator's own request creates the row (a `species` or `reaction`, which no upload targets). The rule is now judged on every deposit signal: the review row's `created_by`, the record's own `created_by`, and the uploader of any submission linked to the record.
-  - Owned records (thermo, kinetics, statmech, transport, calculation, reaction entry, transition state and entry, network and solve, applied energy correction, conformer observation, molecular property observation) are refused to any depositor.
+  - Owned records (thermo, kinetics, statmech, transport, calculation, reaction entry, transition state and entry, network and solve, applied energy correction, conformer observation, molecular property observation) are refused to their depositor, judged on the record's own `created_by` and the review row's; linked-submission uploaders count only when both are NULL, because a link can merely cite another account's record.
   - Shared identities (`species`, `reaction`, `species_entry`, `conformer_group`) are refused only to their sole depositor, so who deposited first no longer decides. A `species` or `reaction` takes the signals of its entries.
-  - The bulk submission approval skips the per-record check for a record that is already approved (a re-stamp changes no trust state).
+  - The bulk submission approval returns a record that is already approved untouched (reviewer, time and history stay), and does not judge it again.
+  - The review queue read carries `actor_may_approve` per row (false when the rule would refuse the reader); the review page uses it to hide "approved" (it used to compare `created_by` with the signed-in user). Needs a frontend deploy.
   - The refusal is now `record_self_approval`, HTTP 403 with `record_type` and `record_ref` in `context` (it was an uncoded 400 `domain_error`).
   - `POST /submissions/{id}/approve` by the submission's uploader now carries the code `submission_self_approval` (403, was an uncoded 400); the rule itself is unchanged.
   - `PATCH /record-reviews` on a record that does not exist is a 404 `record_not_found`, and on `record_type=artifact` a 422 `record_type_not_reviewable`; before, either created a review row.

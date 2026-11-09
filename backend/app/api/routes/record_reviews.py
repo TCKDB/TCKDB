@@ -47,6 +47,7 @@ from app.services.record_refs import (
     resolve_record_public_refs,
 )
 from app.services.record_review import (
+    actor_would_be_refused_approval,
     get_record_review,
     list_record_reviews,
     set_record_review_status,
@@ -143,7 +144,7 @@ def list_review_queue_page(
     status: RecordReviewStatus | None = Query(default=None),
     pagination: PaginationParams = Depends(),
     session: Session = Depends(get_db),
-    _user: AppUser = Depends(require_curator_or_admin),
+    actor: AppUser = Depends(require_curator_or_admin),
 ) -> ReviewQueuePageRead:
     """The review queue grouped by subject: one block per record a curator
     judges as one unit, every review row nested under it.
@@ -210,6 +211,19 @@ def list_review_queue_page(
                     row,
                     result.refs.get((row.record_type, row.record_id)),
                     result.containers.get((row.record_type, row.record_id)),
+                ).model_copy(
+                    update={
+                        "actor_may_approve": (
+                            None
+                            if row.status is RecordReviewStatus.approved
+                            else not actor_would_be_refused_approval(
+                                session,
+                                record_type=row.record_type,
+                                record_id=row.record_id,
+                                actor=actor,
+                            )
+                        )
+                    }
                 )
                 for row in subject.rows
             ],
