@@ -441,7 +441,7 @@ If your chemistry is legitimate: None needed: the link is stored as stated. Link
 
 What a record cites as evidence belongs to the record's own subject (its species, transition state or participant). A source of another subject's is that subject's evidence, not weaker evidence for this one.
 
-If your chemistry is legitimate: Cite the calculation, record or selection of the subject the record is about.
+If your chemistry is legitimate: Cite the calculation or statmech record of the subject the record is about.
 
 <a id="k-assert-statmech-owned-by"></a>
 

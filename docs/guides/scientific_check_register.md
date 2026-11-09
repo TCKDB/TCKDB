@@ -1527,7 +1527,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Enforced at.**
 
 - `assert_owned_by` — `backend/app/services/calculation_ownership.py::assert_owned_by`
-  *The shared seam; every source-calculation, statmech and conformer-selection owner code above arrives as its argument, through `assert_calculation_owned_by` and `assert_statmech_owned_by`.*
+  *The shared seam; every source-calculation and statmech owner code above arrives as its argument, through `assert_calculation_owned_by` and `assert_statmech_owned_by`.*
 - `owner_mismatch_error` — `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py::owner_mismatch_error`
   *Transport and stability source links, built once for the request schema and the workflow (ADR 0017).*
 - `assert_state_energy_source_owner` — `backend/app/services/network_energy_sources.py::assert_state_energy_source_owner`
@@ -1535,7 +1535,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - `assert_network_role_source_owner` — `backend/app/services/network_energy_sources.py::assert_network_role_source_owner`
 - `assert_state_participant_source_owner` — `backend/app/services/network_energy_sources.py::assert_state_participant_source_owner`
 
-**Escape hatch.** Cite the calculation, record or selection of the subject the record is about.
+**Escape hatch.** Cite the calculation or statmech record of the subject the record is about.
 
 ## Declarations against the record
 
@@ -1700,7 +1700,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Energy comparison
 
-### 74. Energies at different levels of theory or protocols are not compared: a lowest-energy selection is refused across levels and without the exact species entry and level it needs, and a protocol is not compared with itself.
+### 74. A lowest-energy selection compares energies of one level and one species entry, and a relative-energy comparison names two different protocols.
 
 | Field | Value |
 | --- | --- |

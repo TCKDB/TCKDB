@@ -882,7 +882,7 @@ _OPENINGS: dict[int, str] = {
     71: 'A thermo record that carries an enthalpy states wh',
     72: 'The graph of which calculation depends on which is',
     73: 'SCF stability verdicts do not cite one another as ',
-    74: 'Energies at different levels of theory or protocol',
+    74: 'A lowest-energy selection compares energies of one',
     75: 'An optimisation recorded as converged has an energ',
     76: "What a depositor typed about a calculation's setti",
     77: 'The electronic energy a tool states for a single p',

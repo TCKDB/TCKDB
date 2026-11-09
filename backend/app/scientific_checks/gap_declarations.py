@@ -677,7 +677,7 @@ CHECK_A_CITED_THING_IS_OF_THE_RECORDS_OWN_SUBJECT = ScientificCheck(
         PythonCheck(
             calculation_ownership.assert_owned_by,
             note=(
-                "The shared seam; every source-calculation, statmech and conformer-selection owner code above "
+                "The shared seam; every source-calculation and statmech owner code above "
                 "arrives as its argument, through ``assert_calculation_owned_by`` and ``assert_statmech_owned_by``."
             ),
         ),
@@ -690,7 +690,7 @@ CHECK_A_CITED_THING_IS_OF_THE_RECORDS_OWN_SUBJECT = ScientificCheck(
         PythonCheck(network_energy_sources.assert_network_role_source_owner),
         PythonCheck(network_energy_sources.assert_state_participant_source_owner),
     ),
-    escape_hatch="Cite the calculation, record or selection of the subject the record is about.",
+    escape_hatch="Cite the calculation or statmech record of the subject the record is about.",
 )
 
 # ---------------------------------------------------------------------------
@@ -958,9 +958,8 @@ CHECK_ENERGIES_AT_DIFFERENT_LEVELS_ARE_NOT_COMPARED = ScientificCheck(
         "relative_conformer_energy_compare_identical_protocols",
     ),
     asserts=(
-        "Energies at different levels of theory or protocols are not compared: a lowest-energy selection "
-        "is refused across levels and without the exact species entry and level it needs, and a protocol "
-        "is not compared with itself."
+        "A lowest-energy selection compares energies of one level and one species entry, and a "
+        "relative-energy comparison names two different protocols."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
