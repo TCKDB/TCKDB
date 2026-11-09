@@ -1380,9 +1380,13 @@ class TCKDBClient:
           whole batch with 422 and no DB rows or S3 writes survive,
           and a pass-2 storage failure compensates earlier S3 writes
           before returning 503. Returns a list of
-          :class:`ArtifactUploadBatchResult` records, one per
-          ``calculation_id`` group, preserving caller-supplied group
-          order and intra-group item order.
+          :class:`ArtifactUploadBatchResult` records, one per request,
+          preserving caller-supplied group order and intra-group item order.
+          A calculation's files are split into several requests when
+          together they exceed 64 MiB (the builders' inline budget), so one
+          request stays under the proxy body limit; the first request keeps
+          the key below, later ones end in ``artifact-batch-2``, ``-3``, ….
+          Atomicity is then per request, not per calculation.
 
         **Pre-dispatch validation** (both modes): every plan item
         must be a ``PlannedArtifactUpload``-like object with a
@@ -1474,8 +1478,26 @@ class TCKDBClient:
             cid: grp[0].calculation_ref for cid, grp in groups.items()
         }
 
-        results: list[ArtifactUploadBatchResult] = []
+        # One request must stay under the inline budget (the proxy body limit),
+        # so a calculation's files are split into several requests by size.
+        from tckdb_client.builders.artifact import INLINE_TOTAL_BUDGET_BYTES
+
+        chunks: list[tuple[int, int, list[Any]]] = []
         for calc_id, group_items in groups.items():
+            current: list[Any] = []
+            used = 0
+            n = 0
+            for item in group_items:
+                size = pathlib.Path(item.path).stat().st_size
+                if current and used + size > INLINE_TOTAL_BUDGET_BYTES:
+                    chunks.append((calc_id, n, current))
+                    current, used, n = [], 0, n + 1
+                current.append(item)
+                used += size
+            chunks.append((calc_id, n, current))
+
+        results: list[ArtifactUploadBatchResult] = []
+        for calc_id, chunk_no, group_items in chunks:
             artifact_payloads: list[dict[str, Any]] = []
             calc_keys: list[str] = []
             for item in group_items:
@@ -1502,8 +1524,12 @@ class TCKDBClient:
             idem: str | None = None
             if idempotency_key_prefix is not None:
                 first_key = calc_keys[0] if calc_keys else str(calc_id)
+                # The first request of a calculation keeps the long-standing
+                # key; later ones (only when the files exceed the budget) are
+                # numbered so each distinct body has its own key.
+                suffix = "artifact-batch" if chunk_no == 0 else f"artifact-batch-{chunk_no + 1}"
                 idem = validate_idempotency_key(
-                    f"{idempotency_key_prefix}:{first_key}:artifact-batch"
+                    f"{idempotency_key_prefix}:{first_key}:{suffix}"
                 )
 
             http = self.request_json(
