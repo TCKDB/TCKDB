@@ -10,7 +10,13 @@ from __future__ import annotations
 
 import json
 
-from app.db.models.common import ArtifactKind, CalculationType, SubmissionRecordType
+from app.db.models.common import (
+    ArtifactKind,
+    CalculationType,
+    PhaseKind,
+    SubmissionRecordType,
+    ThermoTargetKind,
+)
 from app.db.models.deposit_warning import DepositWarning
 from app.services.deposit.expected_outputs import render_json
 from scripts.paper import snapshot_generators
@@ -127,22 +133,87 @@ def test_deposit_warnings_group_by_code_and_count_checked_markers(db_session):
     assert out["warnings_total"] == sum(v["count"] for v in out["by_code"].values())
 
 
+def _declared_gas_thermo(db_session, entry):
+    """A thermo record that declares what the selection route needs to judge it: gas phase, equilibrium ensemble."""
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    thermo.thermodynamic_target_kind = ThermoTargetKind.equilibrium_ensemble
+    thermo.phase = PhaseKind.gas
+    db_session.flush()
+    return thermo
+
+
 def test_thermo_selection_outcomes_never_names_a_best_record(db_session):
+    """Two eligible records of one entry: the answer is the pair, and neither is picked."""
     species = make_species(db_session, smiles="C")
     entry = make_species_entry(db_session, species=species)
-    first = make_thermo_scalar(db_session, species_entry=entry)
-    second = make_thermo_scalar(db_session, species_entry=entry)
-    db_session.flush()
+    first = _declared_gas_thermo(db_session, entry)
+    second = _declared_gas_thermo(db_session, entry)
 
     out = snapshot_generators.thermo_selection_outcomes(db_session)
     row = next(r for r in out["entries"] if r["species_entry_ref"] == entry.public_ref)
     assert row["thermo_records"] == 2
-    assert row["outcome"] in {"sole_eligible_candidate", "incomparable_alternatives", "no_applicable_candidate"}
-    if row["outcome"] == "incomparable_alternatives":
-        # Several eligible records: the answer is the set, and no record is picked.
-        assert row["selected_thermo_ref"] is None
-        assert sorted(row["eligible_thermo_refs"]) == sorted([first.public_ref, second.public_ref])
-    assert sum(out["outcomes"].values()) == out["species_entries_assessed"]
+    assert row["outcome"] == "incomparable_alternatives"
+    assert row["selected_thermo_ref"] is None
+    assert sorted(row["eligible_thermo_refs"]) == sorted([first.public_ref, second.public_ref])
+    assert out["outcomes"]["incomparable_alternatives"] >= 1
     first_bytes = render_json(out)
     assert first_bytes == render_json(snapshot_generators.thermo_selection_outcomes(db_session))
     assert not _no_integer_ids(json.loads(first_bytes))
+
+
+def test_thermo_selection_outcomes_names_the_sole_eligible_record_as_the_only_one(db_session):
+    species = make_species(db_session, smiles="CC")
+    entry = make_species_entry(db_session, species=species)
+    only = _declared_gas_thermo(db_session, entry)
+
+    out = snapshot_generators.thermo_selection_outcomes(db_session)
+    row = next(r for r in out["entries"] if r["species_entry_ref"] == entry.public_ref)
+    assert row["outcome"] == "sole_eligible_candidate"
+    assert row["selected_thermo_ref"] == only.public_ref
+
+
+def test_thermo_selection_outcomes_says_when_a_record_declares_nothing(db_session):
+    species = make_species(db_session, smiles="CCC")
+    entry = make_species_entry(db_session, species=species)
+    make_thermo_scalar(db_session, species_entry=entry)  # no target, no phase
+
+    out = snapshot_generators.thermo_selection_outcomes(db_session)
+    row = next(r for r in out["entries"] if r["species_entry_ref"] == entry.public_ref)
+    assert row["outcome"] == "no_applicable_candidate"
+    assert "thermodynamic_target_not_declared" in row["reason_codes"]
+
+
+def test_structure_selection_outcomes_report_an_outcome_per_grain_and_name_no_first_record(db_session):
+    species = make_species(db_session, smiles="CCCC")
+    entry = make_species_entry(db_session, species=species)
+    group = make_conformer_group(db_session, entry)
+    observation = make_conformer_observation(db_session, conformer_group=group)
+    lot = make_lot(db_session, method="B3LYP", basis="def2-TZVP")
+    make_calculation_with_conformer(
+        db_session, species_entry=entry, conformer_observation=observation, type=CalculationType.opt, lot_id=lot.id
+    )
+
+    out = snapshot_generators.structure_selection_outcomes(db_session)
+    row = next(r for r in out["entries"] if r["species_entry_ref"] == entry.public_ref)
+    for grain in ("calculations", "conformers"):
+        assert row[grain]["outcome"]  # some outcome, stated
+        assert row[grain]["administrative_first_named"] is False  # result_mode all: no record is named first
+    assert set(out["outcomes_by_grain"]) == {"calculations", "conformers"}
+    assert not _no_integer_ids(json.loads(render_json(out)))
+
+
+def test_hessian_reanalysis_and_basins_list_records_by_content_not_by_ref(db_session):
+    """Two builds of the same data differ in refs; the order must not."""
+    from tests.services.scientific_read._factories import attach_freq_result
+
+    lot = make_lot(db_session, method="B3LYP", basis="def2-TZVP")
+    for smiles in ("CCO", "C", "CC"):
+        species = make_species(db_session, smiles=smiles)
+        entry = make_species_entry(db_session, species=species)
+        calc = make_calculation(db_session, type=CalculationType.freq, species_entry_id=entry.id, lot_id=lot.id)
+        attach_freq_result(db_session, calculation=calc, frequencies_cm1=[1000.0, 2000.0])
+
+    out = snapshot_generators.hessian_reanalysis(db_session)
+    smiles_in_order = [r["species_smiles"] for r in out["records"] if r["species_smiles"] in {"CCO", "C", "CC"}]
+    assert smiles_in_order == sorted(smiles_in_order)
+    assert all("species_smiles" in r and "level_of_theory" in r for r in out["records"])

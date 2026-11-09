@@ -193,6 +193,23 @@ class Session:
             self.depositor_key = minted.json()["key"]
 
 
+def digest_files(root: Path, files: list[Path]) -> dict[str, Any]:
+    """Count and one SHA-256 over (path relative to ``root``, SHA-256 of content) pairs, sorted.
+
+    The record of what a deposit read, without a single absolute path in it: the
+    same files give the same digest wherever the source tree sits.
+    """
+    import hashlib
+
+    pairs = []
+    for path in sorted(set(files)):
+        pairs.append((path.resolve().relative_to(root.resolve()).as_posix(), hashlib.sha256(path.read_bytes()).hexdigest()))
+    outer = hashlib.sha256()
+    for relative, digest in pairs:
+        outer.update(f"{relative}\0{digest}\n".encode())
+    return {"files": len(pairs), "sha256": outer.hexdigest()}
+
+
 SAFE = re.compile(r"[^A-Za-z0-9._:-]")
 
 
@@ -209,6 +226,7 @@ __all__ = [
     "TCKDBHTTPError",
     "api_base",
     "collect_response_warnings",
+    "digest_files",
     "error_code",
     "slug",
 ]

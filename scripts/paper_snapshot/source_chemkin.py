@@ -27,10 +27,12 @@ from tckdb_chemkin.parser import parse_mechanism
 from tckdb_chemkin.payloads import ImportConfig, build_all_payloads
 from tckdb_chemkin.uploader import upload_payloads
 
-from common import REPO_ROOT, Report, Session, collect_response_warnings
+from common import REPO_ROOT, Report, Session, collect_response_warnings, digest_files
 
 SOURCE = "chemkin_formic_acid"
 
+#: The citation, as the paper states it. The literature payload has no author field, so none is sent; if the server
+#: resolves the DOI it records the authors the registry gives (see ``literature_record``).
 DEFAULT_LITERATURE = {
     "kind": "article",
     "title": "Using RMG Out-of-the-Box for Formic Acid Pyrolysis and Oxidation",
@@ -64,14 +66,72 @@ class _Recorder:
         return response
 
 
+def _fixture(cfg: dict[str, Any]) -> Path:
+    fixture = Path(cfg.get("fixture_dir", "backend/tests/integration/fixtures/rmg_formic_acid_wu2026"))
+    return fixture if fixture.is_absolute() else REPO_ROOT / fixture
+
+
+def validate(cfg: dict[str, Any]) -> list[str]:
+    """Everything that can be checked before a single deposit is made."""
+    problems: list[str] = []
+    fixture = _fixture(cfg)
+    for name in (cfg.get("mechanism_file", "chem_annotated.inp"), cfg.get("species_dictionary", "species_dictionary.txt")):
+        if not (fixture / name).is_file():
+            problems.append(f"{SOURCE}: {name} not found in the configured fixture directory")
+    if cfg.get("scientific_origin", "estimated") not in ("experimental", "estimated", "computed"):
+        problems.append(f"{SOURCE}: scientific_origin must be experimental, estimated or computed")
+    return problems
+
+
+def describe_inputs(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Count and digest of the files the importer reads, for the snapshot record (no absolute paths)."""
+    fixture = _fixture(cfg)
+    names = (cfg.get("mechanism_file", "chem_annotated.inp"), cfg.get("species_dictionary", "species_dictionary.txt"))
+    return digest_files(fixture, [fixture / n for n in names])
+
+
+def literature_record(client: Any, literature: dict[str, Any] | None) -> dict[str, Any]:
+    """What the instance stored for the cited DOI, and where its title came from.
+
+    The server fetches metadata for a DOI from Crossref when it deposits a
+    literature row, so the stored row (title, authors) depends on whether that
+    lookup was reachable and what it returned at the time. ``title_source``
+    says which: ``resolved_metadata`` (fetched) or ``depositor_supplied``
+    (typed by the depositor, here the title in the sources config).
+    """
+    if not literature or not literature.get("doi"):
+        return {"literature_supplied": False}
+    for candidate in range(1, 8):  # a fresh instance holds the one row this deposit created
+        try:
+            detail = client.get_literature(candidate)
+        except Exception:  # noqa: BLE001 - a missing id ends the scan; it is not an error
+            continue
+        record = detail["record"]
+        identifiers = record.get("identifiers") or {}
+        if (identifiers.get("doi") or "").lower() != literature["doi"].lower():
+            continue
+        core = record["core"]
+        authors = record.get("authors") or []
+        return {
+            "literature_supplied": True,
+            "doi": identifiers.get("doi"),
+            "title_stored": core.get("title"),
+            "title_supplied_in_config": literature.get("title"),
+            "title_source": getattr(core.get("title_source"), "value", core.get("title_source")),
+            "metadata_resolved_by_the_server": core.get("title_source") == "resolved_metadata",
+            "authors_stored": len(authors),
+            "note": "Rebuilding offline, or after the registry changes the record, can change this row.",
+        }
+    return {"literature_supplied": True, "found_on_instance": False}
+
+
 def _duplicate_code(message: str) -> str:
     match = re.search(r"\b(orphan|undeclared)\b", message, flags=re.I)
     return "chemkin_duplicate_" + (match.group(1).lower() if match else "flag")
 
 
 def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Path) -> None:
-    fixture = Path(cfg.get("fixture_dir", "backend/tests/integration/fixtures/rmg_formic_acid_wu2026"))
-    fixture = fixture if fixture.is_absolute() else REPO_ROOT / fixture
+    fixture = _fixture(cfg)
     mechanism_file = cfg.get("mechanism_file", "chem_annotated.inp")
     dictionary_file = cfg.get("species_dictionary", "species_dictionary.txt")
     src = report.source(SOURCE)
@@ -106,6 +166,8 @@ def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Pat
         upload = upload_payloads(payloads, recorder, mechanism_id=mechanism_id)
     finally:
         client.close()
+    with session.client() as lit_client:
+        src["literature"] = literature_record(lit_client, config.literature)
     summary = upload.summary()
     src["upload"] = summary
     src["distinct_submissions"] = len(set(recorder.submission_refs))

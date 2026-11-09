@@ -18,7 +18,6 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -47,44 +46,60 @@ def create_curator(db_env: dict[str, str], username: str, password: str, email: 
     return done.stdout.strip()
 
 
-def approve_all(session: Session, username: str, password: str, report: Report, summary: str = APPROVAL_SUMMARY) -> dict[str, Any]:
-    """Log in as the curator and approve every pending submission, oldest first."""
+PAGE = 200
+
+
+def _pending(http: httpx.Client, session: Session, auth: dict[str, str]) -> list[dict[str, Any]]:
+    """Every submission awaiting review, paged until the listing is exhausted."""
+    rows: list[dict[str, Any]] = []
+    offset = 0
+    while True:
+        response = http.get(
+            session.base + "/submissions/for-review", params={"limit": PAGE, "offset": offset}, headers=auth
+        )
+        response.raise_for_status()
+        page = response.json()
+        if not page:
+            return rows
+        rows.extend(page)
+        offset += len(page)
+
+
+def approve_all(
+    session: Session, username: str, password: str, report: Report, summary: str = APPROVAL_SUMMARY
+) -> dict[str, Any]:
+    """Log in as the curator and approve every pending submission, oldest first.
+
+    The pending list is read to its end (not just the first page), each is approved once, and the list is read
+    again at the end: anything still pending, or any approval that failed, stops the build with an error.
+    """
     approved = 0
     failed: list[dict[str, Any]] = []
-    gave_up: set[int] = set()
     with httpx.Client(timeout=120.0) as http:
         login = http.post(session.base + "/auth/login", json={"username": username, "password": password})
         login.raise_for_status()
         auth = session.session_header(login)
-        while True:
-            page = http.get(session.base + "/submissions/for-review", params={"limit": 200}, headers=auth)
-            page.raise_for_status()
-            rows = page.json()
-            pending = [r for r in rows if r.get("status") not in ("approved", "rejected") and r["id"] not in gave_up]
-            if not pending:
-                break
-            progressed = 0
-            for row in sorted(pending, key=lambda r: r["id"]):
-                response = http.post(
-                    f"{session.base}/submissions/{row['id']}/approve",
-                    json={"summary": summary},
-                    headers=auth,
-                )
-                if response.status_code == 200:
-                    approved += 1
-                    progressed += 1
-                else:
-                    gave_up.add(row["id"])
-                    failed.append({"submission_ref": row.get("public_ref"), "status": response.status_code, "body": response.text[:300]})
-                    report.refusals.append(
-                        {
-                            "source": "curation",
-                            "where": f"approve {row.get('public_ref')}",
-                            "code": "submission_approve_" + str(response.status_code),
-                            "status": response.status_code,
-                            "message": response.text[:300],
-                        }
-                    )
-            if not progressed:
-                break
-    return {"approved_submissions": approved, "failed": failed, "summary_written": summary}
+        for row in sorted(_pending(http, session, auth), key=lambda r: r["id"]):
+            response = http.post(
+                f"{session.base}/submissions/{row['id']}/approve", json={"summary": summary}, headers=auth
+            )
+            if response.status_code == 200:
+                approved += 1
+                continue
+            failed.append({"submission_ref": row.get("public_ref"), "status": response.status_code, "body": response.text[:300]})
+            report.refusals.append(
+                {
+                    "source": "curation",
+                    "where": f"approve {row.get('public_ref')}",
+                    "code": "submission_approve_" + str(response.status_code),
+                    "status": response.status_code,
+                    "message": response.text[:300],
+                }
+            )
+        still_pending = _pending(http, session, auth)
+    if failed or still_pending:
+        raise RuntimeError(
+            f"approval incomplete: {approved} approved, {len(failed)} approval(s) failed, "
+            f"{len(still_pending)} submission(s) still pending; first failure: {failed[:1]}"
+        )
+    return {"approved_submissions": approved, "failed": failed, "pending_after": 0, "summary_written": summary}

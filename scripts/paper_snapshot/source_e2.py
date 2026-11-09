@@ -14,9 +14,16 @@ What is deliberately not deposited, and why, is written to the report:
 
 * ``fort.7`` (the Gaussian punch file), xtb's ``hessian``/``vibspectrum`` and
   the other xtb sidecars: no artifact kind admits those file names;
-* the GFN2-xTB level, unless ``gfn2_log_as`` is set: ``xtb.out`` is refused as
-  an ``output_log`` (the server knows no xtb header) and ``.out`` is not an
-  ``ancillary`` extension, so the level's log has no admissible slot.
+* the GFN2-xTB level: the server does not yet accept an xtb log as an
+  ``output_log`` (no xtb header in its ESS signature list) and ``.out`` is not
+  an ``ancillary`` extension, so the level has no admissible job file, and
+  this build deposits no number without its job file. Listing ``gfn2`` in
+  ``levels`` is refused at validation until the server accepts xtb logs.
+
+A task with a repair directory (``ethylene_glycol/c02`` at B3LYP; the others
+are excluded or outside the deposited levels) deposits the continuation's
+output: its geometry is the restart geometry from ``repair1``, and the first
+attempt's log (which stopped at the step limit) is not deposited.
 """
 
 from __future__ import annotations
@@ -37,7 +44,7 @@ from tckdb_client.builders import (
     Species,
 )
 
-from common import Report, Session, TCKDBError, collect_response_warnings, slug
+from common import Report, Session, TCKDBError, collect_response_warnings, digest_files, slug
 
 SOURCE = "e2_conformers"
 
@@ -253,7 +260,7 @@ def xyz_text(atoms: list[list[Any]], comment: str) -> str:
 # --------------------------------------------------------------------------
 
 
-def build_upload(task: Task, parsed: Parsed, levels: dict[str, Any], gfn2_log_as: str | None, staging: Path):
+def build_upload(task: Task, parsed: Parsed, levels: dict[str, Any]):
     spec = levels[task.level]
     software = SoftwareRelease(**spec["software"])
     level = LevelOfTheory(**spec["level"])
@@ -280,28 +287,58 @@ def build_upload(task: Task, parsed: Parsed, levels: dict[str, Any], gfn2_log_as
         zpe_hartree=parsed.zpe,
         depends_on=opt,
     )
-    if task.level == "gfn2":
-        if gfn2_log_as:
-            # Byte-identical copy under an admissible name; see the module docstring.
-            copy = staging / (slug(task.task) + "_xtb_out.txt")
-            copy.write_bytes((task.directory / "xtb.out").read_bytes())
-            for calc in (opt, freq):
-                calc.add_artifact(copy, "ancillary")
-    else:
-        for calc in (opt, freq):
-            calc.add_artifact(task.directory / "job.log", "output_log")
-            calc.add_artifact(task.directory / "job.gjf", "input")
+    for calc in (opt, freq):
+        calc.add_artifact(task.directory / "job.log", "output_log")
+        calc.add_artifact(task.directory / "job.gjf", "input")
     return ComputedSpeciesUpload(
         species=Species(smiles=task.smiles, charge=task.charge, multiplicity=task.multiplicity),
         calculations=[opt, freq],
     )
 
 
+LEVELS_AVAILABLE = ("b3lyp_d3bj", "wb97xd")
+GFN2_REFUSAL = (
+    "xtb output logs not yet accepted by the server (pending change); "
+    "the gfn2 level cannot be deposited with its job files"
+)
+
+
+def validate(cfg: dict[str, Any]) -> list[str]:
+    """Everything that can be checked before a single deposit is made."""
+    problems: list[str] = []
+    root = Path(str(cfg.get("root", ""))).expanduser()
+    if not cfg.get("root"):
+        problems.append(f"{SOURCE}: 'root' (the E2 directory) is required")
+    else:
+        for needed in ("raw_outputs/manifest_union.json", "raw_outputs/tasks.txt", "raw_outputs/tasks"):
+            if not (root / needed).exists():
+                problems.append(f"{SOURCE}: {needed} not found under the configured root")
+    levels = cfg.get("levels") or list(LEVELS_AVAILABLE)
+    for level in levels:
+        if level == "gfn2":
+            problems.append(f"{SOURCE}: {GFN2_REFUSAL}")
+        elif level not in LEVELS_AVAILABLE:
+            problems.append(f"{SOURCE}: unknown level {level!r}; available: {list(LEVELS_AVAILABLE)}")
+    if "gfn2_log_as" in cfg:
+        problems.append(f"{SOURCE}: 'gfn2_log_as' was removed; xtb logs are not deposited until the server accepts them")
+    return problems
+
+
+def describe_inputs(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Count and digest of the source files this deposit reads, for the snapshot record (no absolute paths)."""
+    root = Path(cfg["root"]).expanduser()
+    levels = list(cfg.get("levels") or LEVELS_AVAILABLE)
+    tasks, _ = load_tasks(root, levels)
+    files = [root / "raw_outputs" / "manifest_union.json", root / "raw_outputs" / "tasks.txt"]
+    for task in tasks:
+        files += [task.directory / "job.log", task.directory / "job.gjf"]
+    return digest_files(root, files)
+
+
 def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Path) -> None:
     root = Path(cfg["root"]).expanduser()
     levels_cfg = {**DEFAULT_LEVELS, **(cfg.get("level_definitions") or {})}
-    wanted = list(cfg.get("levels") or ["b3lyp_d3bj", "wb97xd"])
-    gfn2_log_as = cfg.get("gfn2_log_as")  # None | "ancillary"
+    wanted = list(cfg.get("levels") or LEVELS_AVAILABLE)
     src = report.source(SOURCE)
 
     all_levels = ["b3lyp_d3bj", "wb97xd", "gfn2"]
@@ -310,24 +347,25 @@ def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Pat
     src["provenance"] = provenance_check(root, tasks_all)
     skipped_levels = [lv for lv in all_levels if lv not in wanted]
     if skipped_levels:
-        report.note(
-            f"{SOURCE}: levels not deposited (config): {skipped_levels}. "
-            "GFN2-xTB: xtb.out is refused as output_log (no xtb header in the server's ESS signature list) and '.out' "
-            "is not an ancillary extension, so the level's log has no admissible artifact slot; "
-            "set gfn2_log_as: ancillary to deposit it as a byte-identical .txt copy."
-        )
+        report.note(f"{SOURCE}: levels not deposited: {skipped_levels}. For gfn2: {GFN2_REFUSAL}.")
     tasks = [t for t in tasks_all if t.level in wanted]
     if cfg.get("limit_tasks"):  # a smoke-test aid; leave unset for a real build
         tasks = tasks[: int(cfg["limit_tasks"])]
-    staging = work_dir / "staging"
-    staging.mkdir(parents=True, exist_ok=True)
 
     excluded: list[dict[str, Any]] = []
+    unreadable: list[str] = []
     client = session.client()
     sent = 0
     try:
         for index, task in enumerate(tasks, 1):
-            parsed = parse(task)
+            where = task.task
+            try:
+                parsed = parse(task)
+            except Exception as exc:  # an unreadable log is a recorded outcome, never fatal and never silent
+                report.refuse(SOURCE, where, exc)
+                report.count(SOURCE, "outputs_unreadable")
+                unreadable.append(task.task)
+                continue
             if not parsed.is_minimum(task.level):
                 excluded.append(
                     {
@@ -341,17 +379,14 @@ def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Pat
                 )
                 continue
             key = f"paper-snapshot:e2:{slug(task.task)}"
-            where = task.task
             try:
-                upload = build_upload(task, parsed, levels_cfg, gfn2_log_as, staging)
+                upload = build_upload(task, parsed, levels_cfg)
                 result = client.upload(upload, idempotency_key=key)
                 report.count(SOURCE, "uploads_accepted")
                 collect_response_warnings(report, SOURCE, where, result)
                 plan = upload.artifact_plan(result)
                 if plan:
-                    outcome = client.upload_artifacts(
-                        plan, idempotency_key_prefix=key, batch_by_calculation=True
-                    )
+                    outcome = client.upload_artifacts(plan, idempotency_key_prefix=key, batch_by_calculation=True)
                     for item in outcome:
                         report.count(SOURCE, "artifact_files_accepted", item.artifact_count)
                         for warning in item.warnings:
@@ -368,11 +403,11 @@ def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Pat
     finally:
         client.close()
     src["excluded_not_minima"] = excluded
+    src["outputs_unreadable"] = unreadable
     src["status"] = "deposited" if sent else "nothing deposited"
     src["levels_deposited"] = wanted
     src["tasks_attempted"] = len(tasks)
     src["not_deposited_files"] = {
         "gaussian": "fort.7 (punch file): no artifact kind admits the name",
-        "xtb": "xtb.out, hessian, vibspectrum, xtbopt.*, g98.out, charges, wbo: see module docstring",
         "repairs": "tasks with a repair directory deposit the continuation's output only (listed under provenance)",
     }

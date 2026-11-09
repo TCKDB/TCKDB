@@ -66,13 +66,20 @@ EXPECTED_OUTPUTS = (
     "calculation_evidence",
     "deposit_warnings",
     "hessian_reanalysis",
-    "selected_thermo_by_species",
     "thermo_selection_outcomes",
-    "candidate_lineage",
-    "transition_state_evidence",
+    "structure_selection_outcomes",
     "mechanism_roundtrip_counts",
     "mechanism_fixture_provenance",
 )
+#: Registered but not run: they would be empty. ``selected_thermo_by_species`` reads dataset-release selections (the
+#: snapshot publishes no release); ``candidate_lineage`` needs a species entry with several thermo candidates and
+#: ``transition_state_evidence`` needs transition states, which only the ARC runs (source 2) bring. Add them back
+#: when the sources that feed them exist.
+NOT_RUN_UNTIL_FED = ("selected_thermo_by_species", "candidate_lineage", "transition_state_evidence")
+
+#: Config keys that hold a path on the builder's machine. They are never written to ``snapshot_record.json``.
+PATH_KEYS = frozenset({"root", "fixture_dir", "adapter_path", "runs_root", "arkane_dir"})
+TOP_LEVEL_KEYS = frozenset({"instance", "sources", "accounts", "expected_outputs"})
 
 #: Deposit order (brief section 1): E2, formic acid, ARC runs, network.
 SOURCES = (
@@ -88,6 +95,30 @@ def load_config(path: Path) -> dict[str, Any]:
     config.setdefault("instance", {})
     config.setdefault("sources", {})
     return config
+
+
+def registered_generators() -> set[str]:
+    """Names in the generator registry, read as text so validation needs no database or app import."""
+    text = (REPO_ROOT / "backend" / "scripts" / "paper" / "registry.py").read_text()
+    return set(re.findall(r'^\s+"([a-z0-9_]+)":\s', text, flags=re.MULTILINE))
+
+
+def validate_config(config: dict[str, Any]) -> list[str]:
+    """Check the whole config, enabled stub sources included, before anything is deposited."""
+    problems = [f"unknown top-level key {k!r}" for k in sorted(set(config) - TOP_LEVEL_KEYS)]
+    known = {name for name, _ in SOURCES}
+    sources = config.get("sources") or {}
+    problems += [f"unknown source {k!r}; known: {sorted(known)}" for k in sorted(set(sources) - known)]
+    for name, module in SOURCES:
+        entry = sources.get(name)
+        if entry and entry.get("enabled", True):
+            problems += module.validate(entry)
+    if not any(e and e.get("enabled", True) for e in sources.values()):
+        problems.append("no source is enabled; there is nothing to build")
+    wanted = config.get("expected_outputs")
+    if wanted:
+        problems += [f"unknown generator {n!r}" for n in wanted if n not in registered_generators()]
+    return problems
 
 
 def database_env(instance: dict[str, Any]) -> dict[str, str]:
@@ -154,6 +185,24 @@ def package_versions() -> dict[str, Any]:
     return {"declared_by_this_checkout": declared, "imported_from_this_checkout": here}
 
 
+def source_records(config: dict[str, Any], report: Report) -> dict[str, Any]:
+    """Per source: its options without any path on this machine, and a digest of the files it read."""
+    records: dict[str, Any] = {}
+    for name, module in SOURCES:
+        entry = (config["sources"] or {}).get(name)
+        if not entry:
+            records[name] = {"status": report.source(name)["status"]}
+            continue
+        records[name] = {
+            "status": report.source(name)["status"],
+            "options": {k: v for k, v in entry.items() if k not in PATH_KEYS},
+            "input_files": module.describe_inputs(entry) if entry.get("enabled", True) else {},
+        }
+        if "literature" in report.source(name):
+            records[name]["literature"] = report.source(name)["literature"]
+    return records
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--sources", type=Path, required=True, help="sources config (see sources.example.yml)")
@@ -165,6 +214,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     config = load_config(args.sources)
+    problems = validate_config(config)
+    if problems:
+        print("The sources config is not valid; nothing was deposited:", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return 2
     instance = config["instance"]
     base_url = instance.get("api_url", "http://127.0.0.1:8010")
     out_dir = (args.out_dir or args.work_dir / "snapshot").resolve()
@@ -207,15 +262,17 @@ def main(argv: list[str] | None = None) -> int:
         outcome = curation.approve_all(session, curator["username"], curator["password"], report)
         approval = {"performed": True, "curator_account": created, **outcome,
                     "statement": "approval was done by the build script for a demonstration; it is not an independent review"}
-        print(f"[curation] approved {outcome['approved_submissions']} submissions, {len(outcome['failed'])} failed")
+        print(f"[curation] approved {outcome['approved_submissions']} submissions; none pending")
 
     exports: dict[str, Any] = {}
     if not args.skip_export:
         env = export.subprocess_env(db_env, PACKAGE_PATHS)
         archive = out_dir / "tckdb.archive"
         print("[export] archive ...")
-        exports["archive"] = export.create_archive(archive, env).strip().splitlines()
-        exports["archive_verify"] = export.verify_archive(archive, env).strip().splitlines()
+        written = export.create_archive(archive, env).strip().splitlines()
+        exports["archive_summary"] = written[-1] if written else ""
+        verified = export.verify_archive(archive, env).strip().splitlines()
+        exports["archive_verify"] = [ln for ln in verified if not ln.startswith("Checked ")]
         print("[export] expected outputs ...")
         wanted = list(config.get("expected_outputs") or EXPECTED_OUTPUTS)
         printed = export.expected_outputs(out_dir / "expected_outputs", env, only=wanted).splitlines()
@@ -227,8 +284,7 @@ def main(argv: list[str] | None = None) -> int:
         "snapshot": "TCKDB paper demonstration snapshot",
         "source_commit": git_commit(),
         "packages": package_versions(),
-        "sources_config": {k: {kk: vv for kk, vv in (v or {}).items()} for k, v in (config["sources"] or {}).items()},
-        "source_status": {k: v["status"] for k, v in report.sources.items()},
+        "sources": source_records(config, report),
         "approval": approval,
         "exports": exports,
         "built_at_unix": int(started),

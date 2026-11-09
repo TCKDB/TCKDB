@@ -9,9 +9,9 @@ builds, and so do timestamps. This tool states exactly how much it ignores.
 
 * **expected_outputs/**: per file, byte-identical or not. A file that is not
   byte-identical is compared again with every public ref replaced by a
-  placeholder and every list sorted (refs set the order the generators sort
-  by, so a different ref set reorders rows). The file is then reported as
-  ``identical after masking refs and ordering`` or ``DIFFERS``.
+  placeholder, and nothing else: no list is re-sorted, so a difference in row
+  order is a difference. The file is then reported as
+  ``identical after masking public refs`` or ``DIFFERS``.
 * **archive blobs**: the set of SHA-256 digests and sizes (job files), compared
   exactly.
 * **archive rows**: per table, the multiset of rows with timestamps removed,
@@ -48,19 +48,8 @@ def canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-def sort_lists(node: Any) -> Any:
-    if isinstance(node, dict):
-        return {k: sort_lists(v) for k, v in node.items()}
-    if isinstance(node, list):
-        return sorted((sort_lists(v) for v in node), key=canonical)
-    return node
-
-
-def mask_document(document: Any) -> Any:
-    return sort_lists(json.loads(mask_refs(canonical(document))))
-
-
 def compare_expected(one: Path, two: Path) -> dict[str, Any]:
+    """Per file: byte-identical, or identical once public refs are masked (nothing else is masked, nothing re-sorted)."""
     a, b = one / "expected_outputs", two / "expected_outputs"
     names = sorted({p.name for p in a.glob("*")} | {p.name for p in b.glob("*")})
     result: dict[str, str] = {}
@@ -70,12 +59,10 @@ def compare_expected(one: Path, two: Path) -> dict[str, Any]:
             result[name] = "DIFFERS: present in only one build"
         elif pa.read_bytes() == pb.read_bytes():
             result[name] = "byte-identical"
-        elif name.endswith(".json"):
-            same = mask_document(json.loads(pa.read_text())) == mask_document(json.loads(pb.read_text()))
-            result[name] = "identical after masking refs and ordering" if same else "DIFFERS"
+        elif mask_refs(pa.read_text()) == mask_refs(pb.read_text()):
+            result[name] = "identical after masking public refs"
         else:
-            # The Markdown rendering is a table view of the JSON next to it; the JSON verdict stands for it.
-            result[name] = "not compared (rendering of the .json beside it)"
+            result[name] = "DIFFERS"
     return result
 
 

@@ -38,3 +38,12 @@ def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Pat
         "source 'arc_runs' is configured but its deposit step is not implemented in this phase "
         "(waits on the Zeus re-runs); remove the entry or set enabled: false"
     )
+
+
+def validate(cfg: dict[str, Any]) -> list[str]:
+    """An enabled entry is a configuration error until the deposit step exists."""
+    return [SOURCE + ": configured and enabled, but its deposit step is not implemented in this phase"]
+
+
+def describe_inputs(cfg: dict[str, Any]) -> dict[str, Any]:
+    return {}

@@ -27,7 +27,7 @@ dataset must never require a code release.
 - **What changed:**
   - `scripts/paper_snapshot/` builds the snapshot on an empty local instance from a sources config: the E2 conformer study through the client builders, the formic acid RMG model through the CHEMKIN adapter, a build-script curator approval (recorded as a demonstration), the archive export and the expected outputs. Sources 2 (ARC runs) and 3 (N2H3 network) are stubs behind configuration.
   - `backend/scripts/paper/`: `hessian_reanalysis` is registered; new generators `conformer_basins`, `calculation_evidence`, `deposit_warnings`, `thermo_selection_outcomes`; `mechanism_roundtrip_counts` and `mechanism_fixture_provenance` report on the formic acid model (and the first also on what the database holds for it).
-  - `tckdb-chemkin` no longer reuses one idempotency key for two species that share a SMILES and differ in spin (singlet and triplet CH2 or O); the second was refused as `idempotency_conflict` and its thermo never deposited. The first occurrence keeps its old key.
+  - `tckdb-chemkin` keys a species record (thermo, transport) by its structure and spin (SMILES, multiplicity, and charge when not zero) instead of by SMILES alone, so singlet and triplet CH2 or O no longer share one idempotency key (the second was refused as `idempotency_conflict` and its thermo never deposited), and the key no longer depends on file order. Two species of one mechanism that still share all three are keyed by their CHEMKIN label, and the import report says so. Keys of earlier imports are not kept.
 - **Schema and migration:** none. **Versions:** `tckdb-chemkin` 0.6.1.
 
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)

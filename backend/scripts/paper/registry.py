@@ -55,6 +55,7 @@ GENERATORS: dict[str, Generator] = {
     "calculation_evidence": snapshot_generators.calculation_evidence,
     "deposit_warnings": snapshot_generators.deposit_warnings,
     "thermo_selection_outcomes": snapshot_generators.thermo_selection_outcomes,
+    "structure_selection_outcomes": snapshot_generators.structure_selection_outcomes,
 }
 
 __all__ = ["GENERATORS"]

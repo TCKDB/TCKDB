@@ -32,6 +32,8 @@ anything real.
 
 from __future__ import annotations
 
+import json
+import re
 from collections import Counter, defaultdict
 from typing import Any
 
@@ -74,6 +76,20 @@ def _level_label(lot) -> str:
     return label + (" [" + ", ".join(str(x) for x in extras) + "]" if extras else "")
 
 
+_REF = re.compile(r"\b[a-z]{2,6}_[a-z2-7]{26}\b")
+
+
+def _content_key(row: dict[str, Any]) -> str:
+    """The row as canonical JSON with every public ref blanked.
+
+    Public refs are random per instance, so ordering by them gives a different
+    row order in two builds of the same data. Ordering by everything else makes
+    the order a function of the content; rows that tie are identical apart from
+    their refs.
+    """
+    return _REF.sub("", json.dumps(row, sort_keys=True, default=str))
+
+
 def _software_label(release) -> str:
     if release is None:
         return "(no software)"
@@ -93,8 +109,33 @@ def hessian_reanalysis(session: Session) -> dict[str, Any]:
     list. A calculation without a stored Hessian is reported with status
     ``hessian_not_stored`` and counted in ``scope.by_status``; refusals are
     counted, never dropped.
+
+    Each record also names the species (SMILES and multiplicity), the level of
+    theory and the calculation type, and the records are ordered by those and
+    then by content, not by public ref, so two builds of the same data list
+    them in the same order.
     """
-    return _hessian_reanalysis(session, include_modes=True)
+    out = _hessian_reanalysis(session, include_modes=True)
+    by_ref = {
+        calc.public_ref: calc
+        for calc in session.scalars(select(Calculation).where(Calculation.public_ref.in_([r["calculation_ref"] for r in out["records"]])))
+    }
+    for record in out["records"]:
+        calc = by_ref.get(record["calculation_ref"])
+        entry = calc.species_entry if calc is not None else None
+        record["species_smiles"] = entry.species.smiles if entry is not None else None
+        record["species_multiplicity"] = entry.species.multiplicity if entry is not None else None
+        record["level_of_theory"] = _level_label(calc.lot) if calc is not None else None
+    out["records"].sort(
+        key=lambda r: (
+            r["species_smiles"] or "",
+            r["species_multiplicity"] or 0,
+            r["level_of_theory"] or "",
+            r["calculation_type"] or "",
+            _content_key(r),
+        )
+    )
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +191,7 @@ def conformer_basins(session: Session) -> dict[str, Any]:
                     "number_of_levels": len(levels),
                 }
             )
+        group_rows.sort(key=lambda g: (g["number_of_levels"], sorted(g["levels_observing"].items()), g["observations"], _content_key(g)))
         total_groups += len(groups)
         total_observations += entry_observations
         rows.append(
@@ -164,6 +206,7 @@ def conformer_basins(session: Session) -> dict[str, Any]:
                 "groups": group_rows,
             }
         )
+    rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], _content_key(r)))
     return {
         "species_entries_with_conformers": len(rows),
         "conformer_groups": total_groups,
@@ -309,6 +352,7 @@ def thermo_selection_outcomes(session: Session) -> dict[str, Any]:
                 {
                     "species_entry_ref": entry.public_ref,
                     "species_smiles": entry.species.smiles,
+                    "multiplicity": entry.species.multiplicity,
                     "outcome": outcome,
                     "thermo_records": len(candidates),
                     "eligible_thermo_refs": eligible,
@@ -316,10 +360,73 @@ def thermo_selection_outcomes(session: Session) -> dict[str, Any]:
                     "reason_codes": sorted({r["code"] for c in candidates for r in c["assessment"]["reasons"]}),
                 }
             )
+        rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], _content_key(r)))
         return {
             "species_entries_assessed": len(rows),
             "outcomes": dict(sorted(tally.items())),
             "candidate_reason_codes": dict(sorted(reasons.items())),
+            "entries": rows,
+        }
+    finally:
+        if owned:
+            work.rollback()
+            work.close()
+
+
+# ---------------------------------------------------------------------------
+# structure_selection_outcomes
+# ---------------------------------------------------------------------------
+
+
+def structure_selection_outcomes(session: Session) -> dict[str, Any]:
+    """For each species entry with conformers: what the calculation and conformer selections answer.
+
+    Runs the services behind ``POST /species-entries/{ref}/calculations/select``
+    (intent ``recorded_minimum``) and ``.../conformers/select`` (intent
+    ``validated_minimum``), each with its default request: electronic energy,
+    default eligibility, exploratory profile, ``result_mode`` all. A value is
+    ordered only inside one cohort (the same established recipe); entries with
+    determinations at several recipes end as ``incomparable_alternatives``,
+    and no outcome names a method winner. ``administrative_first_named`` is
+    reported so a change that starts naming one is visible.
+    """
+    from app.schemas.reads.scientific_structure_selection import (
+        CalculationSelectionRequest,
+        ConformerSelectionRequest,
+    )
+    from app.services.structure_selection.public import run_selection
+
+    work, owned = _selection_session(session)
+    try:
+        entry_ids = sorted({g.species_entry_id for g in work.scalars(select(ConformerGroup))})
+        entries = [work.get(SpeciesEntry, i) for i in entry_ids]
+        requests = (("calculations", CalculationSelectionRequest()), ("conformers", ConformerSelectionRequest()))
+        rows: list[dict[str, Any]] = []
+        tally: dict[str, Counter[str]] = {grain: Counter() for grain, _ in requests}
+        for entry in entries:
+            row: dict[str, Any] = {
+                "species_smiles": entry.species.smiles,
+                "multiplicity": entry.species.multiplicity,
+                "species_entry_ref": entry.public_ref,
+            }
+            for grain, body in requests:
+                selection = run_selection(work, entry_id=entry.id, body=body)
+                manifest = selection.manifest
+                decision = manifest["decision"]
+                outcome = manifest["outcome"]
+                tally[grain][outcome] += 1
+                row[grain] = {
+                    "outcome": outcome,
+                    "visible_units": manifest["population"]["visible_units"],
+                    "cohorts": len(decision["cohorts"]),
+                    "selected_refs": len(decision["selected_refs"]),
+                    "administrative_first_named": decision["administrative_first"] is not None,
+                }
+            rows.append(row)
+        rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], _content_key(r)))
+        return {
+            "species_entries_assessed": len(rows),
+            "outcomes_by_grain": {grain: dict(sorted(counts.items())) for grain, counts in tally.items()},
             "entries": rows,
         }
     finally:
@@ -333,5 +440,6 @@ __all__ = [
     "conformer_basins",
     "deposit_warnings",
     "hessian_reanalysis",
+    "structure_selection_outcomes",
     "thermo_selection_outcomes",
 ]
