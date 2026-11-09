@@ -169,7 +169,7 @@ _ORCA_NUMFREQ_NUMGRAD = "! CCSD def2-SVP NumFreq NumGrad\n* xyz 0 2\nH 0 0 0\n*\
 def test_gradient_against_energy_names_both_methods(client, db_session):
     """A stored finite-difference-from-gradients basis and a NumFreq+NumGrad deck."""
     payload = _payload(imag_freq_cm1=-40.0, label="late-grad-energy", software={"name": "ORCA", "version": "6.0.1"})
-    payload["additional_calculations"][0]["level_of_theory"] = {"method": "CCSD", "basis": "def2-SVP"}
+    payload["additional_calculations"][0]["level_of_theory"] = {"method": "MP2", "basis": "def2-SVP"}
     resp = client.post("/api/v1/uploads/conformers", json=payload)
     assert resp.status_code == 201, resp.text
     freq = db_session.scalars(

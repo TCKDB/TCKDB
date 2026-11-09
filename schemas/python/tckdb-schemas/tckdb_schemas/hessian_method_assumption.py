@@ -127,12 +127,14 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from dataclasses import replace
 
 from tckdb_schemas.enums import HessianMethod
 from tckdb_schemas.hessian_method_detection import (
     check_recorded_method_agrees_with_deck,
     deck_hessian_method,
     echo_hessian_method,
+    orca_numfreq_refines_gradient_to_energy,
 )
 from tckdb_schemas.hessian_method_reported import reported_method_of_artifacts
 from tckdb_schemas.software import normalize_software_name
@@ -840,7 +842,11 @@ def resolve_tau_with_assumption(
     1. A recorded ``freq.hessian_method`` (and the grid / convergence
        parameters that refine it) resolves through
        :func:`~tckdb_schemas.stationary_point.resolve_tau_from_parameters`,
-       and always wins.
+       and always wins, with one refinement: a recorded ``finite_difference_gradient`` for an ORCA method with no
+       analytic gradient, against a deck (or echoed input) that asks for ``NumFreq`` (read as finite differences of
+       energies), resolves as ``finite_difference_energy`` (80 cm-1) and carries ``refined_from``; ORCA's
+       ``NumFreq`` differences gradients, and for such a method they are numerical. A recorded ``analytic`` against
+       ``NumFreq`` is still refused.
     2. A method the calculation's own inline input deck states
        (:mod:`tckdb_schemas.hessian_method_detection`). A deposited deck is
        evidence, not an assumption; where it and a recorded parameter
@@ -864,11 +870,34 @@ def resolve_tau_with_assumption(
     :param echo_method: The method the input echoed in the inline output logs requests, if any.
     """
     pairs = list(parameters)
+    recorded_exact: HessianMethod | None = None
+    for key, value in pairs:
+        if key == "freq.hessian_method" and value and value.strip():
+            try:
+                recorded_exact = HessianMethod(value.strip().lower())
+            except ValueError:
+                recorded_exact = None
+
+    def refines(stated: HessianMethod | None) -> bool:
+        return orca_numfreq_refines_gradient_to_energy(
+            normalize_software_name(software_name) if software_name else None, lot_method, recorded_exact, stated
+        )
+
     # The log's report, then the input the log echoes, outrank the recorded parameter and the deck: the same order
     # the stored rows are ranked in (:mod:`app.services.parameter_reconciliation`).
-    for method in (reported_method, echo_method):
-        if method is not None:
-            return resolve_tau_from_parameters([*pairs, ("freq.hessian_method", method.value)])
+    if reported_method is not None:
+        return resolve_tau_from_parameters([*pairs, ("freq.hessian_method", reported_method.value)])
+    if echo_method is not None:
+        echoed = resolve_tau_from_parameters([*pairs, ("freq.hessian_method", echo_method.value)])
+        if refines(echo_method):
+            return replace(echoed, refined_from=recorded_exact.value)
+        return echoed
+    if deck_method is not None and refines(deck_method):
+        # A recorded finite difference of gradients and a deck asking ORCA for NumFreq on a method with no analytic
+        # gradient are one statement: the gradients are numerical, so the Hessian is built from energies. Refined,
+        # not contradicted, and said so (``hessian_method_refined``).
+        deck_refined = resolve_tau_from_parameters([*pairs, ("freq.hessian_method", deck_method.value)])
+        return replace(deck_refined, refined_from=recorded_exact.value)
     resolved = resolve_tau_from_parameters(pairs)
     if resolved.basis is not TauBasis.protocol_not_recorded:
         return resolved
@@ -943,7 +972,17 @@ def check_calculation_deck_agrees(calc) -> None:
     """
     parameters = [(o.canonical_key, o.canonical_value) for o in (calc.parameters or ())]
     key = getattr(calc, "key", None)
-    check_recorded_method_agrees_with_deck(parameters, calculation_deck_method(calc), calculation_key=key)
+    release = calc.software_release
+    software = release.name if release is not None else None
+    lot_method = calc.level_of_theory.method
     check_recorded_method_agrees_with_deck(
-        parameters, calculation_echo_method(calc), calculation_key=key, stated_in="output_log"
+        parameters, calculation_deck_method(calc), calculation_key=key, software=software, lot_method=lot_method
+    )
+    check_recorded_method_agrees_with_deck(
+        parameters,
+        calculation_echo_method(calc),
+        calculation_key=key,
+        stated_in="output_log",
+        software=software,
+        lot_method=lot_method,
     )

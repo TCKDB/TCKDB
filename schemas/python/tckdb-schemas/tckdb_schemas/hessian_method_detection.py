@@ -55,6 +55,7 @@ __all__ = [
     "hessian_method_class",
     "orca_freq_hessian",
     "orca_lacks_analytic_gradient",
+    "orca_numfreq_refines_gradient_to_energy",
 ]
 
 #: Gaussian ``Freq`` options that name the second-derivative method. Only
@@ -398,6 +399,28 @@ def orca_lacks_analytic_gradient(method: str | None) -> bool:
     return "f12" in token and "mp2" in token
 
 
+def orca_numfreq_refines_gradient_to_energy(
+    software: str | None,
+    lot_method: str | None,
+    recorded: HessianMethod | None,
+    stated: HessianMethod | None,
+) -> bool:
+    """True when a recorded ``finite_difference_gradient`` is refined to ``finite_difference_energy``, not contradicted.
+
+    ORCA's ``NumFreq`` always takes finite differences of gradients. For a method with no analytic gradient
+    (:func:`orca_lacks_analytic_gradient`) those gradients are themselves numerical, built from energies, so a deck
+    (or the input an output log echoes) that states finite differences of energies for such a method says the same
+    thing as a recorded finite difference of gradients, in more detail. Only that pair, only for ORCA: a recorded
+    ``analytic`` against ``NumFreq`` stays a contradiction.
+    """
+    return (
+        recorded is HessianMethod.finite_difference_gradient
+        and stated is HessianMethod.finite_difference_energy
+        and (software or "").strip().lower() == "orca"
+        and orca_lacks_analytic_gradient(lot_method)
+    )
+
+
 def orca_freq_hessian(keywords: Iterable[str]) -> tuple[str, HessianMethod] | None:
     """The Hessian method the ORCA keywords state, as ``(directive as written, method)``.
 
@@ -570,6 +593,8 @@ def check_recorded_method_agrees_with_deck(
     *,
     calculation_key: str | None = None,
     stated_in: str = "input",
+    software: str | None = None,
+    lot_method: str | None = None,
 ) -> None:
     """Refuse a recorded ``freq.hessian_method`` that the input deck (or the input a log echoes) contradicts.
 
@@ -585,6 +610,10 @@ def check_recorded_method_agrees_with_deck(
     The message is built from the code and TCKDB's own words ("analytic",
     "numerical"); neither the depositor's recorded string nor any deck text is
     echoed. The calculation's local key goes in ``context``.
+
+    A recorded ``finite_difference_gradient`` against a stated ``finite_difference_energy`` is not refused when
+    ``software`` is ORCA and ``lot_method`` has no analytic gradient
+    (:func:`orca_numfreq_refines_gradient_to_energy`); it is refined instead.
 
     :raises CodedValidationError: ``hessian_method_contradicts_input_deck``.
     """
@@ -605,6 +634,10 @@ def check_recorded_method_agrees_with_deck(
     except ValueError:
         exact = None
     if recorded_class == deck_class and (exact is None or exact is deck_method):
+        return
+    if orca_numfreq_refines_gradient_to_energy(software, lot_method, exact, deck_method):
+        # Not a contradiction: ORCA's NumFreq differences gradients, which for this method are numerical. The
+        # stored tau is refined to the energy basis and a ``hessian_method_refined`` warning says so.
         return
     # Both sides in TCKDB's vocabulary: the parsed method when the recorded value is
     # exactly a HessianMethod token, otherwise its analytic / numerical kind.

@@ -106,6 +106,12 @@ RENDERED: dict[str, str] = {
         "Hessian method from the one the tolerance stored with this frequency calculation rests on. The stored "
         "tolerance was not changed."
     ),
+    "hessian_method_refined": (
+        "The recorded Hessian method, finite differences of gradients, was refined to finite differences of "
+        "energies: ORCA's NumFreq differentiates gradients, and for this method, which has no analytic gradient, "
+        "those gradients are themselves numerical. The tolerance stored with the frequency calculation rests on "
+        "the refined method."
+    ),
     "freq_list_incomplete_for_geometry": (
         "The frequency list carries fewer modes than the geometry it is attached to has vibrations. The "
         "complete signed unrounded list is required, never filtered: a partial list agrees with an "
@@ -1790,6 +1796,20 @@ def _hessian_disagrees(context: Mapping[str, Any]) -> str | None:
     return None
 
 
+def _hessian_refined(context: Mapping[str, Any]) -> str | None:
+    recorded, stored = context.get("recorded"), context.get("stored_method")
+    if recorded in _HESSIAN_METHODS and stored in _HESSIAN_METHODS and context.get("reason") == "no_analytic_gradient":
+        basis = context.get("stored_basis")
+        why = f" ({basis})" if isinstance(basis, str) and basis in _TAU_WHY else ""
+        return (
+            f"The recorded Hessian method, {recorded}, was refined to {stored}{why}: ORCA's NumFreq differentiates "
+            "gradients, and for this method, which has no analytic gradient, those gradients are themselves "
+            "numerical, built from energies. The tolerance stored with this frequency calculation rests on the "
+            f"refined method, {stored}."
+        )
+    return None
+
+
 _PARAMETER_ORIGINS = {"input": "input deck", "output_log": "output log"}
 
 
@@ -1907,6 +1927,7 @@ _WITH_CONTEXT: dict[str, Any] = {
     "sp_energy_payload_log_mismatch": _sp_mismatch,
     "sp_energy_filled_from_log": _sp_filled,
     "hessian_method_disagrees_with_stored_tau_basis": _hessian_disagrees,
+    "hessian_method_refined": _hessian_refined,
     "parameter_disagrees_with_artifact": _parameter_disagrees,
     "input_deck_disagrees_with_output_log": _deck_disagrees_with_log,
     "reported_setting_differs_from_requested": _reported_differs,
@@ -2034,6 +2055,8 @@ def _closed_values(key: str, code: str) -> Any:
         "component": _LOT_COMPONENTS,
         "observed_in": frozenset(_PARAMETER_ORIGINS),
         "deck_method": _HESSIAN_METHODS,
+        "recorded": _HESSIAN_METHODS,
+        "reason": frozenset({"no_analytic_gradient"}),
         "stated_in": frozenset({"input", "output_log"}),
         "reported_method": _HESSIAN_METHODS,
         "stored_method": _HESSIAN_METHODS,
