@@ -38,11 +38,11 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
 
 #: The one Postgres image this repo starts, matched by repository basename so
-#: the guard sees it under ANY registry. Today every caller uses
-#: ``informaticsmatters/rdkit-cartridge-debian`` from Docker Hub; the follow-up
-#: that moves CI to the GHCR copy (``ghcr.io/tckdb/rdkit-cartridge-debian@sha256:...``)
-#: must keep matching, or this guard goes blind and passes having checked
-#: nothing. Pinned by tag in every caller because the RDKit cartridge is
+#: the guard sees it under ANY registry. Compose uses
+#: ``informaticsmatters/rdkit-cartridge-debian`` from Docker Hub; CI
+#: uses the GHCR copy (``ghcr.io/tckdb/rdkit-cartridge-debian@sha256:...``).
+#: Every caller pins by digest, and the guard must keep matching both, or it
+#: goes blind and passes having checked nothing. The RDKit cartridge is
 #: required to migrate: the first revision issues
 #: ``CREATE EXTENSION IF NOT EXISTS rdkit``.
 POSTGRES_IMAGE = "rdkit-cartridge-debian"
