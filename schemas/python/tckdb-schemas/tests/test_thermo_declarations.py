@@ -295,3 +295,16 @@ def test_other_name_may_not_spell_a_listed_recipe(spelling, member):
 @pytest.mark.parametrize("spelling", ["CBS-QB3", "G4X", "W1", "G5", "modified G4"])
 def test_other_name_may_name_anything_that_is_not_a_listed_recipe(spelling):
     assert ThermoProtocolDeclaration.model_validate({"version": 1, "recipe": {"name": "other", "other_name": spelling}})
+
+
+def test_declared_by_defaults_to_depositor_and_accepts_the_chemkin_format():
+    from tckdb_schemas.enums import ThermoDeclarationSource
+    from tckdb_schemas.thermo_declarations import ThermoTargetDeclaration
+
+    assert ThermoTargetDeclaration(kind="equilibrium_ensemble").declared_by is ThermoDeclarationSource.depositor
+    declared = ThermoTargetDeclaration(kind="equilibrium_ensemble", declared_by="chemkin_format")
+    assert declared.declared_by is ThermoDeclarationSource.chemkin_format
+    import pytest
+
+    with pytest.raises(ValueError):
+        ThermoTargetDeclaration(kind="equilibrium_ensemble", declared_by="the_server")

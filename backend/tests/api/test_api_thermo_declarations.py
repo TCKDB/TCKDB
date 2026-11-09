@@ -124,7 +124,7 @@ def test_standalone_equilibrium_target_and_protocol_round_trip(client, db_sessio
     assert row.thermodynamic_target_kind is ThermoTargetKind.equilibrium_ensemble
     assert row.protocol_declaration == G4_PROTOCOL
     (record,) = _read(client, row.species_entry_id)
-    assert record["thermodynamic_target"] == {"kind": "equilibrium_ensemble", "conformer_group_ref": None}
+    assert record["thermodynamic_target"] == {"kind": "equilibrium_ensemble", "conformer_group_ref": None, "declared_by": "depositor"}
     assert _stated(record["protocol"]) == G4_PROTOCOL
     # "No departures" is a statement and survives the read; omitted would read null.
     assert record["protocol"]["departures"] == []
@@ -135,13 +135,13 @@ def test_standalone_single_conformer_target_reads_back_its_group_ref(client, db_
     group = make_conformer_group(db_session, entry)
     response = client.post(
         THERMO,
-        json=_standalone(thermodynamic_target={"kind": "single_conformer", "conformer_group_ref": group.public_ref}),
+        json=_standalone(thermodynamic_target={"kind": "single_conformer", "conformer_group_ref": group.public_ref, "declared_by": "depositor"}),
     )
     assert response.status_code == 201, response.text
     row = _only_thermo(db_session)
     assert row.target_conformer_group_id == group.id
     (record,) = _read(client, row.species_entry_id)
-    assert record["thermodynamic_target"] == {"kind": "single_conformer", "conformer_group_ref": group.public_ref}
+    assert record["thermodynamic_target"] == {"kind": "single_conformer", "conformer_group_ref": group.public_ref, "declared_by": "depositor"}
     # A public ref, never a row id.
     assert str(group.id) != record["thermodynamic_target"]["conformer_group_ref"]
 
@@ -356,7 +356,7 @@ def test_reaction_bundle_round_trips_target_and_protocol(client, db_session):
     assert row.protocol_declaration["supporting_calculations"] == [{"calculation_ref": ref} for ref in refs]
     assert row.protocol_declaration["recipe"] == {"name": "g4", "recipe_version": "Curtiss 2007"}
     (record,) = _read(client, row.species_entry_id)
-    assert record["thermodynamic_target"] == {"kind": "single_conformer", "conformer_group_ref": group.public_ref}
+    assert record["thermodynamic_target"] == {"kind": "single_conformer", "conformer_group_ref": group.public_ref, "declared_by": "depositor"}
 
 
 def test_reaction_bundle_a_siblings_conformer_is_out_of_scope(client, db_session):
@@ -432,7 +432,7 @@ def test_contribution_bundle_export_leaves_out_what_a_portable_bundle_cannot_car
     assert client.post(
         THERMO,
         json=_standalone(
-            thermodynamic_target={"kind": "single_conformer", "conformer_group_ref": group.public_ref},
+            thermodynamic_target={"kind": "single_conformer", "conformer_group_ref": group.public_ref, "declared_by": "depositor"},
             calculations=[
                 {
                     "key": "opt0",

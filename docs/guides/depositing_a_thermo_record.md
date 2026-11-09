@@ -122,6 +122,12 @@ block out to say nothing; a record that says nothing reads `null` for it.
   computed-reaction bundle you name the conformer the bundle declares,
   `"conformer_key": "..."`, instead of a ref.
 
+`declared_by` on the target says who made the claim: `depositor` (the default,
+and what you state about your own record) or `chemkin_format`, which only the
+CHEMKIN importer sets, for a gas-phase NASA-7 entry. It is stored and read back
+with the target; every target declared before the field existed reads
+`depositor`.
+
 **`protocol`** says how the values were produced. It is versioned
 (`"version": 1` is the only accepted value, `thermo_protocol_version_unsupported`
 otherwise), and an unknown field or value is refused. Every block in it is

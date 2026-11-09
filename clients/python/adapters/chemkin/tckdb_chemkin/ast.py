@@ -36,7 +36,7 @@ class ThermoEntry:
 
     :param name: Species name (card columns 1-18).
     :param composition: Element symbol -> atom count, from the card columns.
-    :param phase: Phase character (usually ``G``).
+    :param phase: Phase character from column 45 (``G``, ``L`` or ``S``); empty when the card leaves it blank.
     :param t_low: Lower temperature bound (K).
     :param t_high: Upper temperature bound (K).
     :param t_common: Common / mid switch temperature (K).

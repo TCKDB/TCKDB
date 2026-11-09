@@ -22,6 +22,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Imported CHEMKIN thermo declares its phase and target, and says the format declared it (2026-11-09)
+
+- **What changed:**
+  - A thermo record's `thermodynamic_target` gains `declared_by`: `depositor` (the default, and what every existing target is) or `chemkin_format`. It is stored (`thermo.thermodynamic_target_declared_by`) and returned in the thermo read's `thermodynamic_target` block, and a contribution bundle export carries it.
+  - `tckdb-chemkin` declares `equilibrium_ensemble` with `declared_by: chemkin_format` for every gas-phase entry (a NASA-7 polynomial is the standard ideal-gas ensemble by the definition of the format). The phase comes from the card's column-45 letter: `G` gas, `L` liquid, `S` solid. A liquid or solid card declares its phase and no target. A blank or unknown letter declares neither; a blank used to be read as `G`.
+  - Thermo selection of imported mechanism thermo therefore answers (all 123 species of the formic acid model: `sole_eligible_candidate`) instead of `no_applicable_candidate` with `thermodynamic_target_not_declared`.
+- **Schema and migration:** one new revision, `e7a3c1d9f482`: `thermo.thermodynamic_target_declared_by`, enum `thermo_declaration_source`, `NOT NULL DEFAULT 'depositor'`; a metadata-only change, no UPDATE, so approved rows are untouched. The column is left out of the consistency hash and of the assessment digest at its default, so no stored review or assessment goes stale. **Versions:** `tckdb-schemas` 0.162.0, `tckdb-chemkin` 0.6.1.
+
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 
 - **What changed:**
