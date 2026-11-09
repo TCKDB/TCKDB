@@ -448,7 +448,7 @@ stability policy.
 
 Files (input decks, output logs, checkpoints) attach via
 `Calculation.add_artifact(path, kind, *, label?, sha256?, bytes?)`.
-Since 0.190.0 `to_payload()` embeds them inline by default (see
+`to_payload()` embeds them inline by default (see
 `docs/builders.md`, "Artifact upload"); only files that do not fit the
 inline budget, or all of them with `inline_artifacts=False`, ride on a
 separate POST per calculation after the bundle creates the rows, as
@@ -909,7 +909,7 @@ list. `add_artifact` validates locally:
 - the file exists and is readable
 - the `kind` is in the SDK's artifact-kind vocabulary
 
-Upload mechanics — inline by default (since 0.190.0):
+Upload mechanics — inline by default:
 
 1. `client.upload(computed_species_upload)` posts the scientific payload
    with the attached files embedded in each calculation's `artifacts`,

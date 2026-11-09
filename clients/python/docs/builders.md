@@ -239,15 +239,10 @@ Size rules (the server caps one artifact at 50 MiB and one upload at 200 MB
 of decoded files):
 
 - A file over 50 MiB is refused when the payload is built, naming the file.
-- Inline files are limited to 64 MiB decoded in total per upload (about
-  89 MB once base64-encoded), so the request stays under the 100 MB
-  (decimal) body limit Cloudflare applies in front of the hosted server.
-  `output_log` and `input` files are admitted first; checkpoints and
-  ancillary files are deferred first. Files past the budget are left out of
-  the payload and returned by `upload.artifact_plan(result)`, to send in a
-  second request as below. (The computed-species route caps an upload at
-  200 MB of files; the computed-reaction route has no total cap of its own,
-  a server gap this client does not rely on.)
+- Inline files total at most 64 MiB decoded per upload (about 89 MB
+  base64-encoded). `output_log` and `input` files are admitted first. Files
+  past the budget are left out of the payload and returned by
+  `upload.artifact_plan(result)`, to send in a second request as below.
 - `ComputedSpeciesUpload(..., inline_artifacts=False)` (also on
   `ComputedReactionUpload`) defers every file to that second request.
 - `artifact_plan(result, payload)` takes the dict you posted and skips the

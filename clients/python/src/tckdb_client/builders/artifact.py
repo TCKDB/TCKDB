@@ -1,42 +1,14 @@
 """Artifact builder + planned-upload value type.
 
-Artifacts travel **inline** by default: ``ComputedSpeciesUpload.to_payload()``
-and ``ComputedReactionUpload.to_payload()`` read each attached file and embed
-it (``content_base64``) in its calculation's ``artifacts`` list, which both
-bundle schemas accept. The server stores the files in the same request and
-runs its evidence checks (for example ``converged_opt_no_usable_energy``)
-after they are stored, so a deposit does not carry warnings that a second
-request would immediately make stale.
-
-A file is sent in a second phase only when it cannot go inline:
-
-* The upload sets ``inline_artifacts=False``.
-* Adding it would take the request past :data:`INLINE_TOTAL_BUDGET_BYTES`.
-  The binding limit is the 100 MB (decimal) request body Cloudflare accepts
-  in front of the hosted server; base64 adds a third, so 64 MiB of files is
-  about 89 MB on the wire, leaving room for the scientific JSON. The server
-  itself caps the computed-species route at 200 MB of decoded files; the
-  computed-reaction route has no total cap of its own (a server gap, not
-  changed here). ``output_log`` and ``input`` files are admitted first, so
-  checkpoints and ancillary files are the ones deferred. Files over budget
-  are not an error: they stay out of the payload and appear in
-  ``upload.artifact_plan(result)``, which then lists only those files, to be
-  posted with ``client.upload_artifacts(plan)`` to
-  ``POST /calculations/{calculation_ref}/artifacts`` as before.
-
-Because the files travel with the science, a file the server refuses (an
-``output_log`` from a program it does not recognise, a storage outage) now
-refuses the whole deposit. The builders catch the checkable cases before any
-request (missing, empty or oversized file, a kind/extension the schema
-disallows, a declared ``sha256``/``bytes`` that does not match) and raise
-:class:`TCKDBBuilderValidationError` naming the file. The ESS signature list
-lives in the backend, not in ``tckdb_schemas``, so it is not pre-checked.
-``inline_artifacts=False`` restores the old split, where a bad file fails
-alone after the science is stored.
-
-A single file over :data:`MAX_ARTIFACT_BYTES` (the server's per-artifact cap,
-which the two-phase route enforces too) is refused when the payload is built,
-naming the file, rather than after a long transfer.
+Attached files travel inline in the upload payload (each calculation's
+``artifacts`` carries ``content_base64``). A file stays out of the payload, and
+appears in ``upload.artifact_plan(result)``, when the upload sets
+``inline_artifacts=False`` or when it would exceed
+:data:`INLINE_TOTAL_BUDGET_BYTES`; ``output_log`` and ``input`` files are
+admitted first. A file the server would refuse (missing, empty, over
+:data:`MAX_ARTIFACT_BYTES`, kind/extension not allowed, declared hash or size
+mismatch) raises :class:`TCKDBBuilderValidationError` when the payload is
+built. The output-log program signature is not checked client-side.
 """
 
 from __future__ import annotations
@@ -71,12 +43,10 @@ __all__ = [
     "INLINE_PRIORITY_KINDS",
 ]
 
-#: The server's per-artifact cap (``MAX_ARTIFACT_BYTES`` in
-#: ``backend/app/services/artifact_storage.py``): 50 MiB decoded.
+#: The server's per-artifact cap: 50 MiB decoded.
 MAX_ARTIFACT_BYTES = 50 * 1024 * 1024
 
-#: Decoded bytes of files one upload request may carry inline. Below the
-#: server's 200 MB per-upload cap on purpose: see the module docstring.
+#: Decoded bytes of files one upload request may carry inline (about 89 MB once encoded).
 INLINE_TOTAL_BUDGET_BYTES = 64 * 1024 * 1024
 
 
@@ -189,21 +159,12 @@ class PlannedArtifactUpload:
     calculation_ref: str | None = None
 
 
-#: Kinds that go inline first when the budget is short: the evidence the
-#: server's checks read. Checkpoints and ancillary files are deferred first.
+#: Kinds admitted to the inline budget first.
 INLINE_PRIORITY_KINDS: frozenset[str] = frozenset({"output_log", "input"})
 
 
 def _check_file(art: Artifact) -> int:
-    """Return the file's size, or raise naming the file if the server would refuse it.
-
-    Checks what the server checks without reading content: the file exists, is
-    a regular, non-empty file within the per-artifact cap, and its kind,
-    extension and declared hash pass ``tckdb_schemas``' ``ArtifactIn``. Not
-    checked client-side: the ESS signature an ``output_log`` must carry (that
-    list lives in the backend, not in ``tckdb_schemas``), so an output log from
-    a program the server does not recognise is still refused by the server.
-    """
+    """Return the file's size, or raise naming the file if the server would refuse it."""
     try:
         st = art.path.stat()
     except OSError as exc:
@@ -234,13 +195,8 @@ def _check_file(art: Artifact) -> int:
 def plan_inline_artifacts(calculations: Iterable[Any]) -> set[int]:
     """Choose which attached artifacts travel inline.
 
-    Every file is checked first (:func:`_check_file`). Then ``output_log`` and
-    ``input`` files are admitted, in walk order, followed by the other kinds;
-    each is admitted if it still fits :data:`INLINE_TOTAL_BUDGET_BYTES` (a file
-    that does not fit is skipped and a later, smaller one may still fit).
-    Returns ``id()`` of each admitted :class:`Artifact`. It is a pure function
-    of the builders and the files on disk, so a copy of the builders gets the
-    same answer.
+    Returns ``id()`` of each :class:`Artifact` admitted within
+    :data:`INLINE_TOTAL_BUDGET_BYTES`, ``output_log``/``input`` first.
 
     :raises TCKDBBuilderValidationError: a file is missing, empty, over the
         per-artifact cap, or has a kind, extension or declared hash the server
