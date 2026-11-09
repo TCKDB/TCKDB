@@ -240,12 +240,30 @@ of decoded files):
 
 - A file over 50 MiB is refused when the payload is built, naming the file.
 - Inline files are limited to 64 MiB decoded in total per upload (about
-  85 MiB once base64-encoded), so the request stays under the roughly
-  100 MiB body limit a reverse proxy typically applies. Files past that
-  budget are left out of the payload and returned by
-  `upload.artifact_plan(result)`, to send in a second request as below.
+  89 MB once base64-encoded), so the request stays under the 100 MB
+  (decimal) body limit Cloudflare applies in front of the hosted server.
+  `output_log` and `input` files are admitted first; checkpoints and
+  ancillary files are deferred first. Files past the budget are left out of
+  the payload and returned by `upload.artifact_plan(result)`, to send in a
+  second request as below. (The computed-species route caps an upload at
+  200 MB of files; the computed-reaction route has no total cap of its own,
+  a server gap this client does not rely on.)
 - `ComputedSpeciesUpload(..., inline_artifacts=False)` (also on
   `ComputedReactionUpload`) defers every file to that second request.
+- `artifact_plan(result, payload)` takes the dict you posted and skips the
+  files in it; without `payload` it recomputes the same choice from the
+  builders and the files, so a copy or a rebuilt builder gives the same plan.
+
+A file the server refuses now refuses the whole deposit, because the files
+travel with the science: an `output_log` from a program the server does not
+recognise, or an object-store outage, fails the request instead of leaving
+the science stored and the file missing. The builders catch what they can
+before any request and raise `TCKDBBuilderValidationError` naming the file: a
+missing, empty or oversized file, a kind/extension the schema disallows, a
+declared `sha256`/`bytes` that does not match. The server's list of
+recognised output-log programs is not available client-side, so that case is
+still the server's to refuse. `inline_artifacts=False` restores the old
+split behaviour, where a bad file fails alone after the science is stored.
 
 ### Second-phase artifact upload
 

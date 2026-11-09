@@ -239,13 +239,16 @@ Full design rationale and rejected alternatives:
 ## 7. Artifacts
 
 Artifacts (input decks, output logs, checkpoint files, scan
-tables) ride a **two-phase** flow:
+tables) are sent **inline** with the upload by default. Only files that
+do not fit the inline budget (64 MiB of files per upload), or all of
+them with `inline_artifacts=False`, need a second phase:
 
 ```python
-# Phase 1 — scientific payload only (no artifact bytes).
+# The upload carries the attached files inline.
 result = client.upload(upload, warn_on_dropped_fields=True)
 
-# Phase 2 — artifact bytes, once the server has assigned calc IDs.
+# The second phase covers only what did not go inline (empty for a
+# normal deposit).
 plan = upload.artifact_plan(result)
 
 # Easiest to debug: one artifact per POST.
@@ -262,8 +265,9 @@ client.upload_artifacts(
 
 Key facts:
 
-- Artifacts are **not embedded** in the scientific payload. Phase 1
-  ships structured data; phase 2 ships bytes.
+- Artifacts are embedded in the scientific payload by default, so a file
+  the server refuses (or a storage outage) refuses the whole deposit;
+  `inline_artifacts=False` restores the split, where it fails alone.
 - Artifacts preserve the **original files** for auditability —
   workflow logs, conformer-search histories, raw deck text, etc.
   The conformer-boundary policy (§3) explicitly relies on this:

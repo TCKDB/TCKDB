@@ -125,7 +125,7 @@ not a parallel data model.
 │   scientific Python objects                                  │
 │   local validation                                           │
 │   payload construction                                       │
-│   no HTTP, no I/O                                            │
+│   no HTTP; reads attached files' bytes only to upload them   │
 ├──────────────────────────────────────────────────────────────┤
 │ tckdb_client.client                                          │
 │   HTTP, auth, version headers, idempotency, replay, errors   │
@@ -780,8 +780,11 @@ A few principles:
 
 - **Idempotent.** `upload.to_payload() == upload.to_payload()` for the
   same object — local-key minting must be deterministic (§11).
-- **Pure.** `to_payload()` does no I/O. The HTTP call is a separate
-  step, in `client.upload(...)`.
+- **No network.** `to_payload()` makes no HTTP call (that is a separate
+  step, in `client.upload(...)`). Its one I/O is reading the bytes of
+  attached artifact files so they travel inline; it never parses them, and
+  with no artifacts attached (or `inline_artifacts=False`) it touches no
+  file.
 - **One walk.** Each builder object emits its fragment once; references
   to it become local keys. No copying of geometries or LoT blocks across
   the bundle.
@@ -905,14 +908,15 @@ list. `add_artifact` validates locally:
 - the file exists and is readable
 - the `kind` is in the SDK's artifact-kind vocabulary
 
-Upload mechanics — two-phase, mirroring the existing backend contract:
+Upload mechanics — inline by default (since 0.190.0):
 
 1. `client.upload(computed_species_upload)` posts the scientific payload
-   and returns server-assigned `calculation_id` values.
-2. The builder layer offers `client.upload_artifacts(result)` (Phase 3)
-   that walks the result, finds each calculation's local artifacts list,
-   and POSTs them to
-   `/api/v1/calculations/{calculation_id}/artifacts`.
+   with the attached files embedded in each calculation's `artifacts`,
+   within a size budget (`docs/builders.md`, "Artifact upload").
+2. Files that did not fit the budget, or all of them with
+   `inline_artifacts=False`, are returned by `upload.artifact_plan(result)`
+   and POSTed with `client.upload_artifacts(plan)` to
+   `/api/v1/calculations/{calculation_ref}/artifacts`.
 
 Sidecar / replay-based artifact dispatch (using the existing
 `tckdb_client.replay` machinery) is an option to evaluate during Phase 3.

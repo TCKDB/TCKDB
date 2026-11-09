@@ -12,13 +12,27 @@ A file is sent in a second phase only when it cannot go inline:
 
 * The upload sets ``inline_artifacts=False``.
 * Adding it would take the request past :data:`INLINE_TOTAL_BUDGET_BYTES`.
-  The server caps one upload at 200 MB of decoded files, but a reverse proxy
-  in front of it commonly caps the request body near 100 MiB, and base64
-  adds a third. The budget keeps the whole request under that, with room for
-  the scientific JSON. Files over budget are not an error: they stay out of
-  the payload and appear in ``upload.artifact_plan(result)``, which then
-  lists only those files, to be posted with ``client.upload_artifacts(plan)``
-  to ``POST /calculations/{calculation_ref}/artifacts`` as before.
+  The binding limit is the 100 MB (decimal) request body Cloudflare accepts
+  in front of the hosted server; base64 adds a third, so 64 MiB of files is
+  about 89 MB on the wire, leaving room for the scientific JSON. The server
+  itself caps the computed-species route at 200 MB of decoded files; the
+  computed-reaction route has no total cap of its own (a server gap, not
+  changed here). ``output_log`` and ``input`` files are admitted first, so
+  checkpoints and ancillary files are the ones deferred. Files over budget
+  are not an error: they stay out of the payload and appear in
+  ``upload.artifact_plan(result)``, which then lists only those files, to be
+  posted with ``client.upload_artifacts(plan)`` to
+  ``POST /calculations/{calculation_ref}/artifacts`` as before.
+
+Because the files travel with the science, a file the server refuses (an
+``output_log`` from a program it does not recognise, a storage outage) now
+refuses the whole deposit. The builders catch the checkable cases before any
+request (missing, empty or oversized file, a kind/extension the schema
+disallows, a declared ``sha256``/``bytes`` that does not match) and raise
+:class:`TCKDBBuilderValidationError` naming the file. The ESS signature list
+lives in the backend, not in ``tckdb_schemas``, so it is not pre-checked.
+``inline_artifacts=False`` restores the old split, where a bad file fails
+alone after the science is stored.
 
 A single file over :data:`MAX_ARTIFACT_BYTES` (the server's per-artifact cap,
 which the two-phase route enforces too) is refused when the payload is built,
@@ -28,12 +42,15 @@ naming the file, rather than after a long transfer.
 from __future__ import annotations
 
 import base64
+import hashlib
 import os
 import re
 import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable
+
+from tckdb_schemas.fragments.artifact import ArtifactIn
 
 from tckdb_client.builders.validation import (
     TCKDBBuilderValidationError,
@@ -51,6 +68,7 @@ __all__ = [
     "ARTIFACT_KINDS",
     "MAX_ARTIFACT_BYTES",
     "INLINE_TOTAL_BUDGET_BYTES",
+    "INLINE_PRIORITY_KINDS",
 ]
 
 #: The server's per-artifact cap (``MAX_ARTIFACT_BYTES`` in
@@ -73,15 +91,16 @@ _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 
 @dataclass(eq=False)
 class Artifact:
-    """A file attached to a :class:`Calculation` for later upload.
+    """A file attached to a :class:`Calculation`, uploaded with the deposit.
 
     File existence is **not** checked at construction. Producers
-    typically build a manifest of artifacts ahead of time and only
-    open the files when the plan executes — that keeps
+    typically build a manifest of artifacts ahead of time — that keeps
     :class:`Calculation` construction cheap and avoids spurious
-    failures when manifests are reused across machines. The path is
-    materialised when the planned upload is executed (see
-    :func:`tckdb_client.builders.artifact.PlannedArtifactUpload`).
+    failures when manifests are reused across machines. The file is read
+    when the upload's ``to_payload()`` runs (it travels inline) or, for a
+    file deferred to the second phase, when the planned upload is executed
+    (see :class:`PlannedArtifactUpload`). The builders read the bytes to
+    send them; they never parse them.
     """
 
     path: Path
@@ -170,50 +189,119 @@ class PlannedArtifactUpload:
     calculation_ref: str | None = None
 
 
+#: Kinds that go inline first when the budget is short: the evidence the
+#: server's checks read. Checkpoints and ancillary files are deferred first.
+INLINE_PRIORITY_KINDS: frozenset[str] = frozenset({"output_log", "input"})
+
+
+def _check_file(art: Artifact) -> int:
+    """Return the file's size, or raise naming the file if the server would refuse it.
+
+    Checks what the server checks without reading content: the file exists, is
+    a regular, non-empty file within the per-artifact cap, and its kind,
+    extension and declared hash pass ``tckdb_schemas``' ``ArtifactIn``. Not
+    checked client-side: the ESS signature an ``output_log`` must carry (that
+    list lives in the backend, not in ``tckdb_schemas``), so an output log from
+    a program the server does not recognise is still refused by the server.
+    """
+    try:
+        st = art.path.stat()
+    except OSError as exc:
+        raise TCKDBBuilderValidationError(
+            f"artifact file cannot be read: {art.path} ({exc.strerror or exc}). "
+            "Artifacts are sent inline with the upload, so the file must exist "
+            "when to_payload() runs; pass inline_artifacts=False to defer them."
+        ) from exc
+    if not stat.S_ISREG(st.st_mode):
+        raise TCKDBBuilderValidationError(f"artifact path is not a file: {art.path}")
+    if st.st_size == 0:
+        raise TCKDBBuilderValidationError(f"artifact {art.path} is empty; the server refuses a zero-byte file.")
+    if st.st_size > MAX_ARTIFACT_BYTES:
+        raise TCKDBBuilderValidationError(
+            f"artifact {art.path} is {st.st_size:,} bytes; the server accepts at "
+            f"most {MAX_ARTIFACT_BYTES:,} bytes per artifact."
+        )
+    try:
+        # The server's own model, with a placeholder body standing in for the content.
+        ArtifactIn(
+            kind=art.kind, filename=art.path.name, content_base64="AA==", sha256=art.sha256, bytes=art.bytes
+        )
+    except ValueError as exc:  # pydantic's ValidationError is a ValueError
+        raise TCKDBBuilderValidationError(f"artifact {art.path} would be refused by the server: {exc}") from exc
+    return st.st_size
+
+
 def plan_inline_artifacts(calculations: Iterable[Any]) -> set[int]:
     """Choose which attached artifacts travel inline.
 
-    Walks ``calculations`` in order and returns ``id()`` of each
-    :class:`Artifact` that fits :data:`INLINE_TOTAL_BUDGET_BYTES` (a file that
-    does not fit is skipped and a later, smaller one may still fit). Sizes come
-    from the files on disk.
+    Every file is checked first (:func:`_check_file`). Then ``output_log`` and
+    ``input`` files are admitted, in walk order, followed by the other kinds;
+    each is admitted if it still fits :data:`INLINE_TOTAL_BUDGET_BYTES` (a file
+    that does not fit is skipped and a later, smaller one may still fit).
+    Returns ``id()`` of each admitted :class:`Artifact`. It is a pure function
+    of the builders and the files on disk, so a copy of the builders gets the
+    same answer.
 
-    :raises TCKDBBuilderValidationError: a file is missing or not a regular
-        file, or is larger than :data:`MAX_ARTIFACT_BYTES`.
+    :raises TCKDBBuilderValidationError: a file is missing, empty, over the
+        per-artifact cap, or has a kind, extension or declared hash the server
+        would refuse.
     """
+    arts = [art for calc in calculations for art in calc.artifacts]
+    sizes = {id(art): _check_file(art) for art in arts}
     chosen: set[int] = set()
     used = 0
-    for calc in calculations:
-        for art in calc.artifacts:
-            try:
-                st = art.path.stat()
-            except OSError as exc:
-                raise TCKDBBuilderValidationError(
-                    f"artifact file cannot be read: {art.path} ({exc.strerror or exc}). "
-                    "Artifacts are sent inline with the upload, so the file must exist "
-                    "when to_payload() runs; pass inline_artifacts=False to defer them."
-                ) from exc
-            if not stat.S_ISREG(st.st_mode):
-                raise TCKDBBuilderValidationError(
-                    f"artifact path is not a file: {art.path}"
-                )
-            if st.st_size > MAX_ARTIFACT_BYTES:
-                raise TCKDBBuilderValidationError(
-                    f"artifact {art.path} is {st.st_size:,} bytes; the server accepts at "
-                    f"most {MAX_ARTIFACT_BYTES:,} bytes per artifact."
-                )
-            if used + st.st_size <= INLINE_TOTAL_BUDGET_BYTES:
+    for priority in (True, False):
+        for art in arts:
+            if (art.kind in INLINE_PRIORITY_KINDS) is priority and used + sizes[id(art)] <= INLINE_TOTAL_BUDGET_BYTES:
                 chosen.add(id(art))
-                used += st.st_size
+                used += sizes[id(art)]
     return chosen
 
 
+def posted_artifact_keys(payload: Any) -> set[tuple[str, str, str]]:
+    """``(calculation key, kind, filename)`` of every artifact already inline in ``payload``.
+
+    Walks a payload built by ``to_payload()`` (either upload class): any dict
+    with a ``key`` and an ``artifacts`` list is a calculation.
+    """
+    found: set[tuple[str, str, str]] = set()
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            arts = node.get("artifacts")
+            if isinstance(node.get("key"), str) and isinstance(arts, list):
+                for a in arts:
+                    if isinstance(a, dict):
+                        found.add((node["key"], str(a.get("kind")), str(a.get("filename"))))
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+
+    walk(payload)
+    return found
+
+
 def artifact_wire(art: Artifact) -> dict[str, Any]:
-    """The ``ArtifactIn`` dict for one attached artifact (reads the file)."""
+    """The ``ArtifactIn`` dict for one attached artifact (reads the file).
+
+    :raises TCKDBBuilderValidationError: a declared ``bytes`` or ``sha256``
+        does not match the bytes just read (the server would refuse it).
+    """
+    content = art.path.read_bytes()
+    if art.bytes is not None and art.bytes != len(content):
+        raise TCKDBBuilderValidationError(
+            f"artifact {art.path}: declared bytes={art.bytes:,} but the file holds {len(content):,}."
+        )
+    if art.sha256 is not None and art.sha256 != hashlib.sha256(content).hexdigest():
+        raise TCKDBBuilderValidationError(
+            f"artifact {art.path}: declared sha256 does not match the file's content."
+        )
     out: dict[str, Any] = {
         "kind": art.kind,
         "filename": art.path.name,
-        "content_base64": base64.b64encode(art.path.read_bytes()).decode("ascii"),
+        "content_base64": base64.b64encode(content).decode("ascii"),
     }
     if art.sha256 is not None:
         out["sha256"] = art.sha256
