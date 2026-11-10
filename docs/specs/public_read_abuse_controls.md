@@ -39,7 +39,8 @@ generous read budget for writes:
 Classification rules:
 
 - **`anon_read` / `auth_read`** — public scientific reads (GET
-  `/api/v1/scientific/...`, POST `/api/v1/scientific/.../search`, GET
+  `/api/v1/scientific/...`, POST `/api/v1/scientific/.../search`, POST the relative-energy and
+  relative-energy compare routes, GET
   `/api/v1/workflow-tools`, GET `/api/v1/workflow-tool-releases`).
   Split by whether a credential is present.
 - **`bundle_dry_run`** — an authenticated `POST /api/v1/bundles/dry-run`,
