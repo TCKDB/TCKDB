@@ -10,7 +10,7 @@ import { SpeciesRelationshipMap } from "../components/RelationshipMap"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { SpeciesValues } from "../components/SpeciesValues"
 import { SpeciesVersions } from "../components/SpeciesVersions"
-import { moleculeLede } from "../domain/entryVersions"
+import { hiddenVersionsNote, moleculeLede } from "../domain/entryVersions"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { useSpeciesOverview } from "../hooks/useSpeciesOverview"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
@@ -78,7 +78,7 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
                     <RecordIdentityHeader
                         kicker="A molecule"
                         glyph="species"
-                        lede={moleculeLede(species.entries.length)}
+                        lede={moleculeLede(species.entries.length, hiddenVersionsNote(species.entriesHiddenByDefault) !== null)}
                         title={name}
                         identity={{
                             kind: "species_entry",

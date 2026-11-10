@@ -7,7 +7,7 @@
 /* The 4px accent bar this header used to carry is retired: this is the
    page's own primary heading, not `.card--derived` content, so a left
    accent rule was borrowing that primitive's meaning without adopting its
-   semantics -- same call as `.species-header`'s. */
+   semantics -- same call as the record header's. */
 .browse-header {
     max-width: 65rem;
 }

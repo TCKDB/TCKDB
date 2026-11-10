@@ -33,7 +33,7 @@ export type WalkControl = {
  * is not fetched twice. Later pages ask for `LATER_PAGE_LIMIT` records at a time, or for the first page's own window
  * when the server refuses that size, so 1000 records cost 1 + 5 requests.
  */
-export async function walk<T>(entryRef: string, load: Loader<T>, control: WalkControl): Promise<AllPages<T>> {
+export async function walk<T>(listRef: string, load: Loader<T>, control: WalkControl): Promise<AllPages<T>> {
     const records: T[] = []
     let request: PageRequest | null = null
     let first: Page<T> | null = null
@@ -41,7 +41,7 @@ export async function walk<T>(entryRef: string, load: Loader<T>, control: WalkCo
     let limit = LATER_PAGE_LIMIT
     do {
         if (control.abandoned()) throw new DOMException("The numbers were no longer wanted.", "AbortError")
-        const key: string = request ? pagedRef(entryRef, request) : entryRef
+        const key: string = request ? pagedRef(listRef, request) : listRef
         const subscription = dedupedFetch(load, key, (signal, onRateLimited) => load(key, signal, onRateLimited))
         control.subscriptions.push(subscription as Subscription<unknown>)
         subscription.onWaiting(control.onWaiting)

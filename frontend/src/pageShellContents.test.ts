@@ -8,7 +8,7 @@ import { MIN_SECTIONS_FOR_LIST } from "./components/TableOfContents"
  */
 const DECLARED: Record<string, "list" | "none"> = {
     "./pages/BrowsePage.tsx": "none",
-        "./pages/FrequencyScaleFactorPage.tsx": "none",
+    "./pages/FrequencyScaleFactorPage.tsx": "none",
     "./pages/CalculationDetailPage.tsx": "list",
     "./pages/CompositeSchemePage.tsx": "list",
     "./pages/ConformerGroupPage.tsx": "list",

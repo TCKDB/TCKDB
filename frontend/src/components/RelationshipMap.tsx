@@ -6,7 +6,7 @@ import { useNearViewport, useSpeciesEntryNeighbours, type NeighboursState } from
 import { wrapLabel } from "../domain/wrapLabel"
 import type { NeighbourNode } from "../domain/neighbourNodes"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
-import { versionLabel } from "../domain/entryVersions"
+import { versionFacts } from "../domain/entryVersions"
 
 const WIDTH = 320
 const PAD = 8
@@ -118,14 +118,14 @@ export function SpeciesRelationshipMap({ species }: { species: SpeciesOverview }
     const nodes: NeighbourNode[] = shown.map((version) => ({
         id: version.species_entry_ref,
         kind: "species-entry",
-        label: versionLabel(species, version),
+        label: `${versionFacts(version)} · ${version.species_entry_ref}`,
         relation: "A version of this molecule",
         to: `/species-entries/${version.species_entry_ref}`,
         found: null,
     }))
     const more = species.entries.length - shown.length
     const note = more > 0
-        ? `This map shows the versions of this molecule: ${shown.length} of ${species.entries.length}. Reactions and networks are on each version's page.`
+        ? `This map shows the first ${shown.length} of ${species.entries.length} listed under Versions of this molecule. Reactions and networks are on each version's page.`
         : "This map shows the versions of this molecule. Reactions and networks are on each version's page."
     return <RelationshipMap selfKind="species" selfLabel="This molecule" note={note} state={{ status: "ready", nodes }} />
 }

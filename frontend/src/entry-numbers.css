@@ -198,9 +198,15 @@
 /* On a phone the record sits above its values and each label above its value, so nothing needs sideways scrolling. */
 @media (max-width: 40rem) {
     .entry-versions-title a,
-    .entry-numbers-version a {
-        display: inline-block;
-        padding-block: .7rem;
+    .entry-numbers-version a,
+    .entry-numbers .order-note a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+    }
+
+    .entry-numbers-toggle {
+        min-height: 44px;
     }
 
     .entry-numbers-table {

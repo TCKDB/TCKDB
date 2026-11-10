@@ -117,7 +117,7 @@ describe("public archive shell", () => {
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
         expect(screen.getByText(speciesRef)).toBeVisible()
-        expect(screen.getAllByRole("link", { name: "charge 0 · singlet (1) · minimum · ground state" })[0])
+        expect(screen.getAllByRole("link", { name: "minimum · ground state" })[0])
             .toHaveAttribute("href", `/species-entries/${entryRef}`)
     })
 

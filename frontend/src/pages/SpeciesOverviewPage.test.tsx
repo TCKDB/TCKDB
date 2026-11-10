@@ -165,6 +165,11 @@ describe("molecule overview: header", () => {
         expect(within(identity).getByText("0 / doublet (2)")).toBeVisible()
     })
 
+    it("says listed versions when some were hidden by default", async () => {
+        await open({ ...speciesPayload(), request: { hidden_by_default: { counts: { rejected: 1 }, include_with: {}, counted: "species_entries" } } })
+        expect(document.querySelector(".record-lede")).toHaveTextContent("A molecule with 2 listed versions; each version holds its own records.")
+    })
+
     it("says one version in the singular", async () => {
         await open(speciesPayload([groundEntry()]))
         expect(document.querySelector(".record-lede")).toHaveTextContent("A molecule with 1 version; each version holds its own records.")
@@ -187,12 +192,12 @@ describe("molecule overview: versions", () => {
         const section = await versionsSection()
         const items = within(section).getAllByRole("listitem")
         expect(items).toHaveLength(2)
-        const ground = within(items[0]).getByRole("link", { name: "charge 0 · doublet (2) · minimum · ground state" })
+        const ground = within(items[0]).getByRole("link", { name: "minimum · ground state" })
         expect(ground).toHaveAttribute("href", `/species-entries/${entryRef}`)
         expect(items[0]).toHaveTextContent("14 calculations; conformers, thermochemistry, statistical mechanics")
         expect(within(items[0]).getByText("not reviewed")).toBeVisible()
         expect(within(items[0]).getByText(entryRef)).toBeVisible()
-        expect(within(items[1]).getByRole("link", { name: "charge 0 · doublet (2) · minimum · excited state · 3B1" })).toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
+        expect(within(items[1]).getByRole("link", { name: "minimum · excited state · 3B1" })).toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
         expect(within(items[1]).getByText("approved")).toBeVisible()
         expect(within(items[0]).getAllByRole("link")).toHaveLength(1)
     })
@@ -200,7 +205,7 @@ describe("molecule overview: versions", () => {
     it("keeps repeated ground-state versions apart by their refs", async () => {
         await open(speciesPayload([groundEntry(), secondGroundEntry(), excitedEntry()]))
         const section = await versionsSection()
-        const ground = within(section).getAllByRole("link", { name: "charge 0 · doublet (2) · minimum · ground state" })
+        const ground = within(section).getAllByRole("link", { name: "minimum · ground state" })
         expect(ground.map((link) => link.getAttribute("href"))).toEqual([`/species-entries/${entryRef}`, "/species-entries/spe_secondgroundentryrecordabcdefgh"])
         expect(within(section).getByText("spe_secondgroundentryrecordabcdefgh")).toBeVisible()
         expect(within(section).getByText("7 calculations; conformers, thermochemistry, statistical mechanics")).toBeVisible()
@@ -210,7 +215,7 @@ describe("molecule overview: versions", () => {
         const entry = { ...groundEntry(), stereo_label: "R", species_entry_label: "R" }
         await open(speciesPayload([entry]))
         const link = within(await versionsSection()).getByRole("link", { name: /minimum/ })
-        expect(link).toHaveAccessibleName("charge 0 · doublet (2) · minimum · ground state · R enantiomer")
+        expect(link).toHaveAccessibleName("minimum · ground state · R enantiomer")
         expect(link).not.toHaveTextContent(/^R$/)
     })
 
@@ -238,7 +243,11 @@ describe("molecule overview: versions", () => {
             ...speciesPayload(),
             request: { hidden_by_default: { counts: { rejected: 2, deprecated: 1 }, include_with: {}, counted: "species_entries" } },
         })
-        expect(await screen.findByText("Not listed by default: 2 rejected and 1 deprecated species entries.")).toBeVisible()
+        expect(await screen.findByText("Not listed by default: 2 rejected and 1 deprecated versions.")).toBeVisible()
+        cleanup()
+        resetAllRequestCaches()
+        await open({ ...speciesPayload(), request: { hidden_by_default: { counts: { rejected: 1 }, include_with: {}, counted: "species_entries" } } })
+        expect(await screen.findByText("Not listed by default: 1 rejected version.")).toBeVisible()
         cleanup()
         resetAllRequestCaches()
         await open()
@@ -246,12 +255,33 @@ describe("molecule overview: versions", () => {
     })
 
     it("draws the map from the versions and says so", async () => {
-        await open()
+        await open(speciesPayload([groundEntry(), secondGroundEntry(), excitedEntry()]))
         const rail = document.querySelector(".page-shell-rail") as HTMLElement
         expect(within(rail).getByText("This map shows the versions of this molecule. Reactions and networks are on each version's page.")).toBeVisible()
         const list = within(rail).getByRole("list", { name: "Connected records" })
-        expect(within(list).getByRole("link", { name: "charge 0 · doublet (2) · minimum · ground state" })).toHaveAttribute("href", `/species-entries/${entryRef}`)
+        expect(within(list).getByRole("link", { name: `minimum · ground state · ${entryRef}` })).toHaveAttribute("href", `/species-entries/${entryRef}`)
+        expect(within(list).getByRole("link", { name: `minimum · ground state · spe_secondgroundentryrecordabcdefgh` })).toBeVisible()
         expect(within(rail).getByRole("link", { name: "This molecule (you are here)" })).toBeVisible()
+    })
+
+    it("draws at most 8 versions in the map and says which 8", async () => {
+        const many = Array.from({ length: 10 }, (_, index) => ({ ...groundEntry(), species_entry_ref: `spe_version${index}` }))
+        await open(speciesPayload(many))
+        const rail = document.querySelector(".page-shell-rail") as HTMLElement
+        expect(within(within(rail).getByRole("list", { name: "Connected records" })).getAllByRole("listitem")).toHaveLength(8)
+        expect(rail.querySelectorAll("svg a.rel-map-node:not(.rel-map-node--self)")).toHaveLength(8)
+        expect(within(rail).getByText(/This map shows the first 8 of 10 listed under Versions of this molecule\./)).toBeVisible()
+        expect(within(rail).queryByText("spe_version9", { exact: false })).toBeNull()
+    })
+
+    it("puts the entry ref into each version link's description, in the list and in the table", async () => {
+        await open(speciesPayload([groundEntry(), secondGroundEntry(), excitedEntry()]), { thermo: [thermoRow("thm_c1", "spe_secondgroundentryrecordabcdefgh", lotA, 1)], statmech: [] })
+        const versions = within(await versionsSection())
+        expect(versions.getAllByRole("link")[1]).toHaveAccessibleDescription("spe_secondgroundentryrecordabcdefgh")
+        const region = await valuesRegion()
+        await waitFor(() => expect(rowIds(region)).toHaveLength(1))
+        const row = region.querySelector("#thermo-thm_c1") as HTMLElement
+        expect(within(row).getByRole("link", { name: "minimum · ground state" })).toHaveAccessibleDescription("spe_secondgroundentryrecordabcdefgh")
     })
 })
 
@@ -264,9 +294,9 @@ describe("molecule overview: all values for this molecule", () => {
         expect(calls.length).toBeGreaterThanOrEqual(2)
         for (const call of calls) expect(call.searchParams.get("species_ref")).toBe(speciesRef)
         const ground = region.querySelector("#thermo-thm_g1") as HTMLElement
-        const link = within(ground).getByRole("link", { name: "charge 0 · doublet (2) · minimum · ground state" })
+        const link = within(ground).getByRole("link", { name: "minimum · ground state" })
         expect(link).toHaveAttribute("href", `/species-entries/${entryRef}`)
-        expect(ground).toHaveTextContent("Version: charge 0 · doublet (2) · minimum · ground state")
+        expect(ground).toHaveTextContent("Version: minimum · ground state")
         expect(within(region.querySelector("#thermo-thm_e1") as HTMLElement).getByRole("link", { name: /excited state/ })).toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
         expect(within(region.querySelector("#statmech-stm_g1") as HTMLElement).getByRole("link", { name: /ground state/ })).toBeVisible()
         expect(within(ground).getByText("143.90")).toBeVisible()
@@ -452,6 +482,7 @@ describe("molecule overview: depositor text", () => {
         const thermoPlanted = plantSentinels({ records: [{ ...thermoRow("thm_g1", entryRef, lotA, 143.9), thermo: { ...thermo("thm_g1", lotA, 143.9), note: "x" } }] } as never, ["note"])
         expectPlanted(thermoPlanted)
         const statmechPlanted = plantSentinels({ records: [statmech("stm_g1", entryRef)] } as never, ["note"])
+        expectPlanted(statmechPlanted)
         await open(value, {
             thermo: (thermoPlanted.value as { records: unknown[] }).records,
             statmech: (statmechPlanted.value as { records: unknown[] }).records,
