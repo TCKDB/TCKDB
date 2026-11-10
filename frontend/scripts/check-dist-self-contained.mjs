@@ -45,10 +45,17 @@
  *       `http://localhost:8000` is not `http://localhost`) and then by the
  *       exact normalised URL. A candidate that does not parse fails. A host
  *       built at run time fails, whether by template (`https://${h}`) or by
- *       concatenation (`"https://" + h`), unless it is one of the two places
- *       below: ALLOWED_RUNTIME_HOSTS (one 3Dmol.js loader), or a bare
- *       `new URL(template);` statement whose result is thrown away (zod's
- *       IPv6 check) in a file where nothing rebinds or reassigns `URL`. An
+ *       concatenation (`"https://" + h`), unless it is one of the places
+ *       below: ALLOWED_RUNTIME_HOSTS (one 3Dmol.js loader); a bare
+ *       `new URL(template);` statement whose result is thrown away; or a
+ *       template passed only to `URL.canParse(...)`, directly or via a
+ *       top-level ES-module function whose body is allowlisted statements,
+ *       every return boolean-valued (`new URL(param)` only as a discarded
+ *       comma operand), and whose name is only ever called (zod's IPv6
+ *       check). The last two need `URL` and `canParse` unbound, unwritten
+ *       and not redefined in every JS file, inline script, `on*` handler,
+ *       `srcdoc` and `javascript:` attribute of the build (aliases such as
+ *       `var g = globalThis` or `const U = URL` are not tracked). An
  *       allow-list entry that no longer matches anything fails, so the lists
  *       cannot rot wider.
  *
@@ -99,7 +106,7 @@ import { dirname, extname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 import ts from "typescript"
 
-const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "dist")
+const DIST = process.env.CHECK_DIST_DIR ?? join(dirname(fileURLToPath(import.meta.url)), "..", "dist")
 const INVENTORY = process.argv.includes("--inventory")
 
 /**
@@ -170,8 +177,10 @@ const fail = (file, message) => failures.push(`${file}: ${message}`)
 
 const counts = {
     loads: 0, scriptSrcs: 0, stylesheets: 0, anchors: 0, inlineScripts: 0, tags: 0, cssRefs: 0,
-    loadCalls: 0, dynamicImports: 0, staticImports: 0, jsStrings: 0, discardedUrlParses: 0,
+    loadCalls: 0, dynamicImports: 0, staticImports: 0, jsStrings: 0, discardedUrlParses: 0, canParseTemplates: 0,
 }
+/** Set when any JS file in dist/ could change what `URL` or `URL.canParse` means. */
+let urlTamperedAnywhere = false
 
 // ---------------------------------------------------------------- URL judgement
 
@@ -378,6 +387,134 @@ function isDiscardedUrlParse(templatePiece, urlIsShadowed) {
     )
 }
 
+/**
+ * A template whose only use is `URL.canParse(template)`, directly or through
+ * a parse-only helper (zod's IPv6 check): only a boolean comes back, so the
+ * host it names is never fetched or kept. Needs `URL` and `canParse` to be
+ * untouched in every JS file of the build.
+ */
+function isCanParseArgument(templatePiece, urlIsShadowed, sf) {
+    const template = templatePiece.parent
+    const call = template?.parent
+    if (urlIsShadowed || urlTamperedAnywhere || !ts.isTemplateExpression(template) || !ts.isCallExpression(call)) return false
+    if (call.arguments.length !== 1 || call.arguments[0] !== template) return false
+    if (isUrlCanParse(call.expression)) return true
+    return ts.isIdentifier(call.expression) && isParseOnlyHelper(sf, call.expression.text)
+}
+
+function isUrlCanParse(expression) {
+    return (
+        ts.isPropertyAccessExpression(expression) &&
+        ts.isIdentifier(expression.expression) &&
+        expression.expression.text === "URL" &&
+        expression.name.text === "canParse"
+    )
+}
+
+const isIdentNamed = (node, name) => ts.isIdentifier(node) && node.text === name
+
+const COMPARE_OPS = new Set([
+    ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.EqualsEqualsEqualsToken,
+    ts.SyntaxKind.ExclamationEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken,
+    ts.SyntaxKind.LessThanToken, ts.SyntaxKind.GreaterThanToken,
+    ts.SyntaxKind.LessThanEqualsToken, ts.SyntaxKind.GreaterThanEqualsToken,
+])
+
+const isLiteralValue = (node) =>
+    ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isNumericLiteral(node) ||
+    node.kind === ts.SyntaxKind.TrueKeyword || node.kind === ts.SyntaxKind.FalseKeyword
+
+/** A value that is never a URL: a literal, a `typeof` test, or a boolean expression. */
+function isPlainValue(node, param, seen) {
+    if (ts.isParenthesizedExpression(node)) return isPlainValue(node.expression, param, seen)
+    if (isLiteralValue(node)) return true
+    if (ts.isTypeOfExpression(node)) return isIdentNamed(node.expression, "URL") || isUrlCanParse(node.expression)
+    return isBooleanExpr(node, param, seen)
+}
+
+/** An expression that can only evaluate to a boolean; `new URL(param)` is allowed only as a discarded comma operand. */
+function isBooleanExpr(node, param, seen) {
+    if (ts.isParenthesizedExpression(node)) return isBooleanExpr(node.expression, param, seen)
+    if (node.kind === ts.SyntaxKind.TrueKeyword || node.kind === ts.SyntaxKind.FalseKeyword) return true
+    if (ts.isCallExpression(node)) {
+        const ok = isUrlCanParse(node.expression) && node.arguments.length === 1 && isIdentNamed(node.arguments[0], param)
+        if (ok) seen.canParse = true
+        return ok
+    }
+    if (ts.isPrefixUnaryExpression(node)) {
+        return node.operator === ts.SyntaxKind.ExclamationToken && isPlainValue(node.operand, param, seen)
+    }
+    if (ts.isConditionalExpression(node)) {
+        return isBooleanExpr(node.condition, param, seen) && isBooleanExpr(node.whenTrue, param, seen) && isBooleanExpr(node.whenFalse, param, seen)
+    }
+    if (ts.isBinaryExpression(node)) {
+        const op = node.operatorToken.kind
+        if (COMPARE_OPS.has(op)) return isPlainValue(node.left, param, seen) && isPlainValue(node.right, param, seen)
+        if (op === ts.SyntaxKind.AmpersandAmpersandToken || op === ts.SyntaxKind.BarBarToken) {
+            return isBooleanExpr(node.left, param, seen) && isBooleanExpr(node.right, param, seen)
+        }
+        if (op === ts.SyntaxKind.CommaToken) return isParseOfParam(node.left, param) && isBooleanExpr(node.right, param, seen)
+    }
+    return false
+}
+
+/** `new URL(param)` evaluated for its throw only. */
+function isParseOfParam(node, param) {
+    if (ts.isParenthesizedExpression(node)) return isParseOfParam(node.expression, param)
+    return (
+        ts.isNewExpression(node) &&
+        isIdentNamed(node.expression, "URL") &&
+        node.arguments?.length === 1 &&
+        isIdentNamed(node.arguments[0], param)
+    )
+}
+
+/** Allowlist of statements a parse-only helper body may contain; every return is boolean-valued. */
+function helperNodeOk(node, param, seen) {
+    if (ts.isBlock(node)) return node.statements.every((s) => helperNodeOk(s, param, seen))
+    if (ts.isTryStatement(node)) {
+        const { catchClause, finallyBlock } = node
+        return !finallyBlock && helperNodeOk(node.tryBlock, param, seen) &&
+            (!catchClause || (!catchClause.variableDeclaration && helperNodeOk(catchClause.block, param, seen)))
+    }
+    if (ts.isReturnStatement(node)) return !!node.expression && isBooleanExpr(node.expression, param, seen)
+    return false
+}
+
+/**
+ * A top-level function of an ES module, with one plain parameter, whose body
+ * is only allowlisted nodes ending in a boolean from `URL.canParse(param)`,
+ * and whose name is used nowhere in the file except as a direct callee.
+ */
+function isParseOnlyHelper(sf, name) {
+    if (!ts.isExternalModule(sf)) return false
+    const decls = sf.statements.filter((s) => ts.isFunctionDeclaration(s) && s.name?.text === name)
+    if (decls.length !== 1) return false
+    const fn = decls[0]
+    if (!fn.body || fn.parameters.length !== 1 || fn.asteriskToken || fn.modifiers?.some((m) => m.kind !== ts.SyntaxKind.ExportKeyword)) return false
+    const [parameter] = fn.parameters
+    if (!ts.isIdentifier(parameter.name) || parameter.initializer || parameter.dotDotDotToken || parameter.modifiers) return false
+    const param = parameter.name.text
+    if (param === name || param === "URL") return false
+    const seen = { canParse: false }
+    if (!helperNodeOk(fn.body, param, seen) || !seen.canParse) return false
+    let clean = true
+    const visit = (node) => {
+        if (!clean) return
+        if (ts.isWithStatement(node)) clean = false
+        if (ts.isIdentifier(node) && node.text === name && node !== fn.name) {
+            const p = node.parent
+            const isPropertyName = (ts.isPropertyAccessExpression(p) && p.name === node) ||
+                ((ts.isPropertyAssignment(p) || ts.isMethodDeclaration(p) || ts.isPropertyDeclaration(p)) && p.name === node)
+            const isDirectCallee = ts.isCallExpression(p) && p.expression === node
+            if (!isPropertyName && !isDirectCallee) clean = false
+        }
+        ts.forEachChild(node, visit)
+    }
+    visit(sf)
+    return clean
+}
+
 const BINDING_PARENTS = [
     ts.isVariableDeclaration, ts.isParameter, ts.isFunctionDeclaration, ts.isFunctionExpression,
     ts.isClassDeclaration, ts.isClassExpression, ts.isBindingElement, ts.isImportSpecifier,
@@ -407,6 +544,75 @@ function shadowsUrl(sf) {
             if ((ts.isIdentifier(left) && left.text === "URL") || (ts.isPropertyAccessExpression(left) && left.name.text === "URL")) {
                 found = true
             }
+        }
+        ts.forEachChild(node, visit)
+    }
+    visit(sf)
+    return found
+}
+
+const GLOBAL_OBJECTS = new Set(["URL", "globalThis", "window", "self", "global"])
+const REDEFINERS = new Set(["defineProperty", "defineProperties", "assign", "setPrototypeOf", "set"])
+
+/** Whether a node is (inside) the target of an assignment, destructuring write, or for-in/of binding. */
+function isWriteTarget(node) {
+    let child = node
+    for (let p = node.parent; p; child = p, p = p.parent) {
+        if (ts.isParenthesizedExpression(p) || ts.isArrayLiteralExpression(p) || ts.isObjectLiteralExpression(p) ||
+            ts.isSpreadElement(p) || ts.isSpreadAssignment(p) || ts.isShorthandPropertyAssignment(p)) continue
+        if (ts.isPropertyAssignment(p)) {
+            if (p.initializer === child) continue
+            return false
+        }
+        if (ts.isBinaryExpression(p)) {
+            return p.left === child && p.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && p.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+        }
+        if (ts.isForInStatement(p) || ts.isForOfStatement(p)) return p.initializer === child
+        if (ts.isPrefixUnaryExpression(p) || ts.isPostfixUnaryExpression(p)) {
+            return p.operator === ts.SyntaxKind.PlusPlusToken || p.operator === ts.SyntaxKind.MinusMinusToken
+        }
+        return false
+    }
+    return false
+}
+
+/**
+ * Whether this file could change what `URL` or `URL.canParse` means for any
+ * file: a binding, write or destructuring write of `URL`, any mention of
+ * `canParse` other than the call or a `typeof` test of `URL.canParse`, a
+ * string key "URL"/"canParse", a `with` statement, or defineProperty/assign
+ * style calls aimed at `URL` or a global object.
+ */
+function tampersUrl(sf) {
+    let found = false
+    const visit = (node) => {
+        if (found) return
+        const parent = node.parent
+        if (ts.isWithStatement(node)) found = true
+        if (ts.isIdentifier(node) && parent) {
+            if (node.text === "URL") {
+                if (parent.name === node && BINDING_PARENTS.some((is) => is(parent))) found = true
+                else if (ts.isShorthandPropertyAssignment(parent) || isWriteTarget(node)) found = true
+                else if (ts.isPropertyAccessExpression(parent) && parent.name === node && isWriteTarget(parent)) found = true
+            }
+            if (node.text === "canParse") {
+                const allowed = ts.isPropertyAccessExpression(parent) && parent.name === node && isIdentNamed(parent.expression, "URL") &&
+                    ((ts.isCallExpression(parent.parent) && parent.parent.expression === parent) || ts.isTypeOfExpression(parent.parent))
+                if (!allowed) found = true
+            }
+        }
+        if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+            const keyed = parent && (ts.isElementAccessExpression(parent) || (ts.isCallExpression(parent) && parent.arguments[0] !== node))
+            if (node.text === "canParse" || (node.text === "URL" && keyed)) found = true
+        }
+        if (ts.isElementAccessExpression(node) && !isLiteralValue(node.argumentExpression) && isWriteTarget(node)) {
+            const base = ts.isPropertyAccessExpression(node.expression) ? node.expression.name : node.expression
+            if (ts.isIdentifier(base) && GLOBAL_OBJECTS.has(base.text)) found = true
+        }
+        if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && REDEFINERS.has(node.expression.name.text)) {
+            const target = node.arguments[0]
+            if (target && ts.isIdentifier(target) && GLOBAL_OBJECTS.has(target.text)) found = true
+            if (target && ts.isPropertyAccessExpression(target) && GLOBAL_OBJECTS.has(target.name.text)) found = true
         }
         ts.forEachChild(node, visit)
     }
@@ -471,10 +677,10 @@ function checkScript(file, source, { inline }) {
             const text = node.text ?? node.rawText ?? ""
             const openEnd = !ts.isTemplateTail(node) && OPEN_AUTHORITY.test(text)
             inventory(file, text, { atStart: ts.isTemplateHead(node), onFound, openEnd })
-            if (openEnd && !isDiscardedUrlParse(node, urlIsShadowed)) {
-                fail(file, `(d) template builds a host at run time: ${JSON.stringify(`${text}\${...}`)}`)
-            } else if (openEnd) {
-                counts.discardedUrlParses += 1
+            if (openEnd) {
+                if (isDiscardedUrlParse(node, urlIsShadowed || urlTamperedAnywhere)) counts.discardedUrlParses += 1
+                else if (isCanParseArgument(node, urlIsShadowed, sf)) counts.canParseTemplates += 1
+                else fail(file, `(d) template builds a host at run time: ${JSON.stringify(`${text}\${...}`)}`)
             }
         } else if (
             ts.isBinaryExpression(node) &&
@@ -553,6 +759,30 @@ function stripComments(html) {
             if (i === Infinity) return out
         }
     }
+}
+
+/** Drops leading C0 controls and spaces (U+0000-U+0020), as a browser does before parsing a URL. */
+function stripLeadingC0(value) {
+    let i = 0
+    while (i < value.length && value.charCodeAt(i) <= 0x20) i += 1
+    return value.slice(i)
+}
+
+/** Whether inline scripts or `on*=` handlers in markup could change what `URL` or `URL.canParse` means. */
+function markupTampersUrl(html) {
+    for (const m of html.matchAll(RAW_TEXT)) {
+        const body = m[3].replace(/^\s*<!\[CDATA\[|\]\]>\s*$/g, "")
+        if (m[1].toLowerCase() === "style" || body.trim() === "") continue
+        const sf = ts.createSourceFile("inline.js", body, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+        if (sf.parseDiagnostics.length > 0 || tampersUrl(sf)) return true
+    }
+    const markup = stripComments(html.replace(RAW_TEXT, (m, tag, attrs) => `<${tag}${attrs}></${tag}>`))
+    for (const m of markup.matchAll(TAG)) {
+        const runsScript = ([name, value]) =>
+            /^on/i.test(name) || name === "srcdoc" || /^javascript:/i.test(stripLeadingC0(value.replace(/[\t\r\n]/g, "")))
+        if (attributes(m[2], () => {}).some(runsScript)) return true
+    }
+    return false
 }
 
 function checkMarkup(file, html) {
@@ -644,6 +874,19 @@ const byKind = new Map()
 const allFiles = walk(DIST)
 
 for (const path of allFiles) {
+    const ext = extname(path).toLowerCase()
+    const kind = TEXT_KINDS.get(ext)
+    if (kind !== "js" && kind !== "html" && kind !== "svg") continue
+    const text = readFileSync(path, "utf8")
+    if (kind !== "js") {
+        if (markupTampersUrl(text)) urlTamperedAnywhere = true
+        continue
+    }
+    const sf = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+    if (sf.parseDiagnostics.length > 0 || tampersUrl(sf)) urlTamperedAnywhere = true
+}
+
+for (const path of allFiles) {
     const file = relative(DIST, path)
     const ext = extname(path).toLowerCase()
     if (BINARY.has(ext)) continue
@@ -719,7 +962,7 @@ console.log(
     `check-dist-self-contained: ${allFiles.length} files in dist (${kinds}); ${counts.tags} tags, ` +
         `${counts.loads} load targets judged, ${counts.inlineScripts} inline scripts, ${counts.cssRefs} CSS refs, ` +
         `${counts.loadCalls} written-out JS loads (${counts.dynamicImports} import(), ${counts.staticImports} static), ` +
-        `${counts.jsStrings} JS strings, ${seen.size} distinct absolute URLs`,
+        `${counts.jsStrings} JS strings, ${counts.canParseTemplates} canParse-only templates, ${seen.size} distinct absolute URLs`,
 )
 if (failures.length > 0) {
     console.error(`FAIL: ${failures.length} problem(s)`)
