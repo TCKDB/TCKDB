@@ -380,7 +380,7 @@ describe("focus, control, kind and text tokens clear their contrast floors in ev
 
     for (const [blockName, block] of Object.entries(BLOCKS)) {
         for (const token of ["focus-ring", "control-border"]) {
-            // No control sits on a kind tint (see the stylesheet scan below), so they are not measured for the border.
+            // Nothing outside theme.css uses a kind tint as a background (see the scan below), so no control sits on one.
             const backgrounds = token === "control-border" ? [...SURFACES, "status-ok-bg", "notice-bg"] : SURFACES
             it(`${blockName}: --${token} is at least 3:1 on every surface${token === "control-border" ? " and status tint" : ""}`, () => {
                 const { ratio, against } = worst(block, token, backgrounds)
@@ -466,27 +466,38 @@ describe("every focus outline is drawn with --focus-ring", () => {
     }
 })
 
-describe("no control rule uses a kind tint as its background", () => {
-    const CONTROL_SELECTOR = /(^|[\s,>+~])(input|select|textarea|button)\b|-(button|toggle|option|control|select)\b|\.btn\b/
-    const TINT_BACKGROUND = /background(?:-color)?\s*:[^;}]*var\(--kind-[a-z-]+-bg\)/
+describe("nothing outside theme.css uses a kind tint as a background", () => {
+    // A container on a kind tint puts its buttons on the tint without the button rule naming it, so any use fails.
+    const ALLOWED_USES: string[] = []
+    const TSX_SOURCES = Object.fromEntries(
+        Object.entries(import.meta.glob("./**/*.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>)
+            .filter(([path]) => !path.endsWith(".test.tsx")),
+    )
+    const CSS_USE = /background(?:-color)?\s*:[^;}]*var\(--kind-[a-z-]+-bg\)/g
+    const TSX_USE = /background(?:Color)?["']?\s*:\s*[^,}\n]*var\(--kind-[a-z-]+-bg\)/g
 
-    function controlRulesOnTints(css: string): string[] {
-        const offenders: string[] = []
-        for (const match of stripComments(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-            const selector = match[1].trim().replace(/\s+/g, " ")
-            if (CONTROL_SELECTOR.test(selector) && TINT_BACKGROUND.test(match[2])) offenders.push(selector)
-        }
-        return offenders
+    function tintBackgrounds(source: string, pattern: RegExp): string[] {
+        return [...stripComments(source).matchAll(pattern)].map((m) => m[0].trim())
     }
 
     for (const [name, css] of Object.entries(NON_TOKEN_STYLESHEETS)) {
-        it(`${name} puts no control on a kind tint`, () => {
-            expect(controlRulesOnTints(css)).toEqual([])
+        it(`${name} uses no kind tint as a background`, () => {
+            expect(tintBackgrounds(css, CSS_USE).filter((use) => !ALLOWED_USES.includes(use))).toEqual([])
         })
     }
 
-    it("flags a control rule that does (the scan is not vacuous)", () => {
-        expect(controlRulesOnTints(".x-button { background: var(--kind-ts-bg); } .chip { background: var(--kind-ts-bg); }")).toEqual([".x-button"])
+    it("no component or page sets a kind tint as an inline background", () => {
+        const offenders = Object.entries(TSX_SOURCES).flatMap(([path, source]) => tintBackgrounds(source, TSX_USE).map((use) => `${path}: ${use}`))
+        expect(offenders).toEqual([])
+        expect(Object.keys(TSX_SOURCES).length).toBeGreaterThan(50)
+    })
+
+    it("flags a tint used by a container, a control or an inline style (the scan is not vacuous)", () => {
+        expect(tintBackgrounds(".panel { background: var(--kind-ts-bg); }", CSS_USE)).toHaveLength(1)
+        expect(tintBackgrounds(".x-button { background-color: var(--kind-network-bg); }", CSS_USE)).toHaveLength(1)
+        expect(tintBackgrounds(".chip { color: var(--kind-ts-ink); }", CSS_USE)).toHaveLength(0)
+        expect(tintBackgrounds("<div style={{ background: \"var(--kind-species-bg)\" }} />", TSX_USE)).toHaveLength(1)
+        expect(tintBackgrounds("<div style={{ backgroundColor: 'var(--kind-species-bg)' }} />", TSX_USE)).toHaveLength(1)
     })
 })
 

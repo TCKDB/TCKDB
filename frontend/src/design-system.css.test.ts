@@ -155,19 +155,24 @@ function stripComments(source: string): string {
 
 describe("font weights are 400, 600 or 700 only, in every stylesheet", () => {
     const ALLOWED = new Set(["400", "600", "700"])
-    const WEIGHT_DECLARATIONS = [
-        /(?<![\w-])font-weight\s*:\s*([^;}]+)/g,
-        /(?<![\w-])font\s*:\s*(\d{3})\b/g,
-        /--type-[\w-]+-font\s*:\s*(\d{3})\b/g,
-    ]
+    const SIZE = /(?:\d*\.?\d+(?:px|rem|em|%|pt)|clamp\()/
+
+    /** Every numeric weight in the text before the size of a `font` shorthand value (`italic 500 1rem ...`). */
+    function shorthandWeights(value: string): string[] {
+        const size = SIZE.exec(value)
+        const head = size ? value.slice(0, size.index) : value
+        return head.split(/\s+/).filter((token) => /^\d{3}$/.test(token))
+    }
 
     /** Every weight a stylesheet's rules declare. `@font-face` ranges declare what a file ships, not a use. */
     function weightsDeclared(css: string): string[] {
         const body = stripComments(css).replace(/@font-face\s*\{[^}]*\}/g, "")
         const out: string[] = []
-        for (const pattern of WEIGHT_DECLARATIONS) {
-            for (const match of body.matchAll(pattern)) out.push(...match[1].trim().split(/\s+/).filter((token) => /^\d+$/.test(token) || /^(lighter|bolder)$/.test(token)))
+        for (const match of body.matchAll(/(?<![\w-])font-weight\s*:\s*([^;}]+)/g)) {
+            out.push(...match[1].trim().split(/\s+/).filter((token) => /^\d+$/.test(token) || /^(lighter|bolder)$/.test(token)))
         }
+        for (const match of body.matchAll(/(?<![\w-])font\s*:\s*([^;}]+)/g)) out.push(...shorthandWeights(match[1]))
+        for (const match of body.matchAll(/--type-[\w-]+-font\s*:\s*([^;}]+)/g)) out.push(...shorthandWeights(match[1]))
         return out
     }
 
@@ -181,6 +186,8 @@ describe("font weights are 400, 600 or 700 only, in every stylesheet", () => {
         const all = Object.values(ALL_STYLESHEETS).flatMap(weightsDeclared)
         expect(all.length).toBeGreaterThan(30)
         expect(weightsDeclared(".a { font-weight: 500; } .b { font: 300 1rem var(--sans); } .c { font-weight: 600; }")).toEqual(["500", "600", "300"])
+        expect(weightsDeclared(".a { font: italic 500 1rem var(--sans); }")).toEqual(["500"])
+        expect(weightsDeclared(".a { font: 700 1rem var(--sans); }")).toEqual(["700"])
     })
 })
 

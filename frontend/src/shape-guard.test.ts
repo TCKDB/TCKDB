@@ -46,8 +46,8 @@ function radiusDeclarationCount(css: string): number {
 /** Numeric SVG `rx` attributes above the limit in TSX source. */
 function svgRxOffenders(source: string): string[] {
     const out: string[] = []
-    for (const match of source.matchAll(/\brx=(?:\{(\d+(?:\.\d+)?)\}|"(\d+(?:\.\d+)?)")/g)) {
-        const value = Number(match[1] ?? match[2])
+    for (const match of source.matchAll(/\brx\s*=\s*(?:\{\s*(\d+(?:\.\d+)?)\s*\}|"\s*(\d+(?:\.\d+)?)\s*"|'\s*(\d+(?:\.\d+)?)\s*')/g)) {
+        const value = Number(match[1] ?? match[2] ?? match[3])
         if (value > MAX_RADIUS_PX) out.push(match[0])
     }
     return out
@@ -87,12 +87,55 @@ describe("SVG rx is at most 6", () => {
     })
 
     it("finds rx attributes (the scan is not vacuous)", () => {
-        const total = Object.values(SOURCES).reduce((n, source) => n + [...source.matchAll(/\brx=/g)].length, 0)
+        const total = Object.values(SOURCES).reduce((n, source) => n + [...source.matchAll(/\brx\s*=/g)].length, 0)
         expect(total).toBeGreaterThanOrEqual(3)
         expect(svgRxOffenders('<rect rx={999} /><rect rx="8" /><rect rx={4} /><rect rx={NODE_RX} />')).toEqual(["rx={999}", 'rx="8"'])
+        expect(svgRxOffenders('<rect rx={ 999 } /><rect rx = "9" /><rect rx = { 7 } /><rect rx = { 6 } />')).toHaveLength(3)
     })
 
     it("keeps the dependency graph's node radius within the limit", () => {
         expect(NODE_RX).toBeLessThanOrEqual(MAX_RADIUS_PX)
+    })
+})
+
+/** Every non-inset `box-shadow` and `drop-shadow` filter in the CSS, as the offending declaration. */
+function softShadows(css: string): string[] {
+    const out: string[] = []
+    const body = stripComments(css)
+    for (const match of body.matchAll(/(?<![\w-])box-shadow\s*:\s*([^;}]+)/g)) {
+        const value = match[1].trim()
+        if (value === "none") continue
+        // Commas inside var()/rgba() are not separators between shadows.
+        const parts = value.split(/,(?![^(]*\))/).map((part) => part.trim())
+        if (parts.some((part) => !part.startsWith("inset"))) out.push(`box-shadow: ${value}`)
+    }
+    for (const match of body.matchAll(/(?<![\w-])filter\s*:\s*([^;}]*drop-shadow[^;}]*)/g)) out.push(`filter: ${match[1].trim()}`)
+    return out
+}
+
+describe("no soft shadows outside the glossary popover", () => {
+    const SCANNED = Object.entries(STYLESHEETS).filter(([path]) => path !== "./term.css")
+
+    for (const [path, css] of SCANNED) {
+        it(`${path} has only inset box-shadows and no drop-shadow`, () => {
+            expect(softShadows(css)).toEqual([])
+        })
+    }
+
+    it("scans the stylesheets and sees their box-shadow declarations (the scan is not vacuous)", () => {
+        expect(SCANNED.length).toBeGreaterThan(30)
+        const insetRings = SCANNED.reduce((n, [, css]) => n + [...stripComments(css).matchAll(/box-shadow\s*:\s*inset/g)].length, 0)
+        expect(insetRings).toBeGreaterThanOrEqual(3)
+    })
+
+    it("flags a soft shadow, a lifted card and a drop-shadow filter", () => {
+        expect(softShadows(".a { box-shadow: 0 8px 28px -12px var(--shadow-color); }")).toHaveLength(1)
+        expect(softShadows(".a { box-shadow: inset 0 0 0 1px var(--control-border), 0 1px 2px rgba(0, 0, 0, .2); }")).toHaveLength(1)
+        expect(softShadows(".a { filter: drop-shadow(0 2px 4px black); }")).toHaveLength(1)
+        expect(softShadows(".a { box-shadow: inset 0 0 0 1px var(--control-border); } .b { box-shadow: none; }")).toEqual([])
+    })
+
+    it("allows the glossary popover its one small shadow", () => {
+        expect(softShadows(STYLESHEETS["./term.css"])).toHaveLength(1)
     })
 })
