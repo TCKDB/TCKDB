@@ -234,6 +234,12 @@ const thermoRecordSchema = z.object({
     // means the deposit did not state one. A plain sibling field, restored
     // from a short-lived `reference: {...}` grouping (reverted).
     enthalpy_reference_kind: z.enum(['formation_298k']).nullable().optional(),
+    // What the depositor declared the values describe; `null` means none was declared.
+    thermodynamic_target: z.object({
+        kind: z.string(),
+        conformer_group_ref: z.string().nullable().optional(),
+        declared_by: z.string().nullable().optional(),
+    }).passthrough().nullable().optional(),
     enthalpy_formation_0k_kj_mol: z.number().nullable().optional(),
     enthalpy_formation_0k_uncertainty_kj_mol: z.number().nullable().optional(),
     h298_kj_mol: z.number().nullable().optional(),

@@ -1,7 +1,7 @@
 /** The kind each record route puts in its title, in the loading and missing states and again once loaded. */
 export const ROUTE_TITLE_KINDS = {
     "/species/:ref": "Species",
-    "/species-entries/:ref": "Species entry",
+    "/species-entries/:ref": "Molecule",
     "/conformer-groups/:ref": "Conformer basin",
     "/conformer-observations/:ref": "Conformer observation",
     "/calculations/:ref": "Calculation",

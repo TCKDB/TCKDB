@@ -503,7 +503,7 @@ describe("EntryThermoSection", () => {
     })
 
     // Finding 16: "MODEL KIND: nasa" under a heading that already says
-    // "NASA-7 thermo record" repeats the exact word the heading just used.
+    // "NASA 7-coefficient polynomial thermo record" repeats the exact word the heading just used.
     it("never prints a 'Model kind' row that repeats the card's own heading", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
@@ -511,7 +511,7 @@ describe("EntryThermoSection", () => {
         expect(within(alphaCard).queryByText("Model kind")).not.toBeInTheDocument()
         // The heading itself is unaffected -- this isn't "nothing about
         // the model kind renders at all".
-        expect(within(alphaCard).getByText("NASA-7 thermo record")).toBeVisible()
+        expect(within(alphaCard).getByText("NASA 7-coefficient polynomial thermo record")).toBeVisible()
     })
 
     it("never hides a superseded record — renders the notice alongside the record, not instead of it", async () => {
@@ -996,7 +996,7 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         // the data commit, but a ToC entry registers from an effect that
         // lands a tick later -- under full-suite load that tick was
         // sometimes still pending, and the sync query missed the link.
-        const link = await screen.findByRole("link", { name: "NASA-7 thermo record" })
+        const link = await screen.findByRole("link", { name: "NASA 7-coefficient polynomial thermo record" })
         expect(link).toHaveAttribute("href", "#thermo-heading-thm_alpha")
         // The href doesn't merely look plausible -- the id it points to is
         // a real element actually on the page.
@@ -1004,9 +1004,9 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
 
         // The two other present model kinds register too, each under its
         // own label -- not just NASA-7.
-        expect(await screen.findByRole("link", { name: "NASA-9 thermo record" }))
+        expect(await screen.findByRole("link", { name: "NASA 9-coefficient polynomial thermo record" }))
             .toHaveAttribute("href", "#thermo-heading-thm_beta")
-        expect(await screen.findByRole("link", { name: "Wilhoit thermo record" }))
+        expect(await screen.findByRole("link", { name: "Wilhoit polynomial thermo record" }))
             .toHaveAttribute("href", "#thermo-heading-thm_gamma")
     })
 
@@ -1022,7 +1022,7 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         // in the ToC, so registration has actually run by the time the
         // absence below is asserted. Asserting the absence before that
         // wait would pass trivially on an unregistered nav.
-        expect(await screen.findByRole("link", { name: "Wilhoit thermo record" })).toBeVisible()
+        expect(await screen.findByRole("link", { name: "Wilhoit polynomial thermo record" })).toBeVisible()
         expect(screen.queryByRole("link", { name: /NASA-7/ })).not.toBeInTheDocument()
     })
 
@@ -1054,10 +1054,10 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         pageWithToc()
         await screen.findByText("thm_delta")
 
-        const first = await screen.findByRole("link", { name: "NASA-7 thermo record 1" })
-        const second = await screen.findByRole("link", { name: "NASA-7 thermo record 2" })
+        const first = await screen.findByRole("link", { name: "NASA 7-coefficient polynomial thermo record 1" })
+        const second = await screen.findByRole("link", { name: "NASA 7-coefficient polynomial thermo record 2" })
         // Absence asserted after the positive waits, so the nav has registered.
-        expect(screen.queryByRole("link", { name: "NASA-7 thermo record" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("link", { name: "NASA 7-coefficient polynomial thermo record" })).not.toBeInTheDocument()
         expect(first).toHaveAttribute("href", "#thermo-heading-thm_alpha")
         expect(second).toHaveAttribute("href", "#thermo-heading-thm_delta")
     })
@@ -1099,7 +1099,7 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         // detail -- jsdom's default queries do not filter those out by
         // visibility, so this reads the DOM structure directly instead).
         const ownHeadingRow = groupCard.querySelector(":scope > .science-record-heading") as HTMLElement
-        expect(ownHeadingRow.querySelector("h3")?.textContent).toBe("NASA-7 thermo record")
+        expect(ownHeadingRow.querySelector("h3")?.textContent).toBe("NASA 7-coefficient polynomial thermo record")
         // Every ref is still listed, in the always-visible group-refs table
         // (not hidden behind "show all").
         const refsTable = within(groupCard).getByRole("table", { name: "Records sharing these identical values" })

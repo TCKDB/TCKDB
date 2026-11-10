@@ -1,12 +1,12 @@
-import { loadEntryTransport } from "../api/transportApi"
+import { loadEntryTransportWithSources } from "../api/transportApi"
 import { usePagedList } from "./usePagedList"
 
 /**
- * Loads one page of the transport records deposited for one species entry (the first, until `goTo` moves; the list is paged, never silently cut), with the
- * eager (always-present) field set only. The two heavy include tokens are
- * opt-in per disclosure via `useEntryListSection` — see
+ * Loads one page of the transport records deposited for one species entry (the first, until `goTo` moves; the list is
+ * paged, never silently cut), with the source calculations each record cites, so the numbers table on the same page
+ * and this tab share one request. The review history is opt-in per disclosure via `useEntryListSection`: see
  * `components/EntryTransportSection.tsx`.
  */
 export function useEntryTransport(entryRef: string) {
-    return usePagedList(entryRef, loadEntryTransport)
+    return usePagedList(entryRef, loadEntryTransportWithSources)
 }

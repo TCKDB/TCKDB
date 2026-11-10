@@ -2,28 +2,19 @@ import { Link } from "react-router-dom"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import type { SpeciesIdentity } from "../domain/recordIdentity"
-import { words } from "../domain/provenanceFormat"
 import { stereoDescription } from "../domain/recordFacets"
 import { termSymbolSpoken } from "../domain/electronicState"
 import { publicElectronicStateLabel, publicTermSymbol } from "../domain/publicText"
+import { entryLede } from "../domain/entryLede"
 import { Formula } from "./Formula"
 import { RecordIdentityHeader } from "./RecordIdentityHeader"
 import { RefsDisclosure } from "./RefsDisclosure"
 
-// `words` returns `null` for a missing/empty token (a case none of the
-// tokens on this component's own wire type can actually hit -- `species_entry_kind`,
-// `electronic_state_kind` and `review.status` are all non-nullable enum
-// strings) but the fallback keeps this call site total rather than
-// asserting a non-null enum shape it doesn't otherwise depend on.
-function displayToken(value: string) {
-    return words(value) ?? value
-}
-
 function availabilityText(entry: SpeciesEntryProjection) {
     return `${entry.availability.has_conformers ? "Conformers" : "No conformers"}`
-        + `${entry.availability.has_thermo ? " · thermo" : ""}`
-        + `${entry.availability.has_statmech ? " · statmech" : ""}`
-        + `${entry.availability.has_transport ? " · transport" : ""}`
+        + `${entry.availability.has_thermo ? " · Thermochemistry" : ""}`
+        + `${entry.availability.has_statmech ? " · Statistical mechanics" : ""}`
+        + `${entry.availability.has_transport ? " · Transport" : ""}`
 }
 
 /**
@@ -96,16 +87,16 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
             a page heading) for no disambiguation this page did not
             already have. */}
         <RecordIdentityHeader
-            kicker="Species entry · deposited scientific record"
+            kicker="One version of a molecule"
+            lede={entryLede(entry)}
             glyph="species-entry"
             review={entry.review.status}
             titleVariant="display-1"
             title={entry.formula ? <Formula value={entry.formula} /> : entry.canonicalSmiles}
             identity={identity}
-            ownRef={{ label: "Species entry ref", value: entry.species_entry_ref }}
+            ownRef={{ label: "Entry ref", value: entry.species_entry_ref }}
         />
         <ul className="entry-facts" aria-label="Record facts">
-            <FactItem label="Entry kind / state" value={`${displayToken(entry.species_entry_kind)} / ${displayToken(entry.electronic_state_kind)}`} />
             <FactItem label="Archive availability" value={availabilityText(entry)} />
             {/* The state label and term symbol only when they are in the grammar the API enforces on write
                 (`electronicState.ts`); anything else is a legacy free-text value and stays hidden (house rule,
@@ -132,7 +123,7 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
             trailing gap. */}
         <p className="note entry-ts-browse-note">
             <Link to={`${BROWSE_KIND_PATHS.transition_state}?participant_smiles=${encodeURIComponent(entry.canonicalSmiles)}`}>
-                Transition states for reactions of this species
+                Transition states for reactions of this molecule
             </Link>
         </p>
         {/* Collapsed by default (see `RefsDisclosure`) -- nothing else on

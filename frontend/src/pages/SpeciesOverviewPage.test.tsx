@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { act, cleanup, render, screen, within, waitFor } from "@testing-library/react"
 import App from "../App"
 import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
+import { resetAllRequestCaches } from "../api/requestCache"
 import { titleHasKind } from "../test/routeTitleKinds"
 
 const speciesRef = "spc_atp56uqux2ajao7hvckx7gx7ca"
@@ -177,11 +178,13 @@ describe("species overview", () => {
         const first = render(<App />)
         expect(await screen.findByRole("heading", { name: "Species not found" })).toBeVisible()
         first.unmount()
+        resetAllRequestCaches()
 
         server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [{}] })))
         const second = render(<App />)
         expect(await screen.findByRole("alert")).toHaveTextContent("Species data could not be read")
         second.unmount()
+        resetAllRequestCaches()
 
         server.use(http.get("/api/v1/scientific/species/search", () => (
             HttpResponse.json({ detail: "archive unavailable" }, { status: 503 })

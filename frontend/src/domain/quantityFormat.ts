@@ -105,6 +105,29 @@ export function scientific(value: number | null | undefined, digits: number, uni
 }
 
 /**
+ * `significant(value, digits, unit)`: like `scientific`, but a mantissa carries no trailing zeros, so a value
+ * never prints a digit it was not given (0.00123 at 4 figures is `1.23 × 10⁻³`, not `1.230 × 10⁻³`).
+ */
+export function significant(value: number | null | undefined, digits: number, unit?: string | null): Quantity | null {
+    const quantity = scientific(value, digits, unit)
+    if (quantity?.exponent === undefined) return quantity
+    return { ...quantity, value: quantity.value.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") }
+}
+
+/** The number exactly as stored, in plain digits (never `1e-7`); `null` for an absent or non-finite value. */
+export function deposited(value: number | null | undefined, unit?: string | null): Quantity | null {
+    if (value === null || value === undefined || !Number.isFinite(value)) return null
+    const text = String(value)
+    if (!/e/i.test(text)) return { value: text, unit: unit ?? null }
+    // A very small or very large number would print as `1e-7`; plain digits are used while they stay readable and exact.
+    const plain = Number(value).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 20 })
+    const readable = Number(plain) === Number(value) && plain.replace(/[-.]/g, "").length <= 15
+    if (readable) return { value: plain, unit: unit ?? null }
+    const [mantissa, exponent] = Number(value).toExponential().split("e")
+    return { value: mantissa, exponent: exponent.startsWith("-") ? `${MINUS}${exponent.slice(1)}` : exponent.replace("+", ""), unit: unit ?? null }
+}
+
+/**
  * What `fillValue` decided to render, for a caller (typically a small React
  * component — see `components/QuantityValue.tsx`) to turn into markup. This is
  * the pure half of `landing.py:2725-2760`'s `fillValue`; that function
@@ -158,6 +181,12 @@ export function fillValue(value: FillableValue): Filled {
  * | transport well depth ε/k        | 1      | K       | transportView headline |
  * | transport dipole moment         | 3      | D       | transportView facts  |
  * | calculation electronic energy   | 6      | hartree | calculationView headline |
+ * | thermo ΔH°(0 K) and uncertainty | 2      | kJ/mol  | (this archive's tables) |
+ * | statmech rotational constants   | 4 sf, no trailing zeros | cm⁻¹ | (this archive's tables) |
+ * | thermo reference pressure       | as deposited | bar | (this archive's tables) |
+ * | thermo temperature range ends   | as deposited | K   | (this archive's tables) |
+ * | transport polarizability        | as deposited | Å³  | (this archive's tables) |
+ * | transport rotational relaxation | as deposited | (none) | (this archive's tables) |
  * | kinetics activation energy Ea   | 2      | kJ/mol  | kineticsView headline |
  * | kinetics pre-exponential A      | 3 sf (scientific) | per A_units enum | kineticsView headline |
  * | kinetics temperature exponent n | 4 sf (scientific) | (none)  | kineticsView facts   |
@@ -172,6 +201,11 @@ export function fillValue(value: FillableValue): Filled {
  */
 export const QUANTITY_SPECS = {
     thermo_h298_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
+    thermo_enthalpy_formation_0k_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
+    thermo_enthalpy_formation_0k_uncertainty_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
+    thermo_reference_pressure_bar: { kind: "deposited", unit: "bar" },
+    thermo_temperature_k: { kind: "deposited", unit: "K" },
+    statmech_rotational_constant_cm1: { kind: "significant", digits: 4, unit: "cm⁻¹" },
     thermo_h298_uncertainty_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
     thermo_s298_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
     thermo_s298_uncertainty_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
@@ -179,11 +213,26 @@ export const QUANTITY_SPECS = {
     transport_sigma_angstrom: { kind: "fixed", digits: 3, unit: "Å" },
     transport_epsilon_over_k_k: { kind: "fixed", digits: 1, unit: "K" },
     transport_dipole_debye: { kind: "fixed", digits: 3, unit: "D" },
+    transport_polarizability_angstrom3: { kind: "deposited", unit: "Å³" },
+    transport_rotational_relaxation: { kind: "deposited", unit: null },
     calculation_electronic_energy_hartree: { kind: "fixed", digits: 6, unit: "hartree" },
     kinetics_ea_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
     kinetics_a: { kind: "scientific", digits: 3, unit: null },
     kinetics_n: { kind: "scientific", digits: 4, unit: null },
-} as const satisfies Record<string, { kind: "fixed" | "scientific"; digits: number; unit: string | null }>
+} as const satisfies Record<string, QuantitySpec>
+
+/** How a quantity is printed: to a digit count ("fixed", "scientific", "significant"), or exactly as stored ("deposited"). */
+export type QuantitySpec =
+    | { kind: "fixed" | "scientific" | "significant"; digits: number; unit: string | null }
+    | { kind: "deposited"; unit: string | null }
+
+/** The specs that print the stored number as it is, with no digit count. */
+export const DEPOSITED_SPEC_KEYS = [
+    "thermo_reference_pressure_bar",
+    "thermo_temperature_k",
+    "transport_polarizability_angstrom3",
+    "transport_rotational_relaxation",
+] as const
 
 export type QuantitySpecKey = keyof typeof QUANTITY_SPECS
 
@@ -200,5 +249,7 @@ export function formatQuantity(
 ): Quantity | null {
     const spec = QUANTITY_SPECS[key]
     const unit = unitOverride !== undefined ? unitOverride : spec.unit
-    return spec.kind === "fixed" ? fixed(value, spec.digits, unit) : scientific(value, spec.digits, unit)
+    if (spec.kind === "deposited") return deposited(value, unit)
+    if (spec.kind === "fixed") return fixed(value, spec.digits, unit)
+    return spec.kind === "significant" ? significant(value, spec.digits, unit) : scientific(value, spec.digits, unit)
 }

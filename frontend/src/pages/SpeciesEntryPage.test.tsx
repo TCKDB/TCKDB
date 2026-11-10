@@ -381,7 +381,7 @@ describe("species-entry page: identity and errors", () => {
         expect(subscript).toHaveTextContent("3")
         expect(screen.getByText("[CH3]")).toBeVisible()
         expect(screen.getByText("0 / doublet (2)")).toBeVisible()
-        expect(screen.getByText("Conformers · thermo · statmech")).toBeVisible()
+        expect(screen.getByText("Conformers · Thermochemistry · Statistical mechanics")).toBeVisible()
 
         // SMILES and InChIKey are ALWAYS visible chemistry identifiers in
         // the identity header -- never behind the References disclosure.
@@ -423,13 +423,13 @@ describe("species-entry page: identity and errors", () => {
 
         // This entry's own ref: first fact in the identity block, at rest,
         // with the data face and a copy button -- never inside References.
-        expect(within(facts).getByText("Species entry ref")).toBeVisible()
+        expect(within(facts).getByText("Entry ref")).toBeVisible()
         const ownRefValue = within(facts).getByText(entryRef)
         expect(ownRefValue).toBeVisible()
         expect(ownRefValue.tagName).toBe("CODE")
         expect(ownRefValue).toHaveClass("data")
-        expect(Array.from(facts.children)[0]).toHaveTextContent("Species entry ref")
-        expect(within(facts).getByRole("button", { name: /copy species entry ref/i })).toBeVisible()
+        expect(Array.from(facts.children)[0]).toHaveTextContent("Entry ref")
+        expect(within(facts).getByRole("button", { name: /copy entry ref/i })).toBeVisible()
         expect(within(refsPanel).queryByText(entryRef)).not.toBeInTheDocument()
 
         // The availability card grid ("Available in this entry" / "View
@@ -448,13 +448,13 @@ describe("species-entry page: identity and errors", () => {
     // heading in document order (`PageShell` renders `identity` before
     // `children`), which a DOM-order check on `compareDocumentPosition`
     // catches and a same-page `getByRole` presence check would not.
-    it('links "Transition states for reactions of this species" to the TS browse with participant_smiles prefilled, placed after the identity heading', async () => {
+    it('links "Transition states for reactions of this molecule" to the TS browse with participant_smiles prefilled, placed after the identity heading', async () => {
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         const heading = await screen.findByRole("heading", { name: "CH3" })
 
-        const link = screen.getByRole("link", { name: "Transition states for reactions of this species" })
+        const link = screen.getByRole("link", { name: "Transition states for reactions of this molecule" })
         // Points at the canonical `/transition-states` path now (its own
         // route, per the per-kind browse paths change), not the legacy
         // `/species?kind=transition_state`.
@@ -653,8 +653,8 @@ describe("species-entry page: conformer picker", () => {
         // Thermo/statmech/transport are entry-scoped lists, independent of
         // whether any conformer basin is projected -- they still render.
         await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
-        expect(await screen.findByText("thm_one")).toBeVisible()
-        expect(screen.getByText("thm_two")).toBeVisible()
+        expect(await within(await screen.findByRole("tabpanel")).findByText("thm_one")).toBeVisible()
+        expect(within(screen.getByRole("tabpanel")).getByText("thm_two")).toBeVisible()
     })
 
     it("shows ONE empty state and no tab strip when the entry has nothing recorded at all (the N2 case)", async () => {
@@ -867,13 +867,13 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}/thermo`)
         render(<App />)
-        expect(await screen.findByText("thm_one")).toBeVisible()
-        expect(screen.getByText("thm_two")).toBeVisible()
+        expect(await within(await screen.findByRole("tabpanel")).findByText("thm_one")).toBeVisible()
+        expect(within(screen.getByRole("tabpanel")).getByText("thm_two")).toBeVisible()
         // thm_three is linked to a DIFFERENT conformer than the one
         // selected -- present (never deleted) but demoted into the
         // collapsed "other conformers" disclosure, so it's in the document
         // without being visible until opened.
-        expect(screen.getByText("thm_three")).toBeInTheDocument()
+        expect(within(screen.getByRole("tabpanel")).getByText("thm_three")).toBeInTheDocument()
         expect(screen.queryByRole("alert")).not.toBeInTheDocument()
 
         const otherDetails = document.querySelector(".conformer-attribution-other") as HTMLDetailsElement
@@ -914,7 +914,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}/thermo`)
         render(<App />)
-        await screen.findByText("thm_one")
+        await within(await screen.findByRole("tabpanel")).findByText("thm_one")
 
         const toc = await screen.findByRole("navigation", { name: "Sections on this page" })
         const labels = within(toc).getAllByRole("link").map((link) => link.textContent)
@@ -928,7 +928,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}/thermo`)
         render(<App />)
-        await screen.findByText("thm_one")
+        await within(await screen.findByRole("tabpanel")).findByText("thm_one")
         // thm_one: score 6/8, two false checks (uncertainty, SCF stability).
         expect(screen.getByText("Evidence completeness (6 / 8)")).toBeVisible()
         expect(screen.getByText("uncertainty")).toBeVisible()
@@ -1020,8 +1020,9 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
 describe("species-entry page: tab clicks and Back are client-side, no re-fetch (bug #1 / #2 regression)", () => {
     function countingHandlers(counts: { species: number; conformers: number }) {
         return [
-            http.get("/api/v1/scientific/species/search", () => {
-                counts.species += 1
+            http.get("/api/v1/scientific/species/search", ({ request }) => {
+                // The "other versions" read asks by `species_ref`; only the entry lookup counts here.
+                if (new URL(request.url).searchParams.has("species_entry_ref")) counts.species += 1
                 return HttpResponse.json({ records: [{
                     species_ref: "spc_atp56uqux2ajao7hvckx7gx7ca",
                     canonical_smiles: "[CH3]", inchi_key: "WCYWZMWISLQXQU-UHFFFAOYSA-N", formula: "CH3",
@@ -1103,7 +1104,7 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
         // already worked before the fix -- kept here so a regression that
         // reintroduces the asymmetry in the other direction is caught too.
         await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
-        expect(await screen.findByText("thm_one")).toBeVisible()
+        expect(await within(await screen.findByRole("tabpanel")).findByText("thm_one")).toBeVisible()
         expect(screen.queryByRole("heading", { name: "Loading species entry" })).not.toBeInTheDocument()
         expect(counts).toEqual({ species: 1, conformers: 1 })
         expect(document.querySelector(".entry-page")).toBe(entryPageNodeBefore)
@@ -1158,8 +1159,9 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
                 }],
             }] })),
             http.get("/api/v1/scientific/conformers/search", () => HttpResponse.json({ records: conformerRecords() })),
-            http.get(`/api/v1/scientific/species-entries/${entryRef}/thermo`, () => {
-                thermoRequests += 1
+            http.get(`/api/v1/scientific/species-entries/${entryRef}/thermo`, ({ request }) => {
+                // The numbers table reads the list without include tokens; only the tab's own read counts.
+                if (new URL(request.url).searchParams.has("include")) thermoRequests += 1
                 return HttpResponse.json({
                     species_entry_ref: entryRef,
                     review_summary: { approved: 0, under_review: 0, not_reviewed: 3, deprecated: 0, rejected: 0, total: 3 },
@@ -1180,19 +1182,19 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
         await findConformerHeading()
 
         await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
-        await screen.findByText("thm_one")
+        await within(await screen.findByRole("tabpanel")).findByText("thm_one")
         expect(thermoRequests).toBe(1)
 
         // Leave the tab -- `EntryThermoSection` unmounts (`TabPanelBody`
         // renders a different component for "statmech").
         await user.click(screen.getByRole("tab", { name: "Statistical mechanics" }))
         await screen.findByRole("heading", { name: "From Conformer Group 1" })
-        expect(screen.queryByText("thm_one")).not.toBeInTheDocument()
+        expect(within(screen.getByRole("tabpanel")).queryByText("thm_one")).not.toBeInTheDocument()
 
         // Revisit Thermochemistry -- `EntryThermoSection` remounts. Without
         // the cache, this is a second `GET .../thermo`.
         await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
-        expect(await screen.findByText("thm_one")).toBeVisible()
+        expect(await within(await screen.findByRole("tabpanel")).findByText("thm_one")).toBeVisible()
         expect(thermoRequests).toBe(1)
     })
 })

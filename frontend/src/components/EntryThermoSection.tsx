@@ -10,7 +10,6 @@ import {
     allProductLevelsAgree,
     productLevelsAgree,
     anyNotation,
-    resolveProductLevels,
     type ProductLevels,
 } from "../domain/productLevels"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
@@ -25,6 +24,8 @@ import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { Disclosure } from "./Disclosure"
 import { SectionHeading } from "./PageSections"
+import { thermoRecordProductLevels } from "../domain/entryNumbers"
+import { thermoModelKindLabel as modelKindLabel } from "../domain/thermoModelKind"
 import { SettingsBehindValue, SettingsLegend } from "./EffectiveSettings"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
@@ -33,27 +34,6 @@ import { MadeUnderLine } from "./MadeUnderLine"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SupersessionNotice } from "./SupersessionNotice"
 import { ThermoCpChart } from "./ThermoCpChart"
-
-/**
- * A thermo record's own geometry/frequency/energy levels of theory: the
- * server's additive `levels` field when present; else derived from this
- * record's own `source_calculations[]` roles when THAT is present (an
- * older API shipping the roles but not yet the derived field); else the
- * oldest fallback -- `provenance.level_of_theory` alone, reused for all
- * three, exactly the single value this page showed before any of the
- * three was split out. Unlike statmech's `source_calculations` (a lazy,
- * include-gated fetch), thermo's is always eager -- nothing on this
- * surface is request-gated (see the module docstring on `api/thermoApi.ts`)
- * -- so this is a plain synchronous function, never a "loading" state.
- */
-function thermoRecordProductLevels(record: ThermoRecord): ProductLevels {
-    if (record.levels) return resolveProductLevels(record.levels, null)
-    if (record.source_calculations && record.source_calculations.length > 0) {
-        return resolveProductLevels(null, record.source_calculations)
-    }
-    const lot = record.provenance?.level_of_theory ?? null
-    return { geometry: lot, frequency: lot, energy: lot, energy_source: lot ? "opt" : null }
-}
 
 // ---------------------------------------------------------------------------
 // The thermo/statmech/transport read surfaces are ENTRY-SCOPED LISTS
@@ -82,14 +62,6 @@ function thermoRecordProductLevels(record: ThermoRecord): ProductLevels {
 // conformer-linked and was removed outright, not patched.
 // ---------------------------------------------------------------------------
 
-const MODEL_KIND_LABELS: Record<string, string> = {
-    nasa: "NASA-7",
-    nasa9: "NASA-9",
-    wilhoit: "Wilhoit",
-    points: "Point-based",
-    scalar: "Scalar",
-}
-const modelKindLabel = (kind: string) => MODEL_KIND_LABELS[kind] ?? kind.replaceAll("_", " ")
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 
 export function EntryThermoSection({ entryRef, conformer, conformers }: {

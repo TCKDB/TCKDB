@@ -85,11 +85,12 @@ export function EntryTransportSection({ entryRef }: { entryRef: string }) {
     )
 }
 
-function useTransportSection<T>(entryRef: string, token: TransportSectionToken) {
+/** `carried` are the records on screen: a token the list was asked for is read from them instead of requested again. */
+function useTransportSection<T>(entryRef: string, token: TransportSectionToken, carried?: TransportRecord[]) {
     return useEntryListSection<TransportRecord, T, TransportSectionToken>(
         entryRef,
         token,
-        (ref, tok, signal) => loadEntryTransportSection(ref, tok, signal),
+        (ref, tok, signal) => (carried ? Promise.resolve(carried) : loadEntryTransportSection(ref, tok, signal)),
         (record) => record.transport.transport_ref,
         (record) => readTransportSectionField<T>(record, token),
     )
@@ -104,7 +105,7 @@ function TransportList({ listKey, meta, onPage, response }: {
 }) {
     const { records, review_summary: reviewSummary, pagination } = response
 
-    const [sourceCalcsState, openSourceCalcs] = useTransportSection<TransportRecord["source_calculations"]>(listKey, "source_calculations")
+    const [sourceCalcsState, openSourceCalcs] = useTransportSection<TransportRecord["source_calculations"]>(listKey, "source_calculations", records)
     const [reviewState, openReview] = useTransportSection<TransportRecord["review_history"]>(listKey, "review")
 
     return (
