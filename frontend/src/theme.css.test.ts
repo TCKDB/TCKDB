@@ -380,8 +380,10 @@ describe("focus, control, kind and text tokens clear their contrast floors in ev
 
     for (const [blockName, block] of Object.entries(BLOCKS)) {
         for (const token of ["focus-ring", "control-border"]) {
-            it(`${blockName}: --${token} is at least 3:1 on every surface`, () => {
-                const { ratio, against } = worst(block, token, SURFACES)
+            // No control sits on a kind tint (see the stylesheet scan below), so they are not measured for the border.
+            const backgrounds = token === "control-border" ? [...SURFACES, "status-ok-bg", "notice-bg"] : SURFACES
+            it(`${blockName}: --${token} is at least 3:1 on every surface${token === "control-border" ? " and status tint" : ""}`, () => {
+                const { ratio, against } = worst(block, token, backgrounds)
                 expect(ratio, `--${token} vs --${against} (${ratio.toFixed(2)}:1)`).toBeGreaterThanOrEqual(3)
             })
         }
@@ -462,4 +464,36 @@ describe("every focus outline is drawn with --focus-ring", () => {
             expect(offenders).toEqual([])
         })
     }
+})
+
+describe("no control rule uses a kind tint as its background", () => {
+    const CONTROL_SELECTOR = /(^|[\s,>+~])(input|select|textarea|button)\b|-(button|toggle|option|control|select)\b|\.btn\b/
+    const TINT_BACKGROUND = /background(?:-color)?\s*:[^;}]*var\(--kind-[a-z-]+-bg\)/
+
+    function controlRulesOnTints(css: string): string[] {
+        const offenders: string[] = []
+        for (const match of stripComments(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+            const selector = match[1].trim().replace(/\s+/g, " ")
+            if (CONTROL_SELECTOR.test(selector) && TINT_BACKGROUND.test(match[2])) offenders.push(selector)
+        }
+        return offenders
+    }
+
+    for (const [name, css] of Object.entries(NON_TOKEN_STYLESHEETS)) {
+        it(`${name} puts no control on a kind tint`, () => {
+            expect(controlRulesOnTints(css)).toEqual([])
+        })
+    }
+
+    it("flags a control rule that does (the scan is not vacuous)", () => {
+        expect(controlRulesOnTints(".x-button { background: var(--kind-ts-bg); } .chip { background: var(--kind-ts-bg); }")).toEqual([".x-button"])
+    })
+})
+
+describe("a control that drops its outline keeps a focus-within ring", () => {
+    it(".search-row hides its input's outline and draws the 3px --focus-ring on the row", () => {
+        const css = stripComments(NON_TOKEN_STYLESHEETS["index.css"])
+        expect(css).toMatch(/\.search-row input\s*\{[^}]*outline:\s*0/)
+        expect(css).toMatch(/\.search-row:focus-within\s*\{[^}]*outline:\s*3px solid var\(--focus-ring\)/)
+    })
 })

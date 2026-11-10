@@ -153,20 +153,35 @@ function stripComments(source: string): string {
     return source.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 
-describe("no font-weight: 700 or 500 literal anywhere in src/**/*.css", () => {
-    // MEASURED (the finding this guards): every font-weight: 700 in the
-    // live site was browser-synthesised, because only Plex 400/600 ship
-    // as font files -- a literal 700 or 500 anywhere renders as a FAKE
-    // bold/medium the browser fabricates, never the real typeface. Scans
-    // every discovered stylesheet, not a hand-picked subset (see the
-    // "discovered, not assumed" describe block above).
-    const WEIGHT_LITERAL = /font(?:-weight)?\s*:\s*(?:[^;]*\s)?(700|500)\b/g
+describe("font weights are 400, 600 or 700 only, in every stylesheet", () => {
+    const ALLOWED = new Set(["400", "600", "700"])
+    const WEIGHT_DECLARATIONS = [
+        /(?<![\w-])font-weight\s*:\s*([^;}]+)/g,
+        /(?<![\w-])font\s*:\s*(\d{3})\b/g,
+        /--type-[\w-]+-font\s*:\s*(\d{3})\b/g,
+    ]
+
+    /** Every weight a stylesheet's rules declare. `@font-face` ranges declare what a file ships, not a use. */
+    function weightsDeclared(css: string): string[] {
+        const body = stripComments(css).replace(/@font-face\s*\{[^}]*\}/g, "")
+        const out: string[] = []
+        for (const pattern of WEIGHT_DECLARATIONS) {
+            for (const match of body.matchAll(pattern)) out.push(...match[1].trim().split(/\s+/).filter((token) => /^\d+$/.test(token) || /^(lighter|bolder)$/.test(token)))
+        }
+        return out
+    }
 
     for (const [name, css] of Object.entries(ALL_STYLESHEETS)) {
-        it(`${name} contains no font-weight: 700 or 500`, () => {
-            expect(stripComments(css).match(WEIGHT_LITERAL)).toBeNull()
+        it(`${name} declares only weights 400, 600 and 700`, () => {
+            expect(weightsDeclared(css).filter((weight) => !ALLOWED.has(weight))).toEqual([])
         })
     }
+
+    it("finds declared weights and rejects others (the scan is not vacuous)", () => {
+        const all = Object.values(ALL_STYLESHEETS).flatMap(weightsDeclared)
+        expect(all.length).toBeGreaterThan(30)
+        expect(weightsDeclared(".a { font-weight: 500; } .b { font: 300 1rem var(--sans); } .c { font-weight: 600; }")).toEqual(["500", "600", "300"])
+    })
 })
 
 describe("exactly one .kv-list dt size rule across src/**/*.css", () => {
@@ -509,6 +524,13 @@ describe("the self-hosted font families are exactly the reviewed set", () => {
     const FAMILIES = [...indexCss.matchAll(/@font-face\s*\{\s*font-family:\s*"([^"]+)"/g)].map((m) => m[1])
     it("declares Source Sans 3, Source Code Pro and the Noto Sans Math symbols face, once or twice each, nothing else", () => {
         expect([...new Set(FAMILIES)].sort()).toEqual(["Noto Sans Math Symbols", "Source Code Pro", "Source Sans 3"])
+    })
+    it("gives Source Sans 3 and Source Code Pro an italic face, so italics are never synthesised", () => {
+        for (const family of ["Source Sans 3", "Source Code Pro"]) {
+            const faces = [...indexCss.matchAll(/@font-face\s*\{[^}]*\}/g)].map((m) => m[0]).filter((face) => face.includes(`"${family}"`))
+            expect(faces.some((face) => /font-style:\s*italic/.test(face)), family).toBe(true)
+            expect(faces.some((face) => /font-style:\s*normal/.test(face)), family).toBe(true)
+        }
     })
     it("points every face at a file under /fonts/", () => {
         const urls = [...indexCss.matchAll(/@font-face[^}]*?url\("([^"]+)"\)/g)].map((m) => m[1])

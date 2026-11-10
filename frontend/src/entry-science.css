@@ -131,7 +131,6 @@
     display: block;
     margin-bottom: .3rem;
     font: 600 .72rem var(--mono);
-    letter-spacing: .06em;
 }
 
 /* `.model-block-heading` is a real `<h4>` at every call site — the

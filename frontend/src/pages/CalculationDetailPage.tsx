@@ -1631,13 +1631,7 @@ function FreqModesSection({ calculationRef, available, applicable }: { calculati
             {(rows) => (rows?.length ? (
                 <div className="table-scroll">
                     <table className="data-table" aria-label="Vibrational modes">
-                        {/* SCIENTIFIC ERROR fixed here (sweep finding, same class
-                            as the Cp chart's y-axis title): `.data-table th`
-                            (design-system.css) uppercases every header via
-                            `--type-label-strong-transform` -- "cm-1" (wavenumber,
-                            lower-case "cm" for centimetre) read "CM-1".
-                            `.t-preserve-case` (design-system.css) is the shared
-                            fix. */}
+                        {/* `.t-preserve-case` keeps these symbols and units in their own case. */}
                         <thead><tr><th scope="col">Mode</th><th className="t-preserve-case" scope="col">Frequency (cm-1)</th><th scope="col">Imaginary</th></tr></thead>
                         <tbody>
                             {rows.map((row) => (

@@ -2,6 +2,7 @@
 @font-face { font-family: "Source Sans 3"; src: url("/fonts/source-sans-3/SourceSans3VF-Upright.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
 @font-face { font-family: "Source Sans 3"; src: url("/fonts/source-sans-3/SourceSans3VF-Italic.woff2") format("woff2"); font-weight: 200 900; font-style: italic; font-display: swap; }
 @font-face { font-family: "Source Code Pro"; src: url("/fonts/source-code-pro/SourceCodeVF-Upright.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Source Code Pro"; src: url("/fonts/source-code-pro/SourceCodeVF-Italic.woff2") format("woff2"); font-weight: 200 900; font-style: italic; font-display: swap; }
 /* The one glyph neither Source family has (⇌). Swap this face and `--font-symbols` to change the fallback. */
 @font-face { font-family: "Noto Sans Math Symbols"; src: url("/fonts/noto-sans-math/NotoSansMath-arrows-relations.woff2") format("woff2"); font-weight: 400; font-display: swap; unicode-range: U+21CC; }
 :root { --radius: 6px; --radius-sm: 4px; --font-symbols: "Noto Sans Math Symbols"; --display: "Source Sans 3", var(--font-symbols), system-ui, sans-serif; --sans: "Source Sans 3", var(--font-symbols), system-ui, sans-serif; --mono: "Source Code Pro", "Source Sans 3", var(--font-symbols), ui-monospace, monospace;
@@ -15,23 +16,10 @@
     --measure-prose: 40rem; }
 * { box-sizing: border-box; } body { margin: 0; min-width: 320px; background: var(--page-bg); } a { color: inherit; text-decoration: none; } button, input { font: inherit; }
 
-/* Kills the UA `monospace` fallback: MEASURED ~100 `<code>` elements
-   across 6 pages with no global `code` rule of their own, rendering
-   whatever generic monospace face the OS/browser substitutes rather
-   than the loaded Plex Mono every other mono run on the site uses.
-   `pre`/`kbd`/`samp` get the same face for the same reason -- none of
-   the four has a page-level rule setting `font-family` today. */
+/* `code`, `pre`, `kbd` and `samp` use the mono face rather than the UA monospace fallback. */
 code, pre, kbd, samp { font-family: var(--mono); }
 
-/* Every `font-weight: 700` measured across the live site was browser-
-   SYNTHESISED, not real: only Plex 400/600 are loaded (the @font-face
-   block above), so an `<h1>`-`<h4>`/`<th>`/`<strong>`/`<b>` that never
-   set its own weight rendered the UA default `bold` (700) as a faux-
-   bold the browser fabricated on the fly, never the actual typeface.
-   This sets the honest weight this app actually ships a font file for.
-   Any page rule that already sets its own weight (`font: 600 …` or a
-   bare `font-weight:`) still wins the cascade for that property, same
-   value either way -- this only changes elements that never set one. */
+/* Headings, `th` and `strong` that set no weight of their own use 600. */
 h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 .skip-link { position: fixed; z-index: 3; top: -4rem; left: 1rem; padding: .65rem .9rem; background: var(--surface); color: var(--accent-700); border: 1px solid var(--accent); } .skip-link:focus { top: 1rem; }
 .skip-link:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
@@ -138,8 +126,8 @@ main:focus, main h1[tabindex="-1"]:focus { outline: none; }
     box-shadow: inset 0 0 0 1px var(--control-border);
 }
 .identifier-search-mode-option:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
-.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--control-border); border-radius: var(--radius); background: var(--surface);  }
-.search-row:focus-within { border-color: var(--focus-ring);  }
+.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--control-border); border-radius: var(--radius); background: var(--surface); }
+.search-row:focus-within { border-color: var(--focus-ring); outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 /* The search-icon glyph ("⌕") -- a decorative symbol sized to sit
    comfortably inside the input row, not text carrying a type-scale role
    (the same "icon glyph, not prose" call `.linkage-connector`'s arrow
@@ -314,7 +302,7 @@ main:focus, main h1[tabindex="-1"]:focus { outline: none; }
    primitive now (`.destination card` in `ArchiveHomePage.tsx`); this rule
    keeps only the flex layout and hover motion a destination card needs on
    top of it. */
-.destination-grid { display: grid; max-width: 65rem; margin: 0 auto; padding: 1.4rem 1.25rem 4.5rem; grid-template-columns: repeat(3,1fr); gap: 1rem; }.destination { display: flex; min-height: 12rem; flex-direction: column; align-items: flex-start; transition: transform .15s, box-shadow .15s, border-color .15s; }.destination:hover { transform: translateY(-2px); border-color: var(--accent-300);  }.destination-icon { display: grid; width: 2.1rem; height: 2.1rem; place-items: center; border-radius: var(--radius); background: var(--accent-50); color: var(--accent); }
+.destination-grid { display: grid; max-width: 65rem; margin: 0 auto; padding: 1.4rem 1.25rem 4.5rem; grid-template-columns: repeat(3,1fr); gap: 1rem; }.destination { display: flex; min-height: 12rem; flex-direction: column; align-items: flex-start; transition: border-color .15s; }.destination:hover { border-color: var(--accent-300); }.destination-icon { display: grid; width: 2.1rem; height: 2.1rem; place-items: center; border-radius: var(--radius); background: var(--accent-50); color: var(--accent); }
 /* `--type-heading-2`: a card naming one of three top-level destinations reads as a heading, not a small UI label. */
 /* SHOULD-FIX-13 (species-entry/browse/chrome residuals re-review): item
    13 asks this file to decide the destination-card title step and say

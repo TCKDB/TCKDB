@@ -409,7 +409,6 @@
 .conformer-basin-rotor dt {
     color: var(--muted);
     font: 600 .64rem var(--mono);
-    letter-spacing: .05em;
 }
 
 .conformer-basin-rotor dd {
@@ -731,8 +730,7 @@
        page (chart toggles, disclosure summaries). Weight itself is still
        overridden per state, never left at `--type-ui`'s own default 600:
        400 here reads as the inactive tab against the selected tab's
-       explicit 600 immediately below -- never the browser-synthesised 500
-       this app's two loaded Plex weights (400/600) can't produce. */
+       explicit 600 immediately below. */
     font: var(--type-ui-font);
     letter-spacing: var(--type-ui-tracking);
     font-weight: 400;

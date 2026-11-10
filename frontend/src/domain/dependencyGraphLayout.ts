@@ -163,7 +163,7 @@ const NODE_H = 40
 // reserve room for it: a point sitting exactly ON the flat half-height
 // line lands INSIDE the rounded corner's cut, not on the actual drawn
 // border, once it's within `rx` of a corner.
-export const NODE_RX = 8
+export const NODE_RX = 6
 
 // Edge labels and the centre node's type pill use `--type-label-font` / `--type-label-strong-font`
 // (.8125rem sans). 7.6px per character is a conservative upper bound for that face, so the longest label

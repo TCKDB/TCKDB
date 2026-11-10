@@ -40,16 +40,7 @@
     border-radius: var(--radius);
     background: var(--surface-sunken);
     color: var(--ink-2);
-    /* Was `.92rem/1.55 var(--serif)` -- a one-off size/face outside the
-       13-step scale. `--type-body-font` (400 1rem/1.6 sans), not
-       `--type-value-font`: this box states its verdict as a full
-       SENTENCE ("This is not a first-order saddle point...") read as
-       prose, not a bare fact-list value -- the same register
-       `.record-identity-ambiguous p` already uses for an explanatory
-       callout box elsewhere in this header/ledger vocabulary, and
-       `--type-body-font` in this design system is sans (not serif; serif
-       is reserved for headings/hero copy), so this also drops the
-       one-off serif face along with the one-off size. */
+    /* The verdict is a full sentence read as prose, so it uses `--type-body-font` (sans) rather than `--type-value-font`. */
     font: var(--type-body-font);
 }
 

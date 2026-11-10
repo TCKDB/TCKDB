@@ -472,7 +472,6 @@
     color: var(--muted);
     /* Accessibility-pass floor (11px / .6875rem) -- was .6rem (9.6px). */
     font-size: .6875rem;
-    letter-spacing: .05em;
 }
 
 .stage-table th + th,

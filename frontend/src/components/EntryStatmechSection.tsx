@@ -268,12 +268,7 @@ function StatmechList({ listKey, meta, onPage, response, conformer, conformers }
                 {(_record, rows) => (rows && rows.length > 0 ? (
                     <div className="table-scroll table-scroll--compact">
                         <table className="data-table" aria-label="Electronic levels">
-                            {/* SCIENTIFIC ERROR fixed here (sweep finding, same
-                                class as the Cp chart's y-axis title and the
-                                Arrhenius chart's "s⁻¹"): `.data-table th`
-                                (design-system.css) uppercases every header, and
-                                "cm⁻¹" (wavenumber) read "CM⁻¹". `.t-preserve-case`
-                                (design-system.css) is the shared fix. */}
+                            {/* `.t-preserve-case` keeps these symbols and units in their own case. */}
                             <thead><tr><th scope="col">Level</th><th className="t-preserve-case" scope="col">Energy (cm⁻¹)</th><th scope="col">Degeneracy</th></tr></thead>
                             <tbody>
                                 {rows.map((row) => (

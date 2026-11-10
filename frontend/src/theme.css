@@ -90,7 +90,6 @@
     --atom-N: #3a5fcd;
     --atom-other: #7a5aa6;
     --bond: #59636e;
-    --atom-line: #1f2328;
 
     /* ---- Semantic states (two different ambers; do not merge) ---- */
     --warning: #a15c00;            /* failure register, e.g. clipboard denied */
@@ -166,7 +165,6 @@
         --atom-N: #7f9dff;
         --atom-other: #c9a0e8;
         --bond: #9da7b3;
-        --atom-line: #0d1015;
 
         --warning: #e2a33e;
         --notice-border: #9c7c22;
@@ -234,7 +232,6 @@
     --atom-N: #7f9dff;
     --atom-other: #c9a0e8;
     --bond: #9da7b3;
-    --atom-line: #0d1015;
 
     --warning: #e2a33e;
     --notice-border: #9c7c22;

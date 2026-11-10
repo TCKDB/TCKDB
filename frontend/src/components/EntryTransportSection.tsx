@@ -211,17 +211,7 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
                 (`unitOverride: null`) -- printing "3.800 Å" next to a
                 "Sigma (Å)" label would say the unit twice. Only the
                 precision half of the digits table applies here. */}
-            {/* SCIENTIFIC ERROR fixed here (sweep finding): `.kv-list dt`
-                (design-system.css) uppercases every fact label via
-                `--type-label-transform`. "Epsilon / k (K)" is the sharpest
-                instance -- lower-case `k` here is the Boltzmann constant
-                (the Lennard-Jones well-depth parameter epsilon/k_B), and
-                uppercasing it collided visually with the UNIT "(K)"
-                immediately after it: "EPSILON / K (K)" reads as the same
-                symbol twice. The other three labels in this group are the
-                same "quantity name (unit)" shape, so all four keep their
-                written case together -- `.t-preserve-case`
-                (design-system.css) is the shared fix. */}
+            {/* `.t-preserve-case` keeps these symbols and units in their own case. */}
             <dl className="kv-list">
                 <div><dt className="t-preserve-case">Sigma (Å)</dt><dd><QuantityValue value={formatQuantity("transport_sigma_angstrom", core.sigma_angstrom, null)} /></dd></div>
                 <div><dt className="t-preserve-case">Epsilon / k (K)</dt><dd><QuantityValue value={formatQuantity("transport_epsilon_over_k_k", core.epsilon_over_k_k, null)} /></dd></div>

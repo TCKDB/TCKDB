@@ -125,7 +125,6 @@
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: var(--surface);
-    
 }
 
 /* A hairline between the archive's pages and the reader's own session,
