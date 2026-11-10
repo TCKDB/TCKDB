@@ -93,8 +93,8 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
                     <li key={node.id} className="rel-map-item">
                         <RecordGlyph kind={node.kind} />
                         {" "}
-                        {node.to === null ? <span>{node.label}</span> : <Link to={node.to}>{node.label}</Link>}
-                        <span className="rel-map-item-note">{[node.relation, node.found].filter(Boolean).join(", ")}</span>
+                        {node.to === null ? <span>{node.label}</span> : <Link to={node.to} aria-describedby={`${headingId}-${node.id}-note`}>{node.label}</Link>}
+                        <span className="rel-map-item-note" id={`${headingId}-${node.id}-note`}>{[node.relation, node.found].filter(Boolean).join(", ")}</span>
                     </li>
                 ))}
             </ul>

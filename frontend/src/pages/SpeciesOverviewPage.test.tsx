@@ -261,6 +261,10 @@ describe("molecule overview: versions", () => {
         const list = within(rail).getByRole("list", { name: "Connected records" })
         expect(within(rail).getByRole("link", { name: `minimum · ground state, A version of this molecule, ${entryRef}` })).toHaveAttribute("href", `/species-entries/${entryRef}`)
         expect(within(list).getAllByRole("listitem")[1]).toHaveTextContent("A version of this molecule, spe_secondgroundentryrecordabcdefgh")
+        const same = within(list).getAllByRole("link", { name: "minimum · ground state" })
+        expect(same).toHaveLength(2)
+        expect(same[0]).toHaveAccessibleDescription(`A version of this molecule, ${entryRef}`)
+        expect(same[1]).toHaveAccessibleDescription("A version of this molecule, spe_secondgroundentryrecordabcdefgh")
         expect(within(rail).getByRole("link", { name: "This molecule (you are here)" })).toBeVisible()
     })
 
