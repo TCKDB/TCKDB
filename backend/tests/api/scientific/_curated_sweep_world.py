@@ -42,7 +42,6 @@ from app.db.models.calculation import (
     CalculationScanResult,
 )
 from app.db.models.common import (
-    ThermoTargetKind,
     AppUserRole,
     ArrheniusAUnits,
     AtomMapSource,
@@ -67,6 +66,7 @@ from app.db.models.common import (
     StatmechCalculationRole,
     SubmissionRecordType,
     ThermoCalculationRole,
+    ThermoTargetKind,
     TransportCalculationRole,
 )
 from app.db.models.record_review import RecordReview
