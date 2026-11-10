@@ -29,7 +29,7 @@ export type WalkControl = {
 }
 
 /**
- * Walks one list. The first page is asked for by the plain ref, exactly as the tabs ask, so a page a tab already holds
+ * Walks one list. The first page is asked for by the plain ref, exactly as the tabs ask (unless a first-page limit is given), so a page a tab already holds
  * is not fetched twice. Later pages ask for `LATER_PAGE_LIMIT` records at a time, or for the first page's own window
  * when the server refuses that size, so 1000 records cost 1 + 5 requests.
  */

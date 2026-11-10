@@ -31,7 +31,7 @@ export function useWalked<T>(ref: string, load: (ref: string, control: WalkContr
             mounted = false
             for (const subscription of control.subscriptions) subscription.unsubscribe()
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- `load` is a module-level function; only the ref re-runs the walk
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- `load` is a module-level function that can also switch with the `preview` flag, which is fixed per instance; only the ref re-runs the walk
     }, [ref])
     return state.ref === ref ? state : { ref, status: "loading" }
 }
