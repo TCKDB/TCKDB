@@ -243,6 +243,14 @@ def test_health_endpoint_is_not_rate_limited(rate_limited_client):
         assert r.status_code == 200
 
 
+def test_health_lookup_uses_the_decoded_path(rate_limited_client):
+    """A decoded trailing newline is not the health path, so it is limited."""
+    for _ in range(settings.rate_limit_anon_other_per_minute):
+        assert rate_limited_client.get("/api/v1/readyz%0A").status_code != 429
+    assert rate_limited_client.get("/api/v1/readyz%0A").status_code == 429
+    assert rate_limited_client.get("/api/v1/health").status_code == 200
+
+
 def test_rate_limit_can_be_disabled(rate_limited_client, monkeypatch):
     """Flipping the master switch off short-circuits the middleware."""
     monkeypatch.setattr(settings, "rate_limit_enabled", False)
@@ -361,8 +369,8 @@ def test_decoded_query_or_fragment_chars_cannot_shorten_the_path(path):
 
 def test_real_search_paths_stay_reads():
     assert _bucket("POST", "/api/v1/scientific/reactions/search") == "anon_read"
-    assert _bucket("POST", "/api/v1/scientific/species/search", api_key="k") == "auth_read"
-    assert _bucket("POST", "/api/v1/scientific/species/search", query=b"a=1") == "anon_read"
+    assert _bucket("POST", "/api/v1/scientific/kinetics/search", api_key="k") == "auth_read"
+    assert _bucket("POST", "/api/v1/scientific/thermo/search", query=b"a=1") == "anon_read"
 
 
 def test_other_scientific_post_stays_anon_other():
@@ -373,6 +381,7 @@ def test_other_scientific_post_stays_anon_other():
 @pytest.mark.parametrize(
     "path",
     [
+        _REL_BASE + "\n",
         _REL_BASE + "/extra",
         _REL_BASE + "/compare/extra",
         _REL_BASE + "/manifest/extra",
