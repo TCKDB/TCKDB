@@ -23,8 +23,9 @@ Internal match taxonomy (grounded in three axes):
 
 Visibility, order and selection (docs/specs/browse_order.md):
 - Every read applies the scientific reads' default visibility (rejected and deprecated records are hidden unless
-  ``include_rejected`` / ``include_deprecated`` is set) and their read profile (``?profile=curated`` withholds records
-  below the ``approved`` floor, with no count of them: hidden == unknown == absent).
+  ``include_rejected`` / ``include_deprecated`` is set) and their read profile (``?profile=curated`` lists only
+  records at ``approved``, with no count of the ones below it; a record's own detail page and the evidence it links
+  are served badged, and only rejected and deprecated ones are withheld, ADR 0023).
 - Records are listed in the display order (review status, then deposition time newest first, then id descending),
   echoed in ``order``. The first record is the first in display order, never a recommendation.
 - ``selection=lowest_energy|latest|earliest`` is an explicit request to narrow a list. What it did is stated in
@@ -52,6 +53,7 @@ from app.api.deps import get_db
 from app.api.error_contract import CodedValueError
 from app.api.errors import NotFoundError
 from app.api.routes._legacy_reads import LegacyVisibility
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.basis_set_names import basis_identity_key
 from app.chemistry.dispersion_names import level_identity_keys, method_matches_level
 from app.chemistry.reaction_family_display import reaction_family_display_name
@@ -90,7 +92,7 @@ from app.services.scientific_read.lot_identity_filters import basis_matches, met
 from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.sql_review import join_review, review_rank_expr
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 
 # ---------------------------------------------------------------------------
@@ -232,7 +234,7 @@ class LookupResponse(BaseModel):
     results: list[LookupResultItem] = Field(default_factory=list)
     #: The display order of the records in ``results``, within each ``resource_type`` (identity rows first).
     order: OrderEcho = Field(default_factory=lambda: _DISPLAY_ORDER.model_copy(deep=True))
-    #: The read profile this lookup answered under; ``curated`` withholds records below the approved floor.
+    #: The read profile this lookup answered under; ``curated`` lists only records at the approved floor.
     profile: ReadProfile = ReadProfile.exploratory
     profile_recommendation: ProfileRecommendation = ProfileRecommendation.none
     #: Exploratory only: how many records the default visibility hid and how to include them. Never present under
@@ -689,14 +691,16 @@ def _resolve_species_list(
     """
     species_rows: list[Species] = []
     for i, (smi, chg, mult) in enumerate(zip(smiles_list, charges, multiplicities, strict=False)):
-        payload = SpeciesEntryIdentityPayload(smiles=smi, charge=chg, multiplicity=mult)
+        payload = caller_input(SpeciesEntryIdentityPayload, smiles=smi, charge=chg, multiplicity=mult)
         try:
             _csmi, inchi_key = canonical_species_identity(payload)
         except ValueError as e:
             code = REACTANT_NOT_FOUND if role == "reactant" else PRODUCT_NOT_FOUND
             mb.add(code, f"{role}[{i}] '{smi}': {e}")
             return None
-        sp = session.scalar(select(Species).where(Species.inchi_key == inchi_key))
+        sp = session.scalar(
+            select(Species).where(Species.inchi_key == inchi_key, Species.merged_into_species_id.is_(None))
+        )
         if sp is None:
             code = REACTANT_NOT_FOUND if role == "reactant" else PRODUCT_NOT_FOUND
             mb.add(code, f"{role}[{i}] '{smi}' not found in database")
@@ -735,7 +739,10 @@ def _resolve_reaction(
         reversible=reversible, reactants=r_stoich, products=p_stoich,
     )
     chem_rxn = session.scalar(
-        select(ChemReaction).where(ChemReaction.stoichiometry_hash == stoi_hash)
+        select(ChemReaction).where(
+            ChemReaction.stoichiometry_hash == stoi_hash,
+            ChemReaction.merged_into_chem_reaction_id.is_(None),
+        )
     )
     if chem_rxn is None:
         mb.add(REACTION_IDENTITY_NONE, "no reaction with this stoichiometry exists")
@@ -850,13 +857,14 @@ def lookup_species(
     Uses the same canonicalization as uploads: SMILES → canonical SMILES
     → InChI key.  Returns the species and all matching entries with
     availability summaries. The summaries count the records the request shows (rejected and deprecated ones are
-    left out unless included; ``profile=curated`` counts approved records only).
+    left out unless included; ``profile=curated`` counts approved records only (a list-level floor)).
     """
     inputs = {"smiles": smiles, "charge": charge, "multiplicity": multiplicity}
-    query = LookupQuery(kind="species", inputs=inputs)
+    query = caller_input(LookupQuery, kind="species", inputs=inputs)
     mb = _MatchBuilder()
 
-    payload = SpeciesEntryIdentityPayload(
+    payload = caller_input(
+        SpeciesEntryIdentityPayload,
         smiles=smiles, charge=charge, multiplicity=multiplicity,
     )
     try:
@@ -866,7 +874,7 @@ def lookup_species(
         return _respond(query, mb)
 
     species = session.scalar(
-        select(Species).where(Species.inchi_key == inchi_key)
+        select(Species).where(Species.inchi_key == inchi_key, Species.merged_into_species_id.is_(None))
     )
     if species is None:
         mb.add(SPECIES_IDENTITY_NONE, "no species with this InChI key exists")
@@ -874,7 +882,9 @@ def lookup_species(
 
     mb.add(SPECIES_IDENTITY_EXACT, "species identity matched exactly by InChI key")
 
-    entries_stmt = select(SpeciesEntry).where(SpeciesEntry.species_id == species.id)
+    entries_stmt = select(SpeciesEntry).where(
+        SpeciesEntry.species_id == species.id, SpeciesEntry.merged_into_species_entry_id.is_(None)
+    )
     entries_hidden = visibility.hidden(
         session,
         SubmissionRecordType.species_entry,
@@ -979,7 +989,7 @@ def lookup_calculations(
         inputs["basis"] = basis
     if selection != "all":
         inputs["selection"] = selection
-    query_echo = LookupQuery(kind="calculations", inputs=inputs)
+    query_echo = caller_input(LookupQuery, kind="calculations", inputs=inputs)
     mb = _MatchBuilder()
 
     entry = session.get(SpeciesEntry, species_entry_id)
@@ -1041,7 +1051,8 @@ def lookup_thermo(
     session: Session = Depends(get_db),
 ):
     """Find thermo records for a species entry, in the display order."""
-    query_echo = LookupQuery(
+    query_echo = caller_input(
+        LookupQuery,
         kind="thermo",
         inputs={"species_entry_id": species_entry_id},
     )
@@ -1140,11 +1151,12 @@ def lookup_species_calculation(
         inputs["basis"] = basis
     if selection != "all":
         inputs["selection"] = selection
-    query_echo = LookupQuery(kind="species_calculation", inputs=inputs)
+    query_echo = caller_input(LookupQuery, kind="species_calculation", inputs=inputs)
     mb = _MatchBuilder()
 
     # Step 1: resolve species identity
-    payload = SpeciesEntryIdentityPayload(
+    payload = caller_input(
+        SpeciesEntryIdentityPayload,
         smiles=smiles, charge=charge, multiplicity=multiplicity,
     )
     try:
@@ -1154,7 +1166,7 @@ def lookup_species_calculation(
         return _respond(query_echo, mb)
 
     species = session.scalar(
-        select(Species).where(Species.inchi_key == inchi_key)
+        select(Species).where(Species.inchi_key == inchi_key, Species.merged_into_species_id.is_(None))
     )
     if species is None:
         mb.add(SPECIES_IDENTITY_NONE, "species identity not found")
@@ -1172,7 +1184,9 @@ def lookup_species_calculation(
     ))
 
     # Step 2: every entry of the species. None is picked: the calculations of all of them are searched.
-    entries_stmt = select(SpeciesEntry).where(SpeciesEntry.species_id == species.id)
+    entries_stmt = select(SpeciesEntry).where(
+        SpeciesEntry.species_id == species.id, SpeciesEntry.merged_into_species_entry_id.is_(None)
+    )
     entries_hidden = visibility.hidden(
         session,
         SubmissionRecordType.species_entry,
@@ -1297,7 +1311,8 @@ def lookup_reaction(
     r_mults = reactant_multiplicities or [1] * len(reactants)
     p_mults = product_multiplicities or [1] * len(products)
 
-    query_echo = LookupQuery(
+    query_echo = caller_input(
+        LookupQuery,
         kind="reaction",
         inputs={"reactants": reactants, "products": products, "reversible": reversible},
     )
@@ -1348,7 +1363,7 @@ def lookup_kinetics(
     inputs: dict[str, Any] = {"reaction_entry_id": reaction_entry_id}
     if model_kind:
         inputs["model_kind"] = model_kind
-    query_echo = LookupQuery(kind="kinetics", inputs=inputs)
+    query_echo = caller_input(LookupQuery, kind="kinetics", inputs=inputs)
     mb = _MatchBuilder()
 
     entry = session.get(ReactionEntry, reaction_entry_id)
@@ -1414,7 +1429,7 @@ def lookup_reaction_kinetics(
     }
     if model_kind:
         inputs["model_kind"] = model_kind
-    query_echo = LookupQuery(kind="reaction_kinetics", inputs=inputs)
+    query_echo = caller_input(LookupQuery, kind="reaction_kinetics", inputs=inputs)
     mb = _MatchBuilder()
 
     chem_rxn, results = _resolve_reaction(
@@ -1499,7 +1514,7 @@ def lookup_geometry(
     canonicalization may be added later; see ``lookup-expansion-spec.md``.
     ``calculation_output_count`` counts the calculations the request shows.
     """
-    query_echo = LookupQuery(kind="geometry", inputs={"geom_hash": geom_hash})
+    query_echo = caller_input(LookupQuery, kind="geometry", inputs={"geom_hash": geom_hash})
     mb = _MatchBuilder()
 
     geom = session.scalar(
@@ -1585,7 +1600,8 @@ def lookup_statmech(
     Append-only: multiple records for the same species entry are all
     returned, not collapsed into one ``preferred`` row, in the display order.
     """
-    query_echo = LookupQuery(
+    query_echo = caller_input(
+        LookupQuery,
         kind="statmech",
         inputs={"species_entry_id": species_entry_id},
     )
@@ -1662,7 +1678,8 @@ def lookup_transport(
     Append-only: multiple records for the same species entry are all
     returned, not collapsed into one ``preferred`` row, in the display order.
     """
-    query_echo = LookupQuery(
+    query_echo = caller_input(
+        LookupQuery,
         kind="transport",
         inputs={"species_entry_id": species_entry_id},
     )
@@ -1722,7 +1739,7 @@ def lookup_network(
     Networks are listed in the display order.
     """
     inputs: dict[str, Any] = {"species_entry_ids": list(species_entry_ids)}
-    query_echo = LookupQuery(kind="network", inputs=inputs)
+    query_echo = caller_input(LookupQuery, kind="network", inputs=inputs)
     mb = _MatchBuilder()
 
     requested = list(dict.fromkeys(species_entry_ids))

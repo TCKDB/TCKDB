@@ -28,6 +28,8 @@ the first time.
 
 from __future__ import annotations
 
+import pytest
+
 _SOFTWARE = {"name": "Gaussian", "version": "16"}
 _LOT = {"method": "B3LYP", "basis": "6-31G(d)"}
 
@@ -104,6 +106,24 @@ class TestConservationAcrossAReaction:
         )
         body = _assert_code(response, "reaction_charge_not_conserved")
         assert "conserved across a reaction" in str(body["detail"])
+
+    def test_the_same_entry_on_both_sides_names_the_null_reaction(self, client):
+        entry = {"smiles": "C/C=C/C", "charge": 0, "multiplicity": 1}
+        response = client.post(
+            "/api/v1/uploads/reactions",
+            json=_reaction_payload([entry], [entry]),
+        )
+        body = _assert_code(response, "reaction_entry_null_reaction")
+        assert "id=" not in str(body["detail"])
+
+    def test_an_isomerisation_between_two_entries_of_one_species_is_accepted(self, client):
+        e = {"smiles": "C/C=C/C", "charge": 0, "multiplicity": 1}
+        z = {"smiles": "C/C=C\\C", "charge": 0, "multiplicity": 1}
+        response = client.post(
+            "/api/v1/uploads/reactions",
+            json=_reaction_payload([z], [e]),
+        )
+        assert response.status_code == 201, response.text
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +327,23 @@ class TestAStructureAgainstItsOwnLabel:
         )
         body = _assert_code(response, "species_kind_conflict")
         assert "already stored as molecule_kind" in str(body["detail"])
+
+    def test_marks_and_geometry_that_describe_different_stereoisomers_name_the_stereo_check(
+        self, client
+    ):
+        """``C/C=C/C`` is trans-2-butene; a cis geometry under it is one molecule described twice."""
+        from tests.services.test_stereo_descriptor import embed_xyz
+
+        response = client.post(
+            "/api/v1/uploads/conformers",
+            json=_conformer_payload(
+                species_entry={"smiles": "C/C=C/C", "charge": 0, "multiplicity": 1},
+                xyz_text=embed_xyz("C/C=C\\C"),
+            ),
+        )
+        body = _assert_code(response, "species_stereo_contradiction")
+        assert body["context"]["sources"] == ["geometry", "SMILES stereo marks"]
+        assert "id=" not in str(body["detail"])
 
 
 # ---------------------------------------------------------------------------
@@ -1237,3 +1274,394 @@ class TestNetworkStateEnergySum:
         assert context["field"] == "solve.state_energies[0].energy_kj_mol", context
         assert context["state_key"] == "entrance", context
         assert not any(key == "id" or key.endswith(("_id", "_ids")) for key in context), context
+
+
+class TestARecordedHessianMethodAgainstItsInputDeck:
+    def test_a_recorded_method_the_attached_deck_contradicts_is_refused_by_name(self, client):
+        """``hessian_method_contradicts_input_deck``: recorded analytic, deck says NumFreq.
+
+        The failure this guards: judged against whichever statement the
+        reader happened to pick, a mode at 40 cm-1 is noise at tau 50 and real
+        curvature at tau 30, and the record keeps both statements.
+        """
+        import base64
+
+        deck = "! B3LYP def2-SVP NumFreq\n* xyz 0 1\nC 0 0 0\n*\n"
+        payload = {
+            "species_entry": {"smiles": "C", "charge": 0, "multiplicity": 1},
+            "conformers": [
+                {
+                    "key": "c0",
+                    "geometry": {"xyz_text": _METHANE_XYZ},
+                    "primary_calculation": {
+                        "key": "opt0",
+                        "type": "opt",
+                        "software_release": {"name": "ORCA", "version": "6.0.1"},
+                        "level_of_theory": {"method": "B3LYP", "basis": "def2-SVP"},
+                        "opt_result": {"converged": True},
+                        "parameters": [
+                            {
+                                "raw_key": "freq",
+                                "raw_value": "analytic",
+                                "canonical_key": "freq.hessian_method",
+                                "canonical_value": "analytic",
+                            }
+                        ],
+                        "artifacts": [
+                            {
+                                "kind": "input",
+                                "filename": "job.in",
+                                "content_base64": base64.b64encode(deck.encode()).decode(),
+                            }
+                        ],
+                    },
+                }
+            ],
+        }
+        response = client.post("/api/v1/uploads/computed-species", json=payload)
+        body = _assert_code(response, "hessian_method_contradicts_input_deck")
+        assert body["context"]["recorded"] == "analytic"
+        assert body["context"]["input_deck"] == "finite_difference_gradient"
+
+
+# ---------------------------------------------------------------------------
+# Codes declared in gap_declarations.py
+# ---------------------------------------------------------------------------
+
+
+class TestAFrequencyListNumbersItsModesOnce:
+    def test_two_rows_with_one_mode_index_are_refused_by_name(self, client):
+        """``mode_index`` is the row's identity in the list; two rows with one index say which mode is which nowhere."""
+        calc = _freq_calc(n_imag=0, frequencies=[800.0, 1600.0])
+        calc["freq_result"]["modes"][1]["mode_index"] = 1
+        response = client.post(
+            "/api/v1/uploads/conformers",
+            json={
+                **_conformer_payload(species_entry=_METHANE, xyz_text=_METHANE_XYZ),
+                "calculation": calc,
+            },
+        )
+        body = _assert_code(response, "freq_mode_index_not_unique")
+        assert body["context"]["duplicate_mode_indices"] == [1]
+
+
+class TestABathGasThatIsNotACompositionIsRefusedByName:
+    @pytest.mark.parametrize(
+        ("case", "code"),
+        [
+            ("high_pressure_limit", "kinetics_bath_gas_at_high_pressure_limit"),
+            ("sum_above_one", "kinetics_bath_gas_mole_fraction_sum"),
+            ("one_species_twice", "kinetics_bath_gas_duplicate_species"),
+        ],
+    )
+    def test_the_response_carries_the_code(self, client, case, code):
+        from tests.api.test_api_kinetics_bath_gas import _APPARENT, HE, KINETICS, N2, _standalone
+
+        overrides = {
+            "high_pressure_limit": {
+                "pressure_context": "high_p_limit",
+                "bath_gas": [{"species_entry": HE, "mole_fraction": 1.0}],
+            },
+            "sum_above_one": {
+                **_APPARENT,
+                "bath_gas": [{"species_entry": HE, "mole_fraction": 0.8}, {"species_entry": N2, "mole_fraction": 0.5}],
+            },
+            "one_species_twice": {
+                **_APPARENT,
+                "bath_gas": [{"species_entry": HE, "mole_fraction": 0.5}, {"species_entry": HE, "mole_fraction": 0.5}],
+            },
+        }[case]
+        response = client.post(KINETICS, json=_standalone(**overrides))
+        assert response.status_code == 422, response.text
+        assert response.json()["code"] == code
+
+
+#: Envelope codes whose end-to-end proof already lives next to the feature's other tests, where the payload builders
+#: are. Each is a refusal posted through the test client whose ``code`` is asserted. The guard in
+#: ``test_scientific_check_register.py`` requires every envelope code to be named in this file; the test below makes
+#: the naming mean something, by opening the cited file and finding a test that posts a request and reads the code.
+PROVED_IN: dict[str, str] = {
+    "network_channel_kind_mismatch": "workflows/test_network_channel_kind.py",
+    "network_state_duplicate_composition": "workflows/test_network_pdep_duplicate_states.py",
+    "network_state_duplicate_participant": "workflows/test_network_pdep_duplicate_states.py",
+    "network_energy_source_subject_mismatch": "api/test_api_network_pdep_energy_source_subjects.py::test_a_well_cannot_cite_another_wells_single_point",
+    "thermo_energy_level_contradiction": "api/test_api_composite_role_consistency.py",
+    "statmech_energy_level_contradiction": "api/test_api_statmech_thermo_levels.py",
+    "kinetics_energy_level_contradiction": "api/test_api_kinetics_declared_energy_level.py",
+    "thermo_sp_geometry_mismatch": "api/test_api_statmech_thermo_levels.py",
+    "statmech_sp_geometry_mismatch": "api/test_api_statmech_thermo_levels.py",
+    "scf_stability_source_geometry_mismatch": "api/test_api_bundle_extras_622_sources.py",
+    "calculation_geometry_conformer_mismatch": "api/test_api_calculation_geometry_conformer_agreement.py",
+    "calculation_input_geometry_mismatch": "api/test_api_calculation_geometry_conformer_agreement.py",
+    "composite_e0_inconsistent": "api/test_api_composite_program_run.py::test_the_two_arithmetic_checks_block_at_the_api",
+    "composite_terms_do_not_sum": "api/test_api_composite_program_run.py::test_the_two_arithmetic_checks_block_at_the_api",
+    "composite_total_mismatch": "api/test_api_composite_assembled_review.py",
+    "composite_input_level_mismatch": "api/test_api_composite_assembled.py",
+    "composite_input_geometry_mismatch": "api/test_api_composite_assembled.py",
+    "sp_energy_component_total_mismatch": "api/test_api_sp_energy_components.py",
+    "sp_energy_components_do_not_sum": "api/test_api_sp_energy_components.py",
+    "kinetics_declaration_contradicts_record": "api/test_api_kinetics_declarations.py",
+    "kinetics_determination_mismatch": "api/test_api_kinetics_declarations.py",
+    "statmech_model_declaration_mismatch": "api/test_api_statmech_model_declaration.py",
+    "structure_determination_mismatch": "api/test_api_structure_declarations.py",
+    "enthalpy_declaration_absent": "api/test_enthalpy_reference.py",
+    "enthalpy_declaration_without_content": "api/test_enthalpy_reference.py",
+    "enthalpy_quantity_not_storable_here": "api/test_enthalpy_reference.py",
+    "enthalpy_reference_kind_unrecognized": "api/test_enthalpy_reference.py",
+    "unsupported_reaction_molecularity": "api/test_api_untested_refusals_tier_de.py",
+    "atom_map_without_transition_state": "api/test_api_untested_refusals_tier_de.py",
+    "atom_map_participant_not_declared": "api/test_api_untested_refusals_tier_de.py",
+    "thermo_declared_by_target_incoherent": "api/test_api_thermo_declarations.py",
+    "thermo_declared_by_record_incoherent": "api/test_api_thermo_declarations.py",
+    "scf_stability_source_cycle": "api/test_api_bundle_extras_622_sources.py",
+    "transition_state_calculation_species_geometry": "api/test_api_calculation_geometry_conformer_agreement.py",
+    "thermo_source_role_type_mismatch": "api/test_api_upload_key_and_role_contracts.py",
+    "statmech_source_role_type_mismatch": "api/test_api_upload_key_and_role_contracts.py",
+    "lowest_energy_across_levels": "api/test_lookup_visibility_and_selection.py",
+    "unsafe_lowest_energy_comparison": "api/test_api_untested_refusals_tier_a.py",
+    "relative_conformer_energy_compare_identical_protocols": "api/scientific/test_api_relative_conformer_energies.py",
+    "thermo_energy_sp_and_composite_linked": "api/test_api_composite_role_consistency.py",
+    "statmech_energy_sp_and_composite_linked": "api/test_api_composite_role_consistency.py",
+    "thermo_energy_level_ambiguous": "api/test_api_composite_role_consistency.py",
+    "applied_energy_correction_source_calculation_owner_mismatch": "api/test_api_bundle_ownership_codes.py",
+    "bac_total_requires_components": "api/test_api_bac_total_requires_components.py",
+    "composite_input_owner_mismatch": "api/test_api_composite_assembled.py",
+    "kinetics_interpretation_conformer_selection_owner_mismatch": "api/test_api_statmech_citation_ownership.py",
+    "kinetics_interpretation_statmech_owner_mismatch": "api/test_api_statmech_citation_ownership.py",
+    "kinetics_protocol_calculation_owner_mismatch": "api/test_api_kinetics_declarations.py",
+    "observation_identity_hint_conflict": "api/test_api_observation_identity_attach.py",
+    "observation_identity_target_not_ground_state_minimum": "api/test_api_observation_identity_attach.py",
+    "scf_stability_source_calculation_owner_mismatch": "api/test_api_bundle_extras_622_sources.py",
+    "scf_stability_source_conformer_unanchored": "api/test_api_bundle_extras_622_sources.py",
+    "sp_energy_component_duplicate": "api/test_api_sp_energy_components.py",
+    "statmech_energy_level_ambiguous": "api/test_api_statmech_thermo_levels.py",
+    "statmech_energy_level_requires_sp": "api/test_api_statmech_thermo_levels.py",
+    "statmech_role_duplicate": "api/test_api_statmech_thermo_levels.py",
+    "thermo_energy_level_requires_sp": "api/test_api_statmech_thermo_levels.py",
+    "thermo_role_duplicate": "api/test_api_statmech_thermo_levels.py",
+    "statmech_source_calculation_owner_mismatch": "api/test_api_bundle_ownership_codes.py",
+    "statmech_torsion_scan_calculation_owner_mismatch": "api/test_api_bundle_torsion_scan_ownership.py",
+    "thermo_protocol_calculation_owner_mismatch": "api/test_api_thermo_declarations.py",
+    "thermo_source_calculation_owner_mismatch": "api/test_api_uploads.py",
+    "thermo_statmech_owner_mismatch": "api/test_api_statmech_citation_ownership.py",
+    "transport_source_calculation_owner_mismatch": "api/test_api_bundle_extras_622.py",
+}
+
+
+
+
+_HTTP_METHODS = frozenset({"post", "put", "patch", "get", "delete"})
+_HTTP_HELPERS = ("_refused", "_post", "post_json", "_deposit", "_upload")
+
+def _cites(source: str, code: str, named: str | None = None) -> list[str]:
+    """Names of the tests in ``source`` that prove ``code`` over HTTP.
+
+    A test proves it when, in executable code (not the docstring or comments), a request is sent and the
+    response ``code`` is compared for equality (or membership) with this code, directly, through a
+    parametrised value, or through a module helper that compares a response ``code`` with its parameter. It
+    must take the ``client`` fixture and must not be skipped or expected to fail. ``named`` limits the search
+    to one test.
+    """
+    import ast
+
+    tree = ast.parse(source)
+    spellings = {code} | {
+        target.id
+        for node in tree.body
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and node.value.value == code
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+
+    def mentions(node: ast.AST, extra: frozenset[str] = frozenset()) -> bool:
+        return any(
+            (isinstance(n, ast.Constant) and n.value == code)
+            or (isinstance(n, ast.Name) and (n.id in spellings or n.id in extra))
+            for n in ast.walk(node)
+        )
+
+    def is_code_key(node: ast.AST) -> bool:
+        return isinstance(node, ast.Constant) and node.value == "code"
+
+    functions = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef) and not n.name.startswith("test_")}
+
+    def reads_a_response_code_directly(node: ast.AST) -> bool:
+        return any(
+            (isinstance(n, ast.Subscript) and is_code_key(n.slice))
+            or (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "get"
+                and n.args and is_code_key(n.args[0]))
+            for n in ast.walk(node)
+        )
+
+    #: Module helpers that return a response's ``code`` (``def code(response): return response.json()["code"]``).
+    code_readers = {
+        name
+        for name, func in functions.items()
+        if any(isinstance(n, ast.Return) and reads_a_response_code_directly(n) for n in ast.walk(func))
+    }
+
+    def reads_response_code(node: ast.AST) -> bool:
+        return reads_a_response_code_directly(node) or any(
+            isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in code_readers
+            for n in ast.walk(node)
+        )
+
+    def equality_with_code(compare: ast.Compare, extra: frozenset[str]) -> bool:
+        if not all(isinstance(op, (ast.Eq, ast.In)) for op in compare.ops):
+            return False
+        sides = [compare.left, *compare.comparators]
+        reading = [side for side in sides if reads_response_code(side)]
+        return bool(reading) and any(mentions(side, extra) for side in sides if side not in reading)
+
+    def helper_compares_its_parameter(helper: ast.FunctionDef) -> bool:
+        params = frozenset(arg.arg for arg in [*helper.args.args, *helper.args.kwonlyargs])
+        return any(
+            isinstance(n, ast.Compare)
+            and all(isinstance(op, (ast.Eq, ast.In)) for op in n.ops)
+            and any(reads_response_code(side) for side in [n.left, *n.comparators])
+            and any(
+                mentions(side, params) or (isinstance(side, ast.Name) and side.id in params)
+                for side in [n.left, *n.comparators]
+            )
+            for n in ast.walk(helper)
+        )
+
+    def proves(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+        body = list(func.body)
+        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+            body = body[1:]  # the docstring is prose
+        scope = ast.Module(body=body, type_ignores=[])
+        if any("skip" in ast.unparse(d) or "xfail" in ast.unparse(d) for d in func.decorator_list):
+            return False
+        if "client" not in {arg.arg for arg in [*func.args.args, *func.args.kwonlyargs]}:
+            return False
+        # A parametrised value that carries the code counts as naming it where the body compares that value.
+        parametrised = (
+            frozenset(arg.arg for arg in [*func.args.args, *func.args.kwonlyargs])
+            if any(mentions(decorator) for decorator in func.decorator_list)
+            else frozenset()
+        )
+        sends = False
+        proved = False
+        for node in ast.walk(scope):
+            if isinstance(node, ast.Call):
+                callee = node.func
+                if isinstance(callee, ast.Attribute) and callee.attr in _HTTP_METHODS:
+                    sends = True
+                if isinstance(callee, ast.Name) and callee.id.startswith(_HTTP_HELPERS):
+                    sends = True
+                if isinstance(callee, ast.Name) and callee.id in functions:
+                    helper = functions[callee.id]
+                    arguments = [*node.args, *(keyword.value for keyword in node.keywords)]
+                    if helper_compares_its_parameter(helper) and any(mentions(a) for a in arguments):
+                        proved = True
+                    if any(
+                        isinstance(n, ast.Compare) and equality_with_code(n, frozenset()) for n in ast.walk(helper)
+                    ):
+                        proved = True
+            if isinstance(node, ast.Compare) and equality_with_code(node, parametrised):
+                proved = True
+        return sends and proved
+
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_"):
+            if named is not None and node.name != named:
+                continue
+            if proves(node):
+                found.append(node.name)
+    return found
+
+
+def test_every_code_cited_as_proved_elsewhere_has_a_test_that_posts_and_reads_it():
+    """Each cited file has a test that sends a request and compares the response code with the cited code."""
+    from pathlib import Path
+
+    tests_root = Path(__file__).resolve().parents[1]
+    assert len(PROVED_IN) >= 30, "the map lost its content, so this test would pass vacuously"
+    unproved = {}
+    for code, citation in sorted(PROVED_IN.items()):
+        relative, _, named_test = citation.partition("::")
+        path = tests_root / relative
+        assert path.exists(), f"{code}: {relative} does not exist"
+        if not _cites(path.read_text(), code, named_test or None):
+            unproved[code] = citation
+    assert not unproved, (
+        "These codes are cited as proved in another file, but no test there sends a request and compares the "
+        f"response code with the code (not skipped, with the client fixture): {unproved}. "
+        "Write one here, or fix the citation."
+    )
+
+
+class TestTheCitationGuardIsNotVacuous:
+    """The guard that vouches for the citations must refuse the shapes it exists to refuse."""
+
+    GOOD = (
+        "def test_x(client):\n"
+        '    body = client.post("/u", json={}).json()\n'
+        '    assert body["code"] == "some_code"\n'
+    )
+
+    def test_a_real_proof_is_accepted(self):
+        assert _cites(self.GOOD, "some_code") == ["test_x"]
+
+    def test_a_mention_in_a_docstring_or_comment_is_not_a_proof(self):
+        source = (
+            "def test_x(client):\n"
+            '    """Refuses some_code."""\n'
+            "    # some_code\n"
+            '    body = client.post("/u", json={}).json()\n'
+            '    assert body["code"] == "another_code"\n'
+        )
+        assert _cites(source, "some_code") == []
+
+    def test_a_skipped_or_xfailed_test_is_not_a_proof(self):
+        assert _cites("import pytest\n@pytest.mark.skip\n" + self.GOOD, "some_code") == []
+        assert _cites("import pytest\n@pytest.mark.xfail\n" + self.GOOD, "some_code") == []
+
+    def test_a_test_that_sends_nothing_or_reads_nothing_is_not_a_proof(self):
+        no_request = 'def test_x(client):\n    body = {"code": "some_code"}\n    assert body["code"] == "some_code"\n'
+        no_read = 'def test_x(client):\n    client.post("/u", json={"k": "some_code"})\n'
+        assert _cites(no_request, "some_code") == []
+        assert _cites(no_read, "some_code") == []
+
+    def test_a_message_contains_assertion_is_not_a_proof(self):
+        source = (
+            "def test_x(client):\n"
+            '    resp = client.post("/u", json={})\n'
+            '    assert "some_code" in resp.text\n'
+            "    resp.content.decode()\n"
+        )
+        assert _cites(source, "some_code") == []
+
+    def test_a_negative_comparison_is_not_a_proof(self):
+        source = (
+            "def test_x(client):\n"
+            '    body = client.post("/u", json={}).json()\n'
+            '    assert body["code"] != "some_code"\n'
+        )
+        assert _cites(source, "some_code") == []
+
+    def test_a_mention_only_in_the_payload_is_not_a_proof(self):
+        source = (
+            "def test_x(client):\n"
+            '    body = client.post("/u", json={"k": "some_code"}).json()\n'
+            '    assert body["code"] == "another_code"\n'
+        )
+        assert _cites(source, "some_code") == []
+
+    def test_a_helper_that_compares_its_parameter_with_the_response_code_is_a_proof(self):
+        source = (
+            "def _assert_code(resp, expected):\n"
+            '    assert resp.json()["code"] == expected\n'
+            "def test_x(client):\n"
+            '    _assert_code(client.post("/u", json={}), "some_code")\n'
+        )
+        assert _cites(source, "some_code") == ["test_x"]
+
+    def test_the_citation_that_was_wrong_in_the_first_draft_is_refused(self):
+        """``thermo_sp_geometry_mismatch`` was cited to a file whose tests do not prove it."""
+        from pathlib import Path
+
+        old = Path(__file__).resolve().parents[1] / "api/test_api_bundle_extras_622_sources.py"
+        assert _cites(old.read_text(), "thermo_sp_geometry_mismatch") == []

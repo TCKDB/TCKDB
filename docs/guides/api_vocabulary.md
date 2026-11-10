@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 342 | `backend/app/api/code_catalogue.py` |
-| **total** | **682** | |
+| Refusal codes a caller can receive | 370 | `backend/app/api/code_catalogue.py` |
+| **total** | **710** | |
 
 ## How a record is named
 
@@ -142,7 +142,7 @@ What a **human curator** has said about one scientific record. It is the only vo
 | --- | --- |
 | `not_reviewed` | Nobody has looked at this record. It is the state every deposit lands in, and it is a statement about TCKDB's attention, not about the science: an unreviewed record can be perfectly good. |
 | `under_review` | A curator has this record open. It is entered deliberately by a curator, never by depositing, which is the whole difference from `not_reviewed`. **For example:** Until 2026-08-24 every deposit was stamped `under_review` on arrival, so 1,153 records on the hosted database claimed somebody was looking at them when nobody was. Revision `c1d8f4a25b30` moved them to `not_reviewed`. If you read the hosted API before that date, `under_review` there meant nothing at all. |
-| `approved` | A curator reviewed the record and accepts it. This is the floor the `curated` read profile draws at: a curated read returns approved records and nothing below them. |
+| `approved` | A curator reviewed the record and accepts it. This is the floor the `curated` read profile draws at for lists, searches, browses, selects and exports: they return approved records and nothing below them. A detail page can still serve a record below the floor, with its review badge. |
 | `rejected` | A curator reviewed the record and does not accept it. Absent from results unless the request asks for it with `include_rejected=true`. |
 | `deprecated` | The record should no longer be used — superseded by a better one, or withdrawn. It is kept rather than deleted so an existing citation still resolves. Absent from results unless the request asks with `include_deprecated=true`. |
 
@@ -465,7 +465,7 @@ Which contract the response answers under. Always echoed, never inferred: a cons
 | Token | What it means |
 | --- | --- |
 | `exploratory` | Every visible candidate, each with its own review and trust state, and **no recommendation from TCKDB** about which is right. This is the default on every read surface, deliberately: on a corpus that is mostly uncurated a curated default returns an empty page and reads as a broken database. |
-| `curated` | Only records at or above the `approved` review floor. Records are not annotated with any release selection that names them — for an attributed endorsement use the `/api/v1/scientific/releases/*` endpoints. |
+| `curated` | The `approved` review floor decides which records a list, search, browse, select or export returns. A detail page serves any record that is not `rejected` or `deprecated`, badged, and the linked evidence of a returned record is shown (with its badge where the response carries `review_status_by_ref`; a legacy single-record read carries the record's own status in the `X-TCKDB-Review-Status` header); only `rejected` and `deprecated` evidence is withheld, and a request cannot lift that. Records are not annotated with any release selection that names them — for an attributed endorsement use the `/api/v1/scientific/releases/*` endpoints. |
 
 ### Profile recommendation
 
@@ -476,7 +476,7 @@ Whether the records in this response carry a TCKDB recommendation. It is a separ
 | Token | What it means |
 | --- | --- |
 | `none` | These are candidates. TCKDB is not telling you which one to use. |
-| `approved_floor_only` | Every record shown is at or above the `approved` review floor and **nothing more is claimed**. A human accepted each of them, which is not the same as TCKDB preferring them over their siblings. |
+| `approved_floor_only` | The `approved` review floor was applied to the records a list, search, browse, select or export returned, and **nothing more is claimed**. Those records were accepted by a human reviewer, which is not the same as TCKDB preferring them over their siblings. A detail page and the linked evidence of a returned record may be unreviewed: they carry their review badge, and the approval above does not apply to them. Only rejected and deprecated records are withheld. |
 | `tckdb_curated_release` | These records are the ones an attributed, append-only release selection names in a published release. Only the release endpoints emit this. |
 
 ### Dataset release status
@@ -727,15 +727,17 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `invalid_idempotency_key` | a thing |
 
-### HTTP 403 (3 codes)
+### HTTP 403 (5 codes)
 
 | Code | Names |
 | --- | --- |
+| `record_self_approval` | a relationship — read `context` |
 | `rights_attestation_not_depositor` | a thing |
 | `rights_attestation_requires_curator` | a thing |
+| `submission_self_approval` | a relationship — read `context` |
 | `submission_supersede_not_owner` | a thing |
 
-### HTTP 404 (28 codes)
+### HTTP 404 (29 codes)
 
 | Code | Names |
 | --- | --- |
@@ -746,6 +748,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `manifest_not_frozen` | a thing |
 | `owner_missing` | a thing |
 | `path_search_result_not_found` | a thing |
+| `record_not_found` | a thing |
 | `scan_result_not_found` | a thing |
 | `structure_finding_reference_not_found` | a thing |
 | `structure_finding_subject_not_found` | a thing |
@@ -800,14 +803,16 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_manifest_schema` | a thing |
 | `username_taken` | a thing |
 
-### HTTP 413 (2 codes)
+### HTTP 413 (4 codes)
 
 | Code | Names |
 | --- | --- |
+| `anonymous_body_too_large` | a relationship — read `context` |
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
+| `request_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (277 codes)
+### HTTP 422 (300 codes)
 
 | Code | Names |
 | --- | --- |
@@ -815,6 +820,15 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `applied_energy_correction_source_calculation_owner_mismatch` | a relationship — read `context` |
 | `applied_energy_correction_source_key_undeclared` | a thing |
 | `arrhenius_a_units_molecularity_mismatch` | a relationship — read `context` |
+| `artifact_empty` | a thing |
+| `artifact_encoded_payload_too_large` | a relationship — read `context` |
+| `artifact_invalid_base64` | a thing |
+| `artifact_not_utf8_text` | a thing |
+| `artifact_sha256_mismatch` | a relationship — read `context` |
+| `artifact_size_mismatch` | a relationship — read `context` |
+| `artifact_too_large` | a relationship — read `context` |
+| `artifact_total_encoded_payload_too_large` | a relationship — read `context` |
+| `artifact_total_size_too_large` | a relationship — read `context` |
 | `assessment_input_check_limit` | a relationship — read `context` |
 | `atom_map_atoms_unaccounted_for` | a relationship — read `context` |
 | `atom_map_contradicts_irc_mapping` | a relationship — read `context` |
@@ -873,6 +887,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `conformer_key_undeclared` | a thing |
 | `cursor_offset_conflict` | a relationship — read `context` |
 | `cursor_query_mismatch` | a relationship — read `context` |
+| `electronic_state_label_invalid` | a thing |
 | `energy_correction_scheme_frequency_level_not_applicable` | a relationship — read `context` |
 | `energy_correction_scheme_frequency_level_without_energy_level` | a relationship — read `context` |
 | `enthalpy_declaration_absent` | a relationship — read `context` |
@@ -891,6 +906,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `geometry_key_unresolved` | a thing |
 | `geometry_too_large` | a relationship — read `context` |
 | `handle_type_mismatch` | a relationship — read `context` |
+| `hessian_method_contradicts_input_deck` | a relationship — read `context` |
 | `include_not_implemented_yet` | a thing |
 | `invalid_cursor` | a thing |
 | `invalid_handle` | a thing |
@@ -932,6 +948,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `multiple_structure_queries` | a relationship — read `context` |
 | `n_imag_contradicts_minimum` | a relationship — read `context` |
 | `network_channel_key_undeclared` | a thing |
+| `network_channel_kind_mismatch` | a relationship — read `context` |
 | `network_declaration_invalid` | a relationship — read `context` |
 | `network_declaration_version_unsupported` | a thing |
 | `network_energy_source_subject_mismatch` | a relationship — read `context` |
@@ -950,6 +967,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `network_kinetics_rate_units_missing` | a thing |
 | `network_selection_population_too_large` | a relationship — read `context` |
 | `network_selection_snapshot_too_large` | a relationship — read `context` |
+| `network_state_duplicate_composition` | a relationship — read `context` |
+| `network_state_duplicate_participant` | a relationship — read `context` |
 | `network_state_energy_sum_mismatch` | a relationship — read `context` |
 | `network_state_key_undeclared` | a thing |
 | `non_finite_value` | a thing |
@@ -958,6 +977,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `observation_identity_hint_conflict` | a relationship — read `context` |
 | `observation_identity_target_not_ground_state_minimum` | a relationship — read `context` |
 | `offset_too_large` | a relationship — read `context` |
+| `output_log_signature_unrecognized` | a relationship — read `context` |
 | `parameter_renamed` | a relationship — read `context` |
 | `parameter_value_requires_key` | a thing |
 | `post_search_fields_must_be_in_body` | a thing |
@@ -966,6 +986,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `rationale_required` | a thing |
 | `reaction_charge_not_conserved` | a relationship — read `context` |
 | `reaction_entry_handle_conflict` | a relationship — read `context` |
+| `reaction_entry_null_reaction` | a relationship — read `context` |
+| `reaction_family_conflict` | a relationship — read `context` |
 | `reaction_handle_conflict` | a relationship — read `context` |
 | `reaction_mass_balance_failed` | a relationship — read `context` |
 | `reaction_reversible_required` | a thing |
@@ -973,6 +995,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `record_not_approved` | a thing |
 | `record_ref_not_selectable` | a thing |
 | `record_subject_mismatch` | a relationship — read `context` |
+| `record_type_not_reviewable` | a thing |
 | `record_type_not_selectable` | a thing |
 | `relative_conformer_energy_compare_identical_protocols` | a relationship — read `context` |
 | `relative_conformer_energy_population_too_large` | a relationship — read `context` |
@@ -1003,6 +1026,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `species_key_undeclared` | a thing |
 | `species_kind_conflict` | a relationship — read `context` |
 | `species_smiles_charge_mismatch` | a relationship — read `context` |
+| `species_stereo_contradiction` | a relationship — read `context` |
+| `species_stereo_label_invalid` | a relationship — read `context` |
 | `statmech_calculation_key_undeclared` | a thing |
 | `statmech_energy_level_ambiguous` | a relationship — read `context` |
 | `statmech_energy_level_contradiction` | a relationship — read `context` |
@@ -1041,7 +1066,10 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `structure_selection_unsupported` | a relationship — read `context` |
 | `subject_type_mismatch` | a relationship — read `context` |
 | `supersedes_same_record` | a relationship — read `context` |
+| `term_symbol_invalid` | a thing |
 | `thermo_declaration_invalid` | a thing |
+| `thermo_declared_by_record_incoherent` | a relationship — read `context` |
+| `thermo_declared_by_target_incoherent` | a relationship — read `context` |
 | `thermo_energy_level_ambiguous` | a relationship — read `context` |
 | `thermo_energy_level_contradiction` | a relationship — read `context` |
 | `thermo_energy_level_requires_sp` | a relationship — read `context` |

@@ -156,7 +156,12 @@ def test_species_side_routes_name_no_hidden_record_under_curated(client, db_sess
 
 
 def _get(client, path, profile):
-    return client.get(f"{BASE}{path}", params={"profile": profile})
+    params = {"profile": profile}
+    response = client.get(f"{BASE}{path}", params=params)
+    # Fail with the body, not with a KeyError two lines later: a one-off
+    # statement timeout once surfaced as ``KeyError: 'records'``.
+    assert response.status_code == 200, (path, params, response.status_code, response.text)
+    return response
 
 
 def test_a_visible_observation_of_a_hidden_group_stays_visible_with_the_group_blanked(client, db_session, login_as):

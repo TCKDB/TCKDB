@@ -8,9 +8,10 @@ the scientific reads obey. This module gives them the same three:
   ``include_deprecated`` is set (:class:`LegacyVisibility`), by the same function the scientific reads use
   (:func:`~app.services.scientific_read.common.visible_statuses`).
 * **The read profile.** ``?profile=curated`` raises the floor to ``approved`` through that same function, and is
-  resolved by the same dependency as on the scientific surface. A record below the floor is absent from a list and from
-  a count. Its own detail route serves it unless it is rejected or deprecated (ADR 0023 step 7), and a withheld one answers
-  exactly as an id that names nothing (hidden == unknown == absent).
+  resolved by the same dependency as on the scientific surface. The record floor decides which rows a list returns
+  and counts. A record's own detail route serves it unless it is rejected or deprecated (ADR 0023 step 7), and a
+  withheld one
+  answers exactly as an id that names nothing.
 * **Linked evidence (ADR 0023).** The floor decides which rows a list returns; a detail route answers 404 for a withheld record only (step 7). What a returned
   row NAMES (a pointer column, an embedded record such as a conformer group's observations) is linked evidence: under
   ``curated`` only a rejected or deprecated record is blanked or dropped, and one that is merely below the floor is named as
@@ -39,6 +40,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.routes._pagination import PaginatedResponse
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.common import ProfileRecommendation, ReadProfile, RecordReviewStatus, SubmissionRecordType
 from app.db.models.record_review import RecordReview
 from app.schemas.reads.scientific_common import (
@@ -53,6 +55,19 @@ from app.services.scientific_read.ref_guard import current_ref_guard_context
 from app.services.scientific_read.sql_review import join_review, visible_review_filter
 
 T = TypeVar("T")
+
+#: Set on a legacy read that named a merged-away row and was answered with the row it was merged into.
+MERGED_FROM_HEADER = "X-TCKDB-Merged-From"
+
+
+def sub_response(response: Response):
+    """The response a detail read sets its header on.
+
+    A dependency, not a handler parameter: the legacy route class reads a ``Response`` parameter as "this is a bare
+    list that discloses what it hid" and documents that header, which a detail read does not carry.
+    """
+
+    return response
 
 ADMIN_LISTING_STATEMENT = (
     "Administrative listing: raw entity rows in stable id order. This is not the browse display order "
@@ -82,7 +97,7 @@ class EntityListResponse(PaginatedResponse[T], Generic[T]):
     profile: ReadProfile = ReadProfile.exploratory
     profile_recommendation: ProfileRecommendation = ProfileRecommendation.none
     #: Exploratory only: how many records each default exclusion hid, and how to include them. ``None`` when nothing
-    #: was excluded by default, and always under ``curated`` (no count of records below the floor, decision D6).
+    #: was excluded by default, and always under ``curated`` (which reports no count of records below the floor).
     hidden_by_default: HiddenByDefault | None = None
 
 
@@ -170,7 +185,7 @@ HIDDEN_HEADER = "X-TCKDB-Hidden-By-Default"
 REVIEW_STATUS_HEADER = "X-TCKDB-Review-Status"
 
 #: The id a withheld record is replaced by before the route runs: it names no row, so the route answers for the withheld
-#: record exactly as it answers for an id that does not exist (hidden == unknown). Shared by the path-parameter gates and
+#: record exactly as it answers for an id that does not exist. Shared by the path-parameter gates and
 #: the id-typed filters.
 ABSENT_ID = -1
 
@@ -324,7 +339,9 @@ UNGATED_ID_FIELDS: dict[str, str] = {
 
 #: Columns that only make sense together with a pointer: blanking the pointer blanks them too, so the record stays valid
 #: (a ``single_conformer`` thermo target must name its group; with the group hidden the target is not stated).
-COUPLED_FIELDS: dict[str, tuple[str, ...]] = {"target_conformer_group_id": ("thermodynamic_target_kind",)}
+COUPLED_FIELDS: dict[str, tuple[str, ...]] = {
+    "target_conformer_group_id": ("thermodynamic_target_kind", "thermodynamic_target_declared_by")
+}
 
 #: Read models that are a gated record, by the kind their ``id`` names. A record embedded in another response
 #: (``TransitionStateRead.entries``, a group's observations) is dropped when the request does not show it.
@@ -518,7 +535,7 @@ def _wrap(endpoint: Any, gates: dict[str, Gate], path_params: set[str], served_p
             for param, gate in gates.items():
                 value = kwargs.get(param)
                 if isinstance(value, int) and _hidden_ids(session, gate.record_type, {value}, _evidence_statuses()):
-                    # A withheld record is the id of nothing (hidden == unknown); see ``ABSENT_ID``.
+                    # A withheld record is the id of nothing; see ``ABSENT_ID``.
                     kwargs[param] = ABSENT_ID
                     continue
                 if isinstance(value, int) and param == served_param:
@@ -554,7 +571,7 @@ def legacy_route_class(gates: dict[str, Gate] | None = None) -> type[APIRoute]:
     """
     declared = dict(gates or {})
 
-    class LegacyRoute(APIRoute):
+    class LegacyRoute(ServerFaultRoute):
         legacy_gates = declared
 
         def __init__(self, path: str, endpoint: Any, **kwargs: Any) -> None:

@@ -12,6 +12,7 @@ import { schemeKindLabel } from "../domain/correctionSchemeFormat"
 import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
 import { useCorrectionScheme } from "../hooks/useCorrectionScheme"
 import type { EnergyCorrectionSchemeRecord, EnergyCorrectionSchemeUsage } from "../api/methodsApi"
+import { LiteratureCitation } from "../components/LiteratureCitation"
 
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
@@ -95,7 +96,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                             <h1 className="t-display-1 record-identity-title">
                                 {title}
                                 {record.level_of_theory && (
-                                    <> <span className="value-pill"><LevelOfTheoryLink levelOfTheory={record.level_of_theory} /></span></>
+                                    <> <span className="value-pill record-identity-title-pill"><LevelOfTheoryLink levelOfTheory={record.level_of_theory} /></span></>
                                 )}
                             </h1>
                             <div className="record-identity-known">
@@ -200,11 +201,11 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                         <dt>Literature source</dt>
                                         <dd>
                                             {record.literature
-                                                ? <>{record.literature.title ?? record.literature.literature_ref}{record.literature.year ? ` (${record.literature.year})` : ""}</>
+                                                ? <LiteratureCitation literature={record.literature} />
                                                 : "not recorded"}
                                         </dd>
                                     </div>
-                                    {scheme.note && <div><dt>Note</dt><dd>{scheme.note}</dd></div>}
+                                    {/* No `scheme.note`: depositor free text (house rule, owner decision 2026-11-03). */}
                                 </dl>
                             </div>
                         </div>

@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.routes.scientific._actor import publish_read_actor
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
@@ -30,6 +31,7 @@ from app.api.routes.scientific._response import (
     prepare_assessment_response,
     refuse_check_inputs,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import (
     RecordReviewStatus,
     ScientificOriginKind,
@@ -48,7 +50,7 @@ from app.services.scientific_read.public_assessments import (
 from app.services.scientific_read.statmech import get_statmech
 from app.services.scientific_read.statmech_search import search_statmech
 
-router = APIRouter(prefix="/statmech")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/statmech")
 
 
 # The router-level ``?profile=`` dependency puts these two keys on every
@@ -115,7 +117,8 @@ def scientific_statmech_search_get(
                 "an unrecognised key is refused rather than ignored."
             ),
         )
-    request_obj = StatmechSearchRequest(
+    request_obj = caller_input(
+        StatmechSearchRequest,
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,
         statmech_ref=statmech_ref,
@@ -197,7 +200,7 @@ def scientific_statmech_search_post(
 @router.get(
     "/{statmech_ref_or_id}",
     response_model=ScientificStatmechDetailResponse,
-    dependencies=[Depends(refuse_check_inputs)],
+    dependencies=[Depends(refuse_check_inputs), Depends(publish_read_actor)],
 )
 def scientific_statmech_detail(
     statmech_ref_or_id: str = Path(..., min_length=1, max_length=64),

@@ -16,9 +16,10 @@ the importer's final report note).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .ast import Mechanism, ThermoEntry, TransportEntry
+from .duplicates import duplicate_flag_warnings
 from .forms import MODEL_CHEBYSHEV
 from .identity import IdentityResolver, ResolvedSpecies
 from .normalizer import (
@@ -78,12 +79,14 @@ def build_thermo_payload(
     config: ImportConfig,
 ) -> dict:
     """Build a ``ThermoUploadRequest`` dict for one species."""
+    # A blank or unknown phase letter stays undeclared.
+    phase = {"G": "gas", "L": "liquid", "S": "solid"}.get(entry.phase.upper())
     payload: dict = {
         "species_entry": species.identity_payload(),
         "scientific_origin": config.scientific_origin,
         # The supported CHEMKIN NASA7 profile is referenced to 1 atm.
         # Preserve the card phase; an unrecognized token remains unknown.
-        "phase": {"G": "gas", "L": "liquid", "S": "solid"}.get(entry.phase.upper()),
+        "phase": phase,
         "reference_pressure_bar": 1.01325,
         # CHEMKIN's NASA-7 thermodynamic format is formation-referenced by
         # definition (the polynomial's constant of integration IS the
@@ -96,6 +99,12 @@ def build_thermo_payload(
         "tmin_k": entry.t_low,
         "tmax_k": entry.t_high,
     }
+    if phase == "gas":
+        # The CHEMKIN format defines a NASA-7 polynomial as the standard ideal-gas ensemble.
+        payload["thermodynamic_target"] = {
+            "kind": "equilibrium_ensemble",
+            "declared_by": "chemkin_format",
+        }
     if config.literature:
         payload["literature"] = config.literature
     wtr = config.workflow_tool_release()
@@ -303,6 +312,10 @@ class BuiltPayloads:
     transport: list[dict]
     kinetics: list[dict]
     warnings: list[str]
+    #: The CHEMKIN species name of each ``thermo`` / ``transport`` payload, in the same order. The uploader keys a
+    #: record by structure and spin and falls back to this label only when two species share both.
+    thermo_names: list[str] = field(default_factory=list)
+    transport_names: list[str] = field(default_factory=list)
 
     def counts(self) -> dict[str, int]:
         return {
@@ -329,20 +342,24 @@ def build_all_payloads(
     if normalized is None:
         normalized = normalize_mechanism(mech)
 
-    warnings: list[str] = []
+    warnings: list[str] = duplicate_flag_warnings(mech.reactions)
 
     thermo_payloads: list[dict] = []
+    thermo_names: list[str] = []
     for name, entry in mech.thermo.items():
         if name not in resolved:
             continue
+        thermo_names.append(name)
         thermo_payloads.append(
             build_thermo_payload(entry, resolved[name], config)
         )
 
     transport_payloads: list[dict] = []
+    transport_names: list[str] = []
     for name, entry in mech.transport.items():
         if name not in resolved:
             continue
+        transport_names.append(name)
         transport_payloads.append(
             build_transport_payload(entry, resolved[name], config)
         )
@@ -361,4 +378,6 @@ def build_all_payloads(
         transport=transport_payloads,
         kinetics=kinetics_payloads,
         warnings=warnings,
+        thermo_names=thermo_names,
+        transport_names=transport_names,
     )

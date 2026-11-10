@@ -16,8 +16,9 @@ judgement.
 
 What it never does. It never changes a label, a completeness number or ``is_certified`` (the rubric's only reader of
 the assessment is a zero-weight warning). It caches nothing and shares nothing across profiles: it runs under the read
-profile in force, so a declared target that rests on a calculation the curated profile hides reads as unresolved
-exactly as it does on the endpoint (hidden == unknown == absent).
+profile in force, so a declared target that rests on a calculation the curated profile withholds (a rejected or
+deprecated one)
+reads as unresolved exactly as it does on the endpoint.
 
 Imports of the structure-selection package are lazy: that package imports the read schemas, which import this package.
 """

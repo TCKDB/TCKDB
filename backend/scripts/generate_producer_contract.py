@@ -11,6 +11,7 @@ Writes, under ``schemas/python/tckdb-schemas/tckdb_schemas/contract/``:
 * ``PRODUCER_CONTRACT.md`` -- what TCKDB accepts today, organised by what a
   producer wants to send;
 * ``REFUSAL_CODES.md`` -- the refusal code reference, one entry per code, shipped beside the contract;
+* ``WARNING_CODES.md`` -- the warning code reference: every warning an accepted deposit can return;
 * ``CHANGELOG.md`` -- the whole package changelog, copied beside the contract;
 * ``schemas/<model>.schema.json`` -- one JSON Schema per upload payload.
 
@@ -142,6 +143,7 @@ from fastapi.routing import APIRoute  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 from pydantic.fields import FieldInfo  # noqa: E402
 from pydantic_core import PydanticUndefined, to_jsonable_python  # noqa: E402
+from tckdb_schemas.deposit_warning_messages import RENDERED  # noqa: E402
 from tckdb_schemas.producer_rule import is_producer_rule  # noqa: E402
 
 from app.api.app import create_app  # noqa: E402
@@ -149,6 +151,8 @@ from app.api.code_catalogue import CATALOGUE, ApiCode, Shape  # noqa: E402
 from app.db.models.common import AppUserRole  # noqa: E402
 from app.scientific_checks import DatabaseConstraint, PythonCheck, ScientificCheck  # noqa: E402
 from app.scientific_checks.declarations import register  # noqa: E402
+from app.scientific_checks.numbering import numbered_register  # noqa: E402
+from app.services.deposit_warnings import REGISTER_ENTRY  # noqa: E402
 
 GENERATOR = "backend/scripts/generate_producer_contract.py"
 PACKAGE_ROOT = REPO_ROOT / "schemas" / "python" / "tckdb-schemas"
@@ -159,6 +163,8 @@ MARKDOWN_NAME = "PRODUCER_CONTRACT.md"
 CHANGELOG_NAME = "CHANGELOG.md"
 #: The refusal code reference, shipped beside the contract (it was a 104 KB section of it).
 CODES_NAME = "REFUSAL_CODES.md"
+#: The warning code reference: every warning a deposit can earn, beside the refusal codes.
+WARNINGS_NAME = "WARNING_CODES.md"
 SCHEMA_SUBDIR = "schemas"
 SCHEMA_SUFFIX = ".schema.json"
 
@@ -1192,6 +1198,17 @@ def _module_for_origin(origin: str) -> types.ModuleType | None:
 
 def _message_near_code(tree: ast.AST, code: str, namespace: dict[str, object]) -> str | None:
     """The first string expression written beside ``code`` in ``tree``."""
+    return next(iter(_messages_near_code(tree, code, namespace)), None)
+
+
+def _messages_near_code(
+    tree: ast.AST, code: str, namespace: dict[str, object], *, ordered: bool = False
+) -> list[str]:
+    """Every string expression written beside ``code`` in ``tree``, distinct.
+
+    ``ordered`` walks in source order (line, column); the default keeps ``ast.walk``'s order.
+    """
+    found: list[str] = []
 
     def is_code(node: ast.AST) -> bool:
         if isinstance(node, ast.Constant):
@@ -1205,7 +1222,12 @@ def _message_near_code(tree: ast.AST, code: str, namespace: dict[str, object]) -
         for child in ast.iter_child_nodes(parent):
             parents[child] = parent
 
-    for node in ast.walk(tree):
+    nodes = (
+        sorted(ast.walk(tree), key=lambda n: (getattr(n, 'lineno', 0), getattr(n, 'col_offset', 0)))
+        if ordered
+        else ast.walk(tree)
+    )
+    for node in nodes:
         text: str | None = None
         if isinstance(node, (ast.Constant, ast.JoinedStr)):
             rendered = _render_str_expr(node)
@@ -1239,9 +1261,32 @@ def _message_near_code(tree: ast.AST, code: str, namespace: dict[str, object]) -
                     if rendered and len(rendered.split()) >= 3:
                         text = rendered
                         break
-        if text:
-            return _one_line(text)
-    return None
+        if text and _one_line(text) not in found:
+            found.append(_one_line(text))
+    return found
+
+
+#: Codes whose raise sites carry different sentences for different reasons; the reference lists them all.
+ALL_MESSAGES_CODES = frozenset({"kinetics_energy_level_contradiction"})
+
+
+def code_all_messages(code: str, entries: list[ApiCode]) -> list[str]:
+    """Every distinct sentence written beside ``code`` in its defining module, in source order.
+
+    Only for ``ALL_MESSAGES_CODES``; the first is the headline and the rest are listed under "Also".
+    """
+    if code not in ALL_MESSAGES_CODES:
+        return []
+    out: list[str] = []
+    for entry in entries:
+        module = _module_for_origin(entry.origin)
+        path = REPO_ROOT / entry.origin
+        if module is None or not path.exists():
+            continue
+        for text in _messages_near_code(ast.parse(path.read_text()), code, vars(module), ordered=True):
+            if text not in out:
+                out.append(text)
+    return out
 
 
 def code_message(code: str, entries: list[ApiCode], sites: Iterable[Callable[..., object]]) -> str | None:
@@ -1320,6 +1365,17 @@ omitted value is stored as "not stated", which makes the record's entropy
 incomparable with others. 1 atm is `1.01325` bar, not `1.0`; many
 statistical-mechanics codes (ARC and RMG among them) compute entropy at
 1 atm. Never write `1.0` because it looks standard.
+
+**Warnings.** An accepted deposit answers `201` with a `warnings` list. Each
+entry has a `code`, a `field` (the path into your own request, which may name
+your local keys), a `context` (the values the check saw; `null` when it states
+none) and a `message`. The `message` is TCKDB's sentence for the `code`, built
+from the code and the context; it never quotes text you typed. **Match on
+`code`, never on `message`**: the wording can change. A label that helps you
+find the problem (a transition-state label, a local key, a file name) is under
+`context.depositor_supplied`, which is text you typed and is marked as such.
+The upload response, the job result and every later read of the record give the
+same sentence.
 
 **Transition-state evidence and statmech.** A saddle point may carry up to
 three validation records, at most one per `kind`, every one optional:
@@ -1988,7 +2044,8 @@ class ContractBuilder:
             "",
             "Read it in pieces: `python -m tckdb_schemas.contract --print` for all of it,"
             " `--since <version>` for what changed, `--schemas` for the JSON Schema files, `--codes` for the path of the"
-            f" refusal code reference (`{CODES_NAME}`, shipped beside this file).",
+            f" refusal code reference (`{CODES_NAME}`, shipped beside this file) and `--warnings` for the path of the"
+            f" warning code reference (`{WARNINGS_NAME}`, every warning an accepted deposit can return).",
             "",
         ]
         out += self._render_glance()
@@ -2007,6 +2064,7 @@ class ContractBuilder:
             "- [Model reference](#model-reference)",
             "- [Enums](#enums)",
             "- [Refusal code reference](#refusal-code-reference) (its own file, `REFUSAL_CODES.md`)",
+            "- Warning code reference (its own file, `WARNING_CODES.md`)",
             "- [Write routes that are not producer surfaces](#write-routes-that-are-not-producer-surfaces)",
             "",
             PREAMBLE,
@@ -2535,6 +2593,51 @@ class ContractBuilder:
         text = re.sub(r"\n{3,}", "\n\n", text)
         return text.rstrip("\n") + "\n"
 
+    def render_warnings_markdown(self) -> str:
+        """``WARNING_CODES.md``: every warning code a deposit can earn, with TCKDB's sentence and its register entry."""
+        checks_by_number = dict(self._register_numbers())
+        out = [
+            "# TCKDB warning code reference",
+            "",
+            "<!-- GENERATED FILE. Do not edit. Regenerate with:",
+            f"     {REGENERATE}",
+            "     and verify with --check. -->",
+            "",
+            f"Generated by `{GENERATOR}` from the warning sentence table (`tckdb_schemas.deposit_warning_messages.RENDERED`)"
+            f" and the scientific check register, beside `{MARKDOWN_NAME}` and `{CODES_NAME}`."
+            f" **tckdb-schemas version `{_package_version()}`.** Find this file with"
+            " `python -m tckdb_schemas.contract --warnings` (prints its path) or"
+            " `tckdb_schemas.contract.warning_codes_path()`.",
+            "",
+            f"{len(RENDERED)} codes. A warning never refuses a deposit: an accepted upload returns `201` with a"
+            " `warnings` list, and each entry carries a `code`, a `field` (the path into your request), a `message`"
+            " and a `context`. Match on `code`, never on `message`. The sentence below is the fixed form; when the"
+            " check has numbers to report (a count, a tolerance, a residual) the `message` includes them, built only"
+            " from the `context` values and never from text you typed. A label that helps you find the problem is"
+            " under `context.depositor_supplied`, marked as yours.",
+            "",
+            "**Register entry** is the scientific check behind the code in `docs/guides/scientific_check_register.md`,"
+            " with its tier; a code with no entry is documented here only, because the register holds checks that could"
+            " be wrong in a scientifically interesting way and not every observation a deposit can make.",
+            "",
+        ]
+        for code in sorted(RENDERED):
+            out += [f'<a id="{_anchor("w", code)}"></a>', "", f"#### `{code}`", ""]
+            number = REGISTER_ENTRY.get(code)
+            if number is None:
+                out.append("- Register entry: none (this reference only).")
+            else:
+                check = checks_by_number[number]
+                out.append(f"- Register entry: {number} ({check.tier.value}): {_one_line(check.asserts)}")
+            out.append(f"- Sentence: {RENDERED[code]}")
+            out.append("")
+        text = "\n".join(out)
+        return re.sub(r"\n{3,}", "\n\n", text).rstrip("\n") + "\n"
+
+    def _register_numbers(self) -> list[tuple[int, ScientificCheck]]:
+        """Each register entry with the number the generated register document prints for it."""
+        return numbered_register()
+
     def _render_code_reference_pointer(self) -> list[str]:
         return [
             '<a id="refusal-code-reference"></a>',
@@ -2612,7 +2715,11 @@ class ContractBuilder:
                 out.append("- The body's `context` names the things involved.")
             if any(e.is_replay_futile for e in entries):
                 out.append("- Never succeeds on replay; do not retry the identical request.")
-            out.append(f"- Message: {facts.message!r}" if facts.message else "- Message: not found by the static search.")
+            every = code_all_messages(code, entries)
+            headline = every[0] if every else facts.message
+            out.append(f"- Message: {headline!r}" if headline else "- Message: not found by the static search.")
+            for extra in every[1:]:
+                out.append(f"- Also: {extra!r}")
             for note in sorted({e.note for e in entries if e.note}):
                 out.append(f"- Note: {_first_sentence(note)}")
             shared_key = next((key for key, (checks, _) in shared.items() if facts.check in checks), None)
@@ -2663,6 +2770,7 @@ class ContractBuilder:
         files = {
             MARKDOWN_NAME: self.render_markdown(),
             CODES_NAME: self.render_codes_markdown(),
+            WARNINGS_NAME: self.render_warnings_markdown(),
             CHANGELOG_NAME: CHANGELOG.read_text(),
         }
         for surface in self.surfaces:
@@ -2683,6 +2791,9 @@ def committed_files() -> dict[str, str]:
     codes = CONTRACT_DIR / CODES_NAME
     if codes.exists():
         files[CODES_NAME] = codes.read_text()
+    warnings_ref = CONTRACT_DIR / WARNINGS_NAME
+    if warnings_ref.exists():
+        files[WARNINGS_NAME] = warnings_ref.read_text()
     changelog = CONTRACT_DIR / CHANGELOG_NAME
     if changelog.exists():
         files[CHANGELOG_NAME] = changelog.read_text()

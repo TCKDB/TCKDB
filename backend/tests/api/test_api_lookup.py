@@ -507,12 +507,12 @@ class TestSelectionModes:
 def _reaction_payload() -> dict:
     return {
         "reversible": True,
-        "reaction_family": "H_Abstraction",
+        "reaction_family": "intra_H_migration",
         "reactants": [
-            {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+            {"species_entry": {"smiles": "CC=O", "charge": 0, "multiplicity": 1}},
         ],
         "products": [
-            {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+            {"species_entry": {"smiles": "C=CO", "charge": 0, "multiplicity": 1}},
         ],
     }
 
@@ -521,7 +521,7 @@ class TestReactionLookup:
     def test_no_match(self, client):
         resp = client.get(
             "/api/v1/lookup/reaction",
-            params={"reactants": "[H]", "products": "[H]"},
+            params={"reactants": "CC=O", "products": "C=CO"},
         )
         data = resp.json()
         assert data["match"]["status"] == "none"
@@ -534,10 +534,10 @@ class TestReactionLookup:
         resp = client.get(
             "/api/v1/lookup/reaction",
             params={
-                "reactants": "[H]",
-                "products": "[H]",
-                "reactant_multiplicities": 2,
-                "product_multiplicities": 2,
+                "reactants": "CC=O",
+                "products": "C=CO",
+                "reactant_multiplicities": 1,
+                "product_multiplicities": 1,
             },
         )
         data = resp.json()
@@ -555,10 +555,10 @@ class TestReactionLookup:
         resp = client.get(
             "/api/v1/lookup/reaction",
             params={
-                "reactants": "[H]",
-                "products": "[H]",
-                "reactant_multiplicities": 2,
-                "product_multiplicities": 2,
+                "reactants": "CC=O",
+                "products": "C=CO",
+                "reactant_multiplicities": 1,
+                "product_multiplicities": 1,
             },
         )
         rxn = next(r for r in resp.json()["results"] if r["resource_type"] == "reaction")
@@ -566,18 +566,18 @@ class TestReactionLookup:
         assert rxn["links"]["self"].startswith("/api/v1/reactions/")
         # The identifier is what a client filters on; the display name is
         # derived at read time and is never stored.
-        assert rxn["summary"]["reaction_family"] == "H_Abstraction"
-        assert rxn["summary"]["reaction_family_display"] == "Hydrogen Abstraction"
+        assert rxn["summary"]["reaction_family"] == "intra_H_migration"
+        assert rxn["summary"]["reaction_family_display"] == "Intra Hydrogen migration"
 
     def test_entry_includes_participant_structure(self, client):
         client.post("/api/v1/uploads/reactions", json=_reaction_payload())
         resp = client.get(
             "/api/v1/lookup/reaction",
             params={
-                "reactants": "[H]",
-                "products": "[H]",
-                "reactant_multiplicities": 2,
-                "product_multiplicities": 2,
+                "reactants": "CC=O",
+                "products": "C=CO",
+                "reactant_multiplicities": 1,
+                "product_multiplicities": 1,
             },
         )
         entry_items = [
@@ -635,10 +635,10 @@ class TestKineticsLookup:
         rxn_resp = client.get(
             "/api/v1/lookup/reaction",
             params={
-                "reactants": "[H]",
-                "products": "[H]",
-                "reactant_multiplicities": 2,
-                "product_multiplicities": 2,
+                "reactants": "CC=O",
+                "products": "C=CO",
+                "reactant_multiplicities": 1,
+                "product_multiplicities": 1,
             },
         )
         entry_items = [
@@ -673,10 +673,10 @@ class TestReactionKineticsLookup:
         resp = client.get(
             "/api/v1/lookup/reaction-kinetics",
             params={
-                "reactants": "[H]",
-                "products": "[H]",
-                "reactant_multiplicities": 2,
-                "product_multiplicities": 2,
+                "reactants": "CC=O",
+                "products": "C=CO",
+                "reactant_multiplicities": 1,
+                "product_multiplicities": 1,
             },
         )
         data = resp.json()

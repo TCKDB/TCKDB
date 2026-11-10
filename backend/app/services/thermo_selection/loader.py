@@ -199,9 +199,10 @@ def scan_population(session: Session, *, species_entry_id: int, request: H298Req
 
 
 def unavailable_evidence(session: Session, rows: list[Thermo]) -> frozenset[str]:
-    """The calculations these records cite that the reader cannot open: hidden under the profile, or naming no row.
+    """The calculations these records cite that the reader cannot open: withheld under the profile, or naming no row.
 
-    Hidden == unknown: such evidence is treated exactly like a reference to nothing, so a hidden supporting calculation
+    Withheld == unknown: such evidence is treated exactly like a reference to nothing, so a withheld supporting
+    calculation
     (a source link, a protocol citation) does not count under ``curated``. Empty, with no statement, without a review
     floor: an exploratory selection is unchanged.
     """
@@ -327,6 +328,9 @@ def normalize_rows(
             ),
             target_kind=(
                 thermo.thermodynamic_target_kind.value if thermo.thermodynamic_target_kind is not None else None
+            ),
+            target_declared_by=(
+                thermo.thermodynamic_target_declared_by.value if thermo.thermodynamic_target_kind is not None else None
             ),
             target_group_ref=(
                 group_refs[thermo.target_conformer_group_id] if thermo.target_conformer_group_id is not None else None

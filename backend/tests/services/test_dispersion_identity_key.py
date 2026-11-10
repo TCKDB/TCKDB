@@ -229,7 +229,6 @@ def test_a_column_form_row_keeps_the_hash_it_always_had():
         "dispersion": "d3bj",
         "solvent": None,
         "solvent_model": None,
-        "keywords": None,
         "spin_treatment": "unknown",
     }
     expected = hashlib.sha256(
@@ -260,7 +259,6 @@ def test_levels_that_must_stay_apart_hash_apart(a, b):
 def test_the_dispersion_is_not_joined_across_other_hashed_fields():
     """The join is only in the key: a different basis or solvent is another level."""
     assert _hash("b3lyp-d3bj") != _hash("b3lyp", "d3bj", solvent="water", solvent_model="smd")
-    assert _hash("b3lyp-d3bj", keywords="Opt") != _hash("b3lyp", "d3bj", keywords="opt")
 
 
 def test_the_upload_path_resolves_every_spelling_to_one_row(db_session):

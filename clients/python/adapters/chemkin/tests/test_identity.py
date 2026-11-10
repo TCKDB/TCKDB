@@ -151,3 +151,113 @@ def test_allow_pseudo_maps_lump(rmg_dict):
     res = resolver.resolve_one(SpeciesDecl(name="LUMP123"))
     assert res is not None
     assert res.molecule_kind == "pseudo"
+
+
+# --- spin from a TCKDB export's MULT= comment ------------------------------
+
+
+def test_inline_comment_mult_separates_spin_states_of_one_structure():
+    mech = parse_mechanism(
+        "SPECIES\n"
+        "CH2_T  ! SMILES=[CH2]  MULT=3\n"
+        "CH2_S  ! SMILES=[CH2]  MULT=1\n"
+        "END\n"
+    )
+    resolver = IdentityResolver()
+    triplet, singlet = (resolver.resolve_one(d) for d in mech.species)
+    assert (triplet.smiles, triplet.multiplicity) == (canon("[CH2]"), 3)
+    assert (singlet.smiles, singlet.multiplicity) == (canon("[CH2]"), 1)
+
+
+def test_inline_comment_without_mult_keeps_the_radical_count_default():
+    mech = parse_mechanism("SPECIES\nFOO  ! SMILES=[CH3]\nEND\n")
+    assert IdentityResolver().resolve_one(mech.species[0]).multiplicity == 2
+
+
+def test_inline_comment_mult_is_read_beside_stereo_tokens():
+    mech = parse_mechanism("SPECIES\nFOO  ! SMILES=C/C=C/C  MULT=1  STEREO=E ref=sp_1\nEND\n")
+    resolved = IdentityResolver().resolve_one(mech.species[0])
+    assert resolved.multiplicity == 1
+    assert resolved.smiles == canon("C/C=C/C")
+
+
+# --- RMG formal charge (c+1 / c-1 / c+2) ------------------------------------
+
+_CHARGED = """\
+CO(11)
+multiplicity 1
+1 C u0 p1 c-1 {2,T}
+2 O u0 p1 c+1 {1,T}
+
+"""
+
+
+def test_species_dictionary_reads_signed_charges():
+    resolved = parse_species_dictionary(_CHARGED)["CO(11)"]
+    assert resolved.charge == 0
+    assert resolved.smiles == canon("[C-]#[O+]")
+
+
+def test_species_dictionary_reads_a_net_charge():
+    text = "OH-(1)\n1 O u0 p3 c-1 {2,S}\n2 H u0 p0 c0 {1,S}\n\n"
+    resolved = parse_species_dictionary(text)["OH-(1)"]
+    assert resolved.charge == -1
+
+
+def test_unreadable_atom_line_is_an_error_not_skipped():
+    text = "BAD(1)\n1 C u0 p0 c? {2,S}\n2 H u0 p0 c0 {1,S}\n\n"
+    with pytest.raises(ValueError, match=r"BAD\(1\).*c\?"):
+        parse_species_dictionary(text)
+
+
+# --- MULT validation ----------------------------------------------------------
+
+
+def _comment_species(comment):
+    mech = parse_mechanism(f"SPECIES\nFOO  ! {comment}\nEND\n")
+    return IdentityResolver().resolve_one(mech.species[0])
+
+
+@pytest.mark.parametrize("token", ["0", "1.0", "x", "-1", "3x"])
+def test_mult_must_be_a_whole_number_at_least_one(token):
+    with pytest.raises(ValueError, match=r"FOO.*MULT"):
+        _comment_species(f"SMILES=[CH2]  MULT={token}")
+
+
+@pytest.mark.parametrize(
+    "smiles, mult",
+    [("[CH2]", 2), ("CC", 2), ("[CH3]", 1), ("[O]", 2), ("[OH]", 1)],
+)
+def test_mult_with_the_wrong_parity_for_the_electron_count_is_refused(smiles, mult):
+    with pytest.raises(ValueError, match=r"FOO.*disagrees"):
+        _comment_species(f"SMILES={smiles}  MULT={mult}")
+
+
+def test_mult_key_is_case_insensitive_but_a_whole_token():
+    assert _comment_species("SMILES=[CH2]  mult=1").multiplicity == 1
+    # STEREO_MULT= is some other key, not this one.
+    assert _comment_species("SMILES=[CH2]  STEREO_MULT=7").multiplicity == 3
+
+
+# --- RMG labels and isotopes ----------------------------------------------------
+
+
+def test_labelled_atoms_are_parsed():
+    text = "CH3(1)\n1 *1 C u1 p0 c0 {2,S} {3,S} {4,S}\n2 H u0 p0 c0 {1,S}\n3 H u0 p0 c0 {1,S}\n4 H u0 p0 c0 {1,S}\n\n"
+    resolved = parse_species_dictionary(text)["CH3(1)"]
+    assert resolved.smiles == canon("[CH3]")
+    assert resolved.multiplicity == 2
+
+
+def test_isotope_tag_is_carried_into_the_smiles():
+    text = "CH4(1)\n1 C u0 p0 c0 i13 {2,S} {3,S} {4,S} {5,S}\n" + "".join(
+        f"{i} H u0 p0 c0 {{1,S}}\n" for i in (2, 3, 4, 5)
+    ) + "\n"
+    resolved = parse_species_dictionary(text)["CH4(1)"]
+    assert resolved.smiles == canon("[13CH4]")
+
+
+@pytest.mark.parametrize("line", ["1 *x C u0 p0 c0 {2,S}", "1 C u0 p0 c0 j13 {2,S}", "1 C uX p0 c0 {2,S}"])
+def test_any_atom_like_line_that_does_not_parse_raises(line):
+    with pytest.raises(ValueError, match="Malformed adjacency-list atom line"):
+        parse_species_dictionary(f"BAD(1)\n{line}\n2 H u0 p0 c0 {{1,S}}\n\n")

@@ -18,7 +18,7 @@ def _seed(db_session, smiles: str = "CC"):
 
 
 def test_get_returns_200_with_envelope(client, db_session):
-    species, entry, thermo = _seed(db_session, smiles="C[CH2]")
+    species, entry, thermo = _seed(db_session, smiles="[CH2]C")
 
     resp = client.get("/api/v1/scientific/thermo/search?smiles=C[CH2]")
 

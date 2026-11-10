@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.routes.scientific._actor import publish_read_actor
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
@@ -25,6 +26,7 @@ from app.api.routes.scientific._response import (
     CONFORMER_RECORD_SECTIONS,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import (
     ConformerSelectionKind,
     RecordReviewStatus,
@@ -48,9 +50,9 @@ from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
 
-cg_router = APIRouter(prefix="/conformer-groups")
-co_router = APIRouter(prefix="/conformer-observations")
-search_router = APIRouter(prefix="/conformers")
+cg_router = APIRouter(route_class=ServerFaultRoute, prefix="/conformer-groups")
+co_router = APIRouter(route_class=ServerFaultRoute, prefix="/conformer-observations")
+search_router = APIRouter(route_class=ServerFaultRoute, prefix="/conformers")
 
 
 # The router-level ``?profile=`` dependency puts these two keys on every
@@ -131,7 +133,8 @@ def scientific_conformers_search_get(
                 "an unrecognised key is refused rather than ignored."
             ),
         )
-    request_obj = ConformersSearchRequest(
+    request_obj = caller_input(
+        ConformersSearchRequest,
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,
         conformer_group_ref=conformer_group_ref,
@@ -256,6 +259,7 @@ def scientific_conformer_group_detail(
 @co_router.get(
     "/{conformer_observation_ref_or_id}",
     response_model=ScientificConformerObservationDetailResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def scientific_conformer_observation_detail(
     conformer_observation_ref_or_id: str = Path(

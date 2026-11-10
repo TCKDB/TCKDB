@@ -91,6 +91,7 @@ from app.schemas.reads.scientific_transition_state import (
     TransitionStateValidationDescriptor,
     TransitionStateValidationEvidenceSummary,
 )
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     evidence_visible_statuses,
@@ -113,6 +114,7 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.reaction_participants import format_reaction_equation
 from app.services.scientific_read.species_calculations_search import (
     _build_energy_block,
     _load_sp_lot_pairs,
@@ -472,6 +474,10 @@ def get_transition_state(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([ts_badge]),
         record=record,
+        **deposit_warning_envelope(
+            # Only the entries the page lists: a withheld entry's warnings (and its submission's) are not ours to show.
+            session, SubmissionRecordType.transition_state_entry, {e.id: e.public_ref for e in counted_entries}
+        ),
     )
 
 
@@ -551,6 +557,9 @@ def get_transition_state_entry(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([tse_badge]),
         record=record,
+        **deposit_warning_envelope(
+            session, SubmissionRecordType.transition_state_entry, {tse.id: tse.public_ref}
+        ),
     )
 
 
@@ -985,12 +994,11 @@ def _format_equation(
     ).all()
     if not rows:
         return None
-    reactants = [r.smiles for r in rows if r.role == ReactionRole.reactant]
-    products = [r.smiles for r in rows if r.role == ReactionRole.product]
+    reactants = [(r.participant_index, r.smiles) for r in rows if r.role == ReactionRole.reactant]
+    products = [(r.participant_index, r.smiles) for r in rows if r.role == ReactionRole.product]
     if not reactants and not products:
         return None
-    arrow = "<=>" if reversible else "->"
-    return f"{' + '.join(reactants)} {arrow} {' + '.join(products)}"
+    return format_reaction_equation(reactants, products, reversible)
 
 
 # ---------------------------------------------------------------------------
@@ -1866,6 +1874,9 @@ def _bulk_lot_summaries(
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
             core_treatment=lot.core_treatment,
+            relativistic_hamiltonian=lot.relativistic_hamiltonian,
+            pno_truncation=lot.pno_truncation,
+            ri_approximation=lot.ri_approximation,
             aux_basis=lot.aux_basis,
             cabs_basis=lot.cabs_basis,
             solvent_model=lot.solvent_model,

@@ -62,6 +62,7 @@ from tckdb_schemas.bundle_source_rules import (
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import CalculationType as PayloadCalculationType
 from tckdb_schemas.fragments.calculation import SCFStabilityBase
+from tckdb_schemas.fragments.kinetics_bath_gas import check_bath_gas_mole_fraction_sum
 from tckdb_schemas.fragments.kinetics_evidence import (
     ENERGY_CORRECTION_CONVENTION_DESCRIPTION,
     ENERGY_ZERO_CONVENTION_DESCRIPTION,
@@ -81,6 +82,7 @@ from tckdb_schemas.local_key_codes import (
     W_TRANSITION_STATE_KEY_UNDECLARED,
     undeclared_key_error,
 )
+from tckdb_schemas.network_channel_kind import W_NETWORK_CHANNEL_KIND_MISMATCH, derive_channel_kind
 from tckdb_schemas.network_declarations import (
     W_NETWORK_DECLARATION_INVALID,
     NetworkBarrierBasis,
@@ -96,13 +98,12 @@ from tckdb_schemas.shared.calculation_in import (
     CalculationIn,
     GeometryIn,
     calculation_in_to_with_results_payload,
-    freq_evidence,
     frequency_completeness_findings,
+    species_entry_frequency_findings,
     transition_state_frequency_findings,
 )
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
-    evaluate_species_entry_frequency,
     raise_for_blocking_findings,
 )
 from tckdb_schemas.workflows.computed_species_upload import (
@@ -289,7 +290,7 @@ class NetworkSpeciesIn(SchemaBase):
                     f"Species '{self.key}' calculation '{calc.key}' "
                     f"conformer_key must reference one of that species's "
                     f"own conformers.",
-                    field=f"calculations['{calc.key}'].conformer_key",
+                    field=f"calculations[{calc.key!r}].conformer_key",
                     key=calc.conformer_key,
                     declared=conformer_keys,
                 )
@@ -307,7 +308,7 @@ class NetworkSpeciesIn(SchemaBase):
                     W_GEOMETRY_KEY_UNRESOLVED,
                     f"Species '{self.key}' calculation '{calc.key}' geometry_key "
                     f"must reference one of that species's conformer geometries.",
-                    field=f"calculations['{calc.key}'].geometry_key",
+                    field=f"calculations[{calc.key!r}].geometry_key",
                     key=calc.geometry_key,
                     declared=conformer_geometry_keys,
                 )
@@ -345,13 +346,12 @@ class NetworkSpeciesIn(SchemaBase):
         findings: list[StationaryPointFinding] = []
         for conformer in self.conformers:
             location = (
-                f"species['{self.key}'].conformers['{conformer.key}']"
-                f".calculation['{conformer.calculation.key}']"
+                f"species[{self.key!r}].conformers[{conformer.key!r}]"
+                f".calculation[{conformer.calculation.key!r}]"
             )
-            n_imag, imag_freq_cm1 = freq_evidence(conformer.calculation)
             findings.extend(
-                evaluate_species_entry_frequency(
-                    kind, n_imag, imag_freq_cm1, location=location
+                species_entry_frequency_findings(
+                    conformer.calculation, kind, location=location
                 )
             )
             findings.extend(
@@ -362,12 +362,9 @@ class NetworkSpeciesIn(SchemaBase):
                 )
             )
         for calc in self.calculations:
-            location = f"species['{self.key}'].calculations['{calc.key}']"
-            n_imag, imag_freq_cm1 = freq_evidence(calc)
+            location = f"species[{self.key!r}].calculations[{calc.key!r}]"
             findings.extend(
-                evaluate_species_entry_frequency(
-                    kind, n_imag, imag_freq_cm1, location=location
-                )
+                species_entry_frequency_findings(calc, kind, location=location)
             )
             findings.extend(
                 frequency_completeness_findings(
@@ -453,7 +450,7 @@ class TransitionStateIn(SchemaBase):
         findings: list[StationaryPointFinding] = []
         for calc in (self.calculation, *self.calculations):
             location = (
-                f"transition_states['{self.key}'].calculations['{calc.key}']"
+                f"transition_states[{self.key!r}].calculations[{calc.key!r}]"
             )
             findings.extend(
                 transition_state_frequency_findings(calc, location=location)
@@ -603,7 +600,10 @@ class NetworkChannelIn(SchemaBase):
 
     :param source_state_key: Local key of the source state.
     :param sink_state_key: Local key of the sink state.
-    :param kind: Macroscopic channel classification (association, ...).
+    :param kind: Optional. The channel's macroscopic type, derived from its two states: well to well is
+        ``isomerization``, bimolecular/termolecular to well ``association``, well to bimolecular/termolecular
+        ``dissociation``, bimolecular/termolecular to bimolecular/termolecular ``exchange``. Omit it and the server
+        fills it in; supply it and it must agree, or the deposit is refused as ``network_channel_kind_mismatch``.
     :param mechanism: Mechanistic attribution. Defaults to ``elementary``, so
         an existing payload that names its ``microreaction_paths`` is
         unaffected.
@@ -630,7 +630,7 @@ class NetworkChannelIn(SchemaBase):
     key: str = Field(min_length=1)
     source_state_key: str = Field(min_length=1)
     sink_state_key: str = Field(min_length=1)
-    kind: NetworkChannelKind
+    kind: NetworkChannelKind | None = None
     mechanism: NetworkChannelMechanism = NetworkChannelMechanism.elementary
     microreaction_paths: list["NetworkChannelMicroReactionIn"] = Field(
         default_factory=list
@@ -1400,8 +1400,8 @@ class NetworkSolveIn(SchemaBase):
         # k(T,P) without stating the collider composition it was fitted in.
         # If it does name one, the composition still has to be a composition.
         if self.bath_gas or self.kind is NetworkSolveKind.computed:
-            if not math.isclose(sum(bg.mole_fraction for bg in self.bath_gas), 1.0, rel_tol=0.0, abs_tol=1e-9):
-                raise ValueError("bath_gas mole fractions must sum to 1.0 within 1e-9.")
+            # One rule, one code, one tolerance with a kinetics rate's bath gas.
+            check_bath_gas_mole_fraction_sum([bg.mole_fraction for bg in self.bath_gas], field="solve.bath_gas")
         keys = [item.state_key for item in self.state_energies]
         if len(keys) != len(set(keys)):
             raise ValueError("state_energies must be unique by state_key.")
@@ -1683,7 +1683,7 @@ class NetworkPDepUploadRequest(SchemaBase):
                 "imaginary_mode": CalculationType.freq,
             }
             for ev_index, evidence in enumerate(ts.validation_evidence):
-                base_field = f"transition_states['{ts.key}'].validation_evidence[{ev_index}]"
+                base_field = f"transition_states[{ts.key!r}].validation_evidence[{ev_index}]"
                 if evidence.kind == "energy_ordering":
                     # Each energy names its own source, and it must be a
                     # calculation of the thing the energy is of: the saddle
@@ -1782,7 +1782,7 @@ class NetworkPDepUploadRequest(SchemaBase):
                     W_GEOMETRY_KEY_UNRESOLVED,
                     f"Calculation '{calc.key}' in {context} references "
                     f"undefined geometry_key '{calc.geometry_key}'.",
-                    field=f"calculations['{calc.key}'].geometry_key",
+                    field=f"calculations[{calc.key!r}].geometry_key",
                     key=calc.geometry_key,
                     declared=geometry_keys,
                 )
@@ -2440,6 +2440,38 @@ class NetworkPDepUploadRequest(SchemaBase):
                     "topology; without it there is no evidence for this "
                     "channel at all."
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_channel_kind_from_states(self) -> Self:
+        """Fill each channel's ``kind`` from its states, and refuse one that disagrees.
+
+        The kind is a function of the source and sink state kinds (``derive_channel_kind``), so an
+        omitted kind is filled in and a supplied one is only ever a claim to check. Runs after
+        ``validate_key_references`` (both endpoints name declared states) and after
+        ``validate_well_skipping_channels``, so a topology refusal is reported before a kind one.
+        """
+        state_kind = {state.key: state.kind for state in self.states}
+        for index, channel in enumerate(self.channels):
+            derived = NetworkChannelKind(
+                derive_channel_kind(state_kind[channel.source_state_key], state_kind[channel.sink_state_key]).value
+            )
+            if channel.kind is not None and channel.kind != derived:
+                raise CodedValidationError(
+                    W_NETWORK_CHANNEL_KIND_MISMATCH,
+                    f"channel '{channel.key}' declares kind='{channel.kind.value}' but joins a "
+                    f"{state_kind[channel.source_state_key]} state to a {state_kind[channel.sink_state_key]} "
+                    f"state, which is kind='{derived.value}'. Omit kind to have it derived, or send "
+                    f"'{derived.value}'.",
+                    context={
+                        "field": f"channels[{index}].kind",
+                        "channel_key": channel.key,
+                        "supplied_kind": channel.kind.value,
+                        "derived_kind": derived.value,
+                    },
+                    message_prefix=False,
+                )
+            channel.kind = derived
         return self
 
     @model_validator(mode="after")

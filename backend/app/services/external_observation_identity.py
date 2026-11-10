@@ -72,6 +72,7 @@ def ground_state_minimum_entries_for_species(
         session.scalars(
             select(SpeciesEntry).where(
                 SpeciesEntry.species_id == species_id,
+                SpeciesEntry.merged_into_species_entry_id.is_(None),
                 SpeciesEntry.kind == StationaryPointKind.minimum,
                 SpeciesEntry.electronic_state_kind
                     == SpeciesEntryStateKind.ground,
@@ -141,7 +142,7 @@ def resolve_identity(
         )
 
     species_rows = session.scalars(
-        select(Species).where(Species.inchi_key == inchikey)
+        select(Species).where(Species.inchi_key == inchikey, Species.merged_into_species_id.is_(None))
     ).all()
     if not species_rows:
         return IdentityResolution(

@@ -22,9 +22,13 @@ from app.db.models.common import (
     CompositeSchemeKind,
     CoreTreatment,
     LegacyCompositeShape,
+    LiteratureTitleSource,
+    PnoTruncation,
     ProfileRecommendation,
     ReadProfile,
     RecordReviewStatus,
+    RelativisticHamiltonian,
+    RiApproximation,
     SpinTreatment,
 )
 
@@ -39,7 +43,7 @@ class HiddenByDefault(BaseModel):
     Reported only under the ``exploratory`` profile, and only for an exclusion the request left at its default
     (``include_rejected`` / ``include_deprecated`` not set). ``counts`` has one key per such exclusion, counted over the
     records that matched the request's other filters. Under ``curated`` the block is never present: records below the
-    review floor are withheld without a count (decision D6: hidden == unknown == absent).
+    review floor are left out of a list and are not counted (the record floor, ADR 0023).
     """
 
     counts: dict[str, int]
@@ -80,10 +84,14 @@ class ProfiledRequestEcho(BaseModel):
     ``profile``                 which contract the response answers under.
     ``profile_recommendation``  whether TCKDB endorses these records. Never
                                 inferred from ``profile`` alone: a curated
-                                read of a database with no published release
-                                still reports ``none``.
-    ``profile_release_ref``     the dataset release backing a curated read,
-                                when one exists.
+                                read on the general read surface reports
+                                ``approved_floor_only`` (the approved floor
+                                was applied to the records returned, nothing
+                                more), whether or not a release has been
+                                published.
+    ``profile_release_ref``     the dataset release a response was resolved
+                                through. Only the release routes set it; it
+                                is always null on the general read surface.
 
     All three are machine tokens. The prose explanation lives in
     ``backend/docs/specs/dataset_release_and_profiles.md``, never in the value.
@@ -95,6 +103,11 @@ class ProfiledRequestEcho(BaseModel):
     #: What the default visibility hid (exploratory only; see :class:`HiddenByDefault`). ``None`` when nothing was
     #: excluded by default, on every read that applies no default visibility, and always under ``curated``.
     hidden_by_default: HiddenByDefault | None = None
+    #: Public refs this request named that belong to a species, species entry or reaction that was merged into another
+    #: (DR-0038), each mapped to the ref of the row it stands for and whose results the response shows. Empty when
+    #: no named ref was merged. A merged row keeps its ref, so a citation of it still resolves; this says that it did so
+    #: by forwarding.
+    merged_refs: dict[str, str] = Field(default_factory=dict)
 
 
 class SelectionPolicy(str, Enum):
@@ -399,6 +412,11 @@ class LevelOfTheorySummary(BaseModel):
     #: when set. Every builder passes it explicitly
     #: (``tests/invariants/test_level_summary_carries_composite_scheme.py``).
     core_treatment: CoreTreatment | None = None
+    #: Method qualifiers (relativistic Hamiltonian, DLPNO truncation, RI approximation); ``None`` = not stated.
+    #: Each is part of the level's identity only when set. Every builder passes them explicitly.
+    relativistic_hamiltonian: RelativisticHamiltonian | None = None
+    pno_truncation: PnoTruncation | None = None
+    ri_approximation: RiApproximation | None = None
     #: The auxiliary (RI) and CABS basis sets, the solvent model and (with ``dispersion`` and ``solvent``) the
     #: spin and core treatment are the parts of the level's identity, beside ``method`` and ``basis``, that
     #: ``notation`` writes. ``None`` means not stated. Every builder passes them explicitly
@@ -556,8 +574,8 @@ def level_label(level: LevelOfTheorySummary) -> str:
     ``display`` is method and basis only, so B3LYP-D3BJ/def2-TZVP and plain B3LYP/def2-TZVP both render
     ``B3LYP/def2-TZVP``. The notation of a record's levels is a headline people read, so it uses the one shared
     renderer (:func:`app.chemistry.level_label.render_level_label`, also behind the ML export's ``label``): auxiliary
-    and CABS basis, dispersion, solvent with its model, spin treatment and core treatment, each only when stated.
-    Raw ``keywords`` are not written; see that module.
+    and CABS basis, dispersion, solvent with its model, spin treatment, core treatment and the relativistic Hamiltonian, PNO truncation and RI approximation, each only
+    when stated.
     """
     return render_level_label(
         method=level.method,
@@ -569,6 +587,9 @@ def level_label(level: LevelOfTheorySummary) -> str:
         solvent_model=level.solvent_model,
         spin_treatment=level.spin_treatment,
         core_treatment=level.core_treatment,
+        relativistic_hamiltonian=level.relativistic_hamiltonian,
+        pno_truncation=level.pno_truncation,
+        ri_approximation=level.ri_approximation,
     )
 
 
@@ -649,8 +670,10 @@ class LiteratureSummary(BaseModel):
     id: int
     literature_ref: str
     title: str | None = None
+    title_source: LiteratureTitleSource | None = None
     year: int | None = None
     doi: str | None = None
+    isbn: str | None = None
 
 
 # ---------------------------------------------------------------------------

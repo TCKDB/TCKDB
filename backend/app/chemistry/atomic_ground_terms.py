@@ -48,6 +48,8 @@ import math
 import re
 from dataclasses import dataclass
 
+from tckdb_schemas.electronic_state import is_valid_term_symbol
+
 __all__ = [
     "ATOMIC_GROUND_TERMS",
     "AtomicGroundTerm",
@@ -237,12 +239,19 @@ def parse_atomic_term(text: str | None) -> ParsedAtomicTerm | None:
 def declared_term_multiplicity(text: str | None) -> int | None:
     """The spin multiplicity a term symbol states, when it states one.
 
-    Only a symbol that *starts* with the multiplicity digit is read
-    (``3P``, ``1A1``, ``2Pi``, ``3Sigma-g``). A state-label prefix (``X2Pi``)
-    or a bare irrep (``A1``, ``B1u``) is ambiguous between a multiplicity and
-    a label, so it is not read: silence beats a false contradiction.
+    A symbol that *starts* with the multiplicity digit is read (``3P``,
+    ``1A1``, ``2Pi``, ``3Sigma-g``). A state-letter prefix (``X2Pi``, ``X 1A1``)
+    is read past only when the whole text is an accepted term symbol
+    (:func:`tckdb_schemas.electronic_state.is_valid_term_symbol`), which needs a
+    multiplicity after the letter. A bare irrep (``A1``, ``B1u``) is ambiguous
+    between a multiplicity and a label and is not read: silence beats a false
+    contradiction.
     """
     if not text:
         return None
+    if is_valid_term_symbol(text.strip()):
+        m = re.match(r"\D*(\d)", _normalise(text))
+        if m:
+            return int(m.group(1))
     m = _LEADING_MULTIPLICITY.match(_normalise(text))
     return int(m["mult"]) if m else None

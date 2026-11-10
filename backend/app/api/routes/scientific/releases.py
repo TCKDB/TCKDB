@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.common import DatasetReleaseStatus
 from app.schemas.reads.scientific_release import (
     ScientificReleaseDetailResponse,
@@ -48,7 +49,7 @@ from app.services.scientific_read.releases import (
     resolve_release,
 )
 
-router = APIRouter(prefix="/releases")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/releases")
 
 
 def _claim_release_backing(release) -> None:

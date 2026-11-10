@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_curator_or_admin
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.app_user import AppUser
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.removed_parameters import RemovedParameters
@@ -58,7 +59,7 @@ from app.services.scientific_read.ml_dataset import (
     iter_ml_species_ndjson,
 )
 
-router = APIRouter(prefix="/export")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/export")
 
 #: An export never picks a record. ``collapse`` / ``selection_policy`` asked it to; both are refused by name.
 _NO_PICKING = RemovedParameters(
@@ -157,7 +158,11 @@ def export_chemkin(
     session: Session = Depends(get_db),
     _user: AppUser = Depends(require_curator_or_admin),
 ) -> StreamingResponse:
-    """Export a CHEMKIN mechanism zip (chem.inp/therm.dat/tran.dat + manifest).
+    """Export a CHEMKIN mechanism zip (chem.inp, therm.dat, optional tran.dat, and a manifest).
+
+    ``tran.dat`` is written only when at least one transport line can be
+    written; otherwise ``manifest.json`` says so under ``transport_file`` with a
+    ``reason_code``.
 
     CHEMKIN holds exactly one thermo, transport and kinetics record per
     species or reaction, and the exporter never picks one. Where a species or
@@ -187,7 +192,8 @@ def export_chemkin(
         kinetics_refs=body.kinetics_refs,
         include_transport=body.include_transport,
     )
-    options = ChemkinOptions(
+    options = caller_input(
+        ChemkinOptions,
         energy_units=body.energy_units,
         include_transport=body.include_transport,
         naming_policy=body.naming_policy,
@@ -197,6 +203,7 @@ def export_chemkin(
     manifest = record_set.manifest()
     manifest["gaps"] = [g.to_dict() for g in result.gaps]
     manifest["counts"]["gaps"] = len(result.gaps)
+    manifest["transport_file"] = result.transport
     # ``record_set.manifest()`` already carries the resolved read-profile echo,
     # so the zipped manifest.json states its contract exactly like every other
     # TCKDB manifest and response.
@@ -280,7 +287,8 @@ def export_ml_species(
     :raises ValueError: 422 for an empty/unresolvable seed, an unknown
         ``lot_ref``, or an ``all`` request over the export cap.
     """
-    filters = MLFilters(
+    filters = caller_input(
+        MLFilters,
         min_review_status=min_review_status,
         lot_ref=lot_ref,
         elements=(
@@ -343,7 +351,8 @@ def export_ml_reactions(
     :raises ValueError: 422 for an empty/unresolvable seed or an ``all``
         request over the export cap.
     """
-    filters = MLFilters(
+    filters = caller_input(
+        MLFilters,
         min_review_status=min_review_status,
         limit=limit,
         offset=offset,

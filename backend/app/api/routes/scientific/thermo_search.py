@@ -10,10 +10,13 @@ from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, p
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     ANYWHERE_SCOPE,
+    THERMO_RECORD_SECTIONS,
     omit_trust_unless_requested,
+    omit_unrequested_sections,
     prepare_assessment_response,
     refuse_check_inputs,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.method_families import MethodFamily
 from app.db.models.common import (
     RecordReviewStatus,
@@ -33,7 +36,7 @@ from app.services.scientific_read.public_assessments import (
 )
 from app.services.scientific_read.thermo_search import search_thermo
 
-router = APIRouter(prefix="/thermo")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/thermo")
 
 # The router-level ``?profile=`` dependency puts these two keys on every
 # scientific operation, POSTs included, so they must be allowed through the
@@ -91,7 +94,8 @@ def thermo_search_get(
     ``POST /species-entries/{ref}/thermo/select`` answers "give me one".
     """
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
-    request = ThermoSearchRequest(
+    request = caller_input(
+        ThermoSearchRequest,
         smiles=smiles,
         inchi=inchi,
         inchi_key=inchi_key,
@@ -139,7 +143,8 @@ def thermo_search_get(
     # occurred" passing. The same asymmetry is why ``assessments`` — which
     # hard-codes the payload-wide scope — has always behaved correctly at
     # this exact depth on this exact response.
-    return omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
+    visibility = omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
+    return omit_unrequested_sections(visibility, payload, table=THERMO_RECORD_SECTIONS, scope=ANYWHERE_SCOPE)
 
 
 @router.post("/search", response_model=ScientificThermoSearchResponse, dependencies=[Depends(refuse_check_inputs)])
@@ -170,4 +175,5 @@ def thermo_search_post(
         payload,
         attach_assessments=attach_thermo_assessments,
     )
-    return omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
+    visibility = omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
+    return omit_unrequested_sections(visibility, payload, table=THERMO_RECORD_SECTIONS, scope=ANYWHERE_SCOPE)

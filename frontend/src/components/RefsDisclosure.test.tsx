@@ -22,6 +22,17 @@ afterEach(() => {
 })
 
 describe("CopyButton", () => {
+    it("anchors its visually-hidden status region so it cannot widen the page", () => {
+        // Absolute with auto offsets and no positioned ancestor places the
+        // span against the page, outside any `.table-scroll`, and at 320px
+        // that made the document ~895px wide.
+        render(<CopyButton value="v" label="SMILES" />)
+        const status = screen.getByRole("status")
+        expect(status.style.position).toBe("absolute")
+        expect(status.style.top).toBe("0px")
+        expect(status.style.left).toBe("0px")
+    })
+
     it("writes the given value to the clipboard, announces success via a status region, and never rewrites its own accessible name", async () => {
         const writeText = vi.fn().mockResolvedValue(undefined)
         Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true })

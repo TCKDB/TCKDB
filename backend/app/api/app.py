@@ -8,8 +8,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.anonymous_body_limit import AnonymousBodyLimitMiddleware
 from app.api.bundle_limits import BundleBodyLimitMiddleware
 from app.api.config import Settings, settings
+from app.api.credential_vary import CredentialVaryMiddleware
 from app.api.errors import register_exception_handlers
 from app.api.export_limits import NetworkExportBodyLimitMiddleware
 from app.api.logging_config import configure_logging
@@ -17,6 +19,7 @@ from app.api.public_openapi import install_hosted_openapi
 from app.api.rate_limit import RateLimitMiddleware
 from app.api.request_id import RequestIDMiddleware
 from app.api.router import api_router
+from app.api.server_faults import server_model_names
 from app.api.startup_checks import (
     report_artifact_storage_at_startup,
     report_database_encoding_at_startup,
@@ -135,7 +138,7 @@ def create_app() -> FastAPI:
     )
     # Middleware ordering. Starlette runs middleware in
     # most-recently-added-first order, so the final inbound chain
-    # below is ``RequestID -> RateLimit -> CORS -> BundleBodyLimit -> router``. The
+    # below is ``RequestID -> RateLimit -> CORS -> AnonymousBodyLimit -> NetworkExportBodyLimit -> BundleBodyLimit -> router``. The
     # request id has to be set first so every downstream layer
     # (rate-limit log lines, error envelopes, route handlers) can
     # read it from ``request.state.request_id`` or the logging
@@ -146,8 +149,12 @@ def create_app() -> FastAPI:
     # ``NetworkExportBodyLimitMiddleware`` (the selected-export body cap) is added next, so it is
     # innermost after the bundle cap and applies in the same order: rate limiting and CORS wrap it,
     # and its 413 is refused before the manifest is parsed.
+    app.add_middleware(CredentialVaryMiddleware)  # innermost: marks a caller-dependent answer private on its way out
     app.add_middleware(BundleBodyLimitMiddleware)
     app.add_middleware(NetworkExportBodyLimitMiddleware)  # the selected-export body cap, before parsing
+    # The anonymous-body allowance wraps both caps above: a caller with no valid credential is told to authenticate
+    # before it is told its bundle is too large, and a credentialed caller reaches the route's own caps unchanged.
+    app.add_middleware(AnonymousBodyLimitMiddleware)
     if settings.cors_allow_origins:
         app.add_middleware(
             CORSMiddleware,
@@ -163,5 +170,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIDMiddleware)
     app.include_router(api_router, prefix="/api/v1")
     register_exception_handlers(app)
+    # After every router is included, so the set sees every response model.
+    server_model_names(app)
     install_hosted_openapi(app)
     return app

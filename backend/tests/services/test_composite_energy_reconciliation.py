@@ -138,7 +138,9 @@ def test_a_log_of_another_method_than_the_level_warns_and_compares_nothing():
     outcome = _reconcile(level_method="CBS-4M", e0_hartree=_E0 + 1.0)
     assert outcome.action is CompositeEnergyAction.method_mismatch
     assert outcome.warning.code == W_COMPOSITE_LOG_METHOD_MISMATCH
-    assert "cbs-qb3" in outcome.warning.message and "'CBS-4M'" in outcome.warning.message
+    assert outcome.warning.context["log_method"] == "cbs-qb3"
+    assert outcome.warning.context["depositor_supplied"] == {"level_of_theory_method": "CBS-4M"}
+    assert "cbs-qb3" in outcome.warning.message and "CBS-4M" not in outcome.warning.message
 
 
 def test_rocbs_qb3_is_not_silently_re_keyed_to_cbs_qb3():

@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_snapshot_db
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.server_faults import ServerFaultRoute
 from app.schemas.reads.scientific_network_selection import (
     NetworkSelectionManifest,
     NetworkSelectionRequest,
@@ -41,7 +42,7 @@ from app.services.network_selection.public import (
 from app.services.scientific_read.profile import stamp_read_profile
 from app.services.scientific_read.ref_guard import attach_review_statuses
 
-router = APIRouter(prefix="/networks")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/networks")
 
 _ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 

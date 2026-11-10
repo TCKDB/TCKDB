@@ -33,15 +33,15 @@ def _entry_with_thermo(db_session, *, smiles: str = "CC", with_nasa: bool = Fals
 
 
 def test_search_by_smiles_returns_thermo_with_species_context(db_session):
-    species, entry, thermo = _entry_with_thermo(db_session, smiles="C[CH2]")
+    species, entry, thermo = _entry_with_thermo(db_session, smiles="[CH2]C")
 
-    response = search_thermo(db_session, ThermoSearchRequest(smiles="C[CH2]"))
+    response = search_thermo(db_session, ThermoSearchRequest(smiles="[CH2]C"))
 
     assert len(response.records) == 1
     rec = response.records[0]
     assert rec.species.species_id == species.id
     assert rec.species.species_entry_id == entry.id
-    assert rec.species.canonical_smiles == "C[CH2]"
+    assert rec.species.canonical_smiles == "[CH2]C"
     assert rec.thermo.thermo_id == thermo.id
 
 

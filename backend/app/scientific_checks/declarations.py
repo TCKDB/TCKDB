@@ -41,6 +41,10 @@ from tckdb_schemas.frequency_completeness import (
     W_FREQ_LIST_EXCEEDS_GEOMETRY,
     evaluate_frequency_list_completeness,
 )
+from tckdb_schemas.hessian_method_detection import (
+    W_HESSIAN_METHOD_CONTRADICTS_INPUT_DECK,
+    check_recorded_method_agrees_with_deck,
+)
 from tckdb_schemas.stationary_point import (
     TAU_ANALYTIC_DEFAULT_CM1,
     TAU_ANALYTIC_TIGHT_CM1,
@@ -49,6 +53,7 @@ from tckdb_schemas.stationary_point import (
     TAU_PARAMETER_KEYS,
     TAU_PROTOCOL_NOT_RECORDED_CM1,
     TS_IMAGINARY_FREQUENCY_MIN_CM1,
+    W_MINIMUM_IMAGINARY_MODES_BELOW_TAU,
     W_N_IMAG_CONTRADICTS_MINIMUM,
     W_N_IMAG_HIGHER_ORDER_SADDLE,
     W_N_IMAG_SUGGESTS_TS,
@@ -66,6 +71,7 @@ from tckdb_schemas.stationary_point import (
 )
 
 from app.chemistry import species as chemistry_species
+from app.chemistry import stereo as chemistry_stereo
 from app.chemistry import units as chemistry_units
 from app.scientific_checks import (
     CheckTier,
@@ -78,16 +84,18 @@ from app.scientific_checks import (
     ScientificCheck,
     collect_constraint_rejections,
     collect_registered_checks,
+    gap_declarations,
 )
 from app.scientific_checks import external_comparison as external_comparison_checks
 from app.services import (
-    calculation_geometry_composition,
+    calc_isotopes,
     charge_multiplicity_reconciliation,
     frequency_geometry_linearity,
     reaction_resolution,
     scan_coordinate_conformance,
     species_resolution,
     transition_state_validation,
+    wavefunction_reliability_warnings,
 )
 from app.services import geometry_validation as geometry_validation_service
 from app.services import reaction_atom_map as reaction_atom_map_service
@@ -125,7 +133,7 @@ _TAU_VALUES: tuple[tuple[str, str], ...] = (
         f"{TAU_FINITE_DIFFERENCE_ENERGY_CM1:.0f}",
     ),
     (
-        "Hessian method not recorded",
+        "Hessian method not recorded and program or method family not in the assumed-default table",
         f"{TAU_PROTOCOL_NOT_RECORDED_CM1:.0f}",
     ),
 )
@@ -137,16 +145,76 @@ _TAU_THRESHOLD = ProvenanceThreshold(
     parameter_keys=TAU_PARAMETER_KEYS,
     values=_TAU_VALUES,
     fallback=(
-        f"When ``freq.hessian_method`` is absent — which is the common case, "
-        f"because most outputs do not say — tau is "
-        f"{TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1 and the record stores "
-        f"``protocol_not_recorded`` as the basis. The fallback is deliberately "
-        f"the *conservative* row rather than the analytic one: assuming the "
-        f"better case would flag genuine quadrature noise as a real "
-        f"higher-order saddle. Crucially, tau never decides between blocking "
-        f"and warning — every blocking rule here is a contract about what the "
-        f"record says, not about magnitude — so missing provenance changes how "
-        f"loudly a record is flagged and never whether it is accepted."
+        f"Tau is resolved in a fixed order (``resolve_tau_with_assumption``, "
+        f"since #864): (1) the method an attached output log reports the "
+        f"frequency job ran; else (2) the method the input echoed in that log "
+        f"requests (what the job read outranks what was recorded about it); else (3) the recorded ``freq.hessian_method`` or the method "
+        f"the calculation's own input deck states; else (4) the producing "
+        f"program's assumed default for the level of theory's method family; "
+        f"else (5) {TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1. A reported method "
+        f"outranks a recorded one because it is what ran; a request only says "
+        f"what was asked for, and the input a log echoes is what the job actually "
+        f"read, so it outranks a method recorded or typed about the job. When no log "
+        f"reports a method, no echoed input requests one and nothing is "
+        f"recorded or stated in a deck — which is the common case, "
+        f"because most outputs do not say — validation resolves tau from the "
+        f"producing program's documented default for the level of theory's "
+        f"method family (ADR 0012's 2026-09-04 amendment, applied at "
+        f"validation since 2026-10-31; the table is "
+        f"``tckdb_schemas.hessian_method_assumption``). Before assuming "
+        f"anything, validation reads the frequency directive of an inline "
+        f"input deck attached to the calculation (Gaussian ``Freq=Numer`` / "
+        f"``EnOnly``, ORCA ``NumFreq`` / ``AnFreq``, where ``NumFreq`` with ``NumGrad`` "
+        f"is a Hessian from energies): a method the deposit "
+        f"states beats an assumed one (a recorded value that contradicts the "
+        f"deck is its own refusal, ``hessian_method_contradicts_input_deck``, "
+        f"declared in register entry 50). A deck that carries no such directive says "
+        f"nothing. Failing that, "
+        f"Gaussian HF, DFT "
+        f"(double-hybrid functionals excepted: only B2PLYP, B2PLYPD, B2PLYPD3, "
+        f"mPW2PLYP and mPW2PLYPD, which the Gaussian manual documents as analytic, "
+        f"are assumed; nothing is assumed for the others), "
+        f"MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic "
+        f"default ({TAU_ANALYTIC_DEFAULT_CM1:.0f} cm-1). ORCA releases before "
+        f"version 5 have no analytic Hessian for meta-GGA functionals and are "
+        f"assumed numerical "
+        f"({TAU_FINITE_DIFFERENCE_GRADIENT_CM1:.0f} cm-1); ORCA double-hybrid "
+        f"and VV10 (non-local) functionals are assumed numerical on any "
+        f"version, because the manuals document numerical frequencies for "
+        f"them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4(DQ), "
+        f"MP4(SDQ), QCISD, CCSD, CISD and CID, and ORCA MP2 (closed-shell DLPNO-MP2 included) and, from ORCA 6, "
+        f"the ``AUTOCI-`` CCSD, CCSD(T), MP2, MP3 and MP4 methods when the level of theory states no "
+        f"frozen core and no RI (otherwise nothing is assumed for them), resolve to finite "
+        f"differences of gradients "
+        f"({TAU_FINITE_DIFFERENCE_GRADIENT_CM1:.0f} cm-1). Gaussian CCSD(T), "
+        f"QCISD(T), MP4(SDTQ) (the bare MP4 keyword) and MP5, and ORCA CCSD, CCSD(T), "
+        f"their F12 variants (F12-MP2 included), every DLPNO coupled-cluster method, and open-shell DLPNO-MP2 and "
+        f"ROHF MP2 (read from the stated spin treatment or a UHF/ROHF prefix), which have no "
+        f"analytic gradient, resolve to finite differences of energies "
+        f"({TAU_FINITE_DIFFERENCE_ENERGY_CM1:.0f} cm-1), which is looser than "
+        f"the conservative row: a minimum at 50 to 80 cm-1 that was refused "
+        f"without a recorded method is now accepted with a warning, and a "
+        f"transition-state extra mode in that band is no longer flagged. Other "
+        f"DLPNO methods (DLPNO-CEPA and the like) assume nothing. The "
+        f"record stores the matching ``assumed_*`` basis so an assumption is "
+        f"never confusable with a recorded statement. An assumption never "
+        f"replaces a statement (a recorded finite difference of gradients on an ORCA ``NumFreq`` deck for a method "
+        f"with no analytic gradient is refined to finite differences of energies and "
+        f"``hessian_method_refined`` says so): a ``freq.hessian_method`` that is present but not "
+        f"recognised is kept at the conservative row rather than replaced by an "
+        f"assumption. "
+        f"Only where the software or the method family is not in that table, "
+        f"or the payload names no software, is tau "
+        f"{TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1 with ``protocol_not_recorded`` "
+        f"as the basis; that fallback is deliberately the *conservative* row, "
+        f"because assuming the better case would flag genuine quadrature noise "
+        f"as a real higher-order saddle. For a transition state tau never "
+        f"decides between blocking and warning — every blocking rule there is "
+        f"a contract about what the record says, not about magnitude — so "
+        f"the resolution changes how loudly a record is flagged and never "
+        f"whether it is accepted. For a declared minimum tau is the line "
+        f"between the warning and the refusal, and it is the same tau that is "
+        f"stored with the record."
     ),
     rationale=(
         "The Hessian noise floor is flat in omega-squared, not in omega, so "
@@ -248,18 +316,23 @@ CHECK_MINIMUM_ZERO_IMAGINARY_MODES = ScientificCheck(
     code=W_N_IMAG_CONTRADICTS_MINIMUM,
     asserts=(
         "A species entry declared a minimum has no imaginary vibrational "
-        "modes."
+        "mode at or above the tolerance of the protocol that produced it."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
     tier_rationale=(
-        "Definitional. A covalently bound minimum whose own frequency "
-        "evidence reports an imaginary mode is mislabelled: the correct "
-        "response is to re-optimise on a tighter integration grid or to "
-        "declare it as something else, so refusing the deposit rejects no "
-        "correct calculation."
+        "Definitional above the protocol's tolerance. A covalently bound "
+        "minimum whose own frequency evidence reports an imaginary mode at "
+        "or above tau is mislabelled: at that protocol the negative "
+        "curvature is real, so the correct response is to re-optimise or to "
+        "declare the entry as something else, and refusing the deposit "
+        "rejects no correct calculation. Below tau the protocol cannot tell "
+        "the sign of the curvature from zero, so refusing would reject "
+        "correct published calculations; that case is the warning declared "
+        "next, not a refusal."
     ),
-    adr="0008",
+    adr="0008, 0012",
+    thresholds=(_TAU_THRESHOLD,),
     enforced_by=(
         PythonCheck(
             evaluate_species_entry_frequency,
@@ -267,7 +340,13 @@ CHECK_MINIMUM_ZERO_IMAGINARY_MODES = ScientificCheck(
                 "One imaginary mode and two-or-more are folded into a single "
                 "blocking message that names "
                 f"``{W_N_IMAG_HIGHER_ORDER_SADDLE}`` for the higher-order "
-                "case. A stationary-point kind the module has not been taught "
+                "case. The refusal stands when any deposited mode is at or "
+                "above tau, and when the magnitudes of the modes were not "
+                "deposited (a mode nobody measured is never assumed soft). "
+                "The same code also refuses a reaction-coordinate "
+                "designation on a minimum, because a minimum has no "
+                "reaction coordinate. "
+                "A stationary-point kind the module has not been taught "
                 "about produces no findings — adding an enum member must be a "
                 "deliberate decision, not a default."
             ),
@@ -276,7 +355,8 @@ CHECK_MINIMUM_ZERO_IMAGINARY_MODES = ScientificCheck(
     escape_hatch=(
         "Declare ``species_entry_kind='vdw_complex'``, which records the same "
         "mode with a warning instead, or deposit the structure through a "
-        "transition-state payload if the single imaginary mode is real."
+        "transition-state payload if the single imaginary mode is real. A "
+        "mode below tau needs no escape: it is accepted with a warning."
     ),
 )
 
@@ -331,13 +411,15 @@ CHECK_TRANSITION_STATE_EXTRA_IMAGINARY_MODES = ScientificCheck(
     group="Stationary points",
     sort_key=4,
     code=(
+        W_MINIMUM_IMAGINARY_MODES_BELOW_TAU,
         W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU,
         W_TS_EXTRA_IMAGINARY_MODE_ABOVE_TAU,
         W_TS_EXTRA_IMAGINARY_MODES_NOT_ASSESSABLE,
     ),
     asserts=(
         "A transition state's imaginary modes other than the reaction "
-        "coordinate are judged by magnitude against a tolerance read from the "
+        "coordinate, and every imaginary mode on a species entry declared a "
+        "minimum, are judged by magnitude against a tolerance read from the "
         "protocol that produced them, not by counting them."
     ),
     tier=CheckTier.warn,
@@ -371,6 +453,22 @@ CHECK_TRANSITION_STATE_EXTRA_IMAGINARY_MODES = ScientificCheck(
                 "tau that decided it are persisted on ``calc_freq_result`` "
                 "rather than recomputed, so a later parser improvement cannot "
                 "silently re-label historical records."
+            ),
+        ),
+        PythonCheck(
+            evaluate_species_entry_frequency,
+            note=(
+                "The minimum case of the same judgement, added 2026-10-29. "
+                "When every imaginary mode of a declared minimum is below tau "
+                f"the record is accepted with "
+                f"``{W_MINIMUM_IMAGINARY_MODES_BELOW_TAU}``; at or above tau "
+                "the blocking minimum rule above still refuses it. The tau "
+                "that decided it is persisted on ``calc_freq_result`` "
+                "(``imaginary_mode_tau_cm1`` and its basis) with the "
+                "structural flag stored as false, meaning judged and not "
+                "flagged, rather than recomputed later. The read-time "
+                "imaginary-mode projections report beside the warning and "
+                "never gate it."
             ),
         ),
     ),
@@ -607,9 +705,11 @@ CHECK_FREQ_LIST_WITHIN_GEOMETRY_DEGREES_OF_FREEDOM = ScientificCheck(
                 "cannot drift into counting three different sets of atoms. "
                 "**The same function also reports the floor**, "
                 "``freq_list_incomplete_for_geometry``, at the warning tier "
-                "and with a structural flag; that finding has no entry here "
+                "and with a structural flag; that finding is not this entry "
                 "because it is an expectation rather than a definition, for "
-                "the reasons set out above. This entry is deliberately about "
+                "the reasons set out above. It is registered under entry 22, "
+                "beside the linearity codes, which make the same kind of "
+                "claim about the same list. This entry is deliberately about "
                 "one of the two codes the function emits."
             ),
         ),
@@ -647,6 +747,75 @@ CHECK_FREQ_LIST_WITHIN_GEOMETRY_DEGREES_OF_FREEDOM = ScientificCheck(
         "has already determined does not belong to the geometry beside it. "
         "The repair is to attach the calculation to the geometry it ran on, "
         "or to deposit that geometry."
+    ),
+)
+
+CHECK_RECORDED_HESSIAN_METHOD_AGREES_WITH_THE_INPUT_DECK = ScientificCheck(
+    # Own group, deliberately: the register numbers by reading order, entry numbers are
+    # identifiers (stored on ``deposit_warning.register_entry`` and cited from docs), and a
+    # new entry must take the next free number rather than shift existing ones. A group that
+    # sorts after every other unlisted group gets #50; "Stationary points" is its subject.
+    group="Vibrational frequency provenance",
+    sort_key=1,
+    code=W_HESSIAN_METHOD_CONTRADICTS_INPUT_DECK,
+    asserts=(
+        "A calculation that records how its frequency job built the Hessian "
+        "(``freq.hessian_method``) and also attaches the input deck that ran "
+        "it, or an output log that echoes that input, states the same method "
+        "in both."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "A contract between two statements in one deposit, not an expectation "
+        "about a result, which is the narrow thing ADR 0008 reserves the "
+        "blocking tier for. Tau, the line between a noise-level imaginary mode "
+        "and a real one, is read from the Hessian method, and two statements of "
+        "it that differ give two different taus (50 against 80 for the two "
+        "numerical methods, 30 or less for analytic). Judging a mode against "
+        "either would be a guess, and the record would carry both statements "
+        "forever with nothing saying which was meant. The check makes no claim "
+        "about chemistry and refuses no calculation: it refuses a deposit that "
+        "cannot say what it did. Only a method the input deck (or the input an "
+        "output log echoes) states with an "
+        "explicit directive counts (Gaussian ``Freq=Numer`` or ``EnOnly``, ORCA "
+        "``NumFreq`` or ``AnFreq``); a deck with no such directive says nothing "
+        "and contradicts nothing, and a recorded value TCKDB cannot read is not "
+        "compared. One pair is not a contradiction: ORCA's ``NumFreq`` always differences "
+        "gradients, and for a method with no analytic gradient (coupled cluster, F12, "
+        "open-shell DLPNO-MP2, ROHF MP2) those gradients are themselves numerical, so a recorded "
+        "``finite_difference_gradient`` against such a deck is accepted, stored as "
+        "``finite_difference_energy`` and reported with the warning ``hessian_method_refined``; "
+        "a recorded ``analytic`` against ``NumFreq`` is still refused."
+    ),
+    adr="0012",
+    enforced_by=(
+        PythonCheck(
+            check_recorded_method_agrees_with_deck,
+            note=(
+                "Runs on the bundle calculation payloads that carry an inline "
+                "``input`` artifact, or an inline ``output_log`` whose echoed input "
+                "states a method, with ``context.stated_in`` saying which "
+                "(``input`` or ``output_log``) and the message naming the log, never a deck, "
+                "when it was the log (computed-species, computed-reaction and "
+                "network bundles). The standalone calculation, conformer and "
+                "transition-state payloads have no ``artifacts`` field, and a "
+                "deck uploaded later through the artifact route is not seen at "
+                "validation; that case earns the warning "
+                "``hessian_method_disagrees_with_stored_tau_basis`` on the "
+                "calculation instead, and the stored tolerance is never "
+                "relabelled. The message and ``context`` carry only TCKDB's "
+                "method tokens (``analytic``, ``finite_difference_gradient``, "
+                "``finite_difference_energy``), never the recorded string or "
+                "deck text."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "Correct whichever of the two is wrong, or omit the recorded "
+        "``freq.hessian_method`` and let the deck (or the log) speak. A deposit that sends "
+        "only a deck or a log is never refused by this check; both are read before "
+        "the deposit is judged."
     ),
 )
 
@@ -780,11 +949,16 @@ CHECK_ATOM_MAP_IS_A_BIJECTION = ScientificCheck(
 CHECK_ATOM_MAP_INDICES_ARE_GEOMETRY_RELATIVE = ScientificCheck(
     group="Atom mapping across a reaction",
     sort_key=3,
-    code=wire_atom_map.W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
+    code=(
+        wire_atom_map.W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
+        wire_atom_map.W_ATOM_MAP_PARTICIPANT_NOT_DECLARED,
+        wire_atom_map.W_ATOM_MAP_WITHOUT_TRANSITION_STATE,
+    ),
     asserts=(
         "Every atom index in a map is counted against a named geometry that "
         "the participant actually owns, and names an atom that geometry "
-        "actually has."
+        "actually has; and a map belongs to a reaction that has a saddle "
+        "point and names only participants that reaction declares."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
@@ -1299,18 +1473,21 @@ CHECK_REPRODUCIBILITY_IS_ITS_OWN_JUDGEMENT = ScientificCheck(
 #: listed here, so forgetting to register a module is caught rather than
 #: silently omitted from the register.
 DECLARING_MODULES: tuple[ModuleType, ...] = (
-    calculation_geometry_composition,
+    calc_isotopes,
     chemistry_species,
+    chemistry_stereo,
     chemistry_units,
     charge_multiplicity_reconciliation,
     external_comparison_checks,
     frequency_geometry_linearity,
+    gap_declarations,
     geometry_validation_service,
     reaction_atom_map_service,
     reaction_resolution,
     scan_coordinate_conformance,
     species_resolution,
     transition_state_validation,
+    wavefunction_reliability_warnings,
     sys.modules[__name__],
 )
 

@@ -31,6 +31,7 @@ from sqlalchemy import and_, case, func, not_, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError, reject_unsupported_filters
+from app.chemistry.stereo import unrepresented_stereo_kinds
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     RecordReviewStatus,
@@ -102,6 +103,8 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.keyset import Page, Paging
 from app.services.scientific_read.species_identity import (
+    public_electronic_state_label,
+    public_term_symbol,
     species_entry_label_for,
 )
 from app.services.scientific_read.sql_review import (
@@ -112,6 +115,7 @@ from app.services.scientific_read.sql_review import (
     visible_review_filter,
 )
 from app.services.scientific_read.structure_query import (
+    constitution_smiles,
     enforce_mode_query_compatibility,
     inchi_key_from_query,
     parse_smarts,
@@ -542,6 +546,7 @@ def _apply_structure_filter(
         .select_from(SpeciesEntry)
         .where(SpeciesEntry.species_id == Species.id)
         .where(SpeciesEntry.mol.is_not(None))
+        .where(SpeciesEntry.merged_into_species_entry_id.is_(None))
     )
     if request.mode is StructureSearchMode.substructure:
         entry_select = entry_select.where(
@@ -911,9 +916,9 @@ def _candidate_species_stmt(
     the summary and the ranking, so the caller never holds the matching id
     set in Python.
     """
-    stmt = select(Species.id, Species.created_at)
+    stmt = select(Species.id, Species.created_at).where(Species.merged_into_species_id.is_(None))
     if request.smiles is not None:
-        stmt = stmt.where(Species.smiles == request.smiles)
+        stmt = stmt.where(Species.smiles == constitution_smiles(request.smiles))
     if request.inchi_key is not None:
         stmt = stmt.where(Species.inchi_key == request.inchi_key)
     if request.charge is not None:
@@ -989,7 +994,8 @@ def _browse_candidate_species_stmt(
     columns: list[Any] = [Species.id, Species.created_at]
     if include_heavy_atom_count:
         columns.append(_heavy_atom_count_expr().label("heavy_atom_count"))
-    stmt = select(*columns)
+    # A merged-away species is kept for its ref but is never a live record (DR-0038).
+    stmt = select(*columns).where(Species.merged_into_species_id.is_(None))
     if request.charge is not None:
         stmt = stmt.where(Species.charge == request.charge)
     if request.multiplicity is not None:
@@ -1089,8 +1095,12 @@ def _apply_provenance_filters(stmt, request: SpeciesBrowseRequest):
 def _entry_filter_predicates(
     request: SpeciesFilterRequest, species_entry_ref_id: int | None
 ) -> list:
-    """The per-entry ``where`` terms, in one place for all three uses."""
-    predicates = []
+    """The per-entry ``where`` terms, in one place for all three uses.
+
+    Live entries only: an entry merged into another keeps its row and forwards to the survivor, which holds the
+    results (DR-0038), so a listing never shows the kept row beside the entry that stands for it.
+    """
+    predicates = [SpeciesEntry.merged_into_species_entry_id.is_(None)]
     if request.electronic_state_kind is not None:
         predicates.append(
             SpeciesEntry.electronic_state_kind == request.electronic_state_kind
@@ -1726,6 +1736,13 @@ def _compute_section_ids(
     return result
 
 
+def _stereo_not_represented(entry: SpeciesEntry) -> list[str]:
+    """Why a ``?`` of this molecule can never be settled by data (a small-ring allene, an allene-dependent element, a tied end)."""
+    if entry.stereo_descriptor is None or "?" not in entry.stereo_descriptor:
+        return []
+    return list(unrepresented_stereo_kinds(entry.species.smiles))
+
+
 def _build_entry_record(
     entry: SpeciesEntry,
     badge: RecordReviewBadge,
@@ -1742,8 +1759,12 @@ def _build_entry_record(
         # SpeciesEntryScientificRecord for why they are in the default
         # projection rather than behind an include token.
         stereo_label=entry.stereo_label,
-        electronic_state_label=entry.electronic_state_label,
-        term_symbol=entry.term_symbol,
+        stereo_descriptor=entry.stereo_descriptor,
+        stereo_resolution=entry.stereo_resolution,
+        stereo_smiles=entry.stereo_smiles,
+        stereo_not_represented=_stereo_not_represented(entry),
+        electronic_state_label=public_electronic_state_label(entry.electronic_state_label),
+        term_symbol=public_term_symbol(entry.term_symbol),
         isotope_key=entry.isotope_key,
         species_entry_label=species_entry_label_for(entry),
         review=badge,

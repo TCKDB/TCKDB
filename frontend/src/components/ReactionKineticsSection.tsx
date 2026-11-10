@@ -8,6 +8,7 @@ import { resolveProductLevels } from "../domain/productLevels"
 import { buildCalculationsByRef, buildDependencyEdgesByChildRef, deriveKineticsLevelsFallback } from "../domain/reactionKineticsLevels"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { reviewPillClass } from "../domain/reviewPillFormat"
+import { LiteratureCitation } from "./LiteratureCitation"
 
 function token(value: string): string {
     return value.replaceAll("_", " ")
@@ -243,7 +244,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                 {record.provenance.software_release && (
                     <div><dt>Fit software</dt><dd>{softwareCellText(record.provenance.software_release) ?? "not recorded"}</dd></div>
                 )}
-                <div><dt>Literature</dt><dd>{record.provenance.literature ? (record.provenance.literature.title ?? record.provenance.literature.literature_ref) : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
+                <div><dt>Literature</dt><dd>{record.provenance.literature ? <LiteratureCitation literature={record.provenance.literature} /> : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
             </dl>
 
             <EvidenceChecklist

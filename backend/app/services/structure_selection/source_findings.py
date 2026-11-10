@@ -173,7 +173,7 @@ def _context(session: Session, calc_ids: set[int]) -> _Context:
 
 
 def _determinations_the_profile_shows(session: Session, rows) -> set[int]:
-    """The determinations among ``rows`` the read profile lets the reader open (hidden == unknown).
+    """The determinations among ``rows`` the read profile lets the reader open (withheld == unknown).
 
     A determination the profile hides is no evidence about its source calculation: a live finding on it must not block a
     visible record that merely shares that calculation. A determination belongs to its conformer observation (a basin)

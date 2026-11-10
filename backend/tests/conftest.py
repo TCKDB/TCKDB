@@ -14,7 +14,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Connection, create_engine, text
+from sqlalchemy import Connection, create_engine, event, text
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
@@ -26,7 +26,7 @@ from app.api.rate_limit import reset_rate_limit_store
 from app.db.models.api_key import ApiKey
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
-from tests import ci_sharding, error_body_observer, error_code_observer, route_build_cache
+from tests import ci_sharding, error_body_observer, error_code_observer, route_build_cache, warning_context_observer
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -34,6 +34,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # session, in the controller and in every xdist worker alike.
 error_code_observer.install()
 error_body_observer.install()
+warning_context_observer.install()
 # Build the route table once per process rather than once per test; see
 # tests/route_build_cache.py for why that cannot change what a test observes.
 route_build_cache.install()
@@ -178,6 +179,15 @@ def pytest_runtest_teardown(item) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _no_warning_breaks_the_message_rule():
+    """Fail the test that built a warning whose message or context broke the rule, even if a producer swallowed it."""
+    warning_context_observer.drain()
+    yield
+    broken = warning_context_observer.drain()
+    assert not broken, "warnings that broke the message rule (#838): " + " | ".join(broken)
+
+
+@pytest.fixture(autouse=True)
 def _disable_rate_limit_by_default():
     """Disable the public rate limiter for every test by default.
 
@@ -195,6 +205,23 @@ def _disable_rate_limit_by_default():
     finally:
         settings.rate_limit_enabled = previous
         reset_rate_limit_store()
+
+
+@pytest.fixture(autouse=True)
+def _disable_anonymous_body_limit_by_default():
+    """Lift the anonymous request-body allowance for every test by default.
+
+    The TestClient replaces authentication with a dependency override, so its
+    requests carry no credential the middleware can see, and the ARC corpus
+    payloads are larger than the 1 MiB allowance. Tests of the allowance itself
+    set it back (``tests/api/test_api_anonymous_body_limit.py``).
+    """
+    previous = settings.anonymous_max_body_bytes
+    settings.anonymous_max_body_bytes = 0
+    try:
+        yield
+    finally:
+        settings.anonymous_max_body_bytes = previous
 
 
 @pytest.fixture(autouse=True)
@@ -1283,6 +1310,119 @@ def _sweep_stale_test_databases(current_db_name: str) -> None:
         engine.dispose()
 
 
+#: Per-database settings that make a slow or stuck statement explain itself in
+#: the Postgres server log. Test harness only: nothing here touches application
+#: or deployed configuration. See ``backend/docs/testing.md`` ("Slow-statement
+#: diagnostics"). ``session_preload_libraries`` is appended separately, only
+#: once ``auto_explain`` is known to load.
+_TEST_DB_DIAGNOSTIC_SETTINGS: tuple[tuple[str, str], ...] = (
+    ("log_lock_waits", "on"),
+    # Postgres's default, pinned explicitly because ``log_lock_waits`` fires
+    # after ``deadlock_timeout``: the 1 s in the docs is this value.
+    ("deadlock_timeout", "'1s'"),
+    ("auto_explain.log_min_duration", "'3s'"),
+    ("auto_explain.log_analyze", "off"),
+    ("auto_explain.log_nested_statements", "on"),
+)
+
+
+def _apply_test_database_diagnostics(connection, db_name: str) -> None:
+    """Make lock waits and slow statements show up in the server log.
+
+    Needs a role allowed to ``ALTER DATABASE ... SET`` these (superuser: CI's
+    role and the local compose role). A role that cannot is skipped with one
+    warning, never failed: the diagnostics are a convenience, not a gate.
+    ``auto_explain`` logs only statements that finish, so it never records a
+    statement cancelled by ``statement_timeout``; that plan comes from
+    ``_explain_statement_on_timeout``.
+    """
+    db_name = _validate_test_db_name(db_name)
+    settings = list(_TEST_DB_DIAGNOSTIC_SETTINGS)
+    try:
+        connection.execute(text("LOAD 'auto_explain'"))
+        settings.append(("session_preload_libraries", "'auto_explain'"))
+    except Exception as error:
+        warnings.warn(
+            f"test-db diagnostics: auto_explain unavailable ({type(error).__name__}); slow plans will not be logged",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        settings = [(k, v) for k, v in settings if not k.startswith("auto_explain.")]
+    try:
+        for name, value in settings:
+            connection.execute(text(f'ALTER DATABASE "{db_name}" SET {name} = {value}'))
+    except Exception as error:
+        warnings.warn(
+            f"test-db diagnostics skipped: role may not ALTER DATABASE SET ({type(error).__name__})",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+
+#: Marker line in front of a timed-out statement's plan, greppable in a CI log.
+TIMEOUT_PLAN_MARKER = "TCKDB-TIMEOUT-PLAN"
+
+
+def _explain_statement_on_timeout(context) -> None:
+    """``handle_error`` hook: on sqlstate 57014 print the plan of the cancelled statement.
+
+    ``auto_explain`` cannot do this (it logs only finished statements), so a
+    ``statement_timeout`` would otherwise leave no plan behind. The plan is
+    taken on a SEPARATE connection (the failed one is in an aborted
+    transaction) with plain ``EXPLAIN``, never ``ANALYZE``, so it cannot run
+    the slow statement again. That connection cannot see the test's
+    uncommitted rows, so the plan is the planner's estimate from table-level
+    statistics, not necessarily the plan the test's session got.
+
+    Test harness only. It never raises and never replaces the original error.
+    Output goes to ``sys.stderr`` so it lands in the failed test's captured
+    output (and live under ``-s``).
+    """
+    import sys
+
+    try:
+        if getattr(context.original_exception, "sqlstate", None) != "57014":
+            return
+        statement = context.statement
+        if not statement:
+            return
+        if statement.lstrip()[:7].upper() == "EXPLAIN":
+            print(f"{TIMEOUT_PLAN_MARKER} unavailable (already an EXPLAIN)", file=sys.stderr)
+            return
+        parameters = context.parameters
+        if isinstance(parameters, list):  # executemany: no single plan
+            print(f"{TIMEOUT_PLAN_MARKER} unavailable (executemany)", file=sys.stderr)
+            return
+        probe_engine = create_engine(context.engine.url, poolclass=NullPool, connect_args={"connect_timeout": 5})
+        try:
+            raw = probe_engine.raw_connection()
+            try:
+                cursor = raw.cursor()
+                cursor.execute("SET statement_timeout = '5s'")
+                # Parameters pass through unchanged: an empty dict still makes the driver
+                # process placeholders, so a literal ``%%`` stays one ``%``.
+                cursor.execute("EXPLAIN " + statement, parameters)
+                plan = "\n".join(row[0] for row in cursor.fetchall())
+                raw.rollback()
+            finally:
+                raw.close()
+        finally:
+            probe_engine.dispose()
+        print(
+            f"{TIMEOUT_PLAN_MARKER} statement cancelled by statement_timeout; estimated plan "
+            f"(separate connection, plain EXPLAIN):\n{statement}\n{plan}\n{TIMEOUT_PLAN_MARKER} end",
+            file=sys.stderr,
+        )
+    except Exception as error:
+        try:
+            print(
+                f"{TIMEOUT_PLAN_MARKER} unavailable ({type(error).__name__}, {getattr(error, 'sqlstate', None)})",
+                file=sys.stderr,
+            )
+        except Exception:
+            pass
+
+
 def _recreate_test_database(db_name: str) -> None:
     db_name = _validate_test_db_name(db_name)
     admin_url = _database_url("postgres")
@@ -1309,6 +1449,7 @@ def _recreate_test_database(db_name: str) -> None:
             connection.execute(
                 text(f"COMMENT ON DATABASE \"{db_name}\" IS '{_ownership_marker()}'")
             )
+            _apply_test_database_diagnostics(connection, db_name)
     finally:
         engine.dispose()
 
@@ -1404,6 +1545,7 @@ def db_engine():
         # upload worker, the idempotency decorator, the health probes -- now
         # reaches *this* database instead of the ambient one.
         api_deps.bind_ambient_session_factory(engine)
+        event.listen(engine, "handle_error", _explain_statement_on_timeout)
         yield engine
     except BaseException:
         body_failed = True

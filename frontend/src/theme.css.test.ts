@@ -316,3 +316,22 @@ describe("dark --line-2 is strictly more visible than its pre-fix value (SHOULD-
         expect(newVsSurface, `new ${newVsSurface.toFixed(3)}:1 vs old ${oldVsSurface.toFixed(3)}:1`).toBeGreaterThan(oldVsSurface)
     })
 })
+
+describe("color-scheme follows the theme (native scrollbars and controls)", () => {
+    const schemeIn = (selector: string): string | undefined => {
+        const start = themeCss.indexOf(selector)
+        expect(start, selector).toBeGreaterThanOrEqual(0)
+        const open = themeCss.indexOf("{", start)
+        const close = themeCss.indexOf("}", open)
+        return /color-scheme:\s*(\w+)/.exec(themeCss.slice(open, close))?.[1]
+    }
+    it("is light on the base block", () => {
+        expect(schemeIn("\n:root {")).toBe("light")
+    })
+    it("is dark in the prefers-color-scheme block", () => {
+        expect(schemeIn(':root:not([data-theme="light"]) {')).toBe("dark")
+    })
+    it("is dark in the explicit dark block", () => {
+        expect(schemeIn('\n:root[data-theme="dark"] {')).toBe("dark")
+    })
+})

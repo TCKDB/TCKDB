@@ -50,6 +50,7 @@ from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.method_families import MethodFamily
 from app.db.models.common import (
     RecordReviewStatus,
@@ -66,7 +67,7 @@ from app.services.scientific_read.transition_states_search import (
     browse_transition_states,
 )
 
-router = APIRouter(prefix="/transition-states")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/transition-states")
 
 
 @router.get(
@@ -159,7 +160,8 @@ def scientific_transition_states_browse(
     equation string) -- enough to identify the record and say what
     reaction it belongs to without a second request.
     """
-    request = TransitionStatesBrowseRequest(
+    request = caller_input(
+        TransitionStatesBrowseRequest,
         status=status,
         charge=charge,
         multiplicity=multiplicity,

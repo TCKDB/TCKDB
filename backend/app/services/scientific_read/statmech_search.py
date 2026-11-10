@@ -85,6 +85,7 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.keyset import Paging
+from app.services.scientific_read.role_settings import attach_calculation_settings
 from app.services.scientific_read.statmech import (
     _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
@@ -473,6 +474,8 @@ def _materialize_records(
                 supersession=supersessions.get(cid),
             )
         )
+    if "calculation_settings" in includes:
+        attach_calculation_settings(session, out)
     return out
 
 

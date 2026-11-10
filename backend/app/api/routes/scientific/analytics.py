@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import (
     CalculationType,
     KineticsDirection,
@@ -56,7 +57,7 @@ from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
 
-router = APIRouter(prefix="/analytics", tags=["scientific-analytics"])
+router = APIRouter(route_class=ServerFaultRoute, prefix="/analytics", tags=["scientific-analytics"])
 
 @router.get("/kinetics", response_model=KineticsAnalyticsResponse)
 def kinetics_analytics(
@@ -111,7 +112,8 @@ def kinetics_analytics(
     """Quantitative kinetics search for dataset construction."""
     payload = search_kinetics_analytics(
         session,
-        KineticsAnalyticsRequest(
+        caller_input(
+            KineticsAnalyticsRequest,
             scientific_origin=scientific_origin,
             direction=direction,
             model_kind=model_kind,
@@ -181,7 +183,8 @@ def thermo_analytics(
     """Quantitative thermochemistry search for dataset construction."""
     payload = search_thermo_analytics(
         session,
-        ThermoAnalyticsRequest(
+        caller_input(
+            ThermoAnalyticsRequest,
             scientific_origin=scientific_origin,
             phase=phase,
             model_kind=model_kind,
@@ -245,7 +248,8 @@ def statmech_analytics(
     """Quantitative statistical-mechanics search for dataset construction."""
     payload = search_statmech_analytics(
         session,
-        StatmechAnalyticsRequest(
+        caller_input(
+            StatmechAnalyticsRequest,
             scientific_origin=scientific_origin,
             external_symmetry=external_symmetry,
             is_linear=is_linear,
@@ -309,7 +313,8 @@ def calculation_analytics(
     """Quantitative calculation search for dataset construction."""
     payload = search_calculation_analytics(
         session,
-        CalculationAnalyticsRequest(
+        caller_input(
+            CalculationAnalyticsRequest,
             calculation_type=calculation_type,
             electronic_energy_min_hartree=electronic_energy_min_hartree,
             electronic_energy_max_hartree=electronic_energy_max_hartree,

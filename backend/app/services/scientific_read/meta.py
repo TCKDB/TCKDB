@@ -296,7 +296,9 @@ def list_reaction_families(session: Session) -> list[dict]:
     rows = session.execute(
         select(ReactionFamily.name, func.count(ChemReaction.id))
         .outerjoin(
-            ChemReaction, ChemReaction.reaction_family_id == ReactionFamily.id
+            ChemReaction,
+            (ChemReaction.reaction_family_id == ReactionFamily.id)
+            & ChemReaction.merged_into_chem_reaction_id.is_(None),  # a merged-away reaction is not counted (DR-0038)
         )
         .group_by(ReactionFamily.name)
         .order_by(func.count(ChemReaction.id).desc(), ReactionFamily.name.asc())

@@ -17,12 +17,14 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_optional_current_user
+from app.api.routes.scientific._actor import publish_read_actor
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
     omit_unrequested_calculation_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.method_families import MethodFamily
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
@@ -57,7 +59,7 @@ from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
 
-router = APIRouter(prefix="/calculations")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/calculations")
 
 
 # The router-level ``?profile=`` dependency puts these two keys on every
@@ -126,7 +128,8 @@ def scientific_calculations_search_get(
     filter is required; pure pagination/include/review knobs are not
     enough — see ``backend/docs/specs/scientific_calculation_reads.md``.
     """
-    request_obj = CalculationsSearchRequest(
+    request_obj = caller_input(
+        CalculationsSearchRequest,
         species_entry_ref=species_entry_ref,
         transition_state_entry_ref=transition_state_entry_ref,
         species_ref=species_ref,
@@ -214,6 +217,7 @@ def scientific_calculations_search_post(
 @router.get(
     "/{calculation_ref_or_id}",
     response_model=ScientificCalculationDetailResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def scientific_calculation_detail(
     calculation_ref_or_id: str = Path(..., min_length=1, max_length=64),
@@ -243,7 +247,7 @@ def scientific_calculation_detail(
     See ``docs/specs/public_identifier_policy.md`` and
     ``docs/specs/internal_ids_visibility_policy.md``.
     """
-    request = CalculationDetailRequest(include=parse_include(include))
+    request = caller_input(CalculationDetailRequest, include=parse_include(include))
     payload = get_calculation(
         session,
         calculation_handle=calculation_ref_or_id,

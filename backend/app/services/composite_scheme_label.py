@@ -72,10 +72,10 @@ class LabelInput:
     :param cardinal_number: The declared cardinal number, if any.
     :param method: The level row's method.
     :param basis: Its basis, if any.
-    :param core_treatment: ``frozen_core`` / ``all_electron`` / ``None``.
+    :param core_treatment: ``frozen_core`` / ``all_electron`` / ``window`` / ``None``.
     :param extras: Any other stated identity field, ``name -> value``, in a
         fixed order (auxiliary basis, CABS basis, dispersion, solvent, solvent
-        model, keywords, spin treatment).
+        model, spin treatment, relativistic Hamiltonian, PNO truncation, RI approximation).
     """
 
     slot: str

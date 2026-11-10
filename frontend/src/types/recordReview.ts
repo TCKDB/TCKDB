@@ -78,6 +78,8 @@ export const RecordReviewSchema = z.object({
     reviewed_at: z.string().nullable().default(null),
     first_approved_at: z.string().nullable().default(null),
     note: z.string().nullable().default(null),
+    // Server-computed: false when the reader may not approve this row (hides "approved"). Null leaves it offered.
+    actor_may_approve: z.boolean().nullable().default(null),
     created_at: z.string(),
     created_by: z.number().int().nullable().default(null),
 })
@@ -185,6 +187,9 @@ export const ReviewQueueSubjectChemistrySchema = z.object({
     electronic_state_label: z.string().nullable().default(null),
     term_symbol: z.string().nullable().default(null),
     stereo_label: z.string().nullable().default(null),
+    // DR-0038: `stereo_label` is NULL while an entry is unresolved; read these, not the NULL.
+    stereo_descriptor: z.string().nullable().default(null),
+    stereo_resolution: z.enum(["resolved", "partial", "unresolved"]).nullable().default(null),
     isotope_key: z.string().nullable().default(null),
     // The transition-state entry's OWN raw SMILES, kept separate from
     // `formula`: the two can disagree (a reaction-shaped string the

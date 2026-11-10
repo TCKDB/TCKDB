@@ -54,8 +54,9 @@ from tckdb_schemas.thermo_declarations import (
 )
 
 from app.api.error_contract import CodedValueError
+from app.api.server_faults import caller_input
 from app.db.models.calculation import Calculation
-from app.db.models.common import ThermoTargetKind
+from app.db.models.common import ThermoDeclarationSource, ThermoTargetKind
 from app.db.models.species import ConformerGroup
 from app.services.calculation_ownership import assert_calculation_owned_by, assert_owned_by
 from app.services.conformer_group_forwarding import forwarded_group_id
@@ -101,6 +102,7 @@ class ResolvedThermoDeclarations:
     thermodynamic_target_kind: ThermoTargetKind | None = None
     target_conformer_group_id: int | None = None
     protocol_declaration: dict[str, Any] | None = None
+    thermodynamic_target_declared_by: ThermoDeclarationSource = ThermoDeclarationSource.depositor
 
 
 def assert_thermo_declaration(payload: object) -> None:
@@ -239,7 +241,7 @@ def _resolve_protocol(
     wire = (
         protocol
         if isinstance(protocol, ThermoProtocolDeclaration)
-        else ThermoProtocolDeclaration.model_validate(protocol)
+        else caller_input(ThermoProtocolDeclaration.model_validate, protocol)
     )
     refs: list[str] = []
     for index, supporting in enumerate(wire.supporting_calculations):
@@ -288,7 +290,7 @@ def _stored_json(wire: ThermoProtocolDeclaration, calculation_refs: list[str]) -
     raw.pop("supporting_calculations", None)
     if calculation_refs:
         raw["supporting_calculations"] = [{"calculation_ref": ref} for ref in calculation_refs]
-    stored = StoredThermoProtocolDeclaration.model_validate(raw)
+    stored = caller_input(StoredThermoProtocolDeclaration.model_validate, raw)
     return stored.model_dump(mode="json", exclude_none=True, exclude_defaults=True)
 
 
@@ -334,7 +336,12 @@ def resolve_thermo_declarations(
         calculations_by_key=calculations_by_key,
         field=f"{field_prefix}protocol",
     )
-    return ResolvedThermoDeclarations(kind, group_id, stored)
+    # A target built without validation may omit the field; ``depositor`` is the
+    # only claim a caller could have made before it existed.
+    declared_by = ThermoDeclarationSource(
+        getattr(target, "declared_by", None) or ThermoDeclarationSource.depositor
+    )
+    return ResolvedThermoDeclarations(kind, group_id, stored, declared_by)
 
 
 def assert_thermo_declaration_columns(

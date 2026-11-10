@@ -77,8 +77,14 @@ from app.schemas.reads.scientific_statmech import (
     StatmechTorsionSummary,
     StatmechTransitionStateContext,
 )
-from app.services.calculation_levels import RoleCalcInfo, derive_levels, withhold_levels_from_calculations
+from app.services.calculation_levels import (
+    RoleCalcInfo,
+    derive_levels,
+    level_suppliers,
+    withhold_levels_from_calculations,
+)
 from app.services.composite_verification import verify_composite_calculations
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read.common import (
     evidence_withheld_predicate,
     fetch_review_badges,
@@ -104,7 +110,11 @@ from app.services.scientific_read.handles import resolve_statmech_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.role_settings import LevelPlan, attach_calculation_settings, make_level_plan
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
+    STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
 from app.services.scientific_read.supersession import fetch_supersession_notices
@@ -142,6 +152,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "frequencies",
     "conformers",
     "review",
+    "calculation_settings",
     "internal_ids",
     "assessments",
     "trust",
@@ -293,11 +304,16 @@ def get_statmech(
         includes=includes,
         supersession=supersessions.get(sm.id),
     )
+    if "calculation_settings" in includes:
+        attach_calculation_settings(session, [record])
 
     return ScientificStatmechDetailResponse(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([badge]),
         record=record,
+        **deposit_warning_envelope(
+            session, SubmissionRecordType.statmech, {sm.id: sm.public_ref}
+        ),
     )
 
 
@@ -368,7 +384,9 @@ def build_statmech_record(
         has_conformer_context=has_conformer_context,
         sp_from_optimization=_sp_role_is_an_optimization(session, shown_source_rows),
     )
-    levels = _build_levels(session, source_rows, sm.energy_level_of_theory_id, withheld_calculation_ids=withheld_source_calc_ids)
+    levels, level_plan = _build_levels(
+        session, source_rows, sm.energy_level_of_theory_id, withheld_calculation_ids=withheld_source_calc_ids
+    )
     available = AvailableStatmechSections(
         has_source_calculations=bool(shown_source_rows),
         has_torsions=bool(torsion_rows),
@@ -439,7 +457,7 @@ def build_statmech_record(
             review_status=badge.status,
         )
 
-    return ScientificStatmechRecord(
+    record = ScientificStatmechRecord(
         statmech=core,
         supersession=supersession,
         species=species_context,
@@ -459,6 +477,10 @@ def build_statmech_record(
         review_history=review_block,
         trust=trust_block,
     )
+    # The settings behind each level are resolved for the page, not per record: the caller attaches them
+    # (:func:`attach_calculation_settings`) after the records are built, in a fixed number of statements.
+    record._level_plan = level_plan
+    return record
 
 
 def build_statmech_trust_fragment(
@@ -537,7 +559,7 @@ def _build_levels(
     declared_energy_lot_id: int | None = None,
     *,
     withheld_calculation_ids: set[int] | frozenset[int] = frozenset(),
-) -> ScientificLevelsSummary:
+) -> tuple[ScientificLevelsSummary, LevelPlan]:
     """R1: derive geometry/frequency/energy levels from this record's links.
 
     The derivation reads every link. A level whose supplying calculations are all in ``withheld_calculation_ids`` (the
@@ -560,10 +582,13 @@ def _build_levels(
         declared_energy_lot_id
     )
     if not role_calc_ids:
-        return ScientificLevelsSummary(
-            declared_energy=declared,
-            composite_energy_verification=None,
-            legacy_composite_shape=None,
+        return (
+            ScientificLevelsSummary(
+                declared_energy=declared,
+                composite_energy_verification=None,
+                legacy_composite_shape=None,
+            ),
+            LevelPlan(),
         )
 
     all_ids = {cid for ids in role_calc_ids.values() for cid in ids}
@@ -631,12 +656,13 @@ def _build_levels(
         legacy_composites=[info for _, info in roles["legacy_composites"]],
     )
     # Evidence rule: a level whose supplying calculations are all withheld goes, with its source (no re-derivation).
+    plan = make_level_plan(level_suppliers(derived, **roles), withheld_calculation_ids)
     derived = withhold_levels_from_calculations(derived, withheld=withheld_calculation_ids, **roles)
     shown_typed_composite_ids = [cid for cid in typed_composite_ids if cid not in withheld_calculation_ids]
     geometry = _build_lot_summary(session, derived.geometry_lot_id)
     frequency = _build_lot_summary(session, derived.frequency_lot_id)
     energy = _build_lot_summary(session, derived.energy_lot_id)
-    return ScientificLevelsSummary(
+    levels = ScientificLevelsSummary(
         geometry=geometry,
         frequency=frequency,
         energy=energy,
@@ -667,6 +693,7 @@ def _build_levels(
             energy_source=derived.energy_source,
         ),
     )
+    return levels, plan
 
 
 def _exists_review_for(
@@ -748,11 +775,12 @@ def _build_species_context(
             # entry of the species this record belongs to. Selected here
             # under their own names because species_entry_label_for()
             # reads them by attribute.
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         )
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.id == species_entry_id)
@@ -765,6 +793,7 @@ def _build_species_context(
         species_entry_id=row.entry_id,
         species_entry_ref=row.entry_ref,
         species_entry_label=species_entry_label_for(row),
+        **entry_facets_of(row),
         canonical_smiles=row.smiles,
         inchi_key=row.inchi_key,
         charge=row.charge,
@@ -819,6 +848,9 @@ def _build_lot_summary(
         solvent=lot.solvent,
         spin_treatment=lot.spin_treatment,
         core_treatment=lot.core_treatment,
+        relativistic_hamiltonian=lot.relativistic_hamiltonian,
+        pno_truncation=lot.pno_truncation,
+        ri_approximation=lot.ri_approximation,
         aux_basis=lot.aux_basis,
         cabs_basis=lot.cabs_basis,
         solvent_model=lot.solvent_model,
@@ -891,8 +923,10 @@ def _build_literature_summary(
         id=lit.id,
         literature_ref=lit.public_ref,
         title=getattr(lit, "title", None),
+        title_source=getattr(lit, "title_source", None),
         year=getattr(lit, "year", None),
         doi=getattr(lit, "doi", None),
+        isbn=getattr(lit, "isbn", None),
     )
 
 
@@ -982,6 +1016,9 @@ def _bulk_lot_summaries(
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
             core_treatment=lot.core_treatment,
+            relativistic_hamiltonian=lot.relativistic_hamiltonian,
+            pno_truncation=lot.pno_truncation,
+            ri_approximation=lot.ri_approximation,
             aux_basis=lot.aux_basis,
             cabs_basis=lot.cabs_basis,
             solvent_model=lot.solvent_model,

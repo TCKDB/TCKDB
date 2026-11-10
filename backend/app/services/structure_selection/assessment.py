@@ -467,7 +467,12 @@ def _minimum_support(cv: CurvatureFacts, subject: StructureSubject, n: int) -> t
         return "unresolved", None, ["imaginary_mode_magnitude_not_stored"]
     resolution = _tau(cv) or resolve_tau()
     findings = evaluate_species_entry_frequency(
-        StationaryPointKind(subject.stationary_point_kind), n, max(magnitudes), location="curvature"
+        StationaryPointKind(subject.stationary_point_kind),
+        n,
+        max(magnitudes),
+        location="curvature",
+        imaginary_modes=_owner_modes(cv),
+        tau=resolution,
     )
     notes = [f"stationary_point_finding:{f.code}" for f in findings]
     if any(m >= resolution.tau_cm1 for m in magnitudes):

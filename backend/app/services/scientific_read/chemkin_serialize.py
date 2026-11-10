@@ -26,12 +26,13 @@ formula-based name with a numeric disambiguator; ``public_ref`` uses the
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic import ValidationError
 from tckdb_schemas.thermo import ThermoNASACreate
 
 from app.chemistry.arrhenius import ArrheniusRangeError, a_at_unit_t0
+from app.chemistry.stereo import unrepresented_stereo_kinds
 from app.db.models.common import ArrheniusAUnits, KineticsModelKind
 from app.services.scientific_read.export import (
     ExportGap,
@@ -81,6 +82,10 @@ class ChemkinOptions:
 class ChemkinExport:
     files: dict[str, str]
     gaps: list[ExportGap]
+    #: What happened to ``tran.dat``: ``written`` (bool) and a plain-language
+    #: ``reason`` when it was not. Carried into the export manifest so a missing
+    #: transport file is stated, not inferred from an absent zip member.
+    transport: dict[str, object] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +111,73 @@ def _composition(smiles: str) -> Counter | None:
     for atom in mol.GetAtoms():
         counts[atom.GetSymbol().upper()] += 1
     return counts
+
+
+def structure_comment(
+    smiles: str,
+    *,
+    stereo_descriptor: str | None,
+    stereo_resolution,
+    stereo_smiles: str | None,
+    multiplicity: int | None = None,
+    isotope_key: str | None = None,
+) -> str:
+    """The ``SMILES=`` traceability text for one species entry, with its stereo (DR-0038).
+
+    The species SMILES is the stereo-blind constitution, so an entry's stereo is printed beside it
+    rather than left to be read as "not distinguished":
+
+    * ``SMILES=`` is the entry's ``stereo_smiles`` when it has one (a fully resolved configuration
+      that can be written as a SMILES), otherwise the constitution SMILES;
+    * ``STEREO=`` is the descriptor, one token per stereo element (``E``, ``R,S``, ``E,?``), and is
+      absent for an achiral species (descriptor ``NULL``);
+    * ``STEREO_RESOLUTION=partial|unresolved`` marks an entry in which some element is still
+      unknown, so a ``?`` is never read as a statement;
+    * ``STEREO_NOT_REPRESENTED=axial_small_ring|allene_dependent|cumulene_tied_end`` marks an element
+      no data can settle (a cyclic allene in a ring of five or fewer, a centre or double bond that depends on
+      an allene's sense, or a cumulated chain with a tied pair of stereo-bearing arms at one end), whose
+      isomers share the entry.
+
+    ``isotope_key`` is the entry's atom-resolved isotope SMILES, set only for an isotopologue. It is
+    printed as the ``SMILES=`` token in place of the isotope-blind species SMILES, so a re-import
+    reads the isotopologue as itself and not as the plain species. (An isotopologue that also has a
+    stereo descriptor keeps its ``STEREO=`` token; ``stereo_smiles`` has isotopes stripped, so it is
+    not combined with the isotope SMILES.)
+
+    ``MULT=`` follows the structure on every species (including ``MULT=1``): a SMILES alone does not
+    say the spin state (CH2 singlet and triplet, atomic C, O share one), and the importer reads it
+    back so a re-import keeps the two apart.
+
+    The first token after ``SMILES=`` is the structure; a reader that takes only that token ignores
+    the rest.
+    """
+
+    mult = f"  MULT={multiplicity}" if multiplicity is not None else ""
+    if isotope_key:
+        smiles = isotope_key
+        stereo_smiles = isotope_key
+    if stereo_descriptor is None:
+        return f"SMILES={smiles}{mult}"
+    text = f"SMILES={stereo_smiles or smiles}{mult}  STEREO={stereo_descriptor}"
+    resolution = getattr(stereo_resolution, "value", stereo_resolution)
+    if resolution and resolution != "resolved":
+        text += f"  STEREO_RESOLUTION={resolution}"
+    kinds = unrepresented_stereo_kinds(smiles)
+    if kinds:
+        text += f"  STEREO_NOT_REPRESENTED={'+'.join(kinds)}"
+    return text
+
+
+def _species_structure_comment(sr: SpeciesExportRecord) -> str:
+    entry = sr.species_entry
+    return structure_comment(
+        sr.species.smiles,
+        stereo_descriptor=entry.stereo_descriptor,
+        stereo_resolution=entry.stereo_resolution,
+        stereo_smiles=entry.stereo_smiles,
+        multiplicity=sr.species.multiplicity,
+        isotope_key=entry.isotope_key,
+    )
 
 
 def _sanitize_name(raw: str) -> str:
@@ -317,7 +389,7 @@ def _build_therm_dat(
             gaps.append(ExportGap(kind="thermo_nasa", ref=ref, detail="; ".join(reasons)))
             continue
         lines.append(
-            f"! {names[se_id]}  SMILES={sr.species.smiles}  ref={sr.species.public_ref}"
+            f"! {names[se_id]}  {_species_structure_comment(sr)}  ref={sr.species.public_ref}"
         )
         lines.extend(_nasa_card(names[se_id], comp, nasa_thermo))
     lines.append("END")
@@ -563,7 +635,7 @@ def _build_chem_inp(
     for sr in record_set.species_records:
         se_id = sr.species_entry.id
         lines.append(
-            f"{names[se_id]}   ! SMILES={sr.species.smiles} "
+            f"{names[se_id]}   ! {_species_structure_comment(sr)} "
             f"ref={sr.species.public_ref}"
         )
     lines.append("END")
@@ -579,27 +651,31 @@ def _build_chem_inp(
     emitted = [rr for rr in record_set.reaction_records if rr.kinetics]
 
     def _dup_key(rr: ReactionExportRecord) -> tuple:
-        # Cantera's ``Kinetics::checkDuplicates`` requires the DUPLICATE keyword
-        # only when two reactions are genuinely *indistinguishable*: same
-        # reactant multiset, same product multiset, in the SAME written
-        # direction, and of the same kinetic type. It deliberately does NOT
-        # require it for a reversible reaction stated forwards vs. its reverse
-        # when the two are otherwise distinguishable (e.g. a plain Arrhenius
-        # ``A<=>B`` alongside a Chebyshev ``B(+M)<=>A(+M)`` — different types,
-        # different third-body form), and it *rejects* an over-declared marker
-        # only via the reverse check. So we key on the ordered (sorted
-        # reactants, sorted products, reversible) triple — same-direction
-        # collisions only — which is exactly the set Cantera demands here.
-        # Collapsing forward/reverse into one unordered key over-declares
-        # (marking reversed reversibles that Cantera treats as distinct) and
-        # inflates the DUPLICATE count. ``validate_chemkin_mechanism`` loads the
-        # result through Cantera and is the ground-truth backstop for any case
-        # this heuristic gets wrong.
+        # Cantera 3.2's ``Kinetics::checkDuplicates`` groups reactions by their
+        # participant set, ignoring side and direction. It rejects (a) two
+        # reactions of one rate type that are the same reaction, with identical
+        # sides, or with swapped sides when at least one is reversible, unless
+        # both carry DUPLICATE, and (b) a DUPLICATE reaction with no other
+        # DUPLICATE reaction in its group. So the key is the *unordered* pair of
+        # sides, plus the coarse rate type: a reaction and its reverse share a
+        # key whatever their reversibility, and every member of a colliding key
+        # is marked, so a marker always has a marked partner. Different rate
+        # types (an Arrhenius row beside a Chebyshev row) are not a repeat, so
+        # they are left as the source wrote them.
+        # ``validate_chemkin_mechanism`` loads the result through Cantera and is
+        # the ground-truth backstop.
+        k = rr.kinetics[0].kinetics
+        kind = getattr(k.model_kind, "value", k.model_kind)
+        if kind in ("chebyshev", "plog", "lindemann", "troe", "sri"):
+            rate_type = kind
+        elif k.is_third_body:
+            rate_type = "three_body"
+        else:
+            rate_type = "arrhenius"  # plain, modified and multi-term Arrhenius
         return (
             "dup",
-            tuple(sorted(rr.reactant_refs)),
-            tuple(sorted(rr.product_refs)),
-            rr.reaction.reversible,
+            frozenset((tuple(sorted(rr.reactant_refs)), tuple(sorted(rr.product_refs)))),
+            rate_type,
         )
 
     # Expand every record into its CHEMKIN reaction block(s) up front. A
@@ -720,6 +796,7 @@ def _build_tran_dat(
     compositions: dict[int, Counter | None],
     gaps: list[ExportGap],
 ) -> str:
+    """The tran.dat text, or ``""`` when no species produced a line."""
     lines: list[str] = []
     for sr in record_set.species_records:
         se_id = sr.species_entry.id
@@ -759,10 +836,10 @@ def _build_tran_dat(
             f"{names[se_id]:<16}{geom:>4d}"
             f"{tr.epsilon_over_k_k:>10.3f}{tr.sigma_angstrom:>10.3f}"
             f"{dipole:>10.3f}{polar:>10.3f}{zrot:>10.3f}"
-            f"    ! SMILES={sr.species.smiles} ref={sr.species.public_ref}"
+            f"    ! {_species_structure_comment(sr)} ref={sr.species.public_ref}"
             f" linearity={geom_source}"
         )
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines) + "\n" if lines else ""
 
 
 # ---------------------------------------------------------------------------
@@ -807,12 +884,37 @@ def serialize_chemkin(
             record_set, names, compositions, collider_names, options, gaps
         ),
     }
-    if options.include_transport:
-        files["tran.dat"] = _build_tran_dat(
-            record_set, names, compositions, gaps
-        )
+    # An empty tran.dat is not a neutral file: Cantera's ck2yaml reads it and then
+    # fails the species it finds no line for. Write the file only if it has a
+    # line, and say why when it does not.
+    if not options.include_transport:
+        transport = {
+            "written": False,
+            "reason_code": "not_requested",
+            "reason": "transport export was not requested",
+        }
+    else:
+        tran_text = _build_tran_dat(record_set, names, compositions, gaps)
+        if tran_text:
+            files["tran.dat"] = tran_text
+            transport = {"written": True, "reason_code": None, "reason": None}
+        elif not any(sr.transports for sr in record_set.species_records):
+            transport = {
+                "written": False,
+                "reason_code": "no_exported_species_has_transport",
+                "reason": "no tran.dat was written because no exported species had transport data",
+            }
+        else:
+            transport = {
+                "written": False,
+                "reason_code": "no_transport_line_written",
+                "reason": (
+                    "no tran.dat was written because no transport line could be written "
+                    "(see the transport gaps)"
+                ),
+            }
 
-    return ChemkinExport(files=files, gaps=gaps)
+    return ChemkinExport(files=files, gaps=gaps, transport=transport)
 
 
 def validate_chemkin_mechanism(files: dict[str, str]) -> None:

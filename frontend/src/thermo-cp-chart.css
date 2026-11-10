@@ -86,6 +86,10 @@
    misrepresent it as something other than what a reader would look up. */
 .cp-chart-legend-item {
     display: flex;
+    /* A long group label must wrap, not push the page past a 320px viewport. */
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     align-items: center;
     gap: .4rem;
     padding: .3rem .6rem;
@@ -114,7 +118,15 @@
    on the site, below the 11px accessibility floor. `--type-label-strong`
    (mono, uppercase, 600 .72rem) is the named step for a short, weighted
    status flag like "selected". */
+.cp-chart-legend-label {
+    min-width: 0;
+}
+
+/* The item sets `overflow-wrap: anywhere` so a long label wraps; the flag
+   inherits it and would break mid-word ("SELE/CTED"). Only the label wraps. */
 .cp-chart-legend-flag {
+    flex: none;
+    overflow-wrap: normal;
     color: var(--accent-700);
     font: var(--type-label-strong-font);
     letter-spacing: var(--type-label-strong-tracking);

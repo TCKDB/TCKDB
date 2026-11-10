@@ -1,4 +1,5 @@
 import { Link, Navigate, useParams } from "react-router-dom"
+import { ParticipantChips } from "../components/ParticipantChips"
 import "../conformer-group.css"
 import "../record-identity-header.css"
 import "../reaction-entry.css"
@@ -14,7 +15,7 @@ import { SectionHeading } from "../components/PageSections"
 import { ReactionEquation } from "../components/ReactionEquation"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
-import { stereoChip } from "../domain/recordFacets"
+import { participantChips } from "../domain/participantFacets"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { listMetaOf } from "../api/listEnvelope"
 import { chooserHeaderSourceNote } from "../domain/reactionChooser"
@@ -226,8 +227,8 @@ function ChooserDocument({ reactionRef, headerRecord, total, records, pageStatus
  * because two entries under the same reaction can legitimately be
  * different isomers of the SAME formula, which a formula-only link could
  * not tell apart), the participant's own `spe_` ref with a copy button,
- * and its `species_entry_label` chip (e.g. "Z") when served -- the same
- * four facts the PR 0 mock's own chooser table rendered for every
+ * -- the same
+ * facts the PR 0 mock's own chooser table rendered for every
  * participant (post-review fix: this row previously showed only the
  * formula link, dropping the ref/copy-button/label the mock had).
  */
@@ -251,7 +252,7 @@ function ParticipantCell({ participant, separator }: { participant: ReactionOver
                 participant cell ("H2 ... · H2N2 ... · Z isomer"). Round-2
                 review finding: parentheses keep the chip visually bound
                 to the participant it immediately follows. */}
-            {participant.species_entry_label && <> ({stereoChip(participant.species_entry_label)})</>}
+            <ParticipantChips chips={participantChips(participant)} style="paren" />
         </span>
     )
 }

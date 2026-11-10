@@ -5,6 +5,7 @@ import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import LevelOfTheoryPage from "./LevelOfTheoryPage"
+import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -48,7 +49,6 @@ function baseRecord(overrides: Record<string, unknown> = {}) {
             dispersion: null,
             solvent: null,
             solvent_model: null,
-            keywords: null,
             spin_treatment: null,
             lot_hash: "hash-b3lyp",
             created_at: "2026-07-21T11:59:29Z",
@@ -449,9 +449,48 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         expect(crumb.querySelector("[aria-current='page']")?.textContent).toBe("CCSD(T)/cc-pCVTZ (core=all_electron)")
     })
 
+    it("shows each stated method qualifier, and prints no row for one that is not stated", async () => {
+        const record = baseRecord()
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse({
+            ...record,
+            level_of_theory: {
+                ...record.level_of_theory,
+                core_treatment: "window",
+                relativistic_hamiltonian: "dkh2",
+                ri_approximation: "rijcosx",
+            },
+        }))))
+        page()
+        expect(await screen.findByText("Relativistic Hamiltonian")).toBeVisible()
+        expect(screen.getByText("dkh2")).toBeVisible()
+        expect(screen.getByText("RI approximation")).toBeVisible()
+        expect(screen.getByText("rijcosx")).toBeVisible()
+        expect(screen.getByText("window")).toBeVisible()
+        expect(screen.queryByText("PNO truncation")).toBeNull()
+        expect(screen.queryByText("Keywords")).toBeNull()
+    })
+
     it("keeps method/basis as the title when the payload carries no label", async () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
         page()
         expect(await screen.findByRole("heading", { level: 1, name: "b3lyp/def2tzvp" })).toBeInTheDocument()
+    })
+})
+
+describe("LevelOfTheoryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
+        const planted = plantSentinels(baseRecord(), ["name", "note", "target"])
+        expectPlanted(planted)
+        const { value } = planted
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(value))))
+        const user = userEvent.setup()
+        page()
+        expect(await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })).toBeVisible()
+        await user.click(screen.getByText("Atom-energy correction").closest("summary") as HTMLElement)
+        await user.click(screen.getByText("Petersson bond-additivity correction").closest("summary") as HTMLElement)
+        // The fixture reached the page: both scheme tables rendered with their rows.
+        expect(within(screen.getByRole("table", { name: "Element correction parameters" })).getAllByRole("row")).toHaveLength(9)
+
+        expectNoDepositorText()
     })
 })

@@ -255,10 +255,11 @@ describe("ConformerEvidenceLinkage", () => {
         expect(within(step("geometries")).getByText(/1 calculation output\b/)).toBeVisible()
     })
 
-    it("renders a depositor-chosen label verbatim, never coerced into 'Conformer Group N'", () => {
+    it("never prints a depositor-chosen label: the group's own ref stands in", () => {
         const named = conformer({ conformer_group: { conformer_group_ref: "cg_x", label: "anti-periplanar" } })
         render(<ConformerEvidenceLinkage conformer={named} />)
-        expect(screen.getByRole("heading", { name: "Evidence for anti-periplanar" })).toBeVisible()
+        expect(screen.getByRole("heading", { name: "Evidence for cg_x" })).toBeVisible()
+        expect(document.body.innerHTML).not.toContain("anti-periplanar")
     })
 
     it("falls back to the group's own ref for a blank/whitespace-only label, never an empty heading", () => {

@@ -109,11 +109,13 @@ from app.chemistry.geometry import resolve_element_symbol
 from app.chemistry.isotopes import implied_isotope_mass_number
 from app.chemistry.permuted_rigid_match import PreparedGeometry, SearchBudget, match_prepared
 from app.chemistry.torsion_fingerprint import kabsch_rmsd
-from app.db.models.calculation import Calculation
-from app.db.models.common import CalculationType
+from app.db.models.calculation import Calculation, CalculationSpinDiagnostic
+from app.db.models.common import CalculationType, CompositeBindingSource
 from app.db.models.composite_scheme import CompositeScheme, LevelOfTheoryComposite
 from app.db.models.geometry import Geometry, GeometryAtom
 from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
+from app.db.models.species import Species, SpeciesEntry
+from app.db.models.transition_state import TransitionStateEntry
 from app.schemas.upload_warning import UploadWarning
 
 #: Which role supplied the energy level -- shared by :class:`DerivedLevels`
@@ -335,6 +337,74 @@ def derive_levels(
     )
 
 
+def level_suppliers(
+    derived: DerivedLevels,
+    *,
+    opts: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    freqs: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    sps: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    composites: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    importeds: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    legacy_composites: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+) -> dict[str, tuple[str | None, list[int]]]:
+    """Which calculations supplied each level ``derived`` reports: ``{level: (source, calculation ids, lowest first)}``.
+
+    ``derived`` is the answer :func:`derive_levels` gave for the record's FULL set of links, and the role lists are the
+    same links with their calculation ids (each lowest id first). The suppliers of a level are the calculations of the
+    supplying role at the derived level (every calculation of the role when the energy is ``"ambiguous"``, since they all
+    disagreed). This is the one place the supplier rule lives: the evidence rule
+    (:func:`withhold_levels_from_calculations`) and the settings behind a level both read it, so they cannot disagree
+    about which calculation a level came from. A level with no source has no suppliers.
+    """
+
+    def at(group: "Sequence[tuple[int, RoleCalcInfo]]", lot_id: int | None) -> "list[tuple[int, RoleCalcInfo]]":
+        return [(cid, info) for cid, info in group if info.lot_id == lot_id]
+
+    geometry_lot = derived.geometry_lot_id
+    if derived.geometry_source == "opt":
+        geometry = at(opts, geometry_lot)
+    elif derived.geometry_source == "composite_recipe":
+        geometry = [
+            (cid, info) for cid, info in composites if info.has_output_geometry and info.recipe_geometry_lot_id == geometry_lot
+        ]
+    else:
+        geometry = []
+
+    frequency_lot = derived.frequency_lot_id
+    if derived.frequency_source == "freq":
+        frequency = at(freqs, frequency_lot)
+    elif derived.frequency_source == "opt":
+        frequency = [(cid, info) for cid, info in at(opts, frequency_lot) if info.carries_frequencies]
+    elif derived.frequency_source == "composite_recipe":
+        frequency = [
+            (cid, info) for cid, info in composites if info.has_output_geometry and info.recipe_frequency_lot_id == frequency_lot
+        ]
+    else:
+        frequency = []
+
+    energy_lot = derived.energy_lot_id
+    source = derived.energy_source
+    if source == "composite":
+        energy = at(composites or legacy_composites, energy_lot)
+    elif source == "sp":
+        energy = at(sps, energy_lot)
+    elif source == "opt":
+        energy = at(opts, energy_lot)
+    elif source == "imported":
+        energy = at(importeds, energy_lot)
+    elif source == "ambiguous":
+        distinct_composite_lots = {info.lot_id for _, info in composites if info.lot_id is not None}
+        energy = list(composites) if len(distinct_composite_lots) > 1 else list(sps)
+    else:
+        energy = []
+
+    return {
+        "geometry": (derived.geometry_source, [cid for cid, _ in geometry]),
+        "frequency": (derived.frequency_source, [cid for cid, _ in frequency]),
+        "energy": (derived.energy_source, [cid for cid, _ in energy]),
+    }
+
+
 def withhold_levels_from_calculations(
     derived: DerivedLevels,
     *,
@@ -356,64 +426,25 @@ def withhold_levels_from_calculations(
     role. A level that a calculation still shown also supplies (another ``sp`` at the same level) is a fact about that
     calculation too, and stays.
 
-    The suppliers of a level are the calculations of the supplying role at the derived level (every calculation of the role
-    when the energy is ``"ambiguous"``, since they all disagreed). With ``withheld`` empty ``derived`` is returned as it is.
+    The suppliers are those of :func:`level_suppliers`. With ``withheld`` empty ``derived`` is returned as it is.
     """
     if not withheld:
         return derived
+    suppliers = level_suppliers(
+        derived, opts=opts, freqs=freqs, sps=sps, composites=composites, importeds=importeds, legacy_composites=legacy_composites
+    )
 
-    def gone(suppliers: "Sequence[tuple[int, RoleCalcInfo]]") -> bool:
-        return bool(suppliers) and all(cid in withheld for cid, _ in suppliers)
-
-    def at(group: "Sequence[tuple[int, RoleCalcInfo]]", lot_id: int | None) -> "list[tuple[int, RoleCalcInfo]]":
-        return [(cid, info) for cid, info in group if info.lot_id == lot_id]
+    def gone(level: str) -> bool:
+        ids = suppliers[level][1]
+        return bool(ids) and all(cid in withheld for cid in ids)
 
     update: dict[str, object] = {}
-
-    geometry_lot = derived.geometry_lot_id
-    if derived.geometry_source == "opt":
-        geometry_suppliers = at(opts, geometry_lot)
-    elif derived.geometry_source == "composite_recipe":
-        geometry_suppliers = [
-            (cid, info) for cid, info in composites if info.has_output_geometry and info.recipe_geometry_lot_id == geometry_lot
-        ]
-    else:
-        geometry_suppliers = []
-    if gone(geometry_suppliers):
+    if gone("geometry"):
         update.update(geometry_lot_id=None, geometry_source=None)
-
-    frequency_lot = derived.frequency_lot_id
-    if derived.frequency_source == "freq":
-        frequency_suppliers = at(freqs, frequency_lot)
-    elif derived.frequency_source == "opt":
-        frequency_suppliers = [(cid, info) for cid, info in at(opts, frequency_lot) if info.carries_frequencies]
-    elif derived.frequency_source == "composite_recipe":
-        frequency_suppliers = [
-            (cid, info) for cid, info in composites if info.has_output_geometry and info.recipe_frequency_lot_id == frequency_lot
-        ]
-    else:
-        frequency_suppliers = []
-    if gone(frequency_suppliers):
+    if gone("frequency"):
         update.update(frequency_lot_id=None, frequency_source=None)
-
-    energy_lot = derived.energy_lot_id
-    source = derived.energy_source
-    if source == "composite":
-        energy_suppliers = at(composites or legacy_composites, energy_lot)
-    elif source == "sp":
-        energy_suppliers = at(sps, energy_lot)
-    elif source == "opt":
-        energy_suppliers = at(opts, energy_lot)
-    elif source == "imported":
-        energy_suppliers = at(importeds, energy_lot)
-    elif source == "ambiguous":
-        distinct_composite_lots = {info.lot_id for _, info in composites if info.lot_id is not None}
-        energy_suppliers = list(composites) if len(distinct_composite_lots) > 1 else list(sps)
-    else:
-        energy_suppliers = []
-    if gone(energy_suppliers):
+    if gone("energy"):
         update.update(energy_lot_id=None, energy_source=None)
-
     return derived._replace(**update) if update else derived
 
 
@@ -873,15 +904,10 @@ def collect_composite_link_warnings(links: list[RoleLink], *, subject: str) -> l
     ]
     for calc in legacy:
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field="source_calculations",
                 code=W_COMPOSITE_ROLE_ON_NON_COMPOSITE,
-                message=(
-                    f"{subject}: a calculation of type '{calc.type.value}' is linked with the role "
-                    "'composite'. The role names a composite energy, which is recorded by a "
-                    "calculation of type 'composite'. The link was stored as sent; it will be "
-                    "refused once producers can send that shape."
-                ),
+                context={"record_kind": subject, "calculation_type": calc.type.value},
             )
         )
     freqs = _by_role(links, "freq")
@@ -897,18 +923,17 @@ def collect_composite_link_warnings(links: list[RoleLink], *, subject: str) -> l
             differing = [f for f in freqs if f.lot_id is not None and f.lot_id != canonical]
             if differing:
                 warnings.append(
-                    UploadWarning(
+                    UploadWarning.from_code(
                         field="source_calculations",
                         code=W_COMPOSITE_FREQUENCY_LEVEL_DIFFERS,
-                        message=(
-                            f"{subject}: a linked 'freq' calculation is at "
-                            f"{_lot_label(differing[0].lot)}, but the composite method "
-                            f"{_lot_label(composite.lot)} runs its frequencies at "
-                            f"{_lot_label(session.get(LevelOfTheory, canonical))} and scales their "
-                            "zero-point energy for that level. Link the frequency calculation at the "
-                            "recipe's own level, or expect the record's frequencies and its energy to "
-                            "describe different levels."
-                        ),
+                        context={
+                            "record_kind": subject,
+                            "depositor_supplied": {
+                                "frequency_level": _lot_label(differing[0].lot),
+                                "composite_method": _lot_label(composite.lot),
+                                "recipe_frequency_level": _lot_label(session.get(LevelOfTheory, canonical)),
+                            },
+                        },
                     )
                 )
                 break
@@ -1200,37 +1225,229 @@ def assert_role_consistency(
 _KINETICS_ENERGY_ROLES = frozenset({"reactant_energy", "product_energy", "ts_energy"})
 
 
+def declared_scheme_level_ids(session: Session | None, lot_ids: Collection[int]) -> set[int]:
+    """Which of these levels name a user-declared composite scheme: one batched query."""
+    ids = {i for i in lot_ids if i is not None}
+    if session is None or not ids:
+        return set()
+    return set(
+        session.scalars(
+            select(LevelOfTheoryComposite.level_of_theory_id).where(
+                LevelOfTheoryComposite.level_of_theory_id.in_(ids),
+                LevelOfTheoryComposite.binding_source == CompositeBindingSource.declared,
+            )
+        )
+    )
+
+
+def kinetics_level_fields_match(
+    declared: LevelOfTheory, linked: LevelOfTheory | None, *, scheme_ids: Collection[int] = ()
+) -> bool:
+    """Whether a linked energy's level agrees with the declared kinetics level on every field but spin.
+
+    The fields are the keys the level hash is taken over (``spin_agnostic_level_key``, derived from
+    ``_level_of_theory_payload``), normalised as the hash normalises them. Spin treatment is judged
+    per participant by :func:`assert_kinetics_energy_level_consistency`, not here.
+
+    A level that names a user-declared composite scheme hashes by the scheme's definition, not
+    by columns, so it keeps the row comparison. ``scheme_ids`` is the set of such levels among the
+    ones being compared (:func:`declared_scheme_level_ids`, computed once by the caller).
+    """
+    if linked is None or declared.id == linked.id:
+        return True
+    if declared.id in scheme_ids or linked.id in scheme_ids:
+        return False
+    from app.services.calculation_resolution import spin_agnostic_level_key
+
+    return spin_agnostic_level_key(declared) == spin_agnostic_level_key(linked)
+
+
+#: ``reason`` values on a spin-treatment ``kinetics_energy_level_contradiction`` (closed; no depositor text).
+REASON_OPEN_SHELL_REFERENCE_MIXED = "open_shell_reference_mixed"
+REASON_DECLARED_SPIN_DIFFERS = "declared_spin_differs"
+
+
+def level_spin_value(level: LevelOfTheory | None) -> str | None:
+    """The stated spin treatment of a level (``restricted``, ``unrestricted``, ``restricted_open``), else ``None``."""
+    spin = getattr(getattr(level, "spin_treatment", None), "value", getattr(level, "spin_treatment", None))
+    return None if spin in (None, "unknown") else spin
+
+
+def kinetics_spin_facts(session: Session, calculation_ids: Collection[int]) -> dict[int, tuple[int | None, float | None]]:
+    """``{calculation id: (multiplicity, stored <S^2>)}``: one query for every calculation.
+
+    Multiplicity is the owning species' or transition-state entry's; ``<S^2>`` is the stored
+    ``calc_spin_diagnostic`` row, absent when none was parsed. The query autoflushes, so rows written
+    earlier in the same request are seen.
+    """
+    ids = list(calculation_ids)
+    if not ids:
+        return {}
+    rows = session.execute(
+        select(
+            Calculation.id,
+            Species.multiplicity,
+            TransitionStateEntry.multiplicity,
+            CalculationSpinDiagnostic.s_squared,
+        )
+        .outerjoin(SpeciesEntry, SpeciesEntry.id == Calculation.species_entry_id)
+        .outerjoin(Species, Species.id == SpeciesEntry.species_id)
+        .outerjoin(TransitionStateEntry, TransitionStateEntry.id == Calculation.transition_state_entry_id)
+        .outerjoin(CalculationSpinDiagnostic, CalculationSpinDiagnostic.calculation_id == Calculation.id)
+        .where(Calculation.id.in_(ids))
+    ).all()
+    return {cid: (species_m if species_m is not None else ts_m, s2) for cid, species_m, ts_m, s2 in rows}
+
+
+def kinetics_closed_shell_exempt(multiplicity: int | None, spin: str | None, s_squared: float | None) -> bool:
+    """A singlet computed restricted, or unrestricted and collapsed to the restricted solution.
+
+    Such a link does not constrain the spin treatment: a closed-shell molecule's energy is the same
+    whether the program ran it restricted or unrestricted. ``<S^2>`` at or below the field's 0.1
+    convention (:data:`~app.services.wavefunction_reliability_warnings.S_SQUARED_THRESHOLD`; Williams
+    2011, Rettig 2020, register entry 52) is the collapsed case. An unrestricted singlet with no stored
+    ``<S^2>`` is not exempt (counted as unrestricted), as is a broken-symmetry one (above 0.1).
+    """
+    from app.services.wavefunction_reliability_warnings import S_SQUARED_THRESHOLD
+
+    if multiplicity != 1:
+        return False
+    if spin in ("restricted", "restricted_open"):
+        return True
+    return spin == "unrestricted" and s_squared is not None and s_squared <= S_SQUARED_THRESHOLD
+
+
+def kinetics_energy_level_violation(
+    energies: Sequence[Calculation], declared: LevelOfTheory | None
+) -> CodedValueError | None:
+    """The refusal a declared kinetics energy level earns against these linked energy calculations, or ``None``.
+
+    1. Every calculation with a level must match the declared level on every field but spin
+       (:func:`kinetics_level_fields_match`).
+    2. A closed-shell one (:func:`kinetics_closed_shell_exempt`) never constrains spin.
+    3. The others (every multiplicity above 1, a broken-symmetry or ``<S^2>``-less unrestricted
+       singlet) form the open-shell reference set. Unknown spin is skipped; the rest must agree
+       (``unrestricted`` against ``restricted_open`` is a real level difference).
+    4. A declared spin treatment must equal that shared open-shell reference; with no such calculation
+       it must equal every known spin. A declaration that states none is accepted.
+
+    A calculation with no level of its own is not compared (absence is not a contradiction), and no
+    declaration, or no calculation, is nothing to check.
+    """
+    if declared is None:
+        return None
+    energies = [c for c in {c.id: c for c in energies}.values() if c.lot_id is not None]
+    if not energies:
+        return None
+    session = object_session(declared)
+    scheme_ids = declared_scheme_level_ids(session, [declared.id, *(c.lot_id for c in energies)])
+
+    differing = [c for c in energies if not kinetics_level_fields_match(declared, c.lot, scheme_ids=scheme_ids)]
+    if differing:
+        return CodedValueError(
+            W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
+            f"kinetics: the declared energy level of theory ({_lot_label(declared)}) does not match "
+            f"the level of the linked energy calculations ({', '.join(c.public_ref for c in differing)} "
+            f"at {', '.join(sorted({_lot_label(c.lot) for c in differing}))}). Declare the level the "
+            "linked energies ran at, or link energy calculations run at the declared level.",
+            context={
+                "declared_level_of_theory_ref": declared.public_ref,
+                "energy_calculation_refs": [c.public_ref for c in differing],
+            },
+            message_prefix=False,
+        )
+    if declared.id in scheme_ids or session is None:
+        return None
+
+    facts = kinetics_spin_facts(session, [c.id for c in energies])
+    no_s_squared: set[int] = set()
+    open_shell: dict[str, list[Calculation]] = {}
+    all_known: dict[str, list[Calculation]] = {}
+    for calc in energies:
+        spin = level_spin_value(calc.lot)
+        if spin is None:
+            continue
+        all_known.setdefault(spin, []).append(calc)
+        multiplicity, s_squared = facts.get(calc.id, (None, None))
+        if multiplicity is None or kinetics_closed_shell_exempt(multiplicity, spin, s_squared):
+            continue
+        open_shell.setdefault(spin, []).append(calc)
+        if multiplicity == 1 and spin == "unrestricted" and s_squared is None:
+            no_s_squared.add(calc.id)
+
+    def spin_context(reason: str, calcs: list[Calculation]) -> dict[str, object]:
+        context: dict[str, object] = {
+            "declared_level_of_theory_ref": declared.public_ref,
+            "energy_calculation_refs": sorted({c.public_ref for c in calcs}),
+            "reason": reason,
+        }
+        missing = sorted({c.public_ref for c in calcs if c.id in no_s_squared})
+        if missing:
+            context["s_squared_missing_for"] = missing
+        return context
+
+    def s_squared_clause(calcs: list[Calculation]) -> str:
+        """Why an unrestricted singlet counts as open-shell here, and what would change that."""
+        missing = sorted({c.public_ref for c in calcs if c.id in no_s_squared})
+        if not missing:
+            return ""
+        return (
+            f" The unrestricted singlet energies ({', '.join(missing)}) count as open-shell because no "
+            "spin_diagnostic.s_squared is stored for them; supply it for those calculations."
+        )
+
+    if len(open_shell) > 1:
+        mixed = [c for group in open_shell.values() for c in group]
+        return CodedValueError(
+            W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
+            "kinetics: the open-shell participants' energies were computed with different spin treatments "
+            f"({', '.join(sorted(open_shell))}); they must share one reference (unrestricted or "
+            f"restricted-open).{s_squared_clause(mixed)}",
+            context=spin_context(REASON_OPEN_SHELL_REFERENCE_MIXED, mixed),
+            message_prefix=False,
+        )
+    declared_spin = level_spin_value(declared)
+    if declared_spin is None:
+        return None
+    reference = open_shell if open_shell else all_known
+    wrong = [c for spin, group in reference.items() if spin != declared_spin for c in group]
+    if not wrong:
+        return None
+    if open_shell:
+        return CodedValueError(
+            W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
+            f"kinetics: the declared spin treatment ({declared_spin}) differs from the open-shell participants' "
+            f"({', '.join(sorted(reference))}). Declare the open-shell reference, or no spin treatment."
+            f"{s_squared_clause(wrong)}",
+            context=spin_context(REASON_DECLARED_SPIN_DIFFERS, wrong),
+            message_prefix=False,
+        )
+    return CodedValueError(
+        W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
+        f"kinetics: the declared spin treatment ({declared_spin}) differs from the linked energies' "
+        f"({', '.join(sorted(reference))}), and every participant is closed-shell. Declare the spin "
+        "treatment they were computed with, or none.",
+        context=spin_context(REASON_DECLARED_SPIN_DIFFERS, wrong),
+        message_prefix=False,
+    )
+
+
 def assert_kinetics_energy_level_consistency(
     links: list[RoleLink], declared: LevelOfTheory | None
 ) -> None:
-    """A declared kinetics energy level must match every linked energy calculation's level.
+    """A declared kinetics energy level must agree with every linked energy, spin treatment per participant.
 
     The kinetics counterpart of the R4' check at the end of :func:`assert_role_consistency`
     and refused the same way (a coded 422). Only the ``reactant_energy``, ``product_energy``
-    and ``ts_energy`` links are energies; a calculation with no level of theory of its own is
-    not compared (absence is not a contradiction), and no declaration, or no energy link, is
-    nothing to check. Nothing is inferred in either direction.
+    and ``ts_energy`` links are energies. The rule is :func:`kinetics_energy_level_violation`.
 
     :raises CodedValueError: ``kinetics_energy_level_contradiction``.
     """
-    if declared is None:
-        return
-    energies = [link.calculation for link in links if link.role in _KINETICS_ENERGY_ROLES]
-    differing = list({c.id: c for c in energies if c.lot_id is not None and c.lot_id != declared.id}.values())
-    if not differing:
-        return
-    raise CodedValueError(
-        W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
-        f"kinetics: the declared energy level of theory ({_lot_label(declared)}) does not match "
-        f"the level of the linked energy calculations ({', '.join(c.public_ref for c in differing)} "
-        f"at {', '.join(sorted({_lot_label(c.lot) for c in differing}))}). Declare the level the "
-        "linked energies ran at, or link energy calculations run at the declared level.",
-        context={
-            "declared_level_of_theory_ref": declared.public_ref,
-            "energy_calculation_refs": [c.public_ref for c in differing],
-        },
-        message_prefix=False,
+    violation = kinetics_energy_level_violation(
+        [link.calculation for link in links if link.role in _KINETICS_ENERGY_ROLES], declared
     )
+    if violation is not None:
+        raise violation
 
 
 __all__ = [
@@ -1258,6 +1475,12 @@ __all__ = [
     "assert_kinetics_energy_level_consistency",
     "assert_role_consistency",
     "collect_composite_link_warnings",
+    "declared_scheme_level_ids",
     "derive_levels",
+    "kinetics_closed_shell_exempt",
+    "kinetics_energy_level_violation",
+    "kinetics_level_fields_match",
+    "kinetics_spin_facts",
+    "level_spin_value",
     "role_calc_infos",
 ]

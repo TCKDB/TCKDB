@@ -34,6 +34,7 @@ from app.schemas.reads.scientific_common import (
     ScientificResponse,
     WatermarkEcho,
 )
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 
 
 class ReactionDirectionQuery(str, Enum):
@@ -286,7 +287,7 @@ class ReactionsBrowseRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ReactionParticipantSummary(BaseModel):
+class ReactionParticipantSummary(EntryFacetFields):
     """Reactant or product participant within a reaction-entry record.
 
     Phase B: ``species_entry_ref`` is the public stable handle for the
@@ -308,11 +309,9 @@ class ReactionParticipantSummary(BaseModel):
     consumers parse, so it is left alone here; render from
     ``species_entry_label`` if you need the equation to be unambiguous.
 
-    ``formula`` and ``stoichiometry`` mirror
-    ``ReactionFullSpeciesParticipant`` (``scientific_provenance.py``) — the
-    same RDKit Hill-notation expression and the same
-    ``chem_reaction.reaction_participant`` coefficient, so a search row and
-    a ``/full`` participant row render identically.
+    ``formula`` and ``stoichiometry`` mirror ``ReactionFullSpeciesParticipant`` (``scientific_provenance.py``): each
+    distinct species entry is served once per side, ``stoichiometry`` being how many times it occurs there
+    (``H + H -> H2`` serves the one H entry once, with 2), so a search row and a ``/full`` row render identically.
     """
 
     species_entry_id: int

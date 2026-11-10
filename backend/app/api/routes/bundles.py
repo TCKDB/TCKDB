@@ -21,6 +21,7 @@ from app.api.bundle_limits import bundle_record_count, enforce_bundle_record_cap
 from app.api.deps import get_current_user, get_db, get_write_db
 from app.api.errors import render_handled_exception
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.schemas.contribution_bundle_dry_run import ContributionBundleDryRunResult
 from app.schemas.contribution_bundle_submit import (
@@ -39,7 +40,7 @@ from app.workflows.contribution_bundle_submit import (
 )
 from app.workflows.rehearsal import RehearsalContended, discard_unflushed_writes
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 logger = logging.getLogger(__name__)
 
 

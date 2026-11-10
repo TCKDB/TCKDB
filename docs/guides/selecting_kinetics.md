@@ -102,9 +102,10 @@ candidate as facts, so a reader can judge for themselves; they never change the 
 
 ## Visibility
 
-Under `profile=curated`, records below the approved floor are not part of the world: they appear in no ref, no count
-and no manifest arithmetic (`excluded_by_review_withheld` is true and the count is zero). A curated answer is the same
-whether or not hidden records exist. Under the exploratory profile, records below the floor are listed with their
+Under `profile=curated`, the candidates are approved records only. A record below the approved floor is not a candidate: it
+appears in no candidate ref, no candidate count and no manifest arithmetic (`excluded_by_review_withheld` is true and the count
+is zero), so a curated answer is the same whether or not such records exist. The evidence behind a candidate is a different
+matter: an unreviewed source calculation is read and shown with its badge, and only a rejected or deprecated one is withheld. Under the exploratory profile, records below the floor are listed with their
 reason (at most 100, with the total in `excluded_count`).
 
 ## Replaying a decision

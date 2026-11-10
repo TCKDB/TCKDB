@@ -364,8 +364,9 @@ def test_persist_thermo_upload_surfaces_literature_title_mismatch_warning(
             w for w in warnings if w.code == "literature_title_mismatch"
         ]
         assert len(title_warnings) == 1
-        assert "A Completely Different Paper" in title_warnings[0].message
-        assert "Enthalpy of formation of water" in title_warnings[0].message
+        assert title_warnings[0].context["depositor_supplied"] == {"supplied_title": "A Completely Different Paper"}
+        assert title_warnings[0].context["fetched_title"] == "Enthalpy of formation of water"
+        assert "Completely Different" not in title_warnings[0].message
 
 
 def test_repeated_thermo_uploads_are_append_only(db_conn) -> None:

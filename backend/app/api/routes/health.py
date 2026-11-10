@@ -38,6 +38,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.deps import SessionLocal
+from app.api.server_faults import ServerFaultRoute
 from app.api.startup_checks import server_encoding, template_encoding
 from app.services import (
     artifact_storage,
@@ -47,7 +48,7 @@ from app.services import (
     artifact_storage_seaweedfs,
 )
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 logger = logging.getLogger(__name__)
 
 #: Name given to the inline worker thread in

@@ -12,6 +12,7 @@ from app.api.routes.scientific._response import (
     SPECIES_SEARCH_SECTIONS,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
@@ -28,7 +29,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.species import search_species
 
-router = APIRouter(prefix="/species")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species")
 
 
 @router.get("/search", response_model=ScientificSpeciesSearchResponse)
@@ -62,7 +63,8 @@ def species_search(
     §Endpoint 1 for the contract.
     """
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
-    request = SpeciesSearchRequest(
+    request = caller_input(
+        SpeciesSearchRequest,
         smiles=smiles,
         inchi=inchi,
         inchi_key=inchi_key,

@@ -40,8 +40,11 @@ from app.db.models.common import (
     KineticsDegeneracyConvention,
     KineticsModelKind,
     KineticsRepresentationRole,
+    PnoTruncation,
     PressureContext,
     RecordReviewStatus,
+    RelativisticHamiltonian,
+    RiApproximation,
     SCFStabilityStatus,
     SpinTreatment,
     SubmissionRecordType,
@@ -106,6 +109,7 @@ from app.schemas.reads.scientific_kinetics import (
 )
 from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.composite_verification import verify_composite_calculations
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read.common import (
     build_pagination,
     detail_visible_statuses,
@@ -783,6 +787,11 @@ def get_reaction_kinetics(
         reaction_entry_ref=reaction_entry_ref,
         review_summary=summary,
         records=returned,
+        **deposit_warning_envelope(
+            session,
+            SubmissionRecordType.kinetics,
+            {r.kinetics_id: r.kinetics_ref for r in returned},
+        ),
         pagination=build_pagination(
             offset=offset,
             limit=limit,
@@ -1151,7 +1160,10 @@ class _CalcMeta:
         "lot_dispersion",
         "lot_id",
         "lot_method",
+        "lot_pno_truncation",
         "lot_ref",
+        "lot_relativistic_hamiltonian",
+        "lot_ri_approximation",
         "lot_solvent",
         "lot_solvent_model",
         "lot_spin_treatment",
@@ -1187,6 +1199,9 @@ class _CalcMeta:
         lot_cabs_basis: str | None = None,
         lot_solvent_model: str | None = None,
         lot_spin_treatment: SpinTreatment | None = None,
+        lot_relativistic_hamiltonian: RelativisticHamiltonian | None = None,
+        lot_pno_truncation: PnoTruncation | None = None,
+        lot_ri_approximation: RiApproximation | None = None,
     ):
         self.composite_scheme = composite_scheme
         self.id = id
@@ -1203,6 +1218,9 @@ class _CalcMeta:
         self.lot_cabs_basis = lot_cabs_basis
         self.lot_solvent_model = lot_solvent_model
         self.lot_spin_treatment = lot_spin_treatment
+        self.lot_relativistic_hamiltonian = lot_relativistic_hamiltonian
+        self.lot_pno_truncation = lot_pno_truncation
+        self.lot_ri_approximation = lot_ri_approximation
         self.software_release_id = software_release_id
         self.software_release_ref = software_release_ref
         self.software_name = software_name
@@ -1252,6 +1270,9 @@ def _calc_metadata(
             LevelOfTheory.cabs_basis,
             LevelOfTheory.solvent_model,
             LevelOfTheory.spin_treatment,
+            LevelOfTheory.relativistic_hamiltonian,
+            LevelOfTheory.pno_truncation,
+            LevelOfTheory.ri_approximation,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -1285,6 +1306,9 @@ def _calc_metadata(
             lot_cabs_basis=row[16],
             lot_solvent_model=row[17],
             lot_spin_treatment=row[18],
+            lot_relativistic_hamiltonian=row[19],
+            lot_pno_truncation=row[20],
+            lot_ri_approximation=row[21],
         )
         for row in rows
     }
@@ -1453,8 +1477,10 @@ def _literature_summaries(
             id=lit.id,
             literature_ref=lit.public_ref,
             title=lit.title,
+            title_source=lit.title_source,
             year=lit.year,
             doi=lit.doi,
+            isbn=lit.isbn,
         )
         for lit in rows
     }
@@ -1827,6 +1853,9 @@ def _lot_summary_for_calc(meta: _CalcMeta | None) -> LevelOfTheorySummary | None
         cabs_basis=meta.lot_cabs_basis,
         solvent_model=meta.lot_solvent_model,
         spin_treatment=meta.lot_spin_treatment,
+        relativistic_hamiltonian=meta.lot_relativistic_hamiltonian,
+        pno_truncation=meta.lot_pno_truncation,
+        ri_approximation=meta.lot_ri_approximation,
         composite_scheme=meta.composite_scheme,
     )
 

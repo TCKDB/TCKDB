@@ -40,13 +40,15 @@ const workflowToolReleaseSchema = z.object({
 const literatureSchema = z.object({
     literature_ref: z.string(),
     title: z.string().nullable().optional(),
+    title_source: z.string().nullable().optional(),
     year: z.number().nullable().optional(),
     doi: z.string().nullable().optional(),
+    isbn: z.string().nullable().optional(),
 }).passthrough()
 
 // The LOT summary embedded inside an ECS/FSF record -- a DIFFERENT, smaller
 // shape than the LOT core block below (no `aux_basis`/`cabs_basis`/
-// `solvent_model`/`keywords`/`lot_hash`/`created_at`/`level_of_theory_id`).
+// `solvent_model`/`lot_hash`/`created_at`/`level_of_theory_id`).
 // Reuses `levelOfTheorySchema` (`api/scientificSchemas.ts`) -- the same
 // summary shape every other calculation-adjacent surface already parses
 // LOT summaries with -- rather than a fourth bespoke LOT schema in this
@@ -223,11 +225,14 @@ const levelOfTheoryCoreSchema = z.object({
     dispersion: z.string().nullable().optional(),
     solvent: z.string().nullable().optional(),
     solvent_model: z.string().nullable().optional(),
-    keywords: z.string().nullable().optional(),
     spin_treatment: z.string().nullable().optional(),
-    // ADR 0021 / P7a: `frozen_core`/`all_electron`, or `null` when the
+    // ADR 0021 / P7a: `frozen_core`/`all_electron`/`window`, or `null` when the
     // deposit does not state it (never defaulted to either).
     core_treatment: z.string().nullable().optional(),
+    // Method qualifiers: part of the level's identity only when stated, `null` otherwise.
+    relativistic_hamiltonian: z.string().nullable().optional(),
+    pno_truncation: z.string().nullable().optional(),
+    ri_approximation: z.string().nullable().optional(),
     // The composite recipe this level is bound to, or `null`.
     composite_scheme: compositeSchemeSummarySchema.nullable().optional(),
     // The level written in full by the server (`method/basis (core=...)`), so

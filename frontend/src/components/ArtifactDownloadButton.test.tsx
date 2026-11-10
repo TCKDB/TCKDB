@@ -89,7 +89,7 @@ describe("downloading", () => {
         // The route is authenticated unconditionally; without this the
         // download is a 401 and the test would still pass on the filename.
         await vi.waitFor(() => expect(credentials).toBe("include"))
-        await vi.waitFor(() => expect(saved.name).toBe("input_art_7k2p9x.log"))
+        await vi.waitFor(() => expect(saved.name).toBe("artifact_art_7k2p9x.log"))
     })
 
     it("releases the object URL, which otherwise pins the blob for the page's life", async () => {

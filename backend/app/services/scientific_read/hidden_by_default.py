@@ -5,8 +5,9 @@ such record" from "hidden by default". This module computes that count and carri
 
 * :func:`hidden_by_default_block` is the count. It is **one aggregate statement** per list: the matched ids joined to
   their review rows, grouped by status. It makes no statement at all when nothing is excluded by default, and it
-  returns ``None`` under the ``curated`` profile without querying: records below the review floor are withheld with no
-  count, because a count says they exist (decision D6, hidden == unknown == absent).
+  returns ``None`` under the ``curated`` profile without querying: the record floor is the profile itself, not a default
+  exclusion a request can lift, so there is no switch to point to and nothing a request could change (ADR 0023: a
+  curated list returns approved records only).
 * :func:`record_hidden_by_default` hands the block to the response boundary through a holder the profile dependency
   installs, the same way the resolved profile reaches it, so a scientific service does not thread it through its
   return value. :func:`stamp_hidden_by_default` writes it into the ``request`` echo at the one boundary every
@@ -38,9 +39,13 @@ class HiddenByDefaultHolder:
     #: entry) gets one block from each read; the response reports their sum. A read that is called again for the same
     #: scope (a second page) replaces its earlier block, so nothing is counted twice.
     blocks: dict[object, HiddenByDefault]
+    #: Refs this request named that belong to a merged-away species, entry or reaction, mapped to the ref of the row
+    #: each stands for (DR-0038). Reported in the ``request`` echo as ``merged_refs``.
+    forwarded: dict[str, str]
 
     def __init__(self) -> None:
         self.blocks = {}
+        self.forwarded = {}
 
     @property
     def value(self) -> HiddenByDefault | None:
@@ -85,6 +90,13 @@ def record_hidden_by_default(block: HiddenByDefault | None, *, scope: object = N
         holder.blocks[scope] = block
 
 
+def record_forwarded_ref(ref: str, into_ref: str) -> None:
+    """Remember that ``ref`` named a merged-away row and was answered with ``into_ref``'s. A no-op outside a request."""
+    holder = _HOLDER.get()
+    if holder is not None:
+        holder.forwarded[ref] = into_ref
+
+
 def stamp_hidden_by_default(payload: object) -> None:
     """Write the recorded block into a response envelope's ``request`` echo (when that echo has the field)."""
     holder = _HOLDER.get()
@@ -92,6 +104,8 @@ def stamp_hidden_by_default(payload: object) -> None:
     if holder is None or echo is None or not hasattr(echo, "hidden_by_default"):
         return
     echo.hidden_by_default = holder.value
+    if holder.forwarded and hasattr(echo, "merged_refs"):
+        echo.merged_refs = dict(holder.forwarded)
 
 
 def excluded_by_default(

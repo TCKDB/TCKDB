@@ -70,11 +70,9 @@ from app.services.energy_source_types import ENERGY_SOURCE_TYPES_BY_KIND
 from app.services.local_key_resolution import resolve_calculation_key
 from app.services.network_energy_sources import (
     E_NETWORK_STATE_ENERGY_SUM_MISMATCH,
-    W_NETWORK_ENERGY_SOURCE_TYPE_MISMATCH,
     W_NETWORK_ENERGY_ZPE_SOURCE_ABSENT,
+    W_NETWORK_STATE_ENERGY_SOURCES_PARTIAL,
     W_NETWORK_STATE_ENERGY_SUM_NOT_COMPARED,
-    assert_network_energy_source_type,
-    assert_network_source_role_type,
     collect_state_energy_source_warnings,
     collect_zpe_source_absent_warnings,
     compare_state_energy_sums,
@@ -209,15 +207,14 @@ def _assert_energy_sources_are_comparable(
     for energy_kind, levels in sorted(levels_by_kind.items()):
         if len(levels) > 1:
             warnings.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field=f"{field_path}[{record_index}].energies",
                     code=W_TS_ENERGY_ORDERING_MIXED_LEVELS,
-                    message=(
-                        f"Transition state '{subject_label}' energy_ordering "
-                        f"compares '{energy_kind}' energies taken at "
-                        f"{len(levels)} different levels of theory. An ordering "
-                        "is only meaningful between energies at one level."
-                    ),
+                    context={
+                        "energy_kind": energy_kind,
+                        "n_levels": len(levels),
+                        "depositor_supplied": {"transition_state_label": subject_label},
+                    },
                 )
             )
 
@@ -497,29 +494,20 @@ def _warn_energies_not_compared(
     if warnings is None:
         return
     skipped = [
-        f"'{energy.participant}' {energy.energy_kind} ({comparison.reason})"
+        {"participant": energy.participant, "energy_kind": energy.energy_kind, "reason": comparison.reason or ""}
         for energy, comparison in zip(record.energies or [], comparisons, strict=True)
         if comparison.status == COMPARISON_NOT_COMPARED
     ]
     if not skipped:
         return
-    scaling_hint = (
-        " An E0 that is not the stored electronic energy plus the stored (unscaled) zero-point "
-        "energy was not refused, because a scaled zero-point energy cannot be told from a wrong "
-        "number; if you scaled it, state zpe_scale_factor on that energy and it will be checked."
-        if any(c.reason == NOT_COMPARED_ZPE_SCALING_UNSTATED for c in comparisons)
-        else ""
-    )
     warnings.append(
-        UploadWarning(
+        UploadWarning.from_code(
             field=f"{field_path}[{record_index}].energies",
             code=W_TS_ENERGY_ORDERING_NOT_COMPARED,
-            message=(
-                f"Transition state '{subject_label}' energy_ordering states energies that could "
-                f"not be compared with the energies TCKDB stores for the calculations they cite: "
-                f"{'; '.join(skipped)}. They are stored as not compared, and the ordering rests on "
-                f"the stated numbers for them.{scaling_hint}"
-            ),
+            context={
+                "reasons": sorted({c.reason for c in comparisons if c.status == COMPARISON_NOT_COMPARED and c.reason}),
+                "depositor_supplied": {"transition_state_label": subject_label, "not_compared": skipped},
+            },
         )
     )
 
@@ -888,16 +876,10 @@ def persist_transition_state_validation_evidence(
         record.passed and record.kind == "irc" for record in evidence
     ):
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=field_path,
                 code=W_MISSING_TS_IRC_EVIDENCE,
-                message=(
-                    f"Transition state '{subject_label}' was deposited without passed "
-                    "IRC validation evidence. The saddle point is stored, but nothing "
-                    "in this deposit shows it connects the declared reactants and "
-                    "products. Energy-ordering and imaginary-mode evidence say "
-                    "something else, and do not stand in for it."
-                ),
+                context={"depositor_supplied": {"transition_state_label": subject_label}},
             )
         )
     return rows
@@ -941,67 +923,6 @@ CHECK_TS_IRC_EVIDENCE = ScientificCheck(
         "run and failed is stored and still warns, and so does a deposit "
         "whose only evidence is an energy ordering or an imaginary mode: "
         "neither shows the saddle point connects the declared endpoints."
-    ),
-)
-
-
-CHECK_ENERGY_SOURCE_TYPE = ScientificCheck(
-    group="Stationary points",
-    sort_key=13,
-    code=(E_TS_ENERGY_ORDERING_SOURCE_TYPE_MISMATCH, W_NETWORK_ENERGY_SOURCE_TYPE_MISMATCH),
-    asserts=(
-        "A calculation cited as the source of a stated energy should be of a "
-        "type that carries that kind of energy: an electronic energy from an "
-        "``sp``, ``opt`` or ``composite``, an E0 from a ``freq`` or "
-        "``composite``, never from an IRC point, scan, path search or "
-        "conformer search; and a network ``well_freq`` or ``barrier_freq`` "
-        "source must be a ``freq``."
-    ),
-    tier=CheckTier.block,
-    channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional. An energy taken from an IRC point, or from a bare "
-        "single point labelled as an E0, is not the quantity it is labelled "
-        "as, and an ordering or a master equation built on it compares unlike "
-        "things; the master equation reads the modes of its frequency roles, "
-        "which a ``composite`` (a ZPE only) does not store. The table of types "
-        "is one table shared by the transition-state and network rules "
-        "(``app.services.energy_source_types``, #669), so the two cannot "
-        "disagree about what carries an energy; it is a position a referee "
-        "could dispute, which is why it is registered. A network energy on a "
-        "composed convention (``electronic_plus_zpe`` and the like) is held "
-        "only to the floor of stationary-point types, because its one source "
-        "slot cites the electronic part and the frequency goes in the "
-        "frequency role: tightening it would refuse every producer and "
-        "fixture in the repository, a decision recorded here rather than "
-        "hidden."
-    ),
-    adr="0008",
-    enforced_by=(
-        PythonCheck(
-            _assert_energy_sources_are_comparable,
-            note=(
-                "The transition-state ``energy_ordering`` evidence, at the "
-                "shared evidence seam, so all three deposit paths refuse alike."
-            ),
-        ),
-        PythonCheck(
-            assert_network_energy_source_type,
-            note="Network state and barrier energy sources, read off the persisted row.",
-        ),
-        PythonCheck(
-            assert_network_source_role_type,
-            note=(
-                "The ``well_energy`` / ``barrier_energy`` and the frequency "
-                "roles of the solve's ``source_calculations``."
-            ),
-        ),
-    ),
-    escape_hatch=(
-        "Cite the calculation that carries the energy: the ``sp``, ``opt`` or "
-        "``composite`` for an electronic energy, the ``freq`` (or a "
-        "``composite``) for an E0, and put the ``freq`` in the "
-        "``well_freq`` / ``barrier_freq`` role."
     ),
 )
 
@@ -1110,6 +1031,7 @@ CHECK_TS_ENERGY_ORDERING_NOT_COMPARED = ScientificCheck(
         W_TS_ENERGY_ORDERING_NOT_COMPARED,
         W_NETWORK_STATE_ENERGY_SUM_NOT_COMPARED,
         W_NETWORK_ENERGY_ZPE_SOURCE_ABSENT,
+        W_NETWORK_STATE_ENERGY_SOURCES_PARTIAL,
     ),
     asserts=(
         "Every energy an energy-ordering record or a network state energy "
@@ -1146,8 +1068,10 @@ CHECK_TS_ENERGY_ORDERING_NOT_COMPARED = ScientificCheck(
                 "the needed kind, a state alone on its zero and "
                 "``stated_precision_unknown`` (beyond printed precision, inside "
                 "honest rounding of the stated kJ/mol). Sources on only some "
-                "participants warn separately, with "
-                "``network_state_energy_sources_partial``."
+                "participants warn with ``network_state_energy_sources_partial``: "
+                "the cited sources are one summand of several, so the stated "
+                "energy cannot be held against the sum of every participant's "
+                "stored energy, which is the same absence by another route."
             ),
         ),
         PythonCheck(

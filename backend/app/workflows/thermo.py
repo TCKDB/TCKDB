@@ -47,6 +47,7 @@ from app.services.calculation_resolution import (
 )
 from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
+from app.services.deposit_warnings import note_anchor, note_calculation_keys
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -59,6 +60,7 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scan_coordinate_conformance import collect_scan_coordinate_warnings
 from app.services.species_resolution import resolve_species_entry
 from app.services.statmech_resolution import accepted_types_phrase
 from app.services.thermo_declaration_resolution import (
@@ -71,6 +73,7 @@ from app.services.upload_reference import (
     W_UNKNOWN_STATMECH_REF,
     unknown_reference,
 )
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 
 logger = logging.getLogger(__name__)
 
@@ -402,6 +405,16 @@ def persist_thermo_upload(
                 session, [calc.id for calc in calculations_by_key.values()]
             )
         )
+        warnings_out.extend(
+            collect_scan_coordinate_warnings(
+                session, [calc.id for calc in calculations_by_key.values()]
+            )
+        )
+        warnings_out.extend(
+            collect_wavefunction_reliability_warnings(
+                session, [calc.id for calc in calculations_by_key.values()]
+            )
+        )
 
     # Resolve source_calculation links. Each entry uses either a local
     # calculation_key (inline path) or an existing_calculation_id (DR-0028
@@ -490,6 +503,7 @@ def persist_thermo_upload(
             "source_calculations": resolved_source_calcs,
             "statmech_id": resolved_statmech_id,
             "thermodynamic_target_kind": declarations.thermodynamic_target_kind,
+            "thermodynamic_target_declared_by": declarations.thermodynamic_target_declared_by,
             "target_conformer_group_id": declarations.target_conformer_group_id,
             "protocol_declaration": declarations.protocol_declaration,
             # Stored as declared, after ``assert_role_consistency`` above.
@@ -550,6 +564,7 @@ def persist_thermo_upload(
                 target_species_entry_id=species_entry.id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                field=f"applied_energy_corrections[{correction_index}]",
                 warnings_out=warnings_out,
             )
         )
@@ -580,6 +595,8 @@ def persist_thermo_upload(
         RecordRef(SubmissionRecordType.applied_energy_correction, aec.id)
         for aec in applied_corrections
     )
+    note_anchor(session, "", SubmissionRecordType.thermo, thermo.id)
+    note_calculation_keys(session, {key: calc.id for key, calc in calculations_by_key.items()})
     apply_review_policy(
         session, targets=targets, policy=review_policy, created_by=created_by
     )

@@ -7,7 +7,13 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, PublicRefMixin, TimestampMixin
-from app.db.models.common import CoreTreatment, SpinTreatment
+from app.db.models.common import (
+    CoreTreatment,
+    PnoTruncation,
+    RelativisticHamiltonian,
+    RiApproximation,
+    SpinTreatment,
+)
 
 if TYPE_CHECKING:
     from app.db.models.calculation import Calculation
@@ -27,7 +33,6 @@ class LevelOfTheory(Base, TimestampMixin, PublicRefMixin):
     dispersion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     solvent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     solvent_model: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    keywords: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Restricted / unrestricted / restricted-open — part of LOT identity
     # (DR-0034). NULL = unspecified (distinct from an explicit 'unknown').
     spin_treatment: Mapped[Optional[SpinTreatment]] = mapped_column(
@@ -40,6 +45,23 @@ class LevelOfTheory(Base, TimestampMixin, PublicRefMixin):
     # hash only when set, so no existing row is re-keyed.
     core_treatment: Mapped[Optional[CoreTreatment]] = mapped_column(
         SAEnum(CoreTreatment, name="core_treatment"),
+        nullable=True,
+    )
+
+    # Method qualifiers (Stage 2 of the keywords decision). Each joins the hash
+    # only when set, exactly like ``core_treatment``: NULL = not stated and adds
+    # no key. There is deliberately no free-text keywords column; the settings a
+    # deck or log states are stored as calculation parameters.
+    relativistic_hamiltonian: Mapped[Optional[RelativisticHamiltonian]] = mapped_column(
+        SAEnum(RelativisticHamiltonian, name="relativistic_hamiltonian"),
+        nullable=True,
+    )
+    pno_truncation: Mapped[Optional[PnoTruncation]] = mapped_column(
+        SAEnum(PnoTruncation, name="pno_truncation"),
+        nullable=True,
+    )
+    ri_approximation: Mapped[Optional[RiApproximation]] = mapped_column(
+        SAEnum(RiApproximation, name="ri_approximation"),
         nullable=True,
     )
 

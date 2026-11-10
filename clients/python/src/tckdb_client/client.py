@@ -579,6 +579,18 @@ class TCKDBResponse:
         return None
 
 
+#: A 413 that carries no TCKDB code did not come from the API: an edge or proxy
+#: page (HTML) or an empty body. The API's own 413s (``request_body_too_large``,
+#: ``anonymous_body_too_large``, ``bundle_too_large``) carry a code and keep
+#: their own message. Nothing from the response body is put in the message.
+_UNCODED_413_MESSAGE = (
+    "HTTP 413: the request body was too large for the server or a proxy in front of it, and the refusal "
+    "did not state its limit. Behind Cloudflare Free/Pro the limit is 100,000,000 bytes, which is about "
+    "71.5 MiB of files once they are base64-encoded into the JSON body. Send the files separately "
+    "(TCKDBClient.upload_artifacts) or split the deposit into smaller requests."
+)
+
+
 class TCKDBClient:
     """Synchronous client for the TCKDB HTTP API.
 
@@ -922,6 +934,8 @@ class TCKDBClient:
             detail if isinstance(detail, str) and detail
             else f"HTTP {status_code}"
         )
+        if status_code == 413 and code is None:
+            message = _UNCODED_413_MESSAGE
 
         kwargs = dict(
             status_code=status_code,
@@ -1012,8 +1026,9 @@ class TCKDBClient:
         re-derivation, no unit conversion (native hartree/bohr²). Raises
         the appropriate :class:`~tckdb_client.errors.TCKDBHTTPError`
         (404, ``hessian_not_found``) when the calculation carries no
-        stored Hessian. Under ``profile="curated"`` a calculation below the
-        approved review floor answers 404 as an unknown id does.
+        stored Hessian. Under ``profile="curated"`` a rejected or deprecated
+        calculation answers 404 as an unknown id does; one that is merely
+        unreviewed is served.
         """
         return self.request_json(
             "GET",
@@ -1379,9 +1394,13 @@ class TCKDBClient:
           whole batch with 422 and no DB rows or S3 writes survive,
           and a pass-2 storage failure compensates earlier S3 writes
           before returning 503. Returns a list of
-          :class:`ArtifactUploadBatchResult` records, one per
-          ``calculation_id`` group, preserving caller-supplied group
-          order and intra-group item order.
+          :class:`ArtifactUploadBatchResult` records, one per request,
+          preserving caller-supplied group order and intra-group item order.
+          A calculation's files are split into several requests when
+          together they exceed 64 MiB (the builders' inline budget), so one
+          request stays under the proxy body limit; the first request keeps
+          the key below, later ones end in ``artifact-batch-2``, ``-3``, ….
+          Atomicity is then per request, not per calculation.
 
         **Pre-dispatch validation** (both modes): every plan item
         must be a ``PlannedArtifactUpload``-like object with a
@@ -1473,8 +1492,26 @@ class TCKDBClient:
             cid: grp[0].calculation_ref for cid, grp in groups.items()
         }
 
-        results: list[ArtifactUploadBatchResult] = []
+        # One request must stay under the inline budget (the proxy body limit),
+        # so a calculation's files are split into several requests by size.
+        from tckdb_client.builders.artifact import INLINE_TOTAL_BUDGET_BYTES
+
+        chunks: list[tuple[int, int, list[Any]]] = []
         for calc_id, group_items in groups.items():
+            current: list[Any] = []
+            used = 0
+            n = 0
+            for item in group_items:
+                size = pathlib.Path(item.path).stat().st_size
+                if current and used + size > INLINE_TOTAL_BUDGET_BYTES:
+                    chunks.append((calc_id, n, current))
+                    current, used, n = [], 0, n + 1
+                current.append(item)
+                used += size
+            chunks.append((calc_id, n, current))
+
+        results: list[ArtifactUploadBatchResult] = []
+        for calc_id, chunk_no, group_items in chunks:
             artifact_payloads: list[dict[str, Any]] = []
             calc_keys: list[str] = []
             for item in group_items:
@@ -1501,8 +1538,12 @@ class TCKDBClient:
             idem: str | None = None
             if idempotency_key_prefix is not None:
                 first_key = calc_keys[0] if calc_keys else str(calc_id)
+                # The first request of a calculation keeps the long-standing
+                # key; later ones (only when the files exceed the budget) are
+                # numbered so each distinct body has its own key.
+                suffix = "artifact-batch" if chunk_no == 0 else f"artifact-batch-{chunk_no + 1}"
                 idem = validate_idempotency_key(
-                    f"{idempotency_key_prefix}:{first_key}:artifact-batch"
+                    f"{idempotency_key_prefix}:{first_key}:{suffix}"
                 )
 
             http = self.request_json(
@@ -3417,8 +3458,9 @@ class TCKDBClient:
         :param network_kinetics_ref_or_id: Integer id or ``nkin_…`` ref.
         :param temperature_k: One or more temperatures, K.
         :param pressure_bar: One or more pressures, bar.
-        :param profile: Read profile selecting which curated view of the
-            archive this read is answered from (see
+        :param profile: Read profile this read is answered under
+            (``curated`` applies the approved floor to the records a list,
+            search, browse, select or export returns and shows linked evidence badged; see
             ``backend/docs/specs/dataset_release_and_profiles.md``).
             Forwarded like every other typed scientific read method;
             omitted, the server default applies.
@@ -3484,8 +3526,9 @@ class TCKDBClient:
         :param network_ref_or_id: Integer id or ``net_…`` ref.
         :param temperature_k: One or more temperatures, K. Required.
         :param pressure_bar: One or more pressures, bar. Required.
-        :param profile: Read profile selecting which curated view of the
-            archive this read is answered from (see
+        :param profile: Read profile this read is answered under
+            (``curated`` applies the approved floor to the records a list,
+            search, browse, select or export returns and shows linked evidence badged; see
             ``backend/docs/specs/dataset_release_and_profiles.md``).
             Forwarded like every other typed scientific read method;
             omitted, the server default applies. Rides the query string,
@@ -3799,6 +3842,7 @@ class TCKDBClient:
         query_inchi_key: str | None = None,
         mode: str | None = None,
         similarity_threshold: float | None = None,
+        isomeric: bool | None = None,
         min_review_status: str | None = None,
         include_rejected: bool | None = None,
         include_deprecated: bool | None = None,
@@ -3818,6 +3862,11 @@ class TCKDBClient:
         rather than requiring the caller to already know what it wants.
         Defaults to POST because SMARTS is full of characters that
         round-trip badly through a query string.
+
+        A species is a constitution, so ``C/C=C/C`` and ``CC=CC`` find the
+        same species. ``isomeric=True`` (exact mode, ``query_smiles``) keeps
+        only the entries whose stereo descriptor is the one the query's
+        stereo marks name -- the E entries of 2-butene for ``C/C=C/C``.
         """
 
         body = {
@@ -3827,6 +3876,7 @@ class TCKDBClient:
             "query_inchi_key": query_inchi_key,
             "mode": mode,
             "similarity_threshold": similarity_threshold,
+            "isomeric": isomeric,
             "min_review_status": min_review_status,
             "include_rejected": include_rejected,
             "include_deprecated": include_deprecated,

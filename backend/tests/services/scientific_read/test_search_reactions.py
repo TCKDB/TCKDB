@@ -415,7 +415,9 @@ def test_contains_is_set_not_multiset_query_names_fewer(db_session):
     response = search_reactions(db_session, ReactionSearchRequest(reactants=["DUP_A"]))
 
     assert len(response.records) == 1
-    assert [p.smiles for p in response.records[0].reactants] == ["DUP_A", "DUP_A"]
+    # One row per distinct entry, carrying its occurrence count.
+    assert [(p.smiles, p.stoichiometry) for p in response.records[0].reactants] == [("DUP_A", 2)]
+    assert response.records[0].equation == "DUP_A + DUP_A <=> DUP_B"
 
 
 def test_contains_is_set_not_multiset_query_names_more(db_session):

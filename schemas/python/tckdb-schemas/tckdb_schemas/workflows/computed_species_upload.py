@@ -31,6 +31,7 @@ from tckdb_schemas.enums import (
     CalculationType,
     RigidRotorKind,
     ScientificOriginKind,
+    StationaryPointKind,
     StatmechTreatmentKind,
     ThermoCalculationRole,
     TorsionTreatmentKind,
@@ -85,6 +86,10 @@ from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     evaluate_species_entry_frequency,
     raise_for_blocking_findings,
+)
+from tckdb_schemas.hessian_method_assumption import (
+    check_calculation_deck_agrees,
+    resolve_tau_for_calculation,
 )
 from tckdb_schemas.structure_declarations import (
     StructureDeterminationDeclaration,
@@ -335,6 +340,31 @@ class CalculationInBundle(SchemaBase):
                 seen.add(c.constraint_index)
         return self
 
+    def species_entry_frequency_findings(
+        self, kind: StationaryPointKind, *, location: str
+    ) -> list[StationaryPointFinding]:
+        """Judge this calculation's frequency evidence against a declared species-entry kind.
+
+        The bundle twin of
+        :meth:`CalculationWithResultsPayload.species_entry_frequency_findings`:
+        same owner, and tau resolved from this calculation's own recorded
+        parameters, so a minimum is judged against the protocol that
+        produced it.
+        """
+        if self.freq_result is None:
+            return []
+        return evaluate_species_entry_frequency(
+            kind,
+            self.freq_result.n_imag,
+            self.freq_result.imag_freq_cm1,
+            location=location,
+            imaginary_modes=self.freq_result.imaginary_modes(),
+            reaction_coordinate_mode_index=(
+                self.freq_result.reaction_coordinate_mode_index
+            ),
+            tau=resolve_tau_for_calculation(self),
+        )
+
     def frequency_completeness_findings(
         self, *, location: str, fallback_xyz_text: str | None = None
     ) -> list[StationaryPointFinding]:
@@ -359,6 +389,12 @@ class CalculationInBundle(SchemaBase):
             fallback_xyz_text=fallback_xyz_text,
             location=location,
         )
+
+    @model_validator(mode="after")
+    def validate_recorded_hessian_method_matches_input_deck(self) -> Self:
+        """A recorded ``freq.hessian_method`` must not contradict the attached deck."""
+        check_calculation_deck_agrees(self)
+        return self
 
     @model_validator(mode="after")
     def reject_database_id_fields(self) -> Self:
@@ -1034,7 +1070,7 @@ class ComputedSpeciesUploadRequest(SchemaBase):
                             f"calculation '{calc.key}' depends_on undefined "
                             f"calculation_key '{dep.parent_calculation_key}'.",
                             field=(
-                                f"calculations['{calc.key}'].depends_on."
+                                f"calculations[{calc.key!r}].depends_on."
                                 f"parent_calculation_key"
                             ),
                             key=dep.parent_calculation_key,
@@ -1064,15 +1100,12 @@ class ComputedSpeciesUploadRequest(SchemaBase):
                 if calc.freq_result is None:
                     continue
                 location = (
-                    f"conformers['{conf.key}'].calculations"
-                    f"['{calc.key}'].freq_result"
+                    f"conformers[{conf.key!r}].calculations"
+                    f"[{calc.key!r}].freq_result"
                 )
                 findings.extend(
-                    evaluate_species_entry_frequency(
-                        kind,
-                        calc.freq_result.n_imag,
-                        calc.freq_result.imag_freq_cm1,
-                        location=location,
+                    calc.species_entry_frequency_findings(
+                        kind, location=location
                     )
                 )
                 findings.extend(
@@ -1222,7 +1255,7 @@ class ComputedSpeciesUploadRequest(SchemaBase):
                     continue
                 key = stability.source_calculation_key
                 field = (
-                    f"calculations['{calc.key}'].scf_stability."
+                    f"calculations[{calc.key!r}].scf_stability."
                     f"source_calculation_key"
                 )
                 if key == calc.key:

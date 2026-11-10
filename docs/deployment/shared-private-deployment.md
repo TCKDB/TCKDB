@@ -261,6 +261,16 @@ server {
     ssl_certificate_key /etc/ssl/lab/tckdb.key;
 
     location /api/ {
+        # nginx refuses bodies over 1 MiB by default, before TCKDB sees them.
+        # Sit above the caps the API enforces itself (5 MiB bundles,
+        # BUNDLE_MAX_BODY_BYTES; 9 MiB network export manifests). Upload and
+        # job routes, which can carry ESS logs, need a larger limit in a
+        # second location, e.g. `location ~ ^/api/v1/(uploads|jobs)/ {
+        # client_max_body_size 100m; proxy_pass http://127.0.0.1:8010; ... }`.
+        # A regex location's proxy_pass may not carry a URI part; the request
+        # path already starts with /api/. See frontend/nginx.conf.
+        client_max_body_size 10m;
+
         proxy_pass http://127.0.0.1:8010/api/;
         proxy_set_header Host              $host;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;

@@ -22,6 +22,7 @@ from app.api.routes._legacy_reads import (
     entity_page,
     legacy_route_class,
 )
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.common import ConformerSelectionKind, ScientificOriginKind, SubmissionRecordType
 from app.db.models.species import ConformerGroup, ConformerObservation
@@ -41,7 +42,7 @@ groups_router = APIRouter(
     )
 )
 #: The write route of the conformer groups path: no read profile applies to it.
-groups_write_router = APIRouter()
+groups_write_router = APIRouter(route_class=ServerFaultRoute)
 observations_router = APIRouter(
     route_class=legacy_route_class(
         {

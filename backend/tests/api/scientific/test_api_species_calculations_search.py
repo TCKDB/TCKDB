@@ -20,7 +20,7 @@ def _seed(db_session, *, smiles: str = "CC"):
 
 
 def test_get_returns_200_with_envelope(client, db_session):
-    species, entry = _seed(db_session, smiles="C[CH2]")
+    species, entry = _seed(db_session, smiles="[CH2]C")
     calc = make_calculation(
         db_session, type=CalculationType.sp, species_entry_id=entry.id
     )
@@ -248,11 +248,11 @@ def test_method_basis_filter_via_calculation_lot(client, db_session):
 
 
 def test_get_submission_ref_omitted_for_anonymous_caller(client, db_session):
-    species, entry = _seed(db_session, smiles="C[CH2]O")
+    species, entry = _seed(db_session, smiles="[CH2]CO")
     make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
 
     resp = client.get(
-        "/api/v1/scientific/species-calculations/search?smiles=C[CH2]O"
+        "/api/v1/scientific/species-calculations/search?smiles=[CH2]CO"
     )
     assert resp.status_code == 200
     rec = resp.json()["records"][0]
@@ -260,12 +260,12 @@ def test_get_submission_ref_omitted_for_anonymous_caller(client, db_session):
 
 
 def test_post_submission_ref_omitted_for_anonymous_caller(client, db_session):
-    species, entry = _seed(db_session, smiles="C[CH2]N")
+    species, entry = _seed(db_session, smiles="[CH2]CN")
     make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
 
     resp = client.post(
         "/api/v1/scientific/species-calculations/search",
-        json={"smiles": "C[CH2]N"},
+        json={"smiles": "[CH2]CN"},
     )
     assert resp.status_code == 200
     rec = resp.json()["records"][0]

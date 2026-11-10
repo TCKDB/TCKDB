@@ -32,6 +32,7 @@ from app.api.routes.scientific._response import (
     SPECIES_BROWSE_SECTIONS,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.method_families import MethodFamily
 from app.db.models.common import (
     RecordReviewStatus,
@@ -51,7 +52,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.species import browse_species
 
-router = APIRouter(prefix="/species")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species")
 
 
 @router.get("/browse", response_model=ScientificSpeciesBrowseResponse)
@@ -207,7 +208,8 @@ def species_browse(
     sibling endpoint.
     """
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
-    request = SpeciesBrowseRequest(
+    request = caller_input(
+        SpeciesBrowseRequest,
         formula=formula,
         charge=charge,
         multiplicity=multiplicity,

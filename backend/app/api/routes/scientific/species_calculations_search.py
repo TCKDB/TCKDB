@@ -13,6 +13,7 @@ from app.api.routes.scientific._response import (
     SPECIES_CALCULATIONS_SEARCH_SECTIONS,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.method_families import MethodFamily
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
@@ -37,7 +38,7 @@ from app.services.scientific_read.species_calculations_search import (
     search_species_calculations,
 )
 
-router = APIRouter(prefix="/species-calculations")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species-calculations")
 
 # The router-level ``?profile=`` dependency puts these two keys on every
 # scientific operation, POSTs included, so they must be allowed through the
@@ -103,7 +104,8 @@ def species_calculations_search_get(
     See ``docs/specs/species_calculation_search_api.md``.
     """
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
-    request = SpeciesCalculationsSearchRequest(
+    request = caller_input(
+        SpeciesCalculationsSearchRequest,
         smiles=smiles,
         inchi=inchi,
         inchi_key=inchi_key,

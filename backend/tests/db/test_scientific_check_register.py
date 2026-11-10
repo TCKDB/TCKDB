@@ -101,9 +101,44 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # connected component of its optimised structures, so a chain can be wider than the matching tolerance; TCKDB
     # reports that and never splits it (any automatic cut would put back an arbitrary threshold or an order
     # dependence), and a curator needs a finding to read. One entry, different tier from every blocking entry.
-    assert 10 <= len(REGISTER) <= 48, (
+    #
+    # Raised 48 -> 49 (2026-10-27) for DR-0038: ``reaction_entry_null_reaction``. With the species key the constitution,
+    # a stereo isomerisation has one species on both sides, so "the sides differ" can no longer be read off the
+    # species; the entry-level rule is the definitional one (a reaction that changes no participant is not a
+    # reaction) and the only blocking claim about a reaction's entries. One entry, joining its conservation group.
+    #
+    # Raised 49 -> 50 (2026-10-31): 50, for the Hessian-method/deck contradiction refusal (#839). It is a
+    # contract between two statements in one deposit (a recorded ``freq.hessian_method`` and the input deck
+    # that ran), definitional rather than an expectation about a result, and no existing entry's claim covers
+    # it: the tolerance entries judge a mode against a tau, this one decides which method tau is read from.
+    #
+    # Raised 50 -> 51 (2026-11-01) for #835: species_stereo_contradiction (#822, DR-0038). With the species key the
+    # constitution, the entry is where a configuration is stated, read from three sources -- every linked geometry,
+    # the SMILES marks, a supplied label -- and a disagreement about one element is refused. Reading R/S, E/Z and an
+    # allene's axis from coordinates (torsion windows, alignment over automorphisms, an enumeration cap) is a
+    # position a referee could dispute, which an input-format conflict is not (#672). Entries 8 and 9 compare a
+    # geometry with its SMILES by element and isotope, never by configuration. Reviewed with the whole #835 sweep: of
+    # 58 unregistered warning codes and 13 recent refusals this is the only new entry; four warnings widened 12, 22
+    # and 25, and the stereo-label, channel-kind and bath-gas refusals stay in the code catalogue.
+    #
+    # Raised 51 -> 52 (2026-11-04) for the wavefunction reliability checks: one entry, three warning codes. They are the
+    # first checks that read a stored wavefunction or spin diagnostic. (1) A closed-shell coupled-cluster T1 above 0.02
+    # (Lee and Taylor 1989): a referee could dispute reporting a rule of thumb that the same literature shows is
+    # mostly a false alarm, and could dispute leaving open-shell T1 and D1 unreported (their definitions differ between
+    # programs and no primary threshold exists). (2) An <S^2> more than 0.1 from S(S+1): 0.1 is a convention of the
+    # field with no primary paper recommending it, so the claim, the absolute-versus-relative form and the use of the
+    # entry's declared multiplicity rather than a printed value are all positions a referee could dispute. (3) A
+    # printed ideal <S^2> that is not S(S+1) of the declared multiplicity: a declaration contradicting what the program
+    # ran, like entry 12's multiplicity_mismatch (and, like it, warn-tier here although ADR 0008 would put it at block).
+    # It is in this entry, not entry 12, because the entry is organised by the data it reads (the stored spin and
+    # wavefunction diagnostics). No existing entry covers any of them:
+    # entry 12 compares a declared state with an output log, these judge a stored diagnostic against a criterion or
+    # against the entry. Different tier from every blocking entry.
+    #
+    # 52 -> 82: the codes that had no entry are declared in gap_declarations.py (the rest are in NOT_SCIENTIFIC).
+    assert 10 <= len(REGISTER) <= 82, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~48 the inclusion test ('could this check be wrong "
+        "the system; above ~82 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 
@@ -742,3 +777,189 @@ def test_design_positions_are_prose_not_placeholders() -> None:
                     f"{check.asserts!r} names a design position too vague to "
                     "be checkable by a reader: " + site.where
                 )
+
+
+#: Register numbers as of origin/main before #839. Numbers are identifiers: they are stored on
+#: ``deposit_warning.register_entry`` (append-only, deployed with #837) and cited from docs, so a
+#: new entry takes the next free number and never shifts one. Entries #15 to #18 are the
+#: stationary-point entries every other document cites.
+_PINNED_NUMBERS: dict[str, int] = {
+    "n_imag_contradicts_minimum": 16,
+    "minimum_imaginary_modes_below_tau": 17,
+    "transition_state_extra_imaginary_modes_below_tau": 17,
+    "transition_state_extra_imaginary_mode_above_tau": 17,
+    "transition_state_extra_imaginary_modes_not_assessable": 17,
+    "transition_state_imaginary_frequency_too_small": 18,
+    "reaction_atom_map_absent": 32,
+    "reaction_atom_map_participants_incomplete": 33,
+    "reaction_atom_map_atoms_incomplete": 33,
+    "reported_network_solve": 37,
+    "network_wide_energy_transfer_scope": 38,
+    # Registered by widening an existing entry (#835), so the number is the entry's own.
+    "term_symbol_mismatch": 12,
+    "electronic_state_contradicts_method": 12,
+    "freq_list_incomplete_for_geometry": 22,
+    "network_state_energy_sources_partial": 25,
+    "scan_point_coordinate_disagrees_with_geometry": 49,
+    "t1_diagnostic_above_closed_shell_threshold": 52,
+    "spin_contamination_above_conventional_threshold": 52,
+    "spin_expected_contradicts_multiplicity": 52,
+}
+
+
+#: The first words of every register entry, by number.
+_OPENINGS: dict[int, str] = {
+    1: "The reactant and product sides of a reaction conta",
+    2: "The summed formal charge of a reaction's reactants",
+    3: "A saddle point is made of exactly the atoms of the",
+    4: "A saddle point carries the same total charge as th",
+    5: "The saddle-point atoms an IRC mapping assigns to a",
+    6: "A reaction entry whose reactants and products are",
+    7: "A deposit's `molecule_kind` agrees with the kind a",
+    8: "A conformer geometry deposited under a species ent",
+    9: "The multiset of isotopic substitutions declared in",
+    10: "Every geometry linked to a calculation is made of",
+    11: "A species entry's declared charge equals the summe",
+    12: "The charge and spin multiplicity a depositor decla",
+    13: "An optimisation's output geometry still describes",
+    14: "A transition state has at least one imaginary vibr",
+    15: "A species entry declared a minimum has no imaginar",
+    16: "A van der Waals complex is formally a minimum, so",
+    17: "A transition state's imaginary modes other than th",
+    18: "A transition state's reaction coordinate should ex",
+    19: "A deposited saddle point should carry passing intr",
+    20: "A frequency result that deposits both a scalar ima",
+    21: "A frequency list carries no more modes than the ge",
+    22: "A frequency list's mode count should match the sha",
+    23: "The energies an energy-ordering record compares sh",
+    24: "A stated energy should be the energy TCKDB stores",
+    25: "Every energy an energy-ordering record or a networ",
+    26: "A calculation cited as the source of a stated ener",
+    27: "An atom does not change element on the way across",
+    28: "One saddle-point atom is claimed by exactly one at",
+    29: "Every atom index in a map is counted against a nam",
+    30: "When a map covers every declared participant of an",
+    31: "Where a deposit carries both an atom map and an IR",
+    32: "A reaction that has a transition state should say",
+    33: "A supplied atom map should cover every declared pa",
+    34: "An atom map records whether a human asserted it or",
+    35: "An Arrhenius pre-exponential factor carries units",
+    36: "A partition function belongs to exactly one subjec",
+    37: "A set of phenomenological k(T,P) declares whether",
+    38: "A collisional energy-transfer model records whethe",
+    39: "The bytes TCKDB serves for a stored artifact are t",
+    40: "Whether a record's preserved evidence is sufficien",
+    41: "Compare every supplied NASA Cp/entropy fit with ex",
+    42: "Compare explicitly supplied opposite elementary ra",
+    43: "Compare every stored Gibbs value of one thermo rec",
+    44: "Compare a thermo record's supplied enthalpies (h29",
+    45: "Compare a kinetics record's stated reaction energy",
+    46: "Find, on a protium species entry, calculation geom",
+    47: "Report a conformer group whose converged optimised",
+    48: "A computed thermo record's heat capacity, evaluate",
+    49: "A scan point's stored coordinate_value is the inte",
+    50: "A calculation that records how its frequency job b",
+    51: "A species entry states one stereo configuration: w",
+    52: "A wavefunction reliability diagnostic that a calcu",
+    53: 'A bath gas a rate or a network solve states is a c',
+    54: 'The kind of a network channel (isomerization, asso',
+    55: 'A network state is the multiset of its participant',
+    56: 'One record has one energy level and the declared l',
+    57: 'Energy calculations and optimisations pair one-to-',
+    58: 'A calculation is evidence for one conformer and ra',
+    59: 'The numbers a composite energy states agree with e',
+    60: 'Each input of an assembled composite ran at the le',
+    61: "The parts of a single point's electronic energy do",
+    62: 'A frequency calculation linked beside a composite ',
+    63: 'A named composite method (CBS-QB3, G4, W1U) is one',
+    64: "An assembled composite's inputs each declare the g",
+    65: 'What a record cites as evidence belongs to the rec',
+    66: 'A kinetics applicability or protocol declaration d',
+    67: 'A determination, statistical-model, structure, pro',
+    68: 'A curator attaches an observation of unresolved id',
+    69: 'A Petersson bond-additivity correction applied as ',
+    70: 'The frequency scale factor a statmech record appli',
+    71: 'A thermo record that carries an enthalpy states wh',
+    72: 'The graph of which calculation depends on which is',
+    73: 'SCF stability verdicts do not cite one another as ',
+    74: 'A lowest-energy selection compares energies of one',
+    75: 'An optimisation recorded as converged has an energ',
+    76: "What a depositor typed about a calculation's setti",
+    77: 'The electronic energy a tool states for a single p',
+    78: 'The Hessian method a deck or log attached after th',
+    79: 'What a neutral ground-state atom declares agrees w',
+    80: 'The job named as having measured an SCF stability ',
+    81: 'A thermo declaration the file format defines descr',
+    82: 'A recorded finite difference of gradients on an OR',
+}
+
+
+def test_existing_entries_keep_their_numbers() -> None:
+    """Adding an entry must not renumber the ones already published."""
+    from app.services.deposit_warnings import REGISTER_ENTRY
+
+    doc = (BACKEND_ROOT.parent / "docs" / "guides" / "scientific_check_register.md").read_text()
+    number_of: dict[str, int] = {}
+    for block in re.split(r"\n(?=### \d+\. )", doc)[1:]:
+        number = int(re.match(r"### (\d+)\.", block).group(1))
+        channel = re.search(r"reaches a client via\*\* \| (.*?) \|", block).group(1)
+        code_line = re.search(r"\*\*Code\*\* \| (.*?) \|", block).group(1)
+        for code in re.findall(r"`([a-z_0-9]+)`", code_line):
+            # A code can be declared twice (a refusal and a warning); the stored
+            # number is the warning entry's.
+            if "UploadWarning" in channel or code not in number_of:
+                number_of[code] = number
+    assert len(_PINNED_NUMBERS) >= 10, "the pin lost its content"
+    for code, expected in _PINNED_NUMBERS.items():
+        assert number_of[code] == expected, f"{code}: entry {number_of[code]}, was {expected} on main"
+        if code in REGISTER_ENTRY:
+            assert REGISTER_ENTRY[code] == expected, code
+    assert number_of["hessian_method_contradicts_input_deck"] == 50
+    # The entry added in #835 takes the next free number, in a group listed after every earlier one.
+    assert number_of["species_stereo_contradiction"] == 51
+    # Every entry by its opening words: a new check added to an earlier group shifts every later number (the
+    # generator only protects against new *groups*), and this is the test that notices.
+    headings = {
+        int(m.group(1)): m.group(2)
+        for m in re.finditer(r"^### (\d+)\. (.*)$", doc, flags=re.MULTILINE)
+    }
+    assert set(headings) == set(_OPENINGS) == set(range(1, len(_OPENINGS) + 1))
+    for number, opening in _OPENINGS.items():
+        assert headings[number].startswith(opening), number
+    # Every code stored with a register number still points at the entry that declares it.
+    for code, stored in REGISTER_ENTRY.items():
+        assert number_of[code] == stored, code
+
+
+def _register_codes() -> set[str]:
+    """Every code a register entry reports, including the codes its database constraints name."""
+    codes: set[str] = set()
+    for check in REGISTER:
+        codes.update(check.codes)
+        for site in check.enforced_by:
+            if isinstance(site, DatabaseConstraint) and site.rejection_code:
+                codes.add(site.rejection_code)
+    return codes
+
+
+def test_every_catalogue_and_warning_code_is_in_exactly_one_of_the_register_and_not_scientific() -> None:
+    """Every emitted code is in the register or in NOT_SCIENTIFIC, never both, and nothing stale is listed."""
+    from tckdb_schemas.deposit_warning_messages import RENDERED
+
+    from app.api.code_catalogue import CATALOGUE
+    from app.scientific_checks.not_scientific import NOT_SCIENTIFIC
+
+    emitted = {entry.code for entry in CATALOGUE} | set(RENDERED)
+    registered = _register_codes()
+    assert len(emitted) > 300 and len(NOT_SCIENTIFIC) > 100, "an empty side would make this pass vacuously"
+    unclassified = sorted(emitted - registered - set(NOT_SCIENTIFIC))
+    assert not unclassified, (
+        f"{len(unclassified)} codes are in neither the register nor NOT_SCIENTIFIC: {unclassified}. "
+        "Declare a register entry for a scientific one, or add it to NOT_SCIENTIFIC with the reason it is not."
+    )
+    both = sorted(registered & set(NOT_SCIENTIFIC))
+    assert not both, f"codes claimed by the register and also listed as not scientific: {both}"
+    stale = sorted(set(NOT_SCIENTIFIC) - emitted)
+    assert not stale, f"NOT_SCIENTIFIC names codes nothing emits any more: {stale}"
+    blank = sorted(code for code, reason in NOT_SCIENTIFIC.items() if len(reason.strip()) < 15)
+    assert not blank, f"NOT_SCIENTIFIC entries with no real reason: {blank}"

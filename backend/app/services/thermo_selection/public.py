@@ -246,6 +246,7 @@ def build_response(
             phase=c["phase"],
             enthalpy_reference_kind=c["enthalpy_reference_kind"],
             target_kind=c["target_kind"],
+            target_declared_by=c.get("target_declared_by"),
             target_group_ref=c["target_group_ref"],
             protocol_state=c["protocol_state"],
             protocol=c["protocol"],

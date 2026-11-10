@@ -496,3 +496,133 @@ class TestRunBackfill:
             )
         ).all()
         assert rows
+
+
+class TestOutputLogBackfill:
+    """A calculation deposited with only its output log is backfilled from the log, which echoes the input."""
+
+    def test_log_only_calculation_is_selected_and_read(self, db_session, stub_load_artifact_bytes):
+        calc_id, _ = _seed_calc(db_session, with_input_artifact=False)
+        log = GAUSSIAN_GJF_TEXT
+        sha = hashlib.sha256(log).hexdigest()
+        artifact = CalculationArtifact(
+            calculation_id=calc_id,
+            kind=ArtifactKind.output_log,
+            uri=f"s3://test/{sha[:2]}/{sha}",
+            sha256=sha,
+            bytes=len(log),
+            filename="job.log",
+        )
+        db_session.add(artifact)
+        db_session.flush()
+
+        assert script_mod._select_input_artifact(db_session, calc_id).id == artifact.id
+        assert calc_id in script_mod._calculations_with_input_and_no_parser_rows(db_session, force=False, limit=None)
+
+    def test_a_deck_is_preferred_over_a_log(self, db_session):
+        calc_id, deck_id = _seed_calc(db_session)
+        log = CalculationArtifact(
+            calculation_id=calc_id,
+            kind=ArtifactKind.output_log,
+            uri="s3://test/xx",
+            sha256="b" * 64,
+            bytes=1,
+            filename="job.log",
+        )
+        db_session.add(log)
+        db_session.flush()
+        assert script_mod._select_input_artifact(db_session, calc_id).id == deck_id
+
+
+    def test_force_with_storage_down_for_a_log_changes_nothing_and_reports_the_failure(
+        self, db_session, stub_load_artifact_bytes
+    ):
+        calc_id, _ = _seed_calc(db_session)
+        stub_load_artifact_bytes[GAUSSIAN_GJF_SHA] = GAUSSIAN_GJF_TEXT
+        # A stored output log whose bytes the (down) storage cannot serve, and the log row already derived from it.
+        db_session.add(
+            CalculationArtifact(
+                calculation_id=calc_id,
+                kind=ArtifactKind.output_log,
+                uri="s3://test/cc",
+                sha256="c" * 64,
+                bytes=1,
+                filename="job.log",
+            )
+        )
+        db_session.add(
+            CalculationParameter(
+                calculation_id=calc_id,
+                raw_key="Acc2E",
+                raw_value="12",
+                canonical_key="integral.accuracy",
+                canonical_value="12",
+                source=ParameterSource.parser,
+                artifact_kind=ArtifactKind.output_log,
+            )
+        )
+        db_session.commit()
+
+        stats = script_mod.run_backfill(db_session, calculation_id=calc_id, force=True)
+
+        assert stats.failed == 1 and stats.succeeded == 0
+        kept = db_session.scalars(
+            select(CalculationParameter.raw_key).where(
+                CalculationParameter.calculation_id == calc_id,
+                CalculationParameter.artifact_kind == ArtifactKind.output_log,
+            )
+        ).all()
+        assert kept == ["Acc2E"]
+
+
+class TestForceDeckChoice:
+    """``--force`` rebuilds the deck rows from the deck the caller chose, else the one an upload leaves standing."""
+
+    @staticmethod
+    def _two_decks(db_session, store):
+        def deck(route):
+            return f"%mem=1GB\n# {route}\n\nt\n\n0 2\nH 0.0 0.0 0.0\n\n".encode()
+
+        first, second = deck("B3LYP/6-31G(d) opt scf=tight"), deck("B3LYP/6-31G(d) opt scf=verytight")
+        calc_id, first_id = _seed_calc(
+            db_session, artifact_content=first, artifact_sha=hashlib.sha256(first).hexdigest()
+        )
+        sha = hashlib.sha256(second).hexdigest()
+        later = CalculationArtifact(
+            calculation_id=calc_id, kind=ArtifactKind.input, uri=f"s3://t/{sha}", sha256=sha, bytes=len(second), filename="b.gjf"
+        )
+        db_session.add(later)
+        db_session.flush()
+        store[hashlib.sha256(first).hexdigest()] = first
+        store[sha] = second
+        return calc_id, first_id, later.id
+
+    @staticmethod
+    def _scf(db_session, calc_id):
+        return set(
+            db_session.scalars(
+                select(CalculationParameter.canonical_value).where(
+                    CalculationParameter.calculation_id == calc_id, CalculationParameter.canonical_key == "scf.convergence"
+                )
+            )
+        )
+
+    def test_force_with_an_artifact_id_keeps_the_chosen_earlier_deck(self, db_session, stub_load_artifact_bytes):
+        calc_id, first_id, later_id = self._two_decks(db_session, stub_load_artifact_bytes)
+        script_mod.run_backfill(db_session, calculation_id=calc_id, artifact_id=later_id)
+        assert self._scf(db_session, calc_id) == {"very_tight"}
+        script_mod.run_backfill(db_session, calculation_id=calc_id, artifact_id=first_id, force=True)
+        # Rebuilding from the latest deck regardless of the choice would store very_tight here.
+        assert self._scf(db_session, calc_id) == {"tight"}
+
+    def test_force_without_an_artifact_id_uses_the_deck_an_upload_leaves_standing(self, db_session, stub_load_artifact_bytes):
+        calc_id, first_id, later_id = self._two_decks(db_session, stub_load_artifact_bytes)
+        script_mod.run_backfill(db_session, calculation_id=calc_id, artifact_id=first_id)
+        assert self._scf(db_session, calc_id) == {"tight"}
+        script_mod.run_backfill(db_session, calculation_id=calc_id, force=True)
+        assert self._scf(db_session, calc_id) == {"very_tight"}
+        # One rule in every mode: the latest deck, with or without --force, so repeated runs do not flip.
+        script_mod.run_backfill(db_session, calculation_id=calc_id)
+        assert self._scf(db_session, calc_id) == {"very_tight"}
+        script_mod.run_backfill(db_session, calculation_id=calc_id, force=True)
+        assert self._scf(db_session, calc_id) == {"very_tight"}

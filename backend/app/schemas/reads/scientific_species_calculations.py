@@ -394,14 +394,17 @@ class SpeciesCalculationsSearchRecord(BaseModel):
     #: thing.
     #:
     #: Two of ADR 0012's four persisted fields are transition-state
-    #: business (``reaction_coordinate_mode_index``,
-    #: ``imaginary_mode_structural_flag``) and read ``null`` on every
-    #: record this surface returns, because ``StationaryPointKind`` has
-    #: no saddle-point member: a species entry is a ``minimum`` or a
-    #: ``vdw_complex``, never a TS. They are kept anyway rather than
-    #: trimmed into a species-only variant, because ``null`` there is the
-    #: honest answer ("no reaction coordinate was designated"), and
-    #: because the other two are *not* TS-specific at all.
+    #: business. ``reaction_coordinate_mode_index`` reads ``null`` on
+    #: every record this surface returns, because ``StationaryPointKind``
+    #: has no saddle-point member (a species entry is a ``minimum`` or a
+    #: ``vdw_complex``, never a TS) and a minimum that designates one is
+    #: refused. ``imaginary_mode_structural_flag`` reads ``null`` unless
+    #: the frequency result was judged under the minimum rule (ADR 0012's
+    #: 2026-10-29 note): then it is ``false`` -- every imaginary mode below
+    #: tau, accepted with a warning, judged and not flagged -- and never
+    #: ``true`` here. They are kept rather than trimmed into a
+    #: species-only variant, because ``null`` is the honest answer ("never
+    #: judged"), and because the other two are *not* TS-specific at all.
     #: ``imaginary_mode_tau_cm1`` / ``imaginary_mode_tau_basis`` are
     #: recorded for every frequency upload taken since ADR 0012 shipped,
     #: minima included; nothing was backfilled, so a record older than

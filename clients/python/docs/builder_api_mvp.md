@@ -1,6 +1,9 @@
 # Builder API — MVP Spec
 
-Status: **Phase 0 — design only.** No code in this spec is implemented yet.
+Status: **implemented (public beta).** The builders ship in `tckdb_client.builders`
+(see [`builder_api_stability.md`](builder_api_stability.md) for the public surface and what may
+still change). This document is the original design spec; where it and the code disagree, the
+code and `builder_api_stability.md` win. Section 16 records which phases shipped.
 Audience: TCKDB client maintainers and workflow-tool authors who want to
 contribute scientific data without learning the raw upload payload shape.
 
@@ -122,7 +125,7 @@ not a parallel data model.
 │   scientific Python objects                                  │
 │   local validation                                           │
 │   payload construction                                       │
-│   no HTTP, no I/O                                            │
+│   no HTTP; reads attached files' bytes only to upload them   │
 ├──────────────────────────────────────────────────────────────┤
 │ tckdb_client.client                                          │
 │   HTTP, auth, version headers, idempotency, replay, errors   │
@@ -443,17 +446,20 @@ stability policy.
 
 ### 8.7c Two-phase artifact upload (Phase 7 — shipped)
 
-Files (input decks, output logs, checkpoints) ride on a separate POST
-per calculation after the scientific bundle creates the calculation
-rows. Attach via `Calculation.add_artifact(path, kind, *, label?,
-sha256?, bytes?)`; the bundle's `to_payload()` is byte-identical
-whether or not calculations have artifacts.
+Files (input decks, output logs, checkpoints) attach via
+`Calculation.add_artifact(path, kind, *, label?, sha256?, bytes?)`.
+`to_payload()` embeds them inline by default (see
+`docs/builders.md`, "Artifact upload"); only files that do not fit the
+inline budget, or all of them with `inline_artifacts=False`, ride on a
+separate POST per calculation after the bundle creates the rows, as
+described below.
 
 Resolution at upload time:
 
 ```python
-result = client.upload(upload)            # phase 1: scientific bundle
-plan   = upload.artifact_plan(result)     # list[PlannedArtifactUpload]
+payload = upload.to_payload()
+result  = client.upload(upload.upload_kind, payload)   # the scientific bundle
+plan    = upload.artifact_plan(result, payload)  # list[PlannedArtifactUpload]
 
 # Default — one POST per artifact, easiest to debug.
 client.upload_artifacts(plan)
@@ -775,8 +781,11 @@ A few principles:
 
 - **Idempotent.** `upload.to_payload() == upload.to_payload()` for the
   same object — local-key minting must be deterministic (§11).
-- **Pure.** `to_payload()` does no I/O. The HTTP call is a separate
-  step, in `client.upload(...)`.
+- **No network.** `to_payload()` makes no HTTP call (that is a separate
+  step, in `client.upload(...)`). Its one I/O is reading the bytes of
+  attached artifact files so they travel inline; it never parses them, and
+  with no artifacts attached (or `inline_artifacts=False`) it touches no
+  file.
 - **One walk.** Each builder object emits its fragment once; references
   to it become local keys. No copying of geometries or LoT blocks across
   the bundle.
@@ -900,14 +909,15 @@ list. `add_artifact` validates locally:
 - the file exists and is readable
 - the `kind` is in the SDK's artifact-kind vocabulary
 
-Upload mechanics — two-phase, mirroring the existing backend contract:
+Upload mechanics — inline by default:
 
 1. `client.upload(computed_species_upload)` posts the scientific payload
-   and returns server-assigned `calculation_id` values.
-2. The builder layer offers `client.upload_artifacts(result)` (Phase 3)
-   that walks the result, finds each calculation's local artifacts list,
-   and POSTs them to
-   `/api/v1/calculations/{calculation_id}/artifacts`.
+   with the attached files embedded in each calculation's `artifacts`,
+   within a size budget (`docs/builders.md`, "Artifact upload").
+2. Files that did not fit the budget, or all of them with
+   `inline_artifacts=False`, are returned by `upload.artifact_plan(result)`
+   and POSTed with `client.upload_artifacts(plan)` to
+   `/api/v1/calculations/{calculation_ref}/artifacts`.
 
 Sidecar / replay-based artifact dispatch (using the existing
 `tckdb_client.replay` machinery) is an option to evaluate during Phase 3.
@@ -1076,17 +1086,22 @@ shorter on-ramp.
 
 ## 16. Implementation phases
 
-Recommend a four-phase rollout. Every phase is independently shippable;
+Status as of `tckdb-client` 0.185: phases 0-3 shipped. Of phase 4, the worked
+examples shipped (`examples/builder_*`, `adapter_authoring_quickstart.md`); the
+cclib/Arkane converters did not and are not planned in this package, because that
+conversion belongs in the producer adapter. The list below is the original plan.
+
+The rollout was four phases. Every phase is independently shippable;
 no consumer code breaks at any phase boundary because the thin client
 contract is unchanged throughout.
 
-### Phase 0 — design only (this document)
+### Phase 0 — design only (this document; shipped)
 
 - spec lives at `clients/python/docs/builder_api_mvp.md`
 - linked from `clients/python/README.md`
 - no code changes beyond docs
 
-### Phase 1 — core species pipeline
+### Phase 1 — core species pipeline (shipped)
 
 - `tckdb_client/builders/` package skeleton
 - `BuilderObject` / `Upload` protocol in `builders/base.py`
@@ -1099,21 +1114,21 @@ contract is unchanged throughout.
 - unit vocabulary in `builders/validation.py`
 - tests (see §17)
 
-### Phase 2 — reactions
+### Phase 2 — reactions (shipped)
 
 - `ChemReaction`, `TransitionState`
 - `Kinetics.modified_arrhenius` (+ source-calculation wiring)
 - `ComputedReactionUpload.to_payload()`
 - snapshot tests against current backend payload shape
 
-### Phase 3 — depth
+### Phase 3 — depth (shipped: thermo, statmech, transport, artifacts, two-phase upload)
 
 - `Thermo` builder (NASA9, HFn(T))
 - artifact helpers, two-phase upload glue (or replay sidecar)
 - statmech, transport builders if demand exists
 - richer validation (e.g. negative-frequency count in TS freq)
 
-### Phase 4 — adapter ergonomics
+### Phase 4 — adapter ergonomics (examples shipped; converters not planned here)
 
 - worked examples for common external producers
 - migration cookbook for ARC users who want to use builders in place of

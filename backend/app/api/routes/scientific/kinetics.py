@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.routes.scientific._actor import publish_read_actor
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     KINETICS_RECORD_SECTIONS,
@@ -21,6 +22,7 @@ from app.api.routes.scientific._response import (
     prepare_assessment_response,
     require_bounded_input_check,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.method_families import MethodFamily
 from app.db.models.common import KineticsModelKind, RecordReviewStatus, ScientificOriginKind
 from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
@@ -35,12 +37,13 @@ from app.services.scientific_read.public_assessments import (
     attach_kinetics_assessments,
 )
 
-router = APIRouter(prefix="/reaction-entries")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/reaction-entries")
 
 
 @router.get(
     "/{reaction_entry_id}/kinetics",
     response_model=ScientificReactionKineticsResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def reaction_kinetics(
     http_request: Request,
@@ -103,7 +106,8 @@ def reaction_kinetics(
     # regardless of whether the reaction entry exists (request validation
     # precedes resource lookup).
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
-    request = KineticsReadRequest(
+    request = caller_input(
+        KineticsReadRequest,
         coverage_temperature_min_k=coverage_temperature_min_k,
         coverage_temperature_max_k=coverage_temperature_max_k,
         pressure_bar=pressure_bar,

@@ -1,6 +1,6 @@
 # Curated profile: the approved floor applies to records; linked evidence is badged
 
-**Status: accepted 2026-10-25** (owner decision). Related:
+**Status: accepted 2026-10-25** (owner decision). **Plan complete 2026-10-27** (steps 2 to 8 landed). Related:
 [0006](0006-exploratory-reads-by-default-with-mandatory-disclosure.md) (exploratory by default, with disclosure; **this record
 amends its detail-page seam**, see Q1),
 [0007](0007-curated-selections-are-a-release-overlay-not-a-column.md) (curated selections are a release overlay),
@@ -126,3 +126,8 @@ Step 2 (nested refs in responses, selection documents and exports) moved the sel
   `linked_evidence_withheld`, so a manifest's content and format are unchanged. A
   recorded selection that named an `approved` record replays as before. A served detail counts what it lists: the counts, summaries and `has_*` flags of a transition state, a conformer group and observation, a calculation (`has_dependencies`) and a transport record are computed over the same evidence-rule population as the collections beside them, and a network detail lists its unreviewed solves badged. The network batch evaluate is a population of fits and keeps the record floor, as the selects do. The legacy detail reads state the served record's review status in `X-TCKDB-Review-Status` (single-record responses only; declared in OpenAPI and exposed to browsers by CORS). `generate_rubric_pins.py --check` stays clean. Nothing is
   left on D6.
+- Step 8 (copy) changed no behaviour, manifest or rubric. It rewrote the wording that described the earlier rule: the `ReadProfile` and
+  `ProfileRecommendation` docstrings, the `profile` OpenAPI description, the glossary and the API vocabulary, the browse-order and
+  dataset-release specs, the user guides, and the client README and docstrings. The token `approved_floor_only` is kept; it now says that
+  the approved floor was applied to the records a list, search or select returned and that nothing further is claimed, while detail pages
+  and linked evidence may be unreviewed and badged and `rejected` and `deprecated` are withheld. The plan of this record is complete.

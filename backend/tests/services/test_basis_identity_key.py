@@ -23,6 +23,7 @@ from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
 from app.chemistry.basis_set_names import basis_identity_key
 from app.services.calculation_resolution import _level_of_theory_hash
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 
 #: (basis set, [(program, spelling), ...], exact identity key)
 SAME_BASIS: list[tuple[str, list[tuple[str, str]], str]] = [
@@ -233,7 +234,6 @@ def test_a_canonical_spelling_hashes_as_it_always_did():
         "dispersion": None,
         "solvent": None,
         "solvent_model": None,
-        "keywords": None,
         "spin_treatment": "unknown",
     }
     pre_574 = hashlib.sha256(
@@ -290,9 +290,7 @@ def test_migration_hash_matches_the_application(migration, spelling):
         "spin_treatment": "unrestricted",
     }
     row = SimpleNamespace(_mapping=fields)
-    assert migration._lot_hash(row, keyed=True) == _level_of_theory_hash(
-        LevelOfTheoryRef(**fields)
-    )
+    assert migration._lot_hash(row, keyed=True) == frozen_level_of_theory_hash(**fields)
 
 
 def test_the_merge_record_adds_no_column_to_level_of_theory():
@@ -312,7 +310,8 @@ def test_the_merge_record_adds_no_column_to_level_of_theory():
     columns = {c.key for c in LevelOfTheory.__table__.columns}
     assert columns == {
         "id", "method", "basis", "aux_basis", "cabs_basis", "dispersion",
-        "solvent", "solvent_model", "keywords", "spin_treatment", "core_treatment",
+        "solvent", "solvent_model", "spin_treatment", "core_treatment",
+        "relativistic_hamiltonian", "pno_truncation", "ri_approximation",
         "lot_hash", "created_at", "public_ref",
     }
     assert ("level_of_theory", "core_treatment") in UNCHANGED_DEFAULTS

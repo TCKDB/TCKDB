@@ -1,4 +1,4 @@
-"""Backfill calculation_parameter rows from already-stored input artifacts.
+"""Backfill calculation_parameter rows from already-stored input decks and output logs.
 
 Operational entry point for parsing input artifacts (Gaussian ``.gjf`` /
 ORCA ``.in``) that pre-date the artifact-upload extraction hook, or for
@@ -36,17 +36,17 @@ Usage::
 Artifact-selection policy
 -------------------------
 
-When multiple input artifacts exist for one calculation, the backfill
-parser uses the **earliest input artifact by ``calculation_artifact.id``**
-(``ORDER BY id ASC LIMIT 1``).
+A calculation with an input deck is read from its deck; the service then re-reads the calculation's stored output
+logs beside it, deck first, under the precedence rule of ``app/services/parameter_reconciliation.py`` (the log's
+echoed row wins where both state a setting; the numbers the log reports are stored beside them). A calculation deposited with only an output log is read from its earliest
+log, which echoes the input.
 
-Rationale: the first input artifact is the one most likely to represent
-the file that actually drove the calculation in normal ARC/TCKDB uploads.
-Later input artifacts are ambiguous without an explicit
-supersession/replacement model — they may be corrections, debug files,
-annotations, or accidental duplicates. Until artifact replacement is
-modeled, deterministic earliest-upload wins is safer than
-last-write-wins.
+When multiple input artifacts exist for one calculation, the backfill
+parser uses the **latest input artifact by ``calculation_artifact.id``**
+(``ORDER BY id DESC LIMIT 1``), in every mode: it is the deck an upload's
+replace-all leaves standing, so a re-run, with or without ``--force``,
+does not flip a calculation that has several decks. (Before 2026-11-04 the
+earliest deck was used; the two rules disagreed with what an upload stores.)
 
 If an operator needs to point the parser at a different artifact, use
 ``--artifact-id`` (single-calculation mode only) to override the
@@ -82,6 +82,7 @@ from app.db.models.calculation import (
 from app.db.models.common import ArtifactKind, ParameterSource
 from app.services.calculation_parameter_extraction import (
     ParameterExtractionError,
+    refresh_output_log_rows,
     try_extract_parameters_from_input_artifact_row,
 )
 
@@ -98,7 +99,7 @@ def _select_input_artifact(
     calculation_id: int,
     *,
     artifact_id_override: int | None = None,
-) -> CalculationArtifact | None:
+    ) -> CalculationArtifact | None:
     """Pick the input artifact to feed the parser for one calculation.
 
     Returns ``None`` if no input artifact exists. With
@@ -106,7 +107,7 @@ def _select_input_artifact(
     is an input artifact attached to ``calculation_id`` — otherwise
     ``None``.
 
-    Selection rule (no override): ``ORDER BY id ASC LIMIT 1`` over
+    Selection rule (no override): ``ORDER BY id DESC LIMIT 1`` over
     ``CalculationArtifact`` rows where ``kind = 'input'`` and
     ``calculation_id = calculation_id``. See module docstring for
     rationale.
@@ -118,19 +119,26 @@ def _select_input_artifact(
             return None
         if row.calculation_id != calculation_id:
             return None
-        if row.kind is not ArtifactKind.input:
+        if row.kind not in (ArtifactKind.input, ArtifactKind.output_log):
             return None
         return row
 
-    return session.scalar(
-        select(CalculationArtifact)
-        .where(
-            CalculationArtifact.calculation_id == calculation_id,
-            CalculationArtifact.kind == ArtifactKind.input,
+    # The input deck when there is one (the service then re-reads the calculation's stored output logs beside it,
+    # deck first); a calculation deposited with only its output log is read from the first log, which echoes the
+    # input.
+    for kind in (ArtifactKind.input, ArtifactKind.output_log):
+        row = session.scalar(
+            select(CalculationArtifact)
+            .where(
+                CalculationArtifact.calculation_id == calculation_id,
+                CalculationArtifact.kind == kind,
+            )
+            .order_by(CalculationArtifact.id.desc() if kind is ArtifactKind.input else CalculationArtifact.id.asc())
+            .limit(1)
         )
-        .order_by(CalculationArtifact.id.asc())
-        .limit(1)
-    )
+        if row is not None:
+            return row
+    return None
 
 
 def _calculations_with_input_and_no_parser_rows(
@@ -150,7 +158,7 @@ def _calculations_with_input_and_no_parser_rows(
         select(CalculationArtifact.id)
         .where(
             CalculationArtifact.calculation_id == Calculation.id,
-            CalculationArtifact.kind == ArtifactKind.input,
+            CalculationArtifact.kind.in_((ArtifactKind.input, ArtifactKind.output_log)),
         )
         .exists()
     )
@@ -210,6 +218,7 @@ def _process_one(
     artifact_id_override: int | None,
     dry_run: bool,
     stats: _RunStats,
+    force: bool = False,
 ) -> bool:
     """Process a single calculation. Returns True on success/skip.
 
@@ -302,6 +311,21 @@ def _process_one(
         )
         return True
 
+    if force:
+        # Log rows are appended and carry no source artifact, so a parser fix cannot replace them one by one:
+        # --force re-derives the log rows from the stored output logs and rebuilds the deck rows from the deck
+        # chosen above, under the rule that the log's echoed row outranks the deck's.
+        try:
+            refresh_output_log_rows(
+                session, calculation, deck_artifact=artifact if artifact.kind is ArtifactKind.input else None
+            )
+        except Exception as exc:
+            # Nothing was deleted (the refresh reads every log first); discard the deck pass too and report it.
+            session.rollback()
+            stats.failed += 1
+            stats.failures.append((calculation_id, f"{type(exc).__name__}: {exc}"))
+            logger.warning("calc id=%s: output-log refresh failed, nothing changed: %s", calculation_id, exc)
+            return False
     session.commit()
     stats.succeeded += 1
     logger.info(
@@ -438,6 +462,7 @@ def run_backfill(
             artifact_id_override=artifact_id,
             dry_run=dry_run,
             stats=stats,
+            force=force,
         )
         if not ok and fail_fast:
             logger.error("--fail-fast set; stopping after first failure")

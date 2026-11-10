@@ -148,8 +148,8 @@ class SpeciesRecord(TypedDict, total=False):
 
     ``canonical_smiles``, ``inchi_key``, ``charge`` and ``multiplicity`` are
     the *graph* identity and are shared by every entry beneath it. What
-    separates one entry from another lives on the entry: ``stereo_label``,
-    ``electronic_state_kind``, ``electronic_state_label``, ``term_symbol``
+    separates one entry from another lives on the entry: ``stereo_descriptor``
+    (``stereo_label`` is its display text), ``electronic_state_kind``, ``electronic_state_label``, ``term_symbol``
     and ``isotope_key``, plus the one-string ``species_entry_label`` derived
     from them. Never pick an entry by position or by the species-level
     fields -- ``N=N`` carries a ``Z`` entry (cis-diazene) and an ``E`` entry
@@ -157,9 +157,9 @@ class SpeciesRecord(TypedDict, total=False):
     species-level field there is.
 
     ``stereo_kind`` is the species' own: ``achiral`` means a null
-    ``stereo_label`` on an entry has nothing to label, while ``ez_isomer``
-    or ``enantiomer`` means stereoisomers exist and this entry has simply
-    not been labelled.
+    ``stereo_descriptor`` on an entry has nothing to describe, while ``ez_isomer``
+    or ``enantiomer`` means stereoisomers exist and the entry's descriptor
+    says which one (``?`` per element nothing pinned down).
     """
 
     species_ref: Required[str]
@@ -177,9 +177,9 @@ class ReactionParticipantRecord(TypedDict, total=False):
     """One reactant/product participant, from ``reactions/search`` or ``/browse``.
 
     ``formula`` is the RDKit Hill-notation formula derived from ``smiles``
-    (``null`` when the SMILES fails to parse); ``stoichiometry`` is the
-    graph-identity coefficient ("this equation consumes two of this
-    species"), not a property of any one deposit. Same shape as
+    (``null`` when the SMILES fails to parse); ``stoichiometry`` is how many
+    times this species entry occurs on this side of the reaction entry
+    (``H + H -> H2`` lists the one H entry once, with 2). Same shape as
     ``ReactionFullSpeciesParticipant`` on ``get_reaction_full``'s
     ``species.reactants`` / ``species.products``.
     """
@@ -334,9 +334,10 @@ class KineticsDetailRecord(TypedDict, total=False):
     # What the depositor declared (attributed claims, not verified facts): the determination
     # this record is a representation of, what the coefficient is, and how the rate was
     # produced. ``null`` means not stated, never "standalone" or "universally valid". Under ``profile="curated"``
-    # ``determination`` is also ``null`` when its target (a transition-state entry or a network channel) is not
-    # approved, ``tunneling_application`` is ``null`` when it cites an unapproved entry or calculation, and
-    # ``provenance["irc"]`` is ``null`` when its calculation is not approved.
+    # ``determination`` is also ``null`` when its target (a transition-state entry or a network channel) is
+    # rejected or deprecated, ``tunneling_application`` is ``null`` when it cites a rejected or deprecated entry or
+    # calculation, and ``provenance["irc"]`` is ``null`` when its calculation is rejected or deprecated. An
+    # unreviewed one is shown.
     determination: JSONDict | None
     applicability: JSONDict | None
     protocol: JSONDict | None
@@ -627,8 +628,8 @@ class NetworkSolveRecord(TypedDict, total=False):
     """One scientific network-solve record from search or detail reads."""
 
     network_solve: Required[JSONDict]
-    # ``None`` when the read used ``profile="curated"`` and the network this solve belongs to is not approved: the solve
-    # is shown, the network is not named (the key is always present).
+    # ``None`` when the read used ``profile="curated"`` and the network this solve belongs to is rejected or
+    # deprecated: the solve is shown, the network is not named (the key is always present).
     network: Required[JSONDict | None]
     evidence_summary: Required[JSONDict]
     available_sections: Required[JSONDict]
@@ -644,8 +645,8 @@ class NetworkSolveRecord(TypedDict, total=False):
 
 class NetworkKineticsRecord(TypedDict, total=False):
     network_kinetics: Required[JSONDict]
-    # ``None`` when the read used ``profile="curated"`` and the network is not approved: the fit is shown (it is
-    # reviewed through its solve), the network is not named (the key is always present).
+    # ``None`` when the read used ``profile="curated"`` and the network is rejected or deprecated: the fit is shown
+    # (it is reviewed through its solve), the network is not named (the key is always present).
     network: Required[JSONDict | None]
     network_solve: Required[JSONDict]
     network_channel: Required[JSONDict]
@@ -747,7 +748,7 @@ class StatmechRecord(TypedDict, total=False):
     statmech: Required[JSONDict]
     # ``None`` on a transition-state-owned record (it has a ``transition_state`` block instead). Under
     # ``profile="curated"`` BOTH ``species`` and ``transition_state`` are ``None`` when the record's subject is a
-    # transition-state entry that is not approved: the subject is withheld, not absent.
+    # transition-state entry that is rejected or deprecated: the subject is withheld, not absent.
     species: JSONDict | None
     transition_state: JSONDict | None
     supersession: SupersessionNotice | None
@@ -802,8 +803,10 @@ class SpeciesStructureRecord(TypedDict, total=False):
     ``electronic_state_kind``, ``electronic_state_label``, ``term_symbol``
     and ``isotope_key`` are the entry's own and are what tell those rows
     apart; ``species_entry_label`` is the same five rendered as one short
-    string. Each is ``None`` when the entry carries no such label -- never
-    an empty string.
+    string. Each is ``None`` when the entry carries no such label, and
+    ``electronic_state_label`` and ``term_symbol`` are also ``None`` when the
+    stored value does not satisfy the write-time grammar (a row stored before
+    it) -- never an empty string. A served value is in its canonical spelling.
     """
 
     species_ref: Required[str]
@@ -816,6 +819,10 @@ class SpeciesStructureRecord(TypedDict, total=False):
     species_entry_kind: Required[str]
     electronic_state_kind: Required[str]
     stereo_label: str | None
+    stereo_descriptor: str | None
+    stereo_resolution: str | None
+    stereo_smiles: str | None
+    stereo_not_represented: list[str]
     electronic_state_label: str | None
     term_symbol: str | None
     isotope_key: str | None
@@ -846,8 +853,8 @@ class ConformerRecord(TypedDict, total=False):
 class ConformerObservationRecord(TypedDict, total=False):
     """One observation, with the group and species it belongs to attached.
 
-    ``conformer_group`` is ``None`` when the read used ``profile="curated"`` and the observation's group is not
-    approved: the observation is shown, the group it sits in is not named.
+    ``conformer_group`` is ``None`` when the read used ``profile="curated"`` and the observation's group is
+    rejected or deprecated: the observation is shown, the group it sits in is not named.
     """
 
     conformer_observation: Required[JSONDict]
@@ -871,8 +878,8 @@ class TransitionStateEntryRecord(TypedDict, total=False):
     """
 
     transition_state_entry: Required[JSONDict]
-    # ``None`` when the read used ``profile="curated"`` and the owning transition state is not approved: the entry is
-    # shown, the transition state it belongs to is not named (the key is always present).
+    # ``None`` when the read used ``profile="curated"`` and the owning transition state is rejected or deprecated:
+    # the entry is shown, the transition state it belongs to is not named (the key is always present).
     transition_state: Required[JSONDict | None]
     reaction: Required[JSONDict]
     evidence_summary: Required[JSONDict]
@@ -1195,7 +1202,8 @@ class SelectionEligibilityIn(TypedDict, total=False):
 
     Which of these a route offers depends on the record kind: a network solve offers only the two review ones, a statmech
     candidate and a structure unit add ``include_confirmed_findings``, thermo and kinetics offer all four. The read
-    profile's review floor (``curated``) is not one of them and no request lifts it.
+    profile's record floor (``curated``: a select returns approved records only) is not one of them and no request
+    lifts it.
     """
 
     include_rejected: bool

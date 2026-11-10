@@ -24,7 +24,6 @@ from app.db.models.reaction import (
     ReactionEntry,
     ReactionEntryStructureParticipant,
     ReactionFamily,
-    ReactionParticipant,
 )
 from app.db.models.reaction_atom_map import ReactionAtomMap
 from app.db.models.species import Species, SpeciesEntry
@@ -71,9 +70,14 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.keyset import Paging
+from app.services.scientific_read.reaction_participants import collapse_occurrences, format_reaction_equation
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
+    STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
+from app.services.scientific_read.structure_query import constitution_smiles
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "kinetics",
@@ -230,6 +234,10 @@ def search_reactions(
             )
         ).all()
     }
+    # An entry that stayed on a merged-away reaction is not a live record.
+    entries = [e for e in entries if chem_reactions[e.reaction_id].merged_into_chem_reaction_id is None]
+    if not entries:
+        return _empty_response(request, includes, offset, limit)
 
     # Filter by family if requested.
     if request.family is not None:
@@ -296,9 +304,6 @@ def search_reactions(
     species_id_by_entry_species = _resolve_participant_species_ids(
         session, all_participant_species_entry_ids
     )
-    stoichiometry_by_key = _resolve_reaction_participant_stoichiometry(
-        session, {chem_reactions[e.reaction_id].id for e in entries}
-    )
     availability_by_entry = _compute_availability(session, [e.id for e in entries])
 
     # Determine matched_direction for each entry.
@@ -335,7 +340,6 @@ def search_reactions(
         smiles_by_entry_species=smiles_by_entry_species,
         formulas_by_entry_species=formulas_by_entry_species,
         species_id_by_entry_species=species_id_by_entry_species,
-        stoichiometry_by_key=stoichiometry_by_key,
         badges=badges,
         availability_by_entry=availability_by_entry,
         matched_direction_by_entry=matched_direction_by_entry,
@@ -499,6 +503,9 @@ def browse_reactions(
             )
         ).all()
     }
+    entries = [e for e in entries if chem_reactions[e.reaction_id].merged_into_chem_reaction_id is None]
+    if not entries:
+        return _empty_browse_response(request, offset, limit)
 
     if request.family is not None:
         family = session.scalar(
@@ -576,9 +583,6 @@ def browse_reactions(
     species_id_by_entry_species = _resolve_participant_species_ids(
         session, all_participant_species_entry_ids
     )
-    stoichiometry_by_key = _resolve_reaction_participant_stoichiometry(
-        session, {chem_reactions[e.reaction_id].id for e in entries}
-    )
 
     matched_direction_by_entry: dict[int, ReactionDirectionQuery] = {}
     for e in entries:
@@ -613,7 +617,6 @@ def browse_reactions(
         smiles_by_entry_species=smiles_by_entry_species,
         formulas_by_entry_species=formulas_by_entry_species,
         species_id_by_entry_species=species_id_by_entry_species,
-        stoichiometry_by_key=stoichiometry_by_key,
         badges=badges,
         availability_by_entry=availability_by_entry,
         matched_direction_by_entry=matched_direction_by_entry,
@@ -654,11 +657,16 @@ def _resolve_smiles_to_species_ids(
 ) -> list[int]:
     if not smiles_list:
         return []
+    # The species key is the constitution (DR-0038): ``C/C=C/C`` and ``CC=CC`` name one species, and a species merged
+    # into another is kept but is not what a query resolves to.
+    flat = {s: constitution_smiles(s) for s in smiles_list}
     rows = session.execute(
-        select(Species.smiles, Species.id).where(Species.smiles.in_(smiles_list))
+        select(Species.smiles, Species.id).where(
+            Species.smiles.in_(set(flat.values())), Species.merged_into_species_id.is_(None)
+        )
     ).all()
     by_smiles: dict[str, int] = {row.smiles: row.id for row in rows}
-    return [by_smiles[s] for s in smiles_list if s in by_smiles]
+    return [by_smiles[flat[s]] for s in smiles_list if flat[s] in by_smiles]
 
 
 def _side_matches(
@@ -856,31 +864,6 @@ def _resolve_participant_species_ids(
     return dict(rows)
 
 
-def _resolve_reaction_participant_stoichiometry(
-    session: Session, reaction_ids: set[int]
-) -> dict[tuple[int, int, ReactionRole], int]:
-    """Map (reaction_id, species_id, role) -> graph-identity stoichiometry.
-
-    This is the reaction-level coefficient ("this equation consumes two
-    of this species"), not a property of any one deposit's structure-
-    participant row -- see ``ReactionParticipantSummary``'s docstring.
-    """
-    if not reaction_ids:
-        return {}
-    rows = session.execute(
-        select(
-            ReactionParticipant.reaction_id,
-            ReactionParticipant.species_id,
-            ReactionParticipant.role,
-            ReactionParticipant.stoichiometry,
-        ).where(ReactionParticipant.reaction_id.in_(reaction_ids))
-    ).all()
-    return {
-        (reaction_id, species_id, role): stoichiometry
-        for reaction_id, species_id, role, stoichiometry in rows
-    }
-
-
 def _resolve_participant_refs(
     session: Session, species_entry_ids: set[int]
 ) -> dict[int, str]:
@@ -897,8 +880,11 @@ def _resolve_participant_refs(
 
 def _resolve_participant_labels(
     session: Session, species_entry_ids: set[int]
-) -> dict[int, str | None]:
-    """Map species_entry_id → the entry discriminator, or ``None``.
+) -> dict[int, tuple[str | None, dict]]:
+    """Map species_entry_id → (the entry discriminator or ``None``, the computed facets).
+
+    One batched query for every participant of a page of reactions, so serving the facets adds no per-participant
+    query.
 
     A participant's ``smiles`` is the parent *species*' and is shared by
     every entry under it, so two participants that are different
@@ -909,14 +895,15 @@ def _resolve_participant_labels(
     rows = session.execute(
         select(
             SpeciesEntry.id,
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         ).where(SpeciesEntry.id.in_(species_entry_ids))
     ).all()
-    return {row.id: species_entry_label_for(row) for row in rows}
+    return {row.id: (species_entry_label_for(row), entry_facets_of(row)) for row in rows}
 
 
 def _compute_availability(
@@ -1064,15 +1051,34 @@ def _entry_species_ids(
     return grouped
 
 
-def _format_equation(
-    reactants: list[ReactionParticipantSummary],
-    products: list[ReactionParticipantSummary],
-    reversible: bool,
-) -> str:
-    arrow = "<=>" if reversible else "->"
-    left = " + ".join(p.smiles for p in reactants)
-    right = " + ".join(p.smiles for p in products)
-    return f"{left} {arrow} {right}"
+def _collapsed_participants(
+    participants: list[tuple[int, ReactionRole, int]],
+    role: ReactionRole,
+    refs_by_entry_species: dict[int, str],
+    labels_by_entry_species: dict[int, tuple[str | None, dict]],
+    smiles_by_entry_species: dict[int, str],
+    formulas_by_entry_species: dict[int, str | None],
+) -> list[ReactionParticipantSummary]:
+    """One row per DISTINCT species entry on one side, carrying how many times it occurs.
+
+    The deposit stores one structure-participant row per occurrence (``H + H -> H2`` has two rows for the one H
+    entry). Serving a row per occurrence while each also carried the species-level coefficient made a consumer that
+    rebuilds the equation from the rows read ``2 H + 2 H`` (4 H). ``stoichiometry`` is now this entry's own count on
+    this side, ``participant_index`` the first position it was written at.
+    """
+    return [
+        ReactionParticipantSummary(
+            species_entry_id=se,
+            species_entry_ref=refs_by_entry_species.get(se, ""),
+            species_entry_label=labels_by_entry_species.get(se, (None, {}))[0],
+            **labels_by_entry_species.get(se, (None, {}))[1],
+            smiles=smiles_by_entry_species.get(se, ""),
+            formula=formulas_by_entry_species.get(se),
+            stoichiometry=count,
+            participant_index=first_index,
+        )
+        for se, count, first_index in collapse_occurrences(participants, role)
+    ]
 
 
 def _materialize_and_sort_reaction_records(
@@ -1081,11 +1087,10 @@ def _materialize_and_sort_reaction_records(
     chem_reactions: dict[int, ChemReaction],
     participants_by_entry: dict[int, list[tuple[int, ReactionRole, int]]],
     refs_by_entry_species: dict[int, str],
-    labels_by_entry_species: dict[int, str | None],
+    labels_by_entry_species: dict[int, tuple[str | None, dict]],
     smiles_by_entry_species: dict[int, str],
     formulas_by_entry_species: dict[int, str | None],
     species_id_by_entry_species: dict[int, int],
-    stoichiometry_by_key: dict[tuple[int, int, ReactionRole], int],
     badges: dict[int, RecordReviewBadge],
     availability_by_entry: dict[int, ReactionAvailability],
     matched_direction_by_entry: dict[int, ReactionDirectionQuery],
@@ -1104,37 +1109,27 @@ def _materialize_and_sort_reaction_records(
     for e in entries:
         chem = chem_reactions[e.reaction_id]
         participants = participants_by_entry[e.id]
-        reactants = [
-            ReactionParticipantSummary(
-                species_entry_id=se,
-                species_entry_ref=refs_by_entry_species.get(se, ""),
-                species_entry_label=labels_by_entry_species.get(se),
-                smiles=smiles_by_entry_species.get(se, ""),
-                formula=formulas_by_entry_species.get(se),
-                stoichiometry=stoichiometry_by_key.get(
-                    (chem.id, species_id_by_entry_species.get(se), role), 1
-                ),
-                participant_index=idx,
-            )
-            for se, role, idx in sorted(participants, key=lambda p: (p[1].value, p[2]))
-            if role == ReactionRole.reactant
-        ]
-        products = [
-            ReactionParticipantSummary(
-                species_entry_id=se,
-                species_entry_ref=refs_by_entry_species.get(se, ""),
-                species_entry_label=labels_by_entry_species.get(se),
-                smiles=smiles_by_entry_species.get(se, ""),
-                formula=formulas_by_entry_species.get(se),
-                stoichiometry=stoichiometry_by_key.get(
-                    (chem.id, species_id_by_entry_species.get(se), role), 1
-                ),
-                participant_index=idx,
-            )
-            for se, role, idx in sorted(participants, key=lambda p: (p[1].value, p[2]))
-            if role == ReactionRole.product
-        ]
-        equation = _format_equation(reactants, products, chem.reversible)
+        reactants = _collapsed_participants(
+            participants,
+            ReactionRole.reactant,
+            refs_by_entry_species,
+            labels_by_entry_species,
+            smiles_by_entry_species,
+            formulas_by_entry_species,
+        )
+        products = _collapsed_participants(
+            participants,
+            ReactionRole.product,
+            refs_by_entry_species,
+            labels_by_entry_species,
+            smiles_by_entry_species,
+            formulas_by_entry_species,
+        )
+        equation = format_reaction_equation(
+            [(idx, smiles_by_entry_species.get(se, "")) for se, role, idx in participants if role == ReactionRole.reactant],
+            [(idx, smiles_by_entry_species.get(se, "")) for se, role, idx in participants if role == ReactionRole.product],
+            chem.reversible,
+        )
         records.append(
             ReactionScientificRecord(
                 reaction_id=chem.id,

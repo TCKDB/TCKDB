@@ -58,7 +58,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from tckdb_schemas.enthalpy_reference import (
     ENTHALPY_REFERENCE_MIXED,
@@ -231,7 +231,7 @@ def _lot_label(lot: LevelOfTheory) -> str:
     ``method/basis`` with parenthesised annotations for every stated part of the level's identity (auxiliary
     and CABS basis, dispersion, solvent and model, spin and core treatment), written by the one renderer the
     notation of a record's levels uses (:func:`app.chemistry.level_label.render_level_label`), so the two
-    cannot disagree. Raw ``keywords`` are not written. The stable machine key is ``lot_hash``; this label is the
+    cannot disagree. The stable machine key is ``lot_hash``; this label is the
     readable form and is not a key.
     """
     return render_level_label(
@@ -244,6 +244,9 @@ def _lot_label(lot: LevelOfTheory) -> str:
         solvent_model=lot.solvent_model,
         spin_treatment=lot.spin_treatment,
         core_treatment=lot.core_treatment,
+        relativistic_hamiltonian=lot.relativistic_hamiltonian,
+        pno_truncation=lot.pno_truncation,
+        ri_approximation=lot.ri_approximation,
     )
 
 
@@ -277,6 +280,11 @@ def _lot_block(
             "core_treatment": (
                 lot.core_treatment.value if lot.core_treatment is not None else None
             ),
+            "relativistic_hamiltonian": (
+                lot.relativistic_hamiltonian.value if lot.relativistic_hamiltonian is not None else None
+            ),
+            "pno_truncation": lot.pno_truncation.value if lot.pno_truncation is not None else None,
+            "ri_approximation": lot.ri_approximation.value if lot.ri_approximation is not None else None,
             "label": _lot_label(lot),
         }
     cache[lot_id] = block
@@ -486,7 +494,9 @@ def _resolve_species_entry_ids(
     if species_refs:
         for ref in species_refs:
             se_id = session.scalar(
-                select(SpeciesEntry.id).where(SpeciesEntry.public_ref == ref)
+                select(func.coalesce(SpeciesEntry.merged_into_species_entry_id, SpeciesEntry.id)).where(
+                    SpeciesEntry.public_ref == ref  # a merged-away entry stands for the one it was merged into
+                )
             )
             if se_id is None:
                 raise ValueError(
@@ -496,7 +506,9 @@ def _resolve_species_entry_ids(
 
     if all_species:
         all_ids = session.scalars(
-            select(SpeciesEntry.id).order_by(SpeciesEntry.id)
+            select(SpeciesEntry.id)
+            .where(SpeciesEntry.merged_into_species_entry_id.is_(None))
+            .order_by(SpeciesEntry.id)
         ).all()
         if len(all_ids) > all_cap:
             # The ML surface's own cap, and the same disclosure call as
@@ -697,7 +709,8 @@ def _build_species_records(
     review_status = _species_entry_review(session, species_entry_id)
 
     # A calculation the profile hides is not part of this species' world: its energies, frequencies, Hessian,
-    # geometry and conformer links are left out, not blanked (hidden equals unknown).
+    # geometry and conformer links are left out, not blanked (the ML export's energy rows keep their calculations
+    # approved-only, ADR 0023 Q7).
     calcs = session.scalars(
         where_visible(
             select(Calculation).where(Calculation.species_entry_id == species_entry_id),

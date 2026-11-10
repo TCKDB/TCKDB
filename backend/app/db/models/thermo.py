@@ -22,6 +22,7 @@ from app.db.models.common import (
     PhaseKind,
     ScientificOriginKind,
     ThermoCalculationRole,
+    ThermoDeclarationSource,
     ThermoModelKind,
     ThermoTargetKind,
 )
@@ -79,6 +80,8 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
       named conformer group). ``NULL`` means no target was declared -- it is
       never inferred from ``statmech_id`` or a conformer selection, and never
       backfilled.
+    * ``thermodynamic_target_declared_by`` is whose claim the target is
+      (``depositor`` or ``chemkin_format``); meaningful only with a target.
     * ``target_conformer_group_id`` is the conformer group a
       ``single_conformer`` target names, and is set exactly then
       (``ck_thermo_target_group_iff_single_conformer``). That the group belongs
@@ -195,6 +198,13 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     # (``app.services.thermo_declaration_resolution``).
     thermodynamic_target_kind: Mapped[Optional[ThermoTargetKind]] = mapped_column(
         SAEnum(ThermoTargetKind, name="thermo_target_kind"), nullable=True
+    )
+    # Whose claim the target is; meaningful only when ``thermodynamic_target_kind`` is set.
+    thermodynamic_target_declared_by: Mapped[ThermoDeclarationSource] = mapped_column(
+        SAEnum(ThermoDeclarationSource, name="thermo_declaration_source"),
+        nullable=False,
+        default=ThermoDeclarationSource.depositor,
+        server_default=ThermoDeclarationSource.depositor.value,
     )
     target_conformer_group_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,

@@ -1,5 +1,160 @@
 # Changelog
 
+## 0.199.0 - 2026-11-09
+
+A 413 with no TCKDB code (an HTML page from a proxy or edge, or an empty body) raises `TCKDBHTTPError` with a message that the body was too large for the server or a proxy, that the refusal did not state its limit, that behind Cloudflare Free/Pro it is 100,000,000 bytes (about 71.5 MiB of files after base64), and to send files separately (`upload_artifacts`) or split the deposit. A coded 413 keeps its code and message. `RejectionCode.REQUEST_BODY_TOO_LARGE` is added. The `tckdb-schemas` window is `>=0.158,<0.171`.
+
+## 0.198.0 - 2026-11-09
+
+No client code changed. The `tckdb-schemas` window moves to `>=0.158,<0.170` to contain 0.169.
+
+## 0.197.0 - 2026-11-09
+
+The `tckdb-schemas` window is `>=0.158,<0.169`. No client behaviour changes.
+
+## 0.196.0 - 2026-11-09
+
+`RejectionCode.THERMO_DECLARED_BY_TARGET_INCOHERENT` and `RejectionCode.THERMO_DECLARED_BY_RECORD_INCOHERENT` (422) join the refusal codes. Needs `tckdb-schemas` 0.167.0.
+
+## 0.195.0 - 2026-11-09
+
+`RejectionCode.RECORD_SELF_APPROVAL` (403), `SUBMISSION_SELF_APPROVAL` (403), `RECORD_NOT_FOUND` (404) and `RECORD_TYPE_NOT_REVIEWABLE` (422) join the refusal codes: the record-review and submission-approval routes refuse a depositor approving what they deposited, a record that does not exist, and an artifact. No other client code changed. The `tckdb-schemas` window moves to `>=0.158,<0.167`.
+
+## 0.194.0 - 2026-11-09
+
+The `tckdb-schemas` window is `>=0.158,<0.166`, for the schemas release that changes the assumed Hessian method (see its changelog). No client API changes.
+
+## 0.193.0 - 2026-11-09
+
+No client code changed. `HessianSource.parsed_log_archive` joins the enum and four reasons join `hessian_not_stored_unparseable` (see `tckdb-schemas` 0.164.0). The `tckdb-schemas` window now includes 0.164.
+
+## 0.192.0 - 2026-11-09
+
+Ten `RejectionCode` members join the refusal codes for artifact uploads: `OUTPUT_LOG_SIGNATURE_UNRECOGNIZED`, `ARTIFACT_EMPTY`, `ARTIFACT_TOO_LARGE`, `ARTIFACT_SHA256_MISMATCH`, `ARTIFACT_SIZE_MISMATCH`, `ARTIFACT_NOT_UTF8_TEXT`, `ARTIFACT_INVALID_BASE64`, `ARTIFACT_TOTAL_SIZE_TOO_LARGE`, `ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE` and `ARTIFACT_TOTAL_ENCODED_PAYLOAD_TOO_LARGE` (see `tckdb-schemas` 0.163.0). The `tckdb-schemas` window moves to `>=0.158,<0.164`.
+
+## 0.191.0 - 2026-11-09
+
+- `ComputedSpeciesUpload.to_payload()` and `ComputedReactionUpload.to_payload()` now embed each attached artifact file inline (`content_base64` in the calculation's `artifacts`) instead of leaving it for a second request. The server therefore sees the files when it checks the deposit, and no longer stores warnings such as `converged_opt_no_usable_energy` that the second request made stale.
+  - The attached files must exist when `to_payload()` runs. A file the server refuses, or a storage outage, now refuses the whole deposit. Before any request, a missing, zero-byte or over-50-MiB file, a kind/extension the schema disallows, or a declared `sha256`/`bytes` that does not match raises `TCKDBBuilderValidationError` naming the file. The recognised-program check for `output_log` stays with the server.
+  - Inline files total at most 64 MiB per upload; `output_log` and `input` files are admitted first. Files past the budget stay out of the payload and are returned by `artifact_plan(result)`.
+  - `inline_artifacts=False` on either upload class restores the previous behaviour (every file in the second request, nothing checked at build time).
+  - `artifact_plan(result, payload=None)` lists only files that did not go inline. With `payload` (the dict that was posted) it skips files present in it, matched on calculation, kind, filename and content; without it the choice is recomputed from the files on disk. `artifact_plan_preview()` still lists every file.
+  - `artifact_upload_requires_second_phase` is reported only for files that will not go inline.
+  - `upload_artifacts(batch_by_calculation=True)` returns one result per request, not per calculation, and splits a calculation's files across requests of at most 64 MiB. The first request keeps the key `...:artifact-batch`; later ones end in `-2`, `-3`.
+  - A retry of a deposit under an existing idempotency key sends a different body than before 0.191.0 (or after a file changed), so the server answers 409 `idempotency_conflict`; use a new key.
+- `LevelOfTheory.spin_treatment` (`restricted`, `unrestricted`, `restricted_open`, `unknown`) is sent as the `spin_treatment` wire field when set, never inferred. Another spelling raises `TCKDBBuilderValidationError`.
+
+## 0.190.0 - 2026-11-09
+
+`RejectionCode.REACTION_FAMILY_CONFLICT` (422) joins the refusal codes: a reaction deposited under a family other than the one it is already recorded under is refused with it (before, an uncoded `validation_error`). A network solve's bath-gas sum refusal now carries `RejectionCode.KINETICS_BATH_GAS_MOLE_FRACTION_SUM`, the code a kinetics rate's bath gas already used. No other client code changed.
+
+## 0.189.0 - 2026-11-07
+
+No client code changed. The server now judges a kinetics `energy_level_of_theory`'s spin treatment per participant (closed-shell links are exempt, open-shell links must share one reference), so a reaction mixing restricted closed-shell and unrestricted open-shell species can declare its method and basis (see `tckdb-schemas` 0.161.0). The `tckdb-schemas` window already contains 0.161.
+
+## 0.188.0 - 2026-11-07
+
+`RejectionCode.ANONYMOUS_BODY_TOO_LARGE` (413) joins the refusal codes: the server refuses a request with no valid credential whose body is over its anonymous allowance, before reading it. The client always sends its credential, so it meets this only when the key is missing, unknown or revoked. No other client code changed.
+
+## 0.187.0 - 2026-11-05
+
+The `LevelOfTheory` builder drops `keywords` (the server no longer has such a field; see `tckdb-schemas` 0.158.0) and gains `core_treatment`, `relativistic_hamiltonian`, `pno_truncation` and `ri_approximation`, each sent only when set. The `tckdb-schemas` window moves to `>=0.158,<0.163`: an older schemas would still accept `keywords`, which the server now refuses.
+
+## 0.186.0 - 2026-11-05
+
+The structure-search record's `electronic_state_label` and `term_symbol` are `None` when the stored value does not satisfy the write-time grammar (a row stored before `tckdb-schemas` 0.151.0's check), and are served in their canonical spelling otherwise. Docstring only; no client code changed.
+
+## 0.185.0 - 2026-11-04
+
+Packaging and documentation only; no client code and no wire behaviour changed. The README is now a one-page introduction (what it is, install, read, upload with the builders, adapters), and the rest moved into `docs/` (`configuration.md`, `reads.md`, `uploads_and_idempotency.md`, `errors.md`, `builders.md`, `development.md`). `docs/builder_api_mvp.md` no longer says the builders are unimplemented. Project URLs now point at `github.com/TCKDB/TCKDB`, the licence file ships in the distributions, and the build needs `setuptools>=77` (SPDX licence expression). The `tckdb-schemas` requirement is now a rolling window, `>=0.155,<0.160` (it was `>=0.145.0` with no ceiling); see `docs/development.md`.
+
+## 0.184.0 - 2026-11-04
+
+A deposit can now return the warnings `t1_diagnostic_above_closed_shell_threshold`, `spin_contamination_above_conventional_threshold` and `spin_expected_contradicts_multiplicity`; see `tckdb-schemas` 0.151.0. The client reads warnings by code and message, so no client code changed.
+
+## 0.183.0 - 2026-11-03
+
+Two refusal codes join `RejectionCode`: `ELECTRONIC_STATE_LABEL_INVALID` and `TERM_SYMBOL_INVALID` (both 422). The server now refuses an `electronic_state_label` or `term_symbol` that is not a recognised spectroscopic shape; see `tckdb-schemas` 0.149.0 for the accepted shapes. No client code changed.
+
+## 0.182.0 - 2026-10-31
+
+A warning's `message` is TCKDB's sentence for its `code`.
+
+- Requires `tckdb-schemas>=0.145.0`. No client code changed; the pin moves so `UploadWarning` validated locally is the one the server builds.
+- The `message` of each dict in an upload result's `warnings` no longer quotes text you typed (a label, a local key, a file name). A label that helps you find the problem is under `context.depositor_supplied`. `field` is unchanged. Match on `code`, never on `message`.
+- Bundle submit and dry-run `messages[]` entries now carry a `context` key (`null` when none), the warning's context. The client returns response bodies as they come, so nothing else changes.
+
+## 0.181.0 - 2026-10-31
+
+An unrecorded Hessian method is assumed from the program's default when a deposit is judged.
+
+- Requires `tckdb-schemas>=0.144.0`. No client code changed; the pin moves so a client validating locally judges `tau` the way the server does.
+- `RejectionCode.HESSIAN_METHOD_CONTRADICTS_INPUT_DECK` (`hessian_method_contradicts_input_deck`, 422): the recorded `freq.hessian_method` and the attached input deck state different methods (analytic, `finite_difference_gradient` or `finite_difference_energy`).
+- ORCA `NumFreq` with `NumGrad` is read as `finite_difference_energy`; Gaussian double-hybrid functionals get no assumption.
+- Input decks attached inline are read before the deposit is judged, so a deck stating `NumFreq` or `Freq=Numer` is judged at its recorded tolerance. ORCA meta-GGA functionals before ORCA 5 are assumed numerical.
+- A Gaussian minimum (HF, DFT, MP2, CIS, CASSCF) or ORCA minimum (HF, DFT) with an imaginary mode of 30 cm-1 or more and no recorded `freq.hessian_method` is refused as `n_imag_contradicts_minimum` (it was accepted below 50). Gaussian CCSD(T) and QCISD(T) are judged at 80, so a minimum between 50 and 80 cm-1 that was refused is now accepted with a warning. See the `tckdb-schemas` 0.144.0 entry.
+
+## 0.180.0 - 2026-10-29
+
+Deposit-time warnings are shown with the record when it is read.
+
+- Requires `tckdb-schemas>=0.143.0`.
+- Every `UploadWarning` dict in an upload result's `warnings` carries a `context` key (`null` when the check stated no values).
+- Detail reads of a calculation, a transition-state entry (and its concept), a statmech, a transport record, a network solve and a conformer observation, and the
+  per-parent kinetics and thermo reads, carry `record_warnings`: `[{"record_ref": ..., "status": "recorded" | "not_recorded", "items": [...]}]`. `not_recorded` means the
+  record was deposited before warnings were stored, or its deposit could not place every warning on a record; neither is the same as no warnings. The network detail read carries it too. The client returns response bodies as they come, so nothing else changes.
+
+## 0.179.0 - 2026-10-29
+
+Allene `Ra`/`Sa` and odd-cumulene `E`/`Z` in the entry stereo descriptor.
+
+- Requires `tckdb-schemas>=0.141.0`.
+- Reads: `stereo_not_represented` on species-entry and structure-search records now lists `axial_small_ring` (a cyclic allene in a ring of eight or fewer) and
+  `allene_dependent` (a centre or double bond that depends on an allene's sense) and `cumulene_tied_end` (a cumulated chain with a tied pair of stereo-bearing arms at one end). It no longer lists `axial` or `cumulene`: an open-chain allene or cumulene with
+  a `?` is simply not settled yet.
+- `stereo_descriptor` and `stereo_label` can hold `Ra` / `Sa`. `stereo_smiles` is `null` for any entry with an allene or cumulene element.
+- A CHEMKIN export prints `STEREO_NOT_REPRESENTED=axial_small_ring|allene_dependent|cumulene_tied_end` in place of `axial|cumulene`.
+
+## 0.178.0 - 2026-10-28
+
+A network channel's kind is derived from its states.
+
+- Requires `tckdb-schemas>=0.140.0`.
+- One refusal code is published: `network_channel_kind_mismatch` (422).
+
+## 0.177.0 - 2026-10-27
+
+Stereo isomerisations, duplicate network states, stereo in exports.
+
+- Requires `tckdb-schemas>=0.139.0`.
+- Three refusal codes are published: `reaction_entry_null_reaction`, `network_state_duplicate_composition` and `network_state_duplicate_participant` (all 422).
+- Reads: species-entry and structure-search records gain `stereo_not_represented` (`axial` / `cumulene`): the elements behind a `?` that no data can settle yet.
+- Reaction participant rows (`reactants` / `products` on search, browse and `get_reaction_full`) are one per distinct entry per side, with `stoichiometry` the number of
+  times that entry occurs (`H + H -> H2` lists the one H entry once, with 2). Summing `stoichiometry` over a side now gives the right count.
+- `species_entry_label` is built from the descriptor and resolution (`? unresolved`, `E,? partial`); the review-queue subject chemistry carries
+  `stereo_descriptor` and `stereo_resolution`.
+- A CHEMKIN export now prints each entry's stereo (`STEREO=E`, `STEREO_RESOLUTION=partial`, ...) after the `SMILES=` token in its comments; a reader taking
+  the first token after `SMILES=` is unaffected.
+
+## 0.176.0 - 2026-10-27
+
+A species entry's stereo is a descriptor; the species is the constitution.
+
+- Requires `tckdb-schemas>=0.138.0`: `stereo_label` accepts descriptor tokens only (`R S r s E Z e z - ?`, one per stereo element). Free text such as `"trans"`
+  is refused before the request is sent.
+- Reads: the species-entry types gain `stereo_descriptor`, `stereo_resolution` and `stereo_smiles`; `stereo_label` is now the display text of the descriptor
+  (null while nothing is resolved). Exact structure search takes `isomeric`.
+- Two refusal codes are published (`species_stereo_contradiction`, `species_stereo_label_invalid`). Allenes and longer cumulenes are accepted with a `?`
+  axis and the upload warning `species_entry_stereo_not_represented` (a different code from `species_entry_stereo_unresolved`: no further data would settle it).
+
+## 0.175.0 - 2026-10-27
+
+The README and docstrings describe the `curated` profile as it works.
+
+- Documentation only; no behaviour change. `profile="curated"` applies the `approved` floor to the records a list, search, browse, select or export returns, and
+  shows the evidence behind a returned record with its review badge. Only `rejected` and `deprecated` records are withheld. The typed-dict notes
+  that said "not approved" now say "rejected or deprecated".
+
 ## 0.174.0 - 2026-10-27
 
 Thermo and statmech selections say when the basin they were asked about was forwarded.

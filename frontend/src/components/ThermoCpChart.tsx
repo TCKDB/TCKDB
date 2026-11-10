@@ -28,6 +28,8 @@ import { SectionHeading } from "./PageSections"
 // stays a one-file change with no new CSS class.
 const visuallyHiddenStyle = {
     position: "absolute",
+    top: 0,
+    left: 0,
     width: 1,
     height: 1,
     padding: 0,

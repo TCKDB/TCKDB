@@ -10,7 +10,7 @@ A select call is these steps, in this order (``docs/specs/browse_order.md``):
 3. **The policy.** There are no built-in method rankings.
 4. **The result.** One record, or an explanation that several remain.
 
-The read profile's review floor (``curated``: approved only, hidden equals unknown equals absent) is not an
+The read profile's record floor (``curated``: a select returns approved records only) is not an
 eligibility default and no select request can lift it. An override can only lift an exclusion within what the read
 profile already shows.
 """

@@ -28,6 +28,7 @@ from app.api.routes._legacy_reads import (
     entity_page,
     legacy_route_class,
 )
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import (
     Calculation,
@@ -91,19 +92,24 @@ from app.services.artifact_persistence import (
     link_artifacts_to_deposit_submission,
     persist_artifact_batch,
 )
+from app.services.artifact_warning_recheck import recheck_calculation_warnings
 from app.services.calculation_parameter_extraction import (
-    try_extract_parameters_from_input_upload,
+    inputs_first,
+    try_extract_parameters_from_artifact_upload,
 )
 from app.services.charge_multiplicity_extraction import (
     try_reconcile_charge_multiplicity_from_output_upload,
 )
+from app.services.deposit_warnings import store_deposit_warnings
 from app.services.hessian_extraction import (
     try_extract_hessian_from_artifact_upload,
 )
+from app.services.hessian_method_deck_check import try_hessian_method_disagreement_from_input_upload
 from app.services.input_geometry_extraction import (
     try_extract_input_geometry_from_artifact_upload,
 )
 from app.services.public_refs import PREFIXES
+from app.services.record_review import RecordRef
 from app.services.scientific_read.handles import (
     canonical_level_of_theory_id,
     handle_type_mismatch_error,
@@ -128,7 +134,7 @@ router = APIRouter(
 )
 
 #: The write routes of the calculations path: no read profile applies to them.
-write_router = APIRouter()
+write_router = APIRouter(route_class=ServerFaultRoute)
 
 
 # ---------------------------------------------------------------------------
@@ -799,7 +805,7 @@ def upload_calculation_artifacts(
     # Evidence added after the fact still joins the deposit's submission, so
     # it has the same submission trail as artifacts uploaded with the
     # calculation (ingestion_submission_model.md, "Artifact links").
-    link_artifacts_to_deposit_submission(
+    deposit_submission = link_artifacts_to_deposit_submission(
         session,
         calculation_id=calc_pk,
         artifacts=rows,
@@ -811,8 +817,8 @@ def upload_calculation_artifacts(
     # logs reconcile the single-point energy against what the tool reported,
     # filling it when absent and flagging a mismatch for review.
     warnings: list[UploadWarning] = []
-    for art_in in request.artifacts:
-        try_extract_parameters_from_input_upload(
+    for art_in in inputs_first(request.artifacts):
+        try_extract_parameters_from_artifact_upload(
             session, calculation, art_in, warnings=warnings
         )
         sp_warning = try_reconcile_sp_energy_from_output_upload(
@@ -820,6 +826,11 @@ def upload_calculation_artifacts(
         )
         if sp_warning is not None:
             warnings.append(sp_warning)
+        # A deck attached after the deposit was judged may state a Hessian
+        # method the stored tolerance does not rest on: flag, never relabel.
+        deck_warning = try_hessian_method_disagreement_from_input_upload(session, calculation, art_in)
+        if deck_warning is not None:
+            warnings.append(deck_warning)
         # Output logs also state the charge and spin multiplicity the run
         # actually used; contradicting the declared identity is flagged.
         warnings.extend(
@@ -829,7 +840,9 @@ def upload_calculation_artifacts(
         )
         # Fill-when-absent: a freq log / ORCA .hess yields the Cartesian
         # force-constant matrix, bound to the calc's input geometry.
-        hessian_warning = try_extract_hessian_from_artifact_upload(session, calculation, art_in)
+        hessian_warning = try_extract_hessian_from_artifact_upload(
+            session, calculation, art_in, written_by=current_user.id
+        )
         if hessian_warning is not None:
             warnings.append(hessian_warning)
         # Fill-when-absent-or-degenerate: an opt calc's own input deck / log
@@ -845,6 +858,30 @@ def upload_calculation_artifacts(
     )
     if software_warning is not None:
         warnings.append(software_warning)
+
+    # Stored beside the calculation, under the submission it joined when it joined one; with no live submission to join
+    # the rows name the calculation alone, so a warning is never dropped. No marker row: this is not a re-check of the
+    # deposit, only what the new evidence earned.
+    if warnings:
+        store_deposit_warnings(
+            session,
+            deposit_submission.id if deposit_submission is not None else None,
+            warnings,
+            targets=[RecordRef(SubmissionRecordType.calculation, calc_pk)],
+            mark_checked=False,
+            written_by=current_user.id,
+        )
+
+    # Re-run the file-dependent checks; retirements commit or roll back with the attach.
+    warnings.extend(
+        recheck_calculation_warnings(
+            session,
+            calc_pk,
+            cause="artifact_attached",
+            submission_id=deposit_submission.id if deposit_submission is not None else None,
+            written_by=current_user.id,
+        )
+    )
 
     result = ArtifactsUploadResult(
         calculation_id=calc_pk,

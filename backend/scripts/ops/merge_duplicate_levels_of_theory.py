@@ -173,11 +173,14 @@ _LOT_COLUMNS = (
     "dispersion",
     "solvent",
     "solvent_model",
-    "keywords",
     "spin_treatment",
     # ADR 0021: part of the identity hash when set, so a regroup that left it
     # out would merge a frozen-core level into an all-electron one.
     "core_treatment",
+    # The other typed method qualifiers join the hash the same way.
+    "relativistic_hamiltonian",
+    "pno_truncation",
+    "ri_approximation",
 )
 
 

@@ -8,10 +8,12 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
+    Index,
     Integer,
     SmallInteger,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -41,8 +43,15 @@ class ChemReaction(Base, TimestampMixin, PublicRefMixin):
     __tablename__ = "chem_reaction"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    stoichiometry_hash: Mapped[Optional[str]] = mapped_column(
-        CHAR(64), unique=True, nullable=True
+    stoichiometry_hash: Mapped[Optional[str]] = mapped_column(CHAR(64), nullable=True)
+    #: The reaction this row was merged into, or ``NULL`` for a live row (DR-0038).
+    #: Two reactions whose participants became one species are one reaction. The
+    #: row that loses is kept, with its public ref and curation history, and
+    #: forwards one hop to the survivor, whose entries it handed over.
+    merged_into_chem_reaction_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("chem_reaction.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
     )
     reversible: Mapped[bool] = mapped_column(Boolean, nullable=False)
     reaction_family_id: Mapped[Optional[int]] = mapped_column(
@@ -71,6 +80,18 @@ class ChemReaction(Base, TimestampMixin, PublicRefMixin):
         CheckConstraint(
             "reaction_family_raw IS NULL OR reaction_family_source_note IS NOT NULL",
             name="reaction_family_raw_requires_source_note",
+        ),
+        # Unique over LIVE reactions; a merged-away reaction keeps its hash.
+        Index(
+            "uq_chem_reaction_stoichiometry_hash",
+            "stoichiometry_hash",
+            unique=True,
+            postgresql_where=text("merged_into_chem_reaction_id IS NULL"),
+        ),
+        Index("ix_chem_reaction_merged_into_chem_reaction_id", "merged_into_chem_reaction_id"),
+        CheckConstraint(
+            "merged_into_chem_reaction_id IS NULL OR merged_into_chem_reaction_id <> id",
+            name="not_merged_into_itself",
         ),
     )
 

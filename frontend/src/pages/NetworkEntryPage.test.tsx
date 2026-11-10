@@ -6,6 +6,8 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import "../design-system.css"
 import NetworkEntryPage from "./NetworkEntryPage"
+import { channelHandle } from "../domain/publicText"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 const NETWORK_REF = "net_test1"
 const server = setupServer()
@@ -186,7 +188,7 @@ describe("NetworkEntryPage -- identity, evidence, reactions, review", () => {
     it("renders the identity header, evidence checklist, reactions table and review section", async () => {
         handleEverything()
         page()
-        expect(await screen.findByRole("heading", { name: "hydrazine" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Pressure-dependent network" })).toBeVisible()
         expect(screen.getByText(NETWORK_REF)).toBeVisible()
         expect(screen.getByRole("heading", { name: "Evidence on this network" })).toBeVisible()
         expect(screen.getByRole("heading", { name: "Reactions" })).toBeVisible()
@@ -197,7 +199,7 @@ describe("NetworkEntryPage -- identity, evidence, reactions, review", () => {
     it("renders the potential-energy surface section and the k(T,P) section", async () => {
         handleEverything()
         page()
-        await screen.findByRole("heading", { name: "hydrazine" })
+        await screen.findByRole("heading", { name: "Pressure-dependent network" })
         expect(screen.getByRole("heading", { name: "Potential-energy surface" })).toBeVisible()
         expect(await screen.findByRole("heading", { name: "k(T,P)" })).toBeVisible()
     })
@@ -205,7 +207,7 @@ describe("NetworkEntryPage -- identity, evidence, reactions, review", () => {
     it("no rendered copy names an endpoint, an include= fragment, or a bare URL", async () => {
         handleEverything({ stateEnergies: [{ state_composition_hash: "hash_well", energy_kj_mol: 0, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" }] })
         const { container } = page()
-        await screen.findByRole("heading", { name: "hydrazine" })
+        await screen.findByRole("heading", { name: "Pressure-dependent network" })
         const text = container.textContent ?? ""
         expect(text).not.toMatch(/GET \/scientific/)
         expect(text).not.toMatch(/include=/)
@@ -250,7 +252,7 @@ describe("NetworkEntryPage -- review note", () => {
     it("renders no review-note disclosure when neither review carries a note", async () => {
         handleEverything()
         page()
-        await screen.findByRole("heading", { name: "hydrazine" })
+        await screen.findByRole("heading", { name: "Pressure-dependent network" })
         expect(screen.queryByText("Network review note", { exact: false })).toBeNull()
         expect(screen.queryByText("Network solve review note", { exact: false })).toBeNull()
     })
@@ -261,7 +263,7 @@ describe("NetworkEntryPage -- review note", () => {
         const user = userEvent.setup()
         handleEverything({ record: { solves: solvesWithReview({ status: "under_review", note: SOLVE_REVIEW_NOTE }) } })
         page()
-        await screen.findByRole("heading", { name: "hydrazine" })
+        await screen.findByRole("heading", { name: "Pressure-dependent network" })
         const summary = await screen.findByText("Network solve review note", { exact: false })
         expect(screen.queryByText(SOLVE_REVIEW_NOTE)).not.toBeVisible()
         await user.click(summary)
@@ -272,7 +274,7 @@ describe("NetworkEntryPage -- review note", () => {
         const user = userEvent.setup()
         handleEverything({ record: { network: networkWithReview({ status: "approved", note: NETWORK_REVIEW_NOTE } ) } })
         page()
-        await screen.findByRole("heading", { name: "hydrazine" })
+        await screen.findByRole("heading", { name: "Pressure-dependent network" })
         // Present regardless of status -- this fixture's network review is
         // `approved`, not `under_review`, pinning the "not gated on status"
         // invariant on the page itself, not just the component in isolation.
@@ -324,7 +326,7 @@ describe("NetworkEntryPage -- composition_hash never renders where chemistry bel
             ],
         })
         const { container } = page()
-        await screen.findByRole("heading", { name: "hydrazine" })
+        await screen.findByRole("heading", { name: "Pressure-dependent network" })
         // Open the disclosure (Testing Library renders `<details>` content
         // regardless of `open`, but assert both the label appears and the
         // raw hash never does, anywhere in the DOM).
@@ -345,22 +347,77 @@ describe("NetworkEntryPage -- composition_hash never renders where chemistry bel
     })
 })
 
-describe("NetworkEntryPage -- channel_key never renders as a bare label", () => {
-    it("channel_key (channel_1) appears only inside code.data cells, never as a heading/dt/caption or an SVG <text>", async () => {
+describe("NetworkEntryPage -- channel_key never reaches the DOM", () => {
+    it("prints a channel's position, never the depositor-typed channel_key, anywhere on the page", async () => {
         handleEverything()
         const { container } = page()
-        await screen.findByRole("heading", { name: "hydrazine" })
+        await screen.findByRole("heading", { name: "Pressure-dependent network" })
         const channelCells = Array.from(container.querySelectorAll('td[data-label="Channel"]'))
-        expect(channelCells.some((cell) => cell.textContent === "channel_1")).toBe(true)
-        for (const cell of channelCells) {
-            if (cell.textContent === "channel_1") expect(cell.querySelector("code.data")!.textContent).toBe("channel_1")
+        expect(channelCells.length).toBeGreaterThan(0)
+        expect(channelCells.every((cell) => /^\d+$/.test(cell.textContent ?? ""))).toBe(true)
+        expect(container.innerHTML).not.toContain("channel_1")
+    })
+})
+
+describe("NetworkEntryPage -- structured stereo facets tell isomeric states apart", () => {
+    it("labels the Z and E diazene states from the participants' structured facets, not the joined label", async () => {
+        const facets = { species_entry_kind: "minimum", electronic_state_kind: "ground", stereo_resolution: "resolved" }
+        const state = (hash: string, stereo: string) => ({
+            composition_hash: hash, kind: "well", label: null, participant_count: 1,
+            composition: {
+                participants: [{
+                    species_entry_ref: `spe_${stereo}`, species_ref: "sp_nn", canonical_smiles: "N=N", stoichiometry: 1,
+                    // The joined label carries a typed R as well; it is never read.
+                    species_entry_label: `${stereo} R`, ...facets, stereo_label: stereo, stereo_descriptor: stereo,
+                }],
+                participant_count_total: 1, participants_truncated: false, state_label: `N=N (${stereo} R)`,
+            },
+        })
+        handleEverything({ record: { states: [state("hash_z", "Z"), state("hash_e", "E")], channels: [] }, thermoCounts: { spe_Z: 0, spe_E: 0 } })
+        const { container } = page()
+        await screen.findByText(NETWORK_REF)
+        const table = await screen.findByRole("table", { name: "States in this network" })
+        const text = table.textContent ?? ""
+        expect(text).toContain("N=N (Z isomer)")
+        expect(text).toContain("N=N (E isomer)")
+        expect(container.textContent).not.toContain("enantiomer")
+    })
+})
+
+describe("NetworkEntryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the fields a depositor typed, in text, SVG text, ids or any attribute", async () => {
+        const detail = networkDetailFixture()
+        // The server's state label embeds each participant's `species_entry_label`; plant the typed parts there.
+        const typedLabel = `${ADVERSARIAL.joinedLabel} ${ADVERSARIAL.smilesWord}`
+        for (const state of (detail.record as { states: { composition: { participants: Record<string, unknown>[]; state_label: string } }[] }).states) {
+            for (const participant of state.composition.participants) participant.species_entry_label = typedLabel
+            state.composition.state_label = `${state.composition.state_label} (${typedLabel})`
         }
-        // Never inside a heading, a <dt>, a <caption>, or an SVG <text>
-        // anywhere on the page (invariant 1 of PR 3's diagram brief --
-        // grepping the rendered DOM, not just trusting the component).
-        for (const el of Array.from(container.querySelectorAll("h1, h2, h3, dt, caption, svg text"))) {
-            expect(el.textContent).not.toContain("channel_1")
-        }
+        const planted = plantSentinels(detail, ["name", "description", "channel_key", "label"])
+        expectPlanted(planted)
+        const { value } = planted
+        handleNetworkDetail(value)
+        const barrier = plantSentinels(
+            { channel_key: "x", reaction_entry_ref: "rxe_test1", transition_state_entry_ref: "tse_test1", forward_barrier_kj_mol: 20, reverse_barrier_kj_mol: 70, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
+            ["channel_key"],
+        )
+        handleSolveDetail("nsolve_test1", [
+            { state_composition_hash: "hash_well", energy_kj_mol: 0, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
+            { state_composition_hash: "hash_bim", energy_kj_mol: 50, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
+        ], [barrier.value])
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate((temperaturesK, pressuresBar) => plantSentinels(defaultKtpFits(temperaturesK, pressuresBar), ["channel_key"]).value)
+
+        const { container } = page()
+        // The fixture reached the page: ref, equation, and the energy diagram all rendered.
+        expect(await screen.findByText(NETWORK_REF)).toBeVisible()
+        expect(await screen.findByText("NN <=> [H][H] + N=N")).toBeVisible()
+        await waitFor(() => expect(container.querySelectorAll(".net-pes-level-link").length).toBeGreaterThan(0))
+        await screen.findByRole("heading", { name: "k(T,P)" })
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })
 
@@ -376,7 +433,7 @@ describe("NetworkEntryPage -- potential-energy surface", () => {
             ],
         })
         const { container } = page()
-        await screen.findByRole("heading", { name: "hydrazine" })
+        await screen.findByRole("heading", { name: "Pressure-dependent network" })
         expect(container.querySelectorAll(".net-pes-level-link")).toHaveLength(2)
         expect(container.querySelectorAll(".net-pes-saddle-link")).toHaveLength(1)
     })
@@ -389,7 +446,7 @@ describe("NetworkEntryPage -- potential-energy surface", () => {
             ],
         })
         const { container } = page()
-        await screen.findByRole("heading", { name: "hydrazine" })
+        await screen.findByRole("heading", { name: "Pressure-dependent network" })
         const svgTexts = Array.from(container.querySelectorAll("svg text")).map((t) => t.textContent)
         expect(svgTexts).toContain("NN")
         // The raw hash legitimately appears in a `data-composition-hash`
@@ -403,7 +460,7 @@ describe("NetworkEntryPage -- potential-energy surface", () => {
     it("the accessible states/channels tables always render, alongside the SVG", async () => {
         handleEverything()
         page()
-        await screen.findByRole("heading", { name: "hydrazine" })
+        await screen.findByRole("heading", { name: "Pressure-dependent network" })
         expect(screen.getByRole("table", { name: "States in this network" })).toBeInTheDocument()
         expect(screen.getByRole("table", { name: "Channels in this network" })).toBeInTheDocument()
     })
@@ -524,7 +581,7 @@ describe("NetworkEntryPage — an unreadable solve degrades, it does not blank t
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
         handleKtpEvaluate()
         page()
-        expect(await screen.findByRole("heading", { name: "hydrazine" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Pressure-dependent network" })).toBeVisible()
         expect(await screen.findByText("NN <=> [H][H] + N=N")).toBeInTheDocument()
     })
 
@@ -535,7 +592,7 @@ describe("NetworkEntryPage — an unreadable solve degrades, it does not blank t
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
         handleKtpEvaluate()
         const { container } = page()
-        await screen.findByRole("heading", { name: "hydrazine" })
+        await screen.findByRole("heading", { name: "Pressure-dependent network" })
         expect(container.textContent ?? "").toContain("could not read")
         expect(container.textContent ?? "").toContain("not a statement that no energies were deposited")
     })
@@ -543,7 +600,7 @@ describe("NetworkEntryPage — an unreadable solve degrades, it does not blank t
     it("a network whose solve reads fine says no such thing", async () => {
         handleEverything()
         const { container } = page()
-        await screen.findByRole("heading", { name: "hydrazine" })
+        await screen.findByRole("heading", { name: "Pressure-dependent network" })
         expect(container.textContent ?? "").not.toContain("could not read")
     })
 })
@@ -652,7 +709,7 @@ describe("NetworkEntryPage -- k(T,P) chart (PR 4)", () => {
         // (so the assertion above is not vacuously true on empty markup)
         // -- `channel_key` is present as a `data-*` attribute, per
         // invariant 4, just never as rendered text.
-        expect(section.querySelector('[data-channel-key="channel_1"]')).not.toBeNull()
+        expect(section.querySelector(`[data-channel-key="${channelHandle("channel_1")}"]`)).not.toBeNull()
     })
 
     it("degrades honestly when no channel on this network carries kinetics -- no empty chart, no request fired", async () => {
@@ -929,7 +986,7 @@ function stackedFamilyKtpFits(temperaturesK: number[], pressuresBar: number[]) {
  *  every checkbox's `<label>` carries `data-channel-key`, unchanged from PR
  *  4. */
 function selectChannel(container: HTMLElement, channelKey: string) {
-    const checkbox = container.querySelector(`.network-ktp-channel-option[data-channel-key="${channelKey}"] input`) as HTMLInputElement
+    const checkbox = container.querySelector(`.network-ktp-channel-option[data-channel-key="${channelHandle(channelKey)}"] input`) as HTMLInputElement
     fireEvent.click(checkbox)
 }
 
@@ -1134,5 +1191,82 @@ describe("NetworkEntryPage -- which solve the energies came from, and the order 
         const value = term.nextElementSibling as HTMLElement
         expect(value.textContent).toContain("modified strong collision (nsolve_test1)")
         expect(value.textContent).toContain("reservoir state (nsolve_test2)")
+    })
+})
+
+describe("NetworkEntryPage -- literature title (depositor text guard)", () => {
+    async function mount(literature: Record<string, unknown>) {
+        handleNetworkDetail(networkDetailFixture({ literature }))
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "2 [NH2] <=> NN")
+        handleKtpEvaluate()
+        page()
+        // The fixture reached the page: the Literature row rendered.
+        await screen.findByText("Literature", { selector: "dt" })
+    }
+
+    it("withholds a typed title and a spam DOI; prints the public ref and says the title is not verified", async () => {
+        await mount({
+            literature_ref: "lit_net1", title: "DEPOSITOR_SENTINEL_literature_title", title_source: "depositor_supplied",
+            doi: "10.1/ DEPOSITOR_SENTINEL_literature_doi spam.example",
+        })
+        expect(screen.getByText("Literature", { selector: "dt" }).nextElementSibling?.textContent).toBe("lit_net1 · Title not verified")
+        expectNoDepositorText()
+        expect(document.body.innerHTML).not.toContain("spam.example")
+    })
+
+    it("shows a registry-resolved title (the positive control)", async () => {
+        await mount({ literature_ref: "lit_net1", title: "RESOLVED_TITLE", title_source: "resolved_metadata" })
+        expect(screen.getByText("Literature", { selector: "dt" }).nextElementSibling?.textContent).toBe("RESOLVED_TITLE")
+    })
+})
+
+describe("NetworkEntryPage -- electronic-state labels and term symbols tell excited states apart", () => {
+    const stateWith = (hash: string, ref: string, facets: Record<string, unknown>) => ({
+        composition_hash: hash, kind: "well", label: null, participant_count: 1,
+        composition: {
+            participants: [{
+                species_entry_ref: ref, species_ref: "sp_ch2o", canonical_smiles: "C=O", stoichiometry: 1,
+                species_entry_label: "joined DEPOSITOR_SENTINEL_joined", species_entry_kind: "minimum", electronic_state_kind: "excited", ...facets,
+            }],
+            participant_count_total: 1, participants_truncated: false, state_label: "C=O (excited DEPOSITOR_SENTINEL_joined)",
+        },
+    })
+
+    it("labels the S1 and T1 states from the participants' structured facets", async () => {
+        handleEverything({
+            record: {
+                states: [
+                    stateWith("hash_s1", "spe_s1", { electronic_state_label: "S1", term_symbol: "¹A″" }),
+                    stateWith("hash_t1", "spe_t1", { electronic_state_label: "T1", term_symbol: "³A″" }),
+                ],
+                channels: [],
+            },
+            thermoCounts: { spe_s1: 0, spe_t1: 0 },
+        })
+        page()
+        await screen.findByText(NETWORK_REF)
+        const table = await screen.findByRole("table", { name: "States in this network" })
+        const text = table.textContent ?? ""
+        expect(text).toContain("C=O (excited state, state S1, ¹A″)")
+        expect(text).toContain("C=O (excited state, state T1, ³A″)")
+        expectNoDepositorText()
+    })
+
+    it("hides a label or term symbol outside the grammar (the hide-invalid path)", async () => {
+        handleEverything({
+            record: {
+                states: [stateWith("hash_bad", "spe_bad", { electronic_state_label: "R", term_symbol: "DEPOSITOR_SENTINEL_term" })],
+                channels: [],
+            },
+            thermoCounts: { spe_bad: 0 },
+        })
+        page()
+        await screen.findByText(NETWORK_REF)
+        const table = await screen.findByRole("table", { name: "States in this network" })
+        expect(table.textContent).toContain("C=O (excited state)")
+        expect(table.textContent).not.toMatch(/state R/)
+        expectNoDepositorText()
     })
 })

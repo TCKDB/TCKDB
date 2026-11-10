@@ -99,6 +99,7 @@ from app.schemas.reads.scientific_calculation import (
     CalculationCompositeInputSummary,
     CalculationConformerSummary,
     CalculationDependencySummary,
+    RoleCalculationSettings,
     TransitionStateEntryOwnerSummary,
 )
 from app.schemas.reads.scientific_common import (
@@ -115,6 +116,7 @@ from app.schemas.reads.scientific_conformer import (
     ConformerObservationGroupSummary,
     ConformerObservationSiblingSummary,
 )
+from app.schemas.reads.scientific_deposit_warnings import DepositWarningItem, RecordWarnings
 from app.schemas.reads.scientific_frequency_scale_factor import FrequencyScaleFactorUsageSummary
 from app.schemas.reads.scientific_geometry import (
     GeometryIdentity,
@@ -276,6 +278,8 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         TransitionStateStatmechSummary,
         TransitionStateStatmechSourceCalculation,
         CalculationEvidenceSummary,
+        # The settings behind a thermo or statmech level: a block about the linked calculation.
+        RoleCalculationSettings,
         # PR-2a: the species-side family.
         StatmechTransitionStateContext,
         CalculationCompositeInputSummary,
@@ -309,6 +313,8 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         # An entry record nested in another record's ``entries`` goes whole when the entry is hidden. The subject of a
         # response (``record``, ``records[*]``) is never deleted as a pointer, so this is inert there.
         ScientificTransitionStateEntryRecord,
+        # The deposit warnings of a record the response names beside the subject: gone with the record when it is hidden.
+        RecordWarnings,
         TransitionStateSaddlePointEvidence,
         TransitionStateValidationEvidenceSummary,
         TransitionStateComparedEnergySummary,
@@ -357,6 +363,8 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
 POINTER_FIELDS: frozenset[tuple[type[BaseModel], str]] = frozenset(
     {
         (KineticsProvenance, "irc"),
+        # The values a warning quotes: a hidden ref inside blanks them, and the warning itself stays.
+        (DepositWarningItem, "context"),
     }
 )
 
@@ -1056,7 +1064,7 @@ def _geometry_identity_is_empty(node: BaseModel) -> bool:
 
 #: Blocks that must not survive as an empty shell once their contents were withheld: the field that holds one is set
 #: to ``None``, exactly as when there was never anything to show. A client cannot tell "every owner withheld" from
-#: "no owner" (hidden equals unknown). ``model -> is it empty``.
+#: "no owner" (withheld equals unknown). ``model -> is it empty``.
 COLLAPSE_WHEN_EMPTY: Mapping[type, Any] = {GeometryIdentity: _geometry_identity_is_empty}
 
 
@@ -1404,9 +1412,10 @@ def _withhold_placeholders(session: Session, facts: Any, *, profile: ResolvedRea
 
 
 def unavailable_refs(session: Session, refs: Collection[str]) -> set[str]:
-    """Refs a selection treats as unavailable under the profile in force: hidden, or naming no row.
+    """Refs a selection treats as unavailable under the profile in force: withheld, or naming no row.
 
-    Hidden == unknown: evidence that points at a record the reader cannot open reads exactly like evidence that points at
+    Withheld == unknown: evidence that points at a record the reader cannot open reads exactly like evidence that
+    points at
     nothing. Empty (and no statement) without a review floor, so an exploratory selection is unchanged; a release-backed
     profile is left alone as everywhere in the guard. ``session`` is the selection's own snapshot session.
     """

@@ -28,7 +28,6 @@ from collections import defaultdict
 from types import SimpleNamespace
 
 import pytest
-from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
 from app.chemistry.basis_set_names import basis_identity_key
 from app.chemistry.dispersion_names import (
@@ -39,7 +38,7 @@ from app.chemistry.dispersion_names import (
 )
 from app.chemistry.lot_component_names import component_identity_key
 from app.chemistry.method_names import NAME_ALIASES, SUFFIX_RULES
-from app.services.calculation_resolution import _level_of_theory_hash
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 from tests.services.test_basis_identity_key import _all_spellings
 from tests.services.test_dispersion_identity_key import _ALL_PAIRS, DISPERSION
 from tests.services.test_method_identity_key import _all_methods
@@ -177,7 +176,7 @@ def test_frozen_hash_matches_the_application(mig, method, dispersion):
         "spin_treatment": "unrestricted",
     }
     row = SimpleNamespace(_mapping=fields)
-    assert mig._lot_hash(row, split=True) == _level_of_theory_hash(LevelOfTheoryRef(**fields))
+    assert mig._lot_hash(row, split=True) == frozen_level_of_theory_hash(**fields)
 
 
 @pytest.mark.parametrize(

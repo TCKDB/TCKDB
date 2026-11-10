@@ -362,7 +362,8 @@ def test_real_upgrade_downgrade_upgrade_keeps_existing_rows_null_and_their_diges
     harness.run("upgrade", _REVISION.parent)
     ids = _seed_thermo_rows(harness.engine)
 
-    harness.run("upgrade", _REVISION.revision)
+    # Digests are read through the ORM, so they are taken at head.
+    harness.run("upgrade", "head")
     before = _digests(harness.engine, ids)
     with harness.engine.connect() as conn:
         rows = conn.execute(
@@ -383,7 +384,7 @@ def test_real_upgrade_downgrade_upgrade_keeps_existing_rows_null_and_their_diges
             text("SELECT column_name FROM information_schema.columns WHERE table_name = 'thermo'")
         )))
 
-    harness.run("upgrade", _REVISION.revision)
+    harness.run("upgrade", "head")
     assert _digests(harness.engine, ids) == before
     with harness.engine.connect() as conn:
         assert conn.scalar(

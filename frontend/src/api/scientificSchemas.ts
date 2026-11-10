@@ -131,3 +131,19 @@ export const calculationSummarySchema = z.object({
     software_release: z.object({ software: z.string() }).passthrough().nullable().optional(),
     workflow_tool_release: z.object({ workflow_tool: z.string() }).passthrough().nullable().optional(),
 }).passthrough()
+
+/**
+ * The computed identity facets served on every block that names a species entry (see
+ * `domain/participantFacets.ts`). Spread into the block's `z.object`.
+ */
+export const entryFacetFields = {
+    species_entry_kind: z.string().nullable().optional(),
+    electronic_state_kind: z.string().nullable().optional(),
+    stereo_label: z.string().nullable().optional(),
+    stereo_descriptor: z.string().nullable().optional(),
+    stereo_resolution: z.string().nullable().optional(),
+    isotope_key: z.string().nullable().optional(),
+    /** Served only when in the grammar the API enforces on write; `null` otherwise. */
+    electronic_state_label: z.string().nullable().optional(),
+    term_symbol: z.string().nullable().optional(),
+}

@@ -69,17 +69,17 @@ def test_collapse_is_refused(client, db_session):
 
 
 def test_get_parses_include_repeated_and_comma_forms(client, db_session):
-    species = make_species(db_session, smiles="OC", inchi_key=next_inchi_key("INC"))
+    species = make_species(db_session, smiles="CO", inchi_key=next_inchi_key("INC"))
     entry = make_species_entry(db_session, species)
     make_thermo_scalar(db_session, species_entry=entry)
 
     # Comma-separated form
     resp_a = client.get(
-        "/api/v1/scientific/species/search?smiles=OC&include=thermo,statmech"
+        "/api/v1/scientific/species/search?smiles=CO&include=thermo,statmech"
     )
     # Repeated form
     resp_b = client.get(
-        "/api/v1/scientific/species/search?smiles=OC&include=thermo&include=statmech"
+        "/api/v1/scientific/species/search?smiles=CO&include=thermo&include=statmech"
     )
     assert resp_a.status_code == 200
     assert resp_b.status_code == 200

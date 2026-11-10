@@ -11,6 +11,14 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
     return participants.map((participant) => ({
         species_entry_ref: participant.species_entry_ref,
         species_entry_label: participant.species_entry_label,
+        species_entry_kind: participant.species_entry_kind,
+        electronic_state_kind: participant.electronic_state_kind,
+        stereo_label: participant.stereo_label,
+        stereo_descriptor: participant.stereo_descriptor,
+        stereo_resolution: participant.stereo_resolution,
+        isotope_key: participant.isotope_key,
+        electronic_state_label: participant.electronic_state_label,
+        term_symbol: participant.term_symbol,
         smiles: participant.smiles,
         formula: participant.formula,
         stoichiometry: participant.stoichiometry,
@@ -128,8 +136,7 @@ export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) 
             <div className="browse-row-headline">
                 <p className="reaction-browse-row-title">
                     {/* Deliberately NO `aria-label` here: the equation is the
-                        Link's own visible content (`species_entry_label` chip
-                        and the arrow's "reacts reversibly with"/"reacts to
+                        Link's own visible content (the arrow's "reacts reversibly with"/"reacts to
                         form" aria-label included), so the browser's own
                         accname computation already reads as an English
                         sentence -- e.g. "H2N + H2N reacts reversibly with

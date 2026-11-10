@@ -27,6 +27,9 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Chem import inchi as _inchi
 
+from app.api.error_contract import CodedValueError
+from app.chemistry.species import identity_mol_from_smiles, strip_isotopes
+from app.chemistry.stereo import constitution_mol, descriptor_of_mol
 from app.schemas.reads.scientific_structure_search import (
     StructureQueryKind,
     StructureSearchMode,
@@ -89,6 +92,44 @@ def parse_smiles_to_canonical(smiles: str) -> str:
     return canonical
 
 
+def _constitution_of(mol: Chem.Mol) -> Chem.Mol:
+    """The stereo-blind, isotope-blind molecule a species key is made from."""
+    return constitution_mol(strip_isotopes(mol))
+
+
+def constitution_smiles(smiles: str) -> str:
+    """Flatten a query SMILES to the species key (DR-0038).
+
+    ``C/C=C/C`` and ``CC=CC`` are one species, so an exact match on
+    ``species.smiles`` has to compare constitutions. An unparseable query is
+    returned unchanged: it simply matches nothing.
+    """
+    try:
+        mol = identity_mol_from_smiles(smiles)
+    except ValueError:
+        return smiles
+    return Chem.MolToSmiles(_constitution_of(mol), canonical=True)
+
+
+def entry_stereo_descriptor_of_query(kind: StructureQueryKind, value: str) -> str | None:
+    """The entry stereo descriptor a SMILES query's marks specify, if any.
+
+    Used by the entry-level isomeric search: ``C/C=C/C`` names ``E``. ``None``
+    when the query is not a SMILES, carries no stereo-capable element, or
+    cannot be parsed.
+    """
+    if kind is not StructureQueryKind.smiles:
+        return None
+    try:
+        mol = identity_mol_from_smiles(value)
+    except ValueError:
+        return None
+    try:
+        return descriptor_of_mol(mol)
+    except CodedValueError:
+        return None
+
+
 def parse_smarts(smarts: str) -> Chem.Mol:
     mol = Chem.MolFromSmarts(smarts)
     if mol is None:
@@ -134,7 +175,7 @@ def inchi_key_from_query(
                 "invalid_structure_query: RDKit could not parse the "
                 f"SMILES supplied as {name}."
             )
-        return _inchi.MolToInchiKey(mol)
+        return _inchi.MolToInchiKey(_constitution_of(mol))
     if kind is StructureQueryKind.inchi:
         name = field_name or "query_inchi"
         mol = Chem.MolFromInchi(value)
@@ -143,7 +184,7 @@ def inchi_key_from_query(
                 "invalid_structure_query: RDKit could not parse the "
                 f"InChI supplied as {name}."
             )
-        return _inchi.MolToInchiKey(mol)
+        return _inchi.MolToInchiKey(_constitution_of(mol))
     raise ValueError(
         "invalid_structure_query: exact mode does not accept this "
         "query kind."
@@ -152,7 +193,9 @@ def inchi_key_from_query(
 
 __all__ = [
     "MODE_QUERY_KIND_RULES",
+    "constitution_smiles",
     "enforce_mode_query_compatibility",
+    "entry_stereo_descriptor_of_query",
     "inchi_key_from_query",
     "parse_inchi_to_canonical_smiles",
     "parse_smarts",

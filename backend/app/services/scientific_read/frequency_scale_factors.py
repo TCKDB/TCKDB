@@ -306,6 +306,9 @@ def _build_lot_summary(
         solvent=lot.solvent,
         spin_treatment=lot.spin_treatment,
         core_treatment=lot.core_treatment,
+        relativistic_hamiltonian=lot.relativistic_hamiltonian,
+        pno_truncation=lot.pno_truncation,
+        ri_approximation=lot.ri_approximation,
         aux_basis=lot.aux_basis,
         cabs_basis=lot.cabs_basis,
         solvent_model=lot.solvent_model,
@@ -388,8 +391,10 @@ def _build_literature_summary(
         id=lit.id,
         literature_ref=lit.public_ref,
         title=getattr(lit, "title", None),
+        title_source=getattr(lit, "title_source", None),
         year=getattr(lit, "year", None),
         doi=getattr(lit, "doi", None),
+        isbn=getattr(lit, "isbn", None),
     )
 
 

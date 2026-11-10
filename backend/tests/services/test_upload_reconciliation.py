@@ -164,7 +164,7 @@ class TestReconcileSpeciesEntry:
         )
         assert len(warnings) == 1
         assert warnings[0].code == W_N_IMAG_HIGHER_ORDER_SADDLE
-        assert "2 imaginary modes" in warnings[0].message
+        assert warnings[0].context == {"n_imag": 2}
 
     def test_n_imag_three_vdw_complex_produces_higher_order_warning(self) -> None:
         warnings = reconcile_species_entry(

@@ -18,6 +18,7 @@ from tckdb_schemas.coded_error import CodedValidationError
 
 from app.api.deps import get_current_user, get_write_db
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import Calculation
 from app.db.models.common import ScientificOriginKind, SubmissionKind
@@ -55,6 +56,7 @@ from app.services.artifact_storage import (
     MAX_ENCODED_ARTIFACT_LEN,
 )
 from app.services.atomic_electronic_warnings import collect_atomic_electronic_warnings
+from app.services.deposit_warnings import store_deposit_warnings
 from app.services.frequency_geometry_linearity import (
     computed_species_linearity_warnings,
     inline_calculation_linearity_warnings,
@@ -108,7 +110,7 @@ from app.workflows.thermo import persist_thermo_upload
 from app.workflows.transition_state import persist_transition_state_upload
 from app.workflows.transport import persist_transport_upload
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +349,7 @@ def upload_conformer(
         ],
         warnings=warnings,
     )
+    store_deposit_warnings(session, sub.submission_id, warnings)
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
@@ -383,6 +386,7 @@ def upload_reaction(
         reaction_id=reaction_entry.reaction_id,
         warnings=warnings,
     )
+    store_deposit_warnings(session, sub.submission_id, warnings)
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
@@ -423,6 +427,7 @@ def upload_kinetics(
         reaction_entry_id=kinetics.reaction_entry_id,
         warnings=warnings,
     )
+    store_deposit_warnings(session, sub.submission_id, warnings)
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
@@ -462,6 +467,7 @@ def upload_network(
         submission_ref=sub.submission_ref,
         warnings=warnings,
     )
+    store_deposit_warnings(session, sub.submission_id, warnings)
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
@@ -503,6 +509,7 @@ def upload_network_pdep(
         solve_id=solve_id,
         warnings=pdep_warnings,
     )
+    store_deposit_warnings(session, sub.submission_id, pdep_warnings)
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
@@ -584,6 +591,7 @@ def upload_statmech(
         species_entry_id=statmech.species_entry_id,
         warnings=warnings,
     )
+    store_deposit_warnings(session, sub.submission_id, warnings)
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
@@ -624,6 +632,7 @@ def upload_thermo(
         species_entry_id=thermo.species_entry_id,
         warnings=warnings,
     )
+    store_deposit_warnings(session, sub.submission_id, warnings)
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
@@ -665,6 +674,7 @@ def upload_transition_state(
         reaction_entry_id=ts_entry.transition_state.reaction_entry_id,
         warnings=warnings,
     )
+    store_deposit_warnings(session, sub.submission_id, warnings)
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
@@ -712,6 +722,7 @@ def upload_transport(
         species_entry_id=transport.species_entry_id,
         warnings=warnings,
     )
+    store_deposit_warnings(session, sub.submission_id, warnings)
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
@@ -733,7 +744,9 @@ def upload_computed_species(
     artifacts + optional thermo, atomic in one transaction (DR-0029)."""
     if (replay := idem.maybe_replay()) is not None:
         return replay
-    warnings = reconcile_species_entry(request.species_entry)
+    warnings = reconcile_species_entry(
+        request.species_entry, geometries=[conf.geometry for conf in request.conformers]
+    )
     warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
     # The sharper half of the completeness question, which needs the
     # geometry's coordinates and a collinearity tolerance and therefore
@@ -808,6 +821,7 @@ def upload_computed_species(
         transport=transport_ref,
         warnings=warnings,
     )
+    store_deposit_warnings(session, sub.submission_id, warnings)
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
@@ -851,6 +865,7 @@ def upload_computed_reaction(
             session, result_dict.get("calculation_keys", {})
         ),
     )
+    store_deposit_warnings(session, sub.submission_id, result_dict["warnings"])
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result

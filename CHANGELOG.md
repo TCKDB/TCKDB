@@ -22,6 +22,431 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## An over-limit body gets a coded 413; a 422 does not echo the body (2026-11-09)
+
+- **Behaviour:** the frontend nginx answers a body over its cap (100 MiB on `/api/v1/uploads/`, `/api/v1/jobs/` and `/api/v1/calculations/<ref>/artifacts`, 10 MiB on other `/api/` routes) with `413 request_body_too_large` as JSON in the API's error envelope (`context.max_bytes` is the cap), instead of a bare HTML page. A request-validation 422 no longer carries the caller's value under each error's `input` or in its message. `tckdb-client` explains a 413 that carries no TCKDB code.
+- **Schema and migration:** none. The nginx change needs a frontend image deploy.
+- **Versions:** `tckdb-schemas` 0.170.0, `tckdb-client` 0.199.0.
+
+## Deposit warnings are retired when later events make them untrue (2026-11-09)
+
+- A warning whose condition stops holding is retired, not deleted: the append-only table `deposit_warning_retirement` records when and why, and the warning row stays.
+- Retiring events: a file attached to a calculation (`converged_opt_no_usable_energy` needs the opt's energy and a file when no single point exists), a single point deposited for the same owner (that warning on the owner's opts), and a Hessian stored (the calculation's `hessian_not_stored_*` warnings).
+- A converged opt with no energy that gets a file keeps a warning restated with the file counted; the replacement is stored first, then the old one is retired as `superseded_by_recheck`.
+- Reads show current warnings only; curators and admins also see retired ones with `retired_at` and `retired_reason` (`tckdb-schemas` 0.169.0, client 0.198.0).
+- `has_artifact` in the converged-opt warning now reports a file on an opt that has no energy; it was always false there.
+
+## Every scientific refusal and warning code has a register entry, or a stated reason it has none (2026-11-09)
+
+- **What changed:** the scientific check register grew from 52 to 80 entries. Twenty-eight new entries cover codes the API and the stored warnings already carried: the bath gas of a rate, network channel kind and state composition, declared energy levels and the one-to-one pairing of energies with optimisations, a calculation's own geometry statements, composite and single-point arithmetic, the subject a record's evidence and declarations belong to, curator identity attach, bond-additivity totals and scale factors, the enthalpy reference, the calculation dependency graph, and families of warnings against the uploaded evidence. Five further codes joined four existing entries where they are the same check. Every other catalogued code and rendered warning is now in `NOT_SCIENTIFIC` (`app/scientific_checks/not_scientific.py`) with a reason, and a test fails when a code is in neither the register nor that list. Twenty-two stored warnings now carry the register number of their entry (`record_warnings[].register_entry`), including those stored before this change, which are now numbered when read. Entry 18's text states the tolerance order since #864: reported log method, echoed input, recorded method or deck, assumed program default, 50 cm-1. Three refusals (`observation_identity_target_not_ground_state_minimum`, `observation_identity_hint_conflict`, `unsafe_lowest_energy_comparison`) are now coded errors; the two attach refusals no longer quote the observation's identity hint in their messages.
+- **Unchanged:** no refusal, warning, tier or tolerance changed.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.168.0 (generated contract text only), `tckdb-client` 0.197.0 (schemas window only).
+
+## A thermo target says whose claim it is; imported CHEMKIN thermo declares its target (2026-11-09)
+
+- **What changed:**
+  - A thermo record's `thermodynamic_target` gains `declared_by`: `depositor` (the default; existing targets read `depositor`) or `chemkin_format`, a statement by the depositing client that the CHEMKIN format defines the target. It is stored, returned in the thermo read's `thermodynamic_target`, carried by the bundle export, and shown as `target_declared_by` on each thermo selection candidate. The legacy thermo read returns `thermodynamic_target_declared_by` as `null` when no target is declared.
+  - A `chemkin_format` target is refused unless it is `equilibrium_ensemble` (`thermo_declared_by_target_incoherent`) on a record with phase `gas` and a NASA-7 block (`thermo_declared_by_record_incoherent`).
+  - `tckdb-chemkin` declares `equilibrium_ensemble` with `declared_by: chemkin_format` for gas-phase entries. The phase comes from the card's column-45 letter (`G`, `L`, `S`); `L` and `S` declare their phase and no target, and a blank or unknown letter declares neither (a blank used to read as `G`). It sends a new wire key an older server refuses, and needs a server at migration `e7a3c1d9f482` or later and `tckdb-schemas` 0.167.0 or later.
+  - Thermo selection of the formic acid model's 123 species answers `sole_eligible_candidate` instead of `no_applicable_candidate`.
+- **Schema and migration:** revision `e7a3c1d9f482` adds `thermo.thermodynamic_target_declared_by` (enum `thermo_declaration_source`, `NOT NULL DEFAULT 'depositor'`). **Versions:** `tckdb-schemas` 0.167.0, `tckdb-client` 0.196.0, `tckdb-chemkin` 0.7.0.
+
+## A depositor cannot approve their own record, and the record-review route checks what it is given (2026-11-09)
+
+- **What changed:** `PATCH /record-reviews/{record_type}/{record_id}` to `approved` compared the actor only with the review row's `created_by`, which is NULL when the curator's own request creates the row (a `species` or `reaction`, which no upload targets). The rule is now judged on every deposit signal: the review row's `created_by`, the record's own `created_by`, and the uploader of any submission linked to the record.
+  - Owned records (thermo, kinetics, statmech, transport, calculation, reaction entry, transition state and entry, network and solve, applied energy correction, conformer observation, molecular property observation) are refused to their depositor, judged on the record's own `created_by` and the review row's; linked-submission uploaders count only when both are NULL.
+  - Shared identities (`species`, `reaction`, `species_entry`, `conformer_group`) are refused only to their sole depositor, so who deposited first no longer decides. A `species` or `reaction` takes the signals of its entries.
+  - The bulk submission approval returns a record that is already approved untouched (reviewer, time and history stay), and does not judge it again.
+  - The review queue read carries `actor_may_approve` per row (false when the rule would refuse the reader; null on approved and rejected rows); the review page uses it to hide "approved" (it used to compare `created_by` with the signed-in user). Needs a frontend deploy.
+  - The refusal is now `record_self_approval`, HTTP 403 with `record_type` and `record_ref` in `context` (was an uncoded 400 `domain_error`).
+  - `POST /submissions/{id}/approve` by the submission's uploader now carries the code `submission_self_approval` (403, was an uncoded 400); the rule itself is unchanged.
+  - `PATCH /record-reviews` on a record that does not exist is a 404 `record_not_found`, and on `record_type=artifact` a 422 `record_type_not_reviewable`; before, either created a review row.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.166.0, `tckdb-client` 0.195.0.
+
+## An xtb output file is accepted as an `output_log`, and artifact refusals carry codes (2026-11-09)
+
+- **What changed:**
+  - An xtb output file (`xtb.out`, and xtb's `g98.out`) is accepted as an `output_log` and identified as xtb. The banner version is compared with the declared software release. No energy, frequency, Hessian, charge, multiplicity or geometry is read from it, and no warning is raised for that.
+  - Every artifact validation refusal has a code and `context`: `output_log_signature_unrecognized`, `artifact_empty`, `artifact_too_large`, `artifact_sha256_mismatch`, `artifact_size_mismatch`, `artifact_not_utf8_text`, `artifact_invalid_base64`, `artifact_total_size_too_large`, `artifact_encoded_payload_too_large`, `artifact_total_encoded_payload_too_large` (all 422). A depositor's filename is in `context.depositor_supplied`, not the message.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.163.0, `tckdb-client` 0.192.0.
+
+## Archives with enum or text primary keys restore (2026-11-09)
+
+An archive containing a table whose primary key includes an enum or text column
+(for example a species that is both reactant and product of one reaction) is
+no longer refused on restore with "Primary keys are duplicated or unsorted".
+Export now orders those keys by codepoint, which is the order restore checks.
+Older archives written with the mismatched order are refused; there is no
+legacy path. No schema or migration change.
+
+## A build script for the demonstration snapshot (2026-11-09)
+
+- **What changed:**
+  - `scripts/paper_snapshot/` builds a snapshot on an empty local instance from a sources config: the E2 conformer study through the client builders, the formic acid RMG model through the CHEMKIN adapter, curator approval, the archive and the expected outputs.
+  - `backend/scripts/paper/`: `hessian_reanalysis` is registered; new generators `conformer_basins`, `calculation_evidence`, `deposit_warnings`, `thermo_selection_outcomes` and `structure_selection_outcomes`; `mechanism_roundtrip_counts` and `mechanism_fixture_provenance` report on the formic acid model.
+  - `tckdb-chemkin` keys a species record (thermo, transport) by SMILES, multiplicity and charge (when not zero), so singlet and triplet CH2 or O no longer share an idempotency key. Species that still share all three are keyed by their CHEMKIN label, with a warning in the import report.
+- **Schema and migration:** none. **Versions:** `tckdb-chemkin` 0.6.1.
+
+## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
+
+- **What changed:**
+  - `tckdb-chemkin` reads an RMG `c+1` / `c-1` formal charge, an atom label (`*1`) and an isotope tag (`i13`, kept in the SMILES) in `species_dictionary.txt`. It used to skip an atom line it could not read without a word; any atom-like line that does not parse now raises, naming the species and the line.
+  - A CHEMKIN export writes `MULT=<m>` on every species comment, right after `SMILES=` (therm, SPECIES block, tran and the network export). `tckdb-chemkin` reads it back, so a structure shared by two spin states (CH2 singlet and triplet) stays two species. A `MULT` that is not a whole number >= 1, or whose parity disagrees with the structure's electron count, is an error naming the species.
+  - An export writes `tran.dat` only if at least one transport line was written; otherwise the manifest says so under `transport_file` (`written: false`, a `reason_code` of `not_requested`, `no_exported_species_has_transport` or `no_transport_line_written`, and the reason text).
+  - The export marks `DUPLICATE` by the unordered pair of sides and the rate type, as Cantera 3.2's `checkDuplicates` requires, so a reaction stored in both directions is declared.
+  - An isotopologue's `SMILES=` comment carries the entry's `isotope_key` (the isotope-labelled SMILES), so it re-imports as itself and not as the plain species; non-isotopic species are unchanged.
+  - The importer's report warns, with line numbers, about a reaction repeated without `DUPLICATE` and about a `DUPLICATE` with no other `DUPLICATE` reaction among the same participants (Cantera 3.2's rule, including stoichiometric multiples such as `2A=2B` beside `A=B`; a marker that belongs to an undeclared repeat is one warning, not two). It never adds or removes a marker or drops a reaction.
+- **Why:** the published formic acid model (Wu and Grinberg Dana 2026, 123 species, 3002 reactions) could not be imported, and its export could not be told apart species-wise from its spin variants or loaded by Cantera next to a near-empty `tran.dat`.
+- **Schema and migration:** none. **Versions:** `tckdb-chemkin` 0.6.0.
+
+## A kinetics energy level's spin treatment is judged per participant (2026-11-07)
+
+- **What changed:** a kinetics record's declared `energy_level_of_theory` is compared with each linked reactant, product and TS energy: every identity field except spin must match (normalised as the level hash normalises them); a closed-shell link (multiplicity 1, restricted or restricted-open, or unrestricted with stored ⟨S²⟩ at or below 0.1) never constrains spin; the remaining links must share one open-shell reference (unrestricted or restricted-open; unknown spin is skipped), and a stated spin treatment must equal it. Refusals are `kinetics_energy_level_contradiction` with `reason: open_shell_reference_mixed` or `declared_spin_differs`. A level that names a user-declared composite scheme keeps the row comparison. `/uploads/kinetics` and bundle import apply the same rule: the lookup of source calculations for the declared level matches on the field rule, prefers the calculation on the declared level's own row (no spin declared) or at the declared spin, and treats a closed-shell calculation as eligible; the found calculations are then checked as above. An unrestricted singlet with no stored ⟨S²⟩ counts as open-shell, and the refusal says so (`context.s_squared_missing_for`, with a clause asking for `spin_diagnostic.s_squared`). On bundle import a spin violation is reported with the new reason `contradiction` of `energy_level_stored_without_source_calculations` (found, but contradictory), not `none`. A reaction that names one species twice (H + H) links its single point once per role; `/uploads/kinetics` used to fail with a unique violation on `pk_kinetics_source_calculation` (stoichiometry is on the reaction's participants, not on the links). A violation refuses on the standalone route and, on bundle import, stores the level without source calculations with the existing `energy_level_stored_without_source_calculations` warning.
+- **Why:** spin treatment follows each species' multiplicity, so a reaction mixing radicals (unrestricted) and closed-shell molecules (restricted) had no declaration the old row-id comparison accepted, and every such deposit drew `missing_level_of_theory_provenance`.
+- **Unchanged:** `spin_treatment` stays in level identity and in the hash; thermo and statmech level checks.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.161.0, `tckdb-client` 0.189.0.
+
+## Two refusals gain codes (2026-11-09)
+
+- **What changed:** a reaction deposited under a reaction family different from the one it is already recorded under is still refused (422), now with the code `reaction_family_conflict` instead of the generic `validation_error`; its message no longer quotes depositor text and names a family only when it is a seeded vocabulary name. All three conflict shapes are refused: seeded against seeded, raw against raw, and seeded against raw in either order (the mixed case used to be accepted). A computed-reaction bundle's family now applies to the bundle's own reaction only, not to kinetics fits of other reactions in it. A network solve whose bath-gas mole fractions do not sum to 1 within 1e-9 now returns `kinetics_bath_gas_mole_fraction_sum`, the code a kinetics rate's bath gas already used (one rule, one code, one tolerance).
+- **Schema and migration:** none (`tckdb-schemas` 0.162.0, `tckdb-client` 0.190.0).
+
+## A response the server cannot build is a logged 500, not a bare error or a 422 (2026-11-07)
+
+- **What changed:** when the server fails its own response or read model it now returns a JSON 500 with the new code `server_response_invalid` and fixed text (no validation detail, object repr or id). Two cases lead there: a route whose returned object fails its `response_model` (it used to be a `text/plain` "Internal Server Error"), and a response or read model that fails while a route builds it from a database row (it used to be a 422 that blamed the caller and echoed an object repr).
+- **The rule:** a failing response or read model is a 500; anything else keeps its 422. `ServerFaultRoute` (on every router) classifies a pydantic failure escaping an endpoint by the failing model's name: the models the routes return (walked through nested fields and generic envelopes), every class in `app/schemas/reads`, and every `*Read` class. A request or query model stays a 422 because FastAPI validates request bodies and queries before the route runs, and manual validation of caller data goes through `caller_input` (some request models are in the set as response echoes, so the name alone would not protect them). Lookup parameters, upload payloads and declarations keep their 422 and their bodies unchanged. `caller_input` pins a caller-input site to 422 even if its model shares a name with a response model. `/bundles/dry-run` classifies a raw failure the same way.
+- **Logged:** the validation errors, without their input values, capped at 20 plus the total, with the method and route path.
+- **Schema and migration:** none.
+
+## A request with no valid credential may not make the API read a large body (2026-11-07)
+
+- **What changed:** a `POST`/`PUT`/`PATCH` under `/api/` whose body is over `ANONYMOUS_MAX_BODY_BYTES` (default 1 MiB) is refused `413 anonymous_body_too_large` before the body is read, unless it carries a valid API key or session cookie. Before, FastAPI read and parsed the whole body (up to the proxy's 100 MiB) before the 401. The selected-network-export route keeps its own cap and code.
+- **Schema and migration:** none.
+- **Versions:** `tckdb-schemas` 0.159.0, `tckdb-client` 0.188.0.
+
+## The frontend proxy passes uploads larger than 1 MiB to the API (2026-11-07)
+
+The frontend image's nginx refused any request body over its 1 MiB default with a bare 413, before TCKDB saw it. `/api/` now takes up to 10 MiB, above the two caps the API enforces before parsing (5 MiB bundles, 9 MiB network export manifests), so a request over either gets TCKDB's own coded error. Upload and job routes (several carry ESS logs inline) and `/api/v1/calculations/<ref>/artifacts` take up to 100 MiB. The rest of `/api/` stays smaller because the API parses a body before it checks credentials.
+
+## Scan-point reads no longer fail when a point carries a geometry (2026-11-05)
+
+`GET /calculations/{id}/scan-points` and the `points` of `/scan-result` returned 422 whenever a scan point had a geometry, because the read model inherited the upload payload's inline `geometry` field. The read model now reports `geometry_id` only; the inline `geometry` field is gone from the response schema.
+
+## A level of theory has typed method qualifiers instead of free-text keywords (2026-11-05)
+
+- **What changed:** `keywords` is gone from a level of theory (the upload field, the stored column and the read shape). A payload that sends it is refused like any unknown field. Four typed fields replace what it was used for: `relativistic_hamiltonian`, `pno_truncation`, `ri_approximation`, and `window` as a third `core_treatment` value for a partial frozen core. Each is part of the level's identity only when stated.
+- **Reconciliation:** the warning `level_of_theory_disagrees_with_artifact` now also compares these with the setting an uploaded deck or log states, and fires only when both sides state a value and differ.
+- **Schema and migration:** revision `d5f2b8c1a704` drops `level_of_theory.keywords` and adds three enum columns and `core_treatment = window`. Every stored `lot_hash` changes, so the revision refuses to run (upgrade and downgrade) while `level_of_theory` has rows. A deployment is reseeded, not re-keyed.
+- **Versions:** `tckdb-schemas` 0.158.0, `tckdb-client` 0.187.0 (window `>=0.158,<0.163`).
+- Decision record: `docs/adr/0024-a-level-of-theory-has-typed-method-qualifiers-not-free-text-keywords.md`.
+
+## The imaginary-mode tolerance follows the Hessian method an output log reports (2026-11-05)
+
+- **Client: `tckdb-schemas` 0.156.0 to 0.157.0.** No migration, no new environment variable, no new warning code. `tckdb-client` is unchanged (its `tckdb-schemas>=0.155,<0.160` window contains 0.157).
+- **What changed.** Tau is now taken, in order, from the Hessian method the inline output logs report (ORCA), the input those logs echo, the recorded `freq.hessian_method` or the deck, the program's assumed default, then `protocol_not_recorded`. A reported or echoed method gets the same tau as the same method recorded; the tau table is unchanged. Before this, an input echoed only in a log was ranked in storage but ignored when tau was decided.
+- **What a log reports.** An ORCA `SCF HESSIAN` section is analytic; an `ORCA NUMERICAL FREQUENCIES` section with displaced-gradient lines is finite differences of gradients. It is read only from the final frequency job (no optimiser step after the last listing, so an optimiser's per-step Hessian listings, or a log cut off during an optimisation, report nothing), only when every listing agrees, never from a file with several jobs (`$new_job`), and not when the job used a numerical gradient (`NumGrad`). Gaussian logs report no method that holds across the logs measured, so Gaussian is unchanged.
+- **The echo is a request like the deck.** A typed `freq.hessian_method` that contradicts the input a log echoes is refused with `hessian_method_contradicts_input_deck`, as for a deck; a contradiction with a REPORT only warns.
+- **Several logs and echoes.** With several inline logs, or a file of several ORCA runs, the method they all agree on is used, and none when they differ. An echo that cannot be bound to one job (ORCA `$new_job`/`%compound`, a Gaussian log with more than one route) reads nothing.
+- **Stored rows and reads.** The reported method is stored as a `freq.hessian_method` row with `statement_kind='reported'`, beside any requested row; nothing stored is relabelled. `tau_context.protocol_parameters` now lists a reported Hessian method (with a new `statement_kind` field on each entry), so a basis decided from a report shows the parameter it rests on (a report the stored basis does not agree with, or that two logs contradict, is not listed). ADR 0012 has a dated amendment.
+- **Warnings.** A reported method that contradicts the request (the echoed input, the deck, or a typed parameter) earns `reported_setting_differs_from_requested`; a log attached after the deposit that reports or echoes a method other than the stored basis earns `hessian_method_disagrees_with_stored_tau_basis` (its context may now carry `reported_method`). Neither changes the stored tau, and no new refusal is added.
+
+## Excited and spin states are told apart by their state label and term symbol (2026-11-04)
+
+- **Client: `tckdb-schemas` 0.155.0 to 0.156.0** (the trim set for a state label and term symbol is now explicit and the same in Python and JavaScript) **and `tckdb-client` 0.185.0 to 0.186.0** (docstring only). No migration, no new environment variable.
+- **What changed.** Every block that names a species entry (reaction and network participants, conformer, statmech, transport, geometry and calculation contexts) now also serves `electronic_state_label` and `term_symbol` in `EntryFacetFields`, and the species-entry and structure-search records serve them under the same names. A value is served only when it satisfies the write-time grammar (`tckdb_schemas.electronic_state`), in its canonical spelling (`2Pi` reads `²Π`); a row stored before the grammar that fails it reads `null`, never an error. The joined `species_entry_label` is unchanged.
+- **Web app.** A valid label shows as its own chip (`state T1`), and a valid term symbol as another (`²Π`, `X ²Π`), next to the state-kind chip on the species-entry, species overview, reaction, reaction-entry and network pages. The species-entry page adds "State label" and "Term symbol" facts, the latter with a plain-words reading for screen readers. The frontend checks the same grammar again (`electronicStateGrammar.json`, a copy of the shipped `electronic_state_examples.json`, with a parity test that fails on drift); a value outside it stays hidden.
+
+## The Python client and schemas are ready for PyPI, and the client README is one page (2026-11-04)
+
+- **Client: `tckdb-client` 0.184.0 to 0.185.0, `tckdb-schemas` 0.154.0 to 0.155.0** (packaging and documentation only; no field, code or rule changed, every 0.154.0 payload validates unchanged). No migration, no new environment variable, no server change.
+- **What changed.** Both packages carry the metadata PyPI needs (project URLs at `github.com/TCKDB/TCKDB`, the licence file, `setuptools>=77` for the SPDX licence expression) and build as an sdist and a wheel that pass `twine check`. Nothing has been uploaded. The client README went from 1,341 lines to a one-page introduction; the rest lives in `clients/python/docs/`. The root README and `builder_api_mvp.md` no longer say the builders are future work.
+
+## A thermo or statmech record can show the settings behind its geometry, frequency and energy levels (2026-11-04)
+
+- **Client: none** (`tckdb-schemas` and `tckdb-client` unchanged). No migration, no new environment variable. The calculation page and the thermo and statmech pages of the web app show the new data.
+- **What changed.** `include=calculation_settings` on the thermo reads (species-entry thermo, `thermo/search`) and the statmech reads adds `calculation_settings`: one entry each for `geometry`, `frequency` and `energy`, naming the calculation the record itself links for that level (the one its `levels` come from) and that calculation's `effective_settings` (grid, SCF convergence, each with its state, value, source and `conflicting`). It is built by the same function as the calculation read; nothing is stored. A level with no linked calculation is listed with `absent_reason` (`not_linked`, `ambiguous`, `composite_recipe`) and no settings. A level whose calculations the review profile hides is left out of the list. The calculation shown for a level is the lowest-id calculation that supplied that level's level of theory and that the profile shows. The block is built for the returned page in a fixed number of statements. A thermo reaches its statmech's calculations only through its own `statmech_id`; no level is filled from a sibling record or an unlinked calculation.
+- **Web app.** The calculation page labels each parsed parameter as requested or reported and where it came from, and summarises grid and SCF with the five states and a conflict marker; assumed values are marked as assumed. The thermo and statmech pages show a "Settings behind this value" block.
+
+## A Gaussian --Link1-- log is read per job (2026-11-04)
+
+- **Client: `tckdb-schemas` 0.153.0 to 0.154.0** (a route-reader fix, no field or code added or removed; `tckdb-client` unchanged). No migration, no new environment variable.
+- **What changed.** A Gaussian log is split into jobs at `Entering Link 1` (a `--Link1--` file prints no second `Entering Gaussian System` banner). The job that is the calculation is found by job type and level of theory and, when several jobs share both, by the calculation's stored input deck (the job whose route states exactly the deck's settings); when no single job is, nothing is read from the log, neither its echoed request nor its reported values. Typed rows never break a tie, and a deck with more than one route cannot. Before, a multi-job Gaussian log reported nothing but still had its first job's echoed route read as the request of every calculation. Within one request the input decks are now read before the output logs, in the three places that read artifacts (artifacts are still saved in the listed order), so the order a producer lists them in does not change what a log binds to.
+- **New Gaussian warning case.** `reported_setting_differs_from_requested` now also fires for Gaussian SCF: when the request is stricter than `tight` (`scf=verytight`) and the log reports a threshold no tighter than `tight`'s 1e-8, or when the input states `Conver=N` (read from the deck, and from the log's echo, where the echo wins) and the log does not report 10^-N. No threshold is invented for `SCF=VeryTight`; the rule is an ordering against the documented `Tight` default and `Conver=N` (G09 SCF keyword page), and only for Gaussian 09 and 16. Grid is never compared for Gaussian.
+- **New warning `output_log_job_not_bound`.** When a log holds several jobs and no single job can be matched to the calculation, the log is not read and this warning is returned. While it stands and the log has produced no rows, the calculation's grid and SCF convergence read as `not_stated`, not as the program's assumed default (the log was not read, so "the log neither reports nor echoes it" would be false). Rows always win: once a refresh has read the log, its rows decide.
+- **Fixed.** A short echoed route (dash rows narrower than 60 characters, which is common) was never closed and ran on into the log, so log text was read as requested settings. See `tckdb-schemas` 0.153.0 for the measured side effects.
+- **Not changed.** IRadAn stays raw and unmapped, and is read only from the `IXCGrd= .. IRadAn=` line, never from the Harris initial-guess lines (they differ from it in 58 fixture logs).
+
+## An assumed SCF convergence is shown where a program documents one (2026-11-04)
+
+- **Client: `tckdb-schemas` 0.152.0 to 0.153.0** (no field added or removed; `tckdb-client` unchanged). No migration, no new environment variable.
+- **What was wrong.** `effective_settings` showed `not_stated` for the SCF convergence of every calculation with no log, because the table held a default for the grid only and its docstring said no SCF default was documented. The group knowledge base documents some.
+- **What changed.** Gaussian 09 and 16 show `tight` for every calculation type (G09 manual, "In Gaussian 09, SCF=Tight is the default"). ORCA 5 and 6 show `tight` for an `opt` calculation (manual, "TightSCF in the SCF part is set as default", geometry optimisation notes). It applies to an allowlist of SCF-based methods (DFT, HF, MPn, coupled cluster, QCISD, CIS/CISD, Gaussian composite methods) but not to molecular mechanics, semi-empirical, xTB, Hueckel, CASSCF/MRCI/NEVPT2 or an unrecognised method, and needs a declared method, program and version. The grid stays DFT-only.
+- **Not listed.** ORCA single points, frequencies and other job types (the manual only says "between medium and strong"), Gaussian 03 (no source). They stay `not_stated`. Computed on read, never stored; upload-time tau untouched.
+
+## The settings a program reports it used are stored beside the ones requested, and the log outranks the deck (2026-11-04)
+
+- **Client: `tckdb-schemas` 0.151.0 to 0.152.0** (one new warning code, one sentence changed, no field added or removed; `tckdb-client` unchanged). One new Alembic revision, `c8e2a6d1f305`: `calculation_parameter.statement_kind` (nullable, new enum `parameter_statement_kind`: `requested` / `reported`), existing parser rows stamped `requested`, a check constraint that keeps `reported` to output-log rows, and eight vocabulary keys for the numbers a log prints (`grid.integration_accuracy`, `grid.angular_max`, `scf.tol_*`). No identity change; no new environment variable.
+- **What changed.** An output log is read a second way: for the DFT grid and the SCF thresholds it prints as the ones the program used (ORCA 5/6, Gaussian 03/09/16). They are stored as `reported` rows beside the requested ones, under their own numeric keys; no `grid.quality` or `scf.convergence` value is ever made from a report, and Gaussian's grid is kept as the raw `IRadAn` code it prints. Only grid and SCF convergence are read this way; dispersion, solvation, RI and frozen core are a later change.
+- **Reversed from the previous change.** Where a deck and the input a log echoes state the same setting, the log's row is kept and the deck's is not (upload order does not matter). `include=parameters` now also returns `effective_settings`: for the grid and the SCF convergence, the value used and where it comes from (`reported`, `requested` with the artifact, `assumed_default`, `assumed_default_no_output_log`, `not_stated`). An assumed default is the program's documented default for the declared program and version, computed on read and never stored.
+- **Not changed.** Upload-time tau resolution; the read side of tau now ignores reported rows and selects in stored order.
+
+## A closed-shell T1 and a spin contamination beyond their conventional criteria are reported (2026-11-04)
+
+- **Client: `tckdb-schemas` 0.150.0 to 0.151.0 (three new warning codes, no field added or removed), `tckdb-client` 0.183.0 to 0.184.0.** No migration, no new environment variable.
+- **What was wrong.** A coupled-cluster calculation with a large T1, or a calculation with a heavily contaminated or mislabelled <S^2>, was stored and shown with no remark. The diagnostics were deliberately never read.
+- **What changed.** One warning, `t1_diagnostic_above_closed_shell_threshold`, on the calculation only: the entry's multiplicity is 1, the method is restricted coupled cluster with singles (an unrestricted `U` method is out of scope), and the stored T1 is strictly above 0.02 (Lee and Taylor 1989). The sentence says the value is above the rule of thumb and that T1 does not by itself establish multireference character. Nothing about the value, the review status, the evidence label or any selection changes, and a thermo or kinetics record citing the calculation gets no warning of its own.
+- **Spin.** `spin_contamination_above_conventional_threshold` when the stored `s_squared` is strictly more than 0.1 from S(S+1), S from the entry's declared multiplicity (never from a printed value; `s_squared_annihilated` unused). 0.1 is a convention of the field, not a recommendation of any paper, and the sentence says so. `spin_expected_contradicts_multiplicity` when the ideal value the program printed differs from S(S+1) of the entry's multiplicity by more than 0.001. The two are separate warnings.
+- **What did not.** Open-shell T1 and D1 are stored and shown but not thresholded (open-shell T1 is defined differently by each program, and no open-shell or D1 threshold has a verified primary source). 
+- **Register.** New entry 52 (group "Wavefunction reliability diagnostics"); the cap test is raised 51 to 52 with its written argument. The documented position that T1/D1 are "deliberately not enforced" is replaced (and likewise for <S^2>) in `scientific_calculation_reads.md` and the model docstrings, which also now credit D1 to Janssen and Nielsen (1998).
+
+## An output log is read for parameters, and what a depositor typed is checked against the deck and the log (2026-11-03)
+
+- **Client: `tckdb-schemas` 0.148.0 to 0.149.0** (three new warning codes, no field added or removed; `tckdb-client` unchanged). One new Alembic revision, `a3d7f1c5b904`: `calculation_parameter.artifact_kind` (nullable, the existing `artifact_kind` enum), existing parser rows stamped `input`, and a check constraint that keeps it to parser rows. No identity change; no new environment variable. Stage 1 of the per-calculation-parameter work (part 2 of 2).
+- **What changed.** An uploaded output log (`output_log`) is now read for the input it echoes, as an input deck always was. The two never erase each other: a re-read replaces only the rows of its own kind. Where a deck and a log state the same setting the deck's row is kept and the log's is not stored, whichever arrived first, so a reader never meets two rows for one setting.
+- **New warnings.** `output_log_disagrees_with_earlier_output_log` (a second log never silently replaces the first), `parameter_disagrees_with_artifact` (a typed parameter against the same setting read from a deck or log of the same program; only settings that can change the result, only when both sides state a value, never across programs), `input_deck_disagrees_with_output_log`, and `level_of_theory_disagrees_with_artifact` (the method or basis read from a Gaussian or ORCA route or keyword line against the declared level of theory, through the same identity keys the level of theory is deduplicated by). None refuses or corrects anything. Messages are built from the code; the values on each side are under `depositor_supplied`.
+- **Also.** A deck re-read with fewer settings restores the log rows it had shadowed (re-read from the stored logs); typed values are case- and alias-folded before comparison; the Gaussian route echo is rejoined correctly when the wrap falls on a space; the backfill script also reads output logs; a late output log is checked against the stored Hessian-method tolerance. **Not changed.** `freq.hessian_method` keeps its own check. `level_of_theory.keywords` and level-of-theory identity are untouched (Stage 2).
+
+## Gaussian and ORCA decks are read for grid, SCF, dispersion, solvation, RI, frozen core and relativity (2026-11-03)
+
+- **Client: `tckdb-client` and `tckdb-schemas` unchanged.** One new Alembic revision, `e5b1c8a3d702`, inserts nine rows into `calculation_parameter_vocab` and nothing else: no column, no level-of-theory identity change, no rewrite of a stored parameter row. No new environment variable. Stage 1 of the per-calculation-parameter work (part 1 of 2).
+- **What was wrong.** `Int=UltraFine`, `Int=(Grid=UltraFine)`, `SCF=Tight` without parentheses, `Opt(TS)`, `EmpiricalDispersion=GD3BJ`, `SCRF=(SMD,Solvent=Water)`, `Stable=Opt`, `5D`, `MP2(Full)`, and on the ORCA side `RIJCOSX`, `NoRI`, `D3BJ`, `NoFrozenCore`, `CPCM(Water)`, `DKH2` were either dropped or stored as raw rows with no canonical key, and `grid.quality` never had a canonical value. A depositor could not be checked against their deck on any of them.
+- **What changed.** Each spelling now lands on a canonical key with a value from a closed set (`app/services/parameter_closed_values.py`); a spelling the parser does not know stays a raw row with no key. A numeric `Grid=99590` is an unpruned grid and a named one (`UltraFine`) is pruned, so they are different values: the digits are the canonical value of a numeric grid and never equal a name. ORCA's bare `D3` is Becke-Johnson damping (`d3_bj`), Gaussian's `GD3` is zero damping (`d3_zero`). A key that is not stated has no row: the program default is never assumed. Keys added: `dispersion.correction`, `solvation.model`, `solvation.solvent`, `ri.approximation`, `core.frozen`, `relativistic.hamiltonian`, `basis.d_function_type`, `basis.f_function_type`, `scf.stability_analysis`.
+- **Decided: no `basis.auxiliary` key.** `def2/J`, `def2/JK` and `/C` tokens stay raw rows (section `basis_aux`); `level_of_theory.aux_basis` is their home and a second one would let the two disagree.
+- **Searches and tolerance.** Rows moved sections, so a raw `parameter_key=SCF` or `=Int` search no longer matches the rows it used to (`scf`/`integral` sections hold them now); search the canonical key. A Gaussian `Int=UltraFine` (and `Int=(Grid=UltraFine)`) now reaches the imaginary-mode tolerance as a tight grid on new deposits, which it did not before because no `grid.quality` canonical value was set.
+- **Read API.** `include=parameters` (and the entity read) now carries `source` (`parser`, `upload` or `curated`) on each parameter row.
+
+## Electronic-state labels and term symbols are checked against a strict grammar (2026-11-03)
+
+- **`tckdb-schemas` 0.149.0, `tckdb-client` 0.183.0.** No migration (no DB CHECK: the schema package is the one place the grammar lives, and a SQL copy of a regex would be a second one to keep in step), no new environment variable, no backfill. Existing rows are dev data and are not rewritten.
+- `species_entry.electronic_state_label` and `term_symbol` now refuse anything but a recognised spectroscopic shape, on every upload that carries a species entry, with `electronic_state_label_invalid` or `term_symbol_invalid` (422) naming the field and the accepted shapes. `term_symbol_raw` stays verbatim and unchecked.
+- Every accepted spelling is stored in one canonical form (`2Pi`, `^2Pi`, `2Π` are `²Π`; `A~` is `Ã`), the typed spelling going to `term_symbol_raw`. A state label is a letter (with tilde and primes) or an ordinal; `E`/`e` are allowed.
+- A bare `R`, `S`, `Z`, `M`, `P`, `Ra`, `Sa`, `?`, `-` or a word can no longer be a state label. The joined `species_entry_label` and a network `state_label` now introduce the state part with the word `state` (`excited state A`), so a stored label cannot read as "R enantiomer".
+
+## Participants serve their computed identity facets (2026-11-03)
+
+- **Client: `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no new environment variable. Additive fields on read responses; the OpenAPI golden is regenerated.
+- **What changed.** Every read block that names a species entry and used to serve only the joined `species_entry_label` now also serves the computed parts as separate fields, named as the species surface names them: `species_entry_kind`, `electronic_state_kind`, `stereo_label`, `stereo_descriptor`, `stereo_resolution`, `isotope_key`. Blocks: reaction participants (search and `/full`), network state participants and network species, and the species context of conformer, statmech, transport, geometry and calculation records. The typed `electronic_state_label` and `term_symbol` are deliberately not served on them.
+- **Frontend.** Reaction and network pages render chips from these fields through `facetChips`, so a Z to E step reads "Z isomer" to "E isomer" again instead of "N=N to N=N". The joined label is still never printed.
+
+## Literature records say where their title came from; the review queue is for curators (2026-11-03)
+
+- **Client: `tckdb-client` and `tckdb-schemas` unchanged. Migration `b4d8e1a7c953`, no new environment variable.** Adds the nullable column `literature.title_source` (`resolved_metadata` | `depositor_supplied`). Existing rows stay `NULL`, meaning "not recorded"; there is no backfill because their titles cannot be classified honestly.
+- **What changed.** The resolver sets `title_source` from what happened: `resolved_metadata` only when the DOI/ISBN lookup returned a title, else `depositor_supplied`. An existing row matched later by DOI/ISBN is adopted as it stands; its title and source are never rewritten. The literature reads (`/literature`, `/scientific/literature`) and the literature summary embedded in other reads carry `title_source`; the summary also carries `isbn`.
+- **Website.** A literature title is shown only when `title_source` is `resolved_metadata`. Otherwise the page shows the ISBN, else the public ref, with "Title not verified". A DOI is never printed or linked there: it is depositor-typed text.
+- **Review queue.** `GET /record-reviews/queue` and `GET /record-reviews` (the same rows, flat) now require the curator or admin role; a plain account gets 403. `GET /record-reviews/{record_type}/{record_id}` (one record's status) is unchanged.
+
+## The website no longer prints text a depositor typed (2026-11-03)
+
+- **Frontend only. API, `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no schema change, no new environment variable. The API still returns these fields in their marked places.
+- **What changed.** No public page prints a string a depositor typed: not as text, link text, a pill, a tooltip, an `aria-label`, SVG text, a `data-` attribute or an element id. Notes (transition state, conformer, scale factor, correction scheme), network name, description and channel keys, group-additivity scheme and group labels, torsion top descriptions and reasons, artifact filenames, parsed parameter keys and values, electronic state labels, unmapped SMILES and unrecognised point groups are gone; the ref, formula or a TCKDB noun stands in. A parameter value prints only if it is a number or boolean; a point group only if it is a Schoenflies symbol; a correction-parameter key only if every part is a real element symbol.
+- **`species_entry_label` and network `state_label` are no longer printed.** The server joins the typed state label and term symbol into them, so they cannot be split on the client; pages that have the structured fields (`stereo_label`, `electronic_state_kind`, `isotope_key`) show those. Reaction equations and network states show SMILES and stoichiometry only, so two stereoisomers of one species read alike there.
+- **Conformer groups** show as "Conformer Group N" (the server numbers them itself) or by ref. Downloads are named from the artifact kind and ref, with only a known extension taken from the recorded filename (the command-line client still uses the recorded stem).
+- **Kept.** Curator review notes and supersession reasons (written by a signed-in curator), the owner's own API-key labels and name on the account page and the admin user list (both marked as typed), composite scheme names, the note of a catalogued named-method composite scheme, level-of-theory keywords, and the scientific method strings (software, level-of-theory method and basis, master-equation method, literature title).
+
+## The centre between two allene axes is read as `-`, `r` or `s` (2026-11-02)
+
+- **Client: `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no schema change, no new environment variable, no vocabulary change (`r` and `s` were already tokens). Part 3 of #832 (part of, not closing). Existing data is dev data: an entry stored with `?` at such a centre is not rewritten, and a new deposit of the same molecule now computes a different key; the two are not reconciled.
+- **What changed.** A centre with two constitutionally equal arms that each hold one allene axis (`CC=C=CC(C)C=C=CC`, also `CC=C=CC(C=C=CC)(C)O`) used to stay `?` with the reason `allene_dependent`, so four real stereoisomers had three descriptors. It is now an element with a token: `-` when the two axes have the same sense (`Ra,Ra`, `Sa,Sa`: an enantiomeric pair), `r` or `s` when they differ (`Ra,Sa`: two achiral forms). Four isomers, four descriptors, four distinct InChIs.
+- **The rule.** An `Ra` (M) arm outranks an `Sa` (P) arm (IUPAC 2013 P-92.5, Rule 5), then ordinary CIP on the centre. Read from geometry, from the enumeration (realisability, `-` deduction, supplied labels) and from SMILES marks: with both allene axes marked (part 2) the centre's own `[C@H]` mark, which RDKit drops when the arms are equal, is read from the raw text and named with the same rule, and equal senses give `-` through the enumeration. All 48 handled mark spellings and 192 CDK respellings of them agree with Centres.
+- **Witness.** Centres 1.2.1 (Hanson et al. 2018) agrees with the rule on 32 of 32 mark spellings (4 skeletons, 8 mark combinations each) and on 32 of 32 constructed 3D conformers; the results are committed in `backend/tests/fixtures/centres_allene_pseudo.json` (CI has no Java; `backend/scripts/dev/generate_centres_allene_fixture.py` regenerates it and records the jar's sha256).
+- **A fully stated descriptor is now checked against the stereoisomers too.** `refine` used to return early when no `?` was left, so sources that each pass alone could combine into a configuration no isomer has and be stored as `resolved` (marks `CC=[C@]=CC(C)C=[C@@]=CC` with label `?,?,-`: unequal allene senses around a dash; and on main, `C[C@H](O)C(O)[C@@H](C)O` with `?,?,-`: `R,S` around a dash that needs `R,R`). Such a combination is now `species_stereo_contradiction`. Past the enumeration cap there is no isomer set to check against, and the tokens stand as before.
+- **Still `?` with `allene_dependent`.** Arms joined by a ring or spiro, three or four equal arms, a tied pair beside another tied pair, arms with further stereo content, a double bond whose ends hold allene arms, an arm whose root atom is itself isotopic, and a ligand that ties the arms once isotopes are ignored (a CD3-ended or 13C-ended third arm beside two CH3-ended ones: the isotope is decided later than the rule the reader uses, so the reader would label it inverted; Centres labels these r or s and the labels are on file in the fixture).
+
+## Cyclic allenes in rings of 6 to 8 are read from geometry (2026-11-02)
+
+- **Client: no change. `tckdb-schemas` 0.148.0.** No migration, no backfill. Part of #832 (part 3 stays open).
+- A cyclic allene in a ring of six, seven or eight atoms now gets `Ra` / `Sa` from a deposited geometry, by the rule rings of nine or more and open-chain allenes already used: the torsion between the two CIP-higher substituents must lie between 10 and 170 degrees. The window is unchanged, so a near-planar axis (the racemisation transition state) still reads `?`.
+- Checked against GFN2-xTB optimised minima of 1,2-cyclohexadiene, -cycloheptadiene and -cyclooctadiene (both enantiomers each, plus a hydroxyl-substituted six- and seven-ring and a nine-ring control), a hand Newman projection for every one, and InChI's `/m` partition on the rings of 8 and 9. InChI writes no stereo layer for an allene in a ring of 6 or 7 whatever the twist, so those two are covered by the hand check and by the reader not depending on ring size; the tests record that gap as a fact.
+- The reason `axial_small_ring` now means a cyclic allene in a ring of **five or fewer** atoms (it was eight or fewer); rings of 4 and 5 stay `?` and refuse `Ra`/`Sa` labels because no geometry was checked for them. It is still reported by `stereo_not_represented`, the CHEMKIN `STEREO_NOT_REPRESENTED=` marker and the species-entry warning, with the new ring size. Entries already stored with `?` for a ring of 6 to 8 are development data and are not rewritten: deposit a geometry or a `stereo_label` to settle one.
+- A chirality mark in the SMILES of an allene in a ring of 6, 7 or 8 (for example `C1=[C@]=C(F)CCC1`, which reads `Ra`) is now read too; it was ignored while those rings were never settled. Marks on allenes in rings of five or fewer stay ignored.
+- Frontend: the "cyclic allene" text for `axial_small_ring` now says a ring of 5 or fewer.
+
+## Allene SMILES marks are read (2026-11-02)
+
+- **Client: `tckdb-client` unchanged (0.182.0), `tckdb-schemas` 0.147.0.** No migration, no schema change, no new environment variable. No stored row is rewritten. Part of #832 (part 2 of 3).
+- **What changes.** A chirality mark on the central atom of an allene (`NC(Br)=[C@]=C(O)C`) now sets the entry's axis token, `Ra` or `Sa`, where it used to leave `?`. The reader follows the OpenSMILES extended-tetrahedral rule on the text itself (implicit hydrogens right after their atom, ring-closure digits at the digit, the end written first first), permuted to (CIP-higher, lower) at each end; `@@` is `Ra` in that order.
+- **Checked against an independent labeller.** 442 spellings of 17 molecules (both marks, CDK respellings under random atom orders, ring closures on an end atom, bracket-hydrogen ends, explicit and isotopic hydrogens) agree with the label CDK 2.13 and the Centres 1.2.1 CIP labeller give the same text (`M` is `Ra`, `P` is `Sa`). Centres labels nothing for two of the texts (a ring digit on the central atom; ten others like it are labelled directly), so those rows carry the label of CDK's canonical re-export and are marked so. CI has no Java, so the labels are committed (`backend/tests/fixtures/allene_marks_centres.json`) with the jar URLs, versions, sha256s and command; `backend/scripts/dev/generate_allene_marks_witness.py` regenerates them. The OpenSMILES specification's own example is checked by hand from its depiction.
+- **Read-side structure search changes too.** The query's descriptor comes from the same reader (`descriptor_of_mol`), so an entry-level isomeric search for `CC=[C@]=CC` now looks for the entries whose descriptor is `Ra` (it used to look for `?`), and `CC=[C@@]=CC` for `Sa`.
+- **Fixed on the way.** A standard-isotope label in the text (`[1H]`, `[12C]`) made the raw re-parse one atom longer than the identity molecule and crashed the text matching with a `KeyError`; the same latent crash existed for a cumulene mark on main (`[1H]C(F)=C=C=CC`). The raw parse now clears standard isotopes as the identity molecule does, and a text that cannot be matched reads nothing instead of raising.
+- **Contradictions are now refused for allenes.** An allene mark that disagrees with a geometry or a supplied `stereo_label` is `species_stereo_contradiction`. Cumulene `/` `\\` marks are still ignored.
+- **Warning.** `axial_marks` (under `species_entry_stereo_not_represented`) now means only a mark on an allene that could not be read; its sentence says so.
+- **Not changed.** Small-ring allenes, the pseudo-asymmetric centre between two allenes (`allene_dependent`) and odd-cumulene marks stay `?`.
+
+## Register coverage for deposit warnings; scan values are checked against their geometries (2026-11-01)
+
+- **Client: `tckdb-client` unchanged (0.182.0), `tckdb-schemas` 0.146.0.** No migration, no schema change, no new environment variable. No stored row is rewritten.
+- **New warning `scan_point_coordinate_disagrees_with_geometry`.** A scan point's `coordinate_value` is the internal coordinate itself, measured on that point's own geometry (ADR 0020). When the stored values of a scan coordinate disagree with the coordinate measured on the points' geometries, the scan is accepted as sent and one warning per coordinate series is returned, placed on the scan calculation. The check is the one the ADR 0020 report script already ran; it now runs after the flush on every route whose calculations can carry a scan (conformer, transition state, computed species, computed reaction, thermo, statmech, transport). The real ARC scan payloads under `tests/fixtures/arc_runs` still hold the superseded relative-sweep convention, are kept in it on purpose, and now earn this warning. Values merely rounded to few decimals are not a disagreement (unless they are an evenly spaced grid, gaps allowed: those are labels and are judged tightly; declare `step_size` for a grid whose step is finer than 5 units of its last decimal, otherwise it is judged as rounded values), and a constant offset under the tolerance ceiling (1 degree, 0.1 angstrom) is reported as `small_constant_offset`, which names no cause.
+- **Register.** One new entry (51: a species entry states one stereo configuration, `species_stereo_contradiction`); five warning codes are now under existing entries (12: `term_symbol_mismatch`, `electronic_state_contradicts_method`; 22: `freq_list_incomplete_for_geometry`; 25: `network_state_energy_sources_partial`; 49: the new scan warning). Entries 1-50 keep their numbers. Entry 13 is evidence-only by decision, with its read path named. Every other warning stays in the code catalogue.
+- **`WARNING_CODES.md`**, generated beside `REFUSAL_CODES.md` in `tckdb-schemas`: every warning code, with TCKDB's sentence and its register entry. `python -m tckdb_schemas.contract --warnings` prints its path.
+- Two unreachable warning-code fallbacks in the deduction path were removed (no behaviour change).
+
+## Atomic electronic-state warnings on every route that accepts an atom (2026-11-01)
+
+An earlier note said the atomic-electronic warnings (`missing_atomic_electronic_levels`, `missing_atomic_spin_orbit_correction`, `atomic_electronic_degeneracy_contradicts_term`) came only from `/uploads/statmech`; they also come from the two bundle routes, and now from every other route that can carry a single atom (#836). No code, threshold or field is added or changed.
+
+- **`POST /uploads/thermo`** (and its job, and the thermo records of `POST /bundles/submit`): the spin-orbit warning, judged on the record's own `applied_energy_corrections`. It is not judged when the thermo cites a calculation or statmech whose corrections the request cannot see: `existing_statmech_id`, a source calculation by `existing_calculation_id`, or a protocol supporting calculation by `calculation_ref`. A thermo with no enthalpy content (only `s298_j_mol_k`, or points with only `cp` or `s`) has no energy for a spin-orbit shift to be missing from, so it is not judged unless it lists corrections; enthalpy content is `h298_kj_mol`, `enthalpy_formation_0k_kj_mol`, a NASA polynomial, a Wilhoit `h0_kj_mol`, or a point with `h` or `g`. The computed-species and computed-reaction bundles apply the same rule to their `thermo` block. A thermo carries no levels, so none is said about them.
+- **`POST /uploads/conformers`** (and its job): levels, degeneracy and spin-orbit, judged on the request's statmech (its own `scientific_origin`, the one stored on the statmech row) and corrections. The levels warning is stored on the statmech row, the spin-orbit warning on the conformer.
+- **`POST /uploads/networks/pdep`** (and its job): levels and degeneracy for a species with a statmech block, on `species['<key>'].statmech.electronic_levels`. The route has no corrections field, so it cannot see whether spin-orbit energy was applied and does not say.
+- The direct routes and the jobs return the same warnings, and each is stored on its own record.
+- Closes the known limit in the entry below.
+
+## A warning's message is TCKDB's sentence for its code, not the depositor's words (2026-10-31)
+
+- **Client: `tckdb-client` 0.182.0, `tckdb-schemas` 0.145.0.** No migration, no schema change, no new environment variable. No stored row is rewritten.
+- **What changed.** A deposit-time warning's `message` used to be written by each producer and quoted what the depositor typed: a transition-state label, a local payload key (`species['h']`), a conformer label, a file name, a software or level-of-theory name, a title. The upload response and the job result (`GET /jobs/{id}`) therefore said those words in TCKDB's voice. Every producer now builds its warning with `UploadWarning.from_code(field=..., code=..., context=...)`, and the `message` is `render_message(code, context)`: the same call a public read makes. The upload response, the job result, the stored row and the read carry one sentence.
+- **Where the values went.** The sentence uses only numbers, counts, TCKDB tokens (enum values, a program name parsed from an uploaded log, an element symbol) and the like, all from `context`. A label that helps you find the problem sits under `context.depositor_supplied` (for example `{"transition_state_label": "TS0"}`), which is depositor-typed text and is marked as such. `field` is unchanged: it is the path into your own request.
+- **Match on `code`, never on `message`.** The wording is TCKDB's and can change; the code and `context` are the contract.
+- **Wording.** A message no longer repeats the depositor's text. Every remedy and scientific consequence the old message carried that needs none of the depositor's words is kept in the sentence (for example what to send instead of a named-composite single point, why tau was chosen and how to tighten it, the linearity threshold, the master-equation caveat on a reported solve). Where the old message named the depositor's own key, label, file or title, that text is now under `context.depositor_supplied`, and the program, method and values the sentence needs are tokens in `context`. A sentence also says which branch happened (tau recorded, assumed from the program default, or not recorded; a Hessian file that held no matrix versus a log whose block was unreadable; a banner split into version and revision versus name and version).
+- **`context.depositor_supplied`** is a dict of named strings, lists of strings and lists of records of strings (for example `not_compared` is a list of `{state_key, reason}` records); an entry that holds nothing is dropped, and an entry of a wrong shape is logged and dropped (a warning never fails an upload). No other context key holds depositor-typed text: every other string is a value of a closed set its key names (an enum token, the assumption table's program and method family, a public ref, a parsed program key, a version number), and a test applies that rule to every warning any test builds. Public refs (`twin_ref`, `sibling_ref`, `release_ref`) are structured values a client can link; they are kept in `context` and out of the sentences.
+- **Why tau is what it is** now names the program, method family and rule of an assumption (a documented default, ORCA's documented numerical frequencies for VV10 and double-hybrid functionals, ORCA before version 5 having no analytic meta-GGA Hessian, ORCA 5 and later having one), the grid and optimisation values of an analytic tau when they are among the tight ones tau knows (otherwise "not tight" or "not recorded"), and the stored basis in a late-deck warning. Also kept: the exact excited-state method of an electronic-state deduction, the family a kinetics upload named when it is canonical, per-quantity deltas of a composite log mismatch, and which record (statmech or thermo) a composite link warning is about.
+- **Bundle submit** messages (`messages[]`) now carry the warning's `context`, so `depositor_supplied` reaches a bundle depositor too.
+- **Public `field`.** Every bracket that is not a plain integer position is replaced by `[*]`, including unquoted keys (`transition_states[ts1]`) and keys containing a quote (`species['o'k']`). The pressure-dependent network warnings for a transition state now quote the key like every other path (`transition_states['ts1']`).
+- **Placement.** A warning's calculation key is read back out of its `field` with the same tokeniser the public path uses (`field_keys`), not a regex over the quoted text, so a key containing a quote, a backslash or `']` lands on its own calculation and not on the submission.
+- **Jobs.** A warning recorded on a job is rebuilt from its code and context when the job result is assembled (`UploadWarning.from_stored`), so its sentence is TCKDB's whatever was stored.
+- **One owner for the sentences.** `tckdb_schemas.deposit_warning_messages` (moved from the backend; `app/services/deposit_warning_messages.py` re-exports it) because `tckdb_schemas` emits warnings itself. A sweep test deposits every upload kind with sentinel keys and labels and fails if any appears in a message or in an unmarked context value.
+- **Stored rows** deposited earlier keep the text they were deposited with, as before; a public read already rendered them from the code.
+
+## An unrecorded Hessian method is assumed from the program default when a deposit is judged (2026-10-31)
+
+- **Client: `tckdb-client` 0.181.0, `tckdb-schemas` 0.144.0.** No migration, no schema change, no new environment variable. No stored row is rewritten.
+- **What changed.** `tau` (ADR 0012) now resolves, in order, from a recorded `freq.hessian_method`, then the producing program's assumed default for the payload's own software and level-of-theory method (the 2026-09-04 table: Gaussian and ORCA, stored with an `assumed_*` basis), then 50 cm-1 `protocol_not_recorded`. This happens when the deposit is judged, so persistence stores exactly the tau and basis the deposit was judged at. The post-validation swap and the #834 re-resolution in `persist_calculation_result` are removed.
+- **Behaviour change, minima.** A Gaussian DFT minimum with a -40 cm-1 mode and no recorded method was accepted (judged at 50). It is now refused as `n_imag_contradicts_minimum` (assumed tau 30). A mode below the assumed tau is still accepted, stored at the assumed tau.
+- **Loosening, stated plainly.** Gaussian CCSD(T) and QCISD(T) are judged at 80 cm-1 (finite differences of energies), so minima with 50 <= |nu| < 80 that were refused are now accepted with the warning, and transition-state extra modes in that band are no longer flagged. A `freq.hessian_method` that is present but unrecognised keeps 50 cm-1; CIS is matched exactly (CISD and CID are finite-difference from gradients, 50).
+- **Input decks are read before judging.** ARC ships input decks as `input` artifacts and no `parameters`; the backend parsed `freq.hessian_method` from them only after validation. The detector now lives in `tckdb_schemas.hessian_method_detection` (single owner; the Gaussian and ORCA parsers import its route/input-block readers and keyword tables). Order: recorded parameter, inline deck, assumed default, 50. A recorded method that contradicts the deck is refused with the new `hessian_method_contradicts_input_deck` (422). Previously both rows were stored and nothing compared them. Standalone calculation/conformer/transition-state payloads carry no `artifacts` and a deck uploaded later through the artifact route is not seen at validation: those paths keep today's behaviour. The ops lister reports stored-state evidence, not a replay of validation: it resolves from the stored parameter rows (which include rows parsed from decks attached later through the artifact route) and the stored software release (banner reconciliation can re-point a version-less ORCA release after the freq result was stored), so it can list a record that a re-upload today would accept.
+- **Deck reading details.** Gaussian: every spelling of `Freq`/`Frequency` and its options is read, `EnOnly` beats `Numer`, look-alike keywords and other keywords' options are not read. ORCA: `NumFreq` beats `AnFreq`, and a `#` comment ends at the next `#`. The backend parsers store the shared reading as one row. The classifier now recognises the double hybrids and meta-hybrids the tables name (DSD-*, revDSD, PWPB95, mPW2PLYP, B2GP-PLYP, pr2SCAN50, mPW1B95, BB1K...), so ORCA double hybrids reach the numerical row.
+- **Stored rows keep the deck's text.** The Gaussian parser keeps every `Freq` option row exactly as written (case included); only the winning option's row carries `freq.hessian_method`, and a new spelling with no generic row (`Freq(Numer)`) gets one appended. The ORCA parser emits one `freq.hessian_method` row per deck whose `raw_key` is the winning directive as written (`NumFreq`, or `NumFreq NumGrad`), so no row's raw text contradicts its canonical value.
+- **NumFreq with NumGrad.** An ORCA deck whose keyword lines carry both is a Hessian from energies (`finite_difference_energy`, 80, as ARC records it); `NumFreq` alone stays gradient-based. The parser's stored row follows the same rule (ORCA 5.0.4 manual, 8.3.2 and 9.24.5). **Gaussian double hybrids** (B2PLYP and mPW2PLYP included) get no assumption: the sources available do not confirm analytic frequencies for them.
+- **ORCA release gate.** Before ORCA 5, meta-GGA functionals are assumed `assumed_finite_difference_gradient` (50); ORCA 5 and later and plain GGA/hybrids stay analytic (30); with no usable version a meta-GGA gets no assumption. Double-hybrid and VV10/non-local functionals are assumed `assumed_finite_difference_gradient` (50) on any version, known or not: the manuals document numerical frequencies for them (page references in the PR). Sources are in the table note of `hessian_method_assumption.py`.
+- **Register: 49 -> 50 entries.** `hessian_method_contradicts_input_deck` has its own blocking entry, #50, in a new group ("Vibrational frequency provenance") that sorts last, so every existing entry keeps its number: the numbers are stored on `deposit_warning.register_entry` and cited from docs. `tests/db/test_scientific_check_register.py` pins the main-era numbers.
+- **A deck uploaded later warns.** When an input deck attached through the artifact route states a Hessian method of a different kind from the one the stored tolerance basis rests on (analytic, or numerical from gradients or energies), a `hessian_method_disagrees_with_stored_tau_basis` warning is stored on the calculation (the #837 deposit-warning rows, `written_by` the uploader) and shown under `record_warnings`. The stored tolerance is not changed. Agreement, a deck with no frequency directive and a `protocol_not_recorded` basis warn nothing. The message and context carry TCKDB's method tokens (`stored_method`, `deck_method`, with `stored_basis`), so a gradient-versus-energy disagreement reads as one; the check runs inside a savepoint (`isolated_best_effort`) like its sibling hooks, so it cannot fail the upload. Its public sentence is in `deposit_warning_messages.py` (warning codes are not in the error catalogue, which lists error bodies only); no register entry was added.
+- **Behaviour change, transition states.** The extra-imaginary-mode flag was judged at 50 and stored at 30; it is now judged at the stored tau, so a -40 cm-1 extra mode on a Gaussian DFT saddle is flagged. Warn tier only: nothing about transition-state blocking changed.
+- **One owner for the table.** `tckdb_schemas.hessian_method_assumption`; `app/services/hessian_method_inference.py` re-exports it.
+- **Stored records.** `backend/scripts/ops/list_tau_redecided.py` lists (read-only, public refs only) stored minima that would now be refused and transition-state rows whose flag would flip, and counts the rest. Nothing is relabelled.
+- Docs: ADR 0012 amendment 2026-10-31, the scientific check register (the tau fallback printed under entries 15, 17 and the reaction-coordinate softness check), the depositor guide.
+
+## Deposit-time warnings are shown with the record when it is read (2026-10-29)
+
+- **Client: `tckdb-client` 0.180.0, `tckdb-schemas` 0.143.0.** Migration `f7a2c9e4b183`: a new table, `deposit_warning` (no deployed table is touched, no backfill).
+- Until now a deposit's `warn`-tier findings reached the depositor once, in the upload response, and survived only inside the upload job's result. A later reader of
+  the stored record saw none of them. Each warning is now stored beside the record it concerns, in the same transaction as the deposit, and shown on the record's reads.
+- **Storage.** One row per (submission, record, content hash), where the hash covers the code, payload position, message and context: only truly identical
+  warnings dedupe, so two single points at one named method each keep theirs. Each row carries the code's register entry (`NULL` for the many codes the register does not
+  list), the payload position, the message, the optional `context` (JSON-safe: a NaN or Infinity is null, in the stored row, on the read and in the upload response alike) and a `check_version`. One marker row (`code IS NULL`) per checked record
+  says "this record was checked", so "nothing fired" and "never checked" differ.
+- **Placement.** The workflows say which row they built from which payload object, and a warning lands on that exact record: a `kinetics[0]` path on that kinetics
+  row, `species['h'].thermo` on that thermo row, a bundle-local calculation key on that calculation, a bundle-root provenance gap on every kinetics row the
+  workflow wrote it to, a producer that iterates rows on the row it is about, and a `composite_delta` correction warning on the thermo of the species it was applied to (its field carries the full `species['k'].applied_energy_corrections[i]` path). There is no "primary record" fallback. A warning whose subject is a shared identity row
+  (species entry, reaction, literature, a ref fragment) is never put on that row: it goes to this deposit's single result record for that species or reaction,
+  or, with none, to the submission. Any other warning that cannot be placed is stored on the submission, logged, and that deposit writes no marker rows, so its records read
+  `not_recorded` rather than a false "recorded, nothing fired".
+- **Isolation.** The rows describe the deposit and get no vote on it: they are written inside a SAVEPOINT, and a failure rolls it back, is logged and leaves no rows and no
+  markers. Each submission writes its own rows. The table refuses UPDATE, DELETE and TRUNCATE always (as `record_reproducibility_assessment` does), under an approved record
+  too; INSERT stays open so a later artifact upload can add a warning.
+- **Read.** `record_warnings` sits in the envelope of every detail read (calculation, transition-state entry and concept, statmech, transport, network, network solve, conformer
+  observation) and of the per-parent kinetics and thermo reads, by default, a list with one entry per record the response names, each carrying its public ref. List and search responses do
+  not carry it. `status` is `recorded` (items are exactly what fired, possibly none) or `not_recorded` (deposited before this change, or its deposit could not place every warning).
+  `status` describes the deposit-time check only: `items` can still list a warning a later artifact upload added. Warnings never change a value,
+  order a list or gate selection, and the curated profile shows them like any other evidence; a hidden ref inside a warning's `context` blanks that context and keeps the warning.
+- **Upload responses** are unchanged except that each warning has an optional `context` (`charge_mismatch`, `multiplicity_mismatch`, `sp_energy_payload_log_mismatch`
+  and `sp_energy_filled_from_log` fill it today).
+- **Paths covered.** Every upload route, the upload job worker (the same rows on the same records as the direct route, pinned by a test), `/bundles/submit` thermo and kinetics, and
+  `POST /calculations/{ref}/artifacts` (stored under the submission the calculation's deposit belongs to, or, when it has no live submission, on the calculation alone). Not covered: the admin
+  provenance-correction route and the ThermoML file route.
+- **Register.** The `upload_warning` channel now reads "returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on that
+  record's detail reads and on the per-parent kinetics and thermo reads". The register still has 49 entries.
+- **Whose words.** The depositor's own text (a transition-state label, a local calculation key, a species key) is never presented as TCKDB's. A warning's public `message` is rendered
+  at read time from its code and structured `context` (a fixed sentence per code, with the producers' numbers where they state them), never from the stored text; the public `field` replaces
+  depositor keys with `[*]` and keeps positions. The stored `message` and `field` are unchanged (the rows are append-only, the record of what was said at deposit) and are shown as
+  `depositor_message` / `depositor_field` only to the deposit's owner and to curators and admins (the `GET /jobs/{id}` rule); they are absent for everyone else. A depositor-typed value
+  a producer puts in `context` sits under `context.depositor_supplied`. A test sweeps the producers and fails when a code has no sentence. Upload responses are unchanged.
+- **Deposit-level warnings.** `deposit_warnings` sits beside `record_warnings` in the same envelopes: a list of `{submission_ref, items}` for the warnings no one record could take (an
+  energy-correction scheme shared by a bundle, an unattributable warning), once per submission a named record belongs to, in stored order. Nothing is copied onto a record. `submission_ref` follows
+  the existing auth-only rule (omitted for an anonymous reader). **Contract change:** a router dependency now resolves the optional caller on those reads, so a credential that is present and
+  invalid (a revoked key, an expired session cookie) answers 401 there, as it already did on the calculation read; it used to read as anonymous. A client holding a stale
+  session cookie should drop it on the first 401: `GET /auth/me` now answers 401 *and clears* a stale `tckdb_session` cookie, as logout does. Those reads are also sent `Cache-Control: private` and
+  `Vary: Cookie, X-API-Key`, because the answer depends on the caller.
+- **Who sees the stored text.** Each warning row records who wrote it (`written_by_user_id`: the submission's depositor for a deposit's rows, the uploader for an artifact's). `depositor_message` /
+  `depositor_field` go to that user and to curators and admins only, so a curator's artifact warning is not shown to the depositor as theirs, and an artifact warning with no submission is the
+  uploader's. Under the curated profile `deposit_warnings` is built from the records the response lists, so a withheld record's submission contributes nothing.
+- Known limits: #835 (most codes are not in the register) and #836 (the atomic-electronic warnings are not emitted on every path).
+
+## A minimum's imaginary modes are judged against tau (2026-10-29)
+
+- **Client: `tckdb-client` unchanged (its validation does not mirror this rule), `tckdb-schemas` 0.142.0.** No migration: the frequency result already carries `imaginary_mode_tau_cm1`, its basis and `imaginary_mode_structural_flag`.
+- A species entry declared a `minimum` used to be refused for any imaginary mode. Now each imaginary mode is compared with `tau`, resolved by `resolve_tau` from the calculation's recorded protocol exactly as for a transition state (15 / 30 / 50 / 80 cm-1; 50 cm-1 when the protocol is not recorded).
+  All modes below `tau`: accepted with the new warning `minimum_imaginary_modes_below_tau`. Any mode at or above `tau`: refused as before (`n_imag_contradicts_minimum`), with the same doors (`vdw_complex`, or a transition-state payload).
+  A count with no deposited magnitudes is still refused: a mode nobody measured is never assumed soft.
+- Stored: the deciding `tau` and its basis on `calc_freq_result`, and `imaginary_mode_structural_flag = false` (judged and not flagged; `NULL` stays "never judged"). The stored tau is the one the deposit was judged at, not the assumed-default tau of the 2026-09-04 amendment.
+- A minimum that designates a reaction coordinate is refused (`n_imag_contradicts_minimum`; it was refused before as well, for its imaginary mode). Every frequency calculation on a conformer upload is judged, each warning located at its own `calculations[i].freq_result`.
+- Unchanged: the transition-state rules, the van der Waals complex warning path, and every stored row. Read-time imaginary-mode projections report beside the warning and never gate it.
+- Scientific check register entries 15 and 17 and ADR 0012 / 0008 (amendment and note) are updated; the depositor guide gains "A soft imaginary mode on a minimum".
+
+## Allene Ra/Sa and odd-cumulene E/Z in the stereo descriptor (2026-10-29)
+
+- **Client: `tckdb-client` 0.179.0, `tckdb-schemas` 0.141.0.** Migration `e5b2c8d1f947` (a new revision: `species_entry` is deployed). Closes #827; known limits in #832.
+- The descriptor gains two whole tokens, `Ra` and `Sa`, for an allene's axis (`Ra` = IUPAC `M`, `Sa` = `P`). An odd cumulene (a butatriene and longer) takes `E` / `Z`.
+  Both are read from geometry: the torsion between the two CIP-higher substituents about the end-to-end axis. An allene must lie between 10 and 170 degrees
+  (a flat axis is not read), an odd cumulene within 30 degrees of planar.
+- Not read: SMILES marks on an allene (RDKit drops them on sanitising and no validated reader exists), `/` `\` marks on a cumulene (validated against InChI for
+  butatrienes, but InChI writes no stereo layer for five cumulated double bonds, so the reader is not shipped), and cyclic allenes in rings of eight or fewer atoms.
+- `species_entry_stereo_not_represented` now means only: the symmetry cap, a cyclic allene in a ring of eight or fewer, a centre or double bond that depends
+  on an allene's sense (`CC=C=CC(C)C=C=CC` has four stereoisomers but three possible descriptors), a cumulated chain with a tied pair of stereo-bearing arms at one end (`cumulene_tied_end`, a never-settled `?` element), and an allene or cumulene deposited with only SMILES marks.
+  A `?` that a geometry or a label could settle is `species_entry_stereo_unresolved`. The read field `stereo_not_represented` and the CHEMKIN marker follow.
+- Migration `e5b2c8d1f947`: the descriptor check constraint accepts `Ra` / `Sa`; every live entry with a `?` allene or cumulene is re-read from its linked
+  geometries and filled in place when they agree (printed as `entry ref: old -> new`, or `0 changed`). Entries whose geometries disagree, entries without a
+  geometry and merged-away entries are listed and left. A fill that would collide with a live entry stops the migration with a list. `downgrade()` stops with a
+  list if any entry holds `Ra` / `Sa`.
+
+## Derive network channel kind from its states (2026-10-28)
+
+- **Client: `tckdb-client` 0.178.0, `tckdb-schemas` 0.140.0.** Migration `a7c4e1f9b268` rebuilds the `network_channel_kind` enum.
+- A channel's kind is a function of its two states: well to well is `isomerization`, bimolecular/termolecular to well `association`, well to bimolecular/termolecular
+  `dissociation`, bimolecular/termolecular to bimolecular/termolecular `exchange`. Termolecular is treated like bimolecular, so every pair has a kind.
+- The upload field `kind` is optional. Omitted, the server fills it in; supplied and agreeing, accepted; supplied and disagreeing, refused as
+  `network_channel_kind_mismatch` (422), naming the channel key, the supplied kind and the derived kind.
+- `stabilization` is removed from the enum (nothing used it). The migration recomputes every stored channel kind from its states (as a declared repair on the one column `kind`),
+  stops with a list if a channel joins a state it cannot classify, and recreates the PostgreSQL enum.
+- The PDep ingestion script uses the shared rule and raises on a pair it cannot map instead of defaulting to `isomerization`.
+- Frontend: `dissociation` channels have their own connector style and legend entry.
+
+## Stereo isomerisations, duplicate network states, stereo in exports and UI (2026-10-27)
+
+- **Client: `tckdb-client` 0.177.0, `tckdb-schemas` 0.139.0.** Third part of DR-0038. No table or column changes and no migration.
+- A cis-trans isomerisation (`Z-2-butene -> E-2-butene`) is a reaction between two entries of one species. The graph reaction (`chem_reaction`) already
+  accepted equal species on both sides (reproduced on `main`; nothing to change there). A `reaction_entry` whose reactant and product **entries** are the same
+  is now refused unless the deposit carries a transition state or a kinetics record: `reaction_entry_null_reaction` (422, blocking, no row ids; the message names
+  the missing evidence). A degenerate exchange (`H + H2 -> H2 + H`) deposited with its transition state or its rate is accepted, on the transition-state,
+  kinetics, computed-reaction and network routes; a bare one (reaction upload, network reaction list) is refused. An atom mapping counts as no evidence of its own:
+  the only routes that take one already carry a transition state.
+  A stereo isomerisation and its reverse (both irreversible) share one `chem_reaction` because both sides hold the same species (the hash keys the two sides
+  separately, so in general `A -> B` and `B -> A` are two rows) and differ in their entries' roles.
+- **Reaction participant rows are one per distinct entry per side.** `reactions/search`, `/browse`, `/full` and the review queue served one row per occurrence
+  (`H + H -> H2`: two H rows) while each row also carried the species-level coefficient (2), so a consumer summing the rows read 4 H. Each distinct entry is now served
+  once per side with `stoichiometry` = how many times it occurs there; two entries of one species on a side each keep their own count. Rows are ordered by the first position each entry was written at, and `participant_index`
+  is that first position, on every surface (one shared rule, `reaction_participants.py`). The equation string is built by one shared function from the occurrence rows, as written (every
+  occurrence, in participant order: `[H] + [H][H] + [H] -> ...`), so search, browse, `/full`'s `reaction_entry.equation` and the transition-state read give the same string for the same
+  entry. Against `main` that string is unchanged on every surface (an intermediate form that grouped repeated entries on search never shipped). Consumers: the web app already collapses repeated rows (it now reads the right count), the Python client CLI prints `2 H`; nothing depended on the repeated rows.
+- A computed-reaction bundle's kinetics fit whose entries are the bundle reaction's (same direction, any order) attaches to the canonical reaction entry instead of getting an
+  entry of its own; a reverse-direction fit of a non-degenerate reaction still keeps its own entry (pinned by an existing test).
+- Entry labels for incomplete stereo are flat: `? unresolved`, `E,? partial`.
+- One state of a pressure-dependent network naming the same species entry twice (two species keys that resolve to one entry) was a raw `UniqueViolation` on
+  `pk_network_state_participant` (HTTP 500); it is now `network_state_duplicate_participant` (422, a sibling of `..._duplicate_composition`: it is about one state's
+  own participants, and its remedy is a `stoichiometry`).
+- Reaction search flattens stereo marks per DR-0038, so a search for `C/C=C\C -> C/C=C/C` also returns entries whose sides are unresolved (`? -> E`). That is by design.
+- Two states of one pressure-dependent network with the same composition (two species keys that resolve to one entry, or one state declared twice) were a
+  raw `IntegrityError` on `uq_network_state_network_id`, an HTTP 500. They are now refused before any row is written as `network_state_duplicate_composition`
+  (422), naming the two local state keys.
+- CHEMKIN export prints each entry's stereo in the `! SMILES=` comment (chem.inp SPECIES, therm.dat, tran.dat, and the network export): the entry's isomeric
+  SMILES where it has one, else the constitution SMILES, then `STEREO=<descriptor>`; `STEREO_RESOLUTION=partial|unresolved` marks an incomplete entry and
+  `STEREO_NOT_REPRESENTED=axial|cumulene` an element no data can settle. The importer reads the first token after `SMILES=` and ignores the rest.
+- Reads: species-entry records (species search, structure search) gain `stereo_not_represented` (`["axial"]`, `["cumulene"]` or empty). `species_entry_label`
+  (reaction equations, entry links, network state labels, every read that names an entry) is now built from the descriptor and its resolution, so an unresolved
+  entry reads `? unresolved` and a partial one `E,? partial` instead of no label; the review-queue subject chemistry gains `stereo_descriptor` and
+  `stereo_resolution` beside `stereo_label`. Entries whose stereo is wholly unknown therefore change label text; no stored value changes.
+  Symmetry-cap entries are not listed in `stereo_not_represented` (known gap).
+- Frontend: the species-entry page and entry cards read stereo from the descriptor and its resolution. "Achiral" only for a NULL descriptor; partial and
+  unresolved entries say so (their display `stereo_label` is NULL by design); an allene axis says "axial stereo not represented".
+
 ## Curated detail pages serve unreviewed records badged (2026-10-26)
 
 - **No client type change.** Step 7 of ADR 0023, the last step. Under `profile=curated`, a detail read (every route that resolves one record by
@@ -49,6 +474,19 @@ dataset must never require a code release.
 - **Removed:** `made_under.inputs_unchecked_reason` (it only ever said `curated_profile`) is gone from the read model, the OpenAPI document, the client type and the
   frontend. Pre-release; no compatibility shim. The cost guard is unchanged: only the routes that bound their page compare inputs.
 - No schema or migration impact. No rubric pin changed.
+
+## The species key is the constitution; stereo lives on the entry (2026-10-26)
+
+- **Backend, `tckdb-schemas` 0.138.0, `tckdb-client` 0.176.0.** A species is its stereo-blind canonical SMILES plus charge and multiplicity; which
+  stereoisomer a deposit is lives on the species entry as a canonical stereo descriptor (`E`, `R,S`, `E,?`; `?` for an element nothing pinned down; one
+  string per stereoisomer). Every geometry, the marks in the SMILES and a supplied label each fill the elements the earlier ones left unknown, and any
+  element two of them state differently is refused (`species_stereo_contradiction`). `stereo_label` becomes display text; free text is refused. Allene axes
+  and cis/trans across longer cumulenes are not represented yet: they are always `?`, with the warning `species_entry_stereo_not_represented`.
+- **Migration `c7e2a9f4d138`** recomputes every species key, merges the species, reactions and entries that now collide, re-points their results to the
+  survivor and KEEPS the merged-away rows (public ref and own history), marked `merged_into_*`, forwarding one hop. Approved rows change only through
+  declared repairs; a collision it cannot express, differently labelled entries that would merge, or two standing release selections for one subject
+  stop the migration. The downgrade cannot un-merge, and the upgrade refuses a database that went down through it.
+- New refusal codes `species_stereo_contradiction` and `species_stereo_label_invalid`; new warning `species_entry_stereo_unresolved`.
 
 ## Conformer basins are connected components (2026-10-26)
 

@@ -83,6 +83,7 @@ from app.schemas.reads.scientific_conformer import (
     ScientificConformerObservationDetailResponse,
     ScientificConformerObservationRecord,
 )
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     fetch_review_badges,
@@ -104,6 +105,9 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
+    STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
 
@@ -467,6 +471,9 @@ def get_conformer_observation(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([obs_badge]),
         record=record,
+        **deposit_warning_envelope(
+            session, SubmissionRecordType.conformer_observation, {obs.id: obs.public_ref}
+        ),
     )
 
 
@@ -833,11 +840,12 @@ def _build_species_context(
             # entry of the species this record belongs to. Selected here
             # under their own names because species_entry_label_for()
             # reads them by attribute.
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         )
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.id == species_entry_id)
@@ -853,6 +861,7 @@ def _build_species_context(
         species_entry_id=row.entry_id,
         species_entry_ref=row.entry_ref,
         species_entry_label=species_entry_label_for(row),
+        **entry_facets_of(row),
         formula=row.formula,
         canonical_smiles=row.smiles,
         inchi_key=row.inchi_key,
@@ -1547,6 +1556,9 @@ def _bulk_lot_summaries(
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
             core_treatment=lot.core_treatment,
+            relativistic_hamiltonian=lot.relativistic_hamiltonian,
+            pno_truncation=lot.pno_truncation,
+            ri_approximation=lot.ri_approximation,
             aux_basis=lot.aux_basis,
             cabs_basis=lot.cabs_basis,
             solvent_model=lot.solvent_model,

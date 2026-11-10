@@ -6,7 +6,7 @@ second-phase POST per calculation moves the bytes. These tests
 cover:
 
 - Local validation on ``Calculation.add_artifact``.
-- ``to_payload()`` must not mention artifacts.
+- ``to_payload()`` leaves artifacts out when ``inline_artifacts=False``.
 - ``emission_diagnostics()`` reports ``artifact_upload_requires_second_phase``.
 - ``upload.artifact_plan(result)`` resolves bundle-local keys against
   the server response (both endpoints).
@@ -160,7 +160,7 @@ class TestAddArtifactValidation:
         ]
 
 
-# --- to_payload must not emit artifacts -----------------------------
+# --- inline_artifacts=False keeps files out of the payload ----------
 
 
 def test_artifacts_not_emitted_in_computed_species_payload(
@@ -170,6 +170,7 @@ def test_artifacts_not_emitted_in_computed_species_payload(
         species=water_species,
         calculations=[calc_with_artifacts],
         primary_calculation=calc_with_artifacts,
+        inline_artifacts=False,
     )
     payload = upload.to_payload()
     # Walk the whole payload; "artifacts" must not appear anywhere.
@@ -201,6 +202,7 @@ def test_artifacts_not_emitted_in_computed_reaction_payload(water_geom):
         reaction=rxn,
         calculations=[ts_opt],
         species_calculations={ch4: [ch4_opt]},
+        inline_artifacts=False,
     )
     blob = json.dumps(upload.to_payload())
     assert "artifacts" not in blob

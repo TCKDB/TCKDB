@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.routes.scientific._actor import publish_read_actor
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
@@ -24,6 +25,7 @@ from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.method_families import MethodFamily
 from app.db.models.common import (
     RecordReviewStatus,
@@ -51,8 +53,8 @@ from app.services.scientific_read.transition_states_search import (
 )
 
 # Two prefixes, two routers, one module.
-ts_router = APIRouter(prefix="/transition-states")
-tse_router = APIRouter(prefix="/transition-state-entries")
+ts_router = APIRouter(route_class=ServerFaultRoute, prefix="/transition-states")
+tse_router = APIRouter(route_class=ServerFaultRoute, prefix="/transition-state-entries")
 
 
 # The router-level ``?profile=`` dependency puts these two keys on every
@@ -137,7 +139,8 @@ def scientific_transition_states_search_get(
     pagination / include / review knobs are not enough — see
     ``backend/docs/specs/scientific_transition_state_reads.md``.
     """
-    request_obj = TransitionStatesSearchRequest(
+    request_obj = caller_input(
+        TransitionStatesSearchRequest,
         reaction_ref=reaction_ref,
         reaction_entry_ref=reaction_entry_ref,
         transition_state_ref=transition_state_ref,
@@ -244,6 +247,7 @@ def scientific_transition_states_search_post(
 @ts_router.get(
     "/{transition_state_ref_or_id}",
     response_model=ScientificTransitionStateDetailResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def scientific_transition_state_detail(
     transition_state_ref_or_id: str = Path(..., min_length=1, max_length=64),
@@ -259,7 +263,7 @@ def scientific_transition_state_detail(
     only — integer ids surface only when ``include=internal_ids`` is
     supplied *and* the deployment permits it.
     """
-    req = TransitionStateDetailRequest(include=parse_include(include))
+    req = caller_input(TransitionStateDetailRequest, include=parse_include(include))
     payload = get_transition_state(
         session,
         transition_state_handle=transition_state_ref_or_id,
@@ -283,6 +287,7 @@ def scientific_transition_state_detail(
 @tse_router.get(
     "/{transition_state_entry_ref_or_id}",
     response_model=ScientificTransitionStateEntryDetailResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def scientific_transition_state_entry_detail(
     transition_state_entry_ref_or_id: str = Path(
@@ -303,7 +308,7 @@ def scientific_transition_state_entry_detail(
     not pull it in, and the default response omits the field entirely so
     it stays byte-identical to its pre-trust shape.
     """
-    req = TransitionStateEntryDetailRequest(include=parse_include(include))
+    req = caller_input(TransitionStateEntryDetailRequest, include=parse_include(include))
     payload = get_transition_state_entry(
         session,
         transition_state_entry_handle=transition_state_entry_ref_or_id,

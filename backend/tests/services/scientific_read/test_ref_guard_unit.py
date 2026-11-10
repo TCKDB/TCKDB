@@ -640,6 +640,7 @@ def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
         "TransitionStateStatmechSummary",
         "TransitionStateStatmechSourceCalculation",
         "CalculationEvidenceSummary",
+        "RoleCalculationSettings",
         # PR-2a
         "CalculationCompositeInputSummary",
         "CalculationConformerSummary",
@@ -697,6 +698,8 @@ def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
         "NetworkSolveStateEnergySourceSummary",
         "NetworkKineticsBatchFitEvaluation",
         "FrequencyScaleFactorUsageSummary",
+        # Deposit-time warnings: the entry for a record the response names goes with that record when it is hidden.
+        "RecordWarnings",
     }
 
 

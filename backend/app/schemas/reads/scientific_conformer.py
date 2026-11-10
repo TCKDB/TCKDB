@@ -49,6 +49,8 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
+from app.schemas.reads.scientific_deposit_warnings import RecordWarnings, SubmissionWarnings
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 
 # ---------------------------------------------------------------------------
 # Request
@@ -301,7 +303,7 @@ class ConformerObservationGroupSummary(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ConformerSpeciesContext(BaseModel):
+class ConformerSpeciesContext(EntryFacetFields):
     """Lightweight species/species-entry pointer for a conformer record.
 
     Mirrors :class:`SpeciesEntryOwnerSummary` shape conventions used by
@@ -717,6 +719,12 @@ class ScientificConformerObservationDetailResponse(ScientificResponse):
     """Response envelope for
     ``GET /scientific/conformer-observations/{handle}``."""
 
+    #: The deposit-time warnings of each record this response names, with its public ref (see
+    #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    record_warnings: list[RecordWarnings] = Field(default_factory=list)
+    #: Warnings about the deposit that no one record could take, once per submission a named record belongs to
+    #: (see ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    deposit_warnings: list[SubmissionWarnings] = Field(default_factory=list)
     request: RequestEcho
     review_summary: ReviewStatusSummary
     record: ScientificConformerObservationRecord

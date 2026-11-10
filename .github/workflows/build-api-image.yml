@@ -54,6 +54,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v7
 
@@ -64,6 +65,13 @@ jobs:
           # Docker Hub is the default registry; log in with the repo secrets.
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # For the smoke test's postgres image, pulled from the GHCR mirror.
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       # Labels only. Tags are computed once, in the merge job, because the
       # per-platform images are pushed by digest and carry no tag. The
@@ -126,8 +134,9 @@ jobs:
           # The RDKit cartridge image, not stock postgres: the first migration
           # issues `CREATE EXTENSION IF NOT EXISTS rdkit`, so a stock image
           # fails at "Could not open extension control file rdkit.control".
-          # Serving needs no cartridge types; migrating does. Same image and
-          # tag as docker-compose.yml, so this tests the real pairing.
+          # Serving needs no cartridge types; migrating does. Same image
+          # as docker-compose.yml (here from its GHCR mirror), so this tests
+          # the real pairing.
           docker network create smoke-net
           # The encoding pin matters more here than anywhere: this is the last
           # check before an image is published, so a smoke DB on SQL_ASCII
@@ -139,7 +148,7 @@ jobs:
             -e POSTGRES_DB=tckdb_smoke \
             -e LANG=C.UTF-8 \
             -e POSTGRES_INITDB_ARGS=--encoding=UTF8 \
-            informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3
+            ghcr.io/tckdb/rdkit-cartridge-debian@sha256:96c34a5b88d0cbe02bf57290531f27f3cb97f5d3e494f03baea75ea99749b5ef
 
           # pg_isready runs INSIDE the container, so this does not depend on
           # the runner having postgresql-client installed.

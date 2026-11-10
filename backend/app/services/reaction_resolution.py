@@ -43,6 +43,9 @@ W_REACTION_MASS_BALANCE_FAILED = "reaction_mass_balance_failed"
 #: Raised when a reaction's two sides do not hold the same total charge.
 W_REACTION_CHARGE_NOT_CONSERVED = "reaction_charge_not_conserved"
 
+#: Raised when a reaction entry's reactants and products are the same species entries.
+W_REACTION_ENTRY_NULL_REACTION = "reaction_entry_null_reaction"
+
 #: Raised when a saddle point is not made of its own reaction's atoms.
 W_TRANSITION_STATE_COMPOSITION_MISMATCH = "transition_state_composition_mismatch"
 
@@ -51,6 +54,7 @@ W_TRANSITION_STATE_CHARGE_MISMATCH = "transition_state_charge_mismatch"
 
 #: Raised when a stored SMILES cannot be parsed while balancing a reaction.
 W_STORED_SMILES_UNPARSEABLE = "stored_species_smiles_unparseable"
+W_REACTION_FAMILY_CONFLICT = "reaction_family_conflict"
 
 
 def compress_species_stoichiometry(
@@ -412,6 +416,100 @@ CHECK_REACTION_CHARGE_CONSERVATION = ScientificCheck(
         "entirely, as it does for elemental balance. Conservation is not "
         "neutrality: any net charge is accepted as long as both sides carry "
         "the same one, so ion-molecule reactions are unaffected."
+    ),
+)
+
+
+def refuse_null_reaction_entry(
+    reactant_entries: Sequence[SpeciesEntry],
+    product_entries: Sequence[SpeciesEntry],
+    *,
+    has_transition_state: bool = False,
+    has_kinetics: bool = False,
+) -> None:
+    """Refuse a bare reaction entry whose two sides are the same species entries.
+
+    Since the species key is the constitution (DR-0038), ``Z-2-butene -> E-2-butene`` has one
+    species on both sides, and the graph reaction (``chem_reaction``) accepts that. A reaction
+    entry with the very same species entries on both sides (compared as multisets, so the order of
+    the participants does not matter) converts nothing into nothing *unless the deposit carries
+    evidence that something happens*: a degenerate exchange such as ``H + H2 -> H2 + H`` is real
+    chemistry with a saddle point and a rate. So it is accepted when the same deposit carries a
+    transition state or a kinetics record, and refused only when it carries neither.
+
+    An atom mapping is not a third kind of evidence here: the only routes that accept one
+    (``atom_map`` on a transition-state upload, or on a computed-reaction bundle's transition
+    state) already carry a transition state. No route that creates a reaction entry takes an atom
+    mapping without one.
+
+    A transition state deposited later against an existing reaction entry is not affected: it
+    attaches to the entry and creates no reaction entry, so this check does not run. The rule is
+    enforced on write from DR-0038's third part onward: a bare same-entries reaction entry cannot be
+    created now, and a degenerate reaction arrives with its transition state or kinetics. A database
+    whose entries were merged by the stereo-identity migration could in principle already hold one
+    (the merge re-points structure participants generically); nothing here repairs such a row, since
+    existing data is development data and a migration would stop with a list instead.
+
+    :raises CodedValueError: ``reaction_entry_null_reaction`` (422). The detail names no row id.
+    """
+
+    if not reactant_entries or Counter(e.id for e in reactant_entries) != Counter(
+        e.id for e in product_entries
+    ):
+        return
+    if has_transition_state or has_kinetics:
+        return
+    raise CodedValueError(
+        W_REACTION_ENTRY_NULL_REACTION,
+        "The reactant and product entries are identical and the deposit carries no transition "
+        "state, kinetics record or non-identity atom mapping, so nothing shows that anything "
+        "happens (reaction_entry_null_reaction). Deposit the evidence with the reaction: a "
+        "transition state (the transition-state upload, or `transition_state` in a "
+        "computed-reaction bundle) or a kinetics record (the kinetics upload, or `kinetics` in a "
+        "bundle). For a stereo isomerisation, give each side the stereo (marks, a stereo label or "
+        "a geometry) that makes the two entries different. An identical-entries reaction is "
+        "refused unless a transition state or kinetics is deposited for it.",
+        context={
+            "participants": len(reactant_entries),
+            "missing_evidence": ["transition_state", "kinetics"],
+        },
+        message_prefix=False,
+    )
+
+
+CHECK_REACTION_ENTRY_NULL_REACTION = ScientificCheck(
+    group="Conservation across a reaction",
+    sort_key=6,
+    code="reaction_entry_null_reaction",
+    asserts=(
+        "A reaction entry whose reactants and products are the same species entries carries "
+        "evidence that something happens: a transition state or a kinetics record."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "Definitional. A reaction that leaves every participant exactly as it was, with no saddle "
+        "point and no rate, is not a reaction, so no correct calculation produces one. Two entries "
+        "of one species (E and Z 2-butene) are different participants, and a degenerate exchange "
+        "(H + H2) deposited with its transition state or rate is real chemistry; neither is refused."
+    ),
+    adr="0038, 0008",
+    enforced_by=(
+        PythonCheck(
+            refuse_null_reaction_entry,
+            note=(
+                "Called before ``resolve_chem_reaction`` on every path that creates a reaction entry "
+                "(the reaction upload, which kinetics, networks and transition states reuse, and "
+                "the computed-reaction bundle's canonical and kinetics reactions), told whether the "
+                "deposit carries a transition state or kinetics."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "Deposit the evidence with the reaction: a transition state (transition-state upload, or "
+        "``transition_state`` in a computed-reaction bundle) or a kinetics record (kinetics upload, "
+        "or ``kinetics`` in a bundle). For a stereo isomerisation, deposit the two isomers as "
+        "different entries (stereo marks in the SMILES, a stereo label, or a geometry per side)."
     ),
 )
 
@@ -987,6 +1085,37 @@ def resolve_reaction_family(
     )
 
 
+def _reaction_family_conflict(*, recorded: str | None, supplied: str | None) -> CodedValueError:
+    """The family-conflict refusal; a side that is ``None`` is depositor text and is not named."""
+    named = {key: value for key, value in (("recorded_family", recorded), ("supplied_family", supplied)) if value}
+    if recorded is not None and supplied is not None:
+        detail = (
+            f"This reaction is already recorded under reaction family {recorded!r}, but the deposit "
+            f"names {supplied!r}."
+        )
+    elif recorded is not None:
+        detail = (
+            f"This reaction is already recorded under reaction family {recorded!r}, but the deposit "
+            "names a family that is not in the seeded vocabulary."
+        )
+    elif supplied is not None:
+        detail = (
+            "This reaction is already recorded under a reaction family that is not in the seeded "
+            f"vocabulary, but the deposit names {supplied!r}."
+        )
+    else:
+        detail = (
+            "This reaction is already recorded under a different reaction family that is not in the "
+            "seeded vocabulary, and the deposit names another one."
+        )
+    return CodedValueError(
+        W_REACTION_FAMILY_CONFLICT,
+        detail + " A reaction has one family; deposit it under the recorded family.",
+        context=named,
+        message_prefix=False,
+    )
+
+
 def _resolve_chem_reaction(
     session: Session,
     *,
@@ -1033,28 +1162,31 @@ def _resolve_chem_reaction(
     )
     chem_reaction = session.scalar(
         select(ChemReaction).where(
-            ChemReaction.stoichiometry_hash == stoichiometry_hash
+            ChemReaction.stoichiometry_hash == stoichiometry_hash,
+            ChemReaction.merged_into_chem_reaction_id.is_(None),
         )
     )
     if chem_reaction is not None:
+        recorded_seeded = chem_reaction.reaction_family
+        recorded_raw = chem_reaction.reaction_family_raw
         if resolved_reaction_family is not None:
-            if chem_reaction.reaction_family_id is None:
+            if recorded_seeded is None and recorded_raw is None:
                 chem_reaction.reaction_family = resolved_reaction_family
-            elif chem_reaction.reaction_family_id != resolved_reaction_family.id:
-                raise ValueError(
-                    "Resolved reaction already has a different reaction_family: "
-                    f"{chem_reaction.reaction_family.name!r} != "
-                    f"{resolved_reaction_family.name!r}."
+            elif recorded_seeded is None or recorded_seeded.id != resolved_reaction_family.id:
+                # Recorded under another seeded family, or under depositor text. Only the
+                # seeded side is named.
+                raise _reaction_family_conflict(
+                    recorded=recorded_seeded.name if recorded_seeded is not None else None,
+                    supplied=resolved_reaction_family.name,
                 )
         elif reaction_family_raw is not None:
-            if chem_reaction.reaction_family_raw is None:
+            if recorded_seeded is not None:
+                raise _reaction_family_conflict(recorded=recorded_seeded.name, supplied=None)
+            if recorded_raw is None:
                 chem_reaction.reaction_family_raw = reaction_family_raw
                 chem_reaction.reaction_family_source_note = normalized_source_note
-            elif chem_reaction.reaction_family_raw != reaction_family_raw:
-                raise ValueError(
-                    "Resolved reaction already has a different raw reaction_family: "
-                    f"{chem_reaction.reaction_family_raw!r} != {reaction_family_raw!r}."
-                )
+            elif recorded_raw != reaction_family_raw:
+                raise _reaction_family_conflict(recorded=None, supplied=None)
             elif (
                 chem_reaction.reaction_family_source_note is None
                 and normalized_source_note is not None
@@ -1098,7 +1230,10 @@ def _resolve_chem_reaction(
             session.flush()
     except IntegrityError:
         chem_reaction = session.scalar(
-            select(ChemReaction).where(ChemReaction.stoichiometry_hash == stoichiometry_hash)
+            select(ChemReaction).where(
+                ChemReaction.stoichiometry_hash == stoichiometry_hash,
+                ChemReaction.merged_into_chem_reaction_id.is_(None),
+            )
         )
 
     return chem_reaction
@@ -1111,7 +1246,8 @@ def _reaction_with_hash(session: Session, *, reversible: bool, reactants: Mappin
     return session.scalar(
         select(ChemReaction).where(
             ChemReaction.stoichiometry_hash
-            == reaction_stoichiometry_hash(reversible=reversible, reactants=reactants, products=products)
+            == reaction_stoichiometry_hash(reversible=reversible, reactants=reactants, products=products),
+            ChemReaction.merged_into_chem_reaction_id.is_(None),
         )
     )
 
@@ -1199,15 +1335,10 @@ def resolve_chem_reaction(
             from tckdb_schemas.upload_warning import UploadWarning
 
             warnings_out.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field="reaction.reversible",
                     code=W_REACTION_REVERSIBLE_TWIN,
-                    message=(
-                        f"This reaction is stored as {'reversible' if reversible else 'irreversible'}, and the same "
-                        f"participants are also stored as {'irreversible' if reversible else 'reversible'} "
-                        f"({twin.public_ref}). They are two reactions in TCKDB because reversibility is part of a "
-                        "reaction's identity; rates deposited against one are not found under the other."
-                    ),
+                    context={"reversible": bool(reversible), "twin_ref": twin.public_ref},
                 )
             )
     return chem_reaction

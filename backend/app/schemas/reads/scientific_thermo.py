@@ -7,8 +7,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from tckdb_schemas.thermo_declarations import StoredThermoProtocolDeclaration
 
 from app.db.models.common import (
@@ -17,11 +18,13 @@ from app.db.models.common import (
     PhaseKind,
     RecordReviewStatus,
     ScientificOriginKind,
+    ThermoDeclarationSource,
     ThermoTargetKind,
 )
 from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
 from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
+from app.schemas.reads.scientific_calculation import RoleCalculationSettings
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
     CursorToken,
@@ -40,6 +43,7 @@ from app.schemas.reads.scientific_common import (
     WatermarkEcho,
     WorkflowToolReleaseSummary,
 )
+from app.schemas.reads.scientific_deposit_warnings import RecordWarnings, SubmissionWarnings
 from app.services.trust.models import TrustFragment
 
 
@@ -270,10 +274,12 @@ class ThermoTargetBlock(BaseModel):
     :param kind: ``equilibrium_ensemble`` or ``single_conformer``.
     :param conformer_group_ref: Public ref of the conformer group a
         ``single_conformer`` target names; ``null`` for an equilibrium target.
+    :param declared_by: Whose claim the target is: ``depositor`` or ``chemkin_format``.
     """
 
     kind: ThermoTargetKind
     conformer_group_ref: str | None = None
+    declared_by: ThermoDeclarationSource
 
 
 class ThermoRecord(BaseModel):
@@ -343,6 +349,12 @@ class ThermoRecord(BaseModel):
     # Group-additivity estimation breakdown; null unless the record is an
     # estimated thermo with an attached GA breakdown (DR-0035).
     group_additivity: GroupAdditivityBlock | None = None
+    #: ``include=calculation_settings``. For each of geometry / frequency / energy, the calculation this record links
+    #: for that level and the grid and SCF convergence it used, each with its evidence. A level with no linked
+    #: calculation is listed as absent. Never filled from an unlinked statmech or a sibling record.
+    calculation_settings: list[RoleCalculationSettings] | None = None
+    #: Filled by the record builder, read by ``attach_calculation_settings``; never on the wire.
+    _level_plan: Any = PrivateAttr(default=None)
     trust: TrustFragment | None = None
     assessments: PublicAssessmentSummary | None = None
 
@@ -364,6 +376,12 @@ class ScientificSpeciesThermoResponse(ScientificResponse):
     public stable handle for the response's path-parameter resource.
     """
 
+    #: The deposit-time warnings of each record this response names, with its public ref (see
+    #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    record_warnings: list[RecordWarnings] = Field(default_factory=list)
+    #: Warnings about the deposit that no one record could take, once per submission a named record belongs to
+    #: (see ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    deposit_warnings: list[SubmissionWarnings] = Field(default_factory=list)
     request: RequestEcho
     species_entry_id: int
     species_entry_ref: str

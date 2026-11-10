@@ -483,7 +483,7 @@ that this is a real database. The script:
 - Resolves tau exactly as the upload path would: recorded
   `calculation_parameter` rows first, then -- only when that resolves to
   the conservative `protocol_not_recorded` row -- the assumption table in
-  `app/services/hessian_method_inference.py`, keyed on the calculation's
+  `tckdb_schemas.hessian_method_assumption` (re-exported by `app/services/hessian_method_inference.py`), keyed on the calculation's
   software and level-of-theory method.
 - Writes only `imaginary_mode_tau_cm1` and `imaginary_mode_tau_basis`.
   **`imaginary_mode_structural_flag` is never touched** -- it is judged
@@ -619,7 +619,7 @@ same `public_ref`-untouched rules as `c8424fe82997`.
   `wb97x-d` is keyed as `wb97xd`, `m06-2x` as `m062x`, a trailing `-d3(bj)` or
   `-gd3bj` as `-d3bj`. Gaussian `wB97XD` and ORCA `wB97X-D3` stay two levels.
 - **Dispersion, solvent and solvent-model case**: keyed by strip and
-  lower-case. `keywords` stays verbatim.
+  lower-case. (`keywords` stayed verbatim until revision `d5f2b8c1a704` removed it; see "Level-of-theory keywords removed" below.)
 
 **What the upgrade prints.** One summary line
 (`level_of_theory alias/component re-key: N row(s) re-hashed, M duplicate
@@ -928,6 +928,57 @@ own transaction**, through the same declared-repair machinery as `d3f8a1c6e92b`.
 - **Composition with other data steps.** The step recomputes whatever entries it is given from the database as it finds it, so it composes with a
   revision that merges species entries or changes stereo identity before it. It declines unless the default scheme is exactly
   (`torsion_basin`, 3); `d3f8a1c6e92b`'s step now declines on any database that is not at version 2.
+
+## Literature titles: re-check against the registry (revision `b4d8e1a7c953`)
+
+The migration only adds the nullable `literature.title_source` column; existing rows stay NULL ("not recorded"). To classify them, or to upgrade a depositor-typed title whose registry lookup failed at deposit time, run the explicit step `backend/scripts/ops/reresolve_literature_titles.py`. It re-fetches DOI/ISBN metadata through the resolver's own fetch functions and sets `title` and `title_source=resolved_metadata` where a title comes back; a failed or empty lookup leaves the row unchanged. It never touches DOI, ISBN or the public ref. Dry run is the default:
+
+Run it from the API image, the way `tckdb_deploy.sh` runs `alembic upgrade head` (the container's workdir is `/app/backend`, and `python` is only on `PATH` through the image's entrypoint, which `docker exec` skips). Use the same `DB_NETWORK`, `ENV_FILE` and `IMAGE` values the deploy used (`TCKDB_DB_NETWORK`, `TCKDB_ENV_FILE`, `<TCKDB_IMAGE_REPO>:<tag>`):
+
+```bash
+# (a) a throwaway container, dry run first (the default)
+docker run --rm --network "$DB_NETWORK" --env-file "$ENV_FILE" -e DB_HOST=db -e DB_PORT=5432 \
+    "$IMAGE" python scripts/ops/reresolve_literature_titles.py
+# then write
+docker run --rm --network "$DB_NETWORK" --env-file "$ENV_FILE" -e DB_HOST=db -e DB_PORT=5432 \
+    "$IMAGE" python scripts/ops/reresolve_literature_titles.py --apply --i-know-this-is-deployed
+
+# (b) alternatively, inside the running API container
+docker exec <api> micromamba run -n base python scripts/ops/reresolve_literature_titles.py
+```
+
+Narrow with `--ref lit_...`, `--limit N`, `--since YYYY-MM-DD`. Notes:
+
+- Use an image built after the PR that added this script; an older image does not contain it.
+- The container's network needs outbound internet. Without it every lookup fails and every row is counted `lookup_error`: dry-run first and check the tally before `--apply`.
+- It commits every 50 rows; an interrupted run keeps its progress and a re-run only picks up what is still unverified.
+- The summary counts upgrades whose registry title does not match the stored title (normalised as the deposit-time warning does). Check those refs: the deposited DOI/ISBN may be the wrong one, and the row would now read as verified.
+- For an ISBN, "resolved" means a third-party catalogue (OpenLibrary, which is user-editable) said so: the same trust as at deposit time.
+
+## Level-of-theory keywords removed (revision `d5f2b8c1a704`)
+
+The revision drops `level_of_theory.keywords` and adds the typed method qualifiers (`relativistic_hamiltonian`,
+`pno_truncation`, `ri_approximation`, and `core_treatment = window`). The hash formula lost its `keywords` key, so
+**every stored `lot_hash` is stale** under it. The revision does not re-key or merge: it **refuses to upgrade (and to
+downgrade) while `level_of_theory` holds any row**, with a message that names the reseed.
+
+An instance that already holds data is reseeded:
+
+1. **Back up** the whole database (`pg_dump -Fc`). Keep it: the refusal is the only thing standing between a stale
+   hash and a silent wrong match.
+2. **Save the users and API keys** so people keep their access:
+   `pg_dump --data-only -t app_user -t api_key <database> > users_and_keys.sql`. A data-only dump of those tables
+   carries the sequence `setval` calls, so new ids continue after the restored ones.
+3. **Recreate the database** (drop and create it empty, with the same owner and runtime-role grants as before, and the
+   RDKit extension available).
+4. **Apply the migrations** to the empty database: `alembic upgrade head`.
+5. **Restore the users and keys**: `psql <database> < users_and_keys.sql`.
+6. **Deposit the data again** from its sources. Stored reviews, assessments and public refs of the old data are gone
+   with it; nothing is carried across.
+
+A database with no `level_of_theory` rows (a fresh install) upgrades normally. Downgrading the revision is refused for
+the same reason in reverse, and the value `window` stays in the `core_treatment` type afterwards (an enum value
+cannot be dropped).
 
 ## Self-hosted / Raspberry Pi note
 

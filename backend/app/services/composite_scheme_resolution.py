@@ -526,7 +526,9 @@ def _label_for(definition: Any, resolved: list[list[_ResolvedInput]], definition
                     ("disp", level.dispersion),
                     ("solv", level.solvent),
                     ("solv_model", level.solvent_model),
-                    ("kw", level.keywords),
+                    ("rel", level.relativistic_hamiltonian),
+                    ("pno", level.pno_truncation),
+                    ("ri", level.ri_approximation),
                     ("spin", level.spin_treatment),
                 )
                 if value is not None

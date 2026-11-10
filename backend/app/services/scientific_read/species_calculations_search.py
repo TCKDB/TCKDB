@@ -61,6 +61,9 @@ from app.db.models.common import (
     CalculationRecordKind,
     CalculationType,
     CoreTreatment,
+    PnoTruncation,
+    RelativisticHamiltonian,
+    RiApproximation,
     SpinTreatment,
     SubmissionRecordType,
 )
@@ -204,6 +207,9 @@ class _CalcRow:
     lot_cabs_basis: str | None = None
     lot_solvent_model: str | None = None
     lot_spin_treatment: SpinTreatment | None = None
+    lot_relativistic_hamiltonian: RelativisticHamiltonian | None = None
+    lot_pno_truncation: PnoTruncation | None = None
+    lot_ri_approximation: RiApproximation | None = None
 
 
 def search_species_calculations(
@@ -477,9 +483,9 @@ def _validate_ranking(request: SpeciesCalculationsSearchRequest) -> None:
             "requires calculation_type=sp or calculation_type=opt."
         )
     if request.species_entry_ref is None or request.level_of_theory_ref is None:
-        raise ValueError(
-            "unsafe_lowest_energy_comparison: ranking=lowest_energy requires "
-            "exact species_entry_ref and level_of_theory_ref filters."
+        raise CodedValueError(
+            "unsafe_lowest_energy_comparison",
+            "ranking=lowest_energy requires exact species_entry_ref and level_of_theory_ref filters.",
         )
 
 
@@ -662,6 +668,9 @@ def _query_candidate_calculations(
             LevelOfTheory.cabs_basis,
             LevelOfTheory.solvent_model,
             LevelOfTheory.spin_treatment,
+            LevelOfTheory.relativistic_hamiltonian,
+            LevelOfTheory.pno_truncation,
+            LevelOfTheory.ri_approximation,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -771,6 +780,9 @@ def _query_candidate_calculations(
                 lot_cabs_basis=row[25],
                 lot_solvent_model=row[26],
                 lot_spin_treatment=row[27],
+                lot_relativistic_hamiltonian=row[28],
+                lot_pno_truncation=row[29],
+                lot_ri_approximation=row[30],
             )
         )
     return out
@@ -1290,6 +1302,9 @@ def _lot_summary_from_row(row: _CalcRow) -> LevelOfTheorySummary | None:
         cabs_basis=row.lot_cabs_basis,
         solvent_model=row.lot_solvent_model,
         spin_treatment=row.lot_spin_treatment,
+        relativistic_hamiltonian=row.lot_relativistic_hamiltonian,
+        pno_truncation=row.lot_pno_truncation,
+        ri_approximation=row.lot_ri_approximation,
         composite_scheme=row.composite_scheme,
     )
 

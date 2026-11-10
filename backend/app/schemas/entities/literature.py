@@ -4,7 +4,7 @@ from typing import Self
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
-from app.db.models.common import LiteratureKind
+from app.db.models.common import LiteratureKind, LiteratureTitleSource
 from app.schemas.common import ORMBaseSchema, SchemaBase, TimestampedReadSchema
 from app.schemas.utils import normalize_optional_text, normalize_required_text
 
@@ -87,6 +87,8 @@ class LiteratureCreate(LiteratureBase, SchemaBase):
     """
 
     authors: list[LiteratureAuthorCreate] = Field(default_factory=list)
+    # Set by the resolver from what actually happened; ``None`` = not recorded.
+    title_source: LiteratureTitleSource | None = None
 
     @model_validator(mode="after")
     def validate_unique_authors(self) -> Self:
@@ -140,5 +142,7 @@ class LiteratureUpdate(SchemaBase):
 
 class LiteratureRead(LiteratureBase, TimestampedReadSchema):
     """Read schema for a literature record."""
+
+    title_source: LiteratureTitleSource | None = None
 
     authors: list[LiteratureAuthorRead] = Field(default_factory=list)

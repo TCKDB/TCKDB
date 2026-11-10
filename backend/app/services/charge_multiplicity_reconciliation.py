@@ -53,6 +53,13 @@ from app.scientific_checks import (
     ScientificCheck,
 )
 from app.services.ess_software_detection import SoftwareName, detect_software_from_text
+from app.services.upload_reconciliation import (
+    W_ELECTRONIC_STATE_CONTRADICTS_METHOD,
+    W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY,
+    W_TERM_SYMBOL_MISMATCH,
+    _reconcile_deduction,
+    term_symbol_warnings,
+)
 
 #: Emitted when the declared charge and the log's charge disagree.
 W_CHARGE_MISMATCH = "charge_mismatch"
@@ -201,8 +208,11 @@ def parse_charge_multiplicity_from_log(
         charge, multiplicity = _parse_orca(text)
     elif software == "psi4":
         charge, multiplicity = _parse_psi4(text)
-    else:  # gaussian
+    elif software == "gaussian":
         charge, multiplicity = _parse_gaussian(text)
+    else:
+        # xtb: recognised, not parsed.
+        return None
 
     # A multiplicity below 1 is unphysical (2S+1 >= 1, mirrored by the
     # ``multiplicity_ge_1`` check constraint on the entry tables): a parse
@@ -270,15 +280,10 @@ def reconcile_charge_multiplicity(
         compared = True
         if declared_charge != parsed.charge:
             warnings.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field=f"{field_prefix}.charge",
                     code=W_CHARGE_MISMATCH,
-                    message=(
-                        f"Declared charge {declared_charge:+d} disagrees with "
-                        f"the charge stated by the uploaded {parsed.software} "
-                        f"output log ({parsed.charge:+d}). The declared value "
-                        "is kept unchanged and flagged for reviewer attention."
-                    ),
+                    context={"declared": declared_charge, "logged": parsed.charge, "software": parsed.software},
                 )
             )
 
@@ -286,16 +291,14 @@ def reconcile_charge_multiplicity(
         compared = True
         if declared_multiplicity != parsed.multiplicity:
             warnings.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field=f"{field_prefix}.multiplicity",
                     code=W_MULTIPLICITY_MISMATCH,
-                    message=(
-                        f"Declared spin multiplicity {declared_multiplicity} "
-                        f"disagrees with the multiplicity stated by the "
-                        f"uploaded {parsed.software} output log "
-                        f"({parsed.multiplicity}). The declared value is kept "
-                        "unchanged and flagged for reviewer attention."
-                    ),
+                    context={
+                        "declared": declared_multiplicity,
+                        "logged": parsed.multiplicity,
+                        "software": parsed.software,
+                    },
                 )
             )
 
@@ -321,11 +324,20 @@ def reconcile_charge_multiplicity(
 CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
     group="A structure against its own label",
     sort_key=5,  # Shifted from 4 by #143; see CHECK_SMILES_CHARGE_MATCHES_DECLARED.
-    code=(W_CHARGE_MISMATCH, W_MULTIPLICITY_MISMATCH),
+    code=(
+        W_CHARGE_MISMATCH,
+        W_MULTIPLICITY_MISMATCH,
+        W_TERM_SYMBOL_MISMATCH,
+        W_ELECTRONIC_STATE_CONTRADICTS_METHOD,
+        W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY,
+    ),
     asserts=(
-        "The charge and spin multiplicity a depositor declares match the ones "
-        "the electronic-structure log says the calculation was actually run "
-        "at."
+        "The charge and spin multiplicity a depositor declares agree with the "
+        "electronic-structure log of the calculation; the ground-or-excited "
+        "state and term symbol they declare agree with what the calculation's "
+        "declared method, multiplicity and statmech point group and linearity "
+        "imply; and a term symbol agrees with the spin multiplicity declared "
+        "beside it."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
@@ -339,7 +351,34 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
         "false-positive rate is unknown and promoting them first would be "
         "unsafe. The register records the gap rather than hiding it: this is "
         "the clearest case in TCKDB of a check sitting one tier below where "
-        "its own governing decision puts it."
+        "its own governing decision puts it. **The two deduction codes are "
+        "warnings for a different reason.** Charge and multiplicity are "
+        "read from the log, so a disagreement is a contradiction between a "
+        "declaration and a parsed statement. The other two compare one "
+        "declaration with another: no log is read; the method and "
+        "multiplicity come from the payload itself and the point group and "
+        "linearity from its statmech block. An EOM, CIS or spin-flip TDDFT "
+        "method (the ``EXCITED_STATE_METHODS`` list) deduces an excited "
+        "state definitively (that rule covers the ``EXCITED_STATE_METHODS`` "
+        "names only); on this path job types are calculation types "
+        "(opt, freq, sp ...) and say nothing, so plain TDDFT is not on the "
+        "list and reads as the ground default, which is only a default for "
+        "a single-reference method (confidence heuristic). Only the method "
+        "names casscf, caspt2, nevpt2, mrci, dlpno-nevpt2 and "
+        "dlpno-steom-ccsd, compared without regard to case (so CASSCF "
+        "counts), deduce nothing. Any other name (for example "
+        "MRCI+Davidson, or Molpro's RS2) is read as single-reference and "
+        "gets the ground default, so a ground state declared for such a "
+        "calculation can read as a contradiction. "
+        "A term symbol is compared "
+        "with the one derived from the multiplicity (and the point group and "
+        "linearity where there are any), a derivation and not a reading. A heuristic "
+        "default cannot block. **The two term-symbol codes are declaration against "
+        "declaration too.** The leading digit of a term symbol is 2S+1, so ``3P`` beside "
+        "``multiplicity=2`` is a contradiction no correct deposit can contain, which the ADR "
+        "would put at the blocking tier; it warns here for the reason above (a species-entry "
+        "payload is shared by every upload route, and promoting a warning is a migration). "
+        "A one-atom entry's term against the NIST ground term is entry 79's."
     ),
     adr="0008",
     enforced_by=(
@@ -348,6 +387,37 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
             note=(
                 "Re-reads charge and multiplicity from the uploaded artifact "
                 "using the wired Gaussian, ORCA, Psi4 and Molpro parsers."
+            ),
+        ),
+        PythonCheck(
+            term_symbol_warnings,
+            note=(
+                "The term symbol against the multiplicity beside it (``term_symbol_contradicts_multiplicity``), "
+                "read only from symbols that start with the multiplicity digit. No log is read."
+            ),
+        ),
+        PythonCheck(
+            _reconcile_deduction,
+            note=(
+                "The deduction path, for ``term_symbol_mismatch`` and "
+                "``electronic_state_contradicts_method``: the declared term "
+                "symbol and ground-or-excited state are compared with what "
+                "``deduce_all`` derives from the calculation's own declared "
+                "method and spin multiplicity and, from the "
+                "statmech block, the point group and linearity; no log is "
+                "read. **Only the ground-state default is a heuristic**: an "
+                "EOM, CIS or spin-flip TDDFT method (``EXCITED_STATE_METHODS``) "
+                "deduces an excited state definitively, while any other "
+                "method, plain TDDFT included, deduces the ground state by "
+                "default; only the method names casscf, caspt2, "
+                "nevpt2, mrci, dlpno-nevpt2 and dlpno-steom-ccsd, compared "
+                "without regard to case (so CASSCF counts), deduce nothing; "
+                "any other name (for example MRCI+Davidson, or Molpro's RS2) "
+                "is read as single-reference, so a legitimately excited state computed another "
+                "way reads as a contradiction. The deduction carries its own confidence and "
+                "the evidence it rests on in the warning's context, and a "
+                "stationary-point-kind deduction is not compared here at all "
+                "(Layer 1's n_imag warnings own it)."
             ),
         ),
     ),

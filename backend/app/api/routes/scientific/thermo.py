@@ -13,12 +13,16 @@ from fastapi import APIRouter, Depends, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.routes.scientific._actor import publish_read_actor
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
+    THERMO_RECORD_SECTIONS,
     omit_trust_unless_requested,
+    omit_unrequested_sections,
     prepare_assessment_response,
     require_bounded_input_check,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.method_families import MethodFamily
 from app.db.models.common import RecordReviewStatus, ScientificOriginKind
 from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
@@ -34,12 +38,13 @@ from app.services.scientific_read.public_assessments import (
 )
 from app.services.scientific_read.thermo import get_species_thermo
 
-router = APIRouter(prefix="/species-entries")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species-entries")
 
 
 @router.get(
     "/{species_entry_id}/thermo",
     response_model=ScientificSpeciesThermoResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def species_thermo(
     http_request: Request,
@@ -88,7 +93,8 @@ def species_thermo(
     """
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
     resolved_species_entry_id = resolve_species_entry_handle(session, species_entry_id)
-    request = ThermoReadRequest(
+    request = caller_input(
+        ThermoReadRequest,
         coverage_temperature_min_k=coverage_temperature_min_k,
         coverage_temperature_max_k=coverage_temperature_max_k,
         model_kind=model_kind,
@@ -126,4 +132,5 @@ def species_thermo(
         attach_assessments=attach_thermo_assessments,
         check_inputs=check_inputs,
     )
-    return omit_trust_unless_requested(visibility, payload, scope="search")
+    visibility = omit_trust_unless_requested(visibility, payload, scope="search")
+    return omit_unrequested_sections(visibility, payload, table=THERMO_RECORD_SECTIONS, scope="search")

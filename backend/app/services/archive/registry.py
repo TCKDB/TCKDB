@@ -29,6 +29,11 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "applied_group_additivity",
         "applied_group_additivity_component",
         "author",
+        # Deposit-time warnings, stored beside the record they concern (raw record_type/record_id, no FK, like
+        # ``submission_record_link``). A restore that dropped them would hand every record back reading ``not_recorded``.
+        "deposit_warning",
+        # Which deposit warnings were retired, and why.
+        "deposit_warning_retirement",
         # An assembled composite's inputs (ADR 0021): the slot each cited
         # calculation fills. Evidence: a restore that dropped them would hand back
         # a composite energy with no recipe slots behind it.
@@ -286,8 +291,14 @@ PRESEEDED_TABLES: Mapping[
         frozenset(
             (key,)
             for key in (
+                "basis.d_function_type",
+                "basis.f_function_type",
+                "core.frozen",
+                "dispersion.correction",
                 "f12.ansatz",
                 "freq.hessian_method",
+                "grid.angular_max",
+                "grid.integration_accuracy",
                 "grid.quality",
                 "guess.strategy",
                 "integral.accuracy",
@@ -304,12 +315,23 @@ PRESEEDED_TABLES: Mapping[
                 "parallel.nproc",
                 "parallel.nproc_shared",
                 "pno.truncation",
+                "relativistic.hamiltonian",
+                "ri.approximation",
                 "scf.convergence",
                 "scf.convergence_failure_action",
                 "scf.convergence_failure_ignored",
                 "scf.direct",
                 "scf.fallback",
                 "scf.max_cycles",
+                "scf.stability_analysis",
+                "scf.tol_diis_error",
+                "scf.tol_energy_eh",
+                "scf.tol_max_density",
+                "scf.tol_orbital_gradient",
+                "scf.tol_orbital_rotation",
+                "scf.tol_rms_density",
+                "solvation.model",
+                "solvation.solvent",
                 "symmetry.disabled",
             )
         ),

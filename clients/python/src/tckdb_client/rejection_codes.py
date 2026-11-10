@@ -84,9 +84,19 @@ class RejectionCode(str, Enum):
     """
 
     AMBIGUOUS_CONFORMER_SELECTION_LOCATOR = "ambiguous_conformer_selection_locator"
+    ANONYMOUS_BODY_TOO_LARGE = "anonymous_body_too_large"
     APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH = "applied_energy_correction_source_calculation_owner_mismatch"
     APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED = "applied_energy_correction_source_key_undeclared"
     ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH = "arrhenius_a_units_molecularity_mismatch"
+    ARTIFACT_EMPTY = "artifact_empty"
+    ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE = "artifact_encoded_payload_too_large"
+    ARTIFACT_INVALID_BASE64 = "artifact_invalid_base64"
+    ARTIFACT_NOT_UTF8_TEXT = "artifact_not_utf8_text"
+    ARTIFACT_SHA256_MISMATCH = "artifact_sha256_mismatch"
+    ARTIFACT_SIZE_MISMATCH = "artifact_size_mismatch"
+    ARTIFACT_TOO_LARGE = "artifact_too_large"
+    ARTIFACT_TOTAL_ENCODED_PAYLOAD_TOO_LARGE = "artifact_total_encoded_payload_too_large"
+    ARTIFACT_TOTAL_SIZE_TOO_LARGE = "artifact_total_size_too_large"
     ASSESSMENT_INPUT_CHECK_LIMIT = "assessment_input_check_limit"
     ATOM_MAP_ATOMS_UNACCOUNTED_FOR = "atom_map_atoms_unaccounted_for"
     ATOM_MAP_CONTRADICTS_IRC_MAPPING = "atom_map_contradicts_irc_mapping"
@@ -150,6 +160,7 @@ class RejectionCode(str, Enum):
     CURSOR_OFFSET_CONFLICT = "cursor_offset_conflict"
     CURSOR_QUERY_MISMATCH = "cursor_query_mismatch"
     DOI_ALREADY_RECORDED = "doi_already_recorded"
+    ELECTRONIC_STATE_LABEL_INVALID = "electronic_state_label_invalid"
     EMAIL_TAKEN = "email_taken"
     ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_NOT_APPLICABLE = "energy_correction_scheme_frequency_level_not_applicable"
     ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_WITHOUT_ENERGY_LEVEL = "energy_correction_scheme_frequency_level_without_energy_level"
@@ -175,6 +186,7 @@ class RejectionCode(str, Enum):
     GEOMETRY_TOO_LARGE = "geometry_too_large"
     HANDLE_NOT_FOUND = "handle_not_found"
     HANDLE_TYPE_MISMATCH = "handle_type_mismatch"
+    HESSIAN_METHOD_CONTRADICTS_INPUT_DECK = "hessian_method_contradicts_input_deck"
     HESSIAN_NOT_FOUND = "hessian_not_found"
     IDEMPOTENCY_CONFLICT = "idempotency_conflict"
     INCLUDE_NOT_IMPLEMENTED_YET = "include_not_implemented_yet"
@@ -223,6 +235,7 @@ class RejectionCode(str, Enum):
     MULTIPLE_STRUCTURE_QUERIES = "multiple_structure_queries"
     N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
     NETWORK_CHANNEL_KEY_UNDECLARED = "network_channel_key_undeclared"
+    NETWORK_CHANNEL_KIND_MISMATCH = "network_channel_kind_mismatch"
     NETWORK_DECLARATION_INVALID = "network_declaration_invalid"
     NETWORK_DECLARATION_VERSION_UNSUPPORTED = "network_declaration_version_unsupported"
     NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH = "network_energy_source_subject_mismatch"
@@ -243,6 +256,8 @@ class RejectionCode(str, Enum):
     NETWORK_SELECTION_POPULATION_TOO_LARGE = "network_selection_population_too_large"
     NETWORK_SELECTION_SNAPSHOT_TOO_LARGE = "network_selection_snapshot_too_large"
     NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE = "network_solve_reported_requires_literature"
+    NETWORK_STATE_DUPLICATE_COMPOSITION = "network_state_duplicate_composition"
+    NETWORK_STATE_DUPLICATE_PARTICIPANT = "network_state_duplicate_participant"
     NETWORK_STATE_ENERGY_SUM_MISMATCH = "network_state_energy_sum_mismatch"
     NETWORK_STATE_KEY_UNDECLARED = "network_state_key_undeclared"
     NON_FINITE_VALUE = "non_finite_value"
@@ -251,6 +266,7 @@ class RejectionCode(str, Enum):
     OBSERVATION_IDENTITY_HINT_CONFLICT = "observation_identity_hint_conflict"
     OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM = "observation_identity_target_not_ground_state_minimum"
     OFFSET_TOO_LARGE = "offset_too_large"
+    OUTPUT_LOG_SIGNATURE_UNRECOGNIZED = "output_log_signature_unrecognized"
     OWNER_MISSING = "owner_missing"
     PARAMETER_RENAMED = "parameter_renamed"
     PARAMETER_VALUE_REQUIRES_KEY = "parameter_value_requires_key"
@@ -262,13 +278,18 @@ class RejectionCode(str, Enum):
     RATIONALE_REQUIRED = "rationale_required"
     REACTION_CHARGE_NOT_CONSERVED = "reaction_charge_not_conserved"
     REACTION_ENTRY_HANDLE_CONFLICT = "reaction_entry_handle_conflict"
+    REACTION_ENTRY_NULL_REACTION = "reaction_entry_null_reaction"
+    REACTION_FAMILY_CONFLICT = "reaction_family_conflict"
     REACTION_HANDLE_CONFLICT = "reaction_handle_conflict"
     REACTION_MASS_BALANCE_FAILED = "reaction_mass_balance_failed"
     REACTION_REVERSIBLE_REQUIRED = "reaction_reversible_required"
     RECORD_HAS_NO_SUBJECT = "record_has_no_subject"
     RECORD_NOT_APPROVED = "record_not_approved"
+    RECORD_NOT_FOUND = "record_not_found"
     RECORD_REF_NOT_SELECTABLE = "record_ref_not_selectable"
+    RECORD_SELF_APPROVAL = "record_self_approval"
     RECORD_SUBJECT_MISMATCH = "record_subject_mismatch"
+    RECORD_TYPE_NOT_REVIEWABLE = "record_type_not_reviewable"
     RECORD_TYPE_NOT_SELECTABLE = "record_type_not_selectable"
     REFERENCE_CONFLICT = "reference_conflict"
     RELATIVE_CONFORMER_ENERGY_COMPARE_IDENTICAL_PROTOCOLS = "relative_conformer_energy_compare_identical_protocols"
@@ -280,6 +301,7 @@ class RejectionCode(str, Enum):
     RELEASE_SCOPING_NOT_IMPLEMENTED = "release_scoping_not_implemented"
     RELEASE_SELECTS_NOTHING = "release_selects_nothing"
     RELEASE_TAG_TAKEN = "release_tag_taken"
+    REQUEST_BODY_TOO_LARGE = "request_body_too_large"
     RIGHTS_ATTESTATION_NOT_DEPOSITOR = "rights_attestation_not_depositor"
     RIGHTS_ATTESTATION_REQUIRES_CURATOR = "rights_attestation_requires_curator"
     RIGHTS_BASIS_INCOMPATIBLE = "rights_basis_incompatible"
@@ -308,6 +330,8 @@ class RejectionCode(str, Enum):
     SPECIES_KEY_UNDECLARED = "species_key_undeclared"
     SPECIES_KIND_CONFLICT = "species_kind_conflict"
     SPECIES_SMILES_CHARGE_MISMATCH = "species_smiles_charge_mismatch"
+    SPECIES_STEREO_CONTRADICTION = "species_stereo_contradiction"
+    SPECIES_STEREO_LABEL_INVALID = "species_stereo_label_invalid"
     STATE_CONFLICT = "state_conflict"
     STATMECH_CALCULATION_KEY_UNDECLARED = "statmech_calculation_key_undeclared"
     STATMECH_ENERGY_LEVEL_AMBIGUOUS = "statmech_energy_level_ambiguous"
@@ -349,13 +373,17 @@ class RejectionCode(str, Enum):
     STRUCTURE_SELECTION_TRAVERSAL_TOO_DEEP = "structure_selection_traversal_too_deep"
     STRUCTURE_SELECTION_UNSUPPORTED = "structure_selection_unsupported"
     SUBJECT_TYPE_MISMATCH = "subject_type_mismatch"
+    SUBMISSION_SELF_APPROVAL = "submission_self_approval"
     SUBMISSION_SUPERSEDE_NOT_OWNER = "submission_supersede_not_owner"
     SUPERSEDED_RECORD_NOT_APPROVABLE = "superseded_record_not_approvable"
     SUPERSEDES_SAME_RECORD = "supersedes_same_record"
     TCKDB_CLIENT_VERSION_INVALID = "tckdb_client_version_invalid"
     TCKDB_CLIENT_VERSION_MISSING = "tckdb_client_version_missing"
     TCKDB_CLIENT_VERSION_UNSUPPORTED = "tckdb_client_version_unsupported"
+    TERM_SYMBOL_INVALID = "term_symbol_invalid"
     THERMO_DECLARATION_INVALID = "thermo_declaration_invalid"
+    THERMO_DECLARED_BY_RECORD_INCOHERENT = "thermo_declared_by_record_incoherent"
+    THERMO_DECLARED_BY_TARGET_INCOHERENT = "thermo_declared_by_target_incoherent"
     THERMO_ENERGY_LEVEL_AMBIGUOUS = "thermo_energy_level_ambiguous"
     THERMO_ENERGY_LEVEL_CONTRADICTION = "thermo_energy_level_contradiction"
     THERMO_ENERGY_LEVEL_REQUIRES_SP = "thermo_energy_level_requires_sp"
@@ -434,6 +462,15 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED,
         RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH,
+        RejectionCode.ARTIFACT_EMPTY,
+        RejectionCode.ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE,
+        RejectionCode.ARTIFACT_INVALID_BASE64,
+        RejectionCode.ARTIFACT_NOT_UTF8_TEXT,
+        RejectionCode.ARTIFACT_SHA256_MISMATCH,
+        RejectionCode.ARTIFACT_SIZE_MISMATCH,
+        RejectionCode.ARTIFACT_TOO_LARGE,
+        RejectionCode.ARTIFACT_TOTAL_ENCODED_PAYLOAD_TOO_LARGE,
+        RejectionCode.ARTIFACT_TOTAL_SIZE_TOO_LARGE,
         RejectionCode.ASSESSMENT_INPUT_CHECK_LIMIT,
         RejectionCode.ATOM_MAP_ATOMS_UNACCOUNTED_FOR,
         RejectionCode.ATOM_MAP_CONTRADICTS_IRC_MAPPING,
@@ -492,6 +529,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.CONFORMER_KEY_UNDECLARED,
         RejectionCode.CURSOR_OFFSET_CONFLICT,
         RejectionCode.CURSOR_QUERY_MISMATCH,
+        RejectionCode.ELECTRONIC_STATE_LABEL_INVALID,
         RejectionCode.ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_NOT_APPLICABLE,
         RejectionCode.ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_WITHOUT_ENERGY_LEVEL,
         RejectionCode.ENTHALPY_DECLARATION_ABSENT,
@@ -510,6 +548,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.GEOMETRY_KEY_UNRESOLVED,
         RejectionCode.GEOMETRY_TOO_LARGE,
         RejectionCode.HANDLE_TYPE_MISMATCH,
+        RejectionCode.HESSIAN_METHOD_CONTRADICTS_INPUT_DECK,
         RejectionCode.INCLUDE_NOT_IMPLEMENTED_YET,
         RejectionCode.INVALID_CURSOR,
         RejectionCode.INVALID_HANDLE,
@@ -551,6 +590,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.MULTIPLE_STRUCTURE_QUERIES,
         RejectionCode.N_IMAG_CONTRADICTS_MINIMUM,
         RejectionCode.NETWORK_CHANNEL_KEY_UNDECLARED,
+        RejectionCode.NETWORK_CHANNEL_KIND_MISMATCH,
         RejectionCode.NETWORK_DECLARATION_INVALID,
         RejectionCode.NETWORK_DECLARATION_VERSION_UNSUPPORTED,
         RejectionCode.NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH,
@@ -569,6 +609,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.NETWORK_KINETICS_RATE_UNITS_MISSING,
         RejectionCode.NETWORK_SELECTION_POPULATION_TOO_LARGE,
         RejectionCode.NETWORK_SELECTION_SNAPSHOT_TOO_LARGE,
+        RejectionCode.NETWORK_STATE_DUPLICATE_COMPOSITION,
+        RejectionCode.NETWORK_STATE_DUPLICATE_PARTICIPANT,
         RejectionCode.NETWORK_STATE_ENERGY_SUM_MISMATCH,
         RejectionCode.NETWORK_STATE_KEY_UNDECLARED,
         RejectionCode.NON_FINITE_VALUE,
@@ -577,6 +619,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.OBSERVATION_IDENTITY_HINT_CONFLICT,
         RejectionCode.OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM,
         RejectionCode.OFFSET_TOO_LARGE,
+        RejectionCode.OUTPUT_LOG_SIGNATURE_UNRECOGNIZED,
         RejectionCode.PARAMETER_RENAMED,
         RejectionCode.PARAMETER_VALUE_REQUIRES_KEY,
         RejectionCode.POST_SEARCH_FIELDS_MUST_BE_IN_BODY,
@@ -585,6 +628,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.RATIONALE_REQUIRED,
         RejectionCode.REACTION_CHARGE_NOT_CONSERVED,
         RejectionCode.REACTION_ENTRY_HANDLE_CONFLICT,
+        RejectionCode.REACTION_ENTRY_NULL_REACTION,
+        RejectionCode.REACTION_FAMILY_CONFLICT,
         RejectionCode.REACTION_HANDLE_CONFLICT,
         RejectionCode.REACTION_MASS_BALANCE_FAILED,
         RejectionCode.REACTION_REVERSIBLE_REQUIRED,
@@ -592,6 +637,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.RECORD_NOT_APPROVED,
         RejectionCode.RECORD_REF_NOT_SELECTABLE,
         RejectionCode.RECORD_SUBJECT_MISMATCH,
+        RejectionCode.RECORD_TYPE_NOT_REVIEWABLE,
         RejectionCode.RECORD_TYPE_NOT_SELECTABLE,
         RejectionCode.RELATIVE_CONFORMER_ENERGY_COMPARE_IDENTICAL_PROTOCOLS,
         RejectionCode.RELATIVE_CONFORMER_ENERGY_POPULATION_TOO_LARGE,
@@ -622,6 +668,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.SPECIES_KEY_UNDECLARED,
         RejectionCode.SPECIES_KIND_CONFLICT,
         RejectionCode.SPECIES_SMILES_CHARGE_MISMATCH,
+        RejectionCode.SPECIES_STEREO_CONTRADICTION,
+        RejectionCode.SPECIES_STEREO_LABEL_INVALID,
         RejectionCode.STATMECH_CALCULATION_KEY_UNDECLARED,
         RejectionCode.STATMECH_ENERGY_LEVEL_AMBIGUOUS,
         RejectionCode.STATMECH_ENERGY_LEVEL_CONTRADICTION,
@@ -660,7 +708,10 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STRUCTURE_SELECTION_UNSUPPORTED,
         RejectionCode.SUBJECT_TYPE_MISMATCH,
         RejectionCode.SUPERSEDES_SAME_RECORD,
+        RejectionCode.TERM_SYMBOL_INVALID,
         RejectionCode.THERMO_DECLARATION_INVALID,
+        RejectionCode.THERMO_DECLARED_BY_RECORD_INCOHERENT,
+        RejectionCode.THERMO_DECLARED_BY_TARGET_INCOHERENT,
         RejectionCode.THERMO_ENERGY_LEVEL_AMBIGUOUS,
         RejectionCode.THERMO_ENERGY_LEVEL_CONTRADICTION,
         RejectionCode.THERMO_ENERGY_LEVEL_REQUIRES_SP,
@@ -762,9 +813,19 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
 #: both, at two different statuses.
 REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.AMBIGUOUS_CONFORMER_SELECTION_LOCATOR: frozenset({422}),
+    RejectionCode.ANONYMOUS_BODY_TOO_LARGE: frozenset({413}),
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH: frozenset({422}),
+    RejectionCode.ARTIFACT_EMPTY: frozenset({422}),
+    RejectionCode.ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE: frozenset({422}),
+    RejectionCode.ARTIFACT_INVALID_BASE64: frozenset({422}),
+    RejectionCode.ARTIFACT_NOT_UTF8_TEXT: frozenset({422}),
+    RejectionCode.ARTIFACT_SHA256_MISMATCH: frozenset({422}),
+    RejectionCode.ARTIFACT_SIZE_MISMATCH: frozenset({422}),
+    RejectionCode.ARTIFACT_TOO_LARGE: frozenset({422}),
+    RejectionCode.ARTIFACT_TOTAL_ENCODED_PAYLOAD_TOO_LARGE: frozenset({422}),
+    RejectionCode.ARTIFACT_TOTAL_SIZE_TOO_LARGE: frozenset({422}),
     RejectionCode.ASSESSMENT_INPUT_CHECK_LIMIT: frozenset({422}),
     RejectionCode.ATOM_MAP_ATOMS_UNACCOUNTED_FOR: frozenset({422}),
     RejectionCode.ATOM_MAP_CONTRADICTS_IRC_MAPPING: frozenset({422}),
@@ -828,6 +889,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.CURSOR_OFFSET_CONFLICT: frozenset({422}),
     RejectionCode.CURSOR_QUERY_MISMATCH: frozenset({422}),
     RejectionCode.DOI_ALREADY_RECORDED: frozenset({409}),
+    RejectionCode.ELECTRONIC_STATE_LABEL_INVALID: frozenset({422}),
     RejectionCode.EMAIL_TAKEN: frozenset({409}),
     RejectionCode.ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_NOT_APPLICABLE: frozenset({422}),
     RejectionCode.ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_WITHOUT_ENERGY_LEVEL: frozenset({422}),
@@ -853,6 +915,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.GEOMETRY_TOO_LARGE: frozenset({422}),
     RejectionCode.HANDLE_NOT_FOUND: frozenset({404}),
     RejectionCode.HANDLE_TYPE_MISMATCH: frozenset({422}),
+    RejectionCode.HESSIAN_METHOD_CONTRADICTS_INPUT_DECK: frozenset({422}),
     RejectionCode.HESSIAN_NOT_FOUND: frozenset({404}),
     RejectionCode.IDEMPOTENCY_CONFLICT: frozenset({409}),
     RejectionCode.INCLUDE_NOT_IMPLEMENTED_YET: frozenset({422}),
@@ -901,6 +964,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.MULTIPLE_STRUCTURE_QUERIES: frozenset({422}),
     RejectionCode.N_IMAG_CONTRADICTS_MINIMUM: frozenset({422}),
     RejectionCode.NETWORK_CHANNEL_KEY_UNDECLARED: frozenset({422}),
+    RejectionCode.NETWORK_CHANNEL_KIND_MISMATCH: frozenset({422}),
     RejectionCode.NETWORK_DECLARATION_INVALID: frozenset({422}),
     RejectionCode.NETWORK_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),
     RejectionCode.NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH: frozenset({422}),
@@ -921,6 +985,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.NETWORK_SELECTION_POPULATION_TOO_LARGE: frozenset({422}),
     RejectionCode.NETWORK_SELECTION_SNAPSHOT_TOO_LARGE: frozenset({422}),
     RejectionCode.NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE: frozenset({409}),
+    RejectionCode.NETWORK_STATE_DUPLICATE_COMPOSITION: frozenset({422}),
+    RejectionCode.NETWORK_STATE_DUPLICATE_PARTICIPANT: frozenset({422}),
     RejectionCode.NETWORK_STATE_ENERGY_SUM_MISMATCH: frozenset({422}),
     RejectionCode.NETWORK_STATE_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.NON_FINITE_VALUE: frozenset({422}),
@@ -929,6 +995,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.OBSERVATION_IDENTITY_HINT_CONFLICT: frozenset({422}),
     RejectionCode.OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM: frozenset({422}),
     RejectionCode.OFFSET_TOO_LARGE: frozenset({422}),
+    RejectionCode.OUTPUT_LOG_SIGNATURE_UNRECOGNIZED: frozenset({422}),
     RejectionCode.OWNER_MISSING: frozenset({404}),
     RejectionCode.PARAMETER_RENAMED: frozenset({422}),
     RejectionCode.PARAMETER_VALUE_REQUIRES_KEY: frozenset({422}),
@@ -940,13 +1007,18 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.RATIONALE_REQUIRED: frozenset({422}),
     RejectionCode.REACTION_CHARGE_NOT_CONSERVED: frozenset({422}),
     RejectionCode.REACTION_ENTRY_HANDLE_CONFLICT: frozenset({422}),
+    RejectionCode.REACTION_ENTRY_NULL_REACTION: frozenset({422}),
+    RejectionCode.REACTION_FAMILY_CONFLICT: frozenset({422}),
     RejectionCode.REACTION_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.REACTION_MASS_BALANCE_FAILED: frozenset({422}),
     RejectionCode.REACTION_REVERSIBLE_REQUIRED: frozenset({422}),
     RejectionCode.RECORD_HAS_NO_SUBJECT: frozenset({422}),
     RejectionCode.RECORD_NOT_APPROVED: frozenset({422}),
+    RejectionCode.RECORD_NOT_FOUND: frozenset({404}),
     RejectionCode.RECORD_REF_NOT_SELECTABLE: frozenset({422}),
+    RejectionCode.RECORD_SELF_APPROVAL: frozenset({403}),
     RejectionCode.RECORD_SUBJECT_MISMATCH: frozenset({422}),
+    RejectionCode.RECORD_TYPE_NOT_REVIEWABLE: frozenset({422}),
     RejectionCode.RECORD_TYPE_NOT_SELECTABLE: frozenset({422}),
     RejectionCode.REFERENCE_CONFLICT: frozenset({409}),
     RejectionCode.RELATIVE_CONFORMER_ENERGY_COMPARE_IDENTICAL_PROTOCOLS: frozenset({422}),
@@ -958,6 +1030,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.RELEASE_SCOPING_NOT_IMPLEMENTED: frozenset({422}),
     RejectionCode.RELEASE_SELECTS_NOTHING: frozenset({422}),
     RejectionCode.RELEASE_TAG_TAKEN: frozenset({409}),
+    RejectionCode.REQUEST_BODY_TOO_LARGE: frozenset({413}),
     RejectionCode.RIGHTS_ATTESTATION_NOT_DEPOSITOR: frozenset({403}),
     RejectionCode.RIGHTS_ATTESTATION_REQUIRES_CURATOR: frozenset({403}),
     RejectionCode.RIGHTS_BASIS_INCOMPATIBLE: frozenset({422}),
@@ -986,6 +1059,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.SPECIES_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.SPECIES_KIND_CONFLICT: frozenset({422}),
     RejectionCode.SPECIES_SMILES_CHARGE_MISMATCH: frozenset({422}),
+    RejectionCode.SPECIES_STEREO_CONTRADICTION: frozenset({422}),
+    RejectionCode.SPECIES_STEREO_LABEL_INVALID: frozenset({422}),
     RejectionCode.STATE_CONFLICT: frozenset({409}),
     RejectionCode.STATMECH_CALCULATION_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.STATMECH_ENERGY_LEVEL_AMBIGUOUS: frozenset({422}),
@@ -1027,13 +1102,17 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STRUCTURE_SELECTION_TRAVERSAL_TOO_DEEP: frozenset({422}),
     RejectionCode.STRUCTURE_SELECTION_UNSUPPORTED: frozenset({422}),
     RejectionCode.SUBJECT_TYPE_MISMATCH: frozenset({422}),
+    RejectionCode.SUBMISSION_SELF_APPROVAL: frozenset({403}),
     RejectionCode.SUBMISSION_SUPERSEDE_NOT_OWNER: frozenset({403}),
     RejectionCode.SUPERSEDED_RECORD_NOT_APPROVABLE: frozenset({409}),
     RejectionCode.SUPERSEDES_SAME_RECORD: frozenset({422}),
     RejectionCode.TCKDB_CLIENT_VERSION_INVALID: frozenset({426}),
     RejectionCode.TCKDB_CLIENT_VERSION_MISSING: frozenset({426}),
     RejectionCode.TCKDB_CLIENT_VERSION_UNSUPPORTED: frozenset({426}),
+    RejectionCode.TERM_SYMBOL_INVALID: frozenset({422}),
     RejectionCode.THERMO_DECLARATION_INVALID: frozenset({422}),
+    RejectionCode.THERMO_DECLARED_BY_RECORD_INCOHERENT: frozenset({422}),
+    RejectionCode.THERMO_DECLARED_BY_TARGET_INCOHERENT: frozenset({422}),
     RejectionCode.THERMO_ENERGY_LEVEL_AMBIGUOUS: frozenset({422}),
     RejectionCode.THERMO_ENERGY_LEVEL_CONTRADICTION: frozenset({422}),
     RejectionCode.THERMO_ENERGY_LEVEL_REQUIRES_SP: frozenset({422}),

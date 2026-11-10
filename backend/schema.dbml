@@ -190,6 +190,7 @@ enum CoordinateUnit {
 enum CoreTreatment {
   frozen_core
   all_electron
+  window
 }
 
 enum DatasetReleaseStatus {
@@ -285,6 +286,7 @@ enum HessianSource {
   parsed_fchk
   parsed_hess
   parsed_log
+  parsed_log_archive
   uploaded
   derived
 }
@@ -385,6 +387,11 @@ enum LiteratureKind {
   webpage
 }
 
+enum LiteratureTitleSource {
+  resolved_metadata
+  depositor_supplied
+}
+
 enum MachineReviewCuratorTaskState {
   untriaged
   needs_curator_review
@@ -444,7 +451,6 @@ enum NetworkChannelKind {
   isomerization
   association
   dissociation
-  stabilization
   exchange
 }
 
@@ -520,6 +526,11 @@ enum ParameterSource {
   curated
 }
 
+enum ParameterStatementKind {
+  requested
+  reported
+}
+
 enum PathSearchMethod {
   neb
   gsm
@@ -533,6 +544,12 @@ enum PhaseKind {
   liquid
   solid
   aqueous
+}
+
+enum PnoTruncation {
+  loose
+  normal
+  tight
 }
 
 enum PressureContext {
@@ -569,6 +586,17 @@ enum RecordReviewStatus {
   deprecated
 }
 
+enum RelativisticHamiltonian {
+  none
+  dkh0
+  dkh2
+  dkhso
+  resc
+  x2c
+  zora
+  iora
+}
+
 enum ReleaseArtifactKind {
   selected_records
   candidate_records
@@ -592,6 +620,14 @@ enum ReproducibilityGrade {
   described
   auditable
   rerunnable
+}
+
+enum RiApproximation {
+  none
+  rij
+  rijcosx
+  rijk
+  rijonx
 }
 
 enum RightsBasisKind {
@@ -707,6 +743,12 @@ enum StereoKind {
   enantiomer
   diastereomer
   ez_isomer
+}
+
+enum StereoResolution {
+  resolved
+  partial
+  unresolved
 }
 
 enum StructureDeterminationQuantity {
@@ -849,6 +891,11 @@ enum ThermoCalculationRole {
   sp
   composite
   imported
+}
+
+enum ThermoDeclarationSource {
+  depositor
+  chemkin_format
 }
 
 enum ThermoModelKind {
@@ -1785,6 +1832,8 @@ Table calculation_parameter {
   source ParameterSource [not null, default: 'upload']
   parser_name text
   parser_version text
+  artifact_kind ArtifactKind
+  statement_kind ParameterStatementKind
   created_at timestamp [not null, default: 'now']
 
   indexes {
@@ -1796,7 +1845,9 @@ Table calculation_parameter {
   }
 
   checks {
+    `artifact_kind IS NULL OR (source = 'parser' AND artifact_kind IN ('input', 'output_log'))` [name: 'ck_calculation_parameter_artifact_kind_parser_input_or_log']
     `parameter_index IS NULL OR parameter_index >= 0` [name: 'ck_calculation_parameter_parameter_index_ge_0']
+    `statement_kind IS NULL OR (source = 'parser' AND (statement_kind = 'requested' OR artifact_kind = 'output_log'))` [name: 'ck_calculation_parameter_statement_kind_reported_from_log']
   }
 
   Note: 'EAV-style parsed parameter from an ESS calculation.'
@@ -1818,6 +1869,7 @@ Table calculation_parameter_vocab {
 Table chem_reaction {
   id bigint [pk, not null]
   stoichiometry_hash varchar(64)
+  merged_into_chem_reaction_id bigint [ref: > chem_reaction.id]
   reversible boolean [not null]
   reaction_family_id bigint [ref: > reaction_family.id]
   reaction_family_raw text
@@ -1826,11 +1878,13 @@ Table chem_reaction {
   public_ref string [not null]
 
   indexes {
+    merged_into_chem_reaction_id [name: 'ix_chem_reaction_merged_into_chem_reaction_id']
     public_ref [unique, name: 'ix_chem_reaction_public_ref']
     stoichiometry_hash [unique, name: 'uq_chem_reaction_stoichiometry_hash']
   }
 
   checks {
+    `merged_into_chem_reaction_id IS NULL OR merged_into_chem_reaction_id <> id` [name: 'ck_chem_reaction_not_merged_into_itself']
     `reaction_family_raw IS NULL OR reaction_family_source_note IS NOT NULL` [name: 'ck_chem_reaction_reaction_family_raw_requires_source_note']
   }
 }
@@ -2074,6 +2128,54 @@ Table dataset_release {
   }
 
   Note: 'A citable dataset release.'
+}
+
+Table deposit_warning {
+  id bigint [pk, not null]
+  submission_id bigint [ref: > submission.id]
+  record_type SubmissionRecordType
+  record_id bigint
+  code text
+  register_entry int
+  field text
+  message text
+  context jsonb
+  content_hash text
+  written_by_user_id bigint [ref: > app_user.id]
+  check_version int [not null]
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    (record_type, record_id) [name: 'ix_deposit_warning_record']
+    (submission_id, record_type, record_id, content_hash) [unique, name: 'uq_deposit_warning_identity']
+  }
+
+  checks {
+    `context IS NULL OR jsonb_typeof(context) = 'object'` [name: 'ck_deposit_warning_context_is_object']
+    `(code IS NULL AND register_entry IS NULL AND field IS NULL AND message IS NULL AND context IS NULL AND content_hash IS NULL) OR (code IS NOT NULL AND field IS NOT NULL AND message IS NOT NULL AND content_hash IS NOT NULL AND content_hash ~ '^[0-9a-f]{64}$')` [name: 'ck_deposit_warning_marker_or_complete']
+    `(record_type IS NULL) = (record_id IS NULL)` [name: 'ck_deposit_warning_record_both_or_neither']
+    `submission_id IS NOT NULL OR (record_type IS NOT NULL AND code IS NOT NULL)` [name: 'ck_deposit_warning_submission_or_record_warning']
+  }
+
+  Note: 'One deposit-time warning (or one "checked" marker) for one record of one submission.'
+}
+
+Table deposit_warning_retirement {
+  id bigint [pk, not null]
+  deposit_warning_id bigint [not null, ref: > deposit_warning.id]
+  retired_reason_code text [not null]
+  retired_by_user_id bigint [ref: > app_user.id]
+  retired_at timestamp [not null, default: 'now']
+
+  indexes {
+    deposit_warning_id [unique, name: 'uq_deposit_warning_retirement_warning']
+  }
+
+  checks {
+    `retired_reason_code IN ('artifact_attached', 'single_point_deposited', 'hessian_stored', 'superseded_by_recheck')` [name: 'ck_deposit_warning_retirement_reason_known']
+  }
+
+  Note: 'A deposit warning that no longer applies, with the reason, actor and time.'
 }
 
 Table energy_correction_scheme {
@@ -2606,9 +2708,11 @@ Table level_of_theory {
   dispersion text
   solvent text
   solvent_model text
-  keywords text
   spin_treatment SpinTreatment
   core_treatment CoreTreatment
+  relativistic_hamiltonian RelativisticHamiltonian
+  pno_truncation PnoTruncation
+  ri_approximation RiApproximation
   lot_hash varchar(64) [not null]
   created_at timestamp [not null, default: 'now']
   public_ref string [not null]
@@ -2654,6 +2758,7 @@ Table literature {
   id bigint [pk, not null]
   kind LiteratureKind [not null]
   title text [not null]
+  title_source LiteratureTitleSource
   journal text
   year int
   volume text
@@ -3642,17 +3747,20 @@ Table species {
   charge int [not null]
   multiplicity int [not null]
   stereo_kind StereoKind [not null]
+  merged_into_species_id bigint [ref: > species.id]
   created_at timestamp [not null, default: 'now']
   public_ref string [not null]
 
   indexes {
     inchi_key [name: 'ix_species_inchi_key']
+    merged_into_species_id [name: 'ix_species_merged_into_species_id']
     public_ref [unique, name: 'ix_species_public_ref']
     (smiles, charge, multiplicity) [unique, name: 'uq_species_identity']
   }
 
   checks {
     `multiplicity >= 1` [name: 'ck_species_multiplicity_ge_1']
+    `merged_into_species_id IS NULL OR merged_into_species_id <> id` [name: 'ck_species_not_merged_into_itself']
   }
 
   Note: 'Store graph-defined species identities without resolved stereo or 3D conformers.'
@@ -3664,7 +3772,11 @@ Table species_entry {
   kind StationaryPointKind [not null, default: 'minimum']
   mol mol
   unmapped_smiles text
-  stereo_label string
+  stereo_label text
+  stereo_descriptor text
+  stereo_resolution StereoResolution
+  stereo_smiles text
+  merged_into_species_entry_id bigint [ref: > species_entry.id]
   electronic_state_kind SpeciesEntryStateKind [not null, default: 'ground']
   electronic_state_label string
   term_symbol_raw string
@@ -3676,9 +3788,17 @@ Table species_entry {
   public_ref string [not null]
 
   indexes {
+    merged_into_species_entry_id [name: 'ix_species_entry_merged_into_species_entry_id']
     public_ref [unique, name: 'ix_species_entry_public_ref']
     species_id [name: 'ix_species_entry_species_id']
-    (species_id, stereo_label, electronic_state_kind, electronic_state_label, term_symbol, isotope_key) [unique, name: 'uq_species_entry_species_id']
+    stereo_smiles [name: 'ix_species_entry_stereo_smiles']
+    (species_id, stereo_descriptor, electronic_state_kind, electronic_state_label, term_symbol, isotope_key) [unique, name: 'uq_species_entry_species_id']
+  }
+
+  checks {
+    `merged_into_species_entry_id IS NULL OR merged_into_species_entry_id <> id` [name: 'ck_species_entry_not_merged_into_itself']
+    `stereo_descriptor IS NULL OR stereo_descriptor ~ '^(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*$'` [name: 'ck_species_entry_stereo_descriptor_vocabulary']
+    `(stereo_descriptor IS NULL) = (stereo_resolution IS NULL)` [name: 'ck_species_entry_stereo_resolution_iff_descriptor']
   }
 
   Note: 'Store one stereochemically, electronically, or isotopically resolved species form.'
@@ -4139,6 +4259,7 @@ Table thermo {
   energy_level_of_theory_id bigint [ref: > level_of_theory.id]
   enthalpy_reference_kind EnthalpyReferenceKind
   thermodynamic_target_kind ThermoTargetKind
+  thermodynamic_target_declared_by ThermoDeclarationSource [not null, default: 'depositor']
   target_conformer_group_id bigint [ref: > conformer_group.id]
   protocol_declaration jsonb
   h298_kj_mol double

@@ -19,11 +19,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.common import CalculationRecordKind
 from app.services.scientific_read import meta as meta_service
 from app.services.scientific_read.profile import current_read_profile
 
-router = APIRouter(prefix="/meta")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/meta")
 
 
 def _echo() -> dict:

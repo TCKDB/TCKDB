@@ -1,5 +1,327 @@
 # Changelog
 
+## 0.170.0 - 2026-11-09
+
+One refusal code is added: `request_body_too_large` (413). The frontend proxy answers a body over its size cap (100 MiB on the upload, job and calculation-artifact routes, 10 MiB on other `/api/` routes) with this code and `context.max_bytes`, where it sent a bare HTML page. A request-validation 422 no longer echoes the request body under each error's `input`. No model or payload shape changed.
+
+## 0.169.0 - 2026-11-09
+
+The deposit-warning item on scientific reads gains optional `retired_at` and `retired_reason`, set only for curators and admins reading a retired warning (`artifact_attached`, `single_point_deposited`, `hessian_stored`, `superseded_by_recheck`). Other readers get current warnings only and never receive the keys. No field is removed.
+
+## 0.168.0 - 2026-11-09
+
+No refusal, warning or payload shape changes. The generated producer contract (`contract/`) now names the scientific check register entry for every refusal and warning code the register gained an entry for (the register has 80 entries, up from 52), and the text of register entry 18 states the tolerance order in force since #864: the method the output log reports, then the method the echoed input requests, then the recorded `freq.hessian_method` or the input deck, then the program's assumed default, then 50 cm-1.
+
+## 0.167.0 - 2026-11-09
+
+`thermodynamic_target.declared_by` is added to a thermo record's target declaration, with the enum `ThermoDeclarationSource` (`depositor`, the default, and `chemkin_format`). A `chemkin_format` target is refused unless it is `equilibrium_ensemble` (`thermo_declared_by_target_incoherent`) on a record with phase `gas` and a NASA-7 block (`thermo_declared_by_record_incoherent`). No field is removed.
+
+## 0.166.0 - 2026-11-09
+
+Four refusal codes join the producer contract; no field is added or removed: `record_self_approval` (403), `submission_self_approval` (403), `record_not_found` (404) and `record_type_not_reviewable` (422). They come from the record-review and submission-approval routes, which a producer does not call; a client that lists the codes sees them.
+
+## 0.165.0 - 2026-11-09
+
+The assumed Hessian method for an unrecorded `freq.hessian_method` changes for the methods below; a recorded, reported or echoed method still wins. One warning code is added, `hessian_method_refined`. No field or refusal code is added or removed.
+
+Gaussian:
+
+- `MP4`, `MP4(SDTQ)` and `MP5` are finite differences of energies (80 cm-1). `MP3`, `MP4(DQ)` and `MP4(SDQ)` stay finite differences of gradients (50).
+- `B2PLYP`, `B2PLYPD`, `B2PLYPD3`, `B2PLYPD3BJ`, `mPW2PLYP` and `mPW2PLYPD` are analytic (30). Other double hybrids assume nothing.
+- Method options are read: `MP4(SDTQ,FC)`, `MP4=FC`, `MP4 FC`, `CCSD(T,FC)`, `CCSD=(T,FC)`, `CCSD-T` and `QCISD(T,E4T)` map to the method without the option. `CCSD(T,FC)` was read as CCSD. `RO`, `CCSDT`, other tails and unknown options assume nothing.
+
+ORCA:
+
+- CCSD, CCSD(T), DLPNO and DLPNO2013 coupled cluster, `UHF-` / `ROHF-` prefixed coupled cluster and F12 methods (including F12-MP2 and `RI-MP2-F12`) are finite differences of energies (80) on every version. Other `DLPNO-*` methods assume nothing.
+- Open-shell DLPNO-MP2 and ROHF MP2 are finite differences of energies (80). Open shell is read from the level of theory's `spin_treatment` or a `UHF` / `ROHF` method prefix; with neither, the closed-shell row (50) applies. MP2, RI-MP2, SCS-MP2 and closed-shell DLPNO-MP2 stay at 50.
+- From ORCA 6, `AUTOCI-CCSD`, `AUTOCI-CCSD(T)`, `AUTOCI-MP2`, `AUTOCI-MP3`, `AUTOCI-MP4` and `AUTOCI-MP4(SDQ)` are finite differences of gradients (50) when the level of theory states `core_treatment` all-electron and `ri_approximation` none; otherwise, and for other AUTOCI methods, nothing is assumed.
+- Double hybrids written without a hyphen (`PBE0DH`, `PBEQIDH`, `PBE0-QIDH`, `wB97X2`, `B2KPLYP`, `B2TPLYP`) resolve as double hybrids: ORCA 50 instead of plain DFT 30, Gaussian nothing assumed.
+- An input deck or echoed input with `NumFreq` and no `NumGrad` for a method with no analytic gradient reads as finite differences of energies. For DLPNO-MP2 the deck's own open-shell evidence counts: a `UHF`, `UKS` or `ROHF` keyword, or a multiplicity above 1 on the coordinate line (`* xyz`, `*xyzfile`, `*intfile`, `*gzmtfile`, `*pdbfile`) or in a `%coords` block.
+- A recorded `finite_difference_gradient` against such a deck or echoed input is accepted (also when the level of theory states no spin treatment), stored as `finite_difference_energy` (80), and returned with `hessian_method_refined` (context `recorded`, `stored_method`, `stored_basis`, `refined_because`). A recorded `analytic` against `NumFreq`, and a recorded gradient method against `NumGrad` for a method with an analytic gradient, are still refused.
+
+Other:
+
+- `resolve_tau_with_assumption` and `infer_hessian_method` take `spin_treatment`, `core_treatment` and `ri_approximation` keyword arguments; `resolve_tau_with_assumption` also takes `numfreq_energy_implied`.
+- `tau_method_family` can be `mp4(sdq)`, `mp4(sdtq)`, `mp5`, `mp2-f12` or `autoci`; `mp4` is no longer written. `tau_assumption_rule` gains `orca_no_analytic_gradient`, `orca_open_shell_no_gradient` and `orca_autoci_gradient_from_6`.
+- `MP5`, `UMP5`, `F12-CCSD(T)`, `F12/RI-CCSD(T)` and the AUTOCI methods above now count as SCF-based, so a Gaussian `MP5` job gets the assumed `scf_convergence` of `tight`.
+
+## 0.164.0 - 2026-11-09
+
+`HessianSource` gains `parsed_log_archive`: a Cartesian Hessian read from a Gaussian log's archive block, for logs that print no `Force constants in Cartesian coordinates` block. The matrix is stored only when it is consistent with the archive's own atoms (rigid translations and rotations annihilated, using the archive gradient) and the atoms match the stored input geometry. No upload field changes.
+
+Four reasons join `hessian_not_stored_unparseable` (a warning; the artifact is stored either way): `archive_block_unreadable`, `archive_frame_inconsistent`, `archive_atoms_unsupported` and `archive_composite_geometry_mismatch` (a composite job whose final block is at a different geometry from its frequency step, as in G1, G2, G3 and CBS-APNO).
+
+## 0.163.0 - 2026-11-09
+
+An xtb output file is recognised: `detect_software_from_text` returns `"xtb"` for `* xtb version N` and the boxed `x T B` title, and for xtb's `g98.out` (a Gaussian-98-layout file naming the xtb code). `SoftwareName` gains `"xtb"`. Nothing is parsed from an xtb log. An xtb file is accepted as an `output_log`.
+
+Ten artifact refusals gain codes (all 422, with `context`): `output_log_signature_unrecognized` (`supported`, `window_bytes`), `artifact_empty`, `artifact_too_large`, `artifact_sha256_mismatch`, `artifact_size_mismatch`, `artifact_not_utf8_text`, `artifact_invalid_base64` (the filename is in `context.depositor_supplied`), `artifact_total_size_too_large`, `artifact_encoded_payload_too_large` and `artifact_total_encoded_payload_too_large`.
+
+## 0.162.0 - 2026-11-09
+
+One refusal code is added, `reaction_family_conflict` (422), and one existing refusal gains a code. A reaction deposited under a family different from the one it is already recorded under was refused with an uncoded `validation_error` whose text quoted both family names, including depositor text. It is still refused; it now carries `reaction_family_conflict`, and the message names a family only when it comes from the seeded `reaction_family` vocabulary (as `context.recorded_family` and `context.supplied_family`; depositor text is never repeated). All three conflict shapes are refused: seeded against seeded, raw against raw, and seeded against raw in either order (before, a deposit that named a seeded family for a reaction recorded under raw text, or the reverse, was accepted). A computed-reaction bundle's `reaction_family` now applies to the bundle's own reaction only: a kinetics fit for another reaction no longer has it stamped on, or refused because of it. A network solve whose `bath_gas` mole fractions do not sum to 1 within 1e-9 now carries `kinetics_bath_gas_mole_fraction_sum`, the code a kinetics rate's bath gas already used, with the field `solve.bath_gas` and the sum and tolerance in `context`. One rule, one code, one tolerance. The message text changes; no model or payload shape changed.
+
+## 0.161.0 - 2026-11-07
+
+One refusal is narrowed and gains a `reason`; no field is added or removed. A kinetics record's `energy_level_of_theory` names method, basis and qualifiers, and its spin treatment is judged per participant against the linked reactant, product and transition-state energies:
+
+- every link must match the declared level on every identity field except spin (method, basis, aux/cabs basis, dispersion, solvent, solvent model, core treatment, relativistic Hamiltonian, PNO truncation, RI approximation);
+- a closed-shell link (multiplicity 1, computed restricted or restricted-open, or unrestricted with a stored ⟨S²⟩ at or below 0.1) never constrains spin;
+- the other links (every multiplicity above 1, and an unrestricted singlet with ⟨S²⟩ above 0.1 or none stored) must share one reference, unrestricted or restricted-open; a link of unknown spin is skipped. Otherwise `kinetics_energy_level_contradiction` carries `reason: open_shell_reference_mixed`;
+- a declaration that states no spin treatment is accepted; one that states it must equal that open-shell reference (or, with no open-shell link, every known link spin), else `reason: declared_spin_differs`.
+
+The same rule applies on `/uploads/kinetics` and bundle import, where it also decides which calculations a declared level finds: a calculation at the declared spin is preferred, a closed-shell one run restricted is eligible, and a radical with no calculation at the declared spin finds none. A violation refuses on the standalone route; on bundle import the level is stored without source calculations and `energy_level_stored_without_source_calculations` is returned, as when nothing matches. When an unrestricted singlet is counted as open-shell only because no `spin_diagnostic.s_squared` is stored for it, the refusal's context carries `s_squared_missing_for` (calculation refs) and its message asks for it. `energy_level_stored_without_source_calculations` gains the reason `contradiction` (calculations were found but contradict the declared level or each other on spin), distinct from `none` and `ambiguous`. A reaction mixing radicals computed unrestricted with closed-shell species computed restricted can therefore declare its method and basis (with or without `unrestricted`), and no longer draws `missing_level_of_theory_provenance`. Thermo and statmech declarations are unchanged. Sources: the 0.1 bound is the convention the wavefunction-reliability warning already uses (Williams et al. 2011, doi:10.1016/j.cplett.2011.01.020; Rettig et al. 2020, doi:10.1021/acs.jctc.0c00986; register entry 52). Restricted-open and unrestricted references are different levels for open-shell species (Wood et al. 2006 ROCBS-QB3, doi:10.1063/1.2335438; Henry, Sullivan and Radom 2003, G3-RAD).
+
+Contract text on the field: "The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant. When at least one participant is open-shell, closed-shell participants (singlets computed restricted, restricted-open, or unrestricted collapsing to restricted) do not constrain it; the open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference. When every participant is closed-shell, a stated spin treatment must match their spin treatment."
+
+## 0.160.0 - 2026-11-07
+
+One refusal code is added: `server_response_invalid` (500). The server failed its own response model, so the request was not at fault; nothing in it needs changing. Before this, that failure reached a client as a bare `text/plain` 500, or as a 422 that blamed the request. No model or payload shape changed.
+
+## 0.159.0 - 2026-11-07
+
+One refusal code is added: `anonymous_body_too_large` (413). A request without a valid credential whose body is over the anonymous allowance (1 MiB by default) is refused before the body is read; authenticate with an API key or a session to send a larger one. No model or payload shape changed.
+
+## 0.158.0 - 2026-11-05
+
+A level of theory no longer has a free-text `keywords` field; four typed fields take over what it was used to carry. A payload that sends `keywords` is refused like any unknown field, on every path that carries a level (an upload, a composite scheme's input level, a bundle). Nothing is mapped from it into parameters: the settings a deck or log states are read from the uploaded artifact and stored as calculation parameters.
+
+- **Removed:** `keywords` on `LevelOfTheoryRef` and `CompositeSchemeInputLevel`.
+- **Added**, each optional and part of the level's identity only when stated (a payload that omits them is the level it always was, apart from the removed key below):
+  - `relativistic_hamiltonian`: `none`, `dkh0`, `dkh2`, `dkhso`, `resc`, `x2c`, `zora`, `iora`.
+  - `pno_truncation`: `loose`, `normal`, `tight` (the DLPNO presets; a numeric threshold is not representable and stays a parameter).
+  - `ri_approximation`: `none`, `rij`, `rijcosx`, `rijk`, `rijonx`.
+  - `core_treatment` gains `window` (a partial frozen core). Which window stays on the calculation's parameters, so two different windows are one level.
+  - The values are the lowercase tokens only and are case-sensitive, like `spin_treatment` and `core_treatment` (send `dkh2`, not `DKH2`); a declared calculation parameter, by contrast, is case-folded before it is compared.
+  - `none` is a stated value (non-relativistic, no RI), a different level from leaving the field out. Each set is the closed value set of the parsed parameter of the same meaning (`relativistic.hamiltonian`, `pno.truncation`, `ri.approximation`, `core.frozen`).
+  - Next to a `composite_scheme` they are refused like the other method fields.
+- **Changed:** the warning `level_of_theory_disagrees_with_artifact` now also fires for these four fields, with `context.component` one of `relativistic_hamiltonian`, `pno_truncation`, `ri_approximation`, `core_treatment` (as well as `method` and `basis`). It fires only when the level and the uploaded deck or log both state a value and they differ (per job for a multi-job deck: the one job that fits the declared method and basis is read, and none is judged when no single job fits); a deck that says nothing about a qualifier is never a disagreement.
+- **Identity:** the `"keywords"` key left the level-of-theory hash payload, so every level's `lot_hash` differs from the one a server before this version computed. A deployment is reseeded rather than re-keyed; the server's migration refuses to run on a database that already holds levels of theory.
+- The producer contract's focal-point example now states its relativistic term as `relativistic_hamiltonian: dkh2`.
+
+## 0.157.0 - 2026-11-05
+
+The imaginary-mode tolerance (tau) now follows what an inline output log says about the Hessian, ahead of the recorded `freq.hessian_method` and the deck. Order: the method the logs REPORT the frequency job ran (ORCA only), then the input the logs ECHO, then the recorded parameter or the deck, then the program's assumed default, then `protocol_not_recorded`; a reported or echoed method gets the same tau as the same method recorded, and a recorded value that contradicts the deck, or the input a log echoes, is refused with `hessian_method_contradicts_input_deck`. A log reports a method only through a header it prints (`SCF HESSIAN` is analytic; `ORCA NUMERICAL FREQUENCIES` with displaced-gradient lines is finite differences of gradients), only from the final frequency job (no optimiser step after the last listing), only when every listing agrees, never from a file that holds several jobs, and not for a numerical gradient (`NumGrad`). An echo that cannot be bound to one job (ORCA `$new_job`/`%compound`, a Gaussian log with more than one route) reads nothing. With several logs, or a file of several ORCA runs, the method they all agree on is used. Gaussian logs report no method. New: `tckdb_schemas.hessian_method_reported`, `echo_hessian_method`, `calculation_reported_method`, `calculation_echo_method`, and `reported_method` / `echo_method` arguments on `resolve_tau_with_assumption`. The `hessian_method_disagrees_with_stored_tau_basis` warning (same code) can now carry `reported_method` in its context. No field or code added or removed; a payload with no inline output log is judged exactly as before.
+
+## 0.156.0 - 2026-11-05
+
+The characters trimmed from a state label or term symbol before matching are now one explicit set (`TRIM_CHARS`, shipped as `trim` in `electronic_state_examples.json`): exactly the 29 characters Python's `str.strip()` removes (every `str.isspace()` code point), which is what the write path has always trimmed, so what a deposit accepts does not change. JavaScript's `trim()` differs (it also strips U+FEFF, and not the `\x1c`-`\x1f` and `\x85` that Python does), so a frontend now trims with the same explicit set. U+FEFF stays untrimmed on both sides. No field or code added or removed.
+
+## 0.155.0 - 2026-11-04
+
+Packaging only. No field, code or rule is added, changed or removed; every 0.154.0 payload validates unchanged. The distribution now carries what PyPI needs: the project URLs point at `github.com/TCKDB/TCKDB`, the MIT `LICENSE` file ships in the sdist and wheel, and the build requires `setuptools>=77` (SPDX licence expression). Nothing in `tckdb_schemas` itself changed.
+
+## 0.154.0 - 2026-11-04
+
+The route of a Gaussian log is read correctly when it is short. One warning code is added (`output_log_job_not_bound`); no field is added or removed.
+
+- **Fixed:** Gaussian sizes the rows of dashes round the echoed route to the route itself (43 wide for `# sp b3lyp/def2svp`, 70 for a long one). The reader only treated rows of 60 or more as the route's edges, so a short route (under 60 characters, which is common) was never closed: it ran on into the log (one measured route was 5012 characters) and the settings read from it included log text, such as `NAtoms` and `Conv`, as if they had been requested. A row of four or more dashes is now an edge too.
+- New warning `output_log_job_not_bound`. An output log holds several jobs (a `--Link1--` file) and no single job could be matched to this calculation, so the settings in it were not read. One warning per log, however many times the same log is read in a request. A reader shows the calculation's grid and SCF convergence as `not_stated` rather than as the program's default while this warning stands and no row from the log exists.
+- **Measured side effects** (every Gaussian text in the test corpus, before and after):
+  - The tau and Hessian-method detection is unchanged on all 521 texts.
+  - 59 ARC payload logs (routes of about 55 characters) no longer store about 197 junk raw rows read from log text. No canonical row changed.
+  - Two Gaussian 03 composite logs now read the route the user wrote instead of an internal step's:
+    - `cbs_qb3_so2oo_g03`: the route is `#CBS-QB3 opt freq` (it was `#N Geom=AllCheck Guess=Read SCRF=Check MP2/CBSB3 ...`, pair MP2/CBSB3, now none). Rows lost: `guess.strategy=read`, `output.verbosity=normal`. Rows gained: none.
+    - `g3_ethylene_g03`: the route is `# G3 nosym optcyc=100 scf=tight` (it was `#N Geom=AllCheck Guess=Read SCRF=Check MP2(Full)/6-31G(d) Opt=RCFC ...`, pair MP2(Full)/6-31G(d), now none). Rows lost: `guess.strategy=read`, `output.verbosity=normal`, `core.frozen=all_electron`. Row gained: `scf.convergence=tight`.
+  - `method_basis_jobs` now lists the internal-step routes of 5 composite logs. That can only drop a level-of-theory warning, never add one.
+
+## 0.153.0 - 2026-11-04
+
+The assumed SCF convergence is shown where a program documents one. No field is added or removed.
+
+- `tckdb_schemas.program_default_settings` now lists an SCF convergence default, spelled as the `scf.convergence` token (`tight`). It applies to an allowlist of SCF-based methods (DFT, HF, MPn, coupled cluster incl. DLPNO/PNO/F12, QCISD, CIS/CISD, and Gaussian composite methods) and needs a declared method, program and version; molecular mechanics, semi-empirical, xTB, Hueckel, CASSCF/MRCI/NEVPT2 and unrecognised methods get none; the DFT-only limit stays for the grid. Gaussian 09 and 16: `tight` for every calculation type (manual: "In Gaussian 09, SCF=Tight is the default"). ORCA 5 and 6: `tight` for a geometry optimisation only (manual: "TightSCF in the SCF part is set as default"); the manuals give no named default for other ORCA job types, so those stay `not_stated`. Gaussian 16 `tight` rests on the unchanged G09 keyword plus an observed default G16 run (RMS density 1e-8) accepted by the owner; Gaussian 03 is not listed for want of a source. `assumed_default_setting` takes the calculation type as a new optional argument.
+- The module docstring no longer says no SCF default is documented. Used when a record is read; never stored.
+
+## 0.152.0 - 2026-11-04
+
+A deposit can earn one more warning, and the rule for a deck against a log reverses. No field is added or removed.
+
+- **Reversed:** where an uploaded input deck and the input a log echoes state the same setting, the **log's value is now kept** and the deck's row for it is not stored (it was the other way round). The log is the record of the run, and a deposit often has nothing else. `input_deck_disagrees_with_output_log` still warns, and its sentence now says the log's value was kept. Reading order for one setting: what the log reports, then the input the log echoes, then the uploaded deck, then a value the depositor typed.
+- New warning `reported_setting_differs_from_requested`. The output log reports a value for a setting that contradicts the documented report of what was requested (an ORCA `DefGrid` against the angular grid ORCA prints, an ORCA SCF convergence keyword against the thresholds ORCA prints). Both rows are kept. `context` has `canonical_key`, `software` and, under `depositor_supplied`, `requested_value` and `reported_value`. Gaussian never earns it: its grid report is an undocumented internal code.
+- New module `tckdb_schemas.program_default_settings`: the documented default grid by program and major version, spelled as the `grid.quality` tokens a request uses (Gaussian 09 `fine`, Gaussian 16 `ultrafine`, ORCA 5 and 6 `defgrid2`), and only for a DFT method. Used when a record is read; never stored. No SCF default is listed because none is documented.
+## 0.151.0 - 2026-11-04
+
+An accepted deposit can now earn three more warnings, about wavefunction diagnostics stored with a calculation. No field is added or removed.
+
+- New warning `t1_diagnostic_above_closed_shell_threshold`. A closed-shell calculation (the multiplicity of its species or transition-state entry is 1) whose method is restricted coupled cluster with singles (an unrestricted `U` method is out of scope; CCSD, CCSD(T), their F12, local, DLPNO and PNO variants, CCSDT, QCISD) and whose `wavefunction_diagnostic.t1_diagnostic` is strictly above 0.02 earns it. 0.02 is the rule of thumb of Lee and Taylor (1989). The calculation is stored as sent and nothing about the value, its review status or any selection changes. `context` has `t1_diagnostic`, `threshold` (0.02) and `multiplicity` (1). The sentence says only that the value is above the rule of thumb and that T1 does not by itself establish multireference character. It is placed on the calculation's record; a thermo or kinetics record that cites the calculation earns no warning of its own.
+- New warning `spin_contamination_above_conventional_threshold`. A calculation with a stored `spin_diagnostic.s_squared` whose distance from S(S+1) is strictly more than 0.1 earns it, where S comes from the declared multiplicity of the calculation's species or transition-state entry (never from `s_squared` or `s_squared_expected`; `s_squared_annihilated` is not used). 0.1 is a convention of the field (cited in the literature to Williams et al. 2011; Rettig et al. 2020 use a relative 10%), not a finding about the system, and the sentence says so. `context` has `s_squared`, `ideal_s_squared`, `multiplicity` and `threshold`. The calculation is stored as sent.
+- New warning `spin_expected_contradicts_multiplicity`. A stored `spin_diagnostic.s_squared_expected` (the ideal value the program printed) that differs from S(S+1) of the entry's declared multiplicity by more than 0.001 earns it. It is separate from the contamination warning; both can apply to one calculation. `context` has `s_squared_expected`, `expected_from_entry` and `multiplicity`.
+- An open-shell T1 and any D1 value earn no warning: programs define open-shell T1 differently and D1 has no verified threshold. Both stay stored and shown.
+- The `d1_diagnostic` description now names Janssen and Nielsen (1998) as the source of D1.
+
+## 0.150.0 - 2026-11-03
+
+An accepted deposit can now earn four more warnings, each about a setting, a deck or a log that disagrees with what was declared. No field is added or removed.
+
+- New warning `parameter_disagrees_with_artifact`. A parameter the deposit states (`parameters[]` with a `canonical_key` and `canonical_value`) differs from the same setting read from an uploaded input deck or output log of the same program. Only settings that can change the result are compared (`calculation_parameter_vocab.affects_scientific_result`), only when both sides state a canonical value (a deck that is silent about a setting agrees with every declaration of it), and never across programs. `freq.hessian_method` is left to `hessian_method_disagrees_with_stored_tau_basis`. `context` has `canonical_key`, `software`, `observed_in` (`input` or `output_log`) and, under `depositor_supplied`, `declared_value` and `observed_value`. Both rows are kept.
+- New warning `input_deck_disagrees_with_output_log`. A deck and a log attached to one calculation state different values for one setting. The deck's value is kept; the log's row for that setting is not stored. `context` has `canonical_key`, `software` and, under `depositor_supplied`, `deck_value` and `log_value`.
+- New warning `level_of_theory_disagrees_with_artifact`. The method or the basis set read from the route line or keyword line of an uploaded Gaussian or ORCA deck or log differs from the declared level of theory, compared through the same identity keys the level of theory is deduplicated by. `context` has `component` (`method` or `basis`), `software`, `observed_in` and, under `depositor_supplied`, `declared_value` and `observed_value`. The declaration is kept.
+- New warning `output_log_disagrees_with_earlier_output_log`. A second output log attached to a calculation states a different value for a setting than the first. The earlier log's value is kept (a later log never silently replaces it) and the later log's row for it is not stored. `context` has `canonical_key`, `software` and, under `depositor_supplied`, `earlier_value` and `later_value`.
+- Typed `parameters[]` values are folded to the form the parsers emit before they are compared (`UltraFine`, `GD3BJ`, `PCM`, `Water` agree with what a deck says); a value that is not a token of its closed set is never judged. The method and basis comparison understands spin prefixes, `PBE1PBE` for `PBE0`, RI forms, a dispersion suffix, `/Auto`, several jobs in one file (`--Link1--`, ORCA `$new_job`), and ignores a bare reference method named beside a correlated one.
+- A late output log is also checked against the stored Hessian-method tolerance (`hessian_method_disagrees_with_stored_tau_basis`), like a late deck.
+- The route echoed by a Gaussian log is rejoined by dropping only the one blank column in front of each wrapped line, so a wrap on a space no longer fuses two tokens (`guess=readub3lyp/def2tzvp`).
+- Output logs are now read for parameters, from the input they echo. A deck and a log never erase each other's rows, and where both state a setting the deck's row is the one kept, whichever arrived first.
+- `include=parameters` on the scientific calculation read, and the calculation parameter read, carry `source` (`parser`, `upload`, `curated`) on every row.
+
+## 0.149.0 - 2026-11-03
+
+An electronic-state label and a term symbol must now be a recognised spectroscopic shape, and are stored in one canonical spelling. Two refusal codes join the contract. No field is added or removed.
+
+- `electronic_state_label_invalid` (422): `electronic_state_label` must be a spectroscopic letter with an optional tilde and primes (`X`, `A`, `E`, `a`, `X~`, `A'`, `A''`) or a state ordinal (`S0`, `S1`, `T1`, `D0`, `Q0`), in at most 8 characters. Symmetry species such as `1A1` belong in `term_symbol`, not here.
+- `term_symbol_invalid` (422): `term_symbol` must be an atomic term (`3P`, `3P2`, `2P_{3/2}`), a linear-molecule term (`2Pi`, `3Sigma_g-`, `1Sigma_g+`, `2Pi_{3/2}`, or Greek and superscript spellings) or a polyatomic term (`1A1`, `2A'`, `1A1g`), optionally with a state letter in front (`X2Pi`, `X 1A1`, `X^2Pi`), in at most 64 characters.
+- Every accepted spelling is stored as one canonical form, so `2Pi`, `^2Pi`, `^{2}Pi` and `2Π` are one value and one species entry: superscript multiplicity, Greek capitals, subscript indices and J, `′`/`″` for primes, a combining tilde (`A~` is `Ã`), and a state letter written first and followed by one space (`X ²Π`). The spelling you typed is kept in `term_symbol_raw` when it differs and you did not send one. A state label has no raw field.
+- `R`, `S`, `Z`, `M`, `P` (and lower case) are refused as state letters, as are `Ra`, `Sa`, `?`, `-`, words and isotope-like text. `E`/`e` are accepted (CO E¹Π); the server writes the state part of a joined label with the word `state`, so `state E` cannot be read as the stereo descriptor `E`.
+- `term_symbol_raw` is not checked: it is kept verbatim for provenance and is never joined into a displayed label.
+- `tckdb_schemas.electronic_state` is the one place the grammar and the canonical form are written (`ELECTRONIC_STATE_LABEL_SOURCE`, `TERM_SYMBOL_SOURCE`, `is_valid_*`, `canonical_*`). `electronic_state_examples.json` ships in the package with accepted and rejected examples, the pattern sources, and an input to canonical-form map, for a frontend parity test.
+- Entries already stored are not rewritten. The server now writes the state part of a joined entry label with the word `state` (`excited state A`, `state T1`), so a stored label that looks like a stereo descriptor cannot be misread.
+
+## 0.148.0 - 2026-11-02
+
+A cyclic allene in a ring of 6, 7 or 8 atoms is now read from geometry like any other allene. No field is added or removed.
+
+- A cyclic allene in a ring of six, seven or eight atoms gets `Ra` or `Sa` from a deposited geometry, by the same rule as a ring of nine or more and as an open-chain allene: the torsion between the two CIP-higher substituents about the end-to-end axis must lie between 10 and 170 degrees. The window is unchanged. A near-planar axis (for example the racemisation transition state) is still not read and stays `?`, which `species_entry_stereo_unresolved` reports.
+- A `stereo_label` of `Ra` or `Sa` is accepted for rings of 6, 7 and 8 (it was `species_stereo_label_invalid`). A label that contradicts the geometry is `species_stereo_contradiction`, as for any allene.
+- `species_entry_stereo_not_represented` still covers a cyclic allene in a ring of **five or fewer** atoms (it was eight or fewer): the reason `axial_small_ring` and its sentence now say five. Rings of 4 and 5 stay `?` and refuse `Ra`/`Sa` labels because no geometry was checked for them.
+- A chirality mark in the SMILES of an allene in a ring of 6, 7 or 8 atoms (for example `C1=[C@]=C(F)CCC1`) is now read as well; it was ignored while those rings were never settled. Marks on allenes in rings of five or fewer stay ignored.
+- Entries already stored with `?` for such a ring are not changed; deposit a geometry or a `stereo_label` to settle them.
+
+## 0.147.0 - 2026-11-02
+
+An allene's chirality mark in a SMILES is now read. No field is added or removed.
+
+- A mark on the central atom of an allene (`[C@]` / `[C@@]` between the two double bonds, as in `NC(Br)=[C@]=C(O)C`) now sets the axis token of the entry: `Ra` or `Sa`. A deposit with such a mark and no geometry is `resolved` for that element and earns no warning. A mark that contradicts a geometry or a supplied `stereo_label` is `species_stereo_contradiction`, as for any other element.
+- `/` `\` marks on a cumulene with an odd number of double bonds are still not read.
+- The `not_represented` reason `axial_marks` now means only: a mark on an allene that could not be read (the text is not understood or does not match the molecule). Its sentence says so.
+
+## 0.146.0 - 2026-11-01
+
+An accepted deposit can now earn one more warning, and the warning codes have a reference of their own. No field is added or removed.
+
+- New warning `scan_point_coordinate_disagrees_with_geometry`. A scan point's `coordinate_values[].coordinate_value` is the internal coordinate itself, measured on that point's own geometry, in the coordinate's own unit (a bond length in angstrom, an angle or dihedral in degrees), never an offset from `start_value`. When the stored values of a scan coordinate disagree with that coordinate measured on the points' geometries, the scan is accepted as sent and the response carries one warning per coordinate series. `context` has `scan_number` (the scan's position among the request's scans, from 1), `coordinate_index`, `coordinate_kind`, `pattern` (`consistent_with_legacy_relative_axis`, `uniform_one_step_offset`, `linear_ramp`, `single_outlier`, `small_constant_offset`, `no_pattern_detected` or `insufficient_data`), `n_points_disagreeing`, `n_points_checked`, `max_residual` and `tolerance`. A scan whose values were measured from the scan's start (a relative sweep) is the usual cause; send the coordinate itself. Values that are merely rounded (the tolerance is widened to half a step of the stored decimals, unless the stored values are an evenly spaced grid, gaps allowed, which are labels and are judged tightly; declare `step_size` for a grid whose step is finer than 5 units of its last decimal, otherwise it is judged as rounded values) are not a disagreement, and a constant offset no larger than 1 degree (0.1 angstrom for a bond) is `small_constant_offset`, which names no cause. It is placed on the scan calculation's record.
+- New file `tckdb_schemas/contract/WARNING_CODES.md`, shipped beside `REFUSAL_CODES.md`: every warning code an accepted deposit can return, with TCKDB's sentence and the scientific check register entry behind it, if any. Find it with `python -m tckdb_schemas.contract --warnings` or `tckdb_schemas.contract.warning_codes_path()`; read it with `warning_codes_markdown()`.
+- `species_stereo_contradiction`, `term_symbol_mismatch`, `electronic_state_contradicts_method`, `freq_list_incomplete_for_geometry` and `network_state_energy_sources_partial` are now covered by scientific check register entries (51, 12, 12, 22 and 25). Their behaviour is unchanged.
+
+## 0.145.0 - 2026-10-31
+
+A warning's `message` is TCKDB's sentence for its `code`, never text the depositor typed. No field is added or removed.
+
+- `UploadWarning.from_code(field=, code=, context=)` is the one way to build a warning; its `message` is `render_message(code, context)`.
+- New module `tckdb_schemas.deposit_warning_messages` (`RENDERED`, `render_message`, `normalise_field`), moved from the backend. The sentence for a code is fixed, or built from `context` values (numbers, counts, TCKDB tokens).
+- A label that helps you find the problem is under `context["depositor_supplied"]`, a dict of named strings you typed. Nothing in the sentence is read from it. `field` is unchanged.
+- `StationaryPointFinding` gains `context` (numbers the finding was decided on), used for the warning built from a warn-tier finding. Blocking findings and their messages are unchanged.
+- Match on `code`, never on `message`.
+- Every remedy and consequence the old messages carried that needs no depositor text is kept in the sentence; tau's reason is rendered from the `tau_basis` token. `context.depositor_supplied` holds strings, lists of strings and lists of records of strings only; an entry that holds nothing is dropped.
+- `UploadWarning.from_stored(data)` rebuilds a recorded warning's message from its code and context. `deposit_warning_messages.context_problems` states what a context may hold (every string outside `depositor_supplied` sits under a listed key).
+- `normalise_field` replaces every bracket that is not a plain integer position, quoted or not, robust to embedded quotes.
+- `context_problems(code, context)` holds every string outside `depositor_supplied` to a closed set per key; a context's `depositor_supplied` of a wrong shape is logged and dropped by `from_code`.
+- `TauResolution` gains `assumed_software`, `assumed_family` and `assumption_rule` (the assumption table's own tokens); tau and its basis are unchanged.
+- `StationaryPointFinding.context` is added; the `tau_basis` token and mode counts ride in it. `extra_imaginary_mode_count` is the count in all three transition-state tau codes.
+
+## 0.144.0 - 2026-10-31
+
+An unrecorded `freq.hessian_method` now resolves `tau` through the producing program's assumed default when the deposit is judged, not only when it is stored. No field is added or removed.
+
+- `tau` is resolved from, in order: the Hessian method you record (`freq.hessian_method`, with `grid.quality` and `opt.convergence`); else the assumed default of the calculation's own software and level-of-theory method; else 50 cm-1 with `protocol_not_recorded`.
+- The assumed defaults are the 2026-09-04 table: Gaussian HF, DFT, MP2, CIS, CASSCF and ORCA HF, DFT resolve to the analytic default, 30 cm-1 (`assumed_analytic_default`); Gaussian MP3, MP4, QCISD, CCSD, CISD, CID and ORCA MP2, coupled cluster, DLPNO resolve to finite differences of gradients, 50 cm-1; Gaussian CCSD(T) and QCISD(T) resolve to finite differences of energies, 80 cm-1. CIS is matched exactly: CISD and CID have numerical frequencies only. Any other program, or a method family the table does not list, keeps 50 cm-1.
+- A `freq.hessian_method` that is present but not recognised (for example `numer`) keeps 50 cm-1 / `protocol_not_recorded`; it is never replaced by an assumption.
+- Input decks are read before judging. A deck attached inline (`artifacts` of kind `input` on a bundle calculation: computed-species, computed-reaction, network) is parsed for Gaussian `Freq=Numer` / `EnOnly` and ORCA `NumFreq` / `AnFreq`, and the method it states beats an assumed one. Order: recorded `freq.hessian_method`, the deck, the assumed default, 50 / `protocol_not_recorded`. An ORCA DFT minimum run with `NumFreq` and a -40 cm-1 mode is accepted at 50 with the recorded `finite_difference_gradient` basis; with no deck it is refused at the assumed 30. A deck with no frequency directive says nothing.
+- New refusal `hessian_method_contradicts_input_deck` (422): the recorded `freq.hessian_method` and the deck state different methods (analytic, `finite_difference_gradient` or `finite_difference_energy`; any two different parsed methods, because their tolerances differ). The message carries only TCKDB's words, the method tokens; `context` has `recorded`, `input_deck` and `calculation_key`.
+- Paths that cannot see a deck at validation keep their behaviour: the standalone calculation, conformer and transition-state payloads have no `artifacts` field, and a deck uploaded afterwards through the artifact route is read only by the workflow's parameter extraction.
+- ORCA release gate: before ORCA 5, meta-GGA functionals (M06 family, TPSS, SCAN and r2SCAN family, and similar) have no analytic Hessian and are assumed `assumed_finite_difference_gradient` (50); ORCA 5 and later, and plain GGA and hybrid functionals on any version, stay analytic (30). With no usable ORCA version a meta-GGA gets no assumption (50 / `protocol_not_recorded`). ORCA double-hybrid and VV10/non-local functionals (`-V`, `-NL`) are assumed `assumed_finite_difference_gradient` (50) on any version, known or not, because the ORCA 5.0.4 and 6.1 manuals document numerical frequencies for them. Source notes are in `hessian_method_assumption.py`.
+- ORCA `NumFreq` together with `NumGrad` on the deck's keyword lines is a Hessian built from numerical gradients, i.e. from energies: `finite_difference_energy` (80), the value ARC records. `NumFreq` alone stays `finite_difference_gradient`. The backend ORCA parser stores the same canonical value for its `freq.hessian_method` row. Source: ORCA 5.0.4 manual, 8.3.2 and 9.24.5 \"Numerical Gradients\" (`! NumGrad` requests numerical instead of analytic gradients).
+- Gaussian double-hybrid functionals (B2PLYP, mPW2PLYP, DSD-*, revDSD, PWPB95, QIDH, PBE0-DH, B2GPPLYP, wB97X-2) get no assumption (50 / `protocol_not_recorded`): the Gaussian documentation available to us names analytic frequencies for HF, DFT, MP2, CIS and CASSCF and does not settle double hybrids. A recorded method still wins.
+- Deck reading, precisely: Gaussian `Freq`/`Frequency` in every spelling (`Freq=Numer`, `Freq=(..)`, `Freq(Numer)`, `Freq (Numer)`, `Freq = Numer`); `EnOnly` wins whenever present, otherwise `Numer`/`Numerical`; keywords that merely contain the letters (`FreqChk`) and other keywords' options (`SCF=(Numer)`, `Opt=CalcNumerFC`) are not read. ORCA `NumFreq` wins over `AnFreq`; a `#` comment runs to the next `#`, so keywords after the closing `#` count. The backend parsers store one `freq.hessian_method` row from this shared reading.
+- The family classifier now recognises DSD-*, revDSD, PWPB95, mPW2PLYP, B2GP-PLYP, PBE-QIDH, pr2SCAN50 and similar double hybrids, and mPW1B95, BB1K, mPW1KCIS and rSCAN, as DFT so they reach their rows: ORCA double hybrids are `assumed_finite_difference_gradient` (50) as decided; Gaussian double hybrids still get no assumption.
+- New modules `tckdb_schemas.hessian_method_detection` (the deck readers and keyword tables the backend parsers now import) and `tckdb_schemas.ess_software_detection` (moved from the backend).
+- This loosens one band: Gaussian CCSD(T) and QCISD(T) are judged at 80 cm-1, so a minimum between 50 and 80 cm-1 that was refused is now accepted with `minimum_imaginary_modes_below_tau`, and a transition-state extra mode in that band is no longer flagged.
+- A recorded method always wins over an assumption.
+- Effect on a minimum: a Gaussian DFT minimum with a -40 cm-1 mode and no recorded Hessian method was accepted with `minimum_imaginary_modes_below_tau` at 50 cm-1. It is now refused as `n_imag_contradicts_minimum`, because 40 is at or above 30. Record `freq.hessian_method` (for example `Freq=Numer`) to be judged at the method you ran, or declare the entry as what it is.
+- Effect on a transition state: the extra-imaginary-mode flag is judged at the same tau that is stored with the record. A flag is never a refusal. A -40 cm-1 extra mode on a Gaussian DFT saddle is now flagged (it was judged at 50 and stored at 30, so the record disagreed with its own flag).
+- The stored `imaginary_mode_tau_cm1` and basis are exactly the tau and basis the deposit was judged at.
+- New module `tckdb_schemas.hessian_method_assumption` owns the table (`infer_hessian_method`, `resolve_tau_with_assumption`). The backend imports it.
+
+## 0.143.0 - 2026-10-29
+
+`UploadWarning` gains an optional `context`. No other field is added or removed.
+
+- `UploadWarning.context` (`dict | None`, default `null`) holds the values that triggered the warning as the check saw them, for example the declared and
+  the logged charge for `charge_mismatch`. A check that states none leaves it `null`. It never carries a database id.
+- The upload response is otherwise unchanged. A client that reads `field`, `code` and `message` keeps working; every warning now also carries a `context` key.
+- The server stores each warning beside the record it concerns and shows it on that record's reads (`record_warnings`); see the backend changelog.
+
+## 0.142.0 - 2026-10-29
+
+A species entry declared a minimum is judged by the size of its imaginary modes against the protocol's tolerance, instead of being refused for any imaginary mode. One warning code joins the contract. No field is added or removed.
+
+- `minimum_imaginary_modes_below_tau` (a warning, not a refusal): every imaginary mode on an entry declared a `minimum` is below `tau`. The record is accepted. The same record was refused as `n_imag_contradicts_minimum` before.
+- `tau` is the one the transition-state rule already uses, resolved per calculation from the parameters you deposit (`freq.hessian_method`, `grid.quality`, `opt.convergence`): 15, 30, 50 or 80 cm-1 by protocol, and 50 cm-1 when the protocol is not recorded. A -15 cm-1 mode on a minimum with no recorded protocol is now accepted.
+- A mode at or above `tau` is refused as before (`n_imag_contradicts_minimum`), and so is a list where any mode is at or above `tau`. Counted modes whose magnitudes were not deposited are refused too: a mode nobody measured is never assumed soft. Deposit the frequency list (`freq_result.modes`) or, for one imaginary mode, `imag_freq_cm1`.
+- The refusal and the warning name the `tau` that decided them. `evaluate_species_entry_frequency` gains the optional keywords `imaginary_modes` and `tau`; without them a lone `imag_freq_cm1` with `n_imag == 1` is judged against the "protocol not recorded" row.
+- A species entry declared a `minimum` that designates a reaction coordinate (`reaction_coordinate_mode_index`) is refused as `n_imag_contradicts_minimum`: a minimum has no reaction coordinate. A deposit with one imaginary mode was refused before this change as well. The refusal text also no longer calls unmeasured modes a higher-order saddle, and names a single real mode among soft ones as a transition-state case.
+- Judged per frequency calculation: every frequency calculation on the entry is checked, not just the first that reports `n_imag`.
+- The escape hatches for a mode at or above `tau` are unchanged: declare `species_entry_kind='vdw_complex'`, or deposit the structure as a transition state.
+- A van der Waals complex keeps its own warning (`n_imag_contradicts_minimum` as a warning); the transition-state rule is unchanged.
+- The server stores the `tau` that decided it on the frequency result (`imaginary_mode_tau_cm1` and its basis) and stores `imaginary_mode_structural_flag` as `false` (judged and not flagged). No column is added.
+
+## 0.141.0 - 2026-10-29
+
+An allene's axis and an odd cumulene's cis/trans are now part of the stereo descriptor. No field is added or removed.
+
+- `stereo_label` (and the stored `stereo_descriptor`) accept two more whole tokens: `Ra` and `Sa`, the axis of an allene (or any cumulene with an even number of
+  double bonds). `Ra` is IUPAC's `M` (a negative torsion between the two CIP-higher substituents), `Sa` is `P`. The pattern is now
+  `(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*`.
+- A cumulene with an odd number of double bonds (a butatriene and longer) takes `E` or `Z`, as a double bond does.
+- A supplied label may be `Ra`, `Sa` or `?` at an allene axis, `E`, `Z` or `?` at an odd cumulene; anything else is `species_stereo_label_invalid`. A label that
+  contradicts the geometry is `species_stereo_contradiction`.
+- The tokens are read from geometry only. SMILES marks on an allene, and `/` `\` marks on a cumulene, are not read. A cyclic allene in a ring of eight or fewer
+  atoms is never read, whatever the geometry.
+- `species_entry_stereo_not_represented` now means only: the symmetry cap, a cyclic allene in a ring of eight or fewer, a centre or double bond whose
+  stereogenicity depends on an allene's sense, a cumulated chain with a tied pair of stereo-bearing arms at one end, and an allene or cumulene given only as SMILES marks. A `?` that a geometry or a label could settle is
+  `species_entry_stereo_unresolved`.
+
+## 0.140.0 - 2026-10-28
+
+A network channel's `kind` is derived from the two states it joins. One refusal code joins the contract.
+
+- `kind` on a PDep channel is optional. Omit it and the server fills it in; supply it and it must agree. well to well is `isomerization`, bimolecular or
+  termolecular to well is `association`, well to bimolecular or termolecular is `dissociation`, and bimolecular or termolecular to bimolecular or termolecular is
+  `exchange` (including a stereo isomerisation of a fragment set, and well-skipping channels). `tckdb_schemas.network_channel_kind.derive_channel_kind` is the rule.
+- `network_channel_kind_mismatch` (422): a supplied `kind` disagrees with the kind derived from the channel's states. The detail names the channel's local key, the
+  supplied kind and the derived kind.
+- `stabilization` is removed from `NetworkChannelKind`; nothing used it. A payload that sends it is refused as an unknown enum value.
+
+## 0.139.0 - 2026-10-27
+
+Three refusal codes join the contract. No field is added or removed.
+
+- `network_state_duplicate_participant` (422): one state of a PDep network names the same species entry twice (two species keys that resolve to one entry). It used
+  to be an HTTP 500. Name the species once with its `stoichiometry`, or say what differs (stereo marks, a stereo label or a geometry).
+
+- `reaction_entry_null_reaction` (422): a reaction's reactants and products are the same species entries and the deposit carries no transition state or
+  kinetics record. A reaction between two entries of *one species* (a cis-trans isomerisation, `Z-2-butene -> E-2-butene`) is valid; give each side the
+  stereo (marks, a stereo label or a geometry) that tells the isomers apart. A degenerate exchange (`H + H2 -> H2 + H`) is accepted when deposited with its
+  transition state (transition-state upload, or `transition_state` in a computed-reaction bundle) or a kinetics record (kinetics upload, or `kinetics`).
+- `network_state_duplicate_composition` (422): two states of one network resolve to the same species entries (two species keys that name one entry, or a
+  state declared twice). It used to be an HTTP 500.
+
+## 0.138.0 - 2026-10-26
+
+`stereo_label` on a species entry is a stereo descriptor, not free text. Species identity no longer includes stereochemistry (DR-0038).
+
+- **Behaviour change.** `SpeciesEntryIdentityPayload.stereo_label` accepts only descriptor tokens: `R`, `S`, `r`, `s` (pseudo-asymmetric), `E`, `Z`, `e`, `z` (pseudo-asymmetric double bond), `-` (not stereogenic here) or `?` (unknown), comma-separated,
+  one per potential stereo element of the molecule in canonical order (`E`, `R,S`, `E,?`). Free text such as `"trans"` is refused at validation. The field
+  is no longer a key that wins over everything: the server fills it only into elements the geometry and the SMILES stereo marks leave unresolved, and
+  cross-checks it where they exist. `max_length` widens from 64 to 512 (one token per element).
+- Server behaviour a depositor sees (no field change): `C/C=C/C` and `CC=CC` are one species and the stereoisomers are entries of it; SMILES marks,
+  geometry and label that name different configurations are refused with `species_stereo_contradiction` (422); a label that does not fit the molecule is
+  refused with `species_stereo_label_invalid` (422); an entry with any element still unknown is accepted with the `species_entry_stereo_unresolved` warning.
+  An allene's axis and cis/trans across a longer cumulene are stereo elements the vocabulary cannot state yet: they are always `?` (a letter there is refused
+  as `species_stereo_label_invalid`), the deposit is accepted, and the warning is `species_entry_stereo_not_represented`, a code of its own because no further
+  data would settle it and both mirror-image forms of an allene share the entry.
+- Read models: `SpeciesEntryScientificRecord` and the structure-search record carry `stereo_descriptor`, `stereo_resolution` and `stereo_smiles` beside
+  `stereo_label`. Structure search takes `isomeric` (exact mode) to match an entry's configuration.
+- The descriptor follows CIP codes: for a sigma-vinyl radical the unpaired electron ranks lowest, so `Z` has the hydrogen on the radical carbon cis to the
+  substituent on the other carbon. A name taken from the precursor halide can carry the opposite letter.
 ## 0.137.0 - 2026-10-25
 
 An ensemble member's relative energy states its convention.

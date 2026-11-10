@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_snapshot_db
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.server_faults import ServerFaultRoute
 from app.schemas.reads.scientific_statmech_selection import (
     StatmechSelectionManifest,
     StatmechSelectionRequest,
@@ -36,7 +37,7 @@ from app.services.scientific_read.profile import stamp_read_profile
 from app.services.scientific_read.ref_guard import attach_review_statuses
 from app.services.statmech_selection.public import build_response, forward_emptied_basin, run_selection
 
-router = APIRouter(prefix="/statmech")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/statmech")
 
 _ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 

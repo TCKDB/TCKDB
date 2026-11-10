@@ -414,8 +414,8 @@ def test_the_release_endpoints_are_reachable_but_not_typed():
         assert entry.client_method is None
 
 
-def test_the_remedy_for_release_scoping_is_documented_in_the_readme():
-    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(
+def test_the_remedy_for_release_scoping_is_documented_in_the_reads_guide():
+    readme = (Path(__file__).resolve().parents[1] / "docs" / "reads.md").read_text(
         encoding="utf-8"
     )
     assert "profile=" in readme

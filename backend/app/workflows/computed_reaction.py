@@ -8,6 +8,8 @@ Follows the same key-resolution pattern as the network PDep workflow.
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy.orm import Session
 from tckdb_schemas.upload_warning import UploadWarning
 
@@ -73,7 +75,8 @@ from app.services.calculation_ownership import (
     assert_calculation_owned_by,
 )
 from app.services.calculation_parameter_extraction import (
-    try_extract_parameters_from_input_upload,
+    inputs_first,
+    try_extract_parameters_from_artifact_upload,
 )
 from app.services.calculation_resolution import (
     add_dependency_edge_idempotent,
@@ -100,6 +103,12 @@ from app.services.conformer_resolution import (
     primary_structure,
     resolve_conformer_group,
     settle_conformer_basin,
+)
+from app.services.deposit_warnings import (
+    note_anchor,
+    note_calculation_keys,
+    note_preferred_scope_anchor,
+    note_warning_subject,
 )
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
@@ -142,6 +151,7 @@ from app.services.reaction_atom_map import (
 )
 from app.services.reaction_resolution import (
     compress_species_stoichiometry,
+    refuse_null_reaction_entry,
     resolve_chem_reaction,
     validate_transition_state_composition,
 )
@@ -150,6 +160,7 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scan_coordinate_conformance import collect_scan_coordinate_warnings
 from app.services.scf_stability_sources import link_scf_stability_sources
 from app.services.software_banner_extraction import (
     try_reconcile_software_from_output_uploads,
@@ -173,6 +184,7 @@ from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
 from app.services.upload_reconciliation import term_symbol_warnings
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 from app.workflows.computed_species import _persist_statmech_block
 from app.workflows.kinetics import (
     persist_interpretation_assignments,
@@ -200,7 +212,18 @@ def _calculation_rows(session: Session, calculation_key_to_id: dict[str, int]) -
     return {key: session.get(Calculation, calc_id) for key, calc_id in calculation_key_to_id.items()}  # type: ignore[misc]
 
 
-def _persist_calculation(
+def _persist_calculation(session: Session, calc_in: ComputedReactionCalculationIn, **kwargs: Any) -> Calculation:
+    """:func:`_persist_calculation_unattributed`, plus: every warning it appended is about the calculation it built."""
+    sink = kwargs.get("sp_energy_warnings")
+    before = len(sink) if sink is not None else 0
+    calculation = _persist_calculation_unattributed(session, calc_in, **kwargs)
+    if sink is not None:
+        for warning in sink[before:]:
+            note_warning_subject(session, warning, SubmissionRecordType.calculation, calculation.id)
+    return calculation
+
+
+def _persist_calculation_unattributed(
     session: Session,
     calc_in: ComputedReactionCalculationIn,
     *,
@@ -258,6 +281,8 @@ def _persist_calculation(
         as_primary=as_primary or is_conformer_primary,
     )
 
+    # Saved in the order the producer listed them; only the reading below is reordered (decks first), because a
+    # log is read against the decks the calculation already has.
     for artifact_in in calc_in.artifacts:
         persist_artifact(
             session,
@@ -265,11 +290,12 @@ def _persist_calculation(
             artifact_in=artifact_in,
             created_by=created_by,
         )
+    for artifact_in in inputs_first(calc_in.artifacts):
         # Opportunistic per-artifact extraction, both best-effort — never
         # abort the bundle. Input artifacts yield parameter rows; output
         # logs reconcile the single-point energy against the tool's
         # reported value (fill/mismatch), the same as the artifacts route.
-        try_extract_parameters_from_input_upload(
+        try_extract_parameters_from_artifact_upload(
             session, calculation, artifact_in, warnings=sp_energy_warnings
         )
         sp_warning = try_reconcile_sp_energy_from_output_upload(
@@ -330,7 +356,7 @@ def _persist_calculation(
     # to this calc's now-resolved input geometry.
     for artifact_in in calc_in.artifacts:
         hessian_warning = try_extract_hessian_from_artifact_upload(
-            session, calculation, artifact_in, field=f"calculations['{calc_in.key}'].artifacts"
+            session, calculation, artifact_in, field=f"calculations[{calc_in.key!r}].artifacts"
         )
         if hessian_warning is not None and sp_energy_warnings is not None:
             sp_energy_warnings.append(hessian_warning)
@@ -377,7 +403,7 @@ def _index_species_sp_calcs(
             resolve_calculation_key(
                 calc.key,
                 calculation_key_to_id,
-                field=f"species['{sp.key}'].calculations[].key",
+                field=f"species[{sp.key!r}].calculations[].key",
             )
             for calc in sp.calculations
             if calc.type == CalculationType.sp
@@ -573,6 +599,57 @@ def _collect_bundle_provenance_warnings(
     return warnings
 
 
+def _canonical_participant_positions(fit_entries, canonical_entries) -> dict[int, int]:
+    """Map a fit's 1-based participant positions to the canonical entry's, matching on entry identity.
+
+    A fit attached to the canonical reaction entry may list the same entries in another order
+    (``[h, ch3]`` against ``[ch3, h]``). Anything keyed by participant position (an interpretation's
+    ``reactant:1``) must follow the entry it names, not the fit's own ordering. A repeated entry maps
+    deterministically: the i-th occurrence in the fit is the i-th occurrence in the canonical list.
+    """
+    seen: dict[int, int] = {}
+    positions: dict[int, int] = {}
+    for fit_index, entry in enumerate(fit_entries, start=1):
+        occurrence = seen.get(entry.id, 0)
+        seen[entry.id] = occurrence + 1
+        matches = [i for i, c in enumerate(canonical_entries, start=1) if c.id == entry.id]
+        positions[fit_index] = matches[occurrence]
+    return positions
+
+
+def _assignments_in_canonical_order(assignments, fit_reactants, fit_products, canonical_reactants, canonical_products):
+    """The fit's interpretation assignments, re-indexed onto the canonical entry's participant order."""
+    reactant_map = _canonical_participant_positions(fit_reactants, canonical_reactants)
+    product_map = _canonical_participant_positions(fit_products, canonical_products)
+    remapped = []
+    for assignment in assignments:
+        if assignment.role == "reactant":
+            assignment = assignment.model_copy(update={"participant_index": reactant_map[assignment.participant_index]})
+        elif assignment.role == "product":
+            assignment = assignment.model_copy(update={"participant_index": product_map[assignment.participant_index]})
+        remapped.append(assignment)
+    return remapped
+
+
+def _fit_is_for_reaction(kin, species_key_to_entry, reactant_entries, product_entries) -> bool:
+    """Whether a bundle kinetics fit is for the bundle's own reaction (DR-0038 null-reaction evidence).
+
+    True when the fit's reactant and product entries equal the reaction's, as multisets and in any order.
+    Bundle fits are not tied to the bundle's reaction, so a fit for another reaction must not count as
+    evidence that this one happens; and such a fit attaches to the canonical reaction entry.
+    """
+    from collections import Counter
+
+    def ids(keys):
+        return Counter(resolve_species_key(k, species_key_to_entry, field="kinetics").id for k in keys)
+
+    mine = (Counter(e.id for e in reactant_entries), Counter(e.id for e in product_entries))
+    fit = (ids(kin.reactant_keys), ids(kin.product_keys))
+    # Same direction, any order. (For a same-entries reaction the two directions are one, so a "reversed" fit is
+    # covered; for any other reaction a reverse-direction fit is a record of its own and keeps its own entry.)
+    return fit == mine
+
+
 def persist_computed_reaction_upload(
     session: Session,
     request: ComputedReactionUploadRequest,
@@ -652,7 +729,7 @@ def persist_computed_reaction_upload(
             structure = primary_structure(conf.calculation, conf.geometry.xyz_text)
             parsed = parse_xyz(GeometryPayload(xyz_text=structure.xyz_text))
             conformer_group, fingerprint, scheme = resolve_conformer_group(
-                session, species_entry, label=conf.label, created_by=created_by,
+                session, species_entry, created_by=created_by,
                 smiles=sp.species_entry.smiles, xyz_atoms=parsed.atoms,
                 defining=structure.defining,
             )
@@ -671,6 +748,13 @@ def persist_computed_reaction_upload(
             settle_conformer_basin(session, observation, fingerprint, smiles=sp.species_entry.smiles)
             observation_id_by_geometry_key[conf.geometry.key] = observation.id
             conformers_by_key[conf.key] = observation.id
+            note_anchor(
+                session,
+                f"species[{sp.key!r}].conformers[{conf.key!r}]",
+                SubmissionRecordType.conformer_observation,
+                observation.id,
+                scope=f"species[{sp.key!r}]",
+            )
             review_targets.append(
                 RecordRef(SubmissionRecordType.conformer_group, conformer_group.id)
             )
@@ -704,7 +788,7 @@ def persist_computed_reaction_upload(
                 observation_id_by_conformer_key=conformers_by_key,
                 observation_id_by_geometry_key=observation_id_by_geometry_key,
                 warnings=sp_energy_warnings,
-                field=f"species['{sp.key}'].calculations['{calc_in.key}']",
+                field=f"species[{sp.key!r}].calculations[{calc_in.key!r}]",
             )
 
     session.flush()
@@ -719,7 +803,7 @@ def persist_computed_reaction_upload(
                     list(conf.structure_determinations),
                     owner=DeterminationOwner(
                         species_entry_id=resolve_species_key(
-                            sp.key, species_key_to_entry, field=f"species['{sp.key}']"
+                            sp.key, species_key_to_entry, field=f"species[{sp.key!r}]"
                         ).id,  # type: ignore[attr-defined]
                         conformer_observation_id=observation_id_by_conformer_key[sp.key][conf.key],
                     ),
@@ -771,6 +855,18 @@ def persist_computed_reaction_upload(
         resolve_species_key(k, species_key_to_entry, field=f"product_keys[{i}]")
         for i, k in enumerate(request.product_keys)
     ]
+
+    refuse_null_reaction_entry(
+        reactant_entries,
+        product_entries,
+        has_transition_state=request.transition_state is not None,
+        # A fit is evidence for THIS reaction only if its entries are this reaction's (either direction, any
+        # order); a fit for another reaction gets an entry of its own and says nothing about this one.
+        has_kinetics=any(
+            _fit_is_for_reaction(kin, species_key_to_entry, reactant_entries, product_entries)
+            for kin in request.kinetics
+        ),
+    )
 
     chem_reaction = resolve_chem_reaction(
         session,
@@ -845,6 +941,8 @@ def persist_computed_reaction_upload(
         )
         session.add(ts_entry)
         session.flush()
+        note_anchor(session, "transition_state", SubmissionRecordType.transition_state_entry, ts_entry.id)
+        note_anchor(session, "atom_map", SubmissionRecordType.transition_state_entry, ts_entry.id)
         review_targets.append(
             RecordRef(SubmissionRecordType.transition_state, ts.id)
         )
@@ -930,6 +1028,9 @@ def persist_computed_reaction_upload(
             )
             if ts_statmech_row is not None:
                 ts_statmech_id = ts_statmech_row.id
+                note_anchor(
+                    session, "transition_state.statmech", SubmissionRecordType.statmech, ts_statmech_row.id
+                )
                 ts_statmech_ref = ts_statmech_row.public_ref
                 review_targets.append(
                     RecordRef(SubmissionRecordType.statmech, ts_statmech_row.id)
@@ -1011,13 +1112,13 @@ def persist_computed_reaction_upload(
         if not calc_in.depends_on:
             return
         child_calc = _persisted_calc(
-            calc_in.key, field=f"calculations['{calc_in.key}'].key"
+            calc_in.key, field=f"calculations[{calc_in.key!r}].key"
         )
         for dep in calc_in.depends_on:
             parent_calc = _persisted_calc(
                 dep.parent_calculation_key,
                 field=(
-                    f"calculations['{calc_in.key}'].depends_on."
+                    f"calculations[{calc_in.key!r}].depends_on."
                     f"parent_calculation_key"
                 ),
             )
@@ -1156,7 +1257,7 @@ def persist_computed_reaction_upload(
                     ac.source_calculation_key,
                     calculation_key_to_id,
                     field=(
-                        f"species['{sp.key}'].applied_energy_corrections[{i}]."
+                        f"species[{sp.key!r}].applied_energy_corrections[{i}]."
                         f"source_calculation_key"
                     ),
                     declares=_BUNDLE_CALCULATION_KEY_REMEDY,
@@ -1176,7 +1277,7 @@ def persist_computed_reaction_upload(
                 ac.source_conformer_key,
                 observation_id_by_conformer_key.get(sp.key, {}),
                 field=(
-                    f"species['{sp.key}'].applied_energy_corrections[{i}]."
+                    f"species[{sp.key!r}].applied_energy_corrections[{i}]."
                     f"source_conformer_key"
                 ),
                 declares=(
@@ -1200,6 +1301,7 @@ def persist_computed_reaction_upload(
                 source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                field=f"species[{sp.key!r}].applied_energy_corrections[{i}]",
                 warnings_out=sp_energy_warnings,
             )
             applied_correction_ids.append(applied.id)
@@ -1264,6 +1366,7 @@ def persist_computed_reaction_upload(
                 source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                field=f"transition_state.applied_energy_corrections[{i}]",
                 warnings_out=sp_energy_warnings,
             )
             applied_correction_ids.append(applied.id)
@@ -1344,7 +1447,7 @@ def persist_computed_reaction_upload(
                     sc.calculation_key,
                     calculation_key_to_id,
                     field=(
-                        f"species['{sp.key}'].thermo.source_calculations"
+                        f"species[{sp.key!r}].thermo.source_calculations"
                         f"[{index}].calculation_key"
                     ),
                 )
@@ -1420,6 +1523,7 @@ def persist_computed_reaction_upload(
                 species_entry_id=species_entry.id,
                 scientific_origin=t.scientific_origin,
                 thermodynamic_target_kind=thermo_declarations.thermodynamic_target_kind,
+                thermodynamic_target_declared_by=thermo_declarations.thermodynamic_target_declared_by,
                 target_conformer_group_id=thermo_declarations.target_conformer_group_id,
                 protocol_declaration=thermo_protocol_json,
                 # Stored as declared, after ``assert_role_consistency`` above.
@@ -1458,6 +1562,13 @@ def persist_computed_reaction_upload(
             session.add(thermo)
             session.flush()
             thermo_ids.append(thermo.id)
+            note_anchor(
+                session,
+                f"species[{sp.key!r}].thermo",
+                SubmissionRecordType.thermo,
+                thermo.id,
+                scope=f"species[{sp.key!r}]",
+            )
             thermo_by_species_key[sp.key] = thermo
 
             # Every source-calculation link was already resolved, role/
@@ -1547,7 +1658,7 @@ def persist_computed_reaction_upload(
                     sc.calculation_key,
                     calculation_key_to_id,
                     field=(
-                        f"species['{sp.key}'].statmech.source_calculations"
+                        f"species[{sp.key!r}].statmech.source_calculations"
                         f"[{i}].calculation_key"
                     ),
                 )
@@ -1627,6 +1738,13 @@ def persist_computed_reaction_upload(
             session.add(statmech)
             session.flush()
             statmech_ids.append(statmech.id)
+            note_anchor(
+                session,
+                f"species[{sp.key!r}].statmech",
+                SubmissionRecordType.statmech,
+                statmech.id,
+                scope=f"species[{sp.key!r}]",
+            )
 
             for level in s.electronic_levels:
                 session.add(
@@ -1669,7 +1787,7 @@ def persist_computed_reaction_upload(
                         torsion_in.source_scan_calculation_key,
                         calculation_key_to_id,
                         field=(
-                            f"species['{sp.key}'].statmech.torsions[{ti}]."
+                            f"species[{sp.key!r}].statmech.torsions[{ti}]."
                             f"source_scan_calculation_key"
                         ),
                     )
@@ -1756,9 +1874,16 @@ def persist_computed_reaction_upload(
             default_workflow_tool_release=request.workflow_tool_release,
             created_by=created_by,
             warnings_out=sp_energy_warnings,
-            field_prefix=f"species['{sp.key}'].transport",
+            field_prefix=f"species[{sp.key!r}].transport",
         )
         transport_ids.append(transport_row.id)
+        note_anchor(
+            session,
+            f"species[{sp.key!r}].transport",
+            SubmissionRecordType.transport,
+            transport_row.id,
+            scope=f"species[{sp.key!r}]",
+        )
         transport_refs.append(transport_row.public_ref)
 
     # ------------------------------------------------------------------
@@ -1777,10 +1902,12 @@ def persist_computed_reaction_upload(
         # ``reaction_entry_structure_participant`` requires it, and the
         # direction-specific ordering is the scientific record we want
         # kinetics to point at.
+        # A fit whose entries are the bundle reaction's (either direction, any order) is a rate of THIS reaction
+        # and attaches to the canonical entry; only a fit for a different set of entries gets an entry of its own.
         is_canonical_direction = (
             list(kin.reactant_keys) == canonical_reactant_keys
             and list(kin.product_keys) == canonical_product_keys
-        )
+        ) or _fit_is_for_reaction(kin, species_key_to_entry, reactant_entries, product_entries)
 
         if is_canonical_direction:
             kin_entry = canonical_reaction_entry
@@ -1802,12 +1929,15 @@ def persist_computed_reaction_upload(
                 for i, k in enumerate(kin.product_keys)
             ]
 
+            # A bundle kinetics reaction IS a kinetics record of that reaction.
+            refuse_null_reaction_entry(kin_reactant_entries, kin_product_entries, has_kinetics=True)
+
             kin_chem_rxn = resolve_chem_reaction(
                 session,
                 warnings_out=sp_energy_warnings,
                 reversible=request.reversible,
-                reaction_family=request.reaction_family,
-                reaction_family_source_note=request.reaction_family_source_note,
+                # The bundle's family describes the bundle's own reaction, resolved above. A fit
+                # for another reaction must not stamp it there, nor be refused because of it.
                 reactant_stoichiometry=compress_species_stoichiometry(
                     kin_reactant_entries
                 ),
@@ -1891,25 +2021,32 @@ def persist_computed_reaction_upload(
             kin.network_kinetics_ref,
             field=f"{kin_field_prefix}network_kinetics_ref",
         )
+        fit_reactant_entries = [
+            resolve_species_key(k, species_key_to_entry, field=f"kinetics[{kin_index}].reactant_keys[{i}]")
+            for i, k in enumerate(kin.reactant_keys)
+        ]
+        fit_product_entries = [
+            resolve_species_key(k, species_key_to_entry, field=f"kinetics[{kin_index}].product_keys[{i}]")
+            for i, k in enumerate(kin.product_keys)
+        ]
+        if kin_entry is canonical_reaction_entry:
+            # The fit is stored on the canonical entry, so its participant positions are the canonical entry's.
+            interpretation_assignments = _assignments_in_canonical_order(
+                kin.interpretation_assignments,
+                fit_reactant_entries,
+                fit_product_entries,
+                reactant_entries,
+                product_entries,
+            )
+            reactant_entries_for_fit, product_entries_for_fit = reactant_entries, product_entries
+        else:
+            interpretation_assignments = kin.interpretation_assignments
+            reactant_entries_for_fit, product_entries_for_fit = fit_reactant_entries, fit_product_entries
         resolved_interpretations = resolve_interpretation_assignments(
             session,
-            kin.interpretation_assignments,
-            reactant_entries=[
-                resolve_species_key(
-                    k,
-                    species_key_to_entry,
-                    field=f"kinetics[{kin_index}].reactant_keys[{i}]",
-                )
-                for i, k in enumerate(kin.reactant_keys)
-            ],
-            product_entries=[
-                resolve_species_key(
-                    k,
-                    species_key_to_entry,
-                    field=f"kinetics[{kin_index}].product_keys[{i}]",
-                )
-                for i, k in enumerate(kin.product_keys)
-            ],
+            interpretation_assignments,
+            reactant_entries=reactant_entries_for_fit,
+            product_entries=product_entries_for_fit,
             created_by=created_by,
             reaction_entry=kin_entry,
             ts_scope="reaction",
@@ -2011,6 +2148,10 @@ def persist_computed_reaction_upload(
         session.add(kinetics)
         session.flush()
         kinetics_ids.append(kinetics.id)
+        note_anchor(session, f"kinetics[{kin_index}]", SubmissionRecordType.kinetics, kinetics.id)
+        # Bundle-root provenance the workflow wrote onto every kinetics row: a gap in it is a gap in each.
+        for root_field in ("workflow_tool_release", "analysis_software_release", "literature"):
+            note_anchor(session, root_field, SubmissionRecordType.kinetics, kinetics.id, fan_out=True)
 
         persist_kinetics_bath_gas(
             session,
@@ -2078,6 +2219,9 @@ def persist_computed_reaction_upload(
             sp_calcs_by_species_key = _index_species_sp_calcs(
                 request, calculation_key_to_id
             )
+            # H + H names the same species key twice: link a given
+            # (calculation, role) once, or the primary key collides.
+            already_linked: set[tuple[int, KineticsCalculationRole]] = set()
             for key, role in [
                 *[
                     (k, KineticsCalculationRole.reactant_energy)
@@ -2089,7 +2233,8 @@ def persist_computed_reaction_upload(
                 ],
             ]:
                 sp_calc_ids = sp_calcs_by_species_key.get(key, [])
-                if sp_calc_ids:
+                if sp_calc_ids and (sp_calc_ids[0], role) not in already_linked:
+                    already_linked.add((sp_calc_ids[0], role))
                     session.add(
                         KineticsSourceCalculation(
                             kinetics_id=kinetics.id,
@@ -2123,6 +2268,12 @@ def persist_computed_reaction_upload(
         RecordRef(SubmissionRecordType.applied_energy_correction, aid)
         for aid in applied_correction_ids
     )
+    note_calculation_keys(session, calculation_key_to_id)
+    for sp in request.species:
+        if sp.applied_energy_corrections:
+            note_preferred_scope_anchor(
+                session, f"species[{sp.key!r}].applied_energy_corrections", f"species[{sp.key!r}]"
+            )
     apply_review_policy(
         session,
         targets=current_conformer_group_targets(session, review_targets),
@@ -2144,6 +2295,12 @@ def persist_computed_reaction_upload(
         collect_named_composite_deposit_warnings(
             session, calculation_key_to_id.values()
         )
+    )
+    sp_energy_warnings.extend(
+        collect_scan_coordinate_warnings(session, calculation_key_to_id.values())
+    )
+    sp_energy_warnings.extend(
+        collect_wavefunction_reliability_warnings(session, calculation_key_to_id.values())
     )
     sp_energy_warnings.extend(
         collect_frequency_scale_factor_software_mismatch_warnings(

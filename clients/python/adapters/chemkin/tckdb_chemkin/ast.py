@@ -36,7 +36,7 @@ class ThermoEntry:
 
     :param name: Species name (card columns 1-18).
     :param composition: Element symbol -> atom count, from the card columns.
-    :param phase: Phase character (usually ``G``).
+    :param phase: Phase character from column 45 (``G``, ``L`` or ``S``); empty when the card leaves it blank.
     :param t_low: Lower temperature bound (K).
     :param t_high: Upper temperature bound (K).
     :param t_common: Common / mid switch temperature (K).
@@ -144,6 +144,7 @@ class Reaction:
 
     rev: tuple[float, float, float] | None = None  # explicit reverse (parse+warn)
     duplicate: bool = False
+    duplicate_line_no: int | None = None  # line of the DUPLICATE keyword
 
     # Aux lines we recognised but do not support in v1 (LT, FORD, RORD, ...).
     unsupported_aux: list[str] = field(default_factory=list)
