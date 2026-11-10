@@ -66,6 +66,7 @@ from app.db.models.common import (
     StatmechCalculationRole,
     SubmissionRecordType,
     ThermoCalculationRole,
+    ThermoTargetKind,
     TransportCalculationRole,
 )
 from app.db.models.record_review import RecordReview
@@ -286,6 +287,10 @@ def _build_unlisted_world(session) -> SweepWorld:
     attach_thermo_source_calculation(session, thermo=thm_v, calculation=calc_vopt, role=ThermoCalculationRole.opt)
     vis["thm_v"], vis["thm_v2"] = thm_v, thm_v2
     hid["thm_h"] = thm_h
+    # thm_v2 declares the hidden conformer group as its target.
+    thm_v2.thermodynamic_target_kind = ThermoTargetKind.single_conformer
+    thm_v2.target_conformer_group_id = cg_h.id
+    session.flush()
 
     # Molecular-property observations (literature-linked).
     mpo_v = make_observation(session, species_entry=sa, literature_id=lit.id)

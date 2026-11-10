@@ -37,6 +37,7 @@ Companion documents:
 | species-calculation search | `GET\|POST /scientific/species-calculations/search` |
 | geometry detail | `GET /scientific/geometries/{geometry_handle}` |
 | species-entry thermo | `GET /scientific/species-entries/{species_entry_handle}/thermo` |
+| species-entry conformer usage | `GET /scientific/species-entries/{species_entry_ref}/conformer-usage` |
 | reaction-entry kinetics | `GET /scientific/reaction-entries/{reaction_entry_handle}/kinetics` |
 | reaction-entry full provenance | `GET /scientific/reaction-entries/{reaction_entry_handle}/full` |
 

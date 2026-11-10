@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Conformer usage read (2026-11-10)
+
+- **Behaviour:** `GET /api/v1/scientific/species-entries/{species_entry_ref}/conformer-usage` lists, for each conformer group of a species entry that something uses, the thermo records whose declared target is that group and the kinetics records whose interpretation assignments select it (reaction entry, role, subject, selection kind, ensemble policy). Thermo records declared as the equilibrium ensemble are listed once, apart from the groups. Records with no declared target are not listed. Lists are ordered by ref. Rejected and deprecated records are hidden by default and counted in `request.hidden_by_default`; `include_rejected`, `include_deprecated` and `min_review_status` work as on the thermo list, and the curated profile floor still applies. A group a merge emptied lists its own usage and names the group it was merged into. A ref to a merged-away entry is answered for its survivor, with the ref asked for kept in `request`.
+- **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-client` 0.200.0 (parity ledger entry only).
+
 ## Relative conformer energy POSTs count as public reads (2026-11-10)
 
 - **Behaviour:** anonymous `POST .../species-entries/{ref}/conformers/relative-energies` and `.../relative-energies/compare` use the `anon_read` rate-limit bucket instead of `anon_other`; with a credential they use `auth_read` instead of `auth_write`. The `/manifest` downloads are unchanged. Other POSTs under `/scientific/` are unchanged, and the anonymous body-size cap still applies.
