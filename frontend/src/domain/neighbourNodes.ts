@@ -15,7 +15,8 @@ export type NeighbourNode = {
     found: string | null
 }
 
-export type ParticipantInput = { entryRef: string; label: string }
+/** A reaction participant: only codes and values (formula, SMILES, ref); a depositor-written label is never read. */
+export type ParticipantInput = { entryRef: string; formula?: string | null; smiles?: string | null }
 
 const record = (value: unknown): Record<string, unknown> | null =>
     value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null
@@ -114,7 +115,7 @@ export function reactionEntryNodes(input: {
     const participant = (role: "reactant" | "product") => (p: ParticipantInput, index: number): NeighbourNode => ({
         id: `${role}-${index}`,
         kind: "species-entry",
-        label: p.label,
+        label: p.formula || p.smiles || p.entryRef,
         relation: role === "reactant" ? "Reactant" : "Product",
         to: `/species-entries/${encodeURIComponent(p.entryRef)}`,
         found: null,

@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom"
 import "../relationship-map.css"
 import { RecordGlyph, type RecordKind } from "./RecordGlyph"
 import { useNearViewport, useSpeciesEntryNeighbours, type NeighboursState } from "../hooks/useNeighbours"
+import { wrapLabel } from "../domain/wrapLabel"
 import type { NeighbourNode } from "../domain/neighbourNodes"
 
 const WIDTH = 320
@@ -10,18 +11,6 @@ const PAD = 8
 const SELF_X = 50
 const NODE_X = 118
 const NODE_W = WIDTH - NODE_X - 8
-const LINE_CHARS = 21
-
-/** Splits a label at word boundaries; a single long word stays whole on its own line. */
-function wrapLabel(label: string): string[] {
-    const lines: string[] = []
-    for (const word of label.split(" ")) {
-        const last = lines[lines.length - 1]
-        if (last !== undefined && `${last} ${word}`.length <= LINE_CHARS) lines[lines.length - 1] = `${last} ${word}`
-        else lines.push(word)
-    }
-    return lines
-}
 
 const nodeAria = (node: NeighbourNode) =>
     [node.label, node.relation, node.found].filter((part): part is string => part !== null).join(", ")

@@ -22,6 +22,10 @@ describe("MolPoster", () => {
         expect(container.querySelectorAll("line")).toHaveLength(2)
     })
 
+    it("outlines every atom at 1.5px so a hydrogen stays visible on the surface", () => {
+        expect(/\.mol-poster-atom \{[^}]*stroke:\s*var\(--bond\)[^}]*stroke-width:\s*1\.5/.exec(posterCss)).not.toBeNull()
+    })
+
     it("colours atoms from the atom tokens, not literals", () => {
         for (const token of ["--atom-C", "--atom-H", "--atom-O", "--atom-N", "--atom-other", "--bond"]) {
             expect(posterCss).toContain(`var(${token})`)

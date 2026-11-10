@@ -91,6 +91,15 @@ describe("RelationshipMap", () => {
         expect(Array.from(label.querySelectorAll("tspan")).map((t) => t.textContent)).toEqual(["Reactions with this", "molecule"])
     })
 
+    it("draws a 30-character label with no spaces on several lines, none clipped", () => {
+        const label = "CC(C)(C)OC(=O)N1CCC(CC1)C(=O)O"
+        const { container } = renderMap([{ id: "p", kind: "species-entry", label, relation: "Reactant", to: "/species-entries/x", found: null }])
+        const spans = Array.from(container.querySelectorAll("svg.rel-map-figure text.rel-map-label tspan")).map((t) => t.textContent ?? "")
+        expect(spans.join("")).toBe(label)
+        for (const span of spans) expect(span.length).toBeLessThanOrEqual(21)
+        expect(container.querySelector("svg.rel-map-figure")!.textContent).not.toContain("\u2026")
+    })
+
     it("says so when nothing is connected, and while it is loading", () => {
         renderMap([], "ready")
         expect(screen.getByText("No connected records were found.")).toBeInTheDocument()

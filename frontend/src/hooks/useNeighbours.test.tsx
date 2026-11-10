@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
@@ -129,5 +129,18 @@ describe("species entry neighbours", () => {
         await waitFor(() => expect(screen.getAllByText("Not available right now").length).toBeGreaterThanOrEqual(5))
         expect(screen.queryByText("No connected records were found.")).toBeNull()
         expect(screen.queryAllByRole("link", { name: /Conformer groups/ })).toHaveLength(0)
+    })
+
+    it("shows Calculations as plain text with its count, never as a link", async () => {
+        mockReads()
+        server.use(http.get("/api/v1/scientific/species-calculations/search", () => HttpResponse.json({
+            records: [{ calculation: { calculation_ref: "calc_1" } }], pagination: { total: 12 },
+        })))
+        render(map())
+        act(() => observers[0].callback([{ isIntersecting: true }]))
+        const list = await screen.findByRole("list", { name: "Connected records" })
+        await waitFor(() => expect(list.textContent).toContain("12 found"))
+        expect(screen.queryAllByRole("link", { name: /^Calculations/ })).toHaveLength(0)
+        expect(within(list).getByText("Calculations")).toBeInTheDocument()
     })
 })

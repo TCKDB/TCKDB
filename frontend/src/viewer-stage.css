@@ -42,3 +42,8 @@
     outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
 }
+
+.viewer-poster-stage .empty-projection:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}

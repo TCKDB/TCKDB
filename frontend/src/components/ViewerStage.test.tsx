@@ -6,6 +6,7 @@ import { ViewerStage } from "./ViewerStage"
 import { PageShell } from "./PageShell"
 import { Announcer } from "./Announcer"
 import stageSource from "./ViewerStage.tsx?raw"
+import stageCss from "../viewer-stage.css?raw"
 
 const loaded = vi.hoisted(() => ({ count: 0 }))
 vi.mock("3dmol", () => {
@@ -104,6 +105,21 @@ describe("ViewerStage", () => {
         expect(screen.queryByTestId("live-AAA")).toBeNull()
         expect(screen.getByRole("img", { name: "Ball-and-stick picture of AAA" })).toBeInTheDocument()
         await waitFor(() => expect(document.querySelector(".announcer")).toHaveTextContent(/3D view of AAA was closed/))
+    })
+
+    it("keeps focus off the evicting stage's button in the reverse order too", async () => {
+        const user = userEvent.setup()
+        render(<MemoryRouter><PageShell>{stage("AAA")}{stage("BBB")}</PageShell></MemoryRouter>)
+        await user.click(screen.getAllByRole("button", { name: "Show in 3D" })[1])
+        expect(screen.getByTestId("live-BBB")).toBeInTheDocument()
+        await user.click(screen.getAllByRole("button", { name: "Show in 3D" })[0])
+        expect(screen.getByTestId("live-AAA")).toBeInTheDocument()
+        expect(screen.queryByTestId("live-BBB")).toBeNull()
+        expect(screen.getByRole("button", { name: "Show in 3D" })).not.toHaveFocus()
+    })
+
+    it("outlines the focused failure sentence with the focus ring", () => {
+        expect(stageCss).toMatch(/\.empty-projection:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--focus-ring\)[^}]*outline-offset:\s*2px/)
     })
 
     it("says bonds are not drawn for very large molecules", () => {
