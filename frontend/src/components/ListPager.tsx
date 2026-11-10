@@ -23,7 +23,7 @@ import "../list-pager.css"
  * `onPage` receives a `PageRequest` built by `domain/paging.ts`, so the control
  * is indifferent to whether a page is named by an offset or, later, a cursor.
  */
-export function ListPager({ meta, noun, nounPlural, onPage, busy = false, label, hideOrder = false }: {
+export function ListPager({ meta, noun, nounPlural, onPage, busy = false, label, hideOrder = false, note }: {
     meta: ListMeta
     noun: string
     nounPlural?: string
@@ -33,6 +33,8 @@ export function ListPager({ meta, noun, nounPlural, onPage, busy = false, label,
     label?: string
     /** The page states the order itself, so the pager leaves it out. */
     hideOrder?: boolean
+    /** One more line under the list notes, such as a linked record the list does not hold. */
+    note?: string | null
 }) {
     const plural = nounPlural ?? `${noun}s`
     const { pagination } = meta
@@ -48,6 +50,7 @@ export function ListPager({ meta, noun, nounPlural, onPage, busy = false, label,
             {showRange && <p className="list-pager-range">{pageRangeSentence(pagination, noun, plural)}</p>}
             {hidden && <p className="list-pager-note list-pager-hidden">{hidden}</p>}
             {order && !hideOrder && <p className="list-pager-note list-pager-order">{order}</p>}
+            {note && <p className="list-pager-note" role="status">{note}</p>}
             {paged && (
                 <div className="list-pager-buttons">
                     <button type="button" disabled={previous === null || busy} onClick={() => previous && onPage(previous)}>

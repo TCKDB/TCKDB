@@ -1,5 +1,5 @@
 import { loadEntryThermo } from "../api/thermoApi"
-import { usePagedRecordList } from "./useLinkedRecordPage"
+import { usePagedRecordList } from "./usePagedRecordList"
 
 /**
  * Loads one page of the thermo records deposited for one species entry (the first, until `goTo` moves or a fragment names

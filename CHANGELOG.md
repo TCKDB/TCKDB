@@ -24,7 +24,7 @@ dataset must never require a code release.
 
 ## Site polish: map labels, shapes note, search order, linked records (Unreleased)
 
-- **Behaviour:** every line of a relationship map label, including the line that names a version's reference, wraps inside its box. The molecule page's "Its 3D shapes" section states its order once (the archive's order across pages and the card order within a page) and says "shape" where it said "conformer basin". The site search comes after the theme control and Sign in in Tab order; on a full-width bar it is still drawn first. A link to a thermochemistry, statistical mechanics or transport record on a later page opens that tab on the page holding the record.
+- **Behaviour:** every line of a relationship map label wraps inside its box; a version's reference is drawn shortened (at least 13 characters, unique among the drawn nodes, ending in an ellipsis) and is whole in the link name, the node title and the "Connected records" list. The molecule page's "Its 3D shapes" section states its order once (the archive's order across pages and the card order within a page) and says "shape" where it said "conformer basin". The site search comes after the theme control and Sign in, both in Tab order and as drawn. A link to a thermochemistry, statistical mechanics or transport record on a later page opens that tab on the page holding the record, or says the record is not in the list. The theme control is one Tab stop and moves with the arrow keys.
 - **Schema and migration:** none. No new environment variable.
 
 ## Molecule page: versions and all values (Unreleased)

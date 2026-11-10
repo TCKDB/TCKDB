@@ -69,7 +69,7 @@ export function EntryThermoSection({ entryRef, conformer, conformers }: {
     conformer?: ConformerProjection | null
     conformers?: ConformerProjection[]
 }) {
-    const { state, meta, goTo } = useEntryThermo(entryRef)
+    const { state, meta, goTo, linkedNote } = useEntryThermo(entryRef)
     if (state.status === "ready") {
         return (
             <SectionErrorBoundary
@@ -82,7 +82,7 @@ export function EntryThermoSection({ entryRef, conformer, conformers }: {
                     </section>
                 )}
             >
-                <ThermoList response={state.record} meta={meta} onPage={goTo} conformer={conformer} conformers={conformers ?? []} />
+                <ThermoList response={state.record} meta={meta} onPage={goTo} linkedNote={linkedNote} conformer={conformer} conformers={conformers ?? []} />
             </SectionErrorBoundary>
         )
     }
@@ -220,7 +220,8 @@ function makeThermoGroupedRenderer(sectionLabels: Map<string, string>) {
     }
 }
 
-function ThermoList({ response, meta, onPage, conformer, conformers }: {
+function ThermoList({ response, meta, onPage, linkedNote, conformer, conformers }: {
+    linkedNote: string | null
     response: ThermoListResponse
     meta: ListMeta | null
     onPage: (request: PageRequest) => void
@@ -251,7 +252,7 @@ function ThermoList({ response, meta, onPage, conformer, conformers }: {
                 {pagination.total} record{pagination.total === 1 ? "" : "s"}
                 {" · review: "}{reviewSummaryText(reviewSummary)}
             </p>
-            {meta && <ListPager meta={meta} noun="thermochemistry record" onPage={onPage} label="Thermochemistry records paging" />}
+            {meta && <ListPager meta={meta} noun="thermochemistry record" onPage={onPage} note={linkedNote} label="Thermochemistry records paging" />}
             {records.length > 0 && (
                 // Driven from EVERY deposited record, not the conformer
                 // partition below -- comparing conformers against each other

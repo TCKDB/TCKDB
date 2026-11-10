@@ -96,6 +96,22 @@ describe("ThemeToggle", () => {
         expect(screen.getByRole("radio", { name: "Dark" })).toHaveAttribute("aria-checked", "true")
     })
 
+    it("is one Tab stop, and the arrow keys move the choice and the focus together", () => {
+        window.localStorage.setItem(STORAGE_KEY, "light")
+        render(<ThemeToggle />)
+        const stops = screen.getAllByRole("radio").filter((radio) => radio.tabIndex === 0)
+        expect(stops.map((radio) => radio.textContent)).toEqual(["Light"])
+
+        const light = screen.getByRole("radio", { name: "Light" })
+        light.focus()
+        fireEvent.keyDown(light, { key: "ArrowRight" })
+        expect(screen.getByRole("radio", { name: "Dark" })).toHaveFocus()
+        expect(screen.getByRole("radio", { name: "Dark" })).toHaveAttribute("aria-checked", "true")
+        fireEvent.keyDown(screen.getByRole("radio", { name: "Dark" }), { key: "ArrowLeft" })
+        fireEvent.keyDown(screen.getByRole("radio", { name: "Light" }), { key: "ArrowLeft" })
+        expect(screen.getByRole("radio", { name: "System" })).toHaveFocus()
+    })
+
     it("still applies the theme when localStorage.setItem throws (private-browsing style failure)", () => {
         vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
             throw new DOMException("denied")

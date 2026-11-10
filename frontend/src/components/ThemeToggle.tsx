@@ -1,3 +1,4 @@
+import { useRef, type KeyboardEvent } from "react"
 import { useTheme, type ThemePreference } from "../hooks/useTheme"
 
 const OPTIONS: { value: ThemePreference; label: string }[] = [
@@ -18,12 +19,25 @@ const OPTIONS: { value: ThemePreference; label: string }[] = [
  */
 export function ThemeToggle() {
     const { preference, setPreference } = useTheme()
+    const group = useRef<HTMLDivElement>(null)
+
+    /** Arrow keys move the choice and focus together, as a radio group does; the group is one Tab stop. */
+    function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+        const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0
+        if (step === 0) return
+        event.preventDefault()
+        const next = (index + step + OPTIONS.length) % OPTIONS.length
+        setPreference(OPTIONS[next].value)
+        group.current?.querySelectorAll<HTMLButtonElement>("button")[next]?.focus()
+    }
 
     return (
-        <div className="theme-toggle" role="radiogroup" aria-label="Theme">
-            {OPTIONS.map(({ value, label }) => (
+        <div className="theme-toggle" role="radiogroup" aria-label="Theme" ref={group}>
+            {OPTIONS.map(({ value, label }, index) => (
                 <button
                     key={value}
+                    tabIndex={preference === value ? 0 : -1}
+                    onKeyDown={(event) => onKeyDown(event, index)}
                     type="button"
                     role="radio"
                     aria-checked={preference === value}

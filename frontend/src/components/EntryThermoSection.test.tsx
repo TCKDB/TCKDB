@@ -718,39 +718,65 @@ describe("EntryThermoSection", () => {
         expect(seen.at(-1)).toEqual({ offset: "0", limit: "2" })
     })
 
-    it("opens on the page that holds the record a fragment names, when that record is not on the first page", async () => {
-        server.use(http.get(ENDPOINT, ({ request }) => {
+    function pagedHandler(seen: Array<{ offset: number; limit: number }>) {
+        return http.get(ENDPOINT, ({ request }) => {
             const url = new URL(request.url)
             const start = Number(url.searchParams.get("offset") ?? 0)
             const size = Number(url.searchParams.get("limit") ?? 2)
+            seen.push({ offset: start, limit: size })
             const all = mockRecords()
             return HttpResponse.json(mockResponse({
                 records: all.slice(start, start + size),
                 pagination: { offset: start, limit: size, returned: all.slice(start, start + size).length, total: all.length },
             }))
-        }))
-        render(
-            <MemoryRouter initialEntries={["/#thermo-heading-thm_gamma"]}>
+        })
+    }
+
+    function renderAt(hash: string) {
+        return render(
+            <MemoryRouter initialEntries={[`/${hash}`]}>
                 <EntryThermoSection entryRef={entryRef} />
             </MemoryRouter>,
         )
+    }
+
+    it("opens on the page that holds the record a fragment names, when that record is not on the first page", async () => {
+        const seen: Array<{ offset: number; limit: number }> = []
+        server.use(pagedHandler(seen))
+        renderAt("#thermo-heading-thm_gamma")
         expect(await screen.findByText("Showing 3\u20133 of 3 thermochemistry records.")).toBeVisible()
         expect(document.getElementById("thermo-heading-thm_gamma")).not.toBeNull()
         expect(screen.queryByText("thm_alpha")).not.toBeInTheDocument()
+        expect(seen.at(-1)).toEqual({ offset: 2, limit: 2 })
     })
 
-    it("stays on the first page when the fragment names a record the list does not hold", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
-            records: mockRecords().slice(0, 2),
-            pagination: { offset: 0, limit: 2, returned: 2, total: 3 },
-        }))))
-        render(
-            <MemoryRouter initialEntries={["/#thermo-heading-thm_missing"]}>
-                <EntryThermoSection entryRef={entryRef} />
-            </MemoryRouter>,
-        )
-        expect(await screen.findByText("thm_alpha")).toBeVisible()
+    it("finds a record a grouped card carries a suffix for", async () => {
+        server.use(pagedHandler([]))
+        renderAt("#thermo-heading-thm_gamma-group")
+        expect(await screen.findByText("Showing 3\u20133 of 3 thermochemistry records.")).toBeVisible()
+    })
+
+    it("stays on the first page and says so when the fragment names a record the list does not hold", async () => {
+        const seen: Array<{ offset: number; limit: number }> = []
+        server.use(pagedHandler(seen))
+        renderAt("#thermo-heading-thm_missing")
+        expect(await screen.findByText("The linked record isn't in this list.")).toBeVisible()
+        expect(screen.getByText("thm_alpha")).toBeVisible()
         expect(screen.getByText("Showing 1\u20132 of 3 thermochemistry records.")).toBeVisible()
+        expect(seen.length).toBeLessThanOrEqual(2)
+        for (const request of seen) expect(request.offset).toBeGreaterThanOrEqual(0)
+    })
+
+    it("lets the reader page away from the linked page and back without being moved again", async () => {
+        server.use(pagedHandler([]))
+        renderAt("#thermo-heading-thm_gamma")
+        await screen.findByText("Showing 3\u20133 of 3 thermochemistry records.")
+        fireEvent.click(screen.getByRole("button", { name: "Previous" }))
+        expect(await screen.findByText("Showing 1\u20132 of 3 thermochemistry records.")).toBeVisible()
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        expect(screen.getByText("Showing 1\u20132 of 3 thermochemistry records.")).toBeVisible()
+        fireEvent.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText("Showing 3\u20133 of 3 thermochemistry records.")).toBeVisible()
     })
 
     it("states what the server said about the list: its display order and the records it hid by default", async () => {

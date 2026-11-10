@@ -58,7 +58,7 @@ function reviewSummaryText(summary: TransportListResponse["review_summary"]) {
 }
 
 export function EntryTransportSection({ entryRef }: { entryRef: string }) {
-    const { state, listKey, meta, goTo } = useEntryTransport(entryRef)
+    const { state, listKey, meta, goTo, linkedNote } = useEntryTransport(entryRef)
     if (state.status === "ready") {
         return (
             <SectionErrorBoundary
@@ -71,7 +71,7 @@ export function EntryTransportSection({ entryRef }: { entryRef: string }) {
                     </section>
                 )}
             >
-                <TransportList listKey={listKey} meta={meta} onPage={goTo} response={state.record} />
+                <TransportList listKey={listKey} meta={meta} onPage={goTo} linkedNote={linkedNote} response={state.record} />
             </SectionErrorBoundary>
         )
     }
@@ -96,7 +96,8 @@ function useTransportSection<T>(entryRef: string, token: TransportSectionToken, 
     )
 }
 
-function TransportList({ listKey, meta, onPage, response }: {
+function TransportList({ listKey, meta, onPage, linkedNote, response }: {
+    linkedNote: string | null
     /** Names the page on screen: the on-demand section hooks below key on it, so their data is never read across pages. */
     listKey: string
     meta: ListMeta | null
@@ -123,7 +124,7 @@ function TransportList({ listKey, meta, onPage, response }: {
                     {pagination.total} record{pagination.total === 1 ? "" : "s"}
                     {" · review: "}{reviewSummaryText(reviewSummary)}
                 </p>
-                {meta && <ListPager meta={meta} noun="transport record" onPage={onPage} label="Transport records paging" />}
+                {meta && <ListPager meta={meta} noun="transport record" onPage={onPage} note={linkedNote} label="Transport records paging" />}
                 {records.length === 0 ? (
                     <p className="empty-projection">
                         No transport records are deposited for this entry. This is the archive's own answer —

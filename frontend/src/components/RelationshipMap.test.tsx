@@ -3,6 +3,7 @@ import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom"
 import { RelationshipMap } from "./RelationshipMap"
+import { shortRefs } from "../domain/shortRefs"
 import type { NeighbourNode } from "../domain/neighbourNodes"
 import { LINE_CHARS } from "../domain/wrapLabel"
 import mapCss from "../relationship-map.css?raw"
@@ -31,19 +32,30 @@ function renderMap(nodes: NeighbourNode[] = NODES, status: "ready" | "loading" =
 }
 
 describe("RelationshipMap", () => {
-    it("keeps every drawn line within the per-line budget, including a long reference", () => {
-        const long = `spe_${"x".repeat(25)}`
-        expect(long).toHaveLength(29)
-        const nodes: NeighbourNode[] = [
-            { id: long, kind: "species-entry", label: "CC(C)(C)OC(=O)N1CCC(CC1)C(=O)O, singlet", relation: `A version of this molecule, ${long}`, to: `/species-entries/${long}`, found: null },
-        ]
-        const { container } = renderMap(nodes)
+    it("draws a long reference shortened, unique and with a visible ellipsis, and keeps it whole in every text form", () => {
+        const first = `spe_${"x".repeat(25)}`
+        const second = `spe_${"x".repeat(14)}${"y".repeat(11)}`
+        expect(first).toHaveLength(29)
+        const make = (ref: string): NeighbourNode => ({
+            id: ref, kind: "species-entry", label: "CC(C)(C)OC(=O)N1CCC(CC1)C(=O)O, singlet", relation: "A version of this molecule", ref,
+            to: `/species-entries/${ref}`, found: null,
+        })
+        const { container } = renderMap([make(first), make(second), make("spe_zzzzzzzzzzzzzzzzzzzzzzzzzz")])
         const lines = [...container.querySelectorAll("svg.rel-map-figure tspan")].map((el) => el.textContent ?? "")
-        expect(lines.length).toBeGreaterThan(3)
         for (const line of lines) expect(line.length).toBeLessThanOrEqual(LINE_CHARS)
-        expect(lines.join("")).toContain(long.replace(/\s/g, ""))
-        expect(screen.getAllByRole("link", { name: new RegExp(long) }).length).toBeGreaterThan(0)
-        expect(container.querySelector(".rel-map-item-note")?.textContent).toContain(long)
+        const drawn = [...container.querySelectorAll("svg.rel-map-figure .rel-map-ref")].map((el) => el.textContent ?? "")
+        expect(drawn).toHaveLength(3)
+        for (const text of drawn) {
+            expect(text.endsWith("\u2026")).toBe(true)
+            expect(text.length - 1).toBeGreaterThanOrEqual(13)
+        }
+        expect(new Set(drawn).size).toBe(3)
+        expect(drawn[0]).not.toBe(drawn[1])
+        expect(lines.join(" ")).not.toContain("A version of this molecule")
+        expect(shortRefs([first, second])[0].length - 1).toBeGreaterThan(18)
+        expect(screen.getByRole("link", { name: new RegExp(first) })).toHaveAttribute("href", `/species-entries/${first}`)
+        expect(container.querySelector("svg.rel-map-figure title")?.textContent).toContain(first)
+        expect(container.querySelector(".rel-map-item-note")?.textContent).toContain(first)
     })
 
     it("draws a group of links under a heading, never one image around the links", () => {

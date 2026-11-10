@@ -1,5 +1,5 @@
 import { loadEntryTransportWithSources } from "../api/transportApi"
-import { usePagedRecordList } from "./useLinkedRecordPage"
+import { usePagedRecordList } from "./usePagedRecordList"
 
 /**
  * Loads one page of the transport records deposited for one species entry (the first, until `goTo` moves; the list is

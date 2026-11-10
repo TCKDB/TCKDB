@@ -327,6 +327,20 @@ describe("EntryTransportSection: paging", () => {
         expect(screen.queryByText("trn_one")).not.toBeInTheDocument()
     })
 
+    it("opens on the page holding the record a fragment names", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const params = new URL(request.url).searchParams
+            const offset = Number(params.get("offset") ?? 0)
+            const limit = Number(params.get("limit") ?? 1)
+            const all = [mockRecord(), mockRecord({ transport: { ...mockRecord().transport, transport_ref: "trn_two" } })]
+            const records = all.slice(offset, offset + limit)
+            return HttpResponse.json({ ...mockResponse(records), pagination: { offset, limit, returned: records.length, total: all.length } })
+        }))
+        render(<MemoryRouter initialEntries={["/#transport-heading-trn_two"]}><EntryTransportSection entryRef={entryRef} /></MemoryRouter>)
+        expect(await screen.findByText("Showing 2\u20132 of 2 transport records.")).toBeVisible()
+        expect(document.getElementById("transport-heading-trn_two")).not.toBeNull()
+    })
+
     it("a list that fits one window shows no paging buttons", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()

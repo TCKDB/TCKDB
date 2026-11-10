@@ -1375,6 +1375,11 @@ describe("species-entry page: paging the conformer basins", () => {
         // What the server said about the list is passed on, not dropped.
         expect(screen.getByText("Not listed by default: 3 rejected shapes.")).toBeVisible()
         expect(screen.getByText(/^Pages follow the archive's display order: approved first\./)).toBeVisible()
+        // One note states both orders; the pager adds no second one.
+        const section = document.querySelector(".conformer-picker")!
+        expect(section.querySelectorAll(".order-note, .list-pager-order")).toHaveLength(1)
+        expect(section.textContent).not.toMatch(/Display order:/)
+        expect(section.textContent).not.toMatch(/basin/i)
         expect(seen[0]).toBe("0:50")
     })
 
@@ -1413,11 +1418,6 @@ describe("species-entry page: what the conformer picker says about its own order
         await screen.findByRole("heading", { name: "Its 3D shapes" })
         expect(screen.getByText(/the cards within a page are listed by conformer number, then label, then reference\./i)).toBeVisible()
         expect(screen.getAllByText(/This order is not a recommendation\./).length).toBeGreaterThan(0)
-        // One note states both orders; the pager adds no second one.
-        const section = document.querySelector(".conformer-picker")!
-        expect(section.querySelectorAll(".order-note, .list-pager-order")).toHaveLength(1)
-        expect(section.textContent).not.toMatch(/Display order:/)
-        expect(section.textContent).not.toMatch(/basin/i)
     })
 
     it("says a selection the page made by itself is only the first listed, not a preference", async () => {

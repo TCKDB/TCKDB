@@ -63,6 +63,8 @@ a.rel-map-node:focus-visible {
     font-weight: 400;
 }
 
+.rel-map-ref { font-family: var(--mono); }
+
 .rel-map-list {
     margin: .75rem 0 0;
     padding: 0;

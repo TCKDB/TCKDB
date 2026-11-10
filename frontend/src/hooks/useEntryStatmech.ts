@@ -1,5 +1,5 @@
 import { loadEntryStatmech } from "../api/statmechApi"
-import { usePagedRecordList } from "./useLinkedRecordPage"
+import { usePagedRecordList } from "./usePagedRecordList"
 
 /**
  * Loads one page of the statmech records deposited for one species entry (the first, until `goTo` moves; the list is paged, never silently cut), with the

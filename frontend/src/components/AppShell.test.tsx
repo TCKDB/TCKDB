@@ -57,20 +57,19 @@ describe("primary navigation", () => {
         for (const name of ["Molecules", "Reactions", "Methods", "Guide"]) {
             await user.tab(); expect(screen.getByRole("link", { name })).toHaveFocus()
         }
-        for (const name of ["Light", "Dark", "System"]) {
-            await user.tab(); expect(screen.getByRole("radio", { name })).toHaveFocus()
-        }
+        // The theme control is one Tab stop: the radio that is on.
+        await user.tab(); expect(screen.getByRole("radio", { checked: true })).toHaveFocus()
         await user.tab(); expect(screen.getByRole("link", { name: "Sign in" })).toHaveFocus()
         await user.tab(); expect(screen.getByRole("searchbox", { name: "Search molecules and reactions" })).toHaveFocus()
     })
 
-    it("puts the search last in the markup and draws it first only on a full-width bar", () => {
+    it("puts the search last in the markup and gives it no order outside the narrow bar", () => {
         const { container } = renderShell()
         const end = container.querySelector(".site-bar-end")!
         expect(end.lastElementChild).toHaveClass("site-search")
-        const narrow = shellCss.slice(shellCss.indexOf("@media (max-width: 60rem)"))
-        expect(shellCss).toMatch(/\.site-search \{ order: -1; \}/)
-        expect(narrow).toMatch(/\.site-search \{ order: 3;/)
+        const cut = shellCss.indexOf("@media (max-width: 60rem)")
+        expect(shellCss.slice(0, cut)).not.toMatch(/\.site-search[^{]*\{[^}]*\border\s*:/)
+        expect(shellCss.slice(cut)).toMatch(/\.site-search \{ order: 3;/)
     })
 
     it("marks only the link for the current page", () => {

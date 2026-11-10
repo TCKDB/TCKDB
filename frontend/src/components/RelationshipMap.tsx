@@ -4,6 +4,7 @@ import "../relationship-map.css"
 import { RecordGlyph, type RecordKind } from "./RecordGlyph"
 import { useNearViewport, useSpeciesEntryNeighbours, type NeighboursState } from "../hooks/useNeighbours"
 import { wrapLabel } from "../domain/wrapLabel"
+import { shortRefs } from "../domain/shortRefs"
 import type { NeighbourNode } from "../domain/neighbourNodes"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
 import { versionFacts } from "../domain/entryVersions"
@@ -15,7 +16,7 @@ const NODE_X = 118
 const NODE_W = WIDTH - NODE_X - 8
 
 const nodeAria = (node: NeighbourNode) =>
-    [node.label, node.relation, node.found].filter((part): part is string => part !== null).join(", ")
+    [node.label, node.relation, node.ref, node.found].filter((part): part is string => !!part).join(", ")
 
 /**
  * Shows where the record sits: this entry on the left, what it connects to on the right. The drawing is a group of
@@ -33,9 +34,10 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
     const headingId = useId()
     const { pathname } = useLocation()
     const { nodes } = state
-    const rows = nodes.map((node) => {
+    const shorts = shortRefs(nodes.map((node) => node.ref ?? ""))
+    const rows = nodes.map((node, index) => {
         const lines = wrapLabel(node.label)
-        const noteLines = wrapLabel(node.found ?? node.relation)
+        const noteLines = node.ref ? wrapLabel(shorts[index]) : wrapLabel(node.found ?? node.relation)
         return { lines, noteLines, height: 22 + 16 * (lines.length + noteLines.length) }
     })
     const tops: number[] = []
@@ -67,6 +69,7 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
                         const mid = tops[index] + rowHeight / 2
                         const body = (
                             <>
+                                <title>{nodeAria(node)}</title>
                                 <rect className="rel-map-box" x={NODE_X} y={boxTop} width={NODE_W} height={rowHeight - 8} rx={4} />
                                 <g transform={`translate(${NODE_X + 8} ${mid - 10})`}><RecordGlyph kind={node.kind} size={20} /></g>
                                 <text x={NODE_X + 36} y={boxTop + 18} className="rel-map-label">
@@ -74,7 +77,7 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
                                         <tspan key={lineIndex} x={NODE_X + 36} dy={lineIndex === 0 ? 0 : 16}>{line}</tspan>
                                     ))}
                                 </text>
-                                <text x={NODE_X + 36} y={boxTop + 18 + 16 * lines.length} className="rel-map-note">
+                                <text x={NODE_X + 36} y={boxTop + 18 + 16 * lines.length} className={node.ref ? "rel-map-note rel-map-ref" : "rel-map-note"}>
                                     {noteLines.map((line, lineIndex) => (
                                         <tspan key={lineIndex} x={NODE_X + 36} dy={lineIndex === 0 ? 0 : 16}>{line}</tspan>
                                     ))}
@@ -97,7 +100,7 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
                         <RecordGlyph kind={node.kind} />
                         {" "}
                         {node.to === null ? <span>{node.label}</span> : <Link to={node.to} aria-describedby={`${headingId}-${node.id}-note`}>{node.label}</Link>}
-                        <span className="rel-map-item-note" id={`${headingId}-${node.id}-note`}>{[node.relation, node.found].filter(Boolean).join(", ")}</span>
+                        <span className="rel-map-item-note" id={`${headingId}-${node.id}-note`}>{[node.relation, node.ref, node.found].filter(Boolean).join(", ")}</span>
                     </li>
                 ))}
             </ul>
@@ -122,7 +125,8 @@ export function SpeciesRelationshipMap({ species }: { species: SpeciesOverview }
         id: version.species_entry_ref,
         kind: "species-entry",
         label: versionFacts(version),
-        relation: `A version of this molecule, ${version.species_entry_ref}`,
+        relation: "A version of this molecule",
+        ref: version.species_entry_ref,
         to: `/species-entries/${version.species_entry_ref}`,
         found: null,
     }))
