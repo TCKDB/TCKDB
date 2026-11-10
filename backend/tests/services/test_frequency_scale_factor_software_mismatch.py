@@ -137,8 +137,12 @@ def test_mismatch_warns(db_conn) -> None:
         assert len(warnings) == 1
         assert warnings[0].code == W_STATMECH_FSF_SOFTWARE_MISMATCH
         assert warnings[0].field == "frequency_scale_factor"
-        assert "Gaussian" in warnings[0].message
-        assert "ORCA" in warnings[0].message
+        # The software names are registry text the depositor typed: under the marked key, not in TCKDB's sentence.
+        assert warnings[0].context["depositor_supplied"] == {
+            "scale_factor_software": "Gaussian",
+            "frequency_software": "ORCA",
+        }
+        assert "Gaussian" not in warnings[0].message and "ORCA" not in warnings[0].message
         # No-ID-leak rule: the message names software, never a row id.
         assert not id_in_text(statmech.id, warnings[0].message)
 

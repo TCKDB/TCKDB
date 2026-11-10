@@ -25,7 +25,7 @@ from app.db.models.common import RecordReviewStatus
 from app.db.models.composite_scheme import CompositeScheme
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.species import ConformerGroup
-from app.schemas.reads.scientific_common import REVIEW_RANK
+from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.schemas.reads.scientific_relative_conformer_energy import (
     RelativeConformerEnergyCompareRequest,
     RelativeConformerEnergyCompareResponse,
@@ -132,7 +132,7 @@ def build_response(run_: RelativeEnergyRun, *, entry_ref: str) -> RelativeConfor
     manifest: dict[str, Any] = run_.manifest
     result = manifest["result"]
     request = manifest["request"]
-    statuses = sorted((RecordReviewStatus(v) for v in manifest["effective_review_statuses"]), key=lambda s: REVIEW_RANK[s])
+    statuses = sorted((RecordReviewStatus(v) for v in manifest["effective_review_statuses"]), key=lambda s: REVIEW_FLOOR_ORDER[s])
     floor = statuses[-1] if statuses else RecordReviewStatus.approved
     return RelativeConformerEnergyResponse(
         request=RelativeEnergyRequestEcho(entry_ref=entry_ref, **request),
@@ -199,7 +199,7 @@ def build_compare_response(run_: ComparisonRun, *, entry_ref: str) -> RelativeCo
     manifest: dict[str, Any] = run_.manifest
     result = manifest["result"]
     request = manifest["request"]
-    statuses = sorted((RecordReviewStatus(v) for v in manifest["runs"]["candidate"]["effective_review_statuses"]), key=lambda s: REVIEW_RANK[s])
+    statuses = sorted((RecordReviewStatus(v) for v in manifest["runs"]["candidate"]["effective_review_statuses"]), key=lambda s: REVIEW_FLOOR_ORDER[s])
     floor = statuses[-1] if statuses else RecordReviewStatus.approved
     return RelativeConformerEnergyCompareResponse(
         request=RelativeEnergyCompareRequestEcho(

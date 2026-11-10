@@ -207,17 +207,7 @@ describe("status/empty lines -- --type-note, not a bare .92rem", () => {
 // against a broken rule as readily as a fixed one. The real, rendered
 // ratio (13px chip / 20px title, both themes, 1920 and 680) is verified in
 // an actual browser as part of the PR's manual verification pass.
-describe("reaction browse row -- stereo-chip capped and muted, not a 1:1 inherited size", () => {
-    it(".reaction-browse-row-title .reaction-equation-chip is capped to --type-note-font and muted, not the title's own heading step", () => {
-        const rule = extractRule(css, ".reaction-browse-row-title .reaction-equation-chip")
-        expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
-        expect(rule).toMatch(/color:\s*var\(--muted\)/)
-        // Never the title's own step -- the exact regression this guards:
-        // someone "fixing" a lint complaint by pointing the chip back at
-        // the same token the title uses.
-        expect(rule).not.toMatch(/--type-heading-2-font/)
-    })
-
+describe("reaction browse row -- equation code in the heading", () => {
     it(".reaction-browse-row-title code.data inherits the surrounding font-size, not its own fixed --type-data-font (companion fix, mirrors reaction-entry.css)", () => {
         const rule = extractRule(css, ".reaction-browse-row-title code.data")
         expect(rule).toMatch(/font-size:\s*inherit/)

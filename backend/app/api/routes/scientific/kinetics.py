@@ -8,20 +8,25 @@ compatibility with OpenAPI consumers.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._actor import publish_read_actor
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     KINETICS_RECORD_SECTIONS,
     SEARCH_SCOPE,
     omit_trust_unless_requested,
     omit_unrequested_sections,
     prepare_assessment_response,
+    require_bounded_input_check,
 )
-from app.db.models.common import KineticsModelKind, RecordReviewStatus
-from app.schemas.reads.scientific_common import CollapseMode
+from app.api.server_faults import ServerFaultRoute, caller_input
+from app.chemistry.method_families import MethodFamily
+from app.db.models.common import KineticsModelKind, RecordReviewStatus, ScientificOriginKind
+from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_kinetics import (
     KineticsReadRequest,
     ScientificReactionKineticsResponse,
@@ -32,18 +37,20 @@ from app.services.scientific_read.public_assessments import (
     attach_kinetics_assessments,
 )
 
-router = APIRouter(prefix="/reaction-entries")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/reaction-entries")
 
 
 @router.get(
     "/{reaction_entry_id}/kinetics",
     response_model=ScientificReactionKineticsResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def reaction_kinetics(
+    http_request: Request,
     reaction_entry_id: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_db),
-    temperature_min: float | None = Query(None),
-    temperature_max: float | None = Query(None),
+    coverage_temperature_min_k: float | None = Query(None),
+    coverage_temperature_max_k: float | None = Query(None),
     pressure_bar: float | None = Query(
         None,
         gt=0,
@@ -61,14 +68,27 @@ def reaction_kinetics(
     level_of_theory_id: int | None = Query(None),
     level_of_theory_ref: str | None = Query(None),
     software: str | None = Query(None),
+    method: str | None = Query(None),
+    basis: str | None = Query(None),
+    software_version: str | None = Query(None),
+    workflow_tool: str | None = Query(None),
+    workflow_tool_version: str | None = Query(None),
+    method_family: list[MethodFamily] | None = Query(None),
+    dft_rung_min: int | None = Query(None, ge=1, le=5),
+    dft_rung_max: int | None = Query(None, ge=1, le=5),
+    scientific_origin: ScientificOriginKind | None = Query(None),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
+    check_inputs: bool = Query(
+        False,
+        description="With include=assessments: compare each stored assessment's inputs with today's. Opt-in, at most 10 records.",
+    ),
 ) -> ScientificReactionKineticsResponse:
     """Return kinetics records for a reaction entry, sorted by review status, then newest.
 
@@ -78,32 +98,45 @@ def reaction_kinetics(
     Provenance keys are always present; TS-chain fields are populated
     only for TS-backed records (Phase 2.2). Default sort is review
     status, then newest, then id (temperature coverage and evidence are
-    reported per record, not ranked). ``sort=`` is rejected (v0). See ``docs/specs/read_api_mvp.md``
+    reported per record, not ranked). ``sort=`` is rejected (v0). See ``docs/specs/browse_order.md``
     §Endpoint 3 and ``docs/specs/public_identifier_policy.md``.
     """
     # Validate the request (pressure alias conflict, etc.) before resolving
     # the resource handle, so a malformed request is rejected with 422
     # regardless of whether the reaction entry exists (request validation
     # precedes resource lookup).
-    request = KineticsReadRequest(
-        temperature_min=temperature_min,
-        temperature_max=temperature_max,
+    reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
+    request = caller_input(
+        KineticsReadRequest,
+        coverage_temperature_min_k=coverage_temperature_min_k,
+        coverage_temperature_max_k=coverage_temperature_max_k,
         pressure_bar=pressure_bar,
         pressure=pressure,
         model_kind=model_kind,
         level_of_theory_id=level_of_theory_id,
         level_of_theory_ref=level_of_theory_ref,
         software=software,
+        method=method,
+        basis=basis,
+        software_version=software_version,
+        workflow_tool=workflow_tool,
+        workflow_tool_version=workflow_tool_version,
+        method_family=method_family,
+        dft_rung_min=dft_rung_min,
+        dft_rung_max=dft_rung_max,
+        scientific_origin=scientific_origin,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
-        collapse=collapse,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
+        check_inputs=check_inputs,
     )
     resolved_reaction_entry_id = resolve_reaction_entry_handle(session, reaction_entry_id)
+    require_bounded_input_check(request_include=request.include, check_inputs=check_inputs, limit=limit)
     payload = get_reaction_kinetics(
         session,
         reaction_entry_id=resolved_reaction_entry_id,
@@ -113,6 +146,7 @@ def reaction_kinetics(
         session,
         payload,
         attach_assessments=attach_kinetics_assessments,
+        check_inputs=check_inputs,
     )
     visibility = omit_trust_unless_requested(visibility, payload, scope=SEARCH_SCOPE)
     return omit_unrequested_sections(

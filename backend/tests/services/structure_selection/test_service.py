@@ -169,24 +169,29 @@ def test_an_unapproved_record_is_hidden_without_trace_under_the_curated_profile(
     assert open_.total_units == 2
 
 
-def test_a_hidden_entry_behaves_exactly_like_a_missing_one(db_session):
-    hidden = make_world(db_session, entry_status=RecordReviewStatus.under_review)
+def test_a_hidden_transition_state_entry_behaves_exactly_like_a_missing_one_and_a_species_entry_is_never_hidden(db_session):
+    from app.services.structure_selection.loader import assert_subject_visible
+    from app.services.structure_selection.models import Grain
+    from tests.services.structure_selection._support import make_ts_world
+
+    hidden = make_ts_world(db_session, entry_status=RecordReviewStatus.under_review)
     hidden.settle()
+    species = make_world(db_session, entry_status=RecordReviewStatus.under_review)
+    species.settle()
     token = curated()
     try:
+        profile = frozenset({RecordReviewStatus.approved})
         with pytest.raises(NotFoundError) as exc_hidden:
-            run(db_session, hidden, request())
+            assert_subject_visible(db_session, Grain.transition_state, hidden.entry.id, profile=profile)
         with pytest.raises(NotFoundError) as exc_missing:
-            assess_entry_structures(
-                db_session, entry_id=hidden.entry.id + 10_000_000, request=request(), require_snapshot=False
-            )
+            assert_subject_visible(db_session, Grain.transition_state, hidden.entry.id + 10_000_000, profile=profile)
+        # a species entry is a scoping parent: it is a visible target under every profile
+        assert_subject_visible(db_session, Grain.conformer, species.entry.id, profile=profile)
     finally:
         reset_current_read_profile(token)
-    # The same code and the same words, the one difference being the ref the caller supplied, which an unknown ref's 404
-    # echoes too when the route resolves it (the route-level test compares the whole bodies). No row id is named.
     assert exc_hidden.value.code == exc_missing.value.code == "handle_not_found"
-    assert str(exc_hidden.value) == f"species_entry not found (species_entry_ref={hidden.entry.public_ref!r})"
-    assert str(exc_missing.value) == "species_entry not found"
+    assert str(exc_hidden.value) == f"transition_state_entry not found (transition_state_entry_ref={hidden.entry.public_ref!r})"
+    assert str(exc_missing.value) == "transition_state_entry not found"
     assert not id_in_text(hidden.entry.id, str(exc_hidden.value))
 
 
@@ -344,18 +349,6 @@ def test_a_required_traversal_past_the_depth_bound_is_refused_rather_than_claime
     assert exc.value.code == "structure_selection_traversal_too_deep"
 
 
-def test_a_dependency_cycle_is_reported_and_never_walked_forever(db_session):
-    world = make_world(db_session)
-    o = world.opt("o", -76.4, declared=declaration())
-    sp = world.sp("sp", -76.41, declared=declaration())
-    f = world.freq("f", declared=declaration())
-    attach_dependency(db_session, parent=o, child=sp, role=CalculationDependencyRole.single_point_on)
-    attach_dependency(db_session, parent=sp, child=o, role=CalculationDependencyRole.optimized_from)
-    d = world.determination([("geometry_optimization", o), ("energy", sp), ("curvature", f)])
-    a = by_ref(run(db_session, world, minimum_request()))[d.public_ref]
-    assert a.applicability is A.unresolved and any(r.code == "dependency_cycle" for r in a.reasons)
-
-
 # ---------------------------------------------------------------------------
 # Snapshot
 # ---------------------------------------------------------------------------
@@ -432,10 +425,11 @@ def test_several_determinations_of_one_basin_are_kept_as_separate_candidates(db_
     assert all(a.physically_eligible for a in result.assessments)
 
 
-def test_a_source_hidden_by_the_profile_reads_generically_and_names_nothing(db_session):
+def test_a_source_withheld_by_the_profile_reads_generically_and_names_nothing(db_session):
     world = make_world(db_session)
-    # The energy source is below the curated floor; the determination and its other sources are visible.
-    d, opt, sp, f = build_basin(world, statuses={"sp": None})
+    # The energy source is rejected, which the curated profile withholds as evidence; the determination and its other
+    # sources are visible.
+    d, opt, sp, f = build_basin(world, statuses={"sp": RecordReviewStatus.rejected})
     token = curated()
     try:
         result = run(db_session, world, minimum_request())
@@ -451,10 +445,32 @@ def test_a_source_hidden_by_the_profile_reads_generically_and_names_nothing(db_s
         }
     )
     assert sp.public_ref not in text
-    # Outside the curated profile the same unreviewed source is visible, and the caller's own floor names why.
-    floor = run(db_session, world, minimum_request(min_review_status=RecordReviewStatus.approved))
-    assert [r.code for r in by_ref(floor)[d.public_ref].reasons] == ["source_below_review_floor"]
+    # Outside the curated profile the same source is a visible, terminal one, and says so.
+    assert [r.code for r in by_ref(run(db_session, world, minimum_request()))[d.public_ref].reasons] == [
+        "source_terminal_review_status"
+    ]
+
+
+def test_an_unreviewed_source_is_used_under_curated_and_the_callers_own_floor_still_holds_it_out(db_session):
+    """ADR 0023 (Q4): the calculations inside a basin are evidence. The record floor does not apply to them.
+
+    Kills: the earlier rule, under which this source read as unavailable and the determination as unresolved.
+    """
+    world = make_world(db_session)
+    d, opt, sp, f = build_basin(world, statuses={"sp": None})
+    token = curated()
+    try:
+        result = run(db_session, world, minimum_request())
+        floored = run(db_session, world, minimum_request(min_review_status=RecordReviewStatus.approved))
+    finally:
+        reset_current_read_profile(token)
+    a = by_ref(result)[d.public_ref]
+    assert a.physically_eligible and a.applicability is not A.unresolved
+    assert sp.public_ref in json.dumps([c.to_dict() for c in result.calculations])
+    # The exploratory answer is the same as it always was.
     assert by_ref(run(db_session, world, minimum_request()))[d.public_ref].physically_eligible
+    # A caller who asks for approved evidence still gets it held out, with the reason that says why.
+    assert [r.code for r in by_ref(floored)[d.public_ref].reasons] == ["source_below_review_floor"]
 
 
 def test_a_rejected_source_and_a_rejected_quality_source_are_not_usable_evidence(db_session):
@@ -478,7 +494,7 @@ def test_the_owning_observation_is_judged_at_its_own_grain_not_through_its_group
     assert d.public_ref in by_ref(open_)
     floor = run(db_session, world, minimum_request(min_review_status=RecordReviewStatus.approved))
     # The group is approved; the observation is not, and group approval does not approve it.
-    assert floor.assessments == () and [e["reason"] for e in floor.excluded_by_review] == ["owner_below_review_floor"]
+    assert floor.assessments == () and [e["reason"] for e in floor.excluded_by_review] == ["below_review_floor"]
     set_review(db_session, record_type=SubmissionRecordType.conformer_observation, record_id=obs.id, status=RecordReviewStatus.approved)
     again = run(db_session, world, minimum_request(min_review_status=RecordReviewStatus.approved))
     assert d.public_ref in by_ref(again)

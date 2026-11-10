@@ -8,12 +8,16 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    entity_page,
+)
 from app.db.models.software import Software, SoftwareRelease
 from app.schemas.entities.software import SoftwareRead, SoftwareReleaseRead
 
-router = APIRouter()
-releases_router = APIRouter()
+router = APIRouter(route_class=LegacyReadRoute)
+releases_router = APIRouter(route_class=LegacyReadRoute)
 
 
 # ---------------------------------------------------------------------------
@@ -21,7 +25,7 @@ releases_router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-@router.get("", response_model=PaginatedResponse[SoftwareRead])
+@router.get("", response_model=EntityListResponse[SoftwareRead])
 def list_software(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
@@ -41,8 +45,8 @@ def list_software(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[SoftwareRead.model_validate(r) for r in rows],
+    return entity_page(
+        [SoftwareRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -62,7 +66,7 @@ def get_software(software_id: int, session: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 
-@releases_router.get("", response_model=PaginatedResponse[SoftwareReleaseRead])
+@releases_router.get("", response_model=EntityListResponse[SoftwareReleaseRead])
 def list_software_releases(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
@@ -91,8 +95,8 @@ def list_software_releases(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[SoftwareReleaseRead.model_validate(r) for r in rows],
+    return entity_page(
+        [SoftwareReleaseRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,

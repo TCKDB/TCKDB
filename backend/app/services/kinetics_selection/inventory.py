@@ -8,7 +8,7 @@ state it: a record whose own question cannot be formed (no determination, no app
 window) is counted ``unresolved`` with the reasons it lacks, never assumed standard.
 
 The numbers describe what the stored data supports today, which is the point: they show how much of the corpus
-method-aware selection could act on before depositors declare anything more.
+a selection could act on before depositors declare anything more.
 
 How a record's own question is formed (every item must be stated by the record itself; none is defaulted):
 
@@ -44,7 +44,6 @@ from app.db.models.reaction import ReactionEntry
 from app.services.kinetics_selection.assessment import assess_candidate
 from app.services.kinetics_selection.loader import (
     _LOAD_OPTIONS,
-    load_subject,
     normalize_rows,
     unavailable_evidence,
 )
@@ -57,7 +56,6 @@ from app.services.kinetics_selection.models import (
     PressureRequest,
     TargetRequest,
 )
-from app.services.kinetics_selection.rules import default_rules
 from app.services.scientific_read.common import fetch_review_badges
 from app.services.selection_kernel import Applicability
 from app.services.selection_kernel.evidence_view import evidence_subject
@@ -170,7 +168,6 @@ def own_question(c: NormalizedKinetics) -> tuple[KineticsRequest | None, list[st
 
 def kinetics_coverage_inventory(session: Session, *, batch_size: int = 100) -> dict[str, Any]:
     """Count stored kinetics records by applicability to their own stated question, and why not. Read-only."""
-    rules = default_rules()
     applicability: Counter[str] = Counter()
     reasons: Counter[str] = Counter()
     blocking: Counter[str] = Counter()
@@ -186,7 +183,6 @@ def kinetics_coverage_inventory(session: Session, *, batch_size: int = 100) -> d
     total = 0
     protocol_stated = 0
     declared_energy_levels = 0
-    rule_scope: dict[str, Counter[str]] = {r.rule_id: Counter() for r in rules}
 
     for entry_ids in _batches(session, batch_size):
         for entry_id in entry_ids:
@@ -205,7 +201,6 @@ def kinetics_coverage_inventory(session: Session, *, batch_size: int = 100) -> d
             source_findings = assess_source_findings(session, {k.id: kinetics_uses(k, unavailable) for k in rows})
             entries += 1
             any_applicable = False
-            subject = None
             for k in rows:
                 total += 1
                 c = normalized[k.id]
@@ -239,10 +234,6 @@ def kinetics_coverage_inventory(session: Session, *, batch_size: int = 100) -> d
                     qualifying += 1
                     if c.determination is not None:
                         qualifying_determinations.add(c.determination.determination_ref)
-                if subject is None:
-                    subject = load_subject(session, entry)
-                for rule in rules:
-                    rule_scope[rule.rule_id][rule.scope(subject, request).state.value] += 1
             if any_applicable:
                 entries_with_a_qualifying_record += 1
 
@@ -274,19 +265,10 @@ def kinetics_coverage_inventory(session: Session, *, batch_size: int = 100) -> d
         "records_naming_a_declared_energy_calculation": declared_energy_levels,
         "reaction_entries_over_candidate_cap": int(entries_over_cap or 0),
         "candidate_cap": MAX_CANDIDATES,
-        "rules": {
-            rule.rule_id: {
-                "status": rule.status,
-                "inactive_reasons": list(rule.inactive_reasons),
-                "scope_of_stated_questions": dict(sorted(rule_scope[rule.rule_id].items())),
-            }
-            for rule in rules
-        },
         "notes": [
             "Each record is assessed against the question its own declarations pose; a record that does not state one "
             "is counted unresolved with the facts it lacks, never assumed standard.",
-            "A record counted qualifying can answer the question it states. Whether any rule ranks it needs a stated "
-            "protocol on every competing record, and no rule is active in this release.",
+            "A record counted qualifying can answer the question it states.",
             "Nothing is written and nothing is backfilled.",
         ],
     }

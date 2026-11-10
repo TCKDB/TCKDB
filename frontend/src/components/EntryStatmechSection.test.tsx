@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter } from "react-router-dom"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { EntryStatmechSection } from "./EntryStatmechSection"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
 // -- see `ReactionEntryPage.test.tsx`'s identical import for why a
 // component test rendered in isolation needs it directly to exercise
@@ -199,7 +200,7 @@ function mockResponse(records = mockRecords()) {
     return {
         review_summary: { approved: 0, under_review: 0, not_reviewed: 1, deprecated: 0, rejected: 0, total: 2 },
         records,
-        pagination: { offset: 0, limit: 50, returned: records.length, total: records.length, post_collapse_total: records.length },
+        pagination: { offset: 0, limit: 50, returned: records.length, total: records.length },
     }
 }
 
@@ -393,7 +394,7 @@ describe("EntryStatmechSection", () => {
         // `frequencies` now (every card's own `FrequenciesBlock` shows it
         // by default, finding 6) -- `torsions` is not, it still waits for
         // its own disclosure to be opened.
-        await waitFor(() => expect(requestedIncludeSets).toEqual([[], ["source_calculations"], ["frequencies"]]))
+        await waitFor(() => expect(requestedIncludeSets).toEqual([[], ["source_calculations"], ["frequencies"], ["calculation_settings"]]))
 
         const section = screen.getByText("Torsions").closest("details") as HTMLDetailsElement
         expect(section.open).toBe(false)
@@ -401,7 +402,7 @@ describe("EntryStatmechSection", () => {
 
         fireEvent.click(screen.getByText("Torsions"))
         await within(section).findByText("Torsions loaded.")
-        expect(requestedIncludeSets).toEqual([[], ["source_calculations"], ["frequencies"], ["torsions"]])
+        expect(requestedIncludeSets).toEqual([[], ["source_calculations"], ["frequencies"], ["calculation_settings"], ["torsions"]])
     })
 
     it("shares one fetch across every record's disclosure for the same token, and never merges one record's rows into another's", async () => {
@@ -488,10 +489,11 @@ describe("EntryStatmechSection", () => {
         // column via `data-label`, so a Top<->Invalidated column swap
         // (values transposed, headers untouched) is caught, not just a
         // "does this text appear somewhere in the row" check.
-        expect(cellAt(soundRow, "Top")).toBe("methyl-sound")
         expect(cellAt(soundRow, "Invalidated")).toBe("not invalidated")
-        expect(cellAt(invalidRow, "Top")).toBe("methyl-bad")
-        expect(cellAt(invalidRow, "Invalidated")).toBe("scan did not close")
+        expect(cellAt(invalidRow, "Invalidated")).toBe("invalidated")
+        // `top_description` and `invalidated_reason` are depositor free text: neither is printed.
+        expect(within(table).queryByText("methyl-sound")).toBeNull()
+        expect(within(table).queryByText("scan did not close")).toBeNull()
     })
 
     it("renders a heavy section as a static, request-free line when no record on the entry has it", async () => {
@@ -507,12 +509,80 @@ describe("EntryStatmechSection", () => {
         // destination to jump to, so no `SectionHeading` registers one.
         expect(screen.queryByRole("heading", { name: "Electronic levels" })).not.toBeInTheDocument()
         expect(screen.getByText("No electronic levels are recorded for any statmech record on this entry.")).toBeVisible()
-        // Three requests, never a fourth for "Electronic levels" (which
-        // stays request-free): the base list load, plus the two eager
+        // Four requests, never a fifth for "Electronic levels" (which
+        // stays request-free): the base list load, plus the three eager
         // fetches every record card needs by default -- `source_calculations`
-        // (conformer derivation) and `frequencies` (finding 6's
-        // `FrequenciesBlock`) -- see the eager-load test above.
-        await waitFor(() => expect(requestCount).toBe(3))
+        // (conformer derivation), `frequencies` (finding 6's
+        // `FrequenciesBlock`) and `calculation_settings` (the "Settings
+        // behind this value" block) -- see the eager-load test above.
+        await waitFor(() => expect(requestCount).toBe(4))
+    })
+
+    it("shows each record's own 'Settings behind this value' from the calculation_settings include, never another record's", async () => {
+        const settingsFor = (calc: string, state: string) => [
+            { role: "geometry", calculation_ref: calc, calculation_type: "opt", settings: [
+                { setting: "grid", state, assumed_value: "defgrid2", reported: [] },
+                { setting: "scf_convergence", state: "not_stated", reported: [] },
+            ] },
+            { role: "frequency", calculation_ref: null, absent_reason: "not_linked", settings: [] },
+            { role: "energy", calculation_ref: null, absent_reason: "not_linked", settings: [] },
+        ]
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const [one, two] = mockRecords()
+            if (includes.includes("calculation_settings")) {
+                return HttpResponse.json(mockResponse([
+                    { ...(one as Record<string, unknown>), calculation_settings: settingsFor("calc_for_one", "assumed_default") },
+                    { ...(two as Record<string, unknown>), calculation_settings: settingsFor("calc_for_two", "not_stated") },
+                ] as unknown as ReturnType<typeof mockRecords>))
+            }
+            return HttpResponse.json(mockResponse())
+        }))
+        page()
+        await screen.findByText("sm_one")
+        const links = await screen.findAllByRole("link", { name: /calc_for_/ })
+        expect(links.map((link) => link.textContent).sort()).toEqual(["calc_for_one", "calc_for_two"])
+        const cards = screen.getAllByRole("article")
+        const first = cards.find((card) => within(card).queryByText("sm_one", { selector: "code" }))!
+        expect(within(first).getByRole("link", { name: "calc_for_one" })).toBeInTheDocument()
+        expect(within(first).queryByRole("link", { name: "calc_for_two" })).toBeNull()
+        expect(within(first).getByText("Assumed default")).toBeInTheDocument()
+        expect(within(first).getAllByText("No calculation linked")).toHaveLength(2)
+    })
+
+    it("says so when the calculation_settings fetch fails, instead of silently showing nothing", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            if (new URL(request.url).searchParams.getAll("include").includes("calculation_settings")) {
+                return HttpResponse.json({ detail: "settings unavailable" }, { status: 500 })
+            }
+            return HttpResponse.json(mockResponse())
+        }))
+        page()
+        await screen.findByText("sm_one")
+        expect((await screen.findAllByText("settings unavailable")).length).toBeGreaterThan(0)
+    })
+
+    it("prints no depositor-typed text from the calculation_settings block", async () => {
+        const block = [
+            { role: "geometry", calculation_ref: "calc_for_one", calculation_type: "opt", settings: [
+                { setting: "grid", state: "requested", requested_value: "typed", requested_from: "typed", reported: [{ key: "k", value: "v" }], assumed_value: "typed" },
+            ] },
+            { role: "frequency", calculation_ref: null, absent_reason: "not_linked", settings: [] },
+            { role: "energy", calculation_ref: null, absent_reason: "not_linked", settings: [] },
+        ]
+        const planted = plantSentinels(block, ["requested_value", "assumed_value", "key", "value"])
+        expectPlanted(planted)
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            if (new URL(request.url).searchParams.getAll("include").includes("calculation_settings")) {
+                const [one] = mockRecords()
+                return HttpResponse.json(mockResponse([{ ...(one as Record<string, unknown>), calculation_settings: planted.value }] as unknown as ReturnType<typeof mockRecords>))
+            }
+            return HttpResponse.json(mockResponse())
+        }))
+        page()
+        await screen.findByText("sm_one")
+        await screen.findByText("Settings behind this value")
+        expectNoDepositorText()
     })
 
     it("states honestly when no statmech records are deposited for this entry, without noise from six separate empty lazy sections", async () => {
@@ -1538,5 +1608,64 @@ describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", (
             expect(within(energyCell).getByText("ambiguous")).toHaveClass("value-pill", "value-pill--muted")
             expect(energyCell).not.toHaveTextContent("not recorded")
         })
+    })
+})
+
+describe("EntryStatmechSection: paging", () => {
+    it("pages the list, and the section requests it makes for the page on screen carry that page's window", async () => {
+        const seen: Array<{ offset: string | null; includes: string[] }> = []
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const params = new URL(request.url).searchParams
+            const offset = Number(params.get("offset") ?? 0)
+            const limit = Number(params.get("limit") ?? 1)
+            seen.push({ offset: params.get("offset"), includes: params.getAll("include") })
+            const all = mockRecords()
+            const records = all.slice(offset, offset + limit)
+            return HttpResponse.json({
+                ...mockResponse(records),
+                pagination: { offset, limit, returned: records.length, total: all.length },
+            })
+        }))
+        page()
+        expect(await screen.findByText(`Showing 1–1 of ${mockRecords().length} statistical-mechanics records.`)).toBeVisible()
+        fireEvent.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText(`Showing 2–2 of ${mockRecords().length} statistical-mechanics records.`)).toBeVisible()
+        // The eager on-demand sections (source calculations, frequencies) are refetched for THIS window, never
+        // read from the first page's response: a record on page 2 must not be matched against page 1's data.
+        await waitFor(() => expect(seen.some((call) => call.offset === "1" && call.includes.includes("frequencies"))).toBe(true))
+    })
+})
+
+describe("EntryStatmechSection -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the typed fields: point group, torsion top and reasons, notes, joined species label", async () => {
+        const withTorsions = baseRecord({
+            statmech: { ...baseRecord().statmech, statmech_ref: "sm_two" },
+            available_sections: { ...baseRecord().available_sections, has_torsions: true },
+            torsions: [{
+                torsion_index: 0, treatment_kind: "hindered_rotor", symmetry_number: 3, dimension: 1,
+                top_description: "x", invalidated_reason: "x", note: "x", source_scan_calculation_ref: "calc_scan", coordinates: [],
+            }],
+        })
+        const planted = plantSentinels(mockResponse([baseRecord(), withTorsions]), ["point_group", "top_description", "invalidated_reason", "note"])
+        expectPlanted(planted)
+        const { value } = planted
+        // A point group that is not a Schoenflies symbol, and a species label that joins in typed parts.
+        for (const record of value.records as { statmech: { point_group: string }; species: { species_entry_label: string | null } }[]) {
+            record.species.species_entry_label = ADVERSARIAL.joinedLabel
+        }
+        ;(value.records[0] as { statmech: { point_group: string } }).statmech.point_group = ADVERSARIAL.pointGroup
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(value)))
+        page()
+        await screen.findByText("sm_one")
+        fireEvent.click(screen.getByText("Torsions"))
+        const section = screen.getByText("Torsions").closest("details") as HTMLDetailsElement
+        await within(section).findByText("Torsions loaded.")
+        // The fixture reached the page: the torsion rows and both records rendered, the typed point group as "not shown".
+        expect(within(section).getAllByRole("row").length).toBeGreaterThan(1)
+        expect(screen.getAllByText("sm_two").length).toBeGreaterThan(0)
+        expect(screen.getAllByText("not shown").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })

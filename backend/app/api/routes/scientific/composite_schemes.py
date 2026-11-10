@@ -14,13 +14,14 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.server_faults import ServerFaultRoute
 from app.schemas.reads.scientific_composite_scheme import (
     ScientificCompositeSchemeDetailResponse,
 )
 from app.services.scientific_read.composite_schemes import get_composite_scheme
 from app.services.scientific_read.internal_ids import apply_internal_ids_visibility
 
-router = APIRouter(prefix="/composite-schemes")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/composite-schemes")
 
 
 @router.get(

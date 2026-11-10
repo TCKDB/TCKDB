@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { MemoryRouter } from "react-router-dom"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { EntryThermoSection } from "./EntryThermoSection"
+import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 import { PageSectionsProvider } from "./PageSections"
 import { TableOfContents } from "./TableOfContents"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
@@ -175,14 +176,15 @@ function mockRecords() {
     ]
 }
 
-function mockResponse(overrides: { records?: unknown[]; pagination?: Record<string, number> } = {}) {
+function mockResponse(overrides: { records?: unknown[]; pagination?: Record<string, number>; request?: Record<string, unknown> } = {}) {
     const records = overrides.records ?? mockRecords()
     return {
         species_entry_ref: entryRef,
         review_summary: { approved: 1, under_review: 0, not_reviewed: 2, deprecated: 0, rejected: 0, total: 3 },
         records,
         pagination: overrides.pagination
-            ?? { offset: 0, limit: 50, returned: records.length, total: records.length, post_collapse_total: records.length },
+            ?? { offset: 0, limit: 50, returned: records.length, total: records.length },
+        ...(overrides.request ? { request: overrides.request } : {}),
     }
 }
 
@@ -555,8 +557,9 @@ describe("EntryThermoSection", () => {
         await screen.findByText("thm_beta")
         const betaCard = screen.getByText("thm_beta").closest("article") as HTMLElement
         expect(within(betaCard).getByText("Group-additivity estimation")).toBeVisible()
-        expect(within(betaCard).getByText("Benson v2 (2.0)")).toBeVisible()
-        expect(within(betaCard).getByText("C/H3")).toBeVisible()
+        expect(within(betaCard).getByText("gas_1")).toBeVisible()
+        // The scheme name/version/commit and the group label are depositor free text: not printed.
+        for (const typed of ["Benson v2", "2.0", "abc123", "C/H3"]) expect(betaCard.innerHTML).not.toContain(typed)
 
         // thm_alpha has group_additivity: null — no section at all, not a
         // heading over an explicit "not recorded" line.
@@ -670,17 +673,68 @@ describe("EntryThermoSection", () => {
         expect(await screen.findByRole("heading", { name: "Thermochemistry not found" })).toBeVisible()
     })
 
-    it("shows the '(showing M)' honesty note only when returned is short of total, with the real deposit total as the headline count", async () => {
+    it("says which records are on screen when the list is longer than the page, with the real deposit total as the headline count", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
             records: mockRecords().slice(0, 2),
-            pagination: { offset: 0, limit: 2, returned: 2, total: 5, post_collapse_total: 5 },
+            pagination: { offset: 0, limit: 2, returned: 2, total: 5 },
         }))))
         page()
         // "5 records" is the deposit total (`pagination.total`), never
-        // `pagination.returned` (2) printed in its place — that swap would
-        // silently delete this note's entire reason for existing.
-        expect(await screen.findByText("5 records (showing 2) · review: 1 approved · 2 not reviewed")).toBeVisible()
+        // `pagination.returned` (2) printed in its place, and the pager says
+        // plainly which slice of the 5 is on screen.
+        expect(await screen.findByText("5 records · review: 1 approved · 2 not reviewed")).toBeVisible()
+        expect(screen.getByText("Showing 1\u20132 of 5 thermochemistry records.")).toBeVisible()
         expect(screen.queryByText(/^2 records/)).not.toBeInTheDocument()
+    })
+
+    it("pages the thermo list: Next asks the archive for the following window and shows those records", async () => {
+        const seen: Array<{ offset: string | null; limit: string | null }> = []
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const url = new URL(request.url)
+            const offset = url.searchParams.get("offset")
+            const limit = url.searchParams.get("limit")
+            seen.push({ offset, limit })
+            const all = mockRecords()
+            const start = offset ? Number(offset) : 0
+            const size = limit ? Number(limit) : 2
+            return HttpResponse.json(mockResponse({
+                records: all.slice(start, start + size),
+                pagination: { offset: start, limit: size, returned: all.slice(start, start + size).length, total: all.length },
+            }))
+        }))
+        page()
+        await screen.findByText("thm_alpha")
+        const total = mockRecords().length
+        expect(total).toBeGreaterThan(2)
+        // The first request names no window (the archive's default page); the pager reads the window it was given.
+        fireEvent.click(await screen.findByRole("button", { name: "Next" }))
+        expect(await screen.findByText(`Showing 3\u2013${total} of ${total} thermochemistry records.`)).toBeVisible()
+        expect(seen.at(-1)).toEqual({ offset: "2", limit: "2" })
+        expect(screen.queryByText("thm_alpha")).not.toBeInTheDocument()
+        // Last page: Next is disabled, Previous goes back to the start.
+        expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+        fireEvent.click(screen.getByRole("button", { name: "Previous" }))
+        expect(await screen.findByText("thm_alpha")).toBeVisible()
+        expect(seen.at(-1)).toEqual({ offset: "0", limit: "2" })
+    })
+
+    it("states what the server said about the list: its display order and the records it hid by default", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
+            request: {
+                sort: {
+                    kind: "display_order",
+                    keys: [
+                        { key: "review_rank", direction: "asc", meaning: "review status: approved first; others after" },
+                        { key: "created_at", direction: "desc", meaning: "deposition time, newest first" },
+                    ],
+                },
+                hidden_by_default: { counts: { rejected: 2, deprecated: 1 }, include_with: {}, counted: "records" },
+            },
+        }))))
+        page()
+        expect(await screen.findByText("Not listed by default: 2 rejected and 1 deprecated thermochemistry records.")).toBeVisible()
+        expect(screen.getByText(/^Display order: approved first, then newest deposited first\./)).toBeVisible()
+        expect(screen.getByText(/not a ranking or a recommendation/)).toBeVisible()
     })
 
     // The owner's report, thermo half: "he opened the Thermochemistry tab
@@ -772,6 +826,57 @@ describe("EntryThermoSection", () => {
 // same card -- a ref is a ref regardless of whether this page happens to
 // link it.
 // ---------------------------------------------------------------------------
+describe("EntryThermoSection: the reproducibility assessment states what it was made under", () => {
+    function renderWithAssessments(reproducibility: Record<string, unknown> | undefined) {
+        const [alpha] = mockRecords()
+        const record = reproducibility === undefined ? alpha : { ...alpha, assessments: { reproducibility } }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [record] }))))
+        page()
+    }
+    const rubric = { rubric: "tckdb_reproducibility", current_rubric: "tckdb_reproducibility" }
+
+    it("current: the grade and a current made-under line", async () => {
+        renderWithAssessments({
+            state: "current", grade: "rerunnable",
+            made_under: { ...rubric, assessed_version: 1, current_version: 1, state: "current" },
+        })
+        await screen.findByRole("heading", { name: "Reproducibility assessment: rerunnable" })
+        expect(document.querySelector('[data-component="made-under"]')).toHaveAttribute("data-state", "current")
+    })
+
+    it("stale under an older rubric version: a Stale badge and the current version", async () => {
+        renderWithAssessments({
+            state: "stale", grade: "described",
+            made_under: { ...rubric, assessed_version: 1, current_version: 2, state: "stale", stale_reason: "rubric_version" },
+        })
+        await screen.findByRole("heading", { name: "Reproducibility assessment: described" })
+        expect(screen.getByText("Stale")).toBeVisible()
+        expect(screen.getByText(/The current version is 2\. It has not been re-assessed under the current version\./)).toBeVisible()
+    })
+
+    it("version 0: stale, worded as stamped before the versioning reset", async () => {
+        renderWithAssessments({
+            state: "stale", grade: "described",
+            made_under: { ...rubric, assessed_version: 0, current_version: 1, state: "stale", stale_reason: "rubric_version" },
+        })
+        await screen.findByRole("heading", { name: "Reproducibility assessment: described" })
+        expect(screen.getByText(/stamped before the 2026-10 versioning reset/)).toBeVisible()
+    })
+
+    it("unassessed: Not assessed, with no grade and no Stale badge", async () => {
+        renderWithAssessments({ state: "unassessed", grade: null, made_under: { state: "unassessed" } })
+        await screen.findByRole("heading", { name: "Reproducibility assessment" })
+        expect(screen.getByText("Not assessed")).toBeVisible()
+        expect(screen.queryByText("Stale")).toBeNull()
+    })
+
+    it("renders no assessment section when the API served none", async () => {
+        renderWithAssessments(undefined)
+        await screen.findByText("thm_alpha")
+        expect(screen.queryByRole("heading", { name: /Reproducibility assessment/ })).toBeNull()
+    })
+})
+
 describe("EntryThermoSection: provenance refs render as .data, like every other ref on the card", () => {
     it("Level of theory ref and Statmech ref are wrapped in .data when present", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
@@ -1577,5 +1682,42 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
             expect(within(energyCell).getByText("ambiguous")).toHaveClass("value-pill", "value-pill--muted")
             expect(energyCell).not.toHaveTextContent("not recorded")
         })
+    })
+
+    it("says 'every' only when the whole list is on screen: a page of a longer list says it is the records on this page, in the intro and the chart", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
+            records: mockRecords().slice(0, 2),
+            pagination: { offset: 0, limit: 2, returned: 2, total: 5 },
+        }))))
+        page()
+        await screen.findByText("thm_alpha")
+        expect(screen.getByText(/The 2 thermo records on this page \(of 5 deposited for this entry\), each shown independently/)).toBeVisible()
+        expect(screen.getByText(/The thermo records on this page's own evaluated points/)).toBeVisible()
+        expect(screen.queryByText(/Every thermo record deposited for this entry/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/Every deposited thermo record's own/)).not.toBeInTheDocument()
+    })
+
+    it("a list that fits one page keeps the 'every' wording", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_alpha")
+        expect(screen.getByText(/Every thermo record deposited for this entry, each shown independently/)).toBeVisible()
+        expect(screen.getByText(/Every deposited thermo record's own evaluated points/)).toBeVisible()
+    })
+})
+
+describe("EntryThermoSection -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the typed fields: group-additivity scheme and group labels, notes, conformer labels", async () => {
+        const planted = plantSentinels(mockResponse(), ["scheme_name", "scheme_version", "code_commit", "group_label", "note"])
+        expectPlanted(planted)
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(planted.value)))
+        const typedGroups = plantSentinels(conformerGroups, ["label"])
+        expectPlanted(typedGroups)
+        page(typedGroups.value[0], typedGroups.value)
+        // The fixture reached the page: the record refs and the group-additivity section rendered.
+        await screen.findByText("thm_beta")
+        expect(screen.getByText("Group-additivity estimation")).toBeVisible()
+
+        expectNoDepositorText()
     })
 })

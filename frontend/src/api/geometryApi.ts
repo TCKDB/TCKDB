@@ -1,3 +1,4 @@
+import { entryFacetFields } from "./scientificSchemas"
 import { z } from "zod"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
@@ -95,6 +96,7 @@ const geometrySpeciesIdentitySchema = z.object({
     species_ref: z.string(),
     species_entry_ref: z.string(),
     species_entry_label: z.string().nullable().optional(),
+    ...entryFacetFields,
     formula: z.string().nullable().optional(),
     canonical_smiles: z.string(),
     inchi_key: z.string(),

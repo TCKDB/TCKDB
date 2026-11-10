@@ -78,11 +78,13 @@ Three rules were considered. The measurement chose between them:
    future one is a real finding.
 2. **Value correlation** -- compare body integers against primary keys
    created in the same transaction. Precise in principle. The
-   measurement argues against it: the only id-shaped values in any body
-   today are ``detail[].input.existing_calculation_id``, which is
-   Pydantic echoing back *the caller's own* programmatic-chaining field.
-   A correlator would flag it, and it is not a disclosure -- the client
-   sent that number.
+   measurement argues against it: when it was taken, the only id-shaped
+   values in any body were ``detail[].input.existing_calculation_id``,
+   Pydantic echoing back *the caller's own* programmatic-chaining field,
+   which a correlator would have flagged though it is no disclosure. The
+   422 handler has since dropped ``input`` from request-validation errors,
+   so that echo no longer appears; the argument against a correlator
+   (it cannot tell a caller's own number from a stored key) stands.
 3. **Allowlist the legitimate numeric keys, refuse the rest.** Inverting
    the burden is the shape that has worked repeatedly in this codebase,
    and it was the front-runner. It is not tractable here, and not merely

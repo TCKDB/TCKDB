@@ -256,7 +256,7 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
         // unremarkable default for nearly every species in the archive,
         // so restating "ground state" next to it on almost every block
         // was noise review #492 measured, not information. Any REAL
-        // extra (an excited-state label, a term symbol) still survives
+        // extra (a term symbol in a recognised shape) still survives
         // `includeState: false` -- see `facetChips`'s own docstring.
         //
         // `facetChips` always leads with a kind chip ("minimum"/"van der
@@ -274,6 +274,8 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
                 electronic_state_label: subject.chemistry.electronic_state_label,
                 term_symbol: subject.chemistry.term_symbol,
                 stereo_label: subject.chemistry.stereo_label,
+                stereo_descriptor: subject.chemistry.stereo_descriptor,
+                stereo_resolution: subject.chemistry.stereo_resolution,
                 isotope_key: subject.chemistry.isotope_key,
             },
             { includeState: false },
@@ -344,11 +346,9 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
                 {!subject.chemistry.formula &&
                     (smilesRecordedButUnparsed ? (
                         <p className="review-subject-caveat admin-absent">
-                            no formula could be derived from this candidate's
-                            own SMILES:{" "}
-                            <code className="data">
-                                {subject.chemistry.unmapped_smiles}
-                            </code>
+                            {/* The SMILES itself is not printed: it is depositor-typed and
+                                unparsed, and the queue is readable by any signed-in account. */}
+                            no formula could be derived from this candidate's own SMILES
                         </p>
                     ) : (
                         <p className="review-subject-caveat admin-absent">
@@ -618,20 +618,12 @@ export default function ReviewQueuePage() {
     /**
      * The transitions this curator can actually perform on this row.
      *
-     * The service refuses to let an actor approve a record they
-     * deposited (`record_review.py`'s self-approval guard), and the page
-     * holds both facts -- `created_by` on the row and the signed-in
-     * user's id. Offering "approved" there is a button that can only
-     * fail, which is the very thing mirroring the transition table was
-     * for.
+     * "approved" is dropped when the server says the reader may not approve
+     * the row (`actor_may_approve === false`); null leaves it offered.
      */
     function offeredTransitions(row: RecordReview): readonly RecordReviewStatus[] {
         const all = allowedTransitions(row.status)
-        const ownDeposit =
-            state.status === "signed-in" &&
-            row.created_by !== null &&
-            row.created_by === state.user.id
-        return ownDeposit ? all.filter((s) => s !== "approved") : all
+        return row.actor_may_approve === false ? all.filter((s) => s !== "approved") : all
     }
 
     /** Open the transition form for one row, or shut it. Always starts blank. */

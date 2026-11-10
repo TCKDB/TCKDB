@@ -100,6 +100,19 @@ def test_chebyshev_payload(built):
     assert c["coefficients"][0] == pytest.approx([10.0, 0.2, 0.03])
 
 
+def test_no_payload_carries_a_bath_gas(built):
+    """A CHEMKIN file does not say which bath gas a PLOG or Chebyshev fit was obtained for.
+
+    The importer leaves it empty on every record: a collider is not inferred from the third-body
+    efficiencies, the mechanism's name or the pressure, so no payload has the field at all.
+    """
+    assert built.kinetics
+    assert {p["model_kind"] for p in built.kinetics} >= {"plog", "chebyshev"}
+    for payload in built.kinetics:
+        assert "bath_gas" not in payload
+        assert "pressure_context" not in payload
+
+
 def test_simple_third_body_payload(built):
     p = _kin_by_reactants(built, ["[O]", "[O]"])
     assert p["model_kind"] == "modified_arrhenius"
@@ -196,3 +209,56 @@ def test_units_kcal_molecules_payload():
     assert p["a_units"] == "cm3_molecule_s"
     assert p["reported_ea"] == pytest.approx(12.0)
     assert p["reported_ea_units"] == "kcal_mol"
+
+
+# --- thermo target and phase come from the card's phase letter ----------------
+
+
+def _thermo_payloads_with_phase_letter(letter):
+    """Import mini.inp with every thermo card's column-45 phase letter replaced by ``letter``."""
+    lines = []
+    for line in read("therm.dat").splitlines():
+        if len(line) > 79 and line[79] == "1" and line[44] == "G":
+            line = line[:44] + letter + line[45:]
+        lines.append(line)
+    mech = parse_mechanism(read("mini.inp"), thermo_text="\n".join(lines) + "\n")
+    resolver = IdentityResolver(rmg_dict=parse_species_dictionary(read("species_dictionary.txt")))
+    config = ImportConfig(scientific_origin="experimental", mechanism_name="MiniMech", mechanism_version="1.0")
+    return mech, build_all_payloads(mech, resolver, config).thermo
+
+
+def test_gas_phase_letter_declares_gas_and_the_ensemble_target_as_chemkin_format():
+    _, thermo = _thermo_payloads_with_phase_letter("G")
+    assert thermo
+    for p in thermo:
+        assert p["phase"] == "gas"
+        assert p["thermodynamic_target"] == {"kind": "equilibrium_ensemble", "declared_by": "chemkin_format"}
+
+
+def test_lowercase_gas_letter_is_gas_too():
+    _, thermo = _thermo_payloads_with_phase_letter("g")
+    assert all(p["phase"] == "gas" and "thermodynamic_target" in p for p in thermo)
+
+
+@pytest.mark.parametrize("letter, phase", [("L", "liquid"), ("S", "solid")])
+def test_liquid_and_solid_declare_the_phase_and_no_target(letter, phase):
+    _, thermo = _thermo_payloads_with_phase_letter(letter)
+    assert thermo
+    for p in thermo:
+        assert p["phase"] == phase
+        assert "thermodynamic_target" not in p
+
+
+def test_blank_phase_letter_stays_undeclared():
+    mech, thermo = _thermo_payloads_with_phase_letter(" ")
+    assert all(e.phase == "" for e in mech.thermo.values())
+    for p in thermo:
+        assert p["phase"] is None
+        assert "thermodynamic_target" not in p
+
+
+def test_unknown_phase_letter_stays_undeclared():
+    _, thermo = _thermo_payloads_with_phase_letter("X")
+    for p in thermo:
+        assert p["phase"] is None
+        assert "thermodynamic_target" not in p

@@ -16,6 +16,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 // rules for a test scoped to this one page.
 import "../design-system.css"
 import ReactionEntryPage from "./ReactionEntryPage"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 
 const ENTRY_REF = "rxe_test1"
 const server = setupServer()
@@ -280,7 +281,8 @@ describe("ReactionEntryPage -- three-state network wording", () => {
         }))
         const { container } = page()
         expect(await screen.findByText("net_test1")).toBeVisible()
-        expect(screen.getByText("hydrazine")).toBeVisible()
+        expect(screen.getAllByText("Pressure-dependent network").length).toBeGreaterThan(0)
+        expect(document.body.innerHTML).not.toContain("hydrazine")
         expect(screen.getByText("21")).toBeVisible()
         // `net_` refs are never cited in this page's References disclosure
         // (plan §2's non-goal: no network page yet, so a network is a plain
@@ -333,6 +335,18 @@ describe("ReactionEntryPage -- network-only kinetics sentence", () => {
         page()
         expect(await screen.findByText(/No rate coefficient deposited on this entry/)).toBeVisible()
         expect(screen.getByText("net_only1", { selector: "a" })).toBeVisible()
+    })
+
+    it("kinetics: [] and several networks -- names every network, and says none is preferred, instead of naming only the first", async () => {
+        const network = (ref: string) => ({
+            network_ref: ref, name: "hydrazine", solve_temperature_min_k: 300, solve_temperature_max_k: 2000,
+            solve_pressure_min_bar: 0.01, solve_pressure_max_bar: 100, channel_count: 21, review: { status: "not_reviewed" },
+        })
+        handleFull(mockFull({ kinetics: [], networks: [network("net_one"), network("net_two")] }))
+        page()
+        expect(await screen.findByText(/served by 2 networks, none preferred over another/)).toBeVisible()
+        expect(screen.getByText("net_one", { selector: "a" })).toBeVisible()
+        expect(screen.getByText("net_two", { selector: "a" })).toBeVisible()
     })
 
     it("kinetics: [] and no network -- the plain archive-absence sentence, not the network-only one", async () => {
@@ -811,6 +825,83 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
         expect(link?.textContent).toBe("O (H2O)")
     })
 
+    it("tells a Z-to-E isomerisation apart from the structured facets, and never from the joined species_entry_label", async () => {
+        const base = mockFull()
+        const facets = { species_entry_kind: "minimum", electronic_state_kind: "ground", isotope_key: null, stereo_resolution: "resolved" }
+        handleFull({
+            ...base,
+            reaction_entry: { ...base.reaction_entry, equation: "CC=CC -> CC=CC", reversible: false },
+            species: {
+                reactants: [{
+                    species_entry_ref: "spe_z", species_entry_label: "Z", ...facets, stereo_label: "Z", stereo_descriptor: "Z",
+                    smiles: "CC=CC", formula: "C4H8", stoichiometry: 1, participant_index: 0, review: { status: "not_reviewed" },
+                }],
+                products: [{
+                    species_entry_ref: "spe_e", species_entry_label: "E", ...facets, stereo_label: "E", stereo_descriptor: "E",
+                    smiles: "CC=CC", formula: "C4H8", stoichiometry: 1, participant_index: 0, review: { status: "not_reviewed" },
+                }],
+            },
+        })
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const fact = Array.from(container.querySelectorAll(".record-identity-header dt")).find((el) => el.textContent === "Equation (as deposited)")
+        expect(fact?.nextElementSibling?.textContent).toBe("CC=CC [Z isomer] -> CC=CC [E isomer]")
+        const reactantCell = container.querySelector('table[aria-label="Reactant participants"] td[data-label="Species"]')
+        expect(reactantCell?.textContent).toContain("Z isomer")
+        const productCell = container.querySelector('table[aria-label="Product participants"] td[data-label="Species"]')
+        expect(productCell?.textContent).toContain("E isomer")
+    })
+
+    it("builds no stereo wording from a joined label whose R was typed as an electronic state label", async () => {
+        const base = mockFull()
+        handleFull({
+            ...base,
+            species: {
+                reactants: [{
+                    species_entry_ref: "spe_typed", species_entry_label: "R", species_entry_kind: "minimum", electronic_state_kind: "ground",
+                    stereo_label: null, stereo_descriptor: null, smiles: "[CH3]", formula: "CH3", stoichiometry: 1, participant_index: 0,
+                    review: { status: "not_reviewed" },
+                }],
+                products: base.species.products,
+            },
+        })
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        expect(container.textContent).not.toContain("enantiomer")
+    })
+
+    function factText(container: HTMLElement): string | null | undefined {
+        const fact = Array.from(container.querySelectorAll(".record-identity-header dt")).find((el) => el.textContent === "Equation (as deposited)")
+        return fact?.nextElementSibling?.textContent
+    }
+
+    // `/full` serves each distinct entry once per side with its own occurrence count (`H + H -> H2` is ONE H row,
+    // stoichiometry 2). Both the hero equation and the as-deposited line read the coefficient from that row.
+    it("H + H -> H2 shows 2 H in both the hero equation and the as-deposited line", async () => {
+        const base = mockFull()
+        handleFull({
+            ...base,
+            reaction_entry: { ...base.reaction_entry, equation: "[H] + [H] -> [H][H]", reversible: false },
+            species: {
+                reactants: [{ species_entry_ref: "spe_h", smiles: "[H]", formula: "H", stoichiometry: 2, participant_index: 1, review: { status: "not_reviewed" } }],
+                products: [{ species_entry_ref: "spe_h2", smiles: "[H][H]", formula: "H2", stoichiometry: 1, participant_index: 1, review: { status: "not_reviewed" } }],
+            },
+        })
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        expect(factText(container)).toBe("2 [H] -> [H][H]")
+        const hero = container.querySelector("h1")?.textContent ?? ""
+        expect(hero).toMatch(/^2 /)
+        expect(hero).not.toMatch(/4/)
+    })
+
+    it("a coefficient-one reaction shows no coefficients", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        expect(factText(container)).toBe("O + [CH3] <=> C + [OH]")
+    })
+
     it("every participant ref still appears exactly once outside References -- moved column, not a new/lost mention", async () => {
         handleFull(mockFull())
         const { container } = page()
@@ -948,5 +1039,136 @@ describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-onl
         const networkLink = networkDt?.nextElementSibling?.querySelector("a")
         expect(networkLink).not.toBeNull()
         expect(networkLink).toHaveAttribute("href", "#network-heading")
+    })
+})
+
+describe("ReactionEntryPage -- the References disclosure names every kinetics record's provenance", () => {
+    /** The default kinetics record, with its own kinetics ref and its own level / software / workflow-tool refs. */
+    function kineticsWithRefs(n: number) {
+        const base = (mockFull().kinetics as Array<{ provenance: Record<string, unknown> } & Record<string, unknown>>)[0]
+        return {
+            ...base,
+            kinetics_ref: `kin_multi${n}`,
+            provenance: {
+                ...base.provenance,
+                primary_level_of_theory: { method: "m", basis: "b", level_of_theory_ref: `lot_multi${n}` },
+                primary_software: { software: "Gaussian", version: "16", software_release_ref: `swr_primary${n}` },
+                software_release: { software: "Arkane", version: null, software_release_ref: `swr_fit${n}` },
+                workflow_tool_release: { workflow_tool: "ARC", version: "1.1.0", workflow_tool_release_ref: `wtr_multi${n}` },
+            },
+        }
+    }
+
+    it("lists the level, software and workflow-tool refs of every record, not only the first", async () => {
+        handleFull(mockFull({ kinetics: [kineticsWithRefs(1), kineticsWithRefs(2)] }))
+        const { container } = page()
+        await screen.findByText("kin_multi1")
+
+        const refs = container.querySelector(".refs-disclosure")?.textContent ?? ""
+        for (const n of [1, 2]) {
+            for (const ref of [`lot_multi${n}`, `swr_primary${n}`, `swr_fit${n}`, `wtr_multi${n}`]) {
+                expect(refs, `${ref} (record ${n}) should be in the References disclosure`).toContain(ref)
+            }
+        }
+    })
+
+    it("names a ref shared by two records once", async () => {
+        const first = kineticsWithRefs(1)
+        const second = { ...kineticsWithRefs(2), provenance: { ...kineticsWithRefs(2).provenance, primary_level_of_theory: first.provenance.primary_level_of_theory } }
+        handleFull(mockFull({ kinetics: [first, second] }))
+        const { container } = page()
+        await screen.findByText("kin_multi1")
+
+        const refs = container.querySelector(".refs-disclosure")?.textContent ?? ""
+        expect(refs.split("lot_multi1").length - 1).toBe(1)
+    })
+})
+
+describe("ReactionEntryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the network name, the participants' joined labels, or atom-map and kinetics notes", async () => {
+        const base = mockFull()
+        const planted = plantSentinels(mockFull({
+            species: {
+                reactants: base.species.reactants.map((p) => ({ ...p, species_entry_label: "x" })) as unknown[],
+                products: base.species.products.map((p) => ({ ...p, species_entry_label: "x" })) as unknown[],
+            },
+            networks: [{
+                network_ref: "net_test1", name: "x", solve_temperature_min_k: 300, solve_temperature_max_k: 2000,
+                solve_pressure_min_bar: 0.01, solve_pressure_max_bar: 100, channel_count: 21, review: { status: "not_reviewed" },
+            }],
+            kinetics: [{ ...base.kinetics[0], note: "x" }],
+        }), ["name", "species_entry_label", "note"])
+        expectPlanted(planted)
+        const { value } = planted
+        setAt(value, "species.reactants.0.species_entry_label", `${ADVERSARIAL.stereoMark} ${ADVERSARIAL.smilesWord}`)
+        handleFull(value)
+        page()
+        // The fixture reached the page: the kinetics record, a participant ref and the network row rendered.
+        await screen.findByText("kin_test1")
+        expect(await screen.findByText("net_test1")).toBeVisible()
+        expect(screen.getAllByText("spe_water").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
+    })
+})
+
+describe("ReactionEntryPage -- kinetics literature (depositor text guard)", () => {
+    async function mount(literature: Record<string, unknown>) {
+        const payload = mockFull()
+        ;(payload.kinetics as Array<{ provenance: Record<string, unknown> }>)[0].provenance.literature = literature
+        handleFull(payload)
+        page()
+        await screen.findByText("kin_test1")
+        // The fixture reached the page: the Literature row rendered.
+        return screen.getByText("Literature", { selector: "dt" }).nextElementSibling?.textContent
+    }
+
+    it("withholds a typed title and a spam DOI; prints the public ref and says the title is not verified", async () => {
+        const row = await mount({
+            literature_ref: "lit_kin1", title: "DEPOSITOR_SENTINEL_literature_title", title_source: "depositor_supplied",
+            doi: "10.1/ DEPOSITOR_SENTINEL_literature_doi spam.example",
+        })
+        expect(row).toBe("lit_kin1 · Title not verified")
+        expectNoDepositorText()
+        expect(document.body.innerHTML).not.toContain("spam.example")
+    })
+
+    it("shows a registry-resolved title (the positive control)", async () => {
+        const row = await mount({ literature_ref: "lit_kin1", title: "RESOLVED_TITLE", title_source: "resolved_metadata" })
+        expect(row).toBe("RESOLVED_TITLE")
+    })
+})
+
+describe("ReactionEntryPage -- electronic-state labels and term symbols", () => {
+    const withState = (facets: Record<string, unknown>) => {
+        const base = mockFull()
+        const [first, ...rest] = base.species.reactants
+        return mockFull({
+            species: {
+                reactants: [{ ...first, species_entry_kind: "minimum", electronic_state_kind: "excited", ...facets }, ...rest],
+                products: base.species.products,
+            },
+        })
+    }
+
+    it("shows a grammar-valid state label and term symbol beside the participant (T1, X ²Π)", async () => {
+        handleFull(withState({ electronic_state_label: "T1", term_symbol: "X ²Π" }))
+        page()
+        await screen.findByText("kin_test1")
+        const row = screen.getAllByText("spe_water").map((node) => node.closest("tr")).find(Boolean) as HTMLElement
+        expect(row).toHaveTextContent("excited state, state T1, X ²Π")
+        // The word `state` keeps a bare state letter from reading as a stereo descriptor.
+        expect(document.body.textContent).not.toMatch(/\bT1 (isomer|enantiomer)/)
+    })
+
+    it("hides a label or term symbol outside the grammar, including a typed stereo letter (the hide-invalid path)", async () => {
+        handleFull(withState({ electronic_state_label: "R", term_symbol: "DEPOSITOR_SENTINEL_term" }))
+        page()
+        await screen.findByText("kin_test1")
+        const row = screen.getAllByText("spe_water").map((node) => node.closest("tr")).find(Boolean) as HTMLElement
+        expect(row).toHaveTextContent("excited state")
+        expect(row.textContent).not.toMatch(/state R|enantiomer/)
+        expectNoDepositorText()
     })
 })

@@ -42,12 +42,10 @@ from app.services.scientific_read.chemkin_serialize import (
     validate_chemkin_mechanism,
 )
 from app.services.scientific_read.export import (
-    CollapseMode,
     ExportRecordSet,
     ReactionExportRecord,
     SeedSelection,
     SelectedKinetics,
-    SelectionPolicy,
     SpeciesExportRecord,
 )
 from tests._ci_dependency import require_module
@@ -76,8 +74,11 @@ def _nasa():
 
 
 def _species(sid: int, smiles: str, ref: str) -> SpeciesExportRecord:
-    sp = SimpleNamespace(id=sid, smiles=smiles, public_ref=ref)
-    se = SimpleNamespace(id=sid, public_ref=f"{ref}-e")
+    sp = SimpleNamespace(id=sid, smiles=smiles, public_ref=ref, multiplicity=1)
+    se = SimpleNamespace(
+        id=sid, public_ref=f"{ref}-e", stereo_descriptor=None, stereo_resolution=None, stereo_smiles=None,
+        isotope_key=None,
+    )
     return SpeciesExportRecord(
         species_entry=se,
         species=sp,
@@ -139,8 +140,6 @@ def _record_set(species_records, reaction_records) -> ExportRecordSet:
     return ExportRecordSet(
         seed=SeedSelection(species_refs=[], reaction_refs=[]),
         min_review_status=None,
-        collapse=CollapseMode.first,
-        selection_policy=SelectionPolicy.latest,
         generated_at=datetime.now(timezone.utc),
         species_records=list(species_records),
         reaction_records=list(reaction_records),
@@ -294,6 +293,35 @@ def test_multi_arrhenius_collision_with_separate_record_marks_all():
     eq = "H1 + O2 <=> H1O2"
     assert len([ln for ln in body if ln.startswith(eq)]) == 3
     assert len([ln for ln in body if ln.strip() == "DUPLICATE"]) == 3
+    validate_chemkin_mechanism(export.files)
+
+
+def _plain(a):
+    return _kinetics(
+        model_kind=KineticsModelKind.modified_arrhenius,
+        a=a,
+        a_units=ArrheniusAUnits.cm3_mol_s,
+        n=0.0,
+        ea_kj_mol=0.0,
+    )
+
+
+@pytest.mark.parametrize("reversible", [True, False])
+def test_a_reaction_stored_in_both_directions_is_marked_and_loads(reversible):
+    """Cantera 3.2 rejects a reversed repeat of one rate type unless both are
+    marked (when at least one is reversible). Two stored entries in opposite
+    directions share an unordered key, so both get DUPLICATE and the file loads
+    strictly. (Marking an irreversible reversed pair too is accepted by Cantera
+    because both are marked.)"""
+    H = _species(1, "[H]", "H")
+    O2 = _species(2, "[O][O]", "O2")
+    HO2 = _species(3, "[O]O", "HO2")
+    fwd = _reaction(["H-e", "O2-e"], ["HO2-e"], _plain(1.0e12), ref="R1", reversible=reversible)
+    rev = _reaction(["HO2-e"], ["H-e", "O2-e"], _plain(5.0e11), ref="R2", reversible=reversible)
+    export, _ = _serialize([H, O2, HO2], [fwd, rev])
+
+    body = _reaction_lines(export.files["chem.inp"])
+    assert len([ln for ln in body if ln.strip() == "DUPLICATE"]) == 2
     validate_chemkin_mechanism(export.files)
 
 

@@ -74,8 +74,8 @@ _ACCEPTED_FIELDS: frozenset[str] = frozenset(
         "species_ref",
         "species_entry_ref",
         # Thermo-specific filters
-        "temperature_min",
-        "temperature_max",
+        "coverage_temperature_min_k",
+        "coverage_temperature_max_k",
         "model_kind",
         "level_of_theory_ref",
         "software",
@@ -85,9 +85,9 @@ _ACCEPTED_FIELDS: frozenset[str] = frozenset(
         "include_deprecated",
         # Pagination / framing
         "offset",
+        "cursor",
         "limit",
         "include",
-        "collapse",
     }
 )
 
@@ -123,8 +123,8 @@ INPUT_SCHEMA: dict[str, Any] = {
             "type": "string",
             "description": "Public species_entry ref. Must start with 'spe_'.",
         },
-        "temperature_min": {"type": "number", "exclusiveMinimum": 0},
-        "temperature_max": {"type": "number", "exclusiveMinimum": 0},
+        "coverage_temperature_min_k": {"type": "number", "exclusiveMinimum": 0},
+        "coverage_temperature_max_k": {"type": "number", "exclusiveMinimum": 0},
         "model_kind": {
             "type": "string",
             "enum": sorted(LEGAL_MODEL_KINDS),
@@ -138,6 +138,7 @@ INPUT_SCHEMA: dict[str, Any] = {
         "include_rejected": {"type": "boolean"},
         "include_deprecated": {"type": "boolean"},
         "offset": {"type": "integer", "minimum": 0},
+        "cursor": {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Stable paging: pass the previous response's next_cursor to get the next page (null on the last page). Do not combine with a non-zero offset. offset is random access and can skip or repeat records if the database changes between pages."},
         "limit": {
             "type": "integer",
             "minimum": 1,
@@ -156,11 +157,6 @@ INPUT_SCHEMA: dict[str, Any] = {
                 "Subset of legal thermo-search include tokens. "
                 "'internal_ids' is not exposed. Defaults to ['provenance']."
             ),
-        },
-        "collapse": {
-            "type": "string",
-            "enum": ["all", "first"],
-            "default": "all",
         },
     },
     "additionalProperties": False,
@@ -227,25 +223,26 @@ def run(
             f"model_kind must be one of {sorted(LEGAL_MODEL_KINDS)!r}; got {model_kind!r}"
         )
 
-    tmin = _validate_temperature(args.get("temperature_min"), "temperature_min")
-    tmax = _validate_temperature(args.get("temperature_max"), "temperature_max")
+    tmin = _validate_temperature(args.get("coverage_temperature_min_k"), "coverage_temperature_min_k")
+    tmax = _validate_temperature(args.get("coverage_temperature_max_k"), "coverage_temperature_max_k")
     if tmin is not None and tmax is not None and tmin > tmax:
         raise invalid_input(
-            f"temperature_min ({tmin}) must be <= temperature_max ({tmax})"
+            f"coverage_temperature_min_k ({tmin}) must be <= coverage_temperature_max_k ({tmax})"
         )
 
     offset = args.get("offset", 0)
     if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
         raise invalid_input(f"offset must be a non-negative integer; got {offset!r}")
+    cursor = args.get("cursor")
+    if cursor is not None and (not isinstance(cursor, str) or not cursor):
+        raise invalid_input("cursor must be the next_cursor string of the previous page")
+    if cursor is not None and offset:
+        raise invalid_input("cursor and a non-zero offset cannot be combined; use the cursor alone")
 
     try:
         limit = config.cap_limit(args.get("limit"))
     except ValueError as exc:
         raise invalid_input(str(exc)) from exc
-
-    collapse = args.get("collapse", "all")
-    if collapse not in ("all", "first"):
-        raise invalid_input(f"collapse must be 'all' or 'first'; got {collapse!r}")
 
     if "include" in args:
         include_raw = args.get("include")
@@ -282,8 +279,8 @@ def run(
         "species_entry_kind": args.get("species_entry_kind"),
         "species_ref": species_ref,
         "species_entry_ref": species_entry_ref,
-        "temperature_min": tmin,
-        "temperature_max": tmax,
+        "coverage_temperature_min_k": tmin,
+        "coverage_temperature_max_k": tmax,
         "model_kind": model_kind,
         "level_of_theory_ref": level_of_theory_ref,
         "software": args.get("software"),
@@ -291,9 +288,9 @@ def run(
         "include_rejected": args.get("include_rejected"),
         "include_deprecated": args.get("include_deprecated"),
         "offset": offset,
+        "cursor": cursor,
         "limit": limit,
         "include": include,
-        "collapse": collapse,
     }
     body = {k: v for k, v in body.items() if v is not None}
 

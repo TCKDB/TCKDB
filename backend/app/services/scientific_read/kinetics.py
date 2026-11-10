@@ -1,6 +1,6 @@
 """Service implementation for /api/v1/scientific/reaction-entries/{id}/kinetics.
 
-See docs/specs/read_api_mvp.md §Endpoint 3.
+See docs/specs/browse_order.md.
 
 Provenance keys are always present per Phase 2.2; TS-chain fields are populated
 only for TS-backed records. Evidence completeness uses the L1 kinetics
@@ -40,8 +40,11 @@ from app.db.models.common import (
     KineticsDegeneracyConvention,
     KineticsModelKind,
     KineticsRepresentationRole,
+    PnoTruncation,
     PressureContext,
     RecordReviewStatus,
+    RelativisticHamiltonian,
+    RiApproximation,
     SCFStabilityStatus,
     SpinTreatment,
     SubmissionRecordType,
@@ -50,6 +53,7 @@ from app.db.models.common import (
 from app.db.models.kinetics import (
     Kinetics,
     KineticsArrheniusEntry,
+    KineticsBathGas,
     KineticsDetermination,
     KineticsInterpretationAssignment,
     KineticsSourceCalculation,
@@ -65,6 +69,7 @@ from app.db.models.species import ConformerAssignmentScheme, ConformerGroup, Con
 from app.db.models.statmech import Statmech
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.schemas.reads._method_family import echo_source_provenance
 from app.schemas.reads.scientific_common import (
     CompositeEnergyVerification,
     CompositeSchemeSummary,
@@ -78,12 +83,14 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     ValidationSummary,
     WorkflowToolReleaseSummary,
+    browse_order,
     simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_kinetics import (
     ArrheniusParameters,
     ChebyshevBlock,
     FalloffBlock,
+    KineticsBathGasBlock,
     KineticsDeterminationBlock,
     KineticsDeterminationTargetBlock,
     KineticsInterpretationAssignmentBlock,
@@ -102,14 +109,16 @@ from app.schemas.reads.scientific_kinetics import (
 )
 from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.composite_verification import verify_composite_calculations
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read.common import (
     build_pagination,
+    detail_visible_statuses,
     fetch_review_badges,
-    ids_below_review_floor,
+    ids_withheld_as_evidence,
+    linked_evidence_predicate,
     reject_client_sort,
-    review_floor_predicate,
     review_summary,
-    slice_for_pagination,
+    shown_predicate,
     temperature_coverage,
     validate_includes,
     validate_pagination,
@@ -129,11 +138,17 @@ from app.services.scientific_read.handles import (
     NO_MATCH,
     reconcile_level_of_theory_pair,
 )
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.scientific_read.trust_floor import evaluate_shown_kinetics
+from app.services.selection_filters import filter_by_provenance, source_provenance_kwargs
 from app.services.trust import (
     TrustFragment,
     build_trust_fragment,
@@ -233,14 +248,14 @@ _PDEP_EAGER_LOADS = (
     selectinload(Kinetics.chebyshev),
     selectinload(Kinetics.falloff),
     selectinload(Kinetics.third_body_efficiencies),
+    selectinload(Kinetics.bath_gases).selectinload(KineticsBathGas.species_entry),
 )
 
-_DEFAULT_SORT_ECHO = (
-    "review_rank,created_at,id"
-)
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
-# Priority order for resolving the "primary" source calculation per spec.
-_LOT_FILTER_ROLE_PRIORITY = (
+# Priority order for picking the one source calculation a record DISPLAYS as its primary. It decides no filter:
+# ``level_of_theory_*`` and ``software`` match when ANY linked source calculation matches.
+_PRIMARY_CALC_ROLE_PRIORITY = (
     KineticsCalculationRole.ts_energy,
     KineticsCalculationRole.fit_source,
     KineticsCalculationRole.freq,
@@ -335,13 +350,19 @@ def get_reaction_kinetics(
     *,
     reaction_entry_id: int,
     request: KineticsReadRequest,
+    detail: bool = False,
 ) -> ScientificReactionKineticsResponse:
     """Return kinetics records for a reaction entry, sorted by review status, then newest.
 
-    Order: review_rank ASC, created_at DESC, id DESC (the export's
-    ``simple_selection_sort_key``). Coverage and evidence are reported per
-    record but do not order them; ``temperature_min`` / ``temperature_max``
-    do not filter, they only fill ``temperature_coverage``.
+    ``detail`` is True when a served detail embeds these records (``/reaction-entries/{id}/full``): under ``curated`` they
+    are then shown with their badge unless rejected or deprecated, and so are the transition-state entries they name (ADR 0023
+    step 7, owner decision Q9). The list route itself (``detail=False``) keeps the approved record floor.
+
+    Order: review_rank ASC, created_at DESC, id DESC (the order the exports
+    list records in). Coverage and evidence are reported per
+    record but do not order them; ``coverage_temperature_min_k`` /
+    ``coverage_temperature_max_k`` do not filter, they only fill ``temperature_coverage``.
+    Every matching record is returned; the read never picks one.
 
     Filters apply shallow per D7. Provenance keys are always present, with
     null TS-chain fields for non-TS-backed records (Phase 2.2). TS-related
@@ -357,6 +378,13 @@ def get_reaction_kinetics(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging(
+        "/scientific/reaction-entries/{id}/kinetics",
+        request,
+        offset=offset,
+        limit=limit,
+        scope_extra={"reaction_entry_id": reaction_entry_id},
+    )
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -364,7 +392,12 @@ def get_reaction_kinetics(
         internal_tokens=_INTERNAL_INCLUDE_TOKENS | {"trust"},
     )
     includes = filter_internal_ids_from_resolved(includes)
-    validate_temperature_range(request.temperature_min, request.temperature_max)
+    validate_temperature_range(
+        request.coverage_temperature_min_k,
+        request.coverage_temperature_max_k,
+        min_name="coverage_temperature_min_k",
+        max_name="coverage_temperature_max_k",
+    )
 
     entry = session.get(ReactionEntry, reaction_entry_id)
     if entry is None:
@@ -390,6 +423,8 @@ def get_reaction_kinetics(
         stmt = stmt.options(*_TRUST_EAGER_LOADS)
     if request.model_kind is not None:
         stmt = stmt.where(Kinetics.model_kind == request.model_kind)
+    if request.scientific_origin is not None:
+        stmt = stmt.where(Kinetics.scientific_origin == request.scientific_origin)
     kinetics_rows: list[Kinetics] = list(session.scalars(stmt).all())
 
     if not kinetics_rows:
@@ -413,53 +448,27 @@ def get_reaction_kinetics(
     sources_by_kinetics = _load_source_calculations(
         session, [k.id for k in kinetics_rows]
     )
-    # Owner decision D5: a source calculation the active profile hides contributes no level, software or filter match.
-    # The record's own LINK to it stays a fact of the record (the ref guard withholds the ref); what the calculation
-    # was run at is a fact about the hidden record. One lookup, and none without a floor.
-    hidden_source_calc_ids = ids_below_review_floor(
+    # One source calculation has to match every supplied provenance field at once (level of theory, software, method,
+    # basis, workflow tool, method family, DFT rung): a record never matches through two different calculations.
+    # Evidence rule (ADR 0023): a source calculation the profile withholds (rejected or deprecated under curated) contributes nothing to a match; an unreviewed one does. The record's own
+    # LINK to it stays a fact of the record (the ref guard withholds the ref); what the calculation was run at is a fact
+    # about the hidden record. There is no "primary" calculation for a filter.
+    provenance = source_provenance_kwargs(request, level_of_theory_id=effective_lot_id)
+    if provenance:
+        kept = filter_by_provenance(
+            session,
+            {k.id: {sc.calculation_id for sc in sources_by_kinetics.get(k.id, [])} for k in kinetics_rows},
+            **provenance,
+        )
+        kinetics_rows = [k for k in kinetics_rows if k.id in kept]
+    if not kinetics_rows:
+        return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
+    # What the evidence rule withholds among the remaining records' source calculations (one lookup, none without a floor).
+    withheld_source_calc_ids = ids_withheld_as_evidence(
         session,
         record_type=SubmissionRecordType.calculation,
-        record_ids={sc.calculation_id for srcs in sources_by_kinetics.values() for sc in srcs},
+        record_ids={sc.calculation_id for k in kinetics_rows for sc in sources_by_kinetics.get(k.id, [])},
     )
-
-    def shown(sources: list[KineticsSourceCalculation]) -> list[KineticsSourceCalculation]:
-        return [sc for sc in sources if sc.calculation_id not in hidden_source_calc_ids]
-
-    # Apply level_of_theory_id filter (operates on the primary source calc).
-    if effective_lot_id is not None:
-        kinetics_rows = [
-            k
-            for k in kinetics_rows
-            if _primary_lot_id(shown(sources_by_kinetics.get(k.id, [])))
-            == effective_lot_id
-        ]
-    if not kinetics_rows:
-        return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
-
-    # Software filter — match against primary source calc's software release name.
-    if request.software is not None:
-        software_name = request.software
-        software_id_by_release = _software_id_by_release_id(
-            session,
-            {
-                sc.software_release_id
-                for srcs in sources_by_kinetics.values()
-                for sc in srcs
-                if sc.software_release_id is not None
-            },
-        )
-        kinetics_rows = [
-            k
-            for k in kinetics_rows
-            if _primary_software_name(
-                shown(sources_by_kinetics.get(k.id, [])),
-                software_id_by_release,
-                session,
-            )
-            == software_name
-        ]
-    if not kinetics_rows:
-        return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
 
     # Review badges + visibility filtering.
     badges = fetch_review_badges(
@@ -467,12 +476,22 @@ def get_reaction_kinetics(
         record_type=SubmissionRecordType.kinetics,
         record_ids=[k.id for k in kinetics_rows],
     )
-    visible = visible_statuses(
+    visible = (detail_visible_statuses if detail else visible_statuses)(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[k.id].status for k in kinetics_rows),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        ),
+        scope=("kinetics", reaction_entry_id),
+    )
     kinetics_rows = [k for k in kinetics_rows if badges[k.id].status in visible]
+    kinetics_rows = paging.snapshot(kinetics_rows, id_of=lambda k: k.id)
     if not kinetics_rows:
         return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
 
@@ -488,7 +507,7 @@ def get_reaction_kinetics(
 
     # Bulk-load TS data for the entry to determine has_transition_state and
     # path-search/IRC chain reachability.
-    ts_entry_ids = _ts_entry_ids_for_reaction(session, reaction_entry_id)
+    ts_entry_ids = _ts_entry_ids_for_reaction(session, reaction_entry_id, detail=detail)
     ts_calc_types = _ts_calc_types_for_entries(session, ts_entry_ids)
 
     # Bulk-load source-calculation metadata used by provenance + checklist.
@@ -580,7 +599,7 @@ def get_reaction_kinetics(
             sw_summaries=sw_summaries,
             wt_summaries=wt_summaries,
             network_kinetics_refs=network_kinetics_refs,
-            hidden_calc_ids=hidden_source_calc_ids,
+            hidden_calc_ids=withheld_source_calc_ids,
         )
         for k in kinetics_rows
     }
@@ -605,10 +624,10 @@ def get_reaction_kinetics(
     missing_opt_meta_ids = set(opt_via_dependency.values()) - calc_meta.keys()
     if missing_opt_meta_ids:
         calc_meta.update(_calc_metadata(session, missing_opt_meta_ids))
-    hidden_opt_ids = ids_below_review_floor(
+    withheld_opt_ids = ids_withheld_as_evidence(
         session, record_type=SubmissionRecordType.calculation, record_ids=set(opt_via_dependency.values())
     )
-    hidden_level_calc_ids = hidden_source_calc_ids | hidden_opt_ids
+    withheld_level_calc_ids = withheld_source_calc_ids | withheld_opt_ids
 
     # Pass 2: build per-record output.
     records: list[KineticsRecord] = []
@@ -617,8 +636,8 @@ def get_reaction_kinetics(
         provenance = provenance_by_kinetics[k.id]
 
         coverage = temperature_coverage(
-            requested_min=request.temperature_min,
-            requested_max=request.temperature_max,
+            requested_min=request.coverage_temperature_min_k,
+            requested_max=request.coverage_temperature_max_k,
             record_min=k.tmin_k,
             record_max=k.tmax_k,
         )
@@ -649,9 +668,9 @@ def get_reaction_kinetics(
             calc_meta=calc_meta,
             composite_verifications=composite_verifications,
         )
-        levels = _without_levels_from_hidden_calculations(
+        levels = _without_levels_from_withheld_calculations(
             levels,
-            hidden=hidden_level_calc_ids,
+            withheld=withheld_level_calc_ids,
             opt_calc_id=levels_opt_calc_id,
             freq_calc_id=ts_freq_calc_id,
             sp_calc_id=ts_sp_calc_id,
@@ -659,7 +678,8 @@ def get_reaction_kinetics(
 
         evidence = _evidence_breakdown(
             kinetics=k,
-            sources=sources,
+            sources=[sc for sc in sources if sc.calculation_id not in withheld_source_calc_ids],
+            withheld_calc_ids=withheld_source_calc_ids,
             ts_entry_ids=ts_entry_ids,
             ts_calc_types=ts_calc_types,
             geometry_validations=geometry_validations,
@@ -674,6 +694,7 @@ def get_reaction_kinetics(
             KineticsRecord(
                 kinetics_id=k.id,
                 kinetics_ref=k.public_ref,
+                created_at=k.created_at,
                 scientific_origin=k.scientific_origin,
                 model_kind=k.model_kind,
                 direction=k.direction,
@@ -709,6 +730,7 @@ def get_reaction_kinetics(
                 chebyshev=_chebyshev_block(k),
                 falloff=_falloff_block(k),
                 third_body_efficiencies=_third_body_blocks(k, collider_refs),
+                bath_gas=_bath_gas_blocks(k),
                 uncertainty=KineticsUncertainty(
                     A_uncertainty=k.a_uncertainty,
                     A_uncertainty_kind=k.a_uncertainty_kind,
@@ -733,52 +755,51 @@ def get_reaction_kinetics(
     summary = review_summary(badges[k.id] for k in kinetics_rows)
 
     # Sort: review status, then newest (#648 rule, extended to kinetics): review status, then newest,
-    # then id -- the same ``simple_selection_sort_key`` the export uses, so the
-    # read and the export pick the same record. ``evidence_completeness`` and
+    # then id -- the same order the exports list records in, so the read and
+    # an export list the same record first. ``evidence_completeness`` and
     # ``temperature_coverage`` stay on each record as displayed fields but are
     # not ranking inputs: the checklist is mostly TS / calculation
     # traceability (an experimental record scores low by construction), and a
     # record with no range counts as "not covering" whenever a bound is
-    # requested. ``temperature_min`` / ``temperature_max`` are not filters.
+    # requested. ``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` are not filters.
     created_at = {k.id: k.created_at for k in kinetics_rows}
     review_status_by_id = {k.id: badges[k.id].status for k in kinetics_rows}
 
-    records.sort(
-        key=lambda rec: simple_selection_sort_key(
+    page = paging.window(
+        records,
+        key_of=lambda rec: simple_selection_sort_key(
             rec.kinetics_id,
             policy=SelectionPolicy.default,
             review_status_by_id=review_status_by_id,
             created_at_by_id=created_at,
-        )
+        ),
     )
-
-    pre_collapse_total = len(records)
-    collapse_first = request.collapse.value == "first"
-    returned = slice_for_pagination(
-        records,
-        offset=offset,
-        limit=limit,
-        collapse_first=collapse_first,
-    )
+    returned = page.items
 
     return ScientificReactionKineticsResponse(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
+            check_inputs=request.check_inputs,
         ),
         reaction_entry_id=reaction_entry_id,
         reaction_entry_ref=reaction_entry_ref,
         review_summary=summary,
         records=returned,
+        **deposit_warning_envelope(
+            session,
+            SubmissionRecordType.kinetics,
+            {r.kinetics_id: r.kinetics_ref for r in returned},
+        ),
         pagination=build_pagination(
             offset=offset,
             limit=limit,
             returned=len(returned),
-            total=pre_collapse_total,
-            collapse_first=collapse_first,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 
@@ -951,11 +972,17 @@ def _build_provenance(
         else None
     )
 
-    transition_state_entry_id = _first_ts_entry_id(sources, calc_meta)
+    # The transition-state entry is traced through a source calculation the rule shows: a withheld source names none. The entry
+    # is a record: ``ts_entry_refs`` holds only those that clear the record floor, so one that does not is named nowhere (and no
+    # other entry is put in its place).
+    transition_state_entry_id = _first_ts_entry_id(
+        [sc for sc in sources if sc.calculation_id not in (hidden_calc_ids or ())],
+        calc_meta,
+    )
 
     primary_calc_id = _primary_calc_id(sources)
     if primary_calc_id in (hidden_calc_ids or ()):
-        # What the hidden primary calculation ran at is a fact about that record; no other source is put in its place.
+        # What the withheld primary calculation ran at is a fact about that record; no other source is put in its place.
         primary_calc_id = None
     primary_lot = (
         _lot_summary_for_calc(calc_meta.get(primary_calc_id))
@@ -1050,6 +1077,7 @@ def _evidence_breakdown(
     scf_stabilities: dict[int, SCFStabilityStatus],
     ts_opt_calc_id: int | None,
     ts_sp_calc_id: int | None,
+    withheld_calc_ids: set[int] | frozenset[int] = frozenset(),
 ) -> EvidenceCompletenessBreakdown:
     """L1 kinetics checklist — endpoint-local, additive, max=9."""
     has_sources = len(sources) > 0
@@ -1084,14 +1112,15 @@ def _evidence_breakdown(
         )
     )
 
+    # The validation targets are chosen first, then a withheld one is dropped (never replaced by another calculation).
     has_geom_val = False
-    if ts_opt_calc_id is not None:
+    if ts_opt_calc_id is not None and ts_opt_calc_id not in withheld_calc_ids:
         gv = geometry_validations.get(ts_opt_calc_id)
         has_geom_val = gv in {ValidationStatus.passed, ValidationStatus.warning}
 
     has_scf = False
     scf_target = ts_sp_calc_id if ts_sp_calc_id is not None else ts_opt_calc_id
-    if scf_target is not None:
+    if scf_target is not None and scf_target not in withheld_calc_ids:
         s = scf_stabilities.get(scf_target)
         has_scf = s in {SCFStabilityStatus.stable, SCFStabilityStatus.stabilized}
 
@@ -1131,7 +1160,10 @@ class _CalcMeta:
         "lot_dispersion",
         "lot_id",
         "lot_method",
+        "lot_pno_truncation",
         "lot_ref",
+        "lot_relativistic_hamiltonian",
+        "lot_ri_approximation",
         "lot_solvent",
         "lot_solvent_model",
         "lot_spin_treatment",
@@ -1167,6 +1199,9 @@ class _CalcMeta:
         lot_cabs_basis: str | None = None,
         lot_solvent_model: str | None = None,
         lot_spin_treatment: SpinTreatment | None = None,
+        lot_relativistic_hamiltonian: RelativisticHamiltonian | None = None,
+        lot_pno_truncation: PnoTruncation | None = None,
+        lot_ri_approximation: RiApproximation | None = None,
     ):
         self.composite_scheme = composite_scheme
         self.id = id
@@ -1183,6 +1218,9 @@ class _CalcMeta:
         self.lot_cabs_basis = lot_cabs_basis
         self.lot_solvent_model = lot_solvent_model
         self.lot_spin_treatment = lot_spin_treatment
+        self.lot_relativistic_hamiltonian = lot_relativistic_hamiltonian
+        self.lot_pno_truncation = lot_pno_truncation
+        self.lot_ri_approximation = lot_ri_approximation
         self.software_release_id = software_release_id
         self.software_release_ref = software_release_ref
         self.software_name = software_name
@@ -1232,6 +1270,9 @@ def _calc_metadata(
             LevelOfTheory.cabs_basis,
             LevelOfTheory.solvent_model,
             LevelOfTheory.spin_treatment,
+            LevelOfTheory.relativistic_hamiltonian,
+            LevelOfTheory.pno_truncation,
+            LevelOfTheory.ri_approximation,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -1265,6 +1306,9 @@ def _calc_metadata(
             lot_cabs_basis=row[16],
             lot_solvent_model=row[17],
             lot_spin_treatment=row[18],
+            lot_relativistic_hamiltonian=row[19],
+            lot_pno_truncation=row[20],
+            lot_ri_approximation=row[21],
         )
         for row in rows
     }
@@ -1322,11 +1366,17 @@ def _scf_stabilities(
     return dict(rows)
 
 
-def _ts_entry_ids_for_reaction(session: Session, reaction_entry_id: int) -> set[int]:
+def _ts_entry_ids_for_reaction(session: Session, reaction_entry_id: int, *, detail: bool = False) -> set[int]:
+    # A transition-state ENTRY is a record (ADR 0023, Q3): only the entries that clear the record floor count here, as in
+    # ``/reactions/browse``; a served detail that embeds these records (``detail=True``) shows the entries it does not
+    # withhold, badged (step 7, Q9). The calculations under a shown entry are evidence (see ``_ts_calc_types_for_entries``).
     rows = session.scalars(
-        select(TransitionStateEntry.id)
-        .join(TransitionState, TransitionState.id == TransitionStateEntry.transition_state_id)
-        .where(TransitionState.reaction_entry_id == reaction_entry_id)
+        where_visible(
+            select(TransitionStateEntry.id)
+            .join(TransitionState, TransitionState.id == TransitionStateEntry.transition_state_id)
+            .where(TransitionState.reaction_entry_id == reaction_entry_id),
+            shown_predicate(TransitionStateEntry.id, SubmissionRecordType.transition_state_entry, detail=detail),
+        )
     ).all()
     return set(rows)
 
@@ -1341,8 +1391,8 @@ def _ts_calc_types_for_entries(
             select(Calculation.transition_state_entry_id, Calculation.type).where(
                 Calculation.transition_state_entry_id.in_(ts_entry_ids)
             ),
-            # D5: the evidence checklist counts the calculation types the profile shows.
-            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+            # The evidence checklist counts the calculation types the evidence rule shows (ADR 0023).
+            linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
         )
     ).all()
     grouped: dict[int, set[CalculationType]] = defaultdict(set)
@@ -1427,8 +1477,10 @@ def _literature_summaries(
             id=lit.id,
             literature_ref=lit.public_ref,
             title=lit.title,
+            title_source=lit.title_source,
             year=lit.year,
             doi=lit.doi,
+            isbn=lit.isbn,
         )
         for lit in rows
     }
@@ -1707,17 +1759,19 @@ def _third_body_blocks(
     return blocks
 
 
-def _software_id_by_release_id(
-    session: Session, release_ids: set[int]
-) -> dict[int, int]:
-    if not release_ids:
-        return {}
-    rows = session.execute(
-        select(SoftwareRelease.id, SoftwareRelease.software_id).where(
-            SoftwareRelease.id.in_(release_ids)
-        )
-    ).all()
-    return dict(rows)
+def _bath_gas_blocks(kinetics: Kinetics) -> list[KineticsBathGasBlock] | None:
+    """The stated bath gas, with each component as a species-entry public ref.
+
+    Sorted by ``species_entry_ref`` for a deterministic read order across requests.
+    """
+    if not kinetics.bath_gases:
+        return None
+    blocks = [
+        KineticsBathGasBlock(species_entry_ref=bg.species_entry.public_ref, mole_fraction=bg.mole_fraction)
+        for bg in kinetics.bath_gases
+    ]
+    blocks.sort(key=lambda b: b.species_entry_ref)
+    return blocks
 
 
 # ---------------------------------------------------------------------------
@@ -1726,39 +1780,12 @@ def _software_id_by_release_id(
 
 
 def _primary_calc_id(sources: list[KineticsSourceCalculation]) -> int | None:
-    for role in _LOT_FILTER_ROLE_PRIORITY:
+    for role in _PRIMARY_CALC_ROLE_PRIORITY:
         for sc in sources:
             if sc.role == role:
                 return sc.calculation_id
     if sources:
         return sources[0].calculation_id
-    return None
-
-
-def _primary_lot_id(sources: list[KineticsSourceCalculation]) -> int | None:
-    """Return the LoT id the primary source calculation points at, if any."""
-    primary = _primary_calc_id(sources)
-    if primary is None:
-        return None
-    return next(
-        (sc.calculation.lot_id for sc in sources if sc.calculation_id == primary and sc.calculation is not None),
-        None,
-    )
-
-
-def _primary_software_name(
-    sources: list[KineticsSourceCalculation],
-    software_id_by_release: dict[int, int],
-    session: Session,
-) -> str | None:
-    """Return the software name for the primary source calc, if any."""
-    for sc in sources:
-        if sc.software_release_id is not None:
-            sw_id = software_id_by_release.get(sc.software_release_id)
-            if sw_id is not None:
-                name = session.scalar(select(Software.name).where(Software.id == sw_id))
-                if name is not None:
-                    return name
     return None
 
 
@@ -1826,6 +1853,9 @@ def _lot_summary_for_calc(meta: _CalcMeta | None) -> LevelOfTheorySummary | None
         cabs_basis=meta.lot_cabs_basis,
         solvent_model=meta.lot_solvent_model,
         spin_treatment=meta.lot_spin_treatment,
+        relativistic_hamiltonian=meta.lot_relativistic_hamiltonian,
+        pno_truncation=meta.lot_pno_truncation,
+        ri_approximation=meta.lot_ri_approximation,
         composite_scheme=meta.composite_scheme,
     )
 
@@ -1962,24 +1992,25 @@ def _build_kinetics_levels(
     )
 
 
-def _without_levels_from_hidden_calculations(
+def _without_levels_from_withheld_calculations(
     levels: ScientificLevelsSummary,
     *,
-    hidden: set[int],
+    withheld: set[int],
     opt_calc_id: int | None,
     freq_calc_id: int | None,
     sp_calc_id: int | None,
 ) -> ScientificLevelsSummary:
-    """Null the levels that come from a calculation the active profile hides (owner decision D5).
+    """Null the levels that come from a calculation the evidence rule withholds (ADR 0023).
 
-    A level is a fact about the calculation that supplied it. When that calculation is below the floor the level is
-    withheld, not re-derived from what is left: the opt's level is never put in the place of a hidden single point's
-    (the substitution the guard exists to prevent). ``notation`` is computed from ``energy`` and ``geometry`` and goes
-    with them. With nothing hidden the summary is returned untouched.
+    A level is a fact about the calculation that supplied it. When that calculation is withheld (rejected or deprecated
+    under ``curated``) the level and its source are nulled together, not re-derived from what is left: the opt's level
+    is never put in the place of a withheld single point's (the substitution the guard exists to prevent). An unreviewed
+    calculation is not withheld, so its level is shown. ``notation`` is computed from ``energy`` and ``geometry`` and goes
+    with them. With nothing withheld the summary is returned untouched.
     """
-    if not hidden:
+    if not withheld:
         return levels
-    opt, freq, sp = (c is not None and c in hidden for c in (opt_calc_id, freq_calc_id, sp_calc_id))
+    opt, freq, sp = (c is not None and c in withheld for c in (opt_calc_id, freq_calc_id, sp_calc_id))
     update: dict[str, object] = {}
     if (freq and levels.frequency_source == "freq") or (opt and levels.frequency_source == "opt"):
         update.update(frequency=None, frequency_source=None)
@@ -1996,7 +2027,7 @@ def _without_levels_from_hidden_calculations(
         return levels
     masked = levels.model_copy(update=update)
     # The annotation describes the levels it sits beside: recomputed from what is left, so it cannot still say that a
-    # hidden calculation sat at a named-method level.
+    # withheld calculation sat at a named-method level.
     return masked.model_copy(
         update={
             "legacy_composite_shape": legacy_composite_shape(
@@ -2042,10 +2073,10 @@ def _extract_path_method(meta: _CalcMeta) -> str | None:
 
 def _filter_echo(request: KineticsReadRequest) -> dict[str, object]:
     echo: dict[str, object] = {}
-    if request.temperature_min is not None:
-        echo["temperature_min"] = request.temperature_min
-    if request.temperature_max is not None:
-        echo["temperature_max"] = request.temperature_max
+    if request.coverage_temperature_min_k is not None:
+        echo["coverage_temperature_min_k"] = request.coverage_temperature_min_k
+    if request.coverage_temperature_max_k is not None:
+        echo["coverage_temperature_max_k"] = request.coverage_temperature_max_k
     if request.pressure_bar is not None:
         echo["pressure_bar"] = request.pressure_bar
     if request.model_kind is not None:
@@ -2056,6 +2087,7 @@ def _filter_echo(request: KineticsReadRequest) -> dict[str, object]:
         echo["level_of_theory_ref"] = request.level_of_theory_ref
     if request.software is not None:
         echo["software"] = request.software
+    echo_source_provenance(request, echo)
     if request.min_review_status is not None:
         echo["min_review_status"] = request.min_review_status.value
     if request.include_rejected:
@@ -2077,7 +2109,6 @@ def _empty_response(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         reaction_entry_id=reaction_entry_id,

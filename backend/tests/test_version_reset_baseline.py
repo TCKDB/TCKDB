@@ -1,49 +1,38 @@
-"""Every TCKDB-owned version is at the release baseline (1), and every rule manifest's pin is its file's bytes.
+"""Every TCKDB-owned version is at its expected current value, and no registry is empty.
 
 The versioning programme reset every version TCKDB owns to 1 at the release baseline (owner decision 1, 2026-10-24).
-This file fails when a registry is empty (so the parametrization cannot pass vacuously), when a registered current
-version is not 1, and when a rule manifest's SHA-256 pin is not the digest of the YAML it pins (the checksum
-mechanism: a pin is the owner's approval of reviewed bytes, so moving the bytes without moving the pin must fail).
+This file fails when a registry is empty (so the parametrization cannot pass vacuously) and when a registered current
+version is not the one written out below.
 
-A future release that bumps a version has to change ``BASELINE`` below in the same change, in plain sight of the review.
+A release that bumps a version has to change ``EXPECTED`` below in the same change, in plain sight of the review. The
+five selection manifest formats are at 2: removing the method-preference rules changed the shape of their decision
+documents, and a replay of the old shape is refused as an unknown version.
 """
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Callable
 
 import pytest
 
-from app.chemistry.kinetics_rules.xyg3_barrier_manifest import MANIFEST_PATH as XYG3_PATH
-from app.chemistry.network_rules.manifest import MANIFEST_PATH as NETWORK_PATH
-from app.chemistry.structure_rules.manifest import MANIFEST_PATH as STRUCTURE_PATH
-from app.chemistry.thermo_rules.e1_manifest import MANIFEST_PATH as E1_PATH
+from app.chemistry.method_families import CLASSIFICATIONS
 from app.parser_registry import PARSERS
 from app.services import document_formats
 from app.services.kinetics_selection.manifest import MANIFEST_FORMATS as KINETICS_FORMATS
 from app.services.kinetics_selection.models import ASSESSMENT_SEMANTICS as KINETICS_SEMANTICS
-from app.services.kinetics_selection.rules import XYG3_MANIFEST_SHA256
-from app.services.kinetics_selection.rules import default_rules_registry as kinetics_rules
 from app.services.machine_review.audit_adapter import PAYLOAD_FORMATS
 from app.services.network_selection.manifest import MANIFEST_FORMATS as NETWORK_FORMATS
-from app.services.network_selection.rules import NETWORK_RULE_MANIFEST_SHA256
-from app.services.network_selection.rules import default_rules_registry as network_rules
 from app.services.relative_conformer_energy.manifest import MANIFEST_FORMATS as RELATIVE_FORMATS
 from app.services.release.manifest import RENDERERS
 from app.services.statmech_selection.manifest import ASSESSMENT_SEMANTICS as STATMECH_SEMANTICS
 from app.services.statmech_selection.manifest import MANIFEST_FORMATS as STATMECH_FORMATS
 from app.services.structure_selection.manifest import MANIFEST_FORMATS as STRUCTURE_FORMATS
-from app.services.structure_selection.rules import STRUCTURE_RULE_MANIFEST_SHA256
-from app.services.structure_selection.rules import default_rules_registry as structure_rules
 from app.services.thermo_selection.models import ASSESSMENT_SEMANTICS as THERMO_SEMANTICS
 from app.services.thermo_selection.models import MANIFEST_FORMATS as THERMO_FORMATS
-from app.services.thermo_selection.rules import E1_MANIFEST_SHA256
-from app.services.thermo_selection.rules import default_rules_registry as thermo_rules
 from app.services.trust.rubrics import RUBRICS
 from app.versioning import VersionRegistry
 
-#: The version every TCKDB-owned thing is at today.
+#: The version every TCKDB-owned thing is at today, unless ``EXPECTED`` says otherwise.
 BASELINE = 1
 
 REGISTRIES: dict[str, Callable[[], VersionRegistry]] = {
@@ -61,53 +50,54 @@ REGISTRIES: dict[str, Callable[[], VersionRegistry]] = {
     "thermo_semantics": lambda: THERMO_SEMANTICS,
     "kinetics_semantics": lambda: KINETICS_SEMANTICS,
     "statmech_semantics": lambda: STATMECH_SEMANTICS,
-    "thermo_rules": thermo_rules,
-    "kinetics_rules": kinetics_rules,
-    "structure_rules": structure_rules,
-    "network_rules": network_rules,
+    "method_family_classifications": lambda: CLASSIFICATIONS,
+}
+
+#: Registries whose current version is not the baseline, and why: the method-preference rules were removed, which
+#: changed the decision documents these formats describe. A select request then gained filters and named eligibility
+#: defaults (2026-10): a recorded decision now carries them, so the format moved again, and the assessment semantics
+#: moved because the recorded ``eligible`` flag is the verdict under the request's own settings. The curated evidence rule
+#: (ADR 0023, step 2) moved the thermo, kinetics, statmech, structure, network and relative-energy formats to 4: a manifest records the
+#: review statuses whose linked evidence its profile withheld, and one recorded before that is refused.
+#: The thermo and kinetics formats moved once more to 5 (2026-10-26): their provenance filters are matched through ONE source
+#: calculation and the filter set grew, so a decision recorded under the earlier reading is refused on replay.
+#: The structure and relative-energy formats moved to 5 (ADR 0023, step 5): a basin determination records its conformer
+#: group's and observation's review statuses apart, so a replay judges the group as a record and the observation as evidence.
+EXPECTED: dict[str, int] = {
+    "thermo_formats": 5,
+    "thermo_semantics": 2,
+    "kinetics_formats": 5,
+    "kinetics_semantics": 2,
+    "statmech_formats": 4,
+    "statmech_semantics": 2,
+    "structure_formats": 5,
+    "network_formats": 4,
+    "relative_energy_formats": 5,
+}
+
+#: Names above the baseline inside a registry whose other names are at it. The transition-state badge lists its
+#: qualifying refs in the structure administrative key, whose version 2 changed that order. The native export and the ML
+#: export are at 2 because no export picks a record any more: the native manifest says ``records`` instead of
+#: ``collapse`` / ``selection_policy``, and the ML species record carries ``thermos``, a list, where it carried the one
+#: thermo it had picked.
+EXPECTED_REF: dict[tuple[str, str], int] = {
+    ("rubrics", "computed_transition_state"): 2,
+    ("document_formats", "tckdb.export"): 2,
+    ("document_formats", "tckdb.ml"): 2,
 }
 
 
 @pytest.mark.parametrize("name", sorted(REGISTRIES))
-def test_every_registered_name_is_at_the_baseline_and_nothing_is_empty(name: str) -> None:
+def test_every_registered_name_is_at_its_expected_version_and_nothing_is_empty(name: str) -> None:
     registry = REGISTRIES[name]()
     refs = registry.refs()
     assert refs, f"{name} holds nothing: the parametrization would pass vacuously"
     for ref in refs:
+        expected = EXPECTED_REF.get((name, ref.name), EXPECTED.get(name, BASELINE))
         assert registry.is_current(ref), (name, ref)
-        assert ref.version == BASELINE, (name, ref)
-        assert registry.current(ref.name).version == BASELINE
+        assert ref.version == expected, (name, ref)
+        assert registry.current(ref.name).version == expected
 
 
 def test_the_expected_registries_are_all_covered() -> None:
-    assert len(REGISTRIES) == 18
-
-
-@pytest.mark.parametrize(
-    ("pin", "path"),
-    [
-        (E1_MANIFEST_SHA256, E1_PATH),
-        (XYG3_MANIFEST_SHA256, XYG3_PATH),
-        (NETWORK_RULE_MANIFEST_SHA256, NETWORK_PATH),
-        (STRUCTURE_RULE_MANIFEST_SHA256, STRUCTURE_PATH),
-    ],
-    ids=["e1", "xyg3", "network", "structure"],
-)
-def test_every_rule_manifest_pin_is_the_digest_of_its_yaml(pin: str, path) -> None:
-    """Kills: editing a rule manifest's bytes and leaving its old pin (or the reverse)."""
-    assert hashlib.sha256(path.read_bytes()).hexdigest() == pin
-
-
-def test_the_four_pins_are_distinct_values_written_out_for_the_owner_to_approve() -> None:
-    """The pull request lists these four moves; a pin that did not move would equal its old value here."""
-    assert {
-        "e1": E1_MANIFEST_SHA256,
-        "xyg3": XYG3_MANIFEST_SHA256,
-        "network": NETWORK_RULE_MANIFEST_SHA256,
-        "structure": STRUCTURE_RULE_MANIFEST_SHA256,
-    } == {
-        "e1": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
-        "xyg3": "0b3b743d1e9a262797cb4a36fe69c339a5dfefbda0c1949d51ec452fe29e4293",
-        "network": "7c349eb20b4f82eb64d332d9741f7951ccc4da8baa6f5d3d626de8c8fa28c56c",
-        "structure": "0dc5ff853cec30767a2e38fbabb07f3966efca34d8af7d43624a3246a6639c27",
-    }
+    assert len(REGISTRIES) == 15

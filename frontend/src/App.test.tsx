@@ -58,7 +58,7 @@ function emptyVocabHandlers() {
 }
 
 function emptyBrowseEnvelope() {
-    return { records: [], pagination: { offset: 0, limit: 20, returned: 0, total: 0, post_collapse_total: 0 } }
+    return { records: [], pagination: { offset: 0, limit: 20, returned: 0, total: 0 } }
 }
 
 describe("public archive shell", () => {
@@ -349,7 +349,7 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
     it("renders the declared public route deterministically", async () => {
         if (path === "/species") {
             server.use(http.get("/api/v1/scientific/species/browse", () => HttpResponse.json({
-                records: [], pagination: { offset: 0, limit: 20, returned: 0, total: 0, post_collapse_total: 0 },
+                records: [], pagination: { offset: 0, limit: 20, returned: 0, total: 0 },
             })))
         }
         if (path.startsWith("/species/")) {
@@ -719,6 +719,7 @@ it("routes a reaction ref to the chooser page (ReactionOverviewPage)", async () 
             products: [{ species_entry_ref: "spe_b", smiles: "B", participant_index: 0 }],
             availability: { has_kinetics: false, has_transition_state: false, has_path_search: false, kinetics_count: 0 },
         }],
+        pagination: { offset: 0, limit: 50, returned: 1, total: 1 },
     })))
     window.history.replaceState({}, "", "/reactions/rxn_abc")
     render(<App />)
@@ -794,6 +795,7 @@ describe("the home-page identifier search recognizes and routes public reference
                 products: [{ species_entry_ref: "spe_b", smiles: "B", participant_index: 0 }],
                 availability: { has_kinetics: false, has_transition_state: false, has_path_search: false, kinetics_count: 0 },
             }],
+            pagination: { offset: 0, limit: 50, returned: 1, total: 1 },
         })))
         const user = userEvent.setup(); render(<App />)
         await user.type(await screen.findByLabelText("Exact species identifier"), `rxn_${REF_BODY}`)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace as _NS
+
 import pytest
 
 from tckdb_client.builders.base import TCKDBBuilderValidationError
@@ -41,9 +43,9 @@ def test_a_declared_protocol_is_validated_and_kept():
 
 def test_both_wires_emit_the_same_stored_form_and_the_server_model_accepts_it():
     calc = _sp(actual_protocol_declaration=PROTOCOL)
-    species = ComputedSpeciesUpload._calc_payload(object(), calc, _KeyMinter())
+    species = ComputedSpeciesUpload._calc_payload(_NS(_inlined=set()), calc, _KeyMinter())
     reaction = ComputedReactionUpload._calc_payload_flat(
-        object(), calc, key="calc-1", calc_keys=_KeyMinter(), geometry_key=None
+        _NS(_inlined=set()), calc, key="calc-1", calc_keys=_KeyMinter(), geometry_key=None
     )
     assert species["actual_protocol_declaration"] == reaction["actual_protocol_declaration"]
     # Unstated facts are left out, not sent as null.
@@ -52,7 +54,7 @@ def test_both_wires_emit_the_same_stored_form_and_the_server_model_accepts_it():
 
 
 def test_a_calculation_that_declares_nothing_sends_nothing():
-    species = ComputedSpeciesUpload._calc_payload(object(), _sp(), _KeyMinter())
+    species = ComputedSpeciesUpload._calc_payload(_NS(_inlined=set()), _sp(), _KeyMinter())
     assert "actual_protocol_declaration" not in species
     assert CalculationWithResultsPayload.model_fields["actual_protocol_declaration"].default is None
 

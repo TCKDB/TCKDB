@@ -560,7 +560,7 @@ def test_manifest_states_it_is_not_a_backup_or_a_projection(
     assert contract["lossless_database_backup"] is False
     assert contract["reingestible"] is False
     assert contract["distinct_from"]["recovery_archive"] == {"name": "tckdb.archive", "version": 1}
-    assert contract["distinct_from"]["convenience_projection"] == {"name": "tckdb.export", "version": 1}
+    assert contract["distinct_from"]["convenience_projection"] == {"name": "tckdb.export", "version": 2}
 
 
 def test_recovery_archive_format_does_not_drift():

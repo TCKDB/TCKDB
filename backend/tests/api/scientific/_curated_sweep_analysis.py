@@ -16,7 +16,7 @@ def fmt(route: tuple[str, str], text: str) -> str:
 
 
 #: Top-level and nested keys that describe the request or the page, not the records. Compared by key name.
-REQUEST_KEYS = frozenset({"request", "review_visibility", "pagination", "review_summary"})
+REQUEST_KEYS = frozenset({"request", "review_visibility", "pagination", "review_summary", "review_status_by_ref"})
 
 #: Counts that legitimately differ between profiles because they answer "what would the list return" (owner decision
 #: D5: population summaries follow the floor in the service). They are not facts about a visible record, so the
@@ -82,11 +82,89 @@ POPULATION_KEYS = frozenset(
         "distinct_software_count",
         "partial_sources",
         "has_channel_barriers",
+        # ADR 0023 (step 3): the counts and flags of a returned record's linked evidence follow the evidence rule, so a
+        # rejected or deprecated calculation is not counted. Each is pinned against the withheld calculation in
+        # test_curated_evidence_counts_and_levels.py, because this comparator cannot hold a count to "equal or null".
+        "geometry_count",
+        "optimization_chain_count",
+        "has_rotor_scans",
+        "has_frequencies",
+        "has_opt_calculation",
+        "has_freq_calculation",
+        "has_sp_calculation",
+        # Step 7 review: a group's observations, an observation's siblings and a calculation's dependency edges follow the
+        # evidence rule like the keys above (pinned by test_curated_detail_consistency.py).
+        "observation_count",
+        "has_observations",
+        "has_dependencies",
+        "by_scientific_origin",
         # A candidate's ordinal among the population's own (guard PR-3): it stands in for the database id as the last
         # tie-break. The population is the profile's, so the same record has another ordinal under curated.
         "id_rank",
     }
 )
+
+#: Counts and flags of a returned record's linked EVIDENCE (ADR 0023, step 3). They are the evidence rule's, not the record
+#: floor's, so the sweep holds them to it when it is given a ``mode``: in the unlisted state (linked evidence that is merely
+#: unreviewed) a count or flag EQUALS the exploratory one; in the withheld state (rejected / deprecated) it is never higher
+#: (a number is <=, a flag may only go True -> False). Without a ``mode`` they are skipped like the population keys.
+EVIDENCE_COUNT_KEYS = frozenset(
+    {
+        "calculation_count",
+        "has_calculations",
+        "has_geometries",
+        "has_validation_evidence",
+        "has_opt",
+        "has_freq",
+        "has_sp",
+        "has_irc",
+        "has_path_search",
+        "has_geometry_validation",
+        "has_scf_stability",
+        "source_calculation_count",
+        "has_source_calculations",
+        "geometry_count",
+        "optimization_chain_count",
+        "has_rotor_scans",
+        "has_frequencies",
+        "has_opt_calculation",
+        "has_freq_calculation",
+        "has_sp_calculation",
+        "has_statmech_provenance",
+        "has_transition_state_provenance",
+        # Step 7 review: a group's observations, an observation's siblings and a calculation's dependency edges are counted
+        # over the same evidence-rule population the page lists, so they shrink with a withheld record.
+        "observation_count",
+        "has_observations",
+        "has_dependencies",
+        "by_scientific_origin",
+    }
+)
+
+#: Evidence count keys that legitimately differ in the UNLISTED state on a route because they also rest on a RECORD the floor
+#: removes (so they are "<=", not "==" there). Per route path, with the reason. Grow this only with a reason.
+RELAXED_UNLISTED: dict[str, dict[str, str]] = {
+    **{
+        path: {"source_calculation_count": "a network's count adds up the source calculations of the solves that clear the floor"}
+        for path in (
+            "/api/v1/scientific/networks/browse",
+            "/api/v1/scientific/networks/search",
+            "/api/v1/scientific/networks/{network_ref_or_id}",
+        )
+    },
+    **{
+        path: {"has_path_search": "a path search counts through the transition state and entry, which are records (floored)"}
+        for path in ("/api/v1/scientific/reactions/browse", "/api/v1/scientific/reactions/search")
+    },
+    **{
+        path: {"calculation_count": "a species entry's availability previews the calculation record list (record floor)"}
+        for path in ("/api/v1/scientific/species/browse", "/api/v1/scientific/species/search")
+    },
+    "/api/v1/scientific/transition-states/{transition_state_ref_or_id}": {
+        "calculation_count": "the concept pools the entries that clear the floor (entries are records)",
+        "has_geometries": "the concept pools the entries that clear the floor (entries are records)",
+    },
+}
 
 #: Blocks that describe the read itself (when it was taken, which profile, the selection document's own disclosures and
 #: checksum) rather than the records. They differ between profiles by design.
@@ -124,6 +202,9 @@ DESCRIBES_THE_READ_PATHS = frozenset(
 #: Fields whose value is a MAP of slots keyed by role (``/full``'s ``transition_states[*].calculations``), not a model
 #: with fixed keys. A slot whose calculation is hidden is removed from the map; the key of a model is never removed.
 REMOVABLE_MAP_FIELDS = frozenset({"calculations", "levels_of_theory"})
+#: Maps keyed by calculation type that are only a map at this exact path (a bare ``software`` field elsewhere is a model).
+#: The type of a hidden calculation is removed from them, as from ``levels_of_theory`` (owner decision D5).
+REMOVABLE_MAP_PATHS = ("evidence_summary.software",)
 
 #: Key stem -> world kind, for the integer-id check.
 ID_STEM_TO_KIND = {
@@ -204,6 +285,139 @@ def ref_leaks(text: str, hidden_refs: dict[str, str], request_text: str) -> set[
     return found
 
 
+#: Direct identity keys of a selection candidate (the node under ``candidates[*]``): the ref that says which record it is.
+CANDIDATE_IDENTITY_KEYS = frozenset({"thermo_ref", "kinetics_ref", "candidate_ref", "unit_ref", "solve_ref"})
+CANDIDATE_PATHS = frozenset({"candidates[*]", "result.candidates[*]"})
+
+
+def route_subject_identities(app) -> dict[tuple[str, str], tuple[str, ...] | None]:
+    """``(method, path) -> identity path`` of the subject model of every scientific route that returns ``record`` / ``records``.
+
+    Read from the app's own response models and the guard's registry (:data:`ref_guard.SUBJECT_IDENTITY`), so the sweep
+    and the guard's subject net agree on what a subject's identity is. ``None`` marks an ungated subject (no check).
+    """
+    import typing
+
+    from pydantic import BaseModel
+
+    def models(annotation):
+        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            yield annotation
+        for arg in typing.get_args(annotation):
+            yield from models(arg)
+
+    out: dict[tuple[str, str], tuple[str, ...] | None] = {}
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        if not path.startswith("/api/v1/scientific"):
+            continue
+        for envelope in models(getattr(route, "response_model", None)):
+            for field_name in ("record", "records"):
+                field = envelope.model_fields.get(field_name)
+                if field is None:
+                    continue
+                for model in models(field.annotation):
+                    identity = ref_guard.SUBJECT_IDENTITY.get(model.__name__)
+                    for method in getattr(route, "methods", ()) or ():
+                        out[(method, path)] = identity
+    return out
+
+
+def _at(node: Any, keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        if not isinstance(node, dict):
+            return None
+        node = node.get(key)
+    return node
+
+
+def subject_leaks(
+    text: str, hidden_refs: dict[str, str], identity: tuple[str, ...] | None = None
+) -> set[tuple[str, str]]:
+    """``(hidden key, json path)`` where an UNLISTED record is the subject of the answer (ADR 0023).
+
+    A record below the approved floor may be named nested, badged; it must never BE a LISTED answer: not a row of ``records``,
+    not a candidate. The ``record`` of a detail read is not checked: since step 7 it serves anything but the withheld set. The subject's identity is the path the guard's registry declares for its model
+    (``identity``, from :func:`route_subject_identities`); a ref anywhere else on the row is linked evidence and is allowed.
+    A candidate of a selection is checked by :data:`CANDIDATE_IDENTITY_KEYS`.
+    """
+    present = {k: r for k, r in hidden_refs.items() if r in text}
+    if not present:
+        return set()
+    kind, obj = parse_body(text)
+    if kind != "json":
+        return set()
+    by_ref = {r: k for k, r in present.items()}
+    found: set[tuple[str, str]] = set()
+    for path, node in _dicts(obj):
+        if identity is not None and path == "records[*]":
+            value = _at(node, identity)
+            if isinstance(value, str) and value in by_ref:
+                found.add((by_ref[value], f"{path}.{'.'.join(identity)}"))
+        elif path in CANDIDATE_PATHS:
+            for key in CANDIDATE_IDENTITY_KEYS & set(node):
+                if isinstance(node[key], str) and node[key] in by_ref:
+                    found.add((by_ref[node[key]], f"{path}.{key}"))
+    return found
+
+
+def subject_rows(text: str, identity: tuple[str, ...] | None) -> list[tuple[str | None, Any]]:
+    """``(identity ref, row)`` for every LISTED subject row (``records[*]``) of a JSON body.
+
+    The ``record`` of a detail read is not a row the floor can drop (step 7), so it is not returned.
+    """
+    kind, obj = parse_body(text)
+    return _rows_of(kind, obj, identity)
+
+
+def _rows_of(kind: str, obj: Any, identity: tuple[str, ...] | None) -> list[tuple[str | None, Any]]:
+    if kind != "json" or not isinstance(obj, dict):
+        return []
+    rows: list[Any] = []
+    if isinstance(obj.get("records"), list):
+        rows.extend(r for r in obj["records"] if isinstance(r, dict))
+    out = []
+    for row in rows:
+        ref = _at(row, identity) if identity is not None else None
+        out.append((ref if isinstance(ref, str) else None, row))
+    return out
+
+
+def refs_in(node: Any, found: set[str] | None = None) -> set[str]:
+    """Every string anywhere in ``node`` (the caller matches them against the refs it cares about)."""
+    found = set() if found is None else found
+    if isinstance(node, dict):
+        for value in node.values():
+            refs_in(value, found)
+    elif isinstance(node, list):
+        for item in node:
+            refs_in(item, found)
+    elif isinstance(node, str):
+        found.add(node)
+    return found
+
+
+def refs_outside_floored_rows(text: str, identity: tuple[str, ...] | None, floored: set[str]) -> set[str]:
+    """Strings of a body that sit outside every listed row whose own identity ref is in ``floored``.
+
+    A row below the floor is the floor's to drop (its whole subtree goes with it), so what is nested inside it is not
+    evidence a curated read owes. Everything else in the body (other rows, the envelope) is kept.
+    """
+    kind, obj = parse_body(text)
+    if kind != "json" or not isinstance(obj, dict):
+        return refs_in(obj) if kind == "json" else set()
+    dropped = {id(row) for ref, row in _rows_of(kind, obj, identity) if ref in floored}
+    out: set[str] = set()
+    for key, value in obj.items():
+        if key == "records" and isinstance(value, list):
+            for row in value:
+                if id(row) not in dropped:
+                    refs_in(row, out)
+            continue
+        refs_in(value, out)
+    return out
+
+
 def id_leaks(text: str, world: SweepWorld) -> set[tuple[str, str]]:
     """``("id:<hidden key>", path)`` where a hidden record's integer pk is the value of a key naming its type."""
     kind, obj = parse_body(text)
@@ -251,11 +465,23 @@ def _dicts(obj: Any, path: str = "", *, top: bool = True) -> Iterator[tuple[str,
             yield from _dicts(item, f"{path}[*]", top=False)
 
 
-def _is_withholding(cur: Any, exp: Any) -> bool:
-    return not withholding_violations(exp, cur)
+def _is_withholding(cur: Any, exp: Any, mode: str | None = None, relaxed: frozenset[str] = frozenset()) -> bool:
+    return not withholding_violations(exp, cur, mode=mode, relaxed=relaxed)
 
 
-def withholding_violations(exp: Any, cur: Any, path: str = "") -> list[str]:
+def _evidence_count_violation(exp: Any, cur: Any, mode: str) -> bool:
+    if isinstance(exp, dict) and isinstance(cur, dict):  # a map of counts: every entry is held to the same relation
+        return any(_evidence_count_violation(exp.get(k, 0), cur.get(k, 0), mode) for k in set(exp) | set(cur))
+    if isinstance(exp, bool) or isinstance(cur, bool):
+        return exp != cur if mode == "equal" else bool(cur) and not bool(exp)
+    if isinstance(exp, (int, float)) and isinstance(cur, (int, float)):
+        return exp != cur if mode == "equal" else cur > exp
+    return exp != cur
+
+
+def withholding_violations(
+    exp: Any, cur: Any, path: str = "", *, mode: str | None = None, relaxed: frozenset[str] = frozenset()
+) -> list[str]:
     """Paths where ``cur`` is not a withholding of ``exp``.
 
     Allowed: equal; a value turned ``None``; a list with elements removed (a subsequence under this same relation).
@@ -268,6 +494,11 @@ def withholding_violations(exp: Any, cur: Any, path: str = "") -> list[str]:
         out: list[str] = []
         for key in sorted(set(exp) | set(cur)):
             sub = f"{path}.{key}" if path else key
+            if mode is not None and key in EVIDENCE_COUNT_KEYS and key in exp and key in cur:
+                key_mode = "le" if key in relaxed else mode
+                if cur[key] is not None and _evidence_count_violation(exp[key], cur[key], key_mode):
+                    out.append(f"{sub}<evidence count {key_mode}: {exp[key]!r} -> {cur[key]!r}>")
+                continue
             if (
                 key in REQUEST_KEYS
                 or key in POPULATION_KEYS
@@ -277,26 +508,30 @@ def withholding_violations(exp: Any, cur: Any, path: str = "") -> list[str]:
             ):
                 continue
             if key not in cur:
-                if path.rsplit(".", 1)[-1] in REMOVABLE_MAP_FIELDS:
+                if path.rsplit(".", 1)[-1] in REMOVABLE_MAP_FIELDS or path.endswith(REMOVABLE_MAP_PATHS):
                     continue  # a slot of a map, withheld whole
                 out.append(f"{sub}<key removed>")
             elif key not in exp:
                 out.append(f"{sub}<key added>")
             else:
-                out.extend(withholding_violations(exp[key], cur[key], sub))
+                out.extend(withholding_violations(exp[key], cur[key], sub, mode=mode, relaxed=relaxed))
         return out
     if isinstance(exp, list) and isinstance(cur, list):
         if len(cur) == len(exp):
-            return [v for e, c in zip(exp, cur, strict=True) for v in withholding_violations(e, c, f"{path}[*]")]
+            return [
+                v for e, c in zip(exp, cur, strict=True) for v in withholding_violations(e, c, f"{path}[*]", mode=mode, relaxed=relaxed)
+            ]
         # Fewer elements: each curated element must match, in order, a distinct exploratory element.
         i = 0
         for c in cur:
-            while i < len(exp) and not _is_withholding(c, exp[i]):
+            while i < len(exp) and not _is_withholding(c, exp[i], mode, relaxed):
                 i += 1
             if i == len(exp):
                 # Name the field that differs, not just the element: the closest exploratory element (fewest
                 # violations) is the one this curated element was taken from, so its violations are the substitution.
-                closest = min((withholding_violations(e, c, f"{path}[*]") for e in exp), key=len, default=[])
+                closest = min(
+                    (withholding_violations(e, c, f"{path}[*]", mode=mode, relaxed=relaxed) for e in exp), key=len, default=[]
+                )
                 return closest or [f"{path}[*]<element not in exploratory list>"]
             i += 1
         return []

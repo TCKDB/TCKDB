@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { madeUnderSchema } from "../domain/madeUnder"
 
 /**
  * Runtime + static types for the admin curator-task queue.
@@ -108,6 +109,8 @@ export const CuratorTaskSchema = z.object({
     resolved_at: z.string().nullable().default(null),
     resolved_by: z.number().int().nullable().default(null),
     resolution_note: z.string().nullable().default(null),
+    // The rubric the record's latest stored machine review was made under, against the registry. Null: none stored.
+    made_under: madeUnderSchema.nullable().default(null),
 })
 export type CuratorTask = z.infer<typeof CuratorTaskSchema>
 

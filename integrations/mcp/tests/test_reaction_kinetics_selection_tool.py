@@ -41,7 +41,7 @@ def _recording(answer: dict[str, Any] | None = None, status: int = 200):
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        return httpx.Response(status, json=answer if answer is not None else {"outcome": "policy_preferred"})
+        return httpx.Response(status, json=answer if answer is not None else {"outcome": "sole_eligible_candidate"})
 
     return seen, handler
 

@@ -10,7 +10,6 @@ from app.db.models.common import (
     SubmissionRecordType,
     ThermoModelKind,
 )
-from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_thermo import (
     ThermoModelKindQuery,
     ThermoReadRequest,
@@ -59,22 +58,6 @@ def test_empty_thermo_returns_empty_records(db_session):
     )
     assert response.records == []
     assert response.species_entry_id == entry.id
-
-
-def test_collapse_first_applies_before_offset(db_session):
-    entry = _entry_with_smiles(db_session)
-    make_thermo_scalar(db_session, species_entry=entry)
-
-    response = get_species_thermo(
-        db_session,
-        species_entry_id=entry.id,
-        request=ThermoReadRequest(collapse=CollapseMode.first, offset=1),
-    )
-
-    assert response.records == []
-    assert response.pagination.total == 1
-    assert response.pagination.post_collapse_total == 1
-    assert response.pagination.returned == 0
 
 
 # ---------------------------------------------------------------------------
@@ -382,7 +365,7 @@ def test_temperature_min_greater_than_max_rejected(db_session):
         get_species_thermo(
             db_session,
             species_entry_id=entry.id,
-            request=ThermoReadRequest(temperature_min=2000.0, temperature_max=300.0),
+            request=ThermoReadRequest(coverage_temperature_min_k=2000.0, coverage_temperature_max_k=300.0),
         )
 
 
@@ -579,55 +562,6 @@ def test_evidence_completeness_counts_statmech_freq_sp_when_thermo_sources_empty
     assert checklist["has_source_calculations"] is True
     assert checklist["has_frequency_evidence"] is True
     assert checklist["has_sp_or_energy_evidence"] is True
-
-
-def test_collapse_first_named_policy_selects_explicitly(db_session):
-    """collapse=first with an explicit named selection_policy picks one
-    candidate by that policy; collapse=all is unaffected. 'default' ranks
-    by the standard thermo order (review status wins here); 'latest' picks
-    the most recent regardless of review status.
-    """
-    from app.db.models.common import RecordReviewStatus, SubmissionRecordType
-    from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
-
-    entry = _entry_with_smiles(db_session)
-    older_approved = make_thermo_scalar(db_session, species_entry=entry)
-    newer = make_thermo_scalar(db_session, species_entry=entry)
-    set_review(
-        db_session,
-        record_type=SubmissionRecordType.thermo,
-        record_id=older_approved.id,
-        status=RecordReviewStatus.approved,
-    )
-
-    # collapse=all returns both candidates (non-canonical default).
-    all_resp = get_species_thermo(
-        db_session, species_entry_id=entry.id, request=ThermoReadRequest()
-    )
-    assert len(all_resp.records) == 2
-    assert all_resp.request.selection_policy == SelectionPolicy.default
-
-    # default policy → review status wins → the approved (older) record.
-    default_resp = get_species_thermo(
-        db_session,
-        species_entry_id=entry.id,
-        request=ThermoReadRequest(collapse=CollapseMode.first),
-    )
-    assert len(default_resp.records) == 1
-    assert default_resp.records[0].thermo_id == older_approved.id
-
-    # latest policy → newest record regardless of review status.
-    latest_resp = get_species_thermo(
-        db_session,
-        species_entry_id=entry.id,
-        request=ThermoReadRequest(
-            collapse=CollapseMode.first,
-            selection_policy=SelectionPolicy.latest,
-        ),
-    )
-    assert len(latest_resp.records) == 1
-    assert latest_resp.records[0].thermo_id == newer.id
-    assert latest_resp.request.selection_policy == SelectionPolicy.latest
 
 
 def test_multiple_statmech_never_leak_into_an_unlinked_thermo(db_session):
@@ -883,7 +817,7 @@ def test_nasa9_coverage_uses_interval_span_when_row_bounds_null(db_session):
     covered = get_species_thermo(
         db_session,
         species_entry_id=entry.id,
-        request=ThermoReadRequest(temperature_min=1000.0, temperature_max=1000.0),
+        request=ThermoReadRequest(coverage_temperature_min_k=1000.0, coverage_temperature_max_k=1000.0),
     )
     assert covered.records[0].model_kind == ThermoModelKindQuery.nasa9
     assert covered.records[0].temperature_coverage is not None
@@ -892,7 +826,7 @@ def test_nasa9_coverage_uses_interval_span_when_row_bounds_null(db_session):
     uncovered = get_species_thermo(
         db_session,
         species_entry_id=entry.id,
-        request=ThermoReadRequest(temperature_min=8000.0, temperature_max=8000.0),
+        request=ThermoReadRequest(coverage_temperature_min_k=8000.0, coverage_temperature_max_k=8000.0),
     )
     assert uncovered.records[0].temperature_coverage is not None
     assert uncovered.records[0].temperature_coverage.covers_requested_range is False
@@ -913,7 +847,7 @@ def test_wilhoit_coverage_falls_through_to_row_level_bounds(db_session):
     covered = get_species_thermo(
         db_session,
         species_entry_id=entry.id,
-        request=ThermoReadRequest(temperature_min=1000.0, temperature_max=1000.0),
+        request=ThermoReadRequest(coverage_temperature_min_k=1000.0, coverage_temperature_max_k=1000.0),
     )
     assert covered.records[0].model_kind == ThermoModelKindQuery.wilhoit
     assert covered.records[0].temperature_coverage is not None
@@ -922,7 +856,7 @@ def test_wilhoit_coverage_falls_through_to_row_level_bounds(db_session):
     uncovered = get_species_thermo(
         db_session,
         species_entry_id=entry.id,
-        request=ThermoReadRequest(temperature_min=4000.0, temperature_max=4000.0),
+        request=ThermoReadRequest(coverage_temperature_min_k=4000.0, coverage_temperature_max_k=4000.0),
     )
     assert uncovered.records[0].temperature_coverage is not None
     assert uncovered.records[0].temperature_coverage.covers_requested_range is False

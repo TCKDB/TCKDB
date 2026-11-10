@@ -139,13 +139,13 @@ from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
     StationaryPointKind,
+    StereoResolution,
     SubmissionRecordType,
 )
 from app.db.models.reaction import (
     ChemReaction,
     ReactionEntry,
     ReactionEntryStructureParticipant,
-    ReactionParticipant,
 )
 from app.db.models.record_review import RecordReview
 from app.db.models.species import Species, SpeciesEntry
@@ -153,7 +153,7 @@ from app.db.models.transition_state import TransitionStateEntry
 from app.services.record_containers import RecordContainer, resolve_record_containers
 from app.services.record_refs import resolve_record_public_refs
 from app.services.scientific_read.common import molecular_formula_expr
-from app.services.scientific_read.species_identity import species_entry_label_for
+from app.services.scientific_read.species_identity import STEREO_DISPLAY, species_entry_label_for
 
 #: Record types with a per-row disambiguating identity: grouping their OWN
 #: review row under their container would collide siblings that are
@@ -202,6 +202,10 @@ class SubjectChemistry:
     electronic_state_label: Optional[str] = None
     term_symbol: Optional[str] = None
     stereo_label: Optional[str] = None
+    #: The entry's stereo key and how much of it is known (DR-0038). ``stereo_label`` is NULL while nothing is
+    #: resolved, so a reader must not take that NULL for "not stereochemically distinguished".
+    stereo_descriptor: Optional[str] = None
+    stereo_resolution: Optional[StereoResolution] = None
     isotope_key: Optional[str] = None
     #: The transition-state entry's OWN structural SMILES, as deposited --
     #: distinct from ``formula``, which is only ``mol_from_smiles(this)``
@@ -311,6 +315,8 @@ def _resolve_species_entry_chemistry(
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.stereo_label,
+            SpeciesEntry.stereo_descriptor,
+            SpeciesEntry.stereo_resolution,
             SpeciesEntry.isotope_key,
             Species.multiplicity,
             molecular_formula_expr(Species.smiles).label("formula"),
@@ -327,6 +333,8 @@ def _resolve_species_entry_chemistry(
             electronic_state_label=row.electronic_state_label,
             term_symbol=row.term_symbol,
             stereo_label=row.stereo_label,
+            stereo_descriptor=row.stereo_descriptor,
+            stereo_resolution=row.stereo_resolution,
             isotope_key=row.isotope_key,
         )
         for row in rows
@@ -386,7 +394,7 @@ def _resolve_reaction_entry_chemistry(
             ReactionEntryStructureParticipant.role,
             ReactionEntryStructureParticipant.participant_index,
             SpeciesEntry.public_ref.label("species_entry_ref"),
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
@@ -409,36 +417,29 @@ def _resolve_reaction_entry_chemistry(
         .where(ReactionEntry.public_ref.in_(refs))
     ).all()
 
-    reaction_ids = {row.reaction_id for row in rows}
-    stoichiometry_by_key: dict[tuple[int, int, ReactionRole], int] = {}
-    if reaction_ids:
-        stoich_rows = session.execute(
-            select(
-                ReactionParticipant.reaction_id,
-                ReactionParticipant.species_id,
-                ReactionParticipant.role,
-                ReactionParticipant.stoichiometry,
-            ).where(ReactionParticipant.reaction_id.in_(reaction_ids))
-        ).all()
-        stoichiometry_by_key = {
-            (r.reaction_id, r.species_id, r.role): r.stoichiometry for r in stoich_rows
-        }
-
     reversible_by_ref: dict[str, bool] = {}
     reactants_by_ref: dict[str, list[ReactionEquationParticipant]] = {}
     products_by_ref: dict[str, list[ReactionEquationParticipant]] = {}
+    # One structure-participant row is stored per occurrence (``H + H -> H2``: two rows, one H entry). Each distinct
+    # entry is served once per side with its own occurrence count as ``stoichiometry``.
+    seen: dict[tuple[str, ReactionRole, str], ReactionEquationParticipant] = {}
     for row in rows:
         reversible_by_ref[row.reaction_entry_ref] = row.reversible
+        key = (row.reaction_entry_ref, row.role, row.species_entry_ref)
+        if key in seen:
+            seen[key].stoichiometry += 1
+            # The first position written, whatever order the rows arrive in (the rule in ``reaction_participants``).
+            seen[key].participant_index = min(seen[key].participant_index, row.participant_index)
+            continue
         participant = ReactionEquationParticipant(
             species_entry_ref=row.species_entry_ref,
             species_entry_label=species_entry_label_for(row),
             smiles=row.smiles,
             formula=row.formula,
-            stoichiometry=stoichiometry_by_key.get(
-                (row.reaction_id, row.species_id, row.role), 1
-            ),
+            stoichiometry=1,
             participant_index=row.participant_index,
         )
+        seen[key] = participant
         bucket = (
             reactants_by_ref
             if row.role is ReactionRole.reactant

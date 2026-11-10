@@ -51,7 +51,6 @@
   "pagination": {
     "limit": 200,
     "offset": 0,
-    "post_collapse_total": 4,
     "returned": 4,
     "total": 4
   },

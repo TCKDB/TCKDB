@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_snapshot_db
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.server_faults import ServerFaultRoute
 from app.schemas.reads.scientific_relative_conformer_energy import (
     RelativeConformerEnergyCompareManifest,
     RelativeConformerEnergyCompareRequest,
@@ -38,8 +39,9 @@ from app.schemas.reads.scientific_relative_conformer_energy import (
 )
 from app.services.relative_conformer_energy import public
 from app.services.scientific_read.profile import stamp_read_profile
+from app.services.scientific_read.ref_guard import attach_review_statuses
 
-router = APIRouter(prefix="/species-entries")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species-entries")
 
 _ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
@@ -82,6 +84,7 @@ def relative_conformer_energies(
     entry_id = public.resolve_entry(session, species_entry_ref)
     payload = public.build_response(public.run(session, entry_id=entry_id, body=body), entry_ref=species_entry_ref)
     stamp_read_profile(payload)
+    attach_review_statuses(payload)
     return payload
 
 
@@ -136,6 +139,7 @@ def relative_conformer_energies_compare(
         public.run_compare(session, entry_id=entry_id, body=body), entry_ref=species_entry_ref
     )
     stamp_read_profile(payload)
+    attach_review_statuses(payload)
     return payload
 
 

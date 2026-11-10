@@ -13,14 +13,13 @@ evidence is an entry, and comparing several entries of one concept needs a valid
 not taken yet, so sibling entries are assessed one at a time.
 
 Paths take public refs only; an integer id is refused. The body carries no database id, no sort expression, no
-pagination, no caller-authored rule and no bound (the engineering bounds are fixed server-side; above them the answer
-is a coded 422 and never a prefix winner).
+pagination and no bound (the engineering bounds are fixed server-side; above them the answer
+is a coded 422 and never an answer from a prefix).
 
 The session is a read-only REPEATABLE READ snapshot opened **before** the route body runs (``get_snapshot_db``), so
 resolving the entry, counting the population and loading every record are one consistent state, and the manifest says
-so. The response is built from public refs only and is returned directly, not through the internal-id stripper
-(which would delete the rule registry key ``rule_id`` from the decision); a test asserts instead that no database id
-appears in either document.
+so. The response is built from public refs only and is returned directly, not through the internal-id stripper;
+a test asserts instead that no database id appears in either document.
 """
 
 from __future__ import annotations
@@ -31,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_snapshot_db
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.server_faults import ServerFaultRoute
 from app.schemas.reads.scientific_structure_selection import (
     CalculationSelectionRequest,
     ConformerSelectionRequest,
@@ -39,6 +39,7 @@ from app.schemas.reads.scientific_structure_selection import (
     TransitionStateEvidenceSelectionRequest,
 )
 from app.services.scientific_read.profile import stamp_read_profile
+from app.services.scientific_read.ref_guard import attach_review_statuses
 from app.services.structure_selection.public import (
     SelectionBody,
     build_response,
@@ -48,8 +49,8 @@ from app.services.structure_selection.public import (
     run_selection,
 )
 
-species_router = APIRouter(prefix="/species-entries")
-tse_router = APIRouter(prefix="/transition-state-entries")
+species_router = APIRouter(route_class=ServerFaultRoute, prefix="/species-entries")
+tse_router = APIRouter(route_class=ServerFaultRoute, prefix="/transition-state-entries")
 
 _ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
@@ -72,6 +73,7 @@ def _select(session: Session, request: Request, body: SelectionBody, entry_id: i
     selection = run_selection(session, entry_id=entry_id, body=body)
     payload = build_response(selection, entry_ref=entry_ref)
     stamp_read_profile(payload)
+    attach_review_statuses(payload)
     return payload
 
 
@@ -96,7 +98,7 @@ def select_species_calculations(
     species_entry_ref: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_snapshot_db),
 ) -> StructureSelectionResponse:
-    """The lowest comparable recorded energy among the entry's calculations, or the audited-rule protocol preference.
+    """The lowest comparable recorded energy among the entry's calculations, or (``intent=protocol_coverage``) the protocols that cover every requested member, listed in display order.
 
     Values are ordered only inside one cohort (the same established recipe, quantity and energy convention); several
     cohorts end as ``incomparable_alternatives`` and a lower absolute energy never names a method winner. A calculation
@@ -136,7 +138,7 @@ def select_species_conformers(
     species_entry_ref: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_snapshot_db),
 ) -> StructureSelectionResponse:
-    """The lowest validated basin of one cohort, the basins that support a claim, or the protocol preference.
+    """The lowest validated basin of one cohort, the basins that support a claim, or the protocols that cover a request, in display order.
 
     A basin needs supported curvature evidence on its own geometry: imaginary modes are judged by magnitude against
     the stored tau (ADR 0012), never counted. Repeated determinations of one basin are alternates, not independent

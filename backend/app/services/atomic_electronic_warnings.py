@@ -58,7 +58,11 @@ __all__ = [
     "W_MISSING_ATOMIC_SPIN_ORBIT_CORRECTION",
     "collect_atomic_electronic_warnings",
     "collect_bundle_atomic_warnings",
+    "collect_conformer_atomic_warnings",
+    "collect_pdep_atomic_warnings",
+    "collect_thermo_atomic_warnings",
     "corrections_include_spin_orbit",
+    "thermo_carries_enthalpy",
 ]
 
 
@@ -77,6 +81,31 @@ def corrections_include_spin_orbit(corrections: Iterable[object]) -> bool:
             if ck is not None and AppliedCorrectionComponentKind(ck) == (AppliedCorrectionComponentKind.soc):
                 return True
     return False
+
+
+def thermo_carries_enthalpy(thermo: object) -> bool:
+    """True when a thermo payload states an energy-bearing value.
+
+    A spin-orbit shift moves an atom's enthalpy and free energy, not its entropy or heat
+    capacity, so a thermo that states only ``s298_j_mol_k`` or ``cp`` points has no energy
+    for the shift to be missing from. Enthalpy-bearing: ``h298_kj_mol``,
+    ``enthalpy_formation_0k_kj_mol``, a NASA-7 or NASA-9 polynomial (their integration
+    constants are the enthalpy), a Wilhoit block with ``h0_kj_mol``, or a tabulated point
+    with ``h_kj_mol`` or ``g_kj_mol``.
+    """
+    if getattr(thermo, "h298_kj_mol", None) is not None:
+        return True
+    if getattr(thermo, "enthalpy_formation_0k_kj_mol", None) is not None:
+        return True
+    if getattr(thermo, "nasa", None) is not None or getattr(thermo, "nasa9_intervals", None):
+        return True
+    wilhoit = getattr(thermo, "wilhoit", None)
+    if wilhoit is not None and getattr(wilhoit, "h0_kj_mol", None) is not None:
+        return True
+    return any(
+        getattr(pt, "h_kj_mol", None) is not None or getattr(pt, "g_kj_mol", None) is not None
+        for pt in (getattr(thermo, "points", None) or ())
+    )
 
 
 def collect_atomic_electronic_warnings(
@@ -133,37 +162,33 @@ def collect_atomic_electronic_warnings(
     if ground.is_s_term:
         return warnings
 
-    j_desc = ", ".join(f"J={two_j / 2:g} (g={two_j + 1}) at {e:g} cm^-1" for two_j, e in ground.levels)
     if electronic_levels is not None and len(electronic_levels) == 0 and statmech_computed:
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=f"{statmech_field}.electronic_levels",
                 code=W_MISSING_ATOMIC_ELECTRONIC_LEVELS,
-                message=(
-                    f"{element} atom has a {ground.term_symbol} ground term with "
-                    f"fine structure ({j_desc}) but this statmech carries no "
-                    f"electronic_levels, so its electronic partition function is "
-                    f"only the spin degeneracy {multiplicity}. Its entropy is low and "
-                    f"its free energy too high by about "
-                    f"{-ground.spin_only_free_energy_error_kj_mol():.2f} kJ/mol at "
-                    f"298.15 K (q_el = {ground.electronic_partition_function():.2f} "
-                    f"against {multiplicity})."
-                ),
+                context={
+                    "element": element,
+                    "ground_term": ground.term_symbol,
+                    "multiplicity": multiplicity,
+                    "electronic_partition_function": ground.electronic_partition_function(),
+                    "free_energy_error_kj_mol": -ground.spin_only_free_energy_error_kj_mol(),
+                    "ground_levels": [
+                        {"j": two_j / 2, "degeneracy": two_j + 1, "energy_cm1": energy} for two_j, energy in ground.levels
+                    ],
+                },
             )
         )
     if energy_is_computed and not has_soc_total:
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=energy_field,
                 code=W_MISSING_ATOMIC_SPIN_ORBIT_CORRECTION,
-                message=(
-                    f"{element} atom has a {ground.term_symbol} ground term whose "
-                    f"spin-orbit splitting lowers the ground level, but no "
-                    f"soc_total energy correction was supplied, so its energy is "
-                    f"the spin-orbit-free value, which lies "
-                    f"{abs(ground.spin_orbit_shift_kj_mol):.2f} kJ/mol above the "
-                    f"ground level."
-                ),
+                context={
+                    "element": element,
+                    "ground_term": ground.term_symbol,
+                    "spin_orbit_shift_kj_mol": abs(ground.spin_orbit_shift_kj_mol),
+                },
             )
         )
     return warnings
@@ -183,17 +208,16 @@ def _degeneracy_warnings(*, element, ground, levels, field):
     if lowest.degeneracy in allowed:
         return []
     return [
-        UploadWarning(
+        UploadWarning.from_code(
             field=field,
             code=W_ATOMIC_ELECTRONIC_DEGENERACY_CONTRADICTS_TERM,
-            message=(
-                f"The lowest electronic level of this {element} atom has "
-                f"degeneracy {lowest.degeneracy}, but the {ground.term_symbol} "
-                f"ground term has levels of degeneracy "
-                f"{', '.join(str(g) for g in ground.level_degeneracies)} in "
-                f"energy order, so the lowest level can only be "
-                f"{', '.join(str(a) for a in allowed)}."
-            ),
+            context={
+                "element": element,
+                "ground_term": ground.term_symbol,
+                "lowest_degeneracy": lowest.degeneracy,
+                "allowed_degeneracies": list(allowed),
+                "level_degeneracies": list(ground.level_degeneracies),
+            },
         )
     ]
 
@@ -217,7 +241,11 @@ def collect_bundle_atomic_warnings(
     element = single_atom_element(xyz_texts=list(xyz_texts), smiles=species_entry.smiles)
     if element is None:
         return []
-    thermo_computed = thermo is not None and thermo.scientific_origin == ScientificOriginKind.computed
+    thermo_computed = (
+        thermo is not None
+        and thermo.scientific_origin == ScientificOriginKind.computed
+        and thermo_carries_enthalpy(thermo)
+    )
     return collect_atomic_electronic_warnings(
         element=element,
         charge=species_entry.charge,
@@ -231,3 +259,106 @@ def collect_bundle_atomic_warnings(
         statmech_field=statmech_field,
         energy_field=energy_field,
     )
+
+
+def collect_thermo_atomic_warnings(request) -> list[UploadWarning]:
+    """Adapter for ``POST /uploads/thermo`` (also a bundle's thermo records and the thermo job).
+
+    A thermo request carries the species identity and its own applied
+    corrections; it carries no levels, so nothing is said about them. The
+    spin-orbit judgement is made only on corrections this request lists. A
+    thermo that cites a record the request cannot see into (``existing_statmech_id``,
+    a source calculation by ``existing_calculation_id``, or a protocol supporting calculation by
+    ``calculation_ref``) may have its spin-orbit
+    energy recorded there, so the absence is not judged.
+    """
+    corrections = list(request.applied_energy_corrections)
+    has_soc = corrections_include_spin_orbit(corrections)
+    protocol = request.protocol
+    cites_unseen_record = (
+        request.existing_statmech_id is not None
+        or any(sc.existing_calculation_id is not None for sc in request.source_calculations)
+        or (
+            protocol is not None
+            and any(c.calculation_ref is not None for c in protocol.supporting_calculations)
+        )
+    )
+    element = single_atom_element(smiles=request.species_entry.smiles)
+    if element is None:
+        return []
+    return collect_atomic_electronic_warnings(
+        element=element,
+        charge=request.species_entry.charge,
+        multiplicity=request.species_entry.multiplicity,
+        electronic_state_kind=request.species_entry.electronic_state_kind,
+        term_symbol=request.species_entry.term_symbol,
+        electronic_levels=None,
+        statmech_computed=False,
+        energy_is_computed=(
+            bool(corrections)
+            or (request.scientific_origin == ScientificOriginKind.computed and thermo_carries_enthalpy(request))
+        )
+        and not cites_unseen_record,
+        has_soc_total=has_soc,
+        energy_field="applied_energy_corrections",
+    )
+
+
+def collect_conformer_atomic_warnings(request) -> list[UploadWarning]:
+    """Adapter for ``POST /uploads/conformers`` (and the conformer job).
+
+    The request carries the geometry, the statmech (its levels, and its own
+    ``scientific_origin``, which is what is stored on the statmech row) and the applied corrections, so all three judgements are made on
+    what it holds.
+    """
+    element = single_atom_element(xyz_texts=[request.geometry.xyz_text], smiles=request.species_entry.smiles)
+    if element is None:
+        return []
+    corrections = list(request.applied_energy_corrections)
+    statmech = request.statmech
+    return collect_atomic_electronic_warnings(
+        element=element,
+        charge=request.species_entry.charge,
+        multiplicity=request.species_entry.multiplicity,
+        electronic_state_kind=request.species_entry.electronic_state_kind,
+        term_symbol=request.species_entry.term_symbol,
+        electronic_levels=(list(statmech.electronic_levels) if statmech is not None else None),
+        statmech_computed=statmech is not None and statmech.scientific_origin == ScientificOriginKind.computed,
+        energy_is_computed=bool(corrections),
+        has_soc_total=corrections_include_spin_orbit(corrections),
+        statmech_field="statmech",
+        energy_field="applied_energy_corrections",
+    )
+
+
+def collect_pdep_atomic_warnings(request) -> list[UploadWarning]:
+    """Adapter for ``POST /uploads/networks/pdep`` (and the network job).
+
+    A network species with a statmech block is judged on its levels. The route has
+    no corrections field, so it cannot see whether spin-orbit energy was applied:
+    that warning is not emitted here.
+    """
+    warnings: list[UploadWarning] = []
+    for sp in request.species:
+        if sp.statmech is None:
+            continue
+        element = single_atom_element(
+            xyz_texts=[c.geometry.xyz_text for c in sp.conformers], smiles=sp.species_entry.smiles
+        )
+        if element is None:
+            continue
+        warnings.extend(
+            collect_atomic_electronic_warnings(
+                element=element,
+                charge=sp.species_entry.charge,
+                multiplicity=sp.species_entry.multiplicity,
+                electronic_state_kind=sp.species_entry.electronic_state_kind,
+                term_symbol=sp.species_entry.term_symbol,
+                electronic_levels=list(sp.statmech.electronic_levels),
+                statmech_computed=sp.statmech.scientific_origin == ScientificOriginKind.computed,
+                energy_is_computed=None,
+                has_soc_total=False,
+                statmech_field=f"species[{sp.key!r}].statmech",
+            )
+        )
+    return warnings

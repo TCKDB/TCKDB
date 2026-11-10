@@ -10,6 +10,7 @@ through include validation but not yet expanded; see
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field
@@ -32,6 +33,8 @@ from app.db.models.common import (
     ImaginaryModeDisposition,
     IRCDirection,
     LegacyCompositeShape,
+    ParameterSource,
+    ParameterStatementKind,
     PathSearchMethod,
     RecordReviewStatus,
     ScanCoordinateKind,
@@ -51,9 +54,12 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
     SCFStabilityStatusValue,
+    ScientificResponse,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
+from app.schemas.reads.scientific_deposit_warnings import RecordWarnings, SubmissionWarnings
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 from app.services.trust.models import TrustFragment
 
 # ---------------------------------------------------------------------------
@@ -122,7 +128,7 @@ class RequestEcho(ProfiledRequestEcho):
 # ---------------------------------------------------------------------------
 
 
-class SpeciesEntryOwnerSummary(BaseModel):
+class SpeciesEntryOwnerSummary(EntryFacetFields):
     """Compact species/species-entry owner shape for a calculation.
 
     Mirrors ``SpeciesCalculationsSpeciesContext`` but only carries the
@@ -180,7 +186,7 @@ class CalculationOwnerSummary(BaseModel):
     guarantees this.
 
     **One exception, under ``profile=curated`` only.** When the owning
-    transition-state entry is hidden (not approved), the ref guard withholds
+    transition-state entry is withheld (rejected or deprecated), the ref guard withholds
     the whole ``transition_state_entry`` block, so ``kind`` can be
     ``"transition_state_entry"`` while *both* owners are ``null``. That is
     "the owner is not shown", not "the calculation has no owner". The default
@@ -593,6 +599,10 @@ class TauProtocolParameterEntry(BaseModel):
 
     canonical_key: str
     canonical_value: str | None = None
+    #: ``reported`` (an output log reports the program used it, and the stored basis rests on that method),
+    #: ``requested`` (the log's echo or a deck), or null (typed by the depositor, or absent). A report the stored basis
+    #: does not agree with is not listed here.
+    statement_kind: ParameterStatementKind | None = None
 
 
 class TauRankedModeEntry(BaseModel):
@@ -1007,6 +1017,73 @@ class CalculationConstraintSummary(BaseModel):
     target_value: float | None = None
 
 
+class EffectiveSettingState(str, Enum):
+    """Where the value shown for a setting comes from, best evidence first.
+
+    ``reported``: the output log prints the value the program used. ``requested``: the log's echoed input, else the
+    uploaded deck, else a value the depositor typed, asked for it (``requested_from`` says which).
+    ``assumed_default``: the log neither reports nor echoes it, so the program's documented default is shown, labelled as
+    assumed. It depends on the declared program, version and method and, for ORCA, the calculation type.
+    ``assumed_default_no_output_log``: the same, with no output log at all. ``not_stated``: nothing says, and no
+    default is documented or the program or version is not declared.
+    """
+
+    reported = "reported"
+    requested = "requested"
+    assumed_default = "assumed_default"
+    assumed_default_no_output_log = "assumed_default_no_output_log"
+    not_stated = "not_stated"
+
+
+class ReportedSettingValue(BaseModel):
+    """One number or code an output log printed for a setting (a canonical key, or the raw key for an undocumented code)."""
+
+    key: str
+    value: str
+
+
+class EffectiveSettingSummary(BaseModel):
+    """What was used for one setting of a calculation, and how we know.
+
+    Computed when the record is read; an assumed default is never stored. ``reported`` lists what the log printed:
+    for ORCA the integration accuracy and the largest angular grid, for the SCF the thresholds. Gaussian's grid is
+    listed as the raw ``IRadAn`` code it prints and does not set ``state``: its correspondence to a named grid is not
+    documented, so the state of a Gaussian grid comes from the echoed or deck value, then the assumed default.
+    """
+
+    setting: Literal["grid", "scf_convergence"]
+    state: EffectiveSettingState
+    requested_value: str | None = None
+    requested_from: Literal["output_log", "input", "typed"] | None = None
+    reported: list[ReportedSettingValue] = Field(default_factory=list)
+    assumed_value: str | None = None
+    #: True when the artifact that decides ``requested_value`` states two different values: the value is then
+    #: withheld (``None``) rather than one of them picked, and the state still names that artifact.
+    conflicting: bool = False
+
+
+class RoleCalculationSettings(BaseModel):
+    """The settings behind one level (geometry, frequency or energy) of a thermo or statmech record.
+
+    ``calculation_ref`` is the calculation the record itself links under that level, picked the way the record's
+    ``levels`` are derived; ``settings`` is that calculation's :class:`EffectiveSettingSummary` list, built by the same
+    code as the calculation read. A level the record has no linked calculation for is listed with
+    ``calculation_ref=null`` and an ``absent_reason``; it is never filled from a sibling record or an unlinked
+    calculation. Computed when the record is read; nothing here is stored.
+
+    ``absent_reason``: ``not_linked`` (no linked calculation answers this level), ``ambiguous`` (linked energy
+    calculations disagree on level of theory, so there is no single one), ``composite_recipe`` (the level is the
+    internal level of a composite method, not a calculation anybody deposited). A level whose linked calculations the
+    active review profile hides is left out of the list altogether.
+    """
+
+    role: Literal["geometry", "frequency", "energy"]
+    calculation_ref: str | None = None
+    calculation_type: CalculationType | None = None
+    absent_reason: Literal["not_linked", "ambiguous", "composite_recipe"] | None = None
+    settings: list[EffectiveSettingSummary] = Field(default_factory=list)
+
+
 class CalculationParameterSummary(BaseModel):
     """One parsed ``calculation_parameter`` row, projected for the
     ``include=parameters`` heavy include.
@@ -1014,9 +1091,12 @@ class CalculationParameterSummary(BaseModel):
     Carries both the raw (software-specific) and canonical (normalized)
     key/value pairs plus the small bag of parser metadata that's
     public-safe (``section``, ``value_type``, ``unit``,
-    ``parameter_index``). The full vocab row (descriptions, classification
-    flags) is intentionally not inlined; callers that need it can fetch
-    the vocab via a separate read.
+    ``parameter_index``) and ``source``, which says where the row came from:
+    ``parser`` (read from an uploaded input deck or output log), ``upload``
+    (typed by the depositor) or ``curated``. A reader comparing two rows for
+    the same key needs it to tell a declaration from an observation. The full
+    vocab row (descriptions, classification flags) is intentionally not
+    inlined; callers that need it can fetch the vocab via a separate read.
 
     ``parameter_id`` is subject to the Phase D internal-ID visibility
     policy and is stripped by the strip helper when the deployment
@@ -1032,6 +1112,12 @@ class CalculationParameterSummary(BaseModel):
     value_type: str | None = None
     unit: str | None = None
     parameter_index: int | None = None
+    source: ParameterSource | None = None
+    #: For a parser row: ``input`` (read from the deck) or ``output_log`` (read from a log).
+    artifact_kind: ArtifactKind | None = None
+    #: For a parser row: ``requested`` (the deck, or the input a log echoes, asked for it) or ``reported`` (the log
+    #: prints it as the value the program used). ``None`` for typed and curated rows.
+    statement_kind: ParameterStatementKind | None = None
     created_at: datetime | None = None
 
 
@@ -1518,6 +1604,8 @@ class ScientificCalculationRecord(BaseModel):
     ) = None
     spin_diagnostic: list[CalculationSpinDiagnosticSummary] | None = None
     parameters: list[CalculationParameterSummary] | None = None
+    #: ``include=parameters``. The grid and SCF convergence this calculation used, each with its evidence.
+    effective_settings: list[EffectiveSettingSummary] | None = None
     constraints: list[CalculationConstraintSummary] | None = None
     review_history: list[CalculationReviewEntry] | None = None
     freq_modes: list[CalculationFreqModeSummary] | None = None
@@ -1528,9 +1616,15 @@ class ScientificCalculationRecord(BaseModel):
     trust: TrustFragment | None = None
 
 
-class ScientificCalculationDetailResponse(BaseModel):
+class ScientificCalculationDetailResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/calculations/{handle}."""
 
+    #: The deposit-time warnings of each record this response names, with its public ref (see
+    #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    record_warnings: list[RecordWarnings] = Field(default_factory=list)
+    #: Warnings about the deposit that no one record could take, once per submission a named record belongs to
+    #: (see ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    deposit_warnings: list[SubmissionWarnings] = Field(default_factory=list)
     request: RequestEcho
     review_summary: ReviewStatusSummary
     record: ScientificCalculationRecord

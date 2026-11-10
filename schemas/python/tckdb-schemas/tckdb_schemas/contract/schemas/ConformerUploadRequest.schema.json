@@ -1107,22 +1107,43 @@
           "default": null,
           "title": "Dispersion"
         },
-        "keywords": {
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "pno_truncation": {
           "anyOf": [
             {
-              "type": "string"
+              "$ref": "#/$defs/PnoTruncation"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Keywords"
+          "default": null
         },
-        "method": {
-          "minLength": 1,
-          "title": "Method",
-          "type": "string"
+        "relativistic_hamiltonian": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelativisticHamiltonian"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ri_approximation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiApproximation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "solvent": {
           "anyOf": [
@@ -1915,10 +1936,11 @@
       "type": "string"
     },
     "CoreTreatment": {
-      "description": "Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).\n\n``frozen_core``: the chemical core is held uncorrelated. ``all_electron``:\nevery electron is correlated. CCSD(T)/cc-pCVTZ frozen-core and all-electron\nare different levels (their difference is the core-valence term of a\nfocal-point scheme). Part of the level identity only when stated: a level\nthat does not say stays ``NULL`` and keeps the hash it always had.\n\nTwo members on purpose. A partial treatment (Gaussian ``FC=1`` /\n``FreezeInnerNobleGasCore``, an ORCA ``FC_EWIN`` energy window, an explicit\norbital range) is real but has no agreed name across codes; it is left\n``NULL`` and described in ``keywords`` until a producer needs it named.",
+      "description": "Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).\n\n``frozen_core``: the chemical core is held uncorrelated. ``all_electron``:\nevery electron is correlated. CCSD(T)/cc-pCVTZ frozen-core and all-electron\nare different levels (their difference is the core-valence term of a\nfocal-point scheme). Part of the level identity only when stated: a level\nthat does not say stays ``NULL`` and keeps the hash it always had.\n\n``window``: a partial treatment (a Gaussian ``Window=(m,n)`` orbital range,\nan ORCA ``FC_EWIN`` energy window). It is one value on purpose: the\nspecific window has no agreed form across codes and stays on the\ncalculation's ``core.frozen`` parameter rows, so two different windows are\none level of theory.",
       "enum": [
         "frozen_core",
-        "all_electron"
+        "all_electron",
+        "window"
       ],
       "title": "CoreTreatment",
       "type": "string"
@@ -2186,6 +2208,17 @@
         "custom"
       ],
       "title": "EnergyCorrectionApplicationRole",
+      "type": "string"
+    },
+    "EnergyCorrectionConvention": {
+      "enum": [
+        "electronic_only",
+        "electronic_plus_zpe",
+        "atom_and_bond_corrected",
+        "thermal_enthalpy_298k",
+        "other"
+      ],
+      "title": "EnergyCorrectionConvention",
       "type": "string"
     },
     "EnergyCorrectionSchemeKind": {
@@ -2896,6 +2929,7 @@
         "parsed_fchk",
         "parsed_hess",
         "parsed_log",
+        "parsed_log_archive",
         "uploaded",
         "derived"
       ],
@@ -3237,18 +3271,6 @@
           "default": null,
           "title": "Dispersion"
         },
-        "keywords": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Keywords"
-        },
         "method": {
           "anyOf": [
             {
@@ -3261,6 +3283,39 @@
           ],
           "default": null,
           "title": "Method"
+        },
+        "pno_truncation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PnoTruncation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "relativistic_hamiltonian": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelativisticHamiltonian"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ri_approximation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiApproximation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "solvent": {
           "anyOf": [
@@ -3491,7 +3546,7 @@
     },
     "ModelMember": {
       "additionalProperties": false,
-      "description": "One member of an explicit equilibrium ensemble: an existing statmech record, in a basin.\n\n:param statmech_ref: The member's own statistical interpretation (an existing record of the same species entry).\n:param conformer_group_ref: The basin the member is assigned to.\n:param counting_multiplicity: The depositor's attributed multiplicity; omitted means not stated, never one.\n:param relative_energy_kj_mol: The member's energy relative to the ensemble's reference, in kJ/mol.\n:param region_key: The configurational region the member covers, to diagnose overlap with a rotor's integral.",
+      "description": "One member of an explicit equilibrium ensemble: an existing statmech record, in a basin.\n\n:param statmech_ref: The member's own statistical interpretation (an existing record of the same species entry).\n:param conformer_group_ref: The basin the member is assigned to.\n:param counting_multiplicity: The depositor's attributed multiplicity; omitted means not stated, never one.\n:param relative_energy_kj_mol: The member's energy relative to the ensemble's reference, in kJ/mol.\n:param relative_energy_convention: What is already folded into that energy: ``electronic_only``,\n    ``electronic_plus_zpe``, ``atom_and_bond_corrected`` or ``thermal_enthalpy_298k``. Required with an energy and\n    refused without one; never assumed. All members of one declaration share one convention, and it agrees with the\n    recipe's ``energy_zero`` when that is stated. The shared enum lists ``other``, but it is always refused on a member,\n    because a member carries no note to explain it.\n:param region_key: The configurational region the member covers, to diagnose overlap with a rotor's integral.",
       "properties": {
         "conformer_group_ref": {
           "anyOf": [
@@ -3541,6 +3596,17 @@
           ],
           "default": null,
           "title": "Region Key"
+        },
+        "relative_energy_convention": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnergyCorrectionConvention"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "relative_energy_kj_mol": {
           "anyOf": [
@@ -4509,6 +4575,16 @@
       "title": "PathSearchResultPayload",
       "type": "object"
     },
+    "PnoTruncation": {
+      "description": "The DLPNO truncation preset a level of theory was run with.\n\nSource: ORCA 6.1 manual, DLPNO \"Basic Usage\": the ``LoosePNO``,\n``NormalPNO`` and ``TightPNO`` keywords are the recommended way to control\naccuracy. A hand-set numeric threshold is not representable here and stays\na parameter row. Part of the level identity only when stated.",
+      "enum": [
+        "loose",
+        "normal",
+        "tight"
+      ],
+      "title": "PnoTruncation",
+      "type": "string"
+    },
     "RelativisticFact": {
       "additionalProperties": false,
       "description": "The scalar-relativistic treatment.",
@@ -4534,6 +4610,21 @@
       "title": "RelativisticFact",
       "type": "object"
     },
+    "RelativisticHamiltonian": {
+      "description": "Scalar-relativistic Hamiltonian a level of theory was run with.\n\nOne vocabulary with the parsed parameter ``relativistic.hamiltonian``\n(``app/services/parameter_closed_values.py``). ``none`` is a stated\nnon-relativistic run and is a different level from not stating it.\nSources: ORCA 6.1 manual Table 2.54 (DKH2/DKH, ZORA, IORA, X2C);\nGaussian 09 ``Integral`` (DKH/DKH2, DKH0, DKHSO, RESC, NoDKH).\nPart of the level identity only when stated.",
+      "enum": [
+        "none",
+        "dkh0",
+        "dkh2",
+        "dkhso",
+        "resc",
+        "x2c",
+        "zora",
+        "iora"
+      ],
+      "title": "RelativisticHamiltonian",
+      "type": "string"
+    },
     "RelativisticTreatment": {
       "description": "The scalar-relativistic Hamiltonian: none (non-relativistic), Douglas-Kroll-Hess, X2C or ZORA.",
       "enum": [
@@ -4543,6 +4634,18 @@
         "zora"
       ],
       "title": "RelativisticTreatment",
+      "type": "string"
+    },
+    "RiApproximation": {
+      "description": "The resolution-of-the-identity approximation of the SCF step.\n\nOne vocabulary with the parsed parameter ``ri.approximation``. ``none`` is\na stated no-RI run. RI inside a method name (``RI-MP2``) is the method's own\nand is not stated here. Part of the level identity only when stated.",
+      "enum": [
+        "none",
+        "rij",
+        "rijcosx",
+        "rijk",
+        "rijonx"
+      ],
+      "title": "RiApproximation",
       "type": "string"
     },
     "RigidRotorKind": {
@@ -4995,7 +5098,7 @@
     },
     "SpeciesEntryIdentityPayload": {
       "additionalProperties": false,
-      "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo label such as ``R`` or ``E``.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X`` or ``A``.\n:param term_symbol_raw: Optional raw uploaded term symbol.\n:param term_symbol: Optional canonicalized term symbol.\n\nIsotopic resolution is *not* a field on this payload. It is derived\nserver-side from the atom-resolved isotope labels in ``smiles`` (see\n``SpeciesIdentityPayload.smiles``). The former free-text\n``isotopologue_label`` has been removed: an arbitrary string could mint\ntwo species identities that no scientific content distinguished, and a\nderived key may never be accepted from an uploader.",
+      "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo descriptor in the closed vocabulary\n    ``R``/``S``/``r``/``s`` (lower case: a pseudo-asymmetric centre)/``E``/``Z``/``-`` (an\n    element that is not stereogenic in this configuration)/``?``, one comma-separated\n    token per potential stereo element in canonical order (``E``, ``R,S``, ``E,?``). Free text\n    such as ``\"trans\"`` is refused. It fills only the elements the geometry\n    and the SMILES marks leave unresolved and is cross-checked where they\n    exist; the server decides whether it fits the molecule.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X``, ``A``, ``E`` or\n    ``T1``; only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted\n    (``electronic_state_label_invalid`` otherwise) and the canonical spelling is stored.\n:param term_symbol_raw: Optional raw uploaded term symbol, kept verbatim and not checked.\n:param term_symbol: Optional canonicalized term symbol such as ``2Pi``, ``3P2`` or ``X 1A1``;\n    only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted\n    (``term_symbol_invalid`` otherwise) and the canonical spelling (``²Π``) is stored, the\n    typed spelling going to ``term_symbol_raw`` when that is not given.\n\nIsotopic resolution is *not* a field on this payload. It is derived\nserver-side from the atom-resolved isotope labels in ``smiles`` (see\n``SpeciesIdentityPayload.smiles``). The former free-text\n``isotopologue_label`` has been removed: an arbitrary string could mint\ntwo species identities that no scientific content distinguished, and a\nderived key may never be accepted from an uploader.",
       "properties": {
         "charge": {
           "title": "Charge",
@@ -5043,7 +5146,7 @@
         "stereo_label": {
           "anyOf": [
             {
-              "maxLength": 64,
+              "maxLength": 512,
               "type": "string"
             },
             {
@@ -5952,7 +6055,7 @@
     },
     "WavefunctionDiagnosticPayload": {
       "additionalProperties": false,
-      "description": "Optional inline wavefunction diagnostics parsed from a calculation's output.\n\nCarries scalar coupled-cluster / multireference diagnostics — T1\n(Lee–Taylor), D1 (Janowski), the norm of the T1 amplitude vector,\nand the largest T2 amplitude. Spin-contamination ``<S^2>`` signals\nare intentionally NOT included in this first slice.\n\nGeneric across calculation types that produce electronic-structure\noutput (typically ``sp``). The producer contract is to emit a block\nonly when at least one diagnostic was actually parsed from the\ncalculation; this payload rejects an all-null block with no note.\n\n:param t1_diagnostic: Coupled-cluster T1 diagnostic (Lee–Taylor).\n:param d1_diagnostic: Janowski D1 diagnostic.\n:param t1_norm: Norm of the T1 amplitude vector, when reported.\n:param largest_t2_amplitude: Largest T2 amplitude magnitude, when\n    reported.\n:param note: Optional free-text annotation.",
+      "description": "Optional inline wavefunction diagnostics parsed from a calculation's output.\n\nCarries scalar coupled-cluster / multireference diagnostics — T1\n(Lee–Taylor), D1 (Janssen and Nielsen, 1998), the norm of the T1 amplitude vector,\nand the largest T2 amplitude. Spin-contamination ``<S^2>`` signals\nare intentionally NOT included in this first slice.\n\nGeneric across calculation types that produce electronic-structure\noutput (typically ``sp``). The producer contract is to emit a block\nonly when at least one diagnostic was actually parsed from the\ncalculation; this payload rejects an all-null block with no note.\n\n:param t1_diagnostic: Coupled-cluster T1 diagnostic (Lee–Taylor).\n:param d1_diagnostic: D1 diagnostic of Janssen and Nielsen (1998).\n:param t1_norm: Norm of the T1 amplitude vector, when reported.\n:param largest_t2_amplitude: Largest T2 amplitude magnitude, when\n    reported.\n:param note: Optional free-text annotation.",
       "properties": {
         "d1_diagnostic": {
           "anyOf": [

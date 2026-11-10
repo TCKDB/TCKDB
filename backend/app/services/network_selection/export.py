@@ -7,12 +7,12 @@ that node. The server then, under one read-only snapshot:
 1. checks the manifest is complete, belongs to this network, and **replays** at both levels from its own captured
    inputs (a forged or internally inconsistent document is refused);
 2. **re-runs the selection** from the manifest's normalised request against server-held content and the caller's
-   authorised population, and requires the scientific content (captured solves, assessments, decision, rule
-   registry, read profile) to be identical. A material change in content, review, rules or population is a stale
+   authorised population, and requires the scientific content (captured solves, assessments, decision, read
+   profile) to be identical. A material change in content, review or population is a stale
    manifest: it needs a fresh selection and is never silently refreshed here;
 3. checks the choice against the decision: a selected node must be the chosen one, an incomparable leading-front
-   node only when the caller accepted an administrative choice (default no), and nothing is exportable from a
-   conflict or from no applicable candidate;
+   node only when the caller accepted an administrative choice (default no), and nothing is exportable from no
+   applicable candidate;
 4. checks the representation choice is exact: one eligible fit per member, none extra, none missing. Alternatives are
    never added alongside the choice, and ``DUPLICATE`` is never written;
 5. refuses forms it cannot serialise with a structured refusal naming each fit and the reason.
@@ -62,6 +62,7 @@ from app.services.scientific_read.chemkin_serialize import (
     _flatten_cheb,
     _formula,
     _sanitize_name,
+    structure_comment,
 )
 from app.services.scientific_read.profile import current_read_profile
 from app.services.selection_kernel import Outcome
@@ -181,7 +182,7 @@ def _verify_against_server(session: Session, manifest: dict[str, Any], *, requir
     if unknown or differs:
         raise _refuse(
             CODE_MANIFEST_STALE,
-            "the submitted manifest is not what the server holds now (content, review states, rules, population or "
+            "the submitted manifest is not what the server holds now (content, review states, population or "
             "read profile changed, or the document was edited); run a fresh selection. Nothing was exported.",
             differs=sorted(set(differs)), unknown_request_keys=unknown,
         )
@@ -218,7 +219,7 @@ def _check_choice(manifest: dict[str, Any], choice: ExportChoice) -> bool:
     decision = manifest["decision"]
     outcome = decision["outcome"]
     node = choice.node_ref
-    if outcome in (Outcome.policy_preferred.value, Outcome.sole_eligible_candidate.value):
+    if outcome == Outcome.sole_eligible_candidate.value:
         if node != decision["selected_ref"]:
             raise _refuse(
                 CODE_CHOICE_NOT_ALLOWED,
@@ -243,7 +244,7 @@ def _check_choice(manifest: dict[str, Any], choice: ExportChoice) -> bool:
         return True
     raise _refuse(
         CODE_CHOICE_NOT_ALLOWED,
-        "this selection chose nothing (a conflict, or no applicable candidate); an administrative choice never "
+        "this selection chose nothing (no applicable candidate); an administrative choice never "
         "bypasses that.",
         reason="outcome_selects_nothing", outcome=outcome,
     )
@@ -348,11 +349,31 @@ def _load_fits(session: Session, network_ref: str, solve_ref: str, fit_refs: lis
 
 def _species_content(session: Session, refs: set[str]) -> dict[str, dict[str, Any]]:
     rows = session.execute(
-        select(SpeciesEntry.public_ref, Species.smiles, Species.public_ref)
+        select(
+            SpeciesEntry.public_ref,
+            Species.smiles,
+            Species.public_ref,
+            SpeciesEntry.stereo_descriptor,
+            Species.multiplicity,
+            SpeciesEntry.stereo_resolution,
+            SpeciesEntry.stereo_smiles,
+            SpeciesEntry.isotope_key,
+        )
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.public_ref.in_(refs))
     ).tuples()
-    return {entry_ref: {"smiles": smiles, "species_ref": species_ref} for entry_ref, smiles, species_ref in rows}
+    return {
+        entry_ref: {
+            "smiles": smiles,
+            "species_ref": species_ref,
+            "stereo_descriptor": descriptor,
+            "multiplicity": multiplicity,
+            "stereo_resolution": resolution,
+            "stereo_smiles": stereo_smiles,
+            "isotope_key": isotope_key,
+        }
+        for entry_ref, smiles, species_ref, descriptor, multiplicity, resolution, stereo_smiles, isotope_key in rows
+    }
 
 
 def _solve_origin(session: Session, manifest: dict[str, Any], solve_ref: str) -> dict[str, Any]:
@@ -540,7 +561,15 @@ def _chemkin_files(
         ]
     lines += ["ELEMENTS", " ".join(elements) or " ", "END", "", "SPECIES"]
     for ref in sorted(names):
-        lines.append(f"{names[ref]}   ! SMILES={species[ref]['smiles']} ref={species[ref]['species_ref']}")
+        comment = structure_comment(
+            species[ref]["smiles"],
+            stereo_descriptor=species[ref]["stereo_descriptor"],
+            stereo_resolution=species[ref]["stereo_resolution"],
+            stereo_smiles=species[ref]["stereo_smiles"],
+            multiplicity=species[ref]["multiplicity"],
+            isotope_key=species[ref]["isotope_key"],
+        )
+        lines.append(f"{names[ref]}   ! {comment} ref={species[ref]['species_ref']}")
     lines += ["END", "", f"REACTIONS {_EA_UNIT_HEADERS.get(choice.energy_units.lower(), 'CAL/MOLE')} MOLES"]
     for equation, fit in blocks:
         lines.extend(_reaction_block(equation, fit, choice.energy_units, origin_note))

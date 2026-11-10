@@ -3,7 +3,7 @@
 A selection is only as trustworthy as the inputs it can be re-derived from. The manifest holds the normalised request,
 the read profile and effective review statuses it was made under, the snapshot isolation, the subject entry, the
 population counts, **every candidate's facts and every normalised source calculation** (public refs and stored facts,
-no database id), each candidate's assessment, the registry entries consulted, and the decision. ``id_rank`` is an
+no database id), each candidate's assessment, and the decision. ``id_rank`` is an
 ordinal standing in for the id as the last tie-break; it cannot be turned back into one. Hashes and recorded
 eligibility flags alone would be inadequate, so the actual assessment inputs are carried.
 
@@ -15,18 +15,18 @@ Three offline operations, none touching a database:
 * :func:`reassess_statmech_captured_inputs` recomputes every candidate's assessment from the captured facts under the
   captured supported versions and refuses on any difference from the recorded one. It never trusts a recorded
   ``eligible``, applicability, reason or advisory, even when coordinated edits make them agree.
-* :func:`replay_statmech_decision` does the reassessment, then runs the scoped rules, fronts and decision over the
+* :func:`replay_statmech_decision` does the reassessment, then runs the ordering and decision over the
   *recomputed* assessments and compares with the recorded decision and top-level outcome.
 
 What replay is and is not. It reproduces reasoning from captured inputs. It does not authenticate scientific truth,
 provenance, or that a forged population was complete. The digests are **checksums, not signatures**: they detect an
 accidental or careless edit, and anyone who edits a manifest can recompute them, so a digest says nothing about who
 made it. Using an external manifest operationally needs server or release provenance and authorization, which no
-replay performs. A historic replay keeps the review statuses captured in the manifest: a later withdrawal, supersession,
-finding or rule deactivation changes a new live decision, never the historical artifact. A fresh endorsement is a new
+replay performs. A historic replay keeps the review statuses captured in the manifest: a later withdrawal, supersession
+or finding changes a new live decision, never the historical artifact. A fresh endorsement is a new
 authorized live selection.
 
-A manifest, semantics or rule version this release does not carry refuses the replay: nothing substitutes the current
+A manifest or semantics version this release does not carry refuses the replay: nothing substitutes the current
 rubric for a historical one. A manifest made under a *supported older* assessment semantics can have its recorded ordering reproduced
 (labelled ``historical``) but is never reassessed under today's rubric; a reassessment or full replay runs only under
 the running semantics and is labelled ``current``.
@@ -49,9 +49,10 @@ from app.services.manifest_formats import (
     new_format_registry,
     read_manifest_format,
 )
-from app.services.rule_registry import rule_recorded_in, rules_registry
+from app.services.scientific_read.common import check_read_profile_block, evidence_usable_statuses
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.selection_kernel import assessment_semantics as semantics
+from app.services.selection_kernel.requested import expected_candidate_statuses
 from app.services.statmech_selection.assessment import StatmechAssessment, assess_candidate
 from app.services.statmech_selection.bounds import check_manifest_size
 from app.services.statmech_selection.decision import (
@@ -67,15 +68,20 @@ from app.services.statmech_selection.models import (
     SUPPORTED_FINDING_VERSIONS,
     StatmechRequest,
 )
-from app.services.statmech_selection.rules import RULES_VERSION, StatmechRule, default_rules, validate_rules
-from app.services.statmech_selection.service import StatmechQualification
+from app.services.statmech_selection.service import StatmechQualification, verdict_of
 from app.services.statmech_selection.vocabulary import CONTRACT_VERSION
 from app.services.structure_selection.models import NormalizedCalculation
 from app.versioning import same_value
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
-#: reads exactly this format; a manifest in any other is refused.
-MANIFEST_FORMAT_VERSION = 1
+#: reads exactly this format; a manifest in any other is refused. Version 2: the decision no longer holds a protocol block
+#: with rules, rule matches, pair checks, edges, conflicts or undecided comparisons (it holds ``ordering``), and the
+#: request no longer holds a comparison objective or a reference model. Version 3: the request records its filters and its
+#: eligibility settings, the manifest records which review statuses a candidate itself may have and each candidate's
+#: verdict under those settings, and the population records the funnel. Version 4: ``read_profile`` records the review statuses whose linked
+#: evidence the profile withheld (ADR 0023); under ``curated`` a not-reviewed or under-review record is shown as
+#: evidence and only a rejected or deprecated one is a token.
+MANIFEST_FORMAT_VERSION = 4
 MANIFEST_FORMAT_NAME = "statmech_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "statmech_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -86,7 +92,8 @@ ASSESSMENT_SEMANTICS_NAME = "statmech_selection_assessment"
 ASSESSMENT_SEMANTICS = new_current_only_registry(
     "statmech_selection_assessment_semantics", ASSESSMENT_SEMANTICS_NAME, ASSESSMENT_VERSION
 )
-EVIDENCE_RUBRIC = VersionRef(name="statmech_qualification", version=ASSESSMENT_VERSION)
+#: The statmech evidence rubric has its own version: it did not change when the assessment semantics did.
+EVIDENCE_RUBRIC = VersionRef(name="statmech_qualification", version=1)
 
 INTEGRITY_NOTE = (
     "sha256 checksums over the canonical JSON of each captured input and of the whole manifest; they detect edits and "
@@ -145,7 +152,6 @@ def _versions() -> dict[str, Any]:
         "normalizer": NORMALIZER_VERSION,
         "decision": DECISION_VERSION,
         "administrative_key": ADMIN_KEY_VERSION,
-        "rules": RULES_VERSION,
         "finding_semantics": sorted(SUPPORTED_FINDING_VERSIONS),
     }
 
@@ -163,6 +169,7 @@ def _population(result: StatmechQualification, *, withhold_excluded: bool) -> di
         "excluded_count": 0 if withhold_excluded else result.excluded_count,
         "excluded_by_review": [] if withhold_excluded else [dict(e) for e in result.excluded_by_review],
         "excluded_by_review_withheld": withhold_excluded,
+        "funnel": dict(result.funnel),
     }
 
 
@@ -185,6 +192,11 @@ def build_manifest(
         ),
         "request": result.request.to_dict(),
         "effective_review_statuses": sorted(s.value for s in result.effective_statuses),
+        "candidate_review_statuses": sorted(s.value for s in result.candidate_statuses),
+        "verdicts": {
+            ref: {"blocked_by": list(v.blocked_by), "passed_only_by_override": list(v.passed_only_by_override), "competes": v.competes}
+            for ref, v in sorted(result.verdicts.items())
+        },
         "read_profile": dict(profile),
         "snapshot_isolation": result.snapshot_isolation,
         "subject": result.subject.to_dict(),
@@ -219,7 +231,7 @@ def _check_versions(manifest: dict[str, Any], *, reassessing: bool) -> int:
     """Refuse a manifest made under a version this release does not carry. Returns the assessment semantics version."""
     versions = manifest.get("versions") or {}
     running = _versions()
-    for name in ("contract", "decision", "administrative_key", "rules"):
+    for name in ("contract", "decision", "administrative_key"):
         if not same_value(versions.get(name), running[name]):
             raise ReplayError(
                 "unsupported_semantic_version",
@@ -287,6 +299,9 @@ def _check_consistency(
     profile = manifest.get("read_profile") or {}
     name = profile.get("profile")
     floor_raw = profile.get("review_floor")
+    problem = check_read_profile_block(profile)
+    if problem is not None:
+        raise ReplayError("inconsistent_manifest", problem)
     if name not in ("exploratory", "curated"):
         raise ReplayError("inconsistent_manifest", f"unknown read profile {name!r}")
     floor = RecordReviewStatus(floor_raw) if floor_raw is not None else None
@@ -299,15 +314,25 @@ def _check_consistency(
         )
     # Every captured input, not only the candidates: a declaration's members and each source calculation carry their own
     # status, and a manifest relabelled curated (or one with an input quietly flipped) must not pass on its candidates alone.
+    # ADR 0023: a source calculation and a declared member are evidence, judged by the evidence rule (every status but
+    # rejected and deprecated, over the caller's own floor), not by the profile's record floor. A replay computes this from the
+    # recorded request alone, so a manifest cannot widen it.
+    usable = evidence_usable_statuses(request.min_review_status)
+    recorded_candidate = frozenset(RecordReviewStatus(s) for s in manifest.get("candidate_review_statuses") or ())
+    if recorded_candidate != expected_candidate_statuses(floor, request.min_review_status, request.eligibility):
+        raise ReplayError(
+            "inconsistent_manifest",
+            "the review statuses a candidate may have are not what the recorded profile, request floor and eligibility settings allow",
+        )
     for candidate in candidates:
-        if candidate.review_status not in recorded:
+        if candidate.review_status not in recorded_candidate:
             raise ReplayError("inconsistent_manifest", f"{candidate.candidate_ref} has a review status its own request cannot see")
         if candidate.declaration is not None:
             for member in candidate.declaration.members:
-                if member.review_status is not None and member.review_status not in recorded:
+                if member.review_status is not None and member.review_status not in usable:
                     raise ReplayError("inconsistent_manifest", f"a member of {candidate.candidate_ref} has a status its request cannot see")
     for calc in calcs.values():
-        if calc.review_status not in recorded:
+        if calc.review_status not in usable:
             raise ReplayError("inconsistent_manifest", f"{calc.calculation_ref} has a review status its own request cannot see")
     if manifest.get("population", {}).get("visible_candidates") != len(candidates):
         raise ReplayError("inconsistent_manifest", "the recorded visible-candidate count is not the number of captured candidates")
@@ -339,27 +364,6 @@ def _recorded_assessments(manifest: dict[str, Any], candidates: Sequence[Candida
     return [by_ref[c.candidate_ref] for c in candidates]
 
 
-def _rules_for(manifest: dict[str, Any], rules: Sequence[StatmechRule] | None) -> tuple[StatmechRule, ...]:
-    candidates = tuple(default_rules() if rules is None else rules)
-    validate_rules(candidates)
-    registry = rules_registry("statmech_selection_rules", candidates)
-    used: list[StatmechRule] = []
-    for entry in (manifest["decision"].get("protocol") or {}).get("rules", []):
-        key = (entry["rule_id"], entry["version"])
-        rule = rule_recorded_in(registry, entry, lambda message: ReplayError("rule_unavailable", message))
-        described = rule.describe()
-        if described["status"] != entry["status"]:
-            raise ReplayError(
-                "rule_status_changed",
-                f"rule {key[0]} version {key[1]} was {entry['status']} when this decision was made and is "
-                f"{described['status']} now; a rule's status change is a new version",
-            )
-        if described.get("manifest_sha256") != entry.get("manifest_sha256"):
-            raise ReplayError("rule_manifest_changed", f"rule {key[0]} version {key[1]} now rests on a different audited manifest")
-        used.append(rule)
-    return tuple(used)
-
-
 # ---------------------------------------------------------------------------
 # The three operations
 # ---------------------------------------------------------------------------
@@ -389,7 +393,26 @@ def _compare_with_recorded(manifest: dict[str, Any], decision: StatmechDecision)
         )
 
 
-def reproduce_statmech_ordering(manifest: dict[str, Any], *, rules: Sequence[StatmechRule] | None = None) -> dict[str, Any]:
+def _check_verdicts(manifest: dict[str, Any], request: StatmechRequest, candidates: Sequence[CandidateFacts], assessments: Sequence[StatmechAssessment]) -> None:
+    """Each candidate's recorded verdict must be what its assessment gives under the recorded eligibility settings."""
+    recorded = manifest.get("verdicts")
+    if not isinstance(recorded, dict) or set(recorded) != {c.candidate_ref for c in candidates}:
+        raise ReplayError("verdict_mismatch", "the recorded verdicts do not cover exactly the captured candidates")
+    for facts, assessment in zip(candidates, assessments, strict=True):
+        verdict = verdict_of(assessment, facts, request)
+        expected = {
+            "blocked_by": list(verdict.blocked_by),
+            "passed_only_by_override": list(verdict.passed_only_by_override),
+            "competes": verdict.competes,
+        }
+        if _canon(recorded[assessment.candidate_ref]) != _canon(expected):
+            raise ReplayError(
+                "verdict_mismatch",
+                f"the recorded verdict of {assessment.candidate_ref} is not what its assessment gives under the recorded eligibility settings",
+            )
+
+
+def reproduce_statmech_ordering(manifest: dict[str, Any]) -> dict[str, Any]:
     """Re-run the decision over the manifest's **recorded** assessments. ``reassessed`` is false and says so.
 
     :returns: ``{"label": ..., "decision": StatmechDecision.to_dict()}``.
@@ -397,11 +420,11 @@ def reproduce_statmech_ordering(manifest: dict[str, Any], *, rules: Sequence[Sta
         assessment (an eligible flag its applicability does not give, an applicability its reasons do not give); a
         decision that is not what the recorded assessments give (``decision_mismatch``).
     """
-    _, request, subject, candidates, _ = _prepare(manifest, reassessing=False)
+    _, request, _, candidates, _ = _prepare(manifest, reassessing=False)
     recorded = _recorded_assessments(manifest, candidates)
-    used = _rules_for(manifest, rules)
-    decision = decide_statmech(request=request, subject=subject, candidates=candidates, assessments=recorded, rules=used)
+    decision = decide_statmech(request=request, candidates=candidates, assessments=recorded)
     _compare_with_recorded(manifest, decision)
+    _check_verdicts(manifest, request, candidates, recorded)
     label = semantics.describe_replay(manifest, semantics=ASSESSMENT_SEMANTICS, name=ASSESSMENT_SEMANTICS_NAME)
     return {"label": label, "decision": decision.to_dict()}
 
@@ -418,6 +441,8 @@ def reassess_statmech_captured_inputs(manifest: dict[str, Any]) -> list[Statmech
         assess_candidate(
             c, request=request, subject=subject, calculations=calcs,
             effective_statuses=frozenset(RecordReviewStatus(s) for s in manifest["effective_review_statuses"]),
+            candidate_statuses=frozenset(RecordReviewStatus(s) for s in manifest["candidate_review_statuses"]),
+            evidence_statuses=evidence_usable_statuses(request.min_review_status),
         )
         for c in candidates
     ]
@@ -430,37 +455,36 @@ def reassess_statmech_captured_inputs(manifest: dict[str, Any]) -> list[Statmech
     for a in recomputed:
         if _canon(a.to_dict()) != _canon(recorded[a.candidate_ref]):
             raise ReplayError("assessment_mismatch", f"the recorded assessment of {a.candidate_ref} is not what its inputs give")
+    _check_verdicts(manifest, request, candidates, recomputed)
     return recomputed
 
 
-def replay_statmech_decision(manifest: dict[str, Any], *, rules: Sequence[StatmechRule] | None = None) -> dict[str, Any]:
-    """Recompute the decision from the manifest: reassessment first, then scoped rules, fronts and the outcome.
+def replay_statmech_decision(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Recompute the decision from the manifest: reassessment first, then the ordering and the outcome.
 
     The decision runs over the *recomputed* assessments, never the recorded ones.
 
     :returns: ``{"label": ..., "decision": StatmechDecision.to_dict()}``.
-    :raises ReplayError: as :func:`reassess_statmech_captured_inputs`, plus an unavailable rule or one whose status or
-        audited manifest is not what the decision was made under, and ``decision_mismatch`` when the recomputed decision
-        is not the recorded one.
+    :raises ReplayError: as :func:`reassess_statmech_captured_inputs`, plus ``decision_mismatch`` when the recomputed
+        decision is not the recorded one.
     """
     assessments = reassess_statmech_captured_inputs(manifest)
-    used = _rules_for(manifest, rules)
-    _, request, subject, candidates, _ = _prepare(manifest, reassessing=True)
-    decision = decide_statmech(request=request, subject=subject, candidates=candidates, assessments=assessments, rules=used)
+    _, request, _, candidates, _ = _prepare(manifest, reassessing=True)
+    decision = decide_statmech(request=request, candidates=candidates, assessments=assessments)
     _compare_with_recorded(manifest, decision)
     recorded = semantics.recorded_version(manifest)
     return {"label": describe_reassessment(manifest, recorded=recorded), "decision": decision.to_dict()}
 
 
-def replay_matches(manifest: dict[str, Any], *, rules: Sequence[StatmechRule] | None = None) -> bool:
+def replay_matches(manifest: dict[str, Any]) -> bool:
     """True when full replay reproduces what the manifest records; False when only the recorded decision disagrees.
 
     The top-level ``outcome`` is a summary a reader trusts; it is tied to the recorded decision's by the consistency
     check every replay runs first, so an edit of it that the decision does not support is refused, not "matched". Every
-    other failure (checksum, version, assessment, rule) still raises :class:`ReplayError`.
+    other failure (checksum, version, assessment) still raises :class:`ReplayError`.
     """
     try:
-        replay_statmech_decision(manifest, rules=rules)
+        replay_statmech_decision(manifest)
     except ReplayError as error:
         if error.code == "decision_mismatch":
             return False
@@ -479,6 +503,7 @@ __all__ = [
     "canonical",
     "describe_reassessment",
     "digest",
+    "expected_candidate_statuses",
     "expected_effective_statuses",
     "reassess_statmech_captured_inputs",
     "replay_matches",

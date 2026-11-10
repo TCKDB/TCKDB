@@ -319,7 +319,7 @@ Client `sort=…` is rejected with 422 `client_sort_not_supported`.
 Default deterministic ordering (search):
 
 ```text
-review_rank ASC          (approved < under_review < not_reviewed < deprecated < rejected)
+review_rank ASC          (the one review rank, defined in [`docs/specs/browse_order.md`](../../../docs/specs/browse_order.md))
 created_at DESC          (recent first)
 transition_state_entry_id DESC   (stable tie-break)
 ```

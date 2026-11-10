@@ -235,7 +235,9 @@ def test_ambiguous_uncited_sibling_warning_names_the_other_ref(db_conn) -> None:
             if w.code == W_AMBIGUOUS_ENERGY_CORRECTION_SCHEME_WITHOUT_LITERATURE
         ]
         assert len(ambiguous) == 1
-        assert first.public_ref in ambiguous[0].message
+        # The other scheme is named by its ref in the context; TCKDB's sentence carries no ref.
+        assert ambiguous[0].context == {"sibling_ref": first.public_ref}
+        assert first.public_ref not in ambiguous[0].message
 
 
 def test_differing_software_siblings_are_not_flagged_ambiguous(db_conn) -> None:

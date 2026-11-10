@@ -19,8 +19,9 @@ Composition strategy (additive on top of Phase 6):
    dependencies) keyed by the candidate calculation IDs. Every one of
    them is one statement for the whole page: this is a paginated search,
    so anything issued per record is multiplied by ``limit``.
-4. Apply ranking (default vs latest/earliest/lowest_energy), then
-   collapse and pagination per Phase 2.1 rules.
+4. Apply the display order (``ranking=default``, or the one the request names:
+   latest / earliest / lowest_energy, echoed in ``request.sort.requested_by``),
+   then paginate. Every matching calculation is returned; none is picked.
 
 LoT filtering targets ``Calculation.lot_id`` directly here — different
 from thermo/kinetics search, which target the primary source calc's LoT.
@@ -32,6 +33,7 @@ is set; the service must never fabricate associations.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select
@@ -39,6 +41,7 @@ from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError, reject_unsupported_filters
 from app.api.errors import NotFoundError, not_found
+from app.chemistry.method_families import MethodClassFilter
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -58,6 +61,9 @@ from app.db.models.common import (
     CalculationRecordKind,
     CalculationType,
     CoreTreatment,
+    PnoTruncation,
+    RelativisticHamiltonian,
+    RiApproximation,
     SpinTreatment,
     SubmissionRecordType,
 )
@@ -73,20 +79,22 @@ from app.db.models.species import (
     SpeciesEntry,
 )
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.schemas.reads._method_family import echo_method_class
 from app.schemas.reads.scientific_calculation import (
     CalculationFreqModeSummary,
     CalculationFreqResultSummary,
 )
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
-    CollapseMode,
     CompositeSchemeSummary,
     LevelOfTheorySummary,
+    OrderEcho,
     ReviewStatusSummary,
     SCFStabilitySummary,
     SoftwareReleaseSummary,
     ValidationSummary,
     WorkflowToolReleaseSummary,
+    browse_order,
 )
 from app.schemas.reads.scientific_species import SpeciesSearchRequest
 from app.schemas.reads.scientific_species_calculations import (
@@ -115,7 +123,6 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
-    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -129,10 +136,15 @@ from app.services.scientific_read.handles import (
     reconcile_species_entry_pair,
     reconcile_species_pair,
 )
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
+from app.services.scientific_read.keyset import Paging
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_family_matches, method_matches
 from app.services.scientific_read.species import search_species
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
@@ -195,6 +207,9 @@ class _CalcRow:
     lot_cabs_basis: str | None = None
     lot_solvent_model: str | None = None
     lot_spin_treatment: SpinTreatment | None = None
+    lot_relativistic_hamiltonian: RelativisticHamiltonian | None = None
+    lot_pno_truncation: PnoTruncation | None = None
+    lot_ri_approximation: RiApproximation | None = None
 
 
 def search_species_calculations(
@@ -214,6 +229,7 @@ def search_species_calculations(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/species-calculations/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -301,7 +317,16 @@ def search_species_calculations(
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[r.calc_id].status for r in rows),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
+    )
     rows = [r for r in rows if badges[r.calc_id].status in visible]
+    rows = paging.snapshot(rows, id_of=lambda r: r.calc_id)
     if not rows:
         return _empty_response(request, includes, offset, limit)
 
@@ -419,23 +444,15 @@ def search_species_calculations(
         )
 
     summary = review_summary(badges[r.calc_id] for r in rows)
-    sort_echo = _apply_ranking_sort(records, request)
-
-    pre_collapse_total = len(records)
-    collapse_first = request.collapse.value == "first"
-    returned = slice_for_pagination(
-        records,
-        offset=offset,
-        limit=limit,
-        collapse_first=collapse_first,
-    )
+    ranking_key, sort_echo = _ranking_sort(request)
+    page = paging.window(records, key_of=ranking_key)
+    returned = page.items
 
     return ScientificSpeciesCalculationsSearchResponse(
         request=RequestEcho(
             filter=_filter_echo(request),
             ranking=request.ranking,
             sort=sort_echo,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=summary,
@@ -444,9 +461,10 @@ def search_species_calculations(
             offset=offset,
             limit=limit,
             returned=len(returned),
-            total=pre_collapse_total,
-            collapse_first=collapse_first,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 
@@ -465,9 +483,9 @@ def _validate_ranking(request: SpeciesCalculationsSearchRequest) -> None:
             "requires calculation_type=sp or calculation_type=opt."
         )
     if request.species_entry_ref is None or request.level_of_theory_ref is None:
-        raise ValueError(
-            "unsafe_lowest_energy_comparison: ranking=lowest_energy requires "
-            "exact species_entry_ref and level_of_theory_ref filters."
+        raise CodedValueError(
+            "unsafe_lowest_energy_comparison",
+            "ranking=lowest_energy requires exact species_entry_ref and level_of_theory_ref filters.",
         )
 
 
@@ -554,9 +572,9 @@ def _resolve_species_entry_context(
                 include_deprecated=request.include_deprecated,
                 offset=page_offset,
                 limit=page_limit,
-                collapse=CollapseMode.all,
                 include=[],
             ),
+            scope_entries=True,
         )
 
     species_records = collect_bounded_pages(
@@ -650,6 +668,9 @@ def _query_candidate_calculations(
             LevelOfTheory.cabs_basis,
             LevelOfTheory.solvent_model,
             LevelOfTheory.spin_treatment,
+            LevelOfTheory.relativistic_hamiltonian,
+            LevelOfTheory.pno_truncation,
+            LevelOfTheory.ri_approximation,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -694,6 +715,9 @@ def _query_candidate_calculations(
         stmt = stmt.where(method_matches(request.method))
     if request.basis is not None:
         stmt = stmt.where(basis_matches(request.basis))
+    classification = MethodClassFilter.from_request(request)
+    if classification.active:
+        stmt = stmt.where(method_family_matches(classification))
     if request.software is not None:
         stmt = stmt.where(Software.name == request.software)
     if request.workflow_tool is not None:
@@ -756,6 +780,9 @@ def _query_candidate_calculations(
                 lot_cabs_basis=row[25],
                 lot_solvent_model=row[26],
                 lot_spin_treatment=row[27],
+                lot_relativistic_hamiltonian=row[28],
+                lot_pno_truncation=row[29],
+                lot_ri_approximation=row[30],
             )
         )
     return out
@@ -1275,6 +1302,9 @@ def _lot_summary_from_row(row: _CalcRow) -> LevelOfTheorySummary | None:
         cabs_basis=row.lot_cabs_basis,
         solvent_model=row.lot_solvent_model,
         spin_treatment=row.lot_spin_treatment,
+        relativistic_hamiltonian=row.lot_relativistic_hamiltonian,
+        pno_truncation=row.lot_pno_truncation,
+        ri_approximation=row.lot_ri_approximation,
         composite_scheme=row.composite_scheme,
     )
 
@@ -1308,11 +1338,23 @@ def _workflow_tool_summary_from_row(
 # ---------------------------------------------------------------------------
 
 
-def _apply_ranking_sort(
-    records: list[SpeciesCalculationsSearchRecord],
-    request: SpeciesCalculationsSearchRequest,
-) -> str:
-    """Sort records in-place per the requested ranking; return sort echo."""
+def _ranking_echo(ranking: CalculationRanking) -> OrderEcho:
+    """The display order a ``ranking`` names. A non-default ranking is a request for it, so the echo says so."""
+    requested_by = f"ranking={ranking.value}"
+    if ranking == CalculationRanking.lowest_energy:
+        return browse_order("energy_hartree", "review_rank", "created_at", "id", requested_by=requested_by)
+    if ranking == CalculationRanking.latest:
+        return browse_order("created_at", "id", requested_by=requested_by)
+    if ranking == CalculationRanking.earliest:
+        return browse_order(("created_at", "asc"), ("id", "asc"), requested_by=requested_by)
+    return browse_order("review_rank", "created_at", "id")
+
+
+def _ranking_sort(request: SpeciesCalculationsSearchRequest) -> tuple[Callable[[SpeciesCalculationsSearchRecord], tuple], OrderEcho]:
+    """The key that orders the records for the requested ranking, and the echo that says so.
+
+    Every key ends in the calculation id, so the order is total and a cursor can resume from it.
+    """
     ranking = request.ranking
 
     if ranking == CalculationRanking.lowest_energy:
@@ -1328,30 +1370,29 @@ def _apply_ranking_sort(
                 -rec.calculation.calculation_id,
             )
 
-        records.sort(key=key)
-        return "energy_hartree_asc_nulls_last,review_rank,created_at_desc,id_desc"
+        return key, _ranking_echo(ranking)
 
     if ranking == CalculationRanking.latest:
-        records.sort(
-            key=lambda r: (-r.calculation.created_at.timestamp(), -r.calculation.calculation_id)
+        return (
+            lambda r: (-r.calculation.created_at.timestamp(), -r.calculation.calculation_id),
+            _ranking_echo(ranking),
         )
-        return "created_at_desc,id_desc"
 
     if ranking == CalculationRanking.earliest:
-        records.sort(
-            key=lambda r: (r.calculation.created_at.timestamp(), r.calculation.calculation_id)
+        return (
+            lambda r: (r.calculation.created_at.timestamp(), r.calculation.calculation_id),
+            _ranking_echo(ranking),
         )
-        return "created_at_asc,id_asc"
 
     # default and review_rank are equivalent for v0.
-    records.sort(
-        key=lambda r: (
+    return (
+        lambda r: (
             REVIEW_RANK[r.calculation.review.status],
             -r.calculation.created_at.timestamp(),
             -r.calculation.calculation_id,
-        )
+        ),
+        browse_order("review_rank", "created_at", "id"),
     )
-    return "review_rank,created_at_desc,id_desc"
 
 
 # ---------------------------------------------------------------------------
@@ -1388,6 +1429,7 @@ def _filter_echo(request: SpeciesCalculationsSearchRequest) -> dict[str, object]
         echo["species_entry_kind"] = request.species_entry_kind.value
     if request.calculation_type is not None:
         echo["calculation_type"] = request.calculation_type.value
+    echo_method_class(request, echo)
     if request.scientific_origin is not None:
         echo["scientific_origin"] = request.scientific_origin.value
     if request.calculation_quality is not None:
@@ -1409,17 +1451,12 @@ def _empty_response(
     offset: int,
     limit: int,
 ) -> ScientificSpeciesCalculationsSearchResponse:
-    sort_echo = {
-        CalculationRanking.lowest_energy: "energy_hartree_asc_nulls_last,review_rank,created_at_desc,id_desc",
-        CalculationRanking.latest: "created_at_desc,id_desc",
-        CalculationRanking.earliest: "created_at_asc,id_asc",
-    }.get(request.ranking, "review_rank,created_at_desc,id_desc")
+    sort_echo = _ranking_echo(request.ranking)
     return ScientificSpeciesCalculationsSearchResponse(
         request=RequestEcho(
             filter=_filter_echo(request),
             ranking=request.ranking,
             sort=sort_echo,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=ReviewStatusSummary(),

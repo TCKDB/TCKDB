@@ -16,8 +16,9 @@ judgement.
 
 What it never does. It never changes a label, a completeness number or ``is_certified`` (the rubric's only reader of
 the assessment is a zero-weight warning). It caches nothing and shares nothing across profiles: it runs under the read
-profile in force, so a declared target that rests on a calculation the curated profile hides reads as unresolved
-exactly as it does on the endpoint (hidden == unknown == absent).
+profile in force, so a declared target that rests on a calculation the curated profile withholds (a rejected or
+deprecated one)
+reads as unresolved exactly as it does on the endpoint.
 
 Imports of the structure-selection package are lazy: that package imports the read schemas, which import this package.
 """
@@ -144,9 +145,19 @@ def _no_declared_target(versions: dict[str, int]) -> TransitionStateTrustContext
 
 
 def _live_versions() -> dict[str, int]:
-    from app.services.structure_selection import ASSESSMENT_VERSION, DECISION_VERSION, NORMALIZER_VERSION
+    from app.services.structure_selection import (
+        ADMIN_KEY_VERSION,
+        ASSESSMENT_VERSION,
+        DECISION_VERSION,
+        NORMALIZER_VERSION,
+    )
 
-    return {"assessment": ASSESSMENT_VERSION, "normalizer": NORMALIZER_VERSION, "decision": DECISION_VERSION}
+    return {
+        "assessment": ASSESSMENT_VERSION,
+        "normalizer": NORMALIZER_VERSION,
+        "decision": DECISION_VERSION,
+        "administrative_key": ADMIN_KEY_VERSION,
+    }
 
 
 def validate_ts_scoped_structure_versions() -> None:

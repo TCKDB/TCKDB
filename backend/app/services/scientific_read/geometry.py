@@ -44,7 +44,12 @@ from app.services.scientific_read.handles import resolve_geometry_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-from app.services.scientific_read.species_identity import species_entry_label
+from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
+    STEREO_DISPLAY,
+    entry_facets_of,
+    species_entry_label,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "review",
@@ -323,11 +328,12 @@ def _build_species_identity(
         select(
             SpeciesEntry.id.label("entry_id"),
             SpeciesEntry.public_ref.label("entry_ref"),
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
             Species.id.label("species_id"),
             Species.public_ref.label("species_ref"),
             Species.smiles,
@@ -345,7 +351,7 @@ def _build_species_identity(
         species_entry_id=row.entry_id,
         species_entry_ref=row.entry_ref,
         species_entry_label=species_entry_label(
-            stereo_label=row.stereo_label,
+            stereo_label=row.stereo_display,
             electronic_state_kind=row.electronic_state_kind,
             electronic_state_label=row.electronic_state_label,
             term_symbol=row.term_symbol,
@@ -356,6 +362,7 @@ def _build_species_identity(
         inchi_key=row.inchi_key,
         charge=row.charge,
         multiplicity=row.multiplicity,
+        **entry_facets_of(row),
     )
 
 

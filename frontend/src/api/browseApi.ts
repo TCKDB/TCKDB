@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { levelOfTheorySchema, recordReviewSchema } from "./scientificSchemas"
+import { levelOfTheorySchema, recordReviewSchema, entryFacetFields } from "./scientificSchemas"
 import { scientificSpeciesRecordSchema } from "./scientificSpeciesSchemas"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
@@ -443,10 +443,8 @@ export function buildSpeciesBrowseQuery(
 ): URLSearchParams {
     const query = sharedQueryParams(filters, offset, limit)
     query.set("species_entry_kind", kind === "vdw" ? "vdw_complex" : "minimum")
-    // Sent explicitly rather than relying on the server default (`CollapseMode.all`,
-    // `species_browse.py:69`) so a future server-side default change cannot silently
-    // narrow this catalogue to one record per species without a test noticing.
-    query.set("collapse", "all")
+    // No `collapse`: a browse read lists every matching record and never picks one, and the server refuses
+    // the parameter (422 `browse_parameter_removed`), so sending it would break this page.
     if (filters.formula !== "") query.set("formula", filters.formula)
     if (filters.elements !== "") {
         query.set("elements", filters.elements)
@@ -617,7 +615,7 @@ export function seedFiltersFromUrl(kind: BrowseKind, searchParams: URLSearchPara
 // ---------------------------------------------------------------------------
 
 const paginationSchema = z.object({
-    offset: z.number(), limit: z.number(), returned: z.number(), total: z.number(), post_collapse_total: z.number(),
+    offset: z.number(), limit: z.number(), returned: z.number(), total: z.number(),
 }).passthrough()
 export type BrowsePagination = z.infer<typeof paginationSchema>
 
@@ -689,7 +687,7 @@ const transitionStateCoreSchema = z.object({
 
 export const transitionStateBrowseRecordSchema = z.object({
     transition_state_entry: transitionStateEntryCoreSchema,
-    // null under `profile=curated` when the owning transition state is not approved (the entry is still shown).
+    // null under `profile=curated` when the owning transition state is rejected or deprecated (the entry is still shown).
     transition_state: transitionStateCoreSchema.nullable(),
     reaction: reactionContextSchema,
     evidence_summary: evidenceSummarySchema,
@@ -718,6 +716,7 @@ const transitionStateBrowseResponseSchema = z.object({
 const reactionParticipantSchema = z.object({
     species_entry_ref: z.string(),
     species_entry_label: z.string().nullable().optional(),
+    ...entryFacetFields,
     smiles: z.string(),
     formula: z.string().nullable().optional(),
     stoichiometry: z.number(),

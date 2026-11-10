@@ -174,11 +174,15 @@ the gap.
 | `source` | ParameterSource (enum) | no | upload | — | `parser`, `upload`, `curated` | not documented |
 | `parser_name` | TEXT | yes | — | — | — | not documented |
 | `parser_version` | TEXT | yes | — | — | — | not documented |
+| `artifact_kind` | ArtifactKind (enum) | yes | — | — | `input`, `output_log`, `checkpoint`, `formatted_checkpoint`, `hessian`, `ancillary` | not documented |
+| `statement_kind` | ParameterStatementKind (enum) | yes | — | — | `requested`, `reported` | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 
 **Check constraints:**
 
+- `ck_calculation_parameter_artifact_kind_parser_input_or_log`: `artifact_kind IS NULL OR (source = 'parser' AND artifact_kind IN ('input', 'output_log'))`
 - `ck_calculation_parameter_parameter_index_ge_0`: `parameter_index IS NULL OR parameter_index >= 0`
+- `ck_calculation_parameter_statement_kind_reported_from_log`: `statement_kind IS NULL OR (source = 'parser' AND (statement_kind = 'requested' OR artifact_kind = 'output_log'))`
 
 ### `composite_scheme`
 
@@ -259,6 +263,11 @@ the gap.
 | `note` | TEXT | yes | — | — | — | not documented |
 | `representative_fingerprint_json` | JSONB | yes | — | — | — | not documented |
 | `representative_coords_json` | JSONB | yes | — | — | — | not documented |
+| `representative_observation_id` | BIGINT | yes | — | conformer_observation.id | — | not documented |
+| `merged_into_conformer_group_id` | BIGINT | yes | — | conformer_group.id | — | not documented |
+| `basin_is_clique` | BOOLEAN | yes | — | — | — | not documented |
+| `basin_span_deg` | FLOAT | yes | — | — | — | not documented |
+| `basin_distance_sums_json` | JSONB | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
@@ -363,12 +372,14 @@ the gap.
 | `charge` | SMALLINT | no | — | — | — | not documented |
 | `multiplicity` | SMALLINT | no | — | — | — | not documented |
 | `stereo_kind` | StereoKind (enum) | no | — | — | `unspecified`, `achiral`, `enantiomer`, `diastereomer`, `ez_isomer` | not documented |
+| `merged_into_species_id` | BIGINT | yes | — | species.id | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
 
 **Check constraints:**
 
 - `ck_species_multiplicity_ge_1`: `multiplicity >= 1`
+- `ck_species_not_merged_into_itself`: `merged_into_species_id IS NULL OR merged_into_species_id <> id`
 
 ### `species_entry`
 
@@ -383,7 +394,11 @@ the gap.
 | `kind` | StationaryPointKind (enum) | no | minimum | — | `minimum`, `vdw_complex` | not documented |
 | `mol` | mol (RDKit cartridge structure) | yes | — | — | — | not documented |
 | `unmapped_smiles` | TEXT | yes | — | — | — | not documented |
-| `stereo_label` | VARCHAR(64) | yes | — | — | — | not documented |
+| `stereo_label` | TEXT | yes | — | — | — | not documented |
+| `stereo_descriptor` | TEXT | yes | — | — | — | ``stereo_descriptor`` is the stereo key (DR-0038): one comma-separated token per potential stereo element, ordered by canonical atom rank. Tokens: ``R`` ``S`` (centre), ``r`` ``s`` (pseudo-asymmetric centre), ``E`` ``Z`` (double bond, or an odd cumulene), ``e`` ``z`` (pseudo-asymmetric double bond), ``Ra`` ``Sa`` (the axis of an allene or any even cumulene; ``Ra`` is IUPAC ``M``, a negative torsion between the two CIP-higher substituents, and ``Sa`` is ``P``), ``-`` (not stereogenic in this configuration) and ``?`` (unknown, or not representable). An allene's token is read from geometry or from the chirality mark in the SMILES; an odd cumulene's from geometry only; ``NULL`` only for an achiral species. |
+| `stereo_resolution` | StereoResolution (enum) | yes | — | — | `resolved`, `partial`, `unresolved` | not documented |
+| `stereo_smiles` | TEXT | yes | — | — | — | not documented |
+| `merged_into_species_entry_id` | BIGINT | yes | — | species_entry.id | — | not documented |
 | `electronic_state_kind` | SpeciesEntryStateKind (enum) | no | ground | — | `ground`, `excited` | not documented |
 | `electronic_state_label` | VARCHAR(8) | yes | — | — | — | not documented |
 | `term_symbol_raw` | VARCHAR(64) | yes | — | — | — | not documented |
@@ -393,6 +408,12 @@ the gap.
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_species_entry_not_merged_into_itself`: `merged_into_species_entry_id IS NULL OR merged_into_species_entry_id <> id`
+- `ck_species_entry_stereo_descriptor_vocabulary`: `stereo_descriptor IS NULL OR stereo_descriptor ~ '^(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*$'`
+- `ck_species_entry_stereo_resolution_iff_descriptor`: `(stereo_descriptor IS NULL) = (stereo_resolution IS NULL)`
 
 ### `workflow_tool`
 
@@ -448,6 +469,7 @@ the gap.
 | `scientific_origin` | ScientificOriginKind (enum) | no | computed | — | `computed`, `experimental`, `estimated` | not documented |
 | `note` | TEXT | yes | — | — | — | not documented |
 | `torsion_fingerprint_json` | JSONB | yes | — | — | — | not documented |
+| `mapped_coords_json` | JSONB | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
@@ -502,9 +524,11 @@ the gap.
 | `dispersion` | TEXT | yes | — | — | — | not documented |
 | `solvent` | TEXT | yes | — | — | — | not documented |
 | `solvent_model` | TEXT | yes | — | — | — | not documented |
-| `keywords` | TEXT | yes | — | — | — | not documented |
 | `spin_treatment` | SpinTreatment (enum) | yes | — | — | `restricted`, `unrestricted`, `restricted_open`, `unknown` | not documented |
-| `core_treatment` | CoreTreatment (enum) | yes | — | — | `frozen_core`, `all_electron` | not documented |
+| `core_treatment` | CoreTreatment (enum) | yes | — | — | `frozen_core`, `all_electron`, `window` | not documented |
+| `relativistic_hamiltonian` | RelativisticHamiltonian (enum) | yes | — | — | `none`, `dkh0`, `dkh2`, `dkhso`, `resc`, `x2c`, `zora`, `iora` | not documented |
+| `pno_truncation` | PnoTruncation (enum) | yes | — | — | `loose`, `normal`, `tight` | not documented |
+| `ri_approximation` | RiApproximation (enum) | yes | — | — | `none`, `rij`, `rijcosx`, `rijk`, `rijonx` | not documented |
 | `lot_hash` | CHAR(64) | no | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
@@ -1142,7 +1166,7 @@ the gap.
 | `geometry_id` | BIGINT | no | — | geometry.id | — | not documented |
 | `natoms` | INTEGER | no | — | — | — | not documented |
 | `lower_triangle_hartree_bohr2` | FLOAT[] | no | — | — | — | not documented |
-| `source` | HessianSource (enum) | no | — | — | `parsed_fchk`, `parsed_hess`, `parsed_log`, `uploaded`, `derived` | not documented |
+| `source` | HessianSource (enum) | no | — | — | `parsed_fchk`, `parsed_hess`, `parsed_log`, `parsed_log_archive`, `uploaded`, `derived` | not documented |
 | `parser_name` | TEXT | yes | — | — | — | not documented |
 | `parser_version` | TEXT | yes | — | — | — | not documented |
 | `note` | TEXT | yes | — | — | — | not documented |
@@ -1575,6 +1599,7 @@ the gap.
 |---|---|---|---|---|---|---|
 | `id` | BIGINT | no | — | — | — | not documented |
 | `stoichiometry_hash` | CHAR(64) | yes | — | — | — | not documented |
+| `merged_into_chem_reaction_id` | BIGINT | yes | — | chem_reaction.id | — | not documented |
 | `reversible` | BOOLEAN | no | — | — | — | not documented |
 | `reaction_family_id` | BIGINT | yes | — | reaction_family.id | — | not documented |
 | `reaction_family_raw` | TEXT | yes | — | — | — | not documented |
@@ -1584,7 +1609,30 @@ the gap.
 
 **Check constraints:**
 
+- `ck_chem_reaction_not_merged_into_itself`: `merged_into_chem_reaction_id IS NULL OR merged_into_chem_reaction_id <> id`
 - `ck_chem_reaction_reaction_family_raw_requires_source_note`: `reaction_family_raw IS NULL OR reaction_family_source_note IS NOT NULL`
+
+### `conformer_group_merge_pending`
+
+**Role:** role not stated on the model
+
+**Purpose:** Work a live upload decided on but could not carry out, in two kinds.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `species_entry_id` | BIGINT | no | — | species_entry.id | — | not documented |
+| `kept_conformer_group_id` | BIGINT | yes | — | conformer_group.id | — | not documented |
+| `absorbed_conformer_group_id` | BIGINT | no | — | conformer_group.id | — | not documented |
+| `conformer_observation_id` | BIGINT | no | — | conformer_observation.id | — | not documented |
+| `reason` | TEXT | no | — | — | — | not documented |
+| `completed_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
+| `completed_by_revision` | VARCHAR(64) | yes | — | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_conformer_group_merge_pending_kept_differs_from_absorbed`: `kept_conformer_group_id IS NULL OR kept_conformer_group_id <> absorbed_conformer_group_id`
 
 ### `dataset_release`
 
@@ -1623,6 +1671,53 @@ the gap.
 - `ck_dataset_release_tag_nonblank`: `length(btrim(tag)) > 0`
 - `ck_dataset_release_title_nonblank`: `length(btrim(title)) > 0`
 - `ck_dataset_release_withdrawn_has_reason`: `(status <> 'withdrawn') OR (withdrawn_at IS NOT NULL AND length(btrim(coalesce(withdrawn_reason, ''))) > 0)`
+
+### `deposit_warning`
+
+**Role:** role not stated on the model
+
+**Purpose:** One deposit-time warning (or one "checked" marker) for one record of one submission.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `submission_id` | BIGINT | yes | — | submission.id | — | not documented |
+| `record_type` | SubmissionRecordType (enum) | yes | — | — | `species`, `species_entry`, `conformer_group`, `conformer_observation`, `reaction`, `reaction_entry`, `transition_state`, `transition_state_entry`, `calculation`, `statmech`, `thermo`, `kinetics`, `transport`, `network`, `network_solve`, `applied_energy_correction`, `artifact`, `molecular_property_observation` | not documented |
+| `record_id` | BIGINT | yes | — | — | — | not documented |
+| `code` | TEXT | yes | — | — | — | not documented |
+| `register_entry` | SMALLINT | yes | — | — | — | not documented |
+| `field` | TEXT | yes | — | — | — | not documented |
+| `message` | TEXT | yes | — | — | — | not documented |
+| `context` | JSONB | yes | — | — | — | not documented |
+| `content_hash` | TEXT | yes | — | — | — | not documented |
+| `written_by_user_id` | BIGINT | yes | — | app_user.id | — | not documented |
+| `check_version` | SMALLINT | no | — | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_deposit_warning_context_is_object`: `context IS NULL OR jsonb_typeof(context) = 'object'`
+- `ck_deposit_warning_marker_or_complete`: `(code IS NULL AND register_entry IS NULL AND field IS NULL AND message IS NULL AND context IS NULL AND content_hash IS NULL) OR (code IS NOT NULL AND field IS NOT NULL AND message IS NOT NULL AND content_hash IS NOT NULL AND content_hash ~ '^[0-9a-f]{64}$')`
+- `ck_deposit_warning_record_both_or_neither`: `(record_type IS NULL) = (record_id IS NULL)`
+- `ck_deposit_warning_submission_or_record_warning`: `submission_id IS NOT NULL OR (record_type IS NOT NULL AND code IS NOT NULL)`
+
+### `deposit_warning_retirement`
+
+**Role:** role not stated on the model
+
+**Purpose:** A deposit warning that no longer applies, with the reason, actor and time.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `deposit_warning_id` | BIGINT | no | — | deposit_warning.id | — | not documented |
+| `retired_reason_code` | TEXT | no | — | — | — | not documented |
+| `retired_by_user_id` | BIGINT | yes | — | app_user.id | — | not documented |
+| `retired_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_deposit_warning_retirement_reason_known`: `retired_reason_code IN ('artifact_attached', 'single_point_deposited', 'hessian_stored', 'superseded_by_recheck')`
 
 ### `energy_correction_scheme`
 
@@ -1912,6 +2007,22 @@ the gap.
 
 - `ck_kinetics_arrhenius_entry_arrhenius_entry_index_ge_1`: `entry_index >= 1`
 
+### `kinetics_bath_gas`
+
+**Role:** role not stated on the model
+
+**Purpose:** One component of the bath gas a pressure-dependent rate was obtained for.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `kinetics_id` | BIGINT | no | — | kinetics.id | — | not documented |
+| `species_entry_id` | BIGINT | no | — | species_entry.id | — | not documented |
+| `mole_fraction` | DOUBLE PRECISION | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_kinetics_bath_gas_mole_fraction_range`: `mole_fraction > 0 AND mole_fraction <= 1`
+
 ### `kinetics_chebyshev`
 
 **Role:** role not stated on the model
@@ -2101,6 +2212,7 @@ the gap.
 | `id` | BIGINT | no | — | — | — | not documented |
 | `kind` | LiteratureKind (enum) | no | — | — | `article`, `book`, `thesis`, `report`, `dataset`, `webpage` | not documented |
 | `title` | TEXT | no | — | — | — | not documented |
+| `title_source` | LiteratureTitleSource (enum) | yes | — | — | `resolved_metadata`, `depositor_supplied` | not documented |
 | `journal` | TEXT | yes | — | — | — | not documented |
 | `year` | INTEGER | yes | — | — | — | not documented |
 | `volume` | TEXT | yes | — | — | — | not documented |
@@ -2186,7 +2298,7 @@ the gap.
 | `network_id` | BIGINT | no | — | network.id | — | not documented |
 | `source_state_id` | BIGINT | no | — | network_state.id | — | not documented |
 | `sink_state_id` | BIGINT | no | — | network_state.id | — | not documented |
-| `kind` | NetworkChannelKind (enum) | no | — | — | `isomerization`, `association`, `dissociation`, `stabilization`, `exchange` | not documented |
+| `kind` | NetworkChannelKind (enum) | no | — | — | `isomerization`, `association`, `dissociation`, `exchange` | ``kind`` is derived from the kinds of the source and sink states and stored: well to well is ``isomerization``, bimolecular or termolecular to well ``association``, well to bimolecular or termolecular ``dissociation``, and bimolecular or termolecular to bimolecular or termolecular ``exchange``. An upload may omit it; one that supplies it must agree. |
 | `mechanism` | NetworkChannelMechanism (enum) | no | elementary | — | `elementary`, `well_skipping` | not documented |
 | `channel_key` | TEXT | no | — | — | — | not documented |
 
@@ -2936,12 +3048,15 @@ the gap.
 | `conformer_group_id` | BIGINT | yes | — | conformer_group.id | — | not documented |
 | `counting_multiplicity` | SMALLINT | yes | — | — | — | not documented |
 | `relative_energy_kj_mol` | DOUBLE PRECISION | yes | — | — | — | not documented |
+| `relative_energy_convention` | EnergyCorrectionConvention (enum) | yes | — | — | `electronic_only`, `electronic_plus_zpe`, `atom_and_bond_corrected`, `thermal_enthalpy_298k`, `other` | not documented |
 | `region_key` | TEXT | yes | — | — | — | not documented |
 
 **Check constraints:**
 
 - `ck_statmech_model_member_counting_multiplicity_ge_1`: `counting_multiplicity IS NULL OR counting_multiplicity >= 1`
 - `ck_statmech_model_member_member_key_bounded`: `length(btrim(member_key)) > 0 AND length(member_key) <= 64`
+- `ck_statmech_model_member_relative_energy_convention_not_other`: `relative_energy_convention IS DISTINCT FROM 'other'`
+- `ck_statmech_model_member_relative_energy_convention_with_energy`: `(relative_energy_kj_mol IS NULL) = (relative_energy_convention IS NULL)`
 - `ck_statmech_model_member_relative_energy_finite`: `relative_energy_kj_mol IS NULL OR (relative_energy_kj_mol <> 'NaN' AND abs(relative_energy_kj_mol) < 'Infinity')`
 
 ### `statmech_model_source`
@@ -3240,6 +3355,7 @@ the gap.
 | `energy_level_of_theory_id` | BIGINT | yes | — | level_of_theory.id | — | not documented |
 | `enthalpy_reference_kind` | EnthalpyReferenceKind (enum) | yes | — | — | `formation_298k` | ``enthalpy_reference_kind`` declares which reference every enthalpy on this record uses. ``formation_298k`` is the standard enthalpy of formation at 298.15 K; an enthalpy at any other temperature is that value plus the species' own enthalpy increment from 298.15 K, with the elemental term not reevaluated. ``NULL`` means the reference was never recorded -- it is never inferred from a value, a producer or a neighbouring row, and never backfilled. |
 | `thermodynamic_target_kind` | ThermoTargetKind (enum) | yes | — | — | `equilibrium_ensemble`, `single_conformer` | ``thermodynamic_target_kind`` declares what the values are claimed to describe: ``equilibrium_ensemble`` (the thermally equilibrated population of the species' conformers) or ``single_conformer`` (one named conformer group). ``NULL`` means no target was declared -- it is never inferred from ``statmech_id`` or a conformer selection, and never backfilled. |
+| `thermodynamic_target_declared_by` | ThermoDeclarationSource (enum) | no | depositor | — | `depositor`, `chemkin_format` | ``thermodynamic_target_declared_by`` is whose claim the target is (``depositor`` or ``chemkin_format``); meaningful only with a target. |
 | `target_conformer_group_id` | BIGINT | yes | — | conformer_group.id | — | ``target_conformer_group_id`` is the conformer group a ``single_conformer`` target names, and is set exactly then (``ck_thermo_target_group_iff_single_conformer``). That the group belongs to this row's species entry is checked where the row is written. |
 | `protocol_declaration` | JSONB | yes | — | — | — | ``protocol_declaration`` is the depositor's versioned protocol declaration -- recipe, formation-reference construction, thermal approximation, departures from the standard recipe, supporting calculations (by public ref) -- validated against ``tckdb_schemas.thermo_declarations.StoredThermoProtocolDeclaration``. An attributed claim, stored as made. ``NULL`` means none was declared. All three are frozen with the rest of an accepted row. |
 | `h298_kj_mol` | DOUBLE PRECISION | yes | — | — | — | ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of formation and standard entropy at 298.15 K. |

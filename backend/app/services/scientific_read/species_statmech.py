@@ -32,11 +32,9 @@ from app.db.models.common import (
 from app.db.models.species import SpeciesEntry
 from app.db.models.statmech import Statmech
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
+    REVIEW_RANK,
     RecordReviewBadge,
-    SelectionPolicy,
-    effective_order_echo,
-    simple_selection_sort_key,
+    browse_order,
 )
 from app.schemas.reads.scientific_statmech import (
     ScientificStatmechRecord,
@@ -51,14 +49,19 @@ from app.services.scientific_read.common import (
     reject_client_sort,
     review_summary,
     review_visibility_echo,
-    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
 )
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
+from app.services.scientific_read.role_settings import attach_calculation_settings
 from app.services.scientific_read.statmech import (
     _DETAIL_LEGAL_INCLUDE_TOKENS,
     _INTERNAL_INCLUDE_TOKENS,
@@ -67,10 +70,8 @@ from app.services.scientific_read.statmech import (
 )
 from app.services.scientific_read.supersession import fetch_supersession_notices
 
-# Candidate-list ordering (``collapse=all``) matches the statmech search
-# service: review rank ASC, created_at DESC, id DESC. The order that actually
-# produced the returned records is reported separately as ``effective_order``.
-_DEFAULT_SORT_ECHO = "review_rank,created_at,id"
+# Display order, the same as the statmech search service: review rank ASC, created_at DESC, id DESC.
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def get_species_statmech(
@@ -82,15 +83,14 @@ def get_species_statmech(
     include_rejected: bool = False,
     include_deprecated: bool = False,
     sort: str | None = None,
-    collapse: CollapseMode = CollapseMode.all,
-    selection_policy: SelectionPolicy = SelectionPolicy.default,
     offset: int = 0,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> ScientificStatmechSearchResponse:
     """Return statmech records for one species entry.
 
     Records are pinned to ``species_entry_id`` and returned in the
-    shared deterministic order. ``include=trust`` adds the
+    shared deterministic order; every matching record is returned, none is picked. ``include=trust`` adds the
     record's computed statmech rubric fragment per record; ``include=all`` never
     expands to trust (it is an internal token here). The response
     reuses :class:`ScientificStatmechSearchResponse`; the pinned entry
@@ -101,6 +101,18 @@ def get_species_statmech(
     """
     reject_client_sort(sort)
     offset, limit = validate_pagination(offset, limit)
+    paging = Paging(
+        "/scientific/species-entries/{id}/statmech",
+        {
+            "cursor": cursor,
+            "species_entry_id": species_entry_id,
+            "min_review_status": min_review_status.value if min_review_status is not None else None,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+        },
+        offset=offset,
+        limit=limit,
+    )
     includes = validate_includes(
         include or [],
         _DETAIL_LEGAL_INCLUDE_TOKENS,
@@ -127,61 +139,53 @@ def get_species_statmech(
         include_deprecated=include_deprecated,
     )
     if not candidate_ids:
-        return _empty_response(
-            species_entry_ref, includes, offset, limit, visible, collapse, selection_policy
-        )
+        return _empty_response(species_entry_ref, includes, offset, limit, visible)
 
     badges = fetch_review_badges(
         session,
         record_type=SubmissionRecordType.statmech,
         record_ids=candidate_ids,
     )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[cid].status for cid in candidate_ids),
+            include_rejected=include_rejected,
+            include_deprecated=include_deprecated,
+            min_review_status=min_review_status,
+        ),
+        scope=("statmech", species_entry_id),
+    )
     visible_ids = [
         cid for cid in candidate_ids if badges[cid].status in visible
     ]
     if not visible_ids:
-        return _empty_response(
-            species_entry_ref, includes, offset, limit, visible, collapse, selection_policy
-        )
+        return _empty_response(species_entry_ref, includes, offset, limit, visible)
 
+    visible_ids = paging.snapshot(visible_ids, id_of=lambda cid: cid)
     summary = review_summary(badges[cid] for cid in visible_ids)
-    total = len(visible_ids)
-    collapse_first = collapse is CollapseMode.first
-    # One key function for both modes, so the echoed ``effective_order`` is
-    # derived from the same table. ``collapse=all`` always lists candidates
-    # review-rank first (policy ``default``); the named policy orders only
-    # the single record ``collapse=first`` chooses.
-    review_status_by_id = {cid: badges[cid].status for cid in visible_ids}
-    ordered_ids = sorted(
+    page = paging.window(
         visible_ids,
-        key=lambda cid: simple_selection_sort_key(
-            cid,
-            policy=selection_policy if collapse_first else SelectionPolicy.default,
-            review_status_by_id=review_status_by_id,
-            created_at_by_id=created_at_by_id,
+        key_of=lambda cid: (
+            REVIEW_RANK[badges[cid].status],
+            -created_at_by_id[cid].timestamp(),
+            -cid,
         ),
     )
-    page_ids = slice_for_pagination(
-        ordered_ids,
-        offset=offset,
-        limit=limit,
-        collapse_first=collapse_first,
-    )
+    page_ids = page.items
     records = _materialize_records(session, page_ids, badges, includes)
 
     return ScientificStatmechSearchResponse(
-        request=_request_echo(
-            species_entry_ref, includes, collapse, selection_policy, visible
-        ),
+        request=_request_echo(species_entry_ref, includes, visible),
         review_summary=summary,
         records=records,
         pagination=build_pagination(
             offset=offset,
             limit=limit,
             returned=len(records),
-            total=total,
-            collapse_first=collapse_first,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 
@@ -222,27 +226,20 @@ def _materialize_records(
                 supersession=supersessions.get(cid),
             )
         )
+    if "calculation_settings" in includes:
+        attach_calculation_settings(session, out)
     return out
 
 
 def _request_echo(
     species_entry_ref: str,
     includes: set[str],
-    collapse: CollapseMode,
-    selection_policy: SelectionPolicy,
     visible: set[RecordReviewStatus],
 ) -> RequestEcho:
-    collapse_first = collapse is CollapseMode.first
     return RequestEcho(
         filter={"species_entry_ref": species_entry_ref},
         sort=_DEFAULT_SORT_ECHO,
         include=sorted(includes),
-        collapse=collapse,
-        selection_policy=selection_policy,
-        effective_order=effective_order_echo(
-            collapse_first=collapse_first, policy=selection_policy
-        ),
-        selection_policy_applied=collapse_first,
         review_visibility=review_visibility_echo(visible),
     )
 
@@ -253,13 +250,9 @@ def _empty_response(
     offset: int,
     limit: int,
     visible: set[RecordReviewStatus],
-    collapse: CollapseMode = CollapseMode.all,
-    selection_policy: SelectionPolicy = SelectionPolicy.default,
 ) -> ScientificStatmechSearchResponse:
     return ScientificStatmechSearchResponse(
-        request=_request_echo(
-            species_entry_ref, includes, collapse, selection_policy, visible
-        ),
+        request=_request_echo(species_entry_ref, includes, visible),
         review_summary=review_summary([]),
         records=[],
         pagination=build_pagination(

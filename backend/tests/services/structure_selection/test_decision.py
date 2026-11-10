@@ -1,4 +1,4 @@
-"""The structure decision over pure assessed units: cohorts, repeats, ordering, contradictions, protocol preference."""
+"""The structure decision over pure assessed units: cohorts, repeats, ordering, contradictions, protocol listing."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import pytest
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import SelectionPolicy
-from app.services.selection_kernel import AdminNode, RuleMatch, Tri, decide_graph
+from app.services.selection_kernel import AdminNode, decide_alternatives
 from app.services.structure_selection.assessment import assess_unit
 from app.services.structure_selection.decision import ADMIN_KEY_SPEC, admin_key, decide_structures
 from app.services.structure_selection.models import (
@@ -18,7 +18,6 @@ from app.services.structure_selection.models import (
     EnergyFacts,
     Grain,
     Intent,
-    Objective,
     Quantity,
     RepeatPolicy,
     ResultMode,
@@ -26,13 +25,6 @@ from app.services.structure_selection.models import (
     ValidationClaim,
 )
 from app.services.structure_selection.models import StructureOutcome as O
-from app.services.structure_selection.rules import (
-    RULE_ACTIVE,
-    RULE_INACTIVE,
-    ProtocolCandidate,
-    StructureRule,
-    validate_rules,
-)
 from tests.services.structure_selection._support import (
     G1,
     G2,
@@ -55,14 +47,12 @@ LOT_B = level("lot_b", basis="cc-pvqz")
 DECL_B = declaration(spin_treatment={"state": "known", "value": "unrestricted"})
 
 
-def run(units, req, *, calcs=(), subj=None, rules=()):
+def run(units, req, *, calcs=(), subj=None):
     """Assess every unit and decide, the way the service does."""
     subj = subj or subject()
     by_ref = {c.calculation_ref: c for c in (*calcs, *(u for u in units if hasattr(u, "calculation_ref")))}
     assessments = [assess_unit(u, request=req, subject=subj, calculations=by_ref) for u in units]
-    return decide_structures(
-        request=req, subject=subj, units=units, assessments=assessments, calculations=by_ref, rules=rules
-    )
+    return decide_structures(request=req, units=units, assessments=assessments, calculations=by_ref)
 
 
 def refs(decision):
@@ -250,7 +240,13 @@ def test_the_administrative_key_directions_are_the_documented_ones():
     assert admin_key(AdminPolicy.earliest, review=ok, quality_rank=0, created_at=T0, ordinal=1) < admin_key(
         AdminPolicy.earliest, review=ok, quality_rank=0, created_at=later, ordinal=1
     )
-    assert ADMIN_KEY_SPEC["version"] == 1 and "ordinal descending" in ADMIN_KEY_SPEC["default"]
+    assert ADMIN_KEY_SPEC["version"] == 2 and "ordinal descending" in ADMIN_KEY_SPEC["default"]
+
+
+def test_under_review_and_not_reviewed_share_a_review_slot_in_the_administrative_key():
+    key = lambda status: admin_key(AdminPolicy.default, review=status, quality_rank=1, created_at=T0, ordinal=5)  # noqa: E731
+    assert key(RecordReviewStatus.under_review) == key(RecordReviewStatus.not_reviewed)
+    assert key(RecordReviewStatus.approved) < key(RecordReviewStatus.under_review)
 
 
 def test_a_decision_echoes_the_administrative_key_and_the_boundary_of_its_coverage():
@@ -262,11 +258,11 @@ def test_a_decision_echoes_the_administrative_key_and_the_boundary_of_its_covera
 def test_the_kernel_orders_by_adapter_keys_and_refuses_a_mixed_population():
     a = AdminNode("a", 1, RecordReviewStatus.approved, T0, admin_key=(2,))
     b = AdminNode("b", 2, RecordReviewStatus.approved, T0, admin_key=(1,))
-    verdict = decide_graph([a, b], [], supersedes={}, admin_policy=SelectionPolicy.default)
+    verdict = decide_alternatives([a, b], admin_policy=SelectionPolicy.default)
     assert verdict.administrative_order == ("b", "a")
     plain = AdminNode("c", 3, RecordReviewStatus.approved, T0)
     with pytest.raises(ValueError, match="every node carries an admin_key or none does"):
-        decide_graph([a, plain], [], supersedes={}, admin_policy=SelectionPolicy.default)
+        decide_alternatives([a, plain], admin_policy=SelectionPolicy.default)
 
 
 # ---------------------------------------------------------------------------
@@ -303,8 +299,8 @@ def basin(i, energy, *, geometry=G1, target="geometry", obs=None, lot=None, decl
     return d, [o, s, f]
 
 
-def decide_dets(pairs, req, *, subj=None, rules=()):
-    return run([p[0] for p in pairs], req, calcs=[c for p in pairs for c in p[1]], subj=subj, rules=rules)
+def decide_dets(pairs, req, *, subj=None):
+    return run([p[0] for p in pairs], req, calcs=[c for p in pairs for c in p[1]], subj=subj)
 
 
 def test_the_lowest_validated_basin_is_the_corpus_minimum_and_says_what_it_is_not():
@@ -406,37 +402,8 @@ def test_a_saddle_minimum_uses_the_same_ordering_at_the_saddle_grain():
 # ---------------------------------------------------------------------------
 
 
-class Pref(StructureRule):
-    """A test rule: the protocol with spin ``prefer`` precedes the one with spin ``yield_``."""
-
-    def __init__(self, rule_id, *, prefer, yield_, status=RULE_ACTIVE, objective=Objective.physical_accuracy,
-                 supersedes=(), reference_model=None, sha="a" * 64):
-        self.rule_id, self.version = rule_id, 1
-        self.prefer, self.yield_ = prefer, yield_
-        self._status = status
-        self.objective = objective
-        self.reference_model = reference_model
-        self.supersedes = tuple(supersedes)
-        self.manifest_sha256 = sha
-        if status != RULE_ACTIVE:
-            self.inactive_reasons = ("test: not audited",)
-
-    @property
-    def status(self):
-        return self._status
-
-    def scope(self, subj, req):
-        return RuleMatch(Tri.true, ())
-
-    def preferred_side(self, c: ProtocolCandidate):
-        return RuleMatch(Tri.true if c.fact("spin_treatment")[1] == self.prefer else Tri.false, ())
-
-    def yielding_side(self, c: ProtocolCandidate):
-        return RuleMatch(Tri.true if c.fact("spin_treatment")[1] == self.yield_ else Tri.false, ())
-
-
 def protocol_request(**kw):
-    base = {"grain": Grain.conformer, "intent": Intent.protocol_preferred, "objective": Objective.physical_accuracy}
+    base = {"grain": Grain.conformer, "intent": Intent.protocol_coverage}
     return StructureRequest(**{**base, **kw})
 
 
@@ -458,10 +425,11 @@ def spin_ids(d):
     return out
 
 
-def test_with_no_active_rule_protocols_stay_unranked():
+def test_complete_protocols_stay_unranked_and_a_lower_energy_never_prefers_one():
     d = decide_dets(two_protocols(), protocol_request())
     assert d.outcome is O.incomparable_alternatives and d.selected_refs == ()
-    assert d.protocol["edges"] == [] and d.protocol["rules"] == [] and len(d.cohorts) == 2
+    assert len(d.cohorts) == 2 and len(d.protocol["fronts"]) == 1
+    assert set(d.protocol) == {"fronts", "administrative_order", "uncovered"}  # no rules, edges or conflicts
 
 
 def test_a_sole_complete_protocol_is_sole_eligible_not_preferred():
@@ -480,67 +448,19 @@ def test_a_protocol_that_does_not_cover_the_whole_requested_set_is_not_a_candida
     assert d.outcome is O.unresolved_comparability and d.selected_refs == ()
 
 
-def test_an_active_rule_makes_one_protocol_preferred_and_a_lower_energy_never_does():
-    pairs = two_protocols()
-    ids = spin_ids(decide_dets(pairs, protocol_request()))
-    d = decide_dets(pairs, protocol_request(), rules=[Pref("R1", prefer="restricted", yield_="unrestricted")])
-    assert d.outcome is O.policy_preferred and d.selected_refs == (ids["restricted"],)
-    assert [e["label"] for e in d.protocol["edges"]] == ["audited protocol preference"]
-    # The unrestricted protocol has the lower absolute total energy and still is not preferred over it.
-
-
-def test_opposing_rules_are_a_policy_conflict_and_a_superseding_rule_resolves_it():
-    pairs = two_protocols()
-    r1 = Pref("R1", prefer="restricted", yield_="unrestricted")
-    r2 = Pref("R2", prefer="unrestricted", yield_="restricted")
-    d = decide_dets(pairs, protocol_request(), rules=[r1, r2])
-    assert d.outcome is O.policy_conflict and d.selected_refs == ()
-    r2s = Pref("R2", prefer="unrestricted", yield_="restricted", supersedes=("R1",))
-    resolved = decide_dets(pairs, protocol_request(), rules=[r1, r2s])
-    assert resolved.outcome is O.policy_preferred and resolved.protocol["overridden_edges"]
-    first = decide_dets(pairs, protocol_request(result_mode=ResultMode.first), rules=[r1, r2])
-    assert first.outcome is O.policy_conflict and first.administrative_first is None  # first never bypasses a conflict
-
-
-def test_an_inactive_rule_another_objective_another_reference_model_and_apply_rules_false_make_no_edge():
-    pairs = two_protocols()
-    d = decide_dets(pairs, protocol_request(), rules=[Pref("R1", prefer="restricted", yield_="unrestricted", status=RULE_INACTIVE)])
-    assert d.outcome is O.incomparable_alternatives and d.protocol["rule_matches"][0]["why"] == "rule_status_inactive"
-    other = Pref("R1", prefer="restricted", yield_="unrestricted", objective=Objective.expected_accuracy)
-    d = decide_dets(pairs, protocol_request(), rules=[other])
-    assert d.protocol["rule_matches"][0]["why"] == "objective_or_reference_model_differs" and d.protocol["edges"] == []
-    active = Pref("R1", prefer="restricted", yield_="unrestricted")
-    off = decide_dets(pairs, protocol_request(apply_rules=False), rules=[active])
-    assert off.outcome is O.incomparable_alternatives and off.protocol["rules"] == []
-    fidelity = Pref("R1", prefer="restricted", yield_="unrestricted", objective=Objective.model_fidelity, reference_model="ref@1")
-    d = decide_dets(pairs, protocol_request(objective=Objective.model_fidelity, reference_model="ref@2"), rules=[fidelity])
-    assert d.protocol["edges"] == []  # another pinned reference model is another question
-    d = decide_dets(pairs, protocol_request(objective=Objective.model_fidelity, reference_model="ref@1"), rules=[fidelity])
-    assert d.outcome is O.policy_preferred
-
-
-def test_an_active_rule_must_be_pinned_and_say_its_objective():
-    with pytest.raises(ValueError, match="no pinned manifest digest"):
-        validate_rules([Pref("R1", prefer="a", yield_="b", sha="")])
-    with pytest.raises(ValueError, match="no objective"):
-        validate_rules([Pref("R1", prefer="a", yield_="b", objective=None)])
-    with pytest.raises(ValueError, match="no reference model"):
-        validate_rules([Pref("R1", prefer="a", yield_="b", objective=Objective.model_fidelity)])
-    with pytest.raises(ValueError, match="rule names must be distinct"):
-        validate_rules([Pref("R1", prefer="a", yield_="b"), Pref("R1", prefer="a", yield_="b")])
-    validate_rules([Pref("R1", prefer="a", yield_="b", status=RULE_INACTIVE, sha=None)])
-
-
-def test_a_protocol_request_states_its_objective_and_its_reference_model():
-    with pytest.raises(ValueError, match="comparison objective"):
-        StructureRequest(Grain.conformer, Intent.protocol_preferred)
-    with pytest.raises(ValueError, match="pinned reference_model"):
-        StructureRequest(Grain.conformer, Intent.protocol_preferred, objective=Objective.model_fidelity)
-    with pytest.raises(ValueError, match="belong to protocol preference"):
-        StructureRequest(Grain.conformer, Intent.validated_minimum, objective=Objective.physical_accuracy)
+def test_a_protocol_request_takes_no_objective_or_reference_model_and_a_calculation_one_needs_a_geometry():
     with pytest.raises(ValueError, match="fixed geometry"):
-        StructureRequest(Grain.calculation, Intent.protocol_preferred, objective=Objective.physical_accuracy)
-    with pytest.raises(ValueError, match="belongs to a model_fidelity objective"):
-        StructureRequest(Grain.conformer, Intent.protocol_preferred, objective=Objective.physical_accuracy, reference_model="x")
-    r = StructureRequest.from_dict(protocol_request(objective=Objective.model_fidelity, reference_model="ref@1").to_dict())
-    assert r.objective is Objective.model_fidelity and r.reference_model == "ref@1"
+        StructureRequest(Grain.calculation, Intent.protocol_coverage)
+    with pytest.raises(TypeError):
+        StructureRequest(Grain.conformer, Intent.protocol_coverage, objective="physical_accuracy")  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        StructureRequest(Grain.conformer, Intent.protocol_coverage, apply_rules=False)  # type: ignore[call-arg]
+    r = StructureRequest.from_dict(protocol_request().to_dict())
+    assert r == protocol_request()
+    assert not {"objective", "reference_model", "apply_rules"} & set(r.to_dict())
+
+
+def test_the_first_cohort_in_display_order_is_labelled_administrative_and_the_outcome_stays_incomparable():
+    d = decide_dets(two_protocols(), protocol_request(result_mode=ResultMode.first))
+    assert d.outcome is O.incomparable_alternatives and d.selected_refs == ()
+    assert d.administrative_first is not None and "not a claim" in d.administrative_first["basis"]

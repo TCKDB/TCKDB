@@ -740,10 +740,6 @@ _RAW_ONLY: tuple[tuple[str, str, str], ...] = tuple(
         ("GET", "/api/v1/species"),
         ("GET", "/api/v1/species-entries/{entry_id}"),
         ("GET", "/api/v1/species-entries/{entry_id}/conformer-groups"),
-        (
-            "GET",
-            "/api/v1/species-entries/{entry_id}/conformer-observations/lowest-sp",
-        ),
         ("GET", "/api/v1/species-entries/{entry_id}/conformers"),
         ("GET", "/api/v1/species-entries/{entry_id}/statmech"),
         ("GET", "/api/v1/species-entries/{entry_id}/thermo"),

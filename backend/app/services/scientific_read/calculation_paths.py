@@ -14,7 +14,7 @@ See ``backend/docs/specs/scientific_calculation_path_includes.md``.
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError, not_found
@@ -42,6 +42,7 @@ from app.schemas.reads.scientific_calculation_paths import (
     ScientificCalculationPathSearchResponse,
     ScientificCalculationScanResponse,
 )
+from app.schemas.reads.scientific_common import browse_order
 from app.services.scientific_read.calculations import (
     _build_irc_include_summary,
     _build_owner,
@@ -59,6 +60,7 @@ from app.services.scientific_read.handles import resolve_calculation_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 
 # Path-data endpoints share an include policy: only ``internal_ids``
 # (and the ``all`` shorthand) is legal. ``include_geometries`` is its
@@ -82,6 +84,7 @@ def get_calculation_scan(
     sort: str | None = None,
     offset: int = 0,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> ScientificCalculationScanResponse:
     """Return full scan data for one calculation, paginated by point.
 
@@ -113,6 +116,12 @@ def get_calculation_scan(
     """
     reject_client_sort(sort)
     offset, limit = validate_pagination(offset, limit)
+    paging = Paging(
+        "/scientific/calculations/{calculation_ref_or_id}/scan",
+        {"cursor": cursor, "calculation": str(calculation_handle)},
+        offset=offset,
+        limit=limit,
+    )
     includes = validate_includes(
         include or [],
         _SCAN_LEGAL_INCLUDE_TOKENS,
@@ -140,16 +149,19 @@ def get_calculation_scan(
     # calc_scan_result.dimension which the schema keeps small).
     coordinates = scan_summary.coordinates
 
-    # Pre-pagination total over scan points.
-    total_points = scan_summary.point_count
-
-    point_rows = session.execute(
-        select(CalculationScanPoint)
-        .where(CalculationScanPoint.calculation_id == calculation_id)
-        .order_by(CalculationScanPoint.point_index.asc())
-        .offset(offset)
-        .limit(limit)
-    ).scalars().all()
+    all_indices = list(
+        session.scalars(select(CalculationScanPoint.point_index).where(CalculationScanPoint.calculation_id == calculation_id))
+    )
+    all_indices = paging.snapshot(all_indices, id_of=lambda index: index)
+    page = paging.window(all_indices, key_of=lambda index: (index,))
+    total_points = page.total
+    point_rows = list(
+        session.scalars(
+            select(CalculationScanPoint)
+            .where(CalculationScanPoint.calculation_id == calculation_id, CalculationScanPoint.point_index.in_(page.items))
+            .order_by(CalculationScanPoint.point_index.asc())
+        )
+    )
 
     point_indices = [row.point_index for row in point_rows]
     coord_values_by_point = _load_coord_values(
@@ -183,7 +195,7 @@ def get_calculation_scan(
         request=ScanRequestEcho(
             include_geometries=include_geometries,
             include=sorted(includes),
-            sort="point_index",
+            sort=browse_order("point_index"),
             offset=offset,
             limit=limit,
         ),
@@ -204,7 +216,9 @@ def get_calculation_scan(
             limit=limit,
             returned=len(points),
             total=total_points,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 
@@ -318,6 +332,7 @@ def get_calculation_irc(
     sort: str | None = None,
     offset: int = 0,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> ScientificCalculationIRCResponse:
     """Return full IRC data for one calculation, paginated by point.
 
@@ -338,6 +353,12 @@ def get_calculation_irc(
     """
     reject_client_sort(sort)
     offset, limit = validate_pagination(offset, limit)
+    paging = Paging(
+        "/scientific/calculations/{calculation_ref_or_id}/irc",
+        {"cursor": cursor, "calculation": str(calculation_handle)},
+        offset=offset,
+        limit=limit,
+    )
     includes = validate_includes(
         include or [],
         _PATH_LEGAL_INCLUDE_TOKENS,
@@ -365,22 +386,19 @@ def get_calculation_irc(
     # ``stored_point_count``-style access. ``calc_irc_result.point_count``
     # is the producer-reported count and may differ; the actual
     # ``COUNT(*)`` over the point table is the right pagination total.
-    total_points = int(
-        session.scalar(
-            select(func.count())
-            .select_from(CalculationIRCPoint)
-            .where(CalculationIRCPoint.calculation_id == calculation_id)
-        )
-        or 0
+    all_indices = list(
+        session.scalars(select(CalculationIRCPoint.point_index).where(CalculationIRCPoint.calculation_id == calculation_id))
     )
-
-    point_rows = session.execute(
-        select(CalculationIRCPoint)
-        .where(CalculationIRCPoint.calculation_id == calculation_id)
-        .order_by(CalculationIRCPoint.point_index.asc())
-        .offset(offset)
-        .limit(limit)
-    ).scalars().all()
+    all_indices = paging.snapshot(all_indices, id_of=lambda index: index)
+    page = paging.window(all_indices, key_of=lambda index: (index,))
+    total_points = page.total
+    point_rows = list(
+        session.scalars(
+            select(CalculationIRCPoint)
+            .where(CalculationIRCPoint.calculation_id == calculation_id, CalculationIRCPoint.point_index.in_(page.items))
+            .order_by(CalculationIRCPoint.point_index.asc())
+        )
+    )
 
     geometry_ids = {
         row.geometry_id for row in point_rows if row.geometry_id is not None
@@ -408,7 +426,7 @@ def get_calculation_irc(
         request=IRCRequestEcho(
             include_geometries=include_geometries,
             include=sorted(includes),
-            sort="point_index",
+            sort=browse_order("point_index"),
             offset=offset,
             limit=limit,
         ),
@@ -428,7 +446,9 @@ def get_calculation_irc(
             limit=limit,
             returned=len(points),
             total=total_points,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 
@@ -473,6 +493,7 @@ def get_calculation_path_search(
     sort: str | None = None,
     offset: int = 0,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> ScientificCalculationPathSearchResponse:
     """Return full path-search data for one calculation, paginated by
     point.
@@ -496,6 +517,12 @@ def get_calculation_path_search(
     """
     reject_client_sort(sort)
     offset, limit = validate_pagination(offset, limit)
+    paging = Paging(
+        "/scientific/calculations/{calculation_ref_or_id}/path-search",
+        {"cursor": cursor, "calculation": str(calculation_handle)},
+        offset=offset,
+        limit=limit,
+    )
     includes = validate_includes(
         include or [],
         _PATH_LEGAL_INCLUDE_TOKENS,
@@ -526,22 +553,19 @@ def get_calculation_path_search(
     # ``calc_path_search_result.n_points`` is the producer-reported
     # value and may diverge from the actual stored count; the COUNT(*)
     # is the right total for pagination semantics.
-    total_points = int(
-        session.scalar(
-            select(func.count())
-            .select_from(CalculationPathSearchPoint)
-            .where(CalculationPathSearchPoint.calculation_id == calculation_id)
-        )
-        or 0
+    all_indices = list(
+        session.scalars(select(CalculationPathSearchPoint.point_index).where(CalculationPathSearchPoint.calculation_id == calculation_id))
     )
-
-    point_rows = session.execute(
-        select(CalculationPathSearchPoint)
-        .where(CalculationPathSearchPoint.calculation_id == calculation_id)
-        .order_by(CalculationPathSearchPoint.point_index.asc())
-        .offset(offset)
-        .limit(limit)
-    ).scalars().all()
+    all_indices = paging.snapshot(all_indices, id_of=lambda index: index)
+    page = paging.window(all_indices, key_of=lambda index: (index,))
+    total_points = page.total
+    point_rows = list(
+        session.scalars(
+            select(CalculationPathSearchPoint)
+            .where(CalculationPathSearchPoint.calculation_id == calculation_id, CalculationPathSearchPoint.point_index.in_(page.items))
+            .order_by(CalculationPathSearchPoint.point_index.asc())
+        )
+    )
 
     geometry_ids = {
         row.geometry_id for row in point_rows if row.geometry_id is not None
@@ -569,7 +593,7 @@ def get_calculation_path_search(
         request=PathSearchRequestEcho(
             include_geometries=include_geometries,
             include=sorted(includes),
-            sort="point_index",
+            sort=browse_order("point_index"),
             offset=offset,
             limit=limit,
         ),
@@ -589,7 +613,9 @@ def get_calculation_path_search(
             limit=limit,
             returned=len(points),
             total=total_points,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 

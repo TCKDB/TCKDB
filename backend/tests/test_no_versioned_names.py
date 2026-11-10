@@ -200,7 +200,6 @@ def test_the_scan_reaches_the_code_it_claims_to() -> None:
     assert len(schema_files) > 10, "the file-name scan's roots hold no schema files"
     mcp = REPO_ROOT / "integrations/mcp/src"
     assert mcp in SCAN_ROOTS and any(mcp in file.parents for file in files), "the MCP package was not reached"
-    assert len(list((REPO_ROOT / "backend/app/chemistry").rglob("*.yaml"))) >= 4, "rule manifests not reached"
     frontend = [f for f in (REPO_ROOT / "frontend/src").rglob("*.ts*") if ".test." not in f.name]
     assert len(frontend) > 100, "frontend sources not reached"
 

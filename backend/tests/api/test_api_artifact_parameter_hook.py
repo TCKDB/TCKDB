@@ -3,7 +3,8 @@ fired by the artifact upload route and inline-bundle workflows.
 
 Hook contract:
 
-- Fires only on ``kind='input'`` artifacts.
+- Fires on ``kind='input'`` artifacts (the deck) and on ``kind='output_log'`` artifacts (the input the
+  log echoes); every other kind is ignored. Rows are tagged with the kind they were read from.
 - Failure of the parser (or anything else inside the hook) must NEVER
   abort the artifact upload — artifacts are canonical, parameters are
   derived metadata.
@@ -24,7 +25,7 @@ from app.db.models.calculation import (
     CalculationArtifact,
     CalculationParameter,
 )
-from app.db.models.common import ParameterSource
+from app.db.models.common import ArtifactKind, ParameterSource
 from app.schemas.fragments.calculation import CalculationParameterObservation
 from app.services.calculation_resolution import persist_calculation_parameters
 from tests.api.artifact_urls import artifacts_url
@@ -141,7 +142,7 @@ class TestUploadHook:
             db_session, calc_id, source=ParameterSource.parser
         ) > 0
 
-    def test_output_log_upload_does_not_trigger_extraction(
+    def test_output_log_upload_extracts_the_echoed_input_tagged_output_log(
         self, client, db_session, stub_store_artifact
     ):
         calc_id = _create_calc_id(client)
@@ -151,8 +152,30 @@ class TestUploadHook:
             json={"artifacts": [_gaussian_output_log_artifact()]},
         )
         assert resp.status_code == 201, resp.text
-        # Hook is restricted to ArtifactKind.input — output_log goes
-        # through the same persist path but emits no parameter rows.
+        # The log echoes the input; its parameters are read like a deck's, and tagged as the log's.
+        assert _parameter_count(
+            db_session, calc_id, source=ParameterSource.parser
+        ) > 0
+        kinds = set(
+            db_session.scalars(
+                select(CalculationParameter.artifact_kind).where(
+                    CalculationParameter.calculation_id == calc_id,
+                    CalculationParameter.source == ParameterSource.parser,
+                )
+            )
+        )
+        assert kinds == {ArtifactKind.output_log}
+
+    def test_non_deck_non_log_artifact_does_not_trigger_extraction(
+        self, client, db_session, stub_store_artifact
+    ):
+        calc_id = _create_calc_id(client)
+
+        resp = client.post(
+            artifacts_url(client, calc_id),
+            json={"artifacts": [{**_gaussian_input_artifact("notes.txt"), "kind": "ancillary"}]},
+        )
+        assert resp.status_code == 201, resp.text
         assert _parameter_count(
             db_session, calc_id, source=ParameterSource.parser
         ) == 0
@@ -286,6 +309,109 @@ def _bundle_payload_with_input_artifact() -> dict:
             }
         ],
     }
+
+
+# ---------------------------------------------------------------------------
+# One request: the order the artifacts are listed in must not decide what a Link1 log binds to
+# ---------------------------------------------------------------------------
+
+_LINK1_JOB2_DECK = "%mem=2GB\n# sp wb97xd/def2svp geom=allcheck guess=read int=finegrid scf=verytight\n\nwater\n\n0 1\n"
+
+
+def _link1_artifacts(log_first: bool) -> list[dict]:
+    log = {
+        "kind": "output_log",
+        "filename": "water_link1.log",
+        "content_base64": _b64((FIXTURES / "gaussian" / "water_link1_g16.log").read_bytes()),
+    }
+    deck = {"kind": "input", "filename": "job2.gjf", "content_base64": _b64(_LINK1_JOB2_DECK.encode())}
+    return [log, deck] if log_first else [deck, log]
+
+
+def _grid_and_scf_rows(db_session: Session, calculation_id: int) -> set[tuple[str, str]]:
+    return {
+        (r.canonical_key, r.canonical_value)
+        for r in db_session.scalars(
+            select(CalculationParameter).where(
+                CalculationParameter.calculation_id == calculation_id,
+                CalculationParameter.source == ParameterSource.parser,
+                CalculationParameter.artifact_kind == ArtifactKind.output_log,
+            )
+        )
+        if r.canonical_key in ("grid.quality", "scf.convergence")
+    }
+
+
+@pytest.mark.parametrize("log_first", [False, True])
+def test_a_link1_log_binds_to_its_job_whichever_order_the_request_lists_it(
+    client, db_session, stub_store_artifact, log_first
+):
+    payload = {
+        **CONFORMER_PAYLOAD,
+        "calculation": {**CONFORMER_PAYLOAD["calculation"], "level_of_theory": {"method": "wB97XD", "basis": "def2-SVP"}},
+    }
+    resp = client.post("/api/v1/uploads/conformers", json=payload)
+    assert resp.status_code == 201, resp.text
+    calc_id = resp.json()["primary_calculation"]["calculation_id"]
+    resp = client.post(artifacts_url(client, calc_id), json={"artifacts": _link1_artifacts(log_first)})
+    assert resp.status_code == 201, resp.text
+    assert _grid_and_scf_rows(db_session, calc_id) == {("grid.quality", "fine"), ("scf.convergence", "very_tight")}
+    assert "reported_setting_differs_from_requested" in [w["code"] for w in resp.json().get("warnings", [])]
+
+
+@pytest.mark.parametrize("log_first", [False, True])
+def test_a_link1_log_in_an_inline_bundle_binds_whichever_order_it_is_listed(
+    client, db_session, stub_store_artifact, log_first
+):
+    payload = _bundle_payload_with_input_artifact()
+    calc = payload["conformers"][0]["primary_calculation"]
+    calc.update(type="sp", level_of_theory={"method": "wB97XD", "basis": "def2-SVP"}, artifacts=_link1_artifacts(log_first))
+    calc.pop("opt_result")
+    calc["sp_result"] = {"electronic_energy_hartree": -76.3}
+    resp = client.post("/api/v1/uploads/computed-species", json=payload)
+    assert resp.status_code == 201, resp.text
+    calc_id = resp.json()["conformers"][0]["primary_calculation"]["calculation_id"]
+    assert _grid_and_scf_rows(db_session, calc_id) == {("grid.quality", "fine"), ("scf.convergence", "very_tight")}
+
+
+def test_a_link1_log_in_a_reaction_bundle_binds_and_the_artifacts_are_saved_in_the_listed_order(
+    client, db_session, stub_store_artifact
+):
+    from tests.api.test_api_bundle_monatomic_sp_primary import (
+        _h_species,
+        _reaction_payload,
+        _reshape_reaction_atom_to_sp_only,
+    )
+
+    payload = _reshape_reaction_atom_to_sp_only(_reaction_payload("rotor_scan_5"))
+    (conformer,) = _h_species(payload)["conformers"]
+    conformer["calculation"].update(
+        software_release={"name": "Gaussian", "version": "16"},
+        level_of_theory={"method": "wB97XD", "basis": "def2-SVP"},
+        artifacts=_link1_artifacts(log_first=True),
+    )
+    resp = client.post("/api/v1/uploads/computed-reaction", json=payload)
+    assert resp.status_code == 201, resp.text[:800]
+    ids = {a.filename: a for a in db_session.scalars(select(CalculationArtifact))}
+    log, deck = ids["water_link1.log"], ids["job2.gjf"]
+    assert log.id < deck.id  # saved as listed: the log first
+    assert _grid_and_scf_rows(db_session, log.calculation_id) == {
+        ("grid.quality", "fine"),
+        ("scf.convergence", "very_tight"),
+    }  # read decks first, so the log bound to job 2
+
+
+def test_inputs_first_orders_only_the_reading():
+    from types import SimpleNamespace
+
+    from app.services.calculation_parameter_extraction import inputs_first
+
+    listed = [SimpleNamespace(kind=k, n=n) for n, k in enumerate([ArtifactKind.output_log, ArtifactKind.input, ArtifactKind.output_log])]
+    assert [(a.kind, a.n) for a in inputs_first(listed)] == [
+        (ArtifactKind.input, 1),
+        (ArtifactKind.output_log, 0),
+        (ArtifactKind.output_log, 2),
+    ]
 
 
 class TestComputedSpeciesInlineHook:

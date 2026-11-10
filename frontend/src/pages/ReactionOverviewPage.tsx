@@ -1,18 +1,25 @@
 import { Link, Navigate, useParams } from "react-router-dom"
+import { ParticipantChips } from "../components/ParticipantChips"
 import "../conformer-group.css"
 import "../record-identity-header.css"
 import "../reaction-entry.css"
 import type { ReactionOverviewParticipant, ReactionOverviewRecord } from "../api/reactionOverviewApi"
 import { loadReactionOverview } from "../api/reactionOverviewApi"
+import type { ListMeta } from "../api/listEnvelope"
+import type { PageRequest } from "../domain/paging"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
+import { ListPager } from "../components/ListPager"
 import { SpeciesFace } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { ReactionEquation } from "../components/ReactionEquation"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
-import { stereoChip } from "../domain/recordFacets"
+import { participantChips } from "../domain/participantFacets"
 import { reviewPillClass } from "../domain/reviewPillFormat"
+import { listMetaOf } from "../api/listEnvelope"
+import { chooserHeaderSourceNote } from "../domain/reactionChooser"
+import { usePagedList } from "../hooks/usePagedList"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
 function statusLabel(status: string): string {
@@ -42,19 +49,22 @@ export default function ReactionOverviewPage() {
 }
 
 function ReactionChooser({ reactionRef }: { reactionRef: string }) {
-    const state = useScientificRecord(reactionRef, loadReactionOverview)
+    // The title and equation come from the FIRST page's first entry, always, so they do not change as the reader pages
+    // through the entries; the table below is the page the reader is on.
+    const firstPage = useScientificRecord(reactionRef, loadReactionOverview)
+    const { state, meta, goTo } = usePagedList(reactionRef, loadReactionOverview)
 
-    if (state.status !== "ready") {
+    if (firstPage.status !== "ready") {
         return (
             <RecordStatus
-                state={state}
+                state={firstPage}
                 ref={reactionRef}
                 kind="reaction"
                 loadingDetail="Retrieving every deposited entry under this reaction identity."
             />
         )
     }
-    if (state.record.records.length === 0) {
+    if (firstPage.record.records.length === 0) {
         return (
             <RecordStatus
                 state={{ ref: reactionRef, status: "missing" }}
@@ -64,15 +74,33 @@ function ReactionChooser({ reactionRef }: { reactionRef: string }) {
             />
         )
     }
-    return <ChooserDocument reactionRef={reactionRef} records={state.record.records} reviewSummary={state.record.review_summary} />
+    const shown = state.status === "ready" ? state.record : null
+    return (
+        <ChooserDocument
+            reactionRef={reactionRef}
+            headerRecord={firstPage.record.records[0]}
+            total={firstPage.record.pagination.total}
+            records={shown?.records ?? []}
+            pageStatus={state.status}
+            reviewSummary={shown?.review_summary ?? firstPage.record.review_summary}
+            meta={meta ?? listMetaOf(firstPage.record)}
+            onPage={goTo}
+        />
+    )
 }
 
-function ChooserDocument({ reactionRef, records, reviewSummary }: {
+function ChooserDocument({ reactionRef, headerRecord, total, records, pageStatus, reviewSummary, meta, onPage }: {
     reactionRef: string
+    /** The first entry of the first page: the source of the title and equation, whatever page the table is on. */
+    headerRecord: ReactionOverviewRecord
+    total: number
+    pageStatus: string
+    meta: ListMeta | null
+    onPage: (request: PageRequest) => void
     records: ReactionOverviewRecord[]
     reviewSummary: { approved: number; under_review: number; not_reviewed: number; deprecated: number; rejected: number; total: number }
 }) {
-    const first = records[0]
+    const first = headerRecord
     return (
         <section className="conformer-page">
             <nav className="record-breadcrumbs" aria-label="Breadcrumb">
@@ -91,10 +119,11 @@ function ChooserDocument({ reactionRef, records, reviewSummary }: {
                                 <ReactionEquation reactants={first.reactants} products={first.products} reversible={first.reversible} />
                             </h1>
                             <p className="t-body section-intro">
-                                {records.length > 1
-                                    ? `${records.length} separate deposits share this reaction identity. This site never merges or silently chooses between matching entries — pick the record you mean below.`
+                                {total > 1
+                                    ? `${total} separate deposits share this reaction identity. This site never merges or silently chooses between matching entries — pick the record you mean below.`
                                     : "One deposited entry carries this reaction identity."}
                             </p>
+                            <p className="t-body section-intro reaction-header-source">{chooserHeaderSourceNote(first.reaction_entry_ref, total)}</p>
                             <div className="record-identity-known">
                                 <dl className="kv-list record-identity-facts">
                                     <div>
@@ -119,6 +148,8 @@ function ChooserDocument({ reactionRef, records, reviewSummary }: {
                 <section className="ledger-section" aria-labelledby="entries-heading">
                     <p className="t-kicker section-kicker">Deposited records</p>
                     <SectionHeading id="entries-heading">Reaction entries</SectionHeading>
+                    {pageStatus !== "ready" && <p className="note" role="status">{pageStatus === "loading" || pageStatus === "retrying" ? "Loading this page of entries…" : "This page of entries could not be loaded."}</p>}
+                    {meta && <ListPager meta={meta} noun="reaction entry" nounPlural="reaction entries" onPage={onPage} label="Reaction entries paging" />}
                     <div className="table-scroll">
                         <table className="data-table" aria-label={`Reaction entries for ${reactionRef}`}>
                             <thead>
@@ -169,7 +200,7 @@ function ChooserDocument({ reactionRef, records, reviewSummary }: {
                     <p className="t-kicker section-kicker">Curation status</p>
                     <SectionHeading id="review-heading">Review, across all entries</SectionHeading>
                     <EvidenceChecklist
-                        heading={`Review counts across the ${records.length} ${records.length === 1 ? "entry" : "entries"} under this reaction`}
+                        heading={`Review counts across the ${total} ${total === 1 ? "entry" : "entries"} under this reaction`}
                         // No `tone` on these rows -- a true collapsed-summary
                         // roll-up (the real total, not the fixed 6-row
                         // count) must come from the caller. See
@@ -196,8 +227,8 @@ function ChooserDocument({ reactionRef, records, reviewSummary }: {
  * because two entries under the same reaction can legitimately be
  * different isomers of the SAME formula, which a formula-only link could
  * not tell apart), the participant's own `spe_` ref with a copy button,
- * and its `species_entry_label` chip (e.g. "Z") when served -- the same
- * four facts the PR 0 mock's own chooser table rendered for every
+ * -- the same
+ * facts the PR 0 mock's own chooser table rendered for every
  * participant (post-review fix: this row previously showed only the
  * formula link, dropping the ref/copy-button/label the mock had).
  */
@@ -221,7 +252,7 @@ function ParticipantCell({ participant, separator }: { participant: ReactionOver
                 participant cell ("H2 ... · H2N2 ... · Z isomer"). Round-2
                 review finding: parentheses keep the chip visually bound
                 to the participant it immediately follows. */}
-            {participant.species_entry_label && <> ({stereoChip(participant.species_entry_label)})</>}
+            <ParticipantChips chips={participantChips(participant)} style="paren" />
         </span>
     )
 }

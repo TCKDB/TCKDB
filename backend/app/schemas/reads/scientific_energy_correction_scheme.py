@@ -30,6 +30,7 @@ from app.schemas.reads.scientific_common import (
     LiteratureSummary,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
@@ -213,7 +214,7 @@ class ScientificEnergyCorrectionSchemeRecord(BaseModel):
     used_by: list[EnergyCorrectionSchemeUsageSummary] | None = None
 
 
-class ScientificEnergyCorrectionSchemeDetailResponse(BaseModel):
+class ScientificEnergyCorrectionSchemeDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/energy-correction-schemes/{handle}``."""
 
     request: RequestEcho

@@ -8,26 +8,25 @@ Composition order (final response ordering):
 1. Resolve species/species_entry candidates using the same identity rules
    as ``search_species`` (AND-combined identifiers, default trust posture
    on the species entry).
-2. For each surviving species_entry, fetch thermo records using the same
-   per-record ordering as ``get_species_thermo`` (review_rank, created_at,
-   id; coverage and evidence are displayed, not ranked; #648).
-3. Group across species_entries deterministically: outer key is the
-   species_entry's review rank then created_at then id; inner order is the
-   thermo per-record ordering already applied above.
-4. Apply collapse and pagination to the flat list.
-
-This means ``collapse="first"`` returns the best-thermo-of-the-best-entry
-candidate. The full ordering is documented in code comments and tests.
+2. For each surviving species_entry, fetch its thermo records with
+   ``get_species_thermo``.
+3. Order the flat list of records by the RECORD's own review rank, then its
+   own deposition time (``created_at`` DESC), then its own id DESC. The
+   parent entry's review standing and id order nothing: a record is not
+   ranked by who its parent is, and records of one entry are not kept
+   together (``docs/specs/browse_order.md``).
+4. Paginate the flat list. Every matching record is returned; none is picked.
 """
 
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.schemas.reads._method_family import echo_source_provenance
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
-    CollapseMode,
     ReviewStatusSummary,
+    browse_order,
 )
 from app.schemas.reads.scientific_species import SpeciesSearchRequest
 from app.schemas.reads.scientific_thermo import ThermoReadRequest
@@ -43,7 +42,6 @@ from app.services.scientific_read.common import (
     collect_bounded_pages,
     reject_client_sort,
     review_summary,
-    slice_for_pagination,
     validate_includes,
     validate_pagination,
     validate_temperature_range,
@@ -51,7 +49,9 @@ from app.services.scientific_read.common import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.public_assessments import attach_thermo_trust
+from app.services.scientific_read.role_settings import attach_calculation_settings
 from app.services.scientific_read.species import search_species
 from app.services.scientific_read.thermo import get_species_thermo
 
@@ -76,6 +76,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "all",
     "assessments",
     "trust",
+    "calculation_settings",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments", "trust"}
 
@@ -88,10 +89,7 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments", "trust"}
 # either token through, add it back here and to ``_LEGAL_INCLUDE_TOKENS``.
 _THERMO_LEGAL_INCLUDES_PASSTHROUGH = {"provenance", "calculations", "review", "artifacts"}
 
-_DEFAULT_SORT_ECHO = (
-    "species_review_rank,species_created_at,species_id;"
-    "review_rank,created_at,id"
-)
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def search_thermo(
@@ -111,6 +109,7 @@ def search_thermo(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/thermo/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -118,7 +117,11 @@ def search_thermo(
         internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
     includes = filter_internal_ids_from_resolved(includes)
-    validate_temperature_range(request.temperature_min, request.temperature_max)
+    validate_temperature_range(
+        request.coverage_temperature_min_k, request.coverage_temperature_max_k,
+        min_name="coverage_temperature_min_k",
+        max_name="coverage_temperature_max_k",
+    )
 
     if not any(
         v is not None
@@ -156,9 +159,9 @@ def search_thermo(
                 include_deprecated=request.include_deprecated,
                 offset=page_offset,
                 limit=page_limit,
-                collapse=CollapseMode.all,
                 include=[],
             ),
+            scope_entries=True,
         )
 
     species_records = collect_bounded_pages(
@@ -206,17 +209,25 @@ def search_thermo(
                 session,
                 species_entry_id=species_entry_id,
                 request=ThermoReadRequest(
-                    temperature_min=request.temperature_min,
-                    temperature_max=request.temperature_max,
+                    coverage_temperature_min_k=request.coverage_temperature_min_k,
+                    coverage_temperature_max_k=request.coverage_temperature_max_k,
                     model_kind=request.model_kind,
                     level_of_theory_id=request.level_of_theory_id,
                     level_of_theory_ref=request.level_of_theory_ref,
                     software=request.software,
+                    method=request.method,
+                    basis=request.basis,
+                    software_version=request.software_version,
+                    workflow_tool=request.workflow_tool,
+                    workflow_tool_version=request.workflow_tool_version,
+                    method_family=request.method_family,
+                    dft_rung_min=request.dft_rung_min,
+                    dft_rung_max=request.dft_rung_max,
+                    scientific_origin=request.scientific_origin,
                     min_review_status=request.min_review_status,
                     include_rejected=request.include_rejected,
                     include_deprecated=request.include_deprecated,
                     include=inner_includes,
-                    collapse=CollapseMode.all,
                     offset=page_offset,
                     limit=page_limit,
                 ),
@@ -232,30 +243,18 @@ def search_thermo(
     if not flat:
         return _empty_response(request, includes, offset, limit)
 
-    # 3) Group by species_entry deterministically. Outer key uses the
-    # species_entry's review rank, then a stable falling-id tiebreaker —
-    # we don't have created_at on the species record here, so id desc is
-    # the documented L3 fallback already used elsewhere. Inner thermo
-    # ordering (review status, then newest; #648) is already applied by
-    # ``get_species_thermo`` and is preserved here because ``list.sort`` is
-    # stable and the key below only compares species-level fields.
-    def sort_key(rec: ThermoSearchRecord) -> tuple:
-        return (
-            REVIEW_RANK[rec.species.species_entry_review.status],
-            -rec.species.species_entry_id,
-        )
-
-    flat.sort(key=sort_key)
-
-    # 4) Collapse + pagination on the flat list.
-    pre_collapse_total = len(flat)
-    collapse_first = request.collapse.value == "first"
-    returned = slice_for_pagination(
+    # 3) Display order over the flat list: the record's own review rank, deposition time and id. Nothing about the
+    # parent entry takes part.
+    flat = paging.snapshot(flat, id_of=lambda rec: rec.thermo.thermo_id)
+    page = paging.window(
         flat,
-        offset=offset,
-        limit=limit,
-        collapse_first=collapse_first,
+        key_of=lambda rec: (
+            REVIEW_RANK[rec.thermo.review.status],
+            -rec.thermo.created_at.timestamp(),
+            -rec.thermo.thermo_id,
+        ),
     )
+    returned = page.items
 
     # Trust is resolved for the returned page and for nothing else.
     # Forwarding ``trust`` into ``get_species_thermo`` would have been the
@@ -269,13 +268,17 @@ def search_thermo(
             [(rec.thermo, rec.thermo.thermo_id) for rec in returned],
         )
 
+    # Likewise the settings behind each level: resolved for the returned page only. Forwarded into
+    # ``get_species_thermo`` they would be built for every candidate the search walked.
+    if "calculation_settings" in includes:
+        attach_calculation_settings(session, [rec.thermo for rec in returned])
+
     summary = review_summary(rec.thermo.review for rec in flat)
 
     return ScientificThermoSearchResponse(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=summary,
@@ -284,9 +287,10 @@ def search_thermo(
             offset=offset,
             limit=limit,
             returned=len(returned),
-            total=pre_collapse_total,
-            collapse_first=collapse_first,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 
@@ -300,10 +304,10 @@ def _filter_echo(request: ThermoSearchRequest) -> dict[str, object]:
         echo["electronic_state_kind"] = request.electronic_state_kind.value
     if request.species_entry_kind is not None:
         echo["species_entry_kind"] = request.species_entry_kind.value
-    if request.temperature_min is not None:
-        echo["temperature_min"] = request.temperature_min
-    if request.temperature_max is not None:
-        echo["temperature_max"] = request.temperature_max
+    if request.coverage_temperature_min_k is not None:
+        echo["coverage_temperature_min_k"] = request.coverage_temperature_min_k
+    if request.coverage_temperature_max_k is not None:
+        echo["coverage_temperature_max_k"] = request.coverage_temperature_max_k
     if request.model_kind is not None:
         echo["model_kind"] = request.model_kind.value
     if request.level_of_theory_id is not None:
@@ -316,6 +320,7 @@ def _filter_echo(request: ThermoSearchRequest) -> dict[str, object]:
         echo["species_entry_ref"] = request.species_entry_ref
     if request.software is not None:
         echo["software"] = request.software
+    echo_source_provenance(request, echo)
     if request.min_review_status is not None:
         echo["min_review_status"] = request.min_review_status.value
     if request.include_rejected:
@@ -335,7 +340,6 @@ def _empty_response(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=ReviewStatusSummary(),

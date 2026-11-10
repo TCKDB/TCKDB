@@ -8,6 +8,7 @@ import pytest
 
 from app.db.models.common import (
     CalculationType,
+    EnergyCorrectionConvention,
     RecordReviewStatus,
     StatmechModelScopeKind,
     StatmechModelSourceRole,
@@ -52,6 +53,7 @@ def released(db_session, curator):
                 conformer_group_id=group.id,
                 counting_multiplicity=2,
                 relative_energy_kj_mol=1.5,
+                relative_energy_convention=EnergyCorrectionConvention.electronic_plus_zpe,
             ),
             StatmechModelSource(
                 declaration_id=declaration.id,
@@ -83,6 +85,7 @@ def test_a_released_record_ships_its_declaration_members_and_sources_by_public_r
     assert declaration["scope_kind"] == "explicit_equilibrium_ensemble" and declaration["recipe"] == {"energy_zero": "e0"}
     (member,) = declaration["statmech_model_member"]
     assert member["member_key"] == "m1" and member["counting_multiplicity"] == 2 and member["relative_energy_kj_mol"] == 1.5
+    assert member["relative_energy_convention"] == "electronic_plus_zpe"
     assert released["sibling"].public_ref in json.dumps(member)  # cited by ref; citing is not selecting
     assert released["group"].public_ref in json.dumps(member)
     (source,) = declaration["statmech_model_source"]

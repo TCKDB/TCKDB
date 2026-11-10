@@ -42,6 +42,7 @@ from app.scientific_checks import (  # noqa: E402
     ScientificCheck,
 )
 from app.scientific_checks.declarations import register  # noqa: E402
+from app.scientific_checks.numbering import number_checks  # noqa: E402
 
 OUTPUT = REPO_ROOT / "docs" / "guides" / "scientific_check_register.md"
 
@@ -77,7 +78,10 @@ _CHANNEL_BLURB = {
     ),
     CodeChannel.upload_warning: (
         "the `code` field of an `UploadWarning` returned alongside the "
-        "accepted upload"
+        "accepted upload, and stored with the record it concerns (or, when no one "
+        "record could take it, with its submission), which shows it, in TCKDB's "
+        "own wording, under `record_warnings` or `deposit_warnings` on that "
+        "record's detail reads and on the per-parent kinetics and thermo reads"
     ),
     CodeChannel.trust_label: (
         "a read-time trust label (`HardFailReason`), not any refusal"
@@ -344,30 +348,6 @@ def _render_check(check: ScientificCheck, index: int) -> str:
     return "\n".join(lines)
 
 
-def _ordered_groups(checks: list[ScientificCheck]) -> list[str]:
-    """Groups in reading order, most fundamental claim first.
-
-    Collection sorts alphabetically for determinism; a reader wants the
-    conservation laws before the atom-map bookkeeping. Any group not
-    listed here still appears, after the ones that are.
-    """
-    preferred = [
-        "Conservation across a reaction",
-        "A structure against its own label",
-        "Stationary points",
-        "Atom mapping across a reaction",
-        "Rate coefficients",
-        "Statistical mechanics",
-        "Pressure-dependent networks",
-        "Custody of the evidence",
-        "Reproducibility",
-    ]
-    present = {check.group for check in checks}
-    ordered = [group for group in preferred if group in present]
-    ordered += sorted(present - set(ordered))
-    return ordered
-
-
 def _divergence_index(checks: list[ScientificCheck], numbering: dict[int, int]) -> str:
     """Short index of every recorded documentation-versus-behaviour gap."""
     rows = sorted(
@@ -395,14 +375,7 @@ def render() -> str:
     checks = register()
     out = [_PREAMBLE, _tier_table(checks), _channel_table(checks)]
 
-    groups = _ordered_groups(checks)
-    numbering: dict[int, int] = {}
-    index = 0
-    for group in groups:
-        for check in checks:
-            if check.group == group:
-                index += 1
-                numbering[id(check)] = index
+    groups, numbering = number_checks(checks)
 
     out.append(_divergence_index(checks, numbering))
 

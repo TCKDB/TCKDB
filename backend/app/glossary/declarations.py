@@ -44,7 +44,6 @@ from app.db.models.common import (
 )
 from app.glossary import Group, Term, Vocabulary
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
     GeometryValidationStatus,
     SelectionPolicy,
 )
@@ -112,8 +111,10 @@ _REVIEW = Vocabulary(
             token="approved",
             means=(
                 "A curator reviewed the record and accepts it. This is the "
-                "floor the `curated` read profile draws at: a curated read "
-                "returns approved records and nothing below them."
+                "floor the `curated` read profile draws at for lists, searches, "
+                "browses, selects and exports: they return approved records and "
+                "nothing below them. A detail page can still serve a record "
+                "below the floor, with its review badge."
             ),
         ),
         Term(
@@ -135,9 +136,8 @@ _REVIEW = Vocabulary(
         ),
     ),
     worked_example=(
-        "When a response ranks candidates it orders them `approved`, "
-        "`under_review`, `not_reviewed`, `deprecated`, `rejected` — "
-        "`REVIEW_RANK` in `backend/app/schemas/reads/scientific_common.py`."
+        "A response lists records in a fixed display order, echoed in `request.sort`. "
+        "The review part of it is defined once, in `docs/specs/browse_order.md`; it is not a scientific preference."
     ),
 )
 
@@ -631,8 +631,15 @@ _READ_PROFILE = Vocabulary(
         Term(
             token="curated",
             means=(
-                "Only records at or above the `approved` review floor. Records "
-                "are not annotated with any release selection that names them — "
+                "The `approved` review floor decides which records a list, search, "
+                "browse, select or export returns. A detail page serves any "
+                "record that is not `rejected` or `deprecated`, badged, and the "
+                "linked evidence of a returned record is shown (with its badge "
+                "where the response carries `review_status_by_ref`; a legacy "
+                "single-record read carries the record's own status in the "
+                "`X-TCKDB-Review-Status` header); only `rejected` and "
+                "`deprecated` evidence is withheld, and a request cannot lift "
+                "that. Records are not annotated with any release selection that names them — "
                 "for an attributed endorsement use the "
                 "`/api/v1/scientific/releases/*` endpoints."
             ),
@@ -659,10 +666,14 @@ _PROFILE_RECOMMENDATION = Vocabulary(
         Term(
             token="approved_floor_only",
             means=(
-                "Every record shown is at or above the `approved` review floor "
-                "and **nothing more is claimed**. A human accepted each of "
-                "them, which is not the same as TCKDB preferring them over "
-                "their siblings."
+                "The `approved` review floor was applied to the records a list, "
+                "search, browse, select or export returned, and **nothing more "
+                "is claimed**. Those records were accepted by a human reviewer, "
+                "which is not the same as TCKDB preferring them over their "
+                "siblings. A detail page and the linked evidence of a returned "
+                "record may be unreviewed: they carry their review badge, and "
+                "the approval above does not apply to them. Only rejected and "
+                "deprecated records are withheld."
             ),
         ),
         Term(
@@ -879,41 +890,21 @@ _MATCH_MODE = Vocabulary(
 )
 
 
-_COLLAPSE = Vocabulary(
-    group=Group.query,
-    title="Collapse mode",
-    enum=CollapseMode,
-    carried_by="the `collapse` request parameter, echoed in `request.collapse`",
-    summary="How many records per subject the response returns.",
-    terms=(
-        Term(token="all", means="Every eligible record, after filtering, sorting and pagination. The default."),
-        Term(
-            token="first",
-            means=(
-                "At most one record — zero or one — after filtering and "
-                "sorting. Which one is decided by the selection policy below, "
-                "and that choice is made at read time; it stores nothing."
-            ),
-        ),
-    ),
-)
-
-
 _SELECTION_POLICY = Vocabulary(
     group=Group.query,
     title="Selection policy",
     enum=SelectionPolicy,
-    carried_by="the `selection_policy` request parameter, meaningful when `collapse=first`",
+    carried_by="the `policy` field of a `.../select` request",
     summary=(
-        "Which candidate wins when the response is collapsed to one. Naming the "
+        "Which record is listed first among the eligible ones a select endpoint reports. Naming the "
         "policy makes \"show me one\" an explicit choice rather than a silent "
-        "one. No policy persists a curator decision — for an attributed "
-        "endorsement, use a dataset release."
+        "one; a browse read has no such parameter and never picks. No policy persists a curator decision — for an "
+        "attributed endorsement, use a dataset release."
     ),
     terms=(
-        Term(token="default", means="The endpoint's standard ranking."),
-        Term(token="latest", means="Most recently created first."),
-        Term(token="most_reviewed", means="Best review status first, then most recent."),
+        Term(token="default", means="The endpoint's display order: review rank, then newest deposited."),
+        Term(token="latest", means="Most recently deposited first."),
+        Term(token="most_reviewed", means="Review rank first (approved, then under_review and not_reviewed together), then most recently deposited."),
     ),
 )
 
@@ -1295,7 +1286,6 @@ VOCABULARIES: tuple[Vocabulary, ...] = (
     _DIRECTION,
     _KINETICS_DIRECTION,
     _MATCH_MODE,
-    _COLLAPSE,
     _SELECTION_POLICY,
     _STRUCTURE_MODE,
     _STRUCTURE_QUERY_KIND,

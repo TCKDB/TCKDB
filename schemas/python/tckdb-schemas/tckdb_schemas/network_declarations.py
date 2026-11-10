@@ -777,6 +777,6 @@ def network_declaration_error(
             ):
                 return (
                     W_NETWORK_DECLARATION_INVALID,
-                    f"target.outputs['{_get(o, 'channel_key')}'].validity lies outside the solve's declared validity.",
+                    f"target.outputs[{_get(o, 'channel_key')!r}].validity lies outside the solve's declared validity.",
                 )
     return None

@@ -19,6 +19,7 @@ from typing import Any
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import SelectionPolicy
+from app.services.selection_kernel.requested import OFFER_FINDINGS, Eligibility
 from app.services.statmech_selection.vocabulary import (
     COMPONENT_OBSERVABLE,
     CONTRACT_VERSION,
@@ -36,7 +37,6 @@ from app.services.statmech_selection.vocabulary import (
     Intent,
     IsotopeConvention,
     Normalization,
-    Objective,
     Observable,
     OwnerKind,
     PopulationKind,
@@ -47,10 +47,14 @@ from app.services.statmech_selection.vocabulary import (
     ZpeInclusion,
 )
 
-ASSESSMENT_VERSION = 1
+#: Version 2: a candidate's own rejected or deprecated review status, and a confirmed finding about a source, are named
+#: eligibility defaults the request may lift (``selection_kernel.requested``); an entry's own review status is no longer
+#: an exclusion (an entry is a scoping parent).
+ASSESSMENT_VERSION = 2
 NORMALIZER_VERSION = 1
 DECISION_VERSION = 1
-ADMIN_KEY_VERSION = 1
+#: Version 2: ``under_review`` and ``not_reviewed`` rank equally in the review key (``docs/specs/browse_order.md``).
+ADMIN_KEY_VERSION = 2
 #: The finding semantics this release reads (shared with structure selection).
 SUPPORTED_FINDING_VERSIONS = frozenset({1})
 
@@ -315,6 +319,35 @@ class Population:
 
 
 @dataclass(frozen=True)
+class StatmechFilters:
+    """The caller's filters, with the statmech search's vocabulary and meaning (public values only).
+
+    ``model_kind`` is the stored partition-function treatment. The provenance fields keep a candidate when at least one
+    of its source calculations that the read profile shows matches every one supplied.
+    """
+
+    model_kind: str | None = None
+    scientific_origin: str | None = None
+    method: str | None = None
+    basis: str | None = None
+    software: str | None = None
+    software_version: str | None = None
+    workflow_tool: str | None = None
+    workflow_tool_version: str | None = None
+
+    def to_record(self) -> dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items() if v is not None}
+
+    @classmethod
+    def from_record(cls, raw: dict[str, Any]) -> StatmechFilters:
+        return cls(**raw)
+
+    @property
+    def active(self) -> bool:
+        return any(v is not None for v in self.__dict__.values())
+
+
+@dataclass(frozen=True)
 class StatmechRequest:
     """The normalised request. Construction validates every cross-field rule; a bad combination raises ``ValueError``."""
 
@@ -325,12 +358,16 @@ class StatmechRequest:
     conditions: Conditions = field(default_factory=Conditions)
     population: Population = field(default_factory=Population)
     coverage: CoverageRequirement = CoverageRequirement.entire_requested_domain
-    objective: Objective | None = None
-    reference_model_ref: str | None = None
     admin_policy: SelectionPolicy = SelectionPolicy.default
     result_mode: ResultMode = ResultMode.all
     min_review_status: RecordReviewStatus | None = None
     bounds: SelectionBounds = field(default_factory=SelectionBounds)
+    filters: StatmechFilters = field(default_factory=StatmechFilters)
+    eligibility: Eligibility = field(default_factory=lambda: Eligibility(offered=OFFER_FINDINGS))
+    #: The conformer-group ref the caller named when that group had been merged into another and the request was
+    #: forwarded to the group that took its members (``target.scope`` names the survivor). Recorded in the manifest's
+    #: request, and only when set, so every other manifest is byte-for-byte what it was.
+    forwarded_from_conformer_group_ref: str | None = None
 
     # -- derived ---------------------------------------------------------------------------------------------
     @property
@@ -346,17 +383,9 @@ class StatmechRequest:
 
     def _check_intent(self) -> None:
         if self.intent is Intent.qualify:
-            if self.objective is not None or self.reference_model_ref is not None:
-                raise ValueError("a qualify intent compares nothing: omit comparison_objective and reference_model_ref")
             if self.result_mode is ResultMode.first:
                 raise ValueError("a qualify intent returns assessments and no selection: result_mode first is contradictory")
             return
-        if self.objective is None:
-            raise ValueError("protocol_preferred states its comparison_objective")
-        if self.objective is Objective.model_fidelity and not self.reference_model_ref:
-            raise ValueError("a model_fidelity objective names the pinned reference_model_ref it is measured against")
-        if self.objective is not Objective.model_fidelity and self.reference_model_ref is not None:
-            raise ValueError("reference_model_ref belongs to a model_fidelity objective")
 
     def _check_deferred(self) -> None:
         allowed = DEFERRED_TASK_OBSERVABLES[self.task]  # type: ignore[index]
@@ -422,7 +451,13 @@ class StatmechRequest:
 
     # -- wire ------------------------------------------------------------------------------------------------
     def to_dict(self) -> dict[str, Any]:
+        forwarded = (
+            {"forwarded_from_conformer_group_ref": self.forwarded_from_conformer_group_ref}
+            if self.forwarded_from_conformer_group_ref is not None
+            else {}
+        )
         return {
+            **forwarded,
             "contract_version": CONTRACT_VERSION,
             "task": self.task.value,
             "intent": self.intent.value,
@@ -431,12 +466,12 @@ class StatmechRequest:
             "conditions": self.conditions.to_dict(),
             "population": self.population.to_dict(),
             "coverage_requirement": self.coverage.value,
-            "comparison_objective": self.objective.value if self.objective else None,
-            "reference_model_ref": self.reference_model_ref,
             "administrative_policy": self.admin_policy.value,
             "result_mode": self.result_mode.value,
             "min_review_status": self.min_review_status.value if self.min_review_status else None,
             "bounds": self.bounds.to_dict(),
+            "filters": self.filters.to_record(),
+            "eligibility": self.eligibility.to_record(),
         }
 
     @classmethod
@@ -451,12 +486,13 @@ class StatmechRequest:
             conditions=Conditions.from_dict(raw["conditions"]),
             population=Population.from_dict(raw["population"]),
             coverage=CoverageRequirement(raw["coverage_requirement"]),
-            objective=Objective(raw["comparison_objective"]) if raw["comparison_objective"] else None,
-            reference_model_ref=raw["reference_model_ref"],
             admin_policy=SelectionPolicy(raw["administrative_policy"]),
             result_mode=ResultMode(raw["result_mode"]),
             min_review_status=RecordReviewStatus(raw["min_review_status"]) if raw["min_review_status"] else None,
             bounds=SelectionBounds.from_dict(raw["bounds"]),
+            filters=StatmechFilters.from_record(raw["filters"]),
+            eligibility=Eligibility.from_record(raw["eligibility"], offered=OFFER_FINDINGS),
+            forwarded_from_conformer_group_ref=raw.get("forwarded_from_conformer_group_ref"),
         )
 
 

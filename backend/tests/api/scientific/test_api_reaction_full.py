@@ -134,10 +134,12 @@ def test_species_participants_carry_formula_and_stoichiometry(client, db_session
         reactants=[methane, methane],
         products=[water, h_radical],
     )
+    methane_entry = make_species_entry(db_session, methane)
     entry = make_reaction_entry(
         db_session,
         reaction=chem,
-        reactant_entries=[make_species_entry(db_session, methane)],
+        # One structure-participant row per occurrence, as every deposit stores them.
+        reactant_entries=[methane_entry, methane_entry],
         product_entries=[
             make_species_entry(db_session, water),
             make_species_entry(db_session, h_radical),
@@ -148,6 +150,7 @@ def test_species_participants_carry_formula_and_stoichiometry(client, db_session
     assert resp.status_code == 200
     body = resp.json()
 
+    assert len(body["species"]["reactants"]) == 1  # the one methane entry, once
     reactant = body["species"]["reactants"][0]
     assert reactant["smiles"] == "C"
     assert reactant["formula"] == "CH4"

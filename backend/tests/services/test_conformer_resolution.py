@@ -65,9 +65,9 @@ def test_resolve_conformer_group_takes_advisory_xact_lock(db_conn) -> None:
                 resolve_conformer_group(
                     session,
                     species_entry,
-                    label="conf-b",
                     smiles="[H]",
                     xyz_atoms=(("H", 0.0, 0.0, 0.0),),
+                    defining=True,
                 )
             finally:
                 event.remove(session.bind, "before_cursor_execute", _capture)
@@ -76,3 +76,107 @@ def test_resolve_conformer_group_takes_advisory_xact_lock(db_conn) -> None:
         "resolve_conformer_group did not issue a pg_advisory_xact_lock; "
         f"captured statements: {captured}"
     )
+
+
+# ---------------------------------------------------------------------------
+# The live upload path and the recompute decide "same basin" the same way
+# ---------------------------------------------------------------------------
+
+
+def _molecule_request(smiles: str, atoms) -> ConformerUploadRequest:
+    lines = [str(len(atoms)), "conformer"] + [f"{s} {x:.6f} {y:.6f} {z:.6f}" for s, x, y, z in atoms]
+    return ConformerUploadRequest(
+        species_entry={"smiles": smiles, "charge": 0, "multiplicity": 1},
+        geometry={"xyz_text": "\n".join(lines)},
+        calculation={
+            "type": "opt",
+            "software_release": {"name": "Gaussian", "version": "16"},
+            "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+        },
+    )
+
+
+def _upload_groups(session, smiles: str, geometries) -> list[int]:
+    """Upload each geometry through the real workflow; return the group id each observation landed in."""
+    from app.db.models.species import ConformerObservation
+
+    for atoms in geometries:
+        persist_conformer_upload(session, _molecule_request(smiles, atoms))
+    session.flush()
+    return [
+        o.conformer_group_id
+        for o in session.scalars(select(ConformerObservation).order_by(ConformerObservation.id))
+    ]
+
+
+def test_upload_keeps_a_planar_aryl_wobble_in_one_basin_and_separates_ethanol_rotamers(db_conn) -> None:
+    from tests.services.test_basin_matching import _ARYL, with_dihedral
+
+    nitro = "c1ccccc1[N+](=O)[O-]"
+    ethanol = "CCO"
+    with Session(db_conn) as session, session.begin():
+        wobble = _upload_groups(
+            session, nitro, [with_dihedral(nitro, _ARYL, 0.5), with_dihedral(nitro, _ARYL, -0.5)]
+        )
+        assert wobble[0] == wobble[1]
+
+    with Session(db_conn) as session, session.begin():
+        rotamers = _upload_groups(
+            session,
+            ethanol,
+            [
+                with_dihedral(ethanol, "[#1][OX2][CH2][CH3]", 180.0, seed=5),
+                with_dihedral(ethanol, "[#1][OX2][CH2][CH3]", 60.0, seed=5),
+                with_dihedral(ethanol, "[#1][OX2][CH2][CH3]", 170.0, seed=5),
+            ],
+        )[-3:]
+        assert rotamers[0] != rotamers[1]
+        assert rotamers[2] == rotamers[0]
+
+
+def test_recomputing_what_the_upload_path_just_wrote_changes_nothing(db_conn) -> None:
+    """The geometry reassignment recovers from an observation is the one the upload used, so the two agree."""
+    from app.services.conformer_reassignment import reassign_conformer_groups
+    from tests.services.test_basin_matching import with_dihedral
+
+    ethanol = "CCO"
+    with Session(db_conn) as session, session.begin():
+        _upload_groups(
+            session,
+            ethanol,
+            [with_dihedral(ethanol, "[#1][OX2][CH2][CH3]", d, seed=5) for d in (180.0, 60.0, 175.0)],
+        )
+        report = reassign_conformer_groups(session, repair_revision="test-recompute")
+        assert report.observations_unresolved == 0
+        assert report.observations_moved == 0 and report.groups_created == 0
+        assert report.groups_emptied_kept == 0 and report.groups_review_reset == 0
+
+
+def test_a_single_atom_never_joins_a_group_that_a_merge_emptied(db_conn) -> None:
+    """The fingerprint-less fallback joins "the first group with no fingerprint". An emptied group has none either."""
+    from sqlalchemy import null as sql_null
+
+    from app.db.models.species import ConformerObservation
+    from tests.services.scientific_read._factories import (
+        make_conformer_group,
+        make_species,
+        make_species_entry,
+        next_inchi_key,
+    )
+
+    with Session(db_conn) as session, session.begin():
+        species = make_species(session, smiles="[H]", inchi_key=next_inchi_key("FALLB"), multiplicity=2)
+        entry = make_species_entry(session, species)
+        emptied = make_conformer_group(session, entry, label="conformer_1")  # the lower id
+        live = make_conformer_group(session, entry, label="conformer_2")
+        session.add(ConformerObservation(conformer_group_id=live.id))
+        emptied.merged_into_conformer_group_id = live.id
+        for g in (emptied, live):
+            g.representative_fingerprint_json = sql_null()  # neither has a fingerprint: only the merge tells them apart
+        session.flush()
+        assert emptied.id < live.id
+        group, fingerprint, _scheme = resolve_conformer_group(
+            session, entry, smiles=None, xyz_atoms=None, defining=True
+        )
+        assert fingerprint is None  # no structure to fingerprint: the fallback applies
+        assert group.id == live.id

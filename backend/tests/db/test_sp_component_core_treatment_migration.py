@@ -19,10 +19,9 @@ import subprocess
 
 import pytest
 from sqlalchemy import text
-from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
-from app.services.calculation_resolution import _level_of_theory_hash
 from app.services.public_refs import make_content_ref
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 from tests.db._migration_chain import revision_under_test
 from tests.db.test_level_of_theory_basis_identity_migration import _Harness
 
@@ -56,7 +55,7 @@ def _seed(conn) -> dict[str, int]:
     entry_id = conn.scalar(text("INSERT INTO species_entry (species_id) VALUES (:s) RETURNING id"), {"s": species_id})
     ids: dict[str, int] = {}
     for key, (method, basis, stale) in _SEED.items():
-        lot_hash = stale or _level_of_theory_hash(LevelOfTheoryRef(method=method, basis=basis))
+        lot_hash = stale or frozen_level_of_theory_hash(method=method, basis=basis)
         ids[key] = conn.scalar(
             text(
                 "INSERT INTO level_of_theory (method, basis, lot_hash, public_ref) "
@@ -150,7 +149,7 @@ def test_upgrade_adds_the_column_and_table_and_rekeys_nothing(harness):
     # Every seeded hash still equals the application's for that level (except the
     # deliberately stale row, which the revision must leave exactly as it was).
     for key, (method, basis, stale) in _SEED.items():
-        expected = stale or _level_of_theory_hash(LevelOfTheoryRef(method=method, basis=basis))
+        expected = stale or frozen_level_of_theory_hash(method=method, basis=basis)
         assert after[ids[key]][1] == expected, key
     with harness.engine.connect() as conn:
         assert conn.scalar(text("SELECT count(*) FROM level_of_theory WHERE core_treatment IS NOT NULL")) == 0
@@ -163,13 +162,9 @@ def test_upgrade_adds_the_column_and_table_and_rekeys_nothing(harness):
         "trg_as_truncate_calc_sp_energy_component",
     }
 
-    # ``alembic check`` compares the live schema with the models, which describe
-    # head: bring the scratch database to head first, so this revision's schema
-    # must be what the models say once every later revision has run too.
-    harness.run("upgrade", "head")
-    checked = _alembic_check(harness)
-    assert checked.returncode == 0, checked.stderr[-3000:] + checked.stdout[-3000:]
-    assert "No new upgrade operations detected" in checked.stdout + checked.stderr
+    # Not taken to head and ``alembic check``-ed here: ``d5f2b8c1a704`` refuses to run over level-of-theory rows
+    # (their hashes are stale under the Stage 2 formula). A fresh head is checked against the models in
+    # tests/db/test_level_of_theory_method_qualifiers_migration.py.
 
 
 def test_upgrade_downgrade_upgrade_converges_on_the_same_data(harness):

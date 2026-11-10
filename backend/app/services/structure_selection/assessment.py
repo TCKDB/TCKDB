@@ -248,7 +248,7 @@ def live_findings(findings: tuple[FindingFacts, ...]) -> list[FindingFacts]:
     return out
 
 
-def _apply_finding(f: _Findings, finding: FindingFacts, *, blocks: bool, role_needed: bool) -> None:
+def _apply_finding(f: _Findings, finding: FindingFacts, *, blocks: bool, role_needed: bool, lift: bool = False) -> None:
     if finding.semantic_version not in SUPPORTED_FINDING_VERSIONS:
         f.note("finding_version_unsupported")
         return
@@ -268,7 +268,11 @@ def _apply_finding(f: _Findings, finding: FindingFacts, *, blocks: bool, role_ne
         f.note("finding_kind_unsupported")
         return
     if finding.verdict == "invalidates":
-        f.block(label)
+        if lift:
+            # The request lifted ``confirmed_blocking_findings``: the finding stays on the record, excluding nothing.
+            f.note(f"finding_overridden:{label}")
+        else:
+            f.block(label)
     else:
         f.unresolved(f"finding_unresolved:{finding.kind}")
 
@@ -337,10 +341,8 @@ def assess_calculation(c: NormalizedCalculation, *, request: StructureRequest, s
     _recipe_findings(recipe, request, f, declaration_state=c.declaration_state)
     _root_check(recipe, subject, f)
     _subject_findings(c, request, f)
-    if c.lineage_cyclic:
-        f.unresolved("dependency_cycle")
     for finding in live_findings(c.findings):
-        _apply_finding(f, finding, blocks=True, role_needed=True)
+        _apply_finding(f, finding, blocks=True, role_needed=True, lift=request.eligibility.include_confirmed_findings)
     verdict = f.verdict()
     return StructureAssessment(
         unit_ref=c.calculation_ref,
@@ -465,7 +467,12 @@ def _minimum_support(cv: CurvatureFacts, subject: StructureSubject, n: int) -> t
         return "unresolved", None, ["imaginary_mode_magnitude_not_stored"]
     resolution = _tau(cv) or resolve_tau()
     findings = evaluate_species_entry_frequency(
-        StationaryPointKind(subject.stationary_point_kind), n, max(magnitudes), location="curvature"
+        StationaryPointKind(subject.stationary_point_kind),
+        n,
+        max(magnitudes),
+        location="curvature",
+        imaginary_modes=_owner_modes(cv),
+        tau=resolution,
     )
     notes = [f"stationary_point_finding:{f.code}" for f in findings]
     if any(m >= resolution.tau_cm1 for m in magnitudes):
@@ -720,8 +727,6 @@ def assess_determination(
         _recipe_findings(recipe, request, f, declaration_state=energy_calc.declaration_state)
         _root_check(recipe, subject, f)
         _subject_findings(energy_calc, request, f)
-        if energy_calc.lineage_cyclic:
-            f.unresolved("dependency_cycle")
 
     # --- the structural claim ---------------------------------------------------------------------------------
     claims: list[ClaimSupport] = []
@@ -736,13 +741,16 @@ def assess_determination(
     # --- findings, each at its own subject and role -------------------------------------------------------------
     needed_roles = _needed_roles(request)
     needed_refs = {c.calculation_ref for role in needed_roles for _, c in roles.usable.get(role, [])}
+    lift = request.eligibility.include_confirmed_findings
     for finding in live_findings(d.findings):
         if finding.scope == "determination":
-            _apply_finding(f, finding, blocks=True, role_needed=True)
+            _apply_finding(f, finding, blocks=True, role_needed=True, lift=lift)
         elif finding.scope == "geometry":
-            _apply_finding(f, finding, blocks=finding.subject_ref == d.evaluated_geometry_ref, role_needed=True)
+            _apply_finding(f, finding, blocks=finding.subject_ref == d.evaluated_geometry_ref, role_needed=True, lift=lift)
         else:
-            _apply_finding(f, finding, blocks=finding.subject_ref in needed_refs, role_needed=_role_needed(finding, d, needed_roles))
+            _apply_finding(
+                f, finding, blocks=finding.subject_ref in needed_refs, role_needed=_role_needed(finding, d, needed_roles), lift=lift
+            )
 
     verdict = f.verdict()
     eligible = verdict is Applicability.applicable and not f.blocking

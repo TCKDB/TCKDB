@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import reject_unsupported_filters
@@ -25,7 +25,7 @@ from app.db.models.energy_correction import (
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
 from app.db.models.software import Software, SoftwareRelease
-from app.schemas.reads.scientific_common import ReviewStatusSummary
+from app.schemas.reads.scientific_common import ReviewStatusSummary, browse_order
 from app.schemas.reads.scientific_energy_correction_scheme import (
     ScientificEnergyCorrectionSchemeRecord,
 )
@@ -36,8 +36,8 @@ from app.schemas.reads.scientific_energy_correction_scheme_search import (
 )
 from app.services.scientific_read.common import (
     build_pagination,
+    linked_evidence_predicate,
     reject_client_sort,
-    review_floor_predicate,
     validate_includes,
     validate_pagination,
     where_visible,
@@ -52,6 +52,7 @@ from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
@@ -83,7 +84,7 @@ _DEFERRED_FILTER_FIELDS: tuple[str, ...] = ("used_by_thermo",)
 #: while the query ordered by ``(kind, name, id)`` -- the echo advertised a
 #: sort key the query never applied, which was wrong before
 #: ``a7d4e2b9c351`` removed the column and merely more obvious after.
-_DEFAULT_SORT_ECHO = "scheme_kind,name,id"
+_DEFAULT_SORT_ECHO = browse_order("scheme_kind", "name", ("id", "asc"))
 
 
 def search_energy_correction_schemes(
@@ -92,6 +93,7 @@ def search_energy_correction_schemes(
     """Multi-axis ECS search."""
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/energy-correction-schemes/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -127,7 +129,7 @@ def search_energy_correction_schemes(
     if short_circuit:
         return _empty_response(request, includes, offset, limit)
 
-    stmt = select(EnergyCorrectionScheme.id)
+    stmt = select(EnergyCorrectionScheme.id, EnergyCorrectionScheme.kind.label("key_1"), EnergyCorrectionScheme.name.label("key_2"))
     if ecs_id is not None:
         stmt = stmt.where(EnergyCorrectionScheme.id == ecs_id)
     if literature_id is not None:
@@ -176,7 +178,9 @@ def search_energy_correction_schemes(
         )
         stmt = stmt.where(ex if request.has_corrections else ~ex)
     if request.used_by_calculation is not None:
-        # An application counts when its target and its source calculation are shown by the read profile.
+        # An application counts when its target is shown by the read profile and its source calculation is not withheld
+        # by the evidence rule (rejected / deprecated under curated, ADR 0023): the filter matches through that
+        # linked calculation, so a not-reviewed one counts.
         ex = where_visible(
             where_visible(
                 exists().where(
@@ -185,21 +189,18 @@ def search_energy_correction_schemes(
                 ),
                 applied_target_visible(),
             ),
-            review_floor_predicate(AppliedEnergyCorrection.source_calculation_id, SubmissionRecordType.calculation),
+            linked_evidence_predicate(AppliedEnergyCorrection.source_calculation_id, SubmissionRecordType.calculation),
         )
         stmt = stmt.where(ex if request.used_by_calculation else ~ex)
 
-    stmt = stmt.order_by(
-        EnergyCorrectionScheme.kind.asc(),
-        EnergyCorrectionScheme.name.asc(),
-        EnergyCorrectionScheme.id.asc(),
-    )
-    candidate_ids = [row.id for row in session.execute(stmt).all()]
-    total = len(candidate_ids)
-    if not candidate_ids:
+    ranked = paging.restrict(stmt, EnergyCorrectionScheme.id).subquery("ranked_ecs")
+    total = session.scalar(select(func.count()).select_from(ranked)) or 0
+    if not total:
         return _empty_response(request, includes, offset, limit)
 
-    page_ids = candidate_ids[offset : offset + limit]
+    keys = [(ranked.c.key_1, "asc"), (ranked.c.key_2, "asc"), (ranked.c.id, "asc")]
+    page = paging.sql_window(session, ranked, columns=[col for col, _d in keys], keys=keys, total=total)
+    page_ids = [int(row.id) for row in page.items]
     records = _materialize_records(session, page_ids, includes)
 
     return ScientificEnergyCorrectionSchemeSearchResponse(
@@ -211,8 +212,9 @@ def search_energy_correction_schemes(
         review_summary=ReviewStatusSummary(),
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset, limit=limit, returned=len(records), total=total, page=page
         ),
+        **page.envelope(),
     )
 
 

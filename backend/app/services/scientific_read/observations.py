@@ -34,7 +34,7 @@ from app.db.models.molecular_property_observation import (
 )
 from app.db.models.species import SpeciesEntry
 from app.db.models.submission import SubmissionAuditEvent
-from app.schemas.reads.scientific_common import REVIEW_RANK, RecordReviewBadge
+from app.schemas.reads.scientific_common import REVIEW_RANK, RecordReviewBadge, browse_order
 from app.schemas.reads.scientific_observation import (
     MolecularPropertyObservationRecord,
     ObservationExternalSource,
@@ -47,14 +47,18 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
-    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
 )
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 
 # No heavy include-gated sections exist on this surface; ``internal_ids`` is
 # the only legal token, matching the sibling per-entry reads' pattern of
@@ -64,7 +68,7 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
 # Deterministic ordering matches the sibling per-entry reads: review rank
 # ASC, created_at DESC, id DESC.
-_DEFAULT_SORT_ECHO = "review_rank,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def get_species_observations(
@@ -79,6 +83,7 @@ def get_species_observations(
     sort: str | None = None,
     offset: int = 0,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> ScientificSpeciesObservationsResponse:
     """Return molecular-property observations for one species entry.
 
@@ -92,6 +97,19 @@ def get_species_observations(
     """
     reject_client_sort(sort)
     offset, limit = validate_pagination(offset, limit)
+    paging = Paging(
+        "/scientific/species-entries/{id}/observations",
+        {
+            "cursor": cursor,
+            "species_entry_id": species_entry_id,
+            "property_kind": property_kind,
+            "min_review_status": min_review_status.value if min_review_status is not None else None,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+        },
+        offset=offset,
+        limit=limit,
+    )
     includes = validate_includes(
         include or [],
         _LEGAL_INCLUDE_TOKENS,
@@ -143,22 +161,30 @@ def get_species_observations(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
     )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[cid].status for cid in candidate_ids),
+            include_rejected=include_rejected,
+            include_deprecated=include_deprecated,
+            min_review_status=min_review_status,
+        ),
+        scope=("observations", species_entry_id),
+    )
     visible_ids = [cid for cid in candidate_ids if badges[cid].status in visible]
     if not visible_ids:
         return _empty_response(filter_echo, includes, offset, limit)
 
+    visible_ids = paging.snapshot(visible_ids, id_of=lambda cid: cid)
     summary = review_summary(badges[cid] for cid in visible_ids)
-    total = len(visible_ids)
-    visible_ids.sort(
-        key=lambda cid: (
+    page = paging.window(
+        visible_ids,
+        key_of=lambda cid: (
             REVIEW_RANK[badges[cid].status],
             -created_at_by_id[cid].timestamp(),
             -cid,
-        )
+        ),
     )
-    page_ids = slice_for_pagination(
-        visible_ids, offset=offset, limit=limit, collapse_first=False
-    )
+    page_ids = page.items
     records = _materialize_records(session, page_ids, badges)
 
     return ScientificSpeciesObservationsResponse(
@@ -170,8 +196,9 @@ def get_species_observations(
         review_summary=summary,
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset, limit=limit, returned=len(records), total=page.total, page=page
         ),
+        **page.envelope(),
     )
 
 

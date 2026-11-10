@@ -16,14 +16,20 @@ import {
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
+import { everyOrThisPage, isPartialWindow } from "../domain/paging"
+import { ListPager } from "./ListPager"
+import type { ListMeta } from "../api/listEnvelope"
+import type { PageRequest } from "../domain/paging"
 import { useRegisteredSection } from "../hooks/usePageSections"
 import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { Disclosure } from "./Disclosure"
 import { SectionHeading } from "./PageSections"
+import { SettingsBehindValue, SettingsLegend } from "./EffectiveSettings"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
+import { MadeUnderLine } from "./MadeUnderLine"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SupersessionNotice } from "./SupersessionNotice"
 import { ThermoCpChart } from "./ThermoCpChart"
@@ -91,7 +97,7 @@ export function EntryThermoSection({ entryRef, conformer, conformers }: {
     conformer?: ConformerProjection | null
     conformers?: ConformerProjection[]
 }) {
-    const state = useEntryThermo(entryRef)
+    const { state, meta, goTo } = useEntryThermo(entryRef)
     if (state.status === "ready") {
         return (
             <SectionErrorBoundary
@@ -104,7 +110,7 @@ export function EntryThermoSection({ entryRef, conformer, conformers }: {
                     </section>
                 )}
             >
-                <ThermoList response={state.record} conformer={conformer} conformers={conformers ?? []} />
+                <ThermoList response={state.record} meta={meta} onPage={goTo} conformer={conformer} conformers={conformers ?? []} />
             </SectionErrorBoundary>
         )
     }
@@ -242,8 +248,10 @@ function makeThermoGroupedRenderer(sectionLabels: Map<string, string>) {
     }
 }
 
-function ThermoList({ response, conformer, conformers }: {
+function ThermoList({ response, meta, onPage, conformer, conformers }: {
     response: ThermoListResponse
+    meta: ListMeta | null
+    onPage: (request: PageRequest) => void
     conformer?: ConformerProjection | null
     conformers: ConformerProjection[]
 }) {
@@ -263,15 +271,15 @@ function ThermoList({ response, conformer, conformers }: {
                 <p className="eyebrow">Deposited evidence</p>
                 <SectionHeading id="thermo-heading">Thermochemistry</SectionHeading>
                 <p>
-                    Every thermo record deposited for this entry, each shown independently. Multiple deposits
+                    {everyOrThisPage(pagination, "thermo record")}, each shown independently. Multiple deposits
                     are never merged, averaged, or reduced to one preferred value on this page.
                 </p>
             </div>
             <p className="note records-note">
                 {pagination.total} record{pagination.total === 1 ? "" : "s"}
-                {pagination.total > pagination.returned ? ` (showing ${pagination.returned})` : ""}
                 {" · review: "}{reviewSummaryText(reviewSummary)}
             </p>
+            {meta && <ListPager meta={meta} noun="thermochemistry record" onPage={onPage} label="Thermochemistry records paging" />}
             {records.length > 0 && (
                 // Driven from EVERY deposited record, not the conformer
                 // partition below -- comparing conformers against each other
@@ -284,6 +292,7 @@ function ThermoList({ response, conformer, conformers }: {
                     records={records}
                     conformers={conformers}
                     selectedConformerGroupRef={conformer?.conformer_group.conformer_group_ref ?? null}
+                    partialList={isPartialWindow(pagination)}
                 />
             )}
             {records.length === 0 ? (
@@ -315,6 +324,7 @@ function ThermoList({ response, conformer, conformers }: {
             ) : (
                 renderThermoRecords(records)
             )}
+            {records.some((record) => (record.calculation_settings?.length ?? 0) > 0) && <SettingsLegend perLevel />}
         </section>
     )
 }
@@ -396,6 +406,7 @@ function ThermoRecordBody({ record, idSuffix = "", showProvenance = true }: {
             <TemperatureCoverageBlock coverage={record.temperature_coverage ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
             <ModelBlock record={record} idSuffix={idSuffix} />
             <EvidenceCompletenessBlock completeness={record.evidence_completeness ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
+            <ReproducibilityAssessmentBlock assessments={record.assessments ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
             {showProvenance && (
                 <ProvenanceBlock
                     provenance={record.provenance ?? null}
@@ -403,6 +414,11 @@ function ThermoRecordBody({ record, idSuffix = "", showProvenance = true }: {
                     thermoRef={record.thermo_ref}
                     idSuffix={idSuffix}
                 />
+            )}
+            {/* The calculations are this record's own links, so the group's shared body (which hides provenance for the
+                same reason) hides them too. */}
+            {showProvenance && (
+                <SettingsBehindValue block={record.calculation_settings ?? null} recordRef={record.thermo_ref} idSuffix={idSuffix} />
             )}
             <GroupAdditivityBlock groupAdditivity={record.group_additivity ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
         </>
@@ -847,6 +863,29 @@ function evidenceCheckLabel(key: string): string {
     return EVIDENCE_CHECK_LABELS[key] ?? key.replace(/^has_/, "").replaceAll("_", " ")
 }
 
+/**
+ * The reproducibility assessment of this record, with the rubric it was made under. Rendered only when the API served
+ * `assessments` (an older deployment does not). A record nobody has assessed says so: "not assessed" is not "stale".
+ * The grade is a statement about how complete the deposited evidence is for a rerun, not a ranking of the record.
+ */
+function ReproducibilityAssessmentBlock({ assessments, thermoRef, idSuffix = "" }: {
+    assessments: ThermoRecord["assessments"] | null
+    thermoRef: string
+    idSuffix?: string
+}) {
+    const reproducibility = assessments?.reproducibility
+    if (!reproducibility) return null
+    const id = `reproducibility-${thermoRef}${idSuffix}`
+    return (
+        <section aria-labelledby={id}>
+            <h4 className="model-block-heading" id={id}>
+                Reproducibility assessment{reproducibility.grade ? `: ${reproducibility.grade.replaceAll("_", " ")}` : ""}
+            </h4>
+            <MadeUnderLine madeUnder={reproducibility.made_under} />
+        </section>
+    )
+}
+
 function EvidenceCompletenessBlock({ completeness, thermoRef, idSuffix = "" }: {
     completeness: ThermoRecord["evidence_completeness"] | null
     thermoRef: string
@@ -1037,12 +1076,10 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef, idSuffix = "" }: {
         <section aria-labelledby={`ga-${thermoRef}${idSuffix}`}>
             <h4 className="model-block-heading" id={`ga-${thermoRef}${idSuffix}`}>Group-additivity estimation</h4>
             <dl className="kv-list">
-                <div>
-                    <dt>Scheme</dt>
-                    <dd>{groupAdditivity.scheme_name}{groupAdditivity.scheme_version ? ` (${groupAdditivity.scheme_version})` : ""}</dd>
-                </div>
+                {/* The scheme's name, version and code commit, and each component's group label, are
+                    free text a depositor typed: none of them is printed (house rule, owner decision
+                    2026-11-03). The scheme is identified by its ref. */}
                 <div><dt>Scheme ref</dt><dd>{groupAdditivity.scheme_ref}</dd></div>
-                <div><dt>Code commit</dt><dd>{groupAdditivity.code_commit ?? "not recorded"}</dd></div>
             </dl>
             {groupAdditivity.components && groupAdditivity.components.length > 0 && (
                 <div className="table-scroll table-scroll--compact">
@@ -1063,7 +1100,7 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef, idSuffix = "" }: {
                         <tbody>
                             {groupAdditivity.components.map((component, index) => (
                                 <tr key={`${thermoRef}-ga-${index}`}>
-                                    <td data-label="Group">{component.group_label}</td>
+                                    <td className="num" data-label="Group">{index + 1}</td>
                                     <td data-label="Kind">{component.component_kind}</td>
                                     <td className="num" data-label="Count">{component.count}</td>
                                     <td className="num" data-label="H298 contribution (kJ/mol)">{component.h298_contribution_kj_mol ?? "not recorded"}</td>

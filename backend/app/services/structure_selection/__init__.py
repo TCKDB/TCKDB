@@ -7,7 +7,12 @@ outcomes) is shared with the thermo, kinetics and network selectors in :mod:`app
 Decision and replay are here too; nothing is wired to a route yet, and nothing here persists a selection.
 """
 
-from app.services.structure_selection.decision import DECISION_VERSION, StructureDecision, decide_structures
+from app.services.structure_selection.decision import (
+    ADMIN_KEY_VERSION,
+    DECISION_VERSION,
+    StructureDecision,
+    decide_structures,
+)
 from app.services.structure_selection.manifest import (
     ReplayError,
     replay_matches,
@@ -33,6 +38,7 @@ from app.services.structure_selection.selection import StructureSelection, selec
 from app.services.structure_selection.service import assess_entry_structures
 
 __all__ = [
+    "ADMIN_KEY_VERSION",
     "ASSESSMENT_VERSION",
     "DECISION_VERSION",
     "NORMALIZER_VERSION",

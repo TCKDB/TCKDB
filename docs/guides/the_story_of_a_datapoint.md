@@ -360,24 +360,27 @@ Months later, a modeler in another group — call him Idris — needs
 thermo for n-butanol. He hits the public read API:
 
 ```
-GET /api/v1/scientific/thermo/search?smiles=CCCCO&collapse=first
+GET /api/v1/scientific/thermo/search?smiles=CCCCO
 ```
 
 What happens next is the design's quietest radical choice. The
 database does **not** look up a stored "preferred value" — no such
 flag exists anywhere. Instead, the read service gathers every
 candidate thermo record for that species entry and *sorts* them, at
-query time, by an explicit, documented policy: highest review status →
-newest (the temperature window and the evidence checklist are reported on
-each record but do not order them). `collapse=first` returns the winner;
-`collapse=all` returns the whole ranked field, so Idris can see the
-runners-up and disagree with the ranking if his use case warrants it.
+query time, in an explicit, documented display order: review rank (approved
+first) → newest deposited (the temperature window and the evidence checklist
+are reported on each record but do not order them). The read
+returns the whole list in that order, so Idris can see every record and judge
+for himself; if he wants one record under a policy he states, he calls the
+select endpoint. The first record is display order,
+not a scientific preference.
 
-Why go to this trouble? Because *"best" is a policy, not a property.*
+Why go to this trouble? Because *"best" is a policy, not a property, and TCKDB
+carries no policy that ranks one method above another.*
 Stored preference flags rot: every new upload would demand re-curation
 of old flags, and yesterday's blessing silently outlives its
-justification. A read-time sort is always current, always explainable,
-and always reproducible — the response can *echo the policy it used*.
+justification. A read-time order is always current, always explainable,
+and always reproducible — the response can *echo the order it used*.
 
 Everything Idris receives is addressed by **public refs**
 (`species_…`, `thermo_…`, `lot_…`) — stable, loggable handles — never

@@ -37,8 +37,8 @@ justify it from a manual or a paper, not that the two strings look alike.
 
 **Scope is by program, and this key cannot see the program.** The hash of a
 level of theory is taken over ``method``, ``basis``, ``aux_basis``,
-``cabs_basis``, ``dispersion``, ``solvent``, ``solvent_model``, ``keywords``
-and ``spin_treatment`` (``_level_of_theory_hash``). The software that ran a
+``cabs_basis``, ``dispersion``, ``solvent``, ``solvent_model`` and
+``spin_treatment``, plus the typed method qualifiers when stated (``_level_of_theory_hash``). The software that ran a
 calculation is a different table (``software_release``, reached through the
 calculation), and ``LevelOfTheoryRef`` carries none. So the key has no program
 to consult, and an entry is admitted only if it is true for every program

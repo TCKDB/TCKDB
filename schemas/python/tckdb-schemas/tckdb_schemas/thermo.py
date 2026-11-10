@@ -274,7 +274,7 @@ class ThermoStateFields(SchemaBase):
     enthalpy_formation_0k_uncertainty_kj_mol: float | None = Field(default=None, ge=0)
     thermodynamic_target: ThermoTargetDeclaration | None = Field(
         default=None,
-        description="What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted.",
+        description="What the values describe (see ThermoTargetDeclaration). The server never infers it; omitted, it reads as not stated.",
     )
     protocol: ThermoProtocolDeclaration | None = Field(
         default=None,

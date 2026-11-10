@@ -1,0 +1,176 @@
+/* `components/EffectiveSettings.tsx` -- the grid and SCF convergence a calculation used, and how the archive knows.
+ * The component owns this stylesheet (imported once from it), like `made-under.css`.
+ *
+ * Colours are the existing tokens only. The state is carried by words first; the styling reinforces it:
+ *   reported   -- solid accent pill (an observation: the program printed it)
+ *   requested  -- solid muted pill (an observation of what was asked for)
+ *   assumed    -- DASHED outline and an italic value (not an observation: a documented default)
+ *   not stated -- plain muted text
+ *   conflicting -- the notice amber, a calmer register than --warning
+ */
+.settings-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .25rem;
+    min-width: 0;
+}
+
+.settings-value {
+    font: var(--type-data-font);
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+
+/* A value outside the closed set reads "recorded": a note like "Not stated", not a value in monospace. */
+.settings-placeholder {
+    color: var(--muted);
+    font: 600 .72rem/1.3 var(--sans);
+}
+
+.settings-value.settings-value--assumed {
+    font-style: italic;
+    color: var(--ink-2);
+}
+
+.settings-reported {
+    font: var(--type-note-font);
+    color: var(--ink-2);
+}
+
+/* A reported number stays whole and stays with the last word of its label; the line may break between the label's
+   other words and between values, never inside a number. */
+.settings-nowrap {
+    white-space: nowrap;
+}
+
+.settings-badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .25rem .5rem;
+}
+
+.settings-state {
+    display: inline-block;
+    padding: .15rem .55rem;
+    border: 1px solid var(--line-2);
+    border-radius: .75rem;
+    background: var(--surface-sunken);
+    color: var(--muted);
+    font: 600 .72rem/1.3 var(--sans);
+    letter-spacing: normal;
+    white-space: nowrap;
+}
+
+.settings-state.settings-state--conflict {
+    border-color: var(--notice-border);
+    background: var(--notice-bg);
+    color: var(--notice-text);
+}
+
+.settings-state.settings-state--neutral {
+    border-color: var(--line-2);
+    background: transparent;
+    color: var(--muted);
+}
+
+.settings-calc-type {
+    display: inline-block;
+    margin-left: .5rem;
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.settings-state.settings-state--reported {
+    border-color: var(--accent-300);
+    background: var(--accent-50);
+    color: var(--accent-700);
+}
+
+.settings-state.settings-state--requested {
+    border-color: var(--line-2);
+    background: var(--surface-sunken);
+    color: var(--ink-2);
+}
+
+.settings-state.settings-state--assumed {
+    border: 1px dashed var(--muted);
+    background: transparent;
+    color: var(--ink-2);
+    font-style: italic;
+}
+
+.settings-state.settings-state--not_stated {
+    border-color: transparent;
+    background: transparent;
+    padding-left: 0;
+    color: var(--muted);
+}
+
+.settings-source {
+    font: var(--type-note-font);
+    color: var(--muted);
+}
+
+.settings-absent {
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.settings-summary,
+.settings-behind {
+    min-width: 0;
+}
+
+.settings-summary { margin-bottom: 1rem; }
+
+.settings-summary .note,
+.settings-behind .note {
+    margin: .5rem 0 0;
+}
+
+/* Narrow container (a phone, or a card in a narrow column): stack each level so nothing scrolls sideways. The pills do
+   not wrap, so the four columns need about 40rem. */
+.settings-behind {
+    container-type: inline-size;
+}
+
+@container (max-width: 40rem) {
+    .settings-behind .data-table,
+    .settings-behind .data-table tbody,
+    .settings-behind .data-table tr,
+    .settings-behind .data-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .settings-behind .data-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+
+    .settings-behind .data-table tr {
+        padding: .6rem 0;
+        border-bottom: 1px solid var(--line-2);
+    }
+
+    .settings-behind .data-table td {
+        padding: .2rem 0;
+        border: 0;
+    }
+
+    .settings-behind .data-table td::before {
+        display: block;
+        color: var(--muted);
+        font-size: .6875rem;
+        content: attr(data-label);
+    }
+
+    .settings-behind .data-table td[data-label="Calculation"] {
+        overflow-wrap: anywhere;
+    }
+}

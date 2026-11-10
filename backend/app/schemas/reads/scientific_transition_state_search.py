@@ -40,10 +40,15 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
 from app.schemas.reads.scientific_common import (
+    CursorToken,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
+    WatermarkEcho,
 )
 from app.schemas.reads.scientific_transition_state import (
     ScientificTransitionStateEntryRecord,
@@ -98,6 +103,11 @@ class TransitionStatesSearchRequest(BaseModel):
         default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH
     )
     workflow_tool_version: str | None = Field(default=None, max_length=128)
+    #: A classification of the calculation's method (not a measure of accuracy); matched on the same calculation as
+    #: the fields above. See ``app/schemas/reads/_method_family.py``.
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
 
     # --- reaction context filters -----------------------------------------
     #: Exact match against the seeded ``reaction_family`` vocabulary
@@ -141,6 +151,7 @@ class TransitionStatesSearchRequest(BaseModel):
     sort: str | None = None  # rejected non-None per v0 sort policy
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
 
@@ -207,6 +218,11 @@ class TransitionStatesBrowseRequest(BaseModel):
         default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH
     )
     workflow_tool_version: str | None = Field(default=None, max_length=128)
+    #: A classification of the calculation's method (not a measure of accuracy); matched on the same calculation as
+    #: the fields above. See ``app/schemas/reads/_method_family.py``.
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
 
     # --- reaction context filters -----------------------------------------
     # Same fields, same semantics, as ``TransitionStatesSearchRequest``
@@ -238,6 +254,7 @@ class TransitionStatesBrowseRequest(BaseModel):
     sort: str | None = None  # rejected non-None per v0 sort policy
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
 
@@ -245,11 +262,11 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope."""
 
     filter: dict[str, Any]
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificTransitionStatesSearchResponse(BaseModel):
+class ScientificTransitionStatesSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/transition-states/search.
 
     Records are at the transition-state-entry grain.
@@ -259,6 +276,10 @@ class ScientificTransitionStatesSearchResponse(BaseModel):
     review_summary: ReviewStatusSummary
     records: list[ScientificTransitionStateEntryRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 class ScientificTransitionStatesBrowseResponse(ScientificTransitionStatesSearchResponse):

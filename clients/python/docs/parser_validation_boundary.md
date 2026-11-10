@@ -139,12 +139,14 @@ inconsistency, and stay out of scientific judgement*.
   it disagrees with reality, the *parser* layer should raise (§6) —
   not the builder.
 
-The single rule that keeps the boundary clean: **builders see only
-structured values, never bytes**. The closest builders come to
-files is `Calculation.add_artifact(path, kind=…)`, which records
-the path and kind on the builder but never opens the file. The
-two-phase upload reads bytes only at phase-2 POST time, inside the
-HTTP client — not inside the builder.
+The single rule that keeps the boundary clean: **builders never parse
+bytes; they see structured values only**. `Calculation.add_artifact(path,
+kind=…)` records the path and kind and does not open the file. As of
+0.191.0 the upload's `to_payload()` does read the attached files' bytes, to
+embed them inline for upload (and to check that they are non-empty, within
+the size cap, and match any declared size or hash). It never interprets
+them: no value is taken from a file's contents. Files deferred to the
+second phase are read inside the HTTP client at POST time, as before.
 
 ---
 

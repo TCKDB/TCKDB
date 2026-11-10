@@ -12,6 +12,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.hessian_method_assumption import (
+    calculation_deck_method,
+    calculation_echo_method,
+    calculation_numfreq_energy_implied,
+    calculation_reported_method,
+)
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.chemistry.geometry import parse_xyz
@@ -76,7 +82,8 @@ from app.services.calculation_ownership import (
     assert_calculation_owned_by,
 )
 from app.services.calculation_parameter_extraction import (
-    try_extract_parameters_from_input_upload,
+    inputs_first,
+    try_extract_parameters_from_artifact_upload,
 )
 from app.services.calculation_resolution import (
     _DEPENDENCY_ROLE_FOR_TYPE,
@@ -98,7 +105,18 @@ from app.services.charge_multiplicity_extraction import (
 )
 from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
-from app.services.conformer_resolution import resolve_conformer_group
+from app.services.conformer_resolution import (
+    current_conformer_group_targets,
+    primary_structure,
+    resolve_conformer_group,
+    settle_conformer_basin,
+)
+from app.services.deposit_warnings import (
+    attribute_warnings,
+    note_anchor,
+    note_calculation_keys,
+    note_preferred_scope_anchor,
+)
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -125,6 +143,7 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scan_coordinate_conformance import collect_scan_coordinate_warnings
 from app.services.scf_stability_sources import link_scf_stability_sources
 from app.services.software_banner_extraction import (
     try_reconcile_software_from_output_uploads,
@@ -144,6 +163,7 @@ from app.services.thermo_declaration_resolution import (
     resolve_thermo_declarations,
 )
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 from app.workflows.thermo import assert_enthalpy_reference, assert_thermo_role_matches_calculation_type
 from app.workflows.transport import persist_bundle_transport
 
@@ -210,7 +230,7 @@ def _to_calc_with_results_payload(
     ``resolve_and_persist_calculation_with_results`` service can be reused
     unchanged. The citation is resolved there, once, rather than here.
     """
-    return CalculationWithResultsPayload(
+    payload = CalculationWithResultsPayload(
         type=calc_in.type,
         quality=calc_in.quality,
         software_release=calc_in.software_release,
@@ -247,6 +267,14 @@ def _to_calc_with_results_payload(
         parameters_extracted_at=calc_in.parameters_extracted_at,
         constraints=calc_in.constraints,
     )
+    # The inline input deck and output log are not part of the shared payload;
+    # carry what the deck states and the log reports about the Hessian method
+    # so persistence stores the tau that validation judged.
+    payload._deck_hessian_method = calculation_deck_method(calc_in)
+    payload._reported_hessian_method = calculation_reported_method(calc_in)
+    payload._echo_hessian_method = calculation_echo_method(calc_in)
+    payload._numfreq_energy_implied = calculation_numfreq_energy_implied(calc_in)
+    return payload
 
 
 def _build_synthetic_thermo_upload_request(
@@ -354,14 +382,15 @@ def persist_computed_species_upload(
     for conf_in in request.conformers:
         geometry = resolve_geometry_payload(session, conf_in.geometry)
 
-        parsed = parse_xyz(GeometryPayload(xyz_text=conf_in.geometry.xyz_text))
+        structure = primary_structure(conf_in.primary_calculation, conf_in.geometry.xyz_text)
+        parsed = parse_xyz(GeometryPayload(xyz_text=structure.xyz_text))
         conformer_group, fingerprint, scheme = resolve_conformer_group(
             session,
             species_entry,
-            label=conf_in.label,
             created_by=created_by,
             smiles=request.species_entry.smiles,
             xyz_atoms=parsed.atoms,
+            defining=structure.defining,
         )
         observation = ConformerObservation(
             conformer_group_id=conformer_group.id,
@@ -375,6 +404,7 @@ def persist_computed_species_upload(
         )
         session.add(observation)
         session.flush()
+        settle_conformer_basin(session, observation, fingerprint, smiles=request.species_entry.smiles)
 
         # Step 4: primary opt + additionals. We replicate the
         # /uploads/conformers anchor-and-link logic here because the
@@ -574,8 +604,11 @@ def persist_computed_species_upload(
     }
     # The same total namespace, to each conformer's group: a thermo target
     # that names a conformer by key resolves to the group it was assigned to.
+    # Read off the observation, not the group captured when it was filed: a later
+    # conformer of this bundle can link two basins and merge the younger into the
+    # older, and the observation is where the survivor shows.
     conformer_keys_to_group_id: dict[str, int] = {
-        outcome.conformer_in_bundle.key: outcome.group_id
+        outcome.conformer_in_bundle.key: outcome.observation.conformer_group_id
         for outcome in conformer_outcomes
     }
     calc_keys_to_id: dict[str, Calculation] = {}
@@ -647,7 +680,7 @@ def persist_computed_species_upload(
                     dep.parent_calculation_key,
                     calc_keys_to_id,
                     field=(
-                        f"calculations['{child_in.key}'].depends_on."
+                        f"calculations[{child_in.key!r}].depends_on."
                         f"parent_calculation_key"
                     ),
                 )
@@ -757,49 +790,51 @@ def persist_computed_species_upload(
                 # rows; output logs reconcile the single-point energy
                 # against the tool's reported value (fill/mismatch), the
                 # same as the standalone artifacts route.
-                for art_in in calc_in.artifacts:
-                    try_extract_parameters_from_input_upload(
-                        session, calc_row, art_in, warnings=upload_warnings
-                    )
-                    sp_warning = try_reconcile_sp_energy_from_output_upload(
-                        session, calc_row, art_in
-                    )
-                    if sp_warning is not None:
-                        upload_warnings.append(sp_warning)
-                    # Output logs also state the charge and spin
-                    # multiplicity the run actually used; a contradiction
-                    # with the declared identity is flagged for review.
-                    upload_warnings.extend(
-                        try_reconcile_charge_multiplicity_from_output_upload(
-                            calc_row, art_in
+                with attribute_warnings(session, upload_warnings, record=(SubmissionRecordType.calculation, calc_row.id)):
+                    for art_in in inputs_first(calc_in.artifacts):
+                        try_extract_parameters_from_artifact_upload(
+                            session, calc_row, art_in, warnings=upload_warnings
                         )
+                        sp_warning = try_reconcile_sp_energy_from_output_upload(
+                            session, calc_row, art_in
+                        )
+                        if sp_warning is not None:
+                            upload_warnings.append(sp_warning)
+                        # Output logs also state the charge and spin
+                        # multiplicity the run actually used; a contradiction
+                        # with the declared identity is flagged for review.
+                        upload_warnings.extend(
+                            try_reconcile_charge_multiplicity_from_output_upload(
+                                calc_row, art_in
+                            )
+                        )
+                        # Input geometries for this calc were attached in an
+                        # earlier pass, so the Hessian can bind to them here.
+                        hessian_warning = try_extract_hessian_from_artifact_upload(
+                            session,
+                            calc_row,
+                            art_in,
+                            field=f"calculations[{calc_in.key!r}].artifacts",
+                            written_by=created_by,
+                        )
+                        if hessian_warning is not None:
+                            upload_warnings.append(hessian_warning)
+                        # Fill-when-absent-or-degenerate: an opt calc's own
+                        # input deck / log yields its true starting geometry
+                        # when none is on file yet, or the one on file only
+                        # duplicates the output.
+                        try_extract_input_geometry_from_artifact_upload(
+                            session, calc_row, art_in
+                        )
+                    # Output logs also carry the program's version banner; a
+                    # version the declared release lacked re-points the
+                    # calculation (#305 (c)). Once per calculation, so every log
+                    # is compared with the declared release.
+                    software_warning = try_reconcile_software_from_output_uploads(
+                        session, calc_row, calc_in.artifacts
                     )
-                    # Input geometries for this calc were attached in an
-                    # earlier pass, so the Hessian can bind to them here.
-                    hessian_warning = try_extract_hessian_from_artifact_upload(
-                        session,
-                        calc_row,
-                        art_in,
-                        field=f"calculations['{calc_in.key}'].artifacts",
-                    )
-                    if hessian_warning is not None:
-                        upload_warnings.append(hessian_warning)
-                    # Fill-when-absent-or-degenerate: an opt calc's own
-                    # input deck / log yields its true starting geometry
-                    # when none is on file yet, or the one on file only
-                    # duplicates the output.
-                    try_extract_input_geometry_from_artifact_upload(
-                        session, calc_row, art_in
-                    )
-                # Output logs also carry the program's version banner; a
-                # version the declared release lacked re-points the
-                # calculation (#305 (c)). Once per calculation, so every log
-                # is compared with the declared release.
-                software_warning = try_reconcile_software_from_output_uploads(
-                    session, calc_row, calc_in.artifacts
-                )
-                if software_warning is not None:
-                    upload_warnings.append(software_warning)
+                    if software_warning is not None:
+                        upload_warnings.append(software_warning)
 
         # An assembled composite's inputs are written, and its total checked,
         # now that every calculation exists, every ``depends_on`` edge is wired
@@ -945,9 +980,25 @@ def persist_computed_species_upload(
         RecordRef(SubmissionRecordType.applied_energy_correction, aec_id)
         for aec_id in (*thermo_aec_ids, *top_level_aec_ids)
     )
+    note_calculation_keys(session, {key: calc.id for key, calc in calc_keys_to_id.items()})
+    for outcome in conformer_outcomes:
+        note_anchor(
+            session,
+            f"conformers[{outcome.conformer_in_bundle.key!r}]",
+            SubmissionRecordType.conformer_observation,
+            outcome.observation.id,
+            scope="",
+        )
+    if thermo_row is not None:
+        note_anchor(session, "thermo", SubmissionRecordType.thermo, thermo_row.id, scope="")
+    if statmech_row is not None:
+        note_anchor(session, "statmech", SubmissionRecordType.statmech, statmech_row.id, scope="")
+    if transport_row is not None:
+        note_anchor(session, "transport", SubmissionRecordType.transport, transport_row.id, scope="")
+    note_preferred_scope_anchor(session, "applied_energy_corrections", "")
     apply_review_policy(
         session,
-        targets=review_targets,
+        targets=current_conformer_group_targets(session, review_targets),
         policy=review_policy,
         created_by=created_by,
     )
@@ -966,6 +1017,8 @@ def persist_computed_species_upload(
     upload_warnings.extend(
         collect_named_composite_deposit_warnings(session, bundle_calc_ids)
     )
+    upload_warnings.extend(collect_scan_coordinate_warnings(session, bundle_calc_ids))
+    upload_warnings.extend(collect_wavefunction_reliability_warnings(session, bundle_calc_ids))
 
     return ComputedSpeciesUploadOutcome(
         species_entry_id=species_entry.id,
@@ -1095,6 +1148,7 @@ def _persist_thermo_block(
         update={
             "source_calculations": resolved_sources,
             "thermodynamic_target_kind": declarations.thermodynamic_target_kind,
+            "thermodynamic_target_declared_by": declarations.thermodynamic_target_declared_by,
             "target_conformer_group_id": declarations.target_conformer_group_id,
             "protocol_declaration": declarations.protocol_declaration,
             # Stored as declared, after ``assert_role_consistency`` above.
@@ -1156,6 +1210,7 @@ def _persist_thermo_block(
             source_conformer_observation_id=source_conf_id,
             source_calculation_id=source_calc_id,
             created_by=created_by,
+            field=f"thermo.applied_energy_corrections[{i}]",
             warnings_out=warnings,
         )
         applied_correction_ids.append(applied.id)
@@ -1234,6 +1289,7 @@ def _persist_top_level_applied_corrections(
             source_conformer_observation_id=source_conf_id,
             source_calculation_id=source_calc_id,
             created_by=created_by,
+            field=f"applied_energy_corrections[{i}]",
             warnings_out=warnings,
         )
         applied_correction_ids.append(applied.id)

@@ -44,13 +44,21 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     LEVEL_OF_THEORY_RECORD_SECTIONS,
     SEARCH_SCOPE,
     omit_unrequested_sections,
 )
-from app.db.models.common import CoreTreatment, SpinTreatment
+from app.api.server_faults import ServerFaultRoute, caller_input
+from app.chemistry.method_families import MethodFamily
+from app.db.models.common import (
+    CoreTreatment,
+    PnoTruncation,
+    RelativisticHamiltonian,
+    RiApproximation,
+    SpinTreatment,
+)
 from app.schemas.reads.scientific_level_of_theory_search import (
     LevelOfTheoryBrowseRequest,
     ScientificLevelOfTheorySearchResponse,
@@ -60,7 +68,7 @@ from app.services.scientific_read.level_of_theory_search import (
     browse_levels_of_theory,
 )
 
-router = APIRouter(prefix="/level-of-theories")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/level-of-theories")
 
 
 @router.get("/browse", response_model=ScientificLevelOfTheorySearchResponse)
@@ -72,8 +80,14 @@ def scientific_level_of_theory_browse(
     basis: str | None = Query(None),
     dispersion: str | None = Query(None),
     solvent: str | None = Query(None),
+    method_family: list[MethodFamily] | None = Query(None),
+    dft_rung_min: int | None = Query(None, ge=1, le=5),
+    dft_rung_max: int | None = Query(None, ge=1, le=5),
     spin_treatment: SpinTreatment | None = Query(None),
     core_treatment: CoreTreatment | None = Query(None),
+    relativistic_hamiltonian: RelativisticHamiltonian | None = Query(None),
+    pno_truncation: PnoTruncation | None = Query(None),
+    ri_approximation: RiApproximation | None = Query(None),
     has_correction_schemes: bool | None = Query(None),
     has_frequency_scale_factors: bool | None = Query(None),
     include_rejected: bool = Query(False),
@@ -81,7 +95,8 @@ def scientific_level_of_theory_browse(
     min_review_status: str | None = Query(None),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """List levels of theory with no filter required, for a catalogue page.
@@ -103,15 +118,22 @@ def scientific_level_of_theory_browse(
     rejected with 422 (``client_sort_not_supported``), matching the
     sibling endpoint.
     """
-    request = LevelOfTheoryBrowseRequest(
+    request = caller_input(
+        LevelOfTheoryBrowseRequest,
         level_of_theory_ref=level_of_theory_ref,
         lot_hash=lot_hash,
         method=method,
         basis=basis,
         dispersion=dispersion,
         solvent=solvent,
+        method_family=method_family,
+        dft_rung_min=dft_rung_min,
+        dft_rung_max=dft_rung_max,
         spin_treatment=spin_treatment,
         core_treatment=core_treatment,
+        relativistic_hamiltonian=relativistic_hamiltonian,
+        pno_truncation=pno_truncation,
+        ri_approximation=ri_approximation,
         has_correction_schemes=has_correction_schemes,
         has_frequency_scale_factors=has_frequency_scale_factors,
         include_rejected=include_rejected,
@@ -120,6 +142,7 @@ def scientific_level_of_theory_browse(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = browse_levels_of_theory(session, request)

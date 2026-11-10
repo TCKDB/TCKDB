@@ -2,8 +2,8 @@
 
 Selection among the stored pressure-dependent solves of one network, for one stated gas-phase rate-coefficient
 question: which channel or declared bundle of outputs, over which temperature and pressure window, in which bath,
-under which state partition, boundaries and regime, with which coefficient meaning and for which comparison
-objective. A read: nothing is stored, no curator endorsement is created or changed, and the ordinary network
+under which state partition, boundaries and regime, with which coefficient meaning. Which solves are eligible, and
+their display order (``docs/specs/browse_order.md``); TCKDB ranks no method above another. A read: nothing is stored, no curator endorsement is created or changed, and the ordinary network
 browse and evaluation endpoints are untouched. See ``docs/guides/selecting_network_kinetics.md``.
 
 No field here carries a database id. References are public refs (``spe_``, ``nsolve_``) and composition hashes (the
@@ -19,14 +19,15 @@ from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from tckdb_schemas.fragments.version import VersionRef
-from tckdb_schemas.network_declarations import (
-    NetworkComparisonObjective,
-    NetworkObservable,
-    NetworkRegimeKind,
-)
+from tckdb_schemas.network_declarations import NetworkObservable, NetworkRegimeKind
 
-from app.db.models.common import PhaseKind, RecordReviewStatus
+from app.db.models.common import NetworkKineticsModelKind, PhaseKind, RecordReviewStatus
 from app.schemas.reads.scientific_common import ProfiledRequestEcho
+from app.schemas.reads.scientific_selection_common import (
+    CalculationProvenanceFilters,
+    ReviewEligibilityIn,
+    SelectionStepsAnswer,
+)
 
 QUANTITY_RATE_COEFFICIENT: Final = "rate_coefficient"
 MOLE_FRACTION_TOLERANCE: Final = 1e-9
@@ -39,10 +40,10 @@ class NetworkSelectionScope(str, Enum):
 
 
 class NetworkSelectionPolicy(str, Enum):
-    """``method_preferred`` applies the registered, audited network rules (none is active in this release, so it
-    ranks nothing and says so); the others are the administrative order only, exactly as on the browse endpoints."""
+    """The administrative order the request asks for, exactly as on the browse endpoints: review rank then newest
+    deposited (``default`` and ``most_reviewed``), or newest deposited first (``latest``). None is a claim about
+    which method is better."""
 
-    method_preferred = "method_preferred"
     default = "default"
     most_reviewed = "most_reviewed"
     latest = "latest"
@@ -54,11 +55,9 @@ class NetworkSelectionMode(str, Enum):
 
 
 class NetworkSelectionOutcome(str, Enum):
-    policy_preferred = "policy_preferred"
     incomparable_alternatives = "incomparable_alternatives"
     sole_eligible_candidate = "sole_eligible_candidate"
     no_applicable_candidate = "no_applicable_candidate"
-    policy_conflict = "policy_conflict"
 
 
 class NetworkSelectionBathComponent(BaseModel):
@@ -142,6 +141,17 @@ class NetworkSelectionOutputIn(BaseModel):
     observable: NetworkObservable
 
 
+class NetworkSelectionFilters(CalculationProvenanceFilters):
+    """The filters the network-kinetics search offers, with their meaning.
+
+    ``model_kind`` keeps the fits of that form (a solve with none is out). The provenance fields keep a solve when at
+    least one of its source calculations that the read profile shows matches every supplied field. Applied before
+    eligibility; a filter excludes on a fact and ranks nothing.
+    """
+
+    model_kind: NetworkKineticsModelKind | None = None
+
+
 class NetworkSelectionRequest(BaseModel):
     """Request body. ``quantity`` and ``phase`` may be omitted; if given they must agree with the endpoint.
 
@@ -170,20 +180,20 @@ class NetworkSelectionRequest(BaseModel):
     regime: NetworkSelectionRegimeIn = Field(default_factory=NetworkSelectionRegimeIn)
     source_composition_hash: str | None = Field(default=None, max_length=128)
     sink_composition_hash: str | None = Field(default=None, max_length=128)
-    objective: NetworkComparisonObjective = NetworkComparisonObjective.physical_accuracy
-    reference_model_ref: str | None = Field(
-        default=None, max_length=64, description="Public network-solve ref (nsolve_...). Required for, and only for, model_fidelity."
-    )
-    reference_outputs: str | None = Field(
-        default=None,
-        max_length=512,
-        description="Names the reference output set. Required for, and only for, representation_fidelity.",
-    )
-    policy: NetworkSelectionPolicy = NetworkSelectionPolicy.method_preferred
+    policy: NetworkSelectionPolicy = NetworkSelectionPolicy.default
     mode: NetworkSelectionMode = NetworkSelectionMode.all
     min_review_status: RecordReviewStatus | None = Field(
         default=None,
         description="Optional floor, applied on top of the read profile's floor (the stricter wins).",
+    )
+    filters: NetworkSelectionFilters = Field(
+        default_factory=NetworkSelectionFilters,
+        description="Narrow the solves by facts before eligibility, with the network-kinetics search's own filters.",
+    )
+    eligibility: ReviewEligibilityIn = Field(
+        default_factory=ReviewEligibilityIn,
+        description="Lift named eligibility defaults: a solve's rejected or deprecated review status. Every default is "
+        "applied unless lifted here; the answer lists each.",
     )
 
     @model_validator(mode="after")
@@ -230,7 +240,6 @@ class NetworkSelectionRequestEcho(ProfiledRequestEcho):
     temperature_max_k: float
     pressure_min_bar: float
     pressure_max_bar: float
-    objective: NetworkComparisonObjective
     administrative_policy: str
     result_mode: str
     min_review_status: RecordReviewStatus | None = None
@@ -248,14 +257,6 @@ class NetworkSelectionPolicyInfo(BaseModel):
     name: str
     version: int
     bounds_version: int
-    rules_applied: bool = Field(
-        description="False under an administrative policy: no rule was consulted, only the administrative order."
-    )
-    rules: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Registry entries consulted: rule id, version, status (every rule shipped is inactive), "
-        "objective, and why an inactive rule is inactive.",
-    )
 
 
 class NetworkSelectionMember(BaseModel):
@@ -267,6 +268,21 @@ class NetworkSelectionMember(BaseModel):
     )
 
 
+class NetworkSelectionSolve(BaseModel):
+    """One solve that competed: its review status, and the default it passed only because the request lifted it.
+
+    Review and provenance belong to the solve, so this is where the eligibility defaults act; every determination
+    and bundle in the answer belongs to one of these.
+    """
+
+    solve_ref: str
+    review_status: RecordReviewStatus
+    passed_only_by_override: list[str] = Field(
+        default_factory=list,
+        description="Eligibility defaults this solve would fail but the request lifted: it competes because of that.",
+    )
+
+
 class NetworkSelectionPick(BaseModel):
     """The node this response names: a determination of one channel, or a declared product set of one solve."""
 
@@ -274,9 +290,10 @@ class NetworkSelectionPick(BaseModel):
     scope: NetworkSelectionScope
     solve_ref: str
     members: list[NetworkSelectionMember]
-    basis: Literal["policy_preferred", "sole_eligible_candidate", "administrative_first"]
+    basis: Literal["sole_eligible_candidate", "administrative_first"]
     administrative: bool = Field(
-        description="True when chosen by review/recency order among unranked alternatives: not a method claim."
+        description="True when first in display order among several eligible alternatives: not a claim that it is "
+        "better, preferred or method-superior."
     )
     explanation: str
 
@@ -297,17 +314,7 @@ class NetworkSelectionDisclosures(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
-class NetworkSelectionRelations(BaseModel):
-    edges: list[dict[str, Any]] = Field(default_factory=list)
-    overridden_edges: list[dict[str, Any]] = Field(default_factory=list)
-    opposing_pairs: list[dict[str, Any]] = Field(default_factory=list)
-    cycles: list[list[str]] = Field(default_factory=list)
-    unused_edges: list[dict[str, Any]] = Field(
-        default_factory=list, description="Edges under more than one objective key are not composed; listed here."
-    )
-
-
-class NetworkSelectionResponse(BaseModel):
+class NetworkSelectionResponse(SelectionStepsAnswer):
     """The decision, its basis and everything it rests on, as public refs only."""
 
     request: NetworkSelectionRequestEcho
@@ -316,7 +323,11 @@ class NetworkSelectionResponse(BaseModel):
     outcome: NetworkSelectionOutcome
     basis: str = Field(description="One sentence saying why this outcome, in plain terms.")
     selection: NetworkSelectionPick | None = None
-    fronts: list[list[str]] = Field(default_factory=list)
+    fronts: list[list[str]] = Field(
+        default_factory=list,
+        description="The eligible nodes that tie, in display order. With no ranking between methods there is "
+        "exactly one front (none when nothing is eligible); its order is not a preference.",
+    )
     administrative_order: list[str] = Field(default_factory=list)
     determinations: list[dict[str, Any]] = Field(
         default_factory=list, description="The assessment of every determination, with every finding behind it."
@@ -324,14 +335,16 @@ class NetworkSelectionResponse(BaseModel):
     bundles: list[dict[str, Any]] = Field(
         default_factory=list, description="The assessment of every declared product set (bundle and full-network)."
     )
-    relations: NetworkSelectionRelations = Field(default_factory=NetworkSelectionRelations)
+    solves: list[NetworkSelectionSolve] = Field(
+        default_factory=list,
+        description="Every solve that competed (passed the filters and the applied defaults), with the default it "
+        "passed only by override, if any.",
+    )
     representations: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Nested fronts of the alternate fits inside each eligible node. They rank no solve and add no "
+        description="The alternate fits inside each eligible node, in display order. They rank no solve and add no "
         "independent confirmation.",
     )
-    rule_matches: list[dict[str, Any]] = Field(default_factory=list)
-    pair_checks: list[dict[str, Any]] = Field(default_factory=list)
     disclosures: NetworkSelectionDisclosures
 
 
@@ -339,7 +352,7 @@ class NetworkSelectionManifest(BaseModel):
     """The replayable decision manifest of ``POST .../kinetics/select/manifest``.
 
     Public refs only: the normalised request, the snapshot isolation, every captured solve with its normalised facts,
-    every assessment, the rules consulted, each comparison and the administrative order. Enough to recompute the
+    every assessment and the administrative order. Enough to recompute the
     decision at both levels with no database.
     """
 

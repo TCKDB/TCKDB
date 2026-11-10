@@ -50,7 +50,7 @@ def _make_species_entry(session) -> int:
     _REVIEW_ENTRY_COUNTER += 1
     entry = SpeciesEntry(
         species_id=species.id,
-        stereo_label=f"review-fixture-{_REVIEW_ENTRY_COUNTER}",
+        term_symbol=f"review-fixture-{_REVIEW_ENTRY_COUNTER}",
     )
     session.add(entry)
     session.flush()

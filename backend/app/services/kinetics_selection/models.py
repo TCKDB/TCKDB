@@ -1,8 +1,7 @@
 """Plain values for kinetics selection: the normalised request, one record's normalised facts,
 its assessment, and a determination group.
 
-Everything here is data. :class:`NormalizedKinetics` is the whole of what the assessor (and,
-later, a preference rule) may look at: public refs, review state, timestamps, stored columns and
+Everything here is data. :class:`NormalizedKinetics` is the whole of what the assessor may look at: public refs, review state, timestamps, stored columns and
 the declared claims, never a database id or an ORM row. That is what lets a decision manifest be
 replayed without a database. ``id_rank`` is the record's position when the population is ordered
 by database id: it stands in for the id as the last tie-break and is not an id.
@@ -32,6 +31,8 @@ from app.db.models.common import (
 from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.manifest_formats import new_current_only_registry
 from app.services.selection_kernel import Applicability, Outcome  # noqa: F401  (Outcome re-exported)
+from app.services.selection_kernel.requested import Eligibility, Verdict
+from app.services.selection_kernel.source_filters import SourceFilters
 
 #: The one quantity this selector answers.
 QUANTITY = "rate_coefficient"
@@ -39,17 +40,20 @@ QUANTITY = "rate_coefficient"
 PHASE = "gas"
 #: A visible population larger than this is refused (HTTP 422), never truncated.
 MAX_CANDIDATES = 500
-#: Version of the DECISION PROCEDURE only: grouping into determinations, the rules, outcomes and ordering, which is
+#: Version of the DECISION PROCEDURE only: grouping into determinations, outcomes and ordering, which is
 #: what ``replay_decision`` re-runs. How a record's eligibility is *assessed* (the evidence rubric version, the
 #: source-finding gate) is a separate contract, ``ASSESSMENT_SEMANTICS_VERSION`` below, recorded in its own
 #: structured manifest block; replay reads the recorded ``eligible`` flags and never reruns the assessment.
-#: A decision manifest records both versions.
-POLICY_NAME = "kinetics_method_preferred"
+#: A decision manifest records both versions. The procedure carries no method-versus-method rule.
+POLICY_NAME = "kinetics_selection"
+#: The name changed with the removal of the method-preference rules (it was ``kinetics_method_preferred``).
 POLICY_VERSION = 1
 #: Version of how eligibility is assessed: an automated geometry-validation fail is advisory and a live confirmed
-#: finding about a source calculation excludes the record (``structure_selection.source_findings``). A manifest with no
+#: finding about a source calculation excludes the record (``structure_selection.source_findings``). Version 2: each of
+#: those exclusions, and the rejected and deprecated review statuses, is a named default the request may lift, and the
+#: recorded ``eligible`` flag is the verdict under the request's own settings (``selection_kernel.requested``). A manifest with no
 #: block, or one recording a version the registry does not hold, is refused on replay.
-ASSESSMENT_SEMANTICS_VERSION = 1
+ASSESSMENT_SEMANTICS_VERSION = 2
 ASSESSMENT_SEMANTICS_NAME = "kinetics_selection_assessment"
 ASSESSMENT_SEMANTICS = new_current_only_registry(
     "kinetics_selection_assessment_semantics", ASSESSMENT_SEMANTICS_NAME, ASSESSMENT_SEMANTICS_VERSION
@@ -157,6 +161,15 @@ class ColliderRequest:
 
 
 @dataclass(frozen=True)
+class KineticsFilters(SourceFilters):
+    """The caller's filters, with the per-entry kinetics browse's vocabulary and meaning (public refs only).
+
+    The provenance fields (level of theory, software, method, basis, workflow tool, method family, DFT rung) are matched
+    through ONE shown source calculation: it has to satisfy every one supplied (``SourceFilters``).
+    """
+
+
+@dataclass(frozen=True)
 class KineticsRequest:
     """The normalised request: a gas-phase rate coefficient for one reaction entry.
 
@@ -165,8 +178,10 @@ class KineticsRequest:
         or already composition-effective).
     :param collider: Required when material: a finite pressure, or a composition-effective coefficient.
     :param min_review_status: Optional caller floor; the read-profile floor is applied on top.
-    :param admin_policy: Administrative order within a front. Never reorders fronts.
+    :param admin_policy: Administrative order of the eligible determinations. Display order, never a method preference.
     :param max_candidates: Population cap; the endpoint contract is 500.
+    :param filters: The caller's filters, applied before eligibility.
+    :param eligibility: The eligibility defaults the caller lifted.
     """
 
     direction: KineticsDirection
@@ -179,7 +194,8 @@ class KineticsRequest:
     min_review_status: RecordReviewStatus | None = None
     admin_policy: SelectionPolicy = SelectionPolicy.default
     max_candidates: int = MAX_CANDIDATES
-    apply_rules: bool = True
+    filters: KineticsFilters = field(default_factory=KineticsFilters)
+    eligibility: Eligibility = field(default_factory=Eligibility)
 
     def __post_init__(self) -> None:
         if self.direction not in (KineticsDirection.forward, KineticsDirection.reverse):
@@ -214,7 +230,8 @@ class KineticsRequest:
             "collider": self.collider.to_dict() if self.collider is not None else None,
             "min_review_status": self.min_review_status.value if self.min_review_status else None,
             "administrative_policy": self.admin_policy.value,
-            "apply_rules": self.apply_rules,
+            "filters": self.filters.to_record(),
+            "eligibility": self.eligibility.to_record(),
             "max_candidates": self.max_candidates,
         }
 
@@ -248,7 +265,8 @@ class KineticsRequest:
             min_review_status=RecordReviewStatus(raw["min_review_status"]) if raw["min_review_status"] else None,
             admin_policy=SelectionPolicy(raw["administrative_policy"]),
             max_candidates=raw.get("max_candidates", MAX_CANDIDATES),
-            apply_rules=raw["apply_rules"],
+            filters=KineticsFilters.from_record(raw["filters"]),
+            eligibility=Eligibility.from_record(raw["eligibility"]),
         )
 
 
@@ -324,7 +342,7 @@ class NormalizedKinetics:
     t0_k: float | None = None
     #: The levels of theory the record itself names, as ``{"source", "role", "method", "basis", ...}``:
     #: ``record_declared`` (the level the depositor declared for the whole record's energies,
-    #: ``kinetics.energy_level_of_theory_id``; the claim a method rule reads), ``protocol_declared`` (the protocol's
+    #: ``kinetics.energy_level_of_theory_id``), ``protocol_declared`` (the protocol's
     #: own supporting calculations, which can corroborate or refute the claim but have no role that says which side
     #: of the barrier they cover) and ``source_link`` (the record's own source-calculation links, which do not
     #: establish that an energy was used). Nothing is read from a sibling record.
@@ -393,7 +411,7 @@ class NormalizedKinetics:
 
 @dataclass(frozen=True)
 class SpeciesFact:
-    """One participant of the reaction entry as a rule needs to see it (public ref, identity, state)."""
+    """One participant of the reaction entry (public ref, identity, state)."""
 
     species_entry_ref: str
     inchi_key: str
@@ -506,7 +524,7 @@ class KineticsAssessmentResult:
 
     ``unresolved_refs`` and ``unsupported_refs`` are disclosures: those records do not compete here and
     might if a missing fact were recorded or their form evaluated. ``outcome`` is ``None`` here:
-    ordering and outcomes are the rule-driven stage built on this result.
+    ordering and outcomes are the stage built on this result.
     """
 
     request: KineticsRequest
@@ -523,3 +541,7 @@ class KineticsAssessmentResult:
     unresolved_refs: tuple[str, ...] = ()
     unsupported_refs: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
+    #: Each record's verdict under the request's eligibility settings, by public ref.
+    verdicts: dict[str, Verdict] = field(default_factory=dict)
+    #: The recorded funnel (``selection_kernel.requested.funnel``).
+    funnel: dict[str, Any] = field(default_factory=dict)

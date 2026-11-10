@@ -38,7 +38,7 @@ from pydantic import Field, StrictInt, StringConstraints, ValidationError, field
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
-from tckdb_schemas.enums import ThermoTargetKind
+from tckdb_schemas.enums import ThermoDeclarationSource, ThermoTargetKind
 from tckdb_schemas.producer_rule import producer_rule
 
 __all__ = [
@@ -59,6 +59,8 @@ __all__ = [
     "ThermoTargetDeclaration",
     "ThermoThermalApproximation",
     "W_THERMO_DECLARATION_INVALID",
+    "W_THERMO_DECLARED_BY_RECORD_INCOHERENT",
+    "W_THERMO_DECLARED_BY_TARGET_INCOHERENT",
     "W_THERMO_PROTOCOL_VERSION_UNSUPPORTED",
     "W_THERMO_RECIPE_NAME_LISTED",
     "W_THERMO_TARGET_GROUP_NOT_ALLOWED",
@@ -77,6 +79,10 @@ W_THERMO_TARGET_GROUP_REQUIRED = "thermo_target_group_required"
 W_THERMO_TARGET_GROUP_NOT_ALLOWED = "thermo_target_group_not_allowed"
 #: A protocol declaration carries a ``version`` this server does not accept.
 W_THERMO_PROTOCOL_VERSION_UNSUPPORTED = "thermo_protocol_version_unsupported"
+#: A ``chemkin_format`` target whose kind is not ``equilibrium_ensemble``.
+W_THERMO_DECLARED_BY_TARGET_INCOHERENT = "thermo_declared_by_target_incoherent"
+#: A ``chemkin_format`` target on a record that is not gas phase or has no NASA-7 block.
+W_THERMO_DECLARED_BY_RECORD_INCOHERENT = "thermo_declared_by_record_incoherent"
 #: A target or protocol declaration that reached a service or the client builder
 #: without passing request validation (a payload built with ``model_construct``)
 #: and fails it there: an unrecognised target kind, or a protocol that does not
@@ -117,9 +123,13 @@ class ThermoTargetDeclaration(SchemaBase):
     :param kind: The target kind.
     :param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.
     :param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.
+    :param declared_by: ``depositor`` (the default) is the depositor's own statement.
+        ``chemkin_format`` is a statement by the depositing client that the CHEMKIN format defines
+        the target; the server checks it is coherent but cannot verify which tool produced it.
     """
 
     kind: ThermoTargetKind
+    declared_by: ThermoDeclarationSource = ThermoDeclarationSource.depositor
     conformer_group_ref: str | None = Field(default=None, min_length=1)
     conformer_key: str | None = Field(default=None, min_length=1)
 
@@ -160,6 +170,14 @@ def thermo_target_error(target: Any) -> tuple[str, str] | None:
             f"thermodynamic_target.kind {kind!r} is not recognised; use "
             f"{' or '.join(repr(member.value) for member in ThermoTargetKind)}. "
             "Matching is exact and case-sensitive.",
+        )
+    declared_by = _get(target, "declared_by")
+    declared_by = declared_by.value if isinstance(declared_by, Enum) else declared_by
+    if declared_by == ThermoDeclarationSource.chemkin_format.value and kind != ThermoTargetKind.equilibrium_ensemble.value:
+        return (
+            W_THERMO_DECLARED_BY_TARGET_INCOHERENT,
+            f"A target declared by chemkin_format must be equilibrium_ensemble, not {kind!r}: the "
+            "CHEMKIN format defines the standard ideal-gas ensemble and no single conformer.",
         )
     ref = _get(target, "conformer_group_ref")
     key = _get(target, "conformer_key")
@@ -491,18 +509,42 @@ class StoredThermoProtocolDeclaration(ThermoProtocolDeclaration):
 # ---------------------------------------------------------------------------
 
 
+def _declared_by_record_error(payload: Any) -> tuple[str, str] | None:
+    """The error for a ``chemkin_format`` target on a record that is not gas phase or has no NASA-7 block."""
+    target = _get(payload, "thermodynamic_target")
+    if target is None:
+        return None
+    declared_by = _get(target, "declared_by")
+    declared_by = declared_by.value if isinstance(declared_by, Enum) else declared_by
+    if declared_by != ThermoDeclarationSource.chemkin_format.value:
+        return None
+    phase = _get(payload, "phase")
+    phase = phase.value if isinstance(phase, Enum) else phase
+    if phase != "gas" or _get(payload, "nasa") is None:
+        return (
+            W_THERMO_DECLARED_BY_RECORD_INCOHERENT,
+            "A target declared by chemkin_format needs phase gas and a NASA-7 block on the record; "
+            f"this record has phase {phase!r} and {'a' if _get(payload, 'nasa') is not None else 'no'} NASA-7 block.",
+        )
+    return None
+
+
 @producer_rule
 def thermo_declaration_error(payload: Any) -> tuple[str, str] | None:
     """A thermo record's optional target and protocol declarations must be coherent.
 
     A ``single_conformer`` target names exactly one conformer group, an
     ``equilibrium_ensemble`` target none; ``protocol.version`` is exactly ``1`` and
-    unknown fields and values are refused. Claims, never inferred or defaulted.
+    unknown fields and values are refused. A target declared by ``chemkin_format`` must be
+    ``equilibrium_ensemble`` on a gas-phase record that carries a NASA-7 block.
     """
     target = _get(payload, "thermodynamic_target")
     error = thermo_target_error(target)
     if error is not None:
         return error
+    record_error = _declared_by_record_error(payload)
+    if record_error is not None:
+        return record_error
     protocol = _get(payload, "protocol")
     if protocol is None:
         return None

@@ -29,6 +29,12 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     # either (ADR 0021). A level that states frozen_core or all_electron
     # includes the column, so its digest differs, as its identity does.
     ("level_of_theory", "core_treatment"): None,
+    # level_of_theory.relativistic_hamiltonian / pno_truncation / ri_approximation: same shape
+    # as core_treatment. A level that does not state one is NULL, and a NULL adds no key to
+    # its hash either. A level that states one includes the column, so its digest differs.
+    ("level_of_theory", "relativistic_hamiltonian"): None,
+    ("level_of_theory", "pno_truncation"): None,
+    ("level_of_theory", "ri_approximation"): None,
     # thermo.thermodynamic_target_kind / target_conformer_group_id /
     # protocol_declaration: a thermo row stored before the columns existed
     # declared no target and no protocol, which is NULL. A record that states
@@ -38,6 +44,8 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     ("thermo", "thermodynamic_target_kind"): None,
     ("thermo", "target_conformer_group_id"): None,
     ("thermo", "protocol_declaration"): None,
+    # thermo.thermodynamic_target_declared_by: left out of a digest at its default.
+    ("thermo", "thermodynamic_target_declared_by"): "depositor",
     # kinetics.determination_id / representation_role / applicability_declaration /
     # protocol_declaration: a kinetics row stored before the columns existed declared no
     # determination, no role, no applicability and no protocol, which is NULL. A record that
@@ -73,16 +81,51 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     # actual protocol, which is NULL. One that declares a protocol includes the column, so its digest differs,
     # as what it claims does. Adding the column restales no stored review or assessment of any existing row.
     ("calculation", "actual_protocol_declaration"): None,
+    # statmech_model_member.relative_energy_convention: a member stored before the column existed stated no energy
+    # (the column is present if and only if the energy is), which is NULL. A member that states an energy includes the
+    # column, so its digest differs, as its meaning does: the energy is read under that convention.
+    ("statmech_model_member", "relative_energy_convention"): None,
 }
 
 
-def is_unchanged_default(table: str, column: str, value: Any) -> bool:
-    """True when ``value`` is the pre-existing default of a listed column.
+#: Columns a digest NEVER includes, whatever they hold (DR-0038). They are not something a record
+#: claims; they are derived from, or bookkeeping about, columns the digest already covers:
+#:
+#: * ``species_entry.stereo_descriptor`` / ``stereo_resolution`` / ``stereo_smiles`` are derived
+#:   from the entry's own configuration, and ``stereo_label`` (already hashed) is their display
+#:   text, so an entry whose stereo changes still changes its digest through the label, while an
+#:   entry whose stereo did not change keeps the digest it had. Without this every stored review
+#:   of every record naming a species entry would read as stale the day the columns appeared.
+#: * ``calculation_parameter.artifact_kind`` says which uploaded artifact (the deck or the log it echoes) a
+#:   parser row was read from. It is provenance of the reading, and the row's own columns (key, value,
+#:   section) are already hashed, so a stored review does not restale the day the column appeared.
+#: * ``calculation_parameter.statement_kind`` says whether a parser row is what the deck or echoed input requested or
+#:   what the log reports as used. Same reasoning as ``artifact_kind``: the row's own columns are already hashed.
+#: * ``merged_into_*``: forwarding bookkeeping of a row that was merged into another, written only
+#:   by a migration; the row's own review history stays on it and does not restale.
+DERIVED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("species_entry", "stereo_descriptor"),
+        ("species_entry", "stereo_resolution"),
+        ("species_entry", "stereo_smiles"),
+        ("species_entry", "merged_into_species_entry_id"),
+        ("calculation_parameter", "artifact_kind"),
+        ("calculation_parameter", "statement_kind"),
+        ("species", "merged_into_species_id"),
+        ("chem_reaction", "merged_into_chem_reaction_id"),
+    }
+)
 
-    ``None`` counts: a transient row that has not been flushed has no value
+
+def is_unchanged_default(table: str, column: str, value: Any) -> bool:
+    """True when a column is left out of a digest: a derived column, or a listed column holding its default.
+
+    ``None`` counts as the default: a transient row that has not been flushed has no value
     yet, and is what a row without the column amounted to.
     """
     key = (table, column)
+    if key in DERIVED_COLUMNS:
+        return True
     if key not in UNCHANGED_DEFAULTS:
         return False
     return value is None or value == UNCHANGED_DEFAULTS[key]

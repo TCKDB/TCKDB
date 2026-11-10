@@ -1,0 +1,33 @@
+/* `components/MadeUnderLine.tsx` -- the one line that says which rubric judged an assessment, at which version, and
+ * whether that is still the version in force. It owns its own stylesheet, imported once from the component, the same
+ * "a component owns its own CSS" convention `EvidenceChecklist` and `ReviewNote` follow.
+ *
+ * Colors are the existing tokens only. A stale badge uses the notice amber (`--notice-*`: "this was superseded or
+ * corrected", a calmer register than `--warning`, which means failure), because a stale assessment is out of date, not
+ * wrong. "Not assessed" reuses the muted pill, a different axis from stale, so the two cannot be mistaken for each other.
+ */
+.made-under {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .35rem .75rem;
+    max-width: var(--measure-note);
+    margin: 0;
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.made-under-badge {
+    flex: none;
+}
+
+.made-under-badge.made-under-badge-stale {
+    border-color: var(--notice-border);
+    background: var(--notice-bg);
+    color: var(--notice-text);
+}
+
+.made-under-text {
+    flex: 1 1 18rem;
+    min-width: 0;
+}

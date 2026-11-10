@@ -89,8 +89,10 @@ class HessianMethod(str, Enum):
     #
     # Recorded only when the output says so explicitly (Gaussian
     # ``Freq=Numer``, ORCA ``NumFreq`` / ``AnFreq``). Absence means "not
-    # recorded", which resolves to the conservative tolerance -- it is
-    # never assumed to be analytic.
+    # recorded", which resolves to the producing program's assumed default
+    # for the level of theory (tckdb_schemas.hessian_method_assumption,
+    # stored with an ``assumed_*`` basis), or to the conservative tolerance
+    # where that is unknown. A recorded value always wins over an assumption.
 
     analytic = "analytic"
     finite_difference_gradient = "finite_difference_gradient"
@@ -126,6 +128,18 @@ class ThermoTargetKind(str, Enum):
 
     equilibrium_ensemble = "equilibrium_ensemble"
     single_conformer = "single_conformer"
+
+
+class ThermoDeclarationSource(str, Enum):
+    """Whose claim a thermo record's thermodynamic-target declaration is.
+
+    ``depositor`` is the depositor's own statement. ``chemkin_format`` is a statement by the
+    depositing client that the CHEMKIN format defines the target; the server checks it is coherent
+    but cannot verify which tool produced it.
+    """
+
+    depositor = "depositor"
+    chemkin_format = "chemkin_format"
 
 
 class PhaseKind(str, Enum):
@@ -316,6 +330,7 @@ class HessianSource(str, Enum):
     parsed_fchk = "parsed_fchk"
     parsed_hess = "parsed_hess"
     parsed_log = "parsed_log"
+    parsed_log_archive = "parsed_log_archive"
     uploaded = "uploaded"
     derived = "derived"
 
@@ -476,14 +491,66 @@ class CoreTreatment(str, Enum):
     focal-point scheme). Part of the level identity only when stated: a level
     that does not say stays ``NULL`` and keeps the hash it always had.
 
-    Two members on purpose. A partial treatment (Gaussian ``FC=1`` /
-    ``FreezeInnerNobleGasCore``, an ORCA ``FC_EWIN`` energy window, an explicit
-    orbital range) is real but has no agreed name across codes; it is left
-    ``NULL`` and described in ``keywords`` until a producer needs it named.
+    ``window``: a partial treatment (a Gaussian ``Window=(m,n)`` orbital range,
+    an ORCA ``FC_EWIN`` energy window). It is one value on purpose: the
+    specific window has no agreed form across codes and stays on the
+    calculation's ``core.frozen`` parameter rows, so two different windows are
+    one level of theory.
     """
 
     frozen_core = "frozen_core"
     all_electron = "all_electron"
+    window = "window"
+
+
+class RelativisticHamiltonian(str, Enum):
+    """Scalar-relativistic Hamiltonian a level of theory was run with.
+
+    One vocabulary with the parsed parameter ``relativistic.hamiltonian``
+    (``app/services/parameter_closed_values.py``). ``none`` is a stated
+    non-relativistic run and is a different level from not stating it.
+    Sources: ORCA 6.1 manual Table 2.54 (DKH2/DKH, ZORA, IORA, X2C);
+    Gaussian 09 ``Integral`` (DKH/DKH2, DKH0, DKHSO, RESC, NoDKH).
+    Part of the level identity only when stated.
+    """
+
+    none = "none"
+    dkh0 = "dkh0"
+    dkh2 = "dkh2"
+    dkhso = "dkhso"
+    resc = "resc"
+    x2c = "x2c"
+    zora = "zora"
+    iora = "iora"
+
+
+class PnoTruncation(str, Enum):
+    """The DLPNO truncation preset a level of theory was run with.
+
+    Source: ORCA 6.1 manual, DLPNO "Basic Usage": the ``LoosePNO``,
+    ``NormalPNO`` and ``TightPNO`` keywords are the recommended way to control
+    accuracy. A hand-set numeric threshold is not representable here and stays
+    a parameter row. Part of the level identity only when stated.
+    """
+
+    loose = "loose"
+    normal = "normal"
+    tight = "tight"
+
+
+class RiApproximation(str, Enum):
+    """The resolution-of-the-identity approximation of the SCF step.
+
+    One vocabulary with the parsed parameter ``ri.approximation``. ``none`` is
+    a stated no-RI run. RI inside a method name (``RI-MP2``) is the method's own
+    and is not stated here. Part of the level identity only when stated.
+    """
+
+    none = "none"
+    rij = "rij"
+    rijcosx = "rijcosx"
+    rijk = "rijk"
+    rijonx = "rijonx"
 
 
 class EnergyComponentKind(str, Enum):
@@ -563,10 +630,31 @@ class SpeciesEntryStateKind(str, Enum):
 
 
 class NetworkChannelKind(str, Enum):
+    """Macroscopic type of a network channel, derived from the states it joins.
+
+    A channel is directed (source to sink). Its kind follows from the kinds of its two states, with
+    termolecular treated exactly like bimolecular. A deposit may omit ``kind``; if it supplies one
+    it is checked against this rule, and a disagreement is refused as ``network_channel_kind_mismatch``.
+
+    ``isomerization``
+        well to well.
+
+    ``association``
+        bimolecular or termolecular to well.
+
+    ``dissociation``
+        well to bimolecular or termolecular.
+
+    ``exchange``
+        bimolecular or termolecular to bimolecular or termolecular, including stereo
+        isomerisation of a fragment set.
+
+    The kind comes from the two endpoints whatever the channel's mechanism: a well-skipping channel
+    that ends at a well is ``association`` or ``dissociation``, not ``exchange``.
+    """
     isomerization = "isomerization"
     association = "association"
     dissociation = "dissociation"
-    stabilization = "stabilization"
     exchange = "exchange"
 
 
@@ -825,6 +913,9 @@ __all__ = (
     "ConstraintKind",
     "CoordinateUnit",
     "CoreTreatment",
+    "PnoTruncation",
+    "RelativisticHamiltonian",
+    "RiApproximation",
     "EnergyComponentKind",
     "EnergyCorrectionApplicationRole",
     "EnergyCorrectionConvention",

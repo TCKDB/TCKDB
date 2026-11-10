@@ -7,7 +7,8 @@ Covers:
 
 ``level_of_theory`` is a first-class, deduplicated provenance identity
 (DR-0034), keyed by ``lot_hash`` over ``method, basis, aux_basis,
-cabs_basis, dispersion, solvent, solvent_model, keywords, spin_treatment``.
+cabs_basis, dispersion, solvent, solvent_model, spin_treatment``, plus ``core_treatment``,
+``relativistic_hamiltonian``, ``pno_truncation`` and ``ri_approximation`` when stated.
 It is not in ``SubmissionRecordType``, so it has no per-row review
 history; the envelope still carries an empty ``review_summary`` for shape
 parity with the rest of the scientific surface.
@@ -30,13 +31,24 @@ from __future__ import annotations
 from datetime import datetime
 
 from pydantic import BaseModel, Field, computed_field
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.chemistry.level_label import render_level_label
-from app.db.models.common import CalculationType, CoreTreatment, FrequencyScaleKind, SpinTreatment
+from app.chemistry.method_families import CLASSIFICATION_REF, MethodFamily, classify_method
+from app.db.models.common import (
+    CalculationType,
+    CoreTreatment,
+    FrequencyScaleKind,
+    PnoTruncation,
+    RelativisticHamiltonian,
+    RiApproximation,
+    SpinTreatment,
+)
 from app.schemas.reads.scientific_common import (
     CompositeSchemeSummary,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
@@ -70,11 +82,10 @@ class LevelOfTheoryCoreBlock(BaseModel):
     ``level_of_theory_id`` it names no database row, so it carries none of
     the enumeration risk internal ids exist to withhold.
 
-    ``aux_basis``/``cabs_basis``/``keywords`` are part of ``lot_hash``'s
+    ``aux_basis``/``cabs_basis`` are part of ``lot_hash``'s
     identity inputs (DR-0034) alongside the fields already served
     elsewhere; a page whose whole point is showing what distinguishes one
-    level of theory from another should not silently drop three of the
-    nine. There is no ``label`` field: the ORM row carries no such column
+    level of theory from another should not silently drop two of them. There is no ``label`` field: the ORM row carries no such column
     (unlike ``LevelOfTheorySummary.label``, which is a cross-record
     presentation field every existing builder sets to ``None`` for lack of
     a stored value) -- inventing one here would fabricate a field the API
@@ -90,10 +101,13 @@ class LevelOfTheoryCoreBlock(BaseModel):
     dispersion: str | None = None
     solvent: str | None = None
     solvent_model: str | None = None
-    keywords: str | None = None
     spin_treatment: SpinTreatment | None = None
     #: Frozen-core or all-electron; ``None`` = not stated (ADR 0021).
     core_treatment: CoreTreatment | None = None
+    #: Method qualifiers; ``None`` = not stated. Each is part of ``lot_hash`` only when set.
+    relativistic_hamiltonian: RelativisticHamiltonian | None = None
+    pno_truncation: PnoTruncation | None = None
+    ri_approximation: RiApproximation | None = None
     lot_hash: str
     #: The composite recipe this level names (ADR 0021), or ``None`` for an
     #: ordinary level. Not part of ``lot_hash``.
@@ -120,7 +134,34 @@ class LevelOfTheoryCoreBlock(BaseModel):
             solvent_model=self.solvent_model,
             spin_treatment=self.spin_treatment,
             core_treatment=self.core_treatment,
+            relativistic_hamiltonian=self.relativistic_hamiltonian,
+            pno_truncation=self.pno_truncation,
+            ri_approximation=self.ri_approximation,
         )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def method_family(self) -> MethodFamily:
+        """The kind of method this is, derived from ``method`` (``unclassified`` when the table does not name it).
+
+        A classification, not a measure of accuracy. See :mod:`app.chemistry.method_families`.
+        """
+        return classify_method(self.method).family
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def dft_rung(self) -> int | None:
+        """The DFT rung, 1 (LDA) to 5 (double hybrid); ``None`` for a method that is not a density functional.
+
+        The ladder covers DFT only and is not an accuracy ranking.
+        """
+        return classify_method(self.method).dft_rung
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def method_classification(self) -> VersionRef:
+        """The versioned classification that produced ``method_family`` and ``dft_rung``."""
+        return CLASSIFICATION_REF
 
 
 # ---------------------------------------------------------------------------
@@ -305,7 +346,7 @@ class ScientificLevelOfTheoryRecord(BaseModel):
     software: LevelOfTheorySoftwareBreakdown | None = None
 
 
-class ScientificLevelOfTheoryDetailResponse(BaseModel):
+class ScientificLevelOfTheoryDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/level-of-theories/{handle}``."""
 
     request: RequestEcho

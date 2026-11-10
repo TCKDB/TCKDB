@@ -1,19 +1,20 @@
 """Read schemas for /api/v1/scientific/species/search.
 
-See docs/specs/read_api_mvp.md §Endpoint 1.
+See docs/specs/browse_order.md.
 """
 
 from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
     StationaryPointKind,
     StereoKind,
+    StereoResolution,
 )
 from app.schemas.reads._field_bounds import (
     MAX_BASIS_LENGTH as _MAX_BASIS_LENGTH,
@@ -45,12 +46,17 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
+from app.schemas.reads.removed_parameters import SPECIES as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
+    CursorToken,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
+    WatermarkEcho,
 )
 from app.schemas.reads.scientific_structure_search import StructureSearchMode
 
@@ -91,7 +97,14 @@ class SpeciesFilterRequest(BaseModel):
     page, not a lookup they arrived with. Its matching semantics (exact,
     case-sensitive, via the RDKit cartridge) are identical on both
     surfaces — see ``species.py::_formula_expr``.
+
+    Every matching record is returned in display order; ``collapse`` and ``selection_policy`` are refused (422).
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_parameters(cls, data):
+        return _REMOVED_PARAMETERS.guard_body(data)
 
     # Matched via the RDKit cartridge's mol_formula(mol_from_smiles(...))
     # against the species' identity SMILES: Hill notation, e.g. "H2O",
@@ -111,9 +124,9 @@ class SpeciesFilterRequest(BaseModel):
     # v0 forbids client-supplied sort. The service rejects a non-None value.
     sort: str | None = None
 
-    collapse: CollapseMode = CollapseMode.all
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
 
@@ -224,6 +237,11 @@ class SpeciesBrowseRequest(SpeciesFilterRequest):
         default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH
     )
     workflow_tool_version: str | None = Field(default=None, max_length=128)
+    #: A classification of the calculation's method (not a measure of accuracy); matched on the same calculation as
+    #: the fields above. See ``app/schemas/reads/_method_family.py``.
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
 
     # Structure filter -- **browse-only**, added alongside the browse-page
     # structure search UI (frontend/src/components/BrowseFilterForm.tsx).
@@ -296,10 +314,10 @@ class SpeciesEntryScientificRecord(BaseModel):
 
     Identity fields
     ---------------
-    ``stereo_label``, ``electronic_state_label``, ``term_symbol`` and
-    ``isotope_key`` are the columns of ``uq_species_entry_species_id``
-    other than ``electronic_state_kind`` (already served above) and the
-    species itself. Together those five are what makes one entry a
+    ``stereo_descriptor`` (the key; ``stereo_label`` is its display text),
+    ``electronic_state_label``, ``term_symbol`` and ``isotope_key`` are the
+    columns of ``uq_species_entry_species_id`` other than
+    ``electronic_state_kind`` (already served above) and the species itself. Together those five are what makes one entry a
     different row from another under the same ``species``.
 
     They are in the **default** projection, not behind an ``include=``
@@ -337,6 +355,21 @@ class SpeciesEntryScientificRecord(BaseModel):
     species_entry_kind: StationaryPointKind
     electronic_state_kind: SpeciesEntryStateKind
     stereo_label: str | None = None
+    #: The entry's stereo key (DR-0038): ``R``/``S``/``E``/``Z``/``Ra``/``Sa``/``?`` per potential
+    #: stereo element (``Ra``/``Sa``: an allene axis), ``null`` only when the species is achiral. ``stereo_label`` is
+    #: its display text (``null`` while nothing is resolved); this is the key.
+    stereo_descriptor: str | None = None
+    stereo_resolution: StereoResolution | None = None
+    #: Canonical isomeric SMILES of a fully resolved configuration, where one can be written.
+    stereo_smiles: str | None = None
+    #: Why a ``?`` of this entry's molecule can never be settled by data: ``axial_small_ring`` (a cyclic
+    #: allene in a ring of five or fewer atoms) and ``allene_dependent`` (a centre or double bond whose
+    #: stereogenicity depends on an allene's sense) and ``cumulene_tied_end`` (a cumulated chain with a tied pair of
+    #: stereo-bearing arms at one end). Empty for every other entry, so a ``?`` in the descriptor
+    #: with this empty means "not yet supplied": a geometry or a stereo_label would settle it.
+    stereo_not_represented: list[str] = Field(default_factory=list)
+    #: Served only when it satisfies the write-time grammar (canonical spelling); ``None`` otherwise,
+    #: including a legacy row whose stored text does not.
     electronic_state_label: str | None = None
     term_symbol: str | None = None
     isotope_key: str | None = None
@@ -390,18 +423,21 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query for debuggability and traceability."""
 
     filter: dict[str, object]
-    sort: str
-    collapse: CollapseMode
+    sort: OrderEcho
     include: list[str]
 
 
-class ScientificSpeciesSearchResponse(BaseModel):
+class ScientificSpeciesSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/species/search."""
 
     request: RequestEcho
     review_summary: ReviewStatusSummary
     records: list[SpeciesScientificRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 class ScientificSpeciesBrowseResponse(ScientificSpeciesSearchResponse):

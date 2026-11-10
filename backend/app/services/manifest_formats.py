@@ -87,4 +87,6 @@ def read_manifest_format(
     try:
         return formats.get(name, recorded["version"])
     except UnknownVersion:
+        if recorded["version"] < formats.current(name).version:
+            raise refuse(f"unknown manifest format {recorded!r}: an earlier format, not replayable") from None
         raise refuse(f"unknown manifest format {recorded!r}") from None

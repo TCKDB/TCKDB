@@ -26,7 +26,6 @@ from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.db.models.record_review import RecordReview
 from app.schemas.reads.scientific_common import (
     MAX_LIMIT,
-    REVIEW_RANK,
     Pagination,
     RecordReviewBadge,
     ReviewStatusSummary,
@@ -92,6 +91,26 @@ def reject_client_sort(sort: str | None) -> None:
             "client_sort_not_supported: sort= is not accepted in v0; the "
             "per-endpoint default sort applies."
         )
+
+
+def software_names_by_calculation(session: Session, calculation_ids: Iterable[int]) -> dict[int, str]:
+    """Name of the software that ran each calculation, in one statement (a software filter's match set).
+
+    A calculation with no software release is absent from the result.
+    """
+    from app.db.models.calculation import Calculation
+    from app.db.models.software import Software, SoftwareRelease
+
+    ids = set(calculation_ids)
+    if not ids:
+        return {}
+    rows = session.execute(
+        select(Calculation.id, Software.name)
+        .join(SoftwareRelease, SoftwareRelease.id == Calculation.software_release_id)
+        .join(Software, Software.id == SoftwareRelease.software_id)
+        .where(Calculation.id.in_(ids))
+    ).all()
+    return dict(rows)
 
 
 def validate_pagination(offset: int, limit: int) -> tuple[int, int]:
@@ -337,9 +356,17 @@ def validate_includes(
 
 
 def validate_temperature_range(
-    temperature_min: float | None, temperature_max: float | None
+    temperature_min: float | None,
+    temperature_max: float | None,
+    *,
+    min_name: str = "temperature_min",
+    max_name: str = "temperature_max",
 ) -> None:
-    """Reject temperature_min > temperature_max with a 422."""
+    """Reject a window whose minimum exceeds its maximum with a 422.
+
+    ``min_name`` / ``max_name`` are the caller-facing parameter names (``coverage_temperature_min_k`` on the thermo
+    and kinetics reads, where the window filters nothing and only sets what coverage is computed against).
+    """
     if (
         temperature_min is not None
         and temperature_max is not None
@@ -361,10 +388,10 @@ def validate_temperature_range(
         # query parameters, so nothing here is a row id.
         raise CodedValueError(
             "invalid_temperature_range",
-            "temperature_min must be <= temperature_max",
+            f"{min_name} must be <= {max_name}",
             context={
-                "temperature_min_k": temperature_min,
-                "temperature_max_k": temperature_max,
+                (min_name if min_name.endswith("_k") else f"{min_name}_k"): temperature_min,
+                (max_name if max_name.endswith("_k") else f"{max_name}_k"): temperature_max,
             },
         )
 
@@ -387,14 +414,15 @@ def visible_statuses(
     unless their respective opt-in flag is set; ``min_review_status`` further
     restricts the set to statuses at or above the threshold.
 
-    **Read-profile floor.** This is the one function every scientific read
-    service calls to decide what is visible, which makes it the single place
-    the ``curated`` profile can be applied without an endpoint being able to
-    forget it. Under ``profile=curated`` the floor is raised to ``approved``
-    and the ``include_rejected`` / ``include_deprecated`` opt-ins are
-    overridden — "show me what TCKDB stands behind, but also include the
-    rejected records" is not a coherent request, and honouring it would let a
-    caller cite a rejected record under the curated banner.
+    **Read-profile floor.** This is the one function every scientific list,
+    search and subresource-list service calls to decide which records are
+    visible, so the ``curated`` record floor cannot be forgotten by an
+    endpoint. (A detail read and a returned record's linked evidence follow
+    the evidence rule instead, ADR 0023.) Under ``profile=curated`` the floor
+    is raised to ``approved`` and the ``include_rejected`` /
+    ``include_deprecated`` opt-ins are overridden — "only approved records,
+    but also the rejected ones" is not a coherent request, and honouring it
+    would let a caller cite a rejected record under the curated banner.
 
     The floor only ever *narrows*: a caller who passes a stricter
     ``min_review_status`` than the profile requires keeps their stricter
@@ -488,11 +516,6 @@ def review_summary(badges: Iterable[RecordReviewBadge]) -> ReviewStatusSummary:
     return summary
 
 
-def review_rank(badge: RecordReviewBadge) -> int:
-    """Return the L2 review_rank integer for a badge (lower = better)."""
-    return REVIEW_RANK[badge.status]
-
-
 # ---------------------------------------------------------------------------
 # Pagination helper
 # ---------------------------------------------------------------------------
@@ -504,20 +527,20 @@ def build_pagination(
     limit: int,
     returned: int,
     total: int,
-    collapse_first: bool = False,
+    page: Any = None,
 ) -> Pagination:
     """Construct the response Pagination block.
 
-    ``total`` is the pre-collapse, post-filter count. The additive
-    ``post_collapse_total`` is the count after collapse and before offset/limit
-    slicing; it equals ``total`` unless ``collapse=first`` was requested.
+    ``total`` is the post-filter count, before offset/limit slicing. Pass the
+    :class:`~app.services.scientific_read.keyset.Page` the records were cut from so the block says which paging
+    contract served it.
     """
     return Pagination(
         offset=offset,
         limit=limit,
         returned=returned,
         total=total,
-        post_collapse_total=min(total, 1) if collapse_first else total,
+        mode=page.mode if page is not None else "offset",
     )
 
 
@@ -590,15 +613,9 @@ def slice_for_pagination(
     *,
     offset: int,
     limit: int,
-    collapse_first: bool,
 ) -> list:
-    """Apply pagination after sort/collapse.
-
-    Collapse is applied first, then ``offset`` and ``limit`` are applied to
-    the collapsed or complete list.
-    """
-    collapsed = items[:1] if collapse_first else items
-    return collapsed[offset : offset + limit]
+    """Apply ``offset`` and ``limit`` to the ordered list. Every matching record is in the list; none is picked."""
+    return items[offset : offset + limit]
 
 
 # ---------------------------------------------------------------------------
@@ -632,10 +649,12 @@ def ids_below_review_floor(
     record_type: SubmissionRecordType,
     record_ids: Iterable[int],
 ) -> set[int]:
-    """Which of ``record_ids`` the active read profile's review floor hides (the detail route answers 404 for them).
+    """Which of ``record_ids`` the active read profile's review floor hides from a LIST.
 
-    Mirrors the floor the detail-by-ref gate applies (``handles.py``). For the count and flag floors (owner decision
-    D5), where a count must not include a record the profile hides. It is not a ref rule: refs are withheld at the
+    The record floor only: since step 7 of ADR 0023 the detail-by-ref gate (``handles.py``) no longer mirrors it, and answers
+    404 for the withheld set alone. For the RECORD floor on a count or a matching filter (owner decision D5): a count of
+    records must not include a record the profile hides. A count or level of a returned record's linked EVIDENCE uses the
+    evidence rule instead (``ids_withheld_as_evidence``, ADR 0023). It is not a ref rule: refs are withheld at the
     response boundary by ``ref_guard``. Without a review floor (exploratory, or outside a scientific request) nothing is
     hidden and no query is made. Otherwise one statement.
     """
@@ -658,8 +677,10 @@ def review_floor_predicate(id_column: Any, record_type: SubmissionRecordType, *,
     ``profile`` defaults to the request's. A streaming caller, which outlives the request context, passes the profile it
     captured while the request was alive.
 
-    Owner decision D5: a count or flag that would say a hidden record exists ("this entry has an IRC", "3 calculations")
-    answers what the list endpoint would show. A missing review row reads as ``not_reviewed``, as everywhere else.
+    The RECORD floor, for a count or flag of records a list would show (owner decision D5) and for matching filters. The
+    count or flag of a returned record's linked evidence ("this entry has an IRC", "3 calculations") is
+    :func:`linked_evidence_predicate` since step 3 of ADR 0023. A missing review row reads as ``not_reviewed``, as everywhere
+    else.
     """
     from app.services.scientific_read.handles import status_hidden_under_profile
 
@@ -683,3 +704,214 @@ def review_floor_predicate(id_column: Any, record_type: SubmissionRecordType, *,
 def where_visible(stmt: Any, predicate: Any) -> Any:
     """``stmt`` restricted by ``predicate`` (from :func:`review_floor_predicate`); untouched when it is ``None``."""
     return stmt if predicate is None else stmt.where(predicate)
+
+
+# ---------------------------------------------------------------------------
+# The evidence rule (owner decision 2026-10-25, DR/ADR 0023)
+# ---------------------------------------------------------------------------
+#
+# Three things are assigned to three rules under the curated profile. They must not be mixed up.
+#
+#   RECORD FLOOR   ``review_floor_predicate`` / ``ids_below_review_floor`` / ``status_hidden_under_profile``.
+#                  Covers lists, searches and selects: which RECORDS are returned. Under ``curated`` anything below
+#                  ``approved`` is not returned.
+#
+#   DETAIL-BY-REF  ``resolve_path_handle`` -> ``_gated_status`` in ``handles.py``, and the legacy detail reads
+#                  (``_legacy_reads.py``). Under ``curated`` they answer 404 for the withheld set below (rejected /
+#                  deprecated) only and serve every other record, badged (step 7 of ADR 0023, amending ADR 0006's second
+#                  seam). What a served detail embeds (a ``/full`` participant, a supersession successor, the usage a
+#                  reference row lists) follows the evidence rule: ``detail_visible_statuses``, ``shown_predicate``.
+#
+#   EVIDENCE RULE  this section. Covers LINKED EVIDENCE of a returned record (source calculations, levels derived from
+#                  them, conformer observations inside a group, evidence counts, nested refs). Under ``curated`` such
+#                  evidence is shown with its review badge, except ``rejected`` and ``deprecated`` evidence, which is
+#                  withheld ("absent" semantics). A missing review row reads as ``not_reviewed`` and is visible.
+#
+# The evidence rule withholds the same statuses the default (exploratory) profile hides by default; unlike the default it
+# cannot be lifted by request. Under exploratory nothing is withheld as evidence, so every function here answers
+# "visible" and issues no query.
+#
+# STATUS (steps 2 to 7 of ADR 0023): matching in search, browse and select (``linked_evidence_predicate`` and
+# ``ids_withheld_as_evidence`` in every filter on linked calculations and observations), the service counts, flags and derived
+# levels of a returned record, the response-level ref guard (``ref_guard.py``: pointers in responses, the document modes, the
+# selection loaders' unavailable-evidence seam, the export batcher), the legacy entity reads, the ML export's conformer refs,
+# the trust evaluators (``trust_floor.py``) and the selection loaders' own evidence populations (``evidence_usable_statuses``
+# and ``evidence_visible_statuses`` in the structure, statmech, network and relative-energy loaders and the source-finding
+# gate) call this section. Named exception: the ML export's energy rows keep their calculations approved-only (owner decision
+# Q7, ``ml_dataset.ml_energy_row_floor``), and the made-under comparisons (step 6: a stored stamp is compared with a
+# profile-free recomputation, so the answer is the same under every profile; ``public_assessments._reproducibility_summary``).
+# Step 7: detail-by-ref (``resolve_path_handle``, the legacy detail reads) answers 404 for the withheld set only, and the
+# records a served detail embeds follow this rule. Nothing is still on the earlier rule (D6): the record floor decides lists,
+# searches and selects, and every other record a read serves or names, that is not withheld, is shown badged.
+
+#: Review statuses whose linked evidence is withheld under a profile with a review floor.
+WITHHELD_EVIDENCE_STATUSES: frozenset[RecordReviewStatus] = frozenset(
+    {RecordReviewStatus.rejected, RecordReviewStatus.deprecated}
+)
+
+
+def evidence_withheld_under_profile(status: RecordReviewStatus, *, profile: Any = None) -> bool:
+    """Whether linked evidence at ``status`` is withheld by the evidence rule under the profile.
+
+    The evidence-rule counterpart of ``status_hidden_under_profile`` (the record floor). Without a review floor
+    (exploratory, or outside a scientific request) nothing is withheld. ``profile`` defaults to the request's; a
+    caller that outlives the request passes the one it captured.
+    """
+    profile = profile if profile is not None else current_read_profile()
+    if profile.review_floor is None:
+        return False
+    return status in WITHHELD_EVIDENCE_STATUSES
+
+
+def linked_evidence_withheld_values(*, profile: Any = None) -> list[str]:
+    """The review statuses, as sorted tokens, whose linked evidence the profile withholds (``[]`` without a floor).
+
+    What a recorded selection manifest says about the evidence rule it was made under, so a reader of the manifest does not
+    have to know which release wrote it.
+    """
+    profile = profile if profile is not None else current_read_profile()
+    return sorted(s.value for s in RecordReviewStatus if evidence_withheld_under_profile(s, profile=profile))
+
+
+def read_profile_block(*, profile: Any = None) -> dict[str, Any]:
+    """The ``read_profile`` block of a selection manifest: the profile, its review floor, and the evidence rule it applied.
+
+    ``linked_evidence_withheld`` is what ADR 0023 adds in manifest format 4: the review statuses whose linked evidence the
+    profile withheld (``["deprecated", "rejected"]`` under ``curated``, ``[]`` otherwise).
+    """
+    profile = profile if profile is not None else current_read_profile()
+    floor = profile.review_floor
+    return {
+        "profile": profile.profile.value,
+        "review_floor": floor.value if floor is not None else None,
+        "linked_evidence_withheld": linked_evidence_withheld_values(profile=profile),
+    }
+
+
+def check_read_profile_block(block: Any) -> str | None:
+    """Why a recorded ``read_profile`` block is not one this release writes, or ``None``.
+
+    The block names the profile and its floor; the evidence rule it records must be the one that profile applies, so a
+    manifest relabelled by hand (or recorded under another rule) is refused rather than read as this one.
+    """
+    if not isinstance(block, dict):
+        return "the manifest records no read profile"
+    recorded = block.get("linked_evidence_withheld")
+    expected = ["deprecated", "rejected"] if block.get("review_floor") is not None else []
+    if recorded != expected:
+        return f"the recorded linked-evidence rule {recorded!r} is not what the recorded read profile applies ({expected!r})"
+    return None
+
+
+def evidence_visible_statuses(*, profile: Any = None) -> frozenset[RecordReviewStatus]:
+    """The review statuses at which linked evidence is shown (badged) under the profile."""
+    profile = profile if profile is not None else current_read_profile()
+    return frozenset(s for s in RecordReviewStatus if not evidence_withheld_under_profile(s, profile=profile))
+
+
+def detail_visible_statuses(
+    *,
+    min_review_status: RecordReviewStatus | None,
+    include_rejected: bool,
+    include_deprecated: bool,
+) -> set[RecordReviewStatus]:
+    """The review statuses a DETAIL read shows of the records it embeds (a ``/full`` participant, a conformer group).
+
+    Under ``curated`` a served detail shows every embedded record that is not in the withheld set (``rejected``,
+    ``deprecated``), badged (ADR 0023 step 7, owner decision Q9): the approved floor decides which records a list returns,
+    not what a detail page rests on. The caller's own ``min_review_status`` still narrows, and the ``include_*`` opt-ins stay
+    overridden. Without a floor (exploratory) this is :func:`visible_statuses`, so the default behaviour is unchanged.
+    """
+    if current_read_profile().review_floor is None:
+        return visible_statuses(
+            min_review_status=min_review_status,
+            include_rejected=include_rejected,
+            include_deprecated=include_deprecated,
+        )
+    return set(evidence_usable_statuses(min_review_status))
+
+
+def evidence_usable_statuses(min_review_status: RecordReviewStatus | None = None) -> frozenset[RecordReviewStatus]:
+    """The review statuses at which a selection engine USES linked evidence (a source calculation, a member, an observation).
+
+    The evidence-rule counterpart of ``visible_statuses(min_review_status=..., include_rejected=False,
+    include_deprecated=False)``: the same set without the profile's record floor, because the floor decides which RECORDS a
+    select returns, not what a returned record rests on (ADR 0023). Terminal statuses are out; the caller's own
+    ``min_review_status`` still narrows. It does not read the request's profile, so it is the same pure function of the
+    caller's floor under every profile; under ``exploratory`` it equals ``visible_statuses(...)``, so an exploratory
+    selection is unchanged. A replay judges a recorded manifest by this function, not by the process's own profile.
+    """
+    base = default_visible_statuses(include_rejected=False, include_deprecated=False)
+    if min_review_status is not None:
+        base = base & status_at_or_above(min_review_status)
+    return frozenset(base)
+
+
+def shown_predicate(id_column: Any, record_type: SubmissionRecordType, *, detail: bool, profile: Any = None) -> Any:
+    """The SQL condition for the records of ``record_type`` a read shows, by what kind of read it is.
+
+    A LIST (a search row, a count of what a list would show) keeps the approved record floor
+    (:func:`review_floor_predicate`). A served DETAIL embeds its records as linked evidence, so under ``curated`` it shows
+    everything but the withheld set, badged (:func:`linked_evidence_predicate`, ADR 0023 step 7). ``None`` when the profile
+    has no floor, so an exploratory statement is unchanged either way.
+    """
+    if detail:
+        return linked_evidence_predicate(id_column, record_type, profile=profile)
+    return review_floor_predicate(id_column, record_type, profile=profile)
+
+
+def evidence_withheld_predicate(id_column: Any, record_type: SubmissionRecordType, *, profile: Any = None) -> Any:
+    """A SQL condition true for the rows of ``record_type`` the evidence rule withholds under the profile.
+
+    The positive form of :func:`linked_evidence_predicate`, for a statement that wants to read the verdict beside the row
+    (``SELECT row, <this>``) instead of filtering by it, so a builder that already queries per record learns which of its
+    links are withheld without another statement. ``None`` when the profile has no floor (nothing is withheld).
+    """
+    profile = profile if profile is not None else current_read_profile()
+    if profile.review_floor is None:
+        return None
+    return (
+        select(RecordReview.id)
+        .where(
+            RecordReview.record_type == record_type,
+            RecordReview.record_id == id_column,
+            RecordReview.status.in_(WITHHELD_EVIDENCE_STATUSES),
+        )
+        .exists()
+    )
+
+
+def linked_evidence_predicate(id_column: Any, record_type: SubmissionRecordType, *, profile: Any = None) -> Any:
+    """A SQL condition true for the rows of ``record_type`` whose evidence the profile leaves visible.
+
+    ``id_column`` holds the evidence record id, as for :func:`review_floor_predicate`. The condition is "no review
+    row of ``rejected`` or ``deprecated`` status exists", so a record with no review row is visible. Returns ``None``
+    when the profile has no floor (exploratory), so a caller adds no condition and its statement is unchanged.
+    """
+    withheld = evidence_withheld_predicate(id_column, record_type, profile=profile)
+    return None if withheld is None else ~withheld
+
+
+def ids_withheld_as_evidence(
+    session: Session,
+    *,
+    record_type: SubmissionRecordType,
+    record_ids: Iterable[int],
+    profile: Any = None,
+) -> set[int]:
+    """Which of ``record_ids`` the evidence rule withholds under the profile.
+
+    No floor, or no ids: nothing is withheld and no query is made. Otherwise one statement.
+    """
+    ids = set(record_ids)
+    profile = profile if profile is not None else current_read_profile()
+    if not ids or profile.review_floor is None:
+        return set()
+    rows = session.scalars(
+        select(RecordReview.record_id).where(
+            RecordReview.record_type == record_type,
+            RecordReview.record_id.in_(ids),
+            RecordReview.status.in_(WITHHELD_EVIDENCE_STATUSES),
+        )
+    )
+    return set(rows)

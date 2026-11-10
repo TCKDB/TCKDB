@@ -22,8 +22,10 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.network_channel_kind import W_NETWORK_CHANNEL_KIND_MISMATCH, derive_channel_kind
 from tckdb_schemas.upload_warning import UploadWarning
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import parse_xyz
 from app.db.models.calculation import (
     Calculation,
@@ -34,6 +36,7 @@ from app.db.models.common import (
     CalculationGeometryRole,
     CalculationType,
     EnergyCorrectionConvention,
+    NetworkChannelKind,
     NetworkSpeciesRole,
     SubmissionRecordType,
 )
@@ -84,7 +87,13 @@ from app.services.composite_result_resolution import collect_named_composite_dep
 from app.services.conformer_anchoring import (
     anchor_species_calculation_to_observation,
 )
-from app.services.conformer_resolution import resolve_conformer_group
+from app.services.conformer_resolution import (
+    current_conformer_group_targets,
+    primary_structure,
+    resolve_conformer_group,
+    settle_conformer_basin,
+)
+from app.services.deposit_warnings import note_anchor, note_calculation_keys
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import (
@@ -137,6 +146,7 @@ from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
 from app.services.transport_resolution import resolve_and_create_transport
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 from app.workflows.computed_species import _persist_statmech_block
 from app.workflows.reaction import persist_reaction_upload
 
@@ -155,12 +165,7 @@ from app.workflows.reaction import persist_reaction_upload
 #: rather than the single per-bundle one the computed-reaction path takes, and
 #: every client mirror — and is deliberately not folded into the change that
 #: made the gap visible.
-_PDEP_ABSENCE_REMEDY = (
-    "The pressure-dependent network bundle cannot yet carry a map, so this "
-    "gap cannot be closed on this deposit path: to record one for this micro "
-    "reaction, deposit it through the computed-reaction upload, which accepts "
-    "'atom_map' (ADR 0011)."
-)
+_PDEP_ABSENCE_DEPOSIT_PATH = "pdep_bundle"
 
 
 def _energy_geometry_ids(session: Session, calculation: Calculation) -> frozenset[int]:
@@ -284,11 +289,77 @@ def _barrier_owner_check(
     return check
 
 
+#: Two states of one network resolve to the same participants (DR-0038).
+W_NETWORK_STATE_DUPLICATE_COMPOSITION = "network_state_duplicate_composition"
+
+
+#: One state names the same species entry twice (two species keys that resolve to one entry).
+W_NETWORK_STATE_DUPLICATE_PARTICIPANT = "network_state_duplicate_participant"
+
+
 def _composition_hash(participants: list[tuple[int, int]]) -> str:
     """Compute a canonical SHA-256 hash for a network state composition."""
     canonical = sorted(participants)
     encoded = json.dumps(canonical, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def refuse_duplicate_state_compositions(
+    states: list[Any], species_key_to_entry: dict[str, Any]
+) -> None:
+    """Refuse a network whose states do not all have a distinct composition.
+
+    A state is the multiset of its participants' species *entries*, and
+    ``uq_network_state_network_id`` keeps one state per (network, composition). Two states that
+    resolve to the same entries (two species keys that name one entry, or one state declared
+    twice) used to reach the database and surface as a raw ``IntegrityError`` (HTTP 500). They
+    are refused here, before any state row is written, naming the local state keys.
+
+    :raises CodedValueError: ``network_state_duplicate_composition`` (422).
+    """
+
+    first_by_hash: dict[str, tuple[int, str]] = {}
+    for state_index, state_in in enumerate(states):
+        participants = [
+            (
+                resolve_species_key(
+                    p.species_key,
+                    species_key_to_entry,
+                    field=f"states[{state_index}].participants[{i}].species_key",
+                ).id,
+                p.stoichiometry,
+            )
+            for i, p in enumerate(state_in.participants)
+        ]
+        entry_ids = [entry_id for entry_id, _ in participants]
+        if len(set(entry_ids)) != len(entry_ids):
+            raise CodedValueError(
+                W_NETWORK_STATE_DUPLICATE_PARTICIPANT,
+                f"State {state_in.key!r} lists the same species entry more than once "
+                "(network_state_duplicate_participant): two of its species keys resolve to one entry. "
+                "Name the species once and give its `stoichiometry`, or say what differs between the two "
+                "(stereo marks, a stereo label or a geometry on the species).",
+                context={"state_key": state_in.key, "state": f"states[{state_index}]"},
+                message_prefix=False,
+            )
+        comp_hash = _composition_hash(participants)
+        if comp_hash in first_by_hash:
+            first_index, first_key = first_by_hash[comp_hash]
+            raise CodedValueError(
+                W_NETWORK_STATE_DUPLICATE_COMPOSITION,
+                f"States {first_key!r} and {state_in.key!r} have the same composition "
+                "(network_state_duplicate_composition): their participants resolve to the same "
+                "species entries, and a network holds one state per composition. If they are "
+                "meant to be different, say what differs (stereo marks, a stereo label or a "
+                "geometry on the species that stand for different isomers); if not, declare the "
+                "state once.",
+                context={
+                    "states": [f"states[{first_index}]", f"states[{state_index}]"],
+                    "state_keys": [first_key, state_in.key],
+                },
+                message_prefix=False,
+            )
+        first_by_hash[comp_hash] = (state_index, state_in.key)
 
 
 def _persist_calculation(
@@ -323,7 +394,7 @@ def _persist_calculation(
         effective_geometry_id = resolve_geometry_key(
             calc_in.geometry_key,
             geometry_key_map,
-            field=f"calculations['{calc_in.key}'].geometry_key",
+            field=f"calculations[{calc_in.key!r}].geometry_key",
         )
 
     # The inline literature fragment is forwarded unresolved; the shared
@@ -486,14 +557,15 @@ def persist_network_pdep_upload(
             )
 
             # Create conformer group + observation (with torsion matching)
-            parsed = parse_xyz(GeometryPayload(xyz_text=conf.geometry.xyz_text))
+            structure = primary_structure(conf.calculation, conf.geometry.xyz_text)
+            parsed = parse_xyz(GeometryPayload(xyz_text=structure.xyz_text))
             conformer_group, fingerprint, scheme = resolve_conformer_group(
                 session,
                 species_entry,
-                label=conf.label,
                 created_by=created_by,
                 smiles=sp.species_entry.smiles,
                 xyz_atoms=parsed.atoms,
+                defining=structure.defining,
             )
             observation = ConformerObservation(
                 conformer_group_id=conformer_group.id,
@@ -507,6 +579,7 @@ def persist_network_pdep_upload(
             )
             session.add(observation)
             session.flush()
+            settle_conformer_basin(session, observation, fingerprint, smiles=sp.species_entry.smiles)
             observation_id_by_geometry_key[conf.geometry.key] = observation.id
             observation_id_by_conformer_key.setdefault(sp.key, {})[
                 conf.key
@@ -518,6 +591,13 @@ def persist_network_pdep_upload(
                 RecordRef(
                     SubmissionRecordType.conformer_observation, observation.id
                 )
+            )
+            note_anchor(
+                session,
+                f"species[{sp.key!r}].conformers[{conf.key!r}]",
+                SubmissionRecordType.conformer_observation,
+                observation.id,
+                scope=f"species[{sp.key!r}]",
             )
 
             # Anchor the calculation to this conformer observation
@@ -551,7 +631,7 @@ def persist_network_pdep_upload(
                 ),
                 observation_id_by_geometry_key=observation_id_by_geometry_key,
                 warnings=warning_sink,
-                field=f"species['{sp.key}'].calculations['{calc_in.key}']",
+                field=f"species[{sp.key!r}].calculations[{calc_in.key!r}]",
             )
 
     # ------------------------------------------------------------------
@@ -571,6 +651,20 @@ def persist_network_pdep_upload(
             )
             review_targets.append(
                 RecordRef(SubmissionRecordType.transport, transport_row.id)
+            )
+            note_anchor(
+                session,
+                f"species[{sp_index}].transport",
+                SubmissionRecordType.transport,
+                transport_row.id,
+                scope=f"species[{sp.key!r}]",
+            )
+            note_anchor(
+                session,
+                f"species[{sp.key!r}].transport",
+                SubmissionRecordType.transport,
+                transport_row.id,
+                scope=f"species[{sp.key!r}]",
             )
 
     # ------------------------------------------------------------------
@@ -594,6 +688,14 @@ def persist_network_pdep_upload(
             review_targets.append(
                 RecordRef(SubmissionRecordType.statmech, statmech_row.id)
             )
+            for statmech_path in (f"species[{sp_index}].statmech", f"species[{sp.key!r}].statmech"):
+                note_anchor(
+                    session,
+                    statmech_path,
+                    SubmissionRecordType.statmech,
+                    statmech_row.id,
+                    scope=f"species[{sp.key!r}]",
+                )
 
     # ------------------------------------------------------------------
     # 4. Resolve micro reactions
@@ -638,6 +740,7 @@ def persist_network_pdep_upload(
             created_by=created_by,
             review_policy=review_policy,
             warnings=warning_sink,
+            has_transition_state=any(ts.micro_reaction_key == rxn.key for ts in request.transition_states),
         )
         reaction_key_to_entry[rxn.key] = reaction_entry
 
@@ -676,6 +779,15 @@ def persist_network_pdep_upload(
         )
         review_targets.append(
             RecordRef(SubmissionRecordType.transition_state_entry, ts_entry.id)
+        )
+        note_anchor(
+            session,
+            f"transition_states[{ts_index}]",
+            SubmissionRecordType.transition_state_entry,
+            ts_entry.id,
+        )
+        note_anchor(
+            session, f"transition_states[{ts_in.key!r}]", SubmissionRecordType.transition_state_entry, ts_entry.id
         )
 
         # Resolve TS geometry
@@ -738,6 +850,12 @@ def persist_network_pdep_upload(
             )
             if ts_statmech is not None:
                 review_targets.append(RecordRef(SubmissionRecordType.statmech, ts_statmech.id))
+                note_anchor(
+                    session,
+                    f"transition_states[{ts_index}].statmech",
+                    SubmissionRecordType.statmech,
+                    ts_statmech.id,
+                )
 
         persist_transition_state_validation_evidence(
             session,
@@ -748,7 +866,7 @@ def persist_network_pdep_upload(
                     evidence_in.source_calculation_key,
                     calculation_key_to_id,
                     field=(
-                        f"transition_states['{ts_in.key}']."
+                        f"transition_states[{ts_in.key!r}]."
                         f"validation_evidence[{index}].source_calculation_key"
                     ),
                 )
@@ -760,7 +878,7 @@ def persist_network_pdep_upload(
             ],
             calculation_ids_by_key=calculation_key_to_id,
             subject_label=ts_in.key,
-            field_path=f"transition_states[{ts_in.key}].validation_evidence",
+            field_path=f"transition_states[{ts_in.key!r}].validation_evidence",
             reaction_entry_id=reaction_entry.id,
             transition_state_geometry_id=ts_geometry.id,
             created_by=created_by,
@@ -772,7 +890,7 @@ def persist_network_pdep_upload(
         # a map is exactly as invisible on this path as on any other, and the
         # ADR requires it be loud enough that a depositor who *has* the
         # mapping notices they are being asked for it. The map itself cannot
-        # be deposited here yet — see ``_PDEP_ABSENCE_REMEDY`` — so the call
+        # be deposited here yet — see ``_PDEP_ABSENCE_DEPOSIT_PATH`` — so the call
         # passes ``None`` unconditionally and exists to report the gap.
         persist_reaction_atom_map(
             session,
@@ -785,9 +903,9 @@ def persist_network_pdep_upload(
             # Points at the saddle point, not at ``.atom_map``: this bundle has
             # no such field, and a machine-readable pointer naming one would
             # send a client that highlights ``field`` to somewhere that does
-            # not exist. ``absence_remedy`` carries where the map can go.
-            field_path=f"transition_states[{ts_in.key}]",
-            absence_remedy=_PDEP_ABSENCE_REMEDY,
+            # not exist. ``deposit_path`` carries where the map can go.
+            field_path=f"transition_states[{ts_in.key!r}]",
+            deposit_path=_PDEP_ABSENCE_DEPOSIT_PATH,
             created_by=created_by,
             warnings=warning_sink,
         )
@@ -805,6 +923,9 @@ def persist_network_pdep_upload(
     # Every calculation of the upload is flushed: an opt or sp at a named
     # composite method's level is reported once, as on every other route.
     warning_sink.extend(collect_named_composite_deposit_warnings(session, calculation_key_to_id.values()))
+    warning_sink.extend(collect_wavefunction_reliability_warnings(session, calculation_key_to_id.values()))
+
+    refuse_duplicate_state_compositions(request.states, species_key_to_entry)
 
     # ------------------------------------------------------------------
     # 6. Resolve network-level provenance and create network
@@ -893,19 +1014,38 @@ def persist_network_pdep_upload(
     # ------------------------------------------------------------------
     channel_key_to_row: dict[str, NetworkChannel] = {}
     for ch_index, ch_in in enumerate(request.channels):
+        source_row = resolve_network_state_key(
+            ch_in.source_state_key,
+            state_key_to_row,
+            field=f"channels[{ch_index}].source_state_key",
+        )
+        sink_row = resolve_network_state_key(
+            ch_in.sink_state_key,
+            state_key_to_row,
+            field=f"channels[{ch_index}].sink_state_key",
+        )
+        # The kind is a function of the two states. The request validator already filled or checked it;
+        # it is derived again here because a request built with ``model_construct`` skips validators.
+        derived_kind = NetworkChannelKind(derive_channel_kind(source_row.kind, sink_row.kind).value)
+        supplied_kind = None if ch_in.kind is None else NetworkChannelKind(ch_in.kind)
+        if supplied_kind is not None and supplied_kind != derived_kind:
+            raise CodedValueError(
+                W_NETWORK_CHANNEL_KIND_MISMATCH,
+                f"channel '{ch_in.key}' declares kind='{supplied_kind.value}' but its states make it "
+                f"kind='{derived_kind.value}'. Omit kind to have it derived.",
+                context={
+                    "field": f"channels[{ch_index}].kind",
+                    "channel_key": ch_in.key,
+                    "supplied_kind": supplied_kind.value,
+                    "derived_kind": derived_kind.value,
+                },
+                message_prefix=False,
+            )
         channel_row = NetworkChannel(
             network_id=network.id,
-            source_state_id=resolve_network_state_key(
-                ch_in.source_state_key,
-                state_key_to_row,
-                field=f"channels[{ch_index}].source_state_key",
-            ).id,
-            sink_state_id=resolve_network_state_key(
-                ch_in.sink_state_key,
-                state_key_to_row,
-                field=f"channels[{ch_index}].sink_state_key",
-            ).id,
-            kind=ch_in.kind,
+            source_state_id=source_row.id,
+            sink_state_id=sink_row.id,
+            kind=derived_kind,
             mechanism=ch_in.mechanism,
             channel_key=ch_in.key,
         )
@@ -1055,6 +1195,7 @@ def persist_network_pdep_upload(
         review_targets.append(
             RecordRef(SubmissionRecordType.network_solve, solve.id)
         )
+        note_anchor(session, "solve", SubmissionRecordType.network_solve, solve.id)
 
         # Bath gas
         for bg_index, bg in enumerate(solve_in.bath_gas):
@@ -1502,9 +1643,11 @@ def persist_network_pdep_upload(
         )
         session.flush()
 
+    note_calculation_keys(session, calculation_key_to_id)
+    note_anchor(session, "", SubmissionRecordType.network, network.id)
     apply_review_policy(
         session,
-        targets=review_targets,
+        targets=current_conformer_group_targets(session, review_targets),
         policy=review_policy,
         created_by=created_by,
     )

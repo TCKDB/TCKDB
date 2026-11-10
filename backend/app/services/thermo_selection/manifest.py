@@ -2,16 +2,15 @@
 
 A selection is only as trustworthy as the inputs it can be re-derived from. The manifest
 holds the normalised request, the effective review floor, every assessed candidate with its
-normalised inputs and applicability verdict, the registry entries (rule id, version, evidence
-limits, audited manifest digest) that were applied, each rule's verdict per candidate, the accepted edges, the fronts,
-and the administrative order. It is a JSON-ready dict, built from public refs only: no
+normalised inputs and applicability verdict, the fronts and the administrative order. It is a JSON-ready dict,
+built from public refs only: no
 database id, no internal key. ``id_rank`` is an ordinal standing in for the id as the last
 tie-break and cannot be turned back into one.
 
 :func:`replay_decision` re-runs the ordering engine over the manifest's eligible candidates
 with no database. A digest would only prove the manifest was not altered; replay proves the
-decision follows from what it records. A rule version, or audited-manifest digest, that the running
-registry does not carry refuses the replay rather than substituting another.
+decision follows from what it records. A manifest format, policy or assessment-semantics version that the
+running registry does not carry refuses the replay rather than substituting another.
 """
 
 from __future__ import annotations
@@ -20,14 +19,16 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from app.db.models.common import RecordReviewStatus
-from app.schemas.reads.scientific_common import REVIEW_RANK, SelectionPolicy
+from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER, SelectionPolicy
 from app.services.manifest_formats import manifest_header, read_manifest_format
-from app.services.rule_registry import rule_recorded_in, rules_registry
+from app.services.scientific_read.common import check_read_profile_block, read_profile_block
+from app.services.selection_kernel import Applicability
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
     check_supported,
     semantics_block,
 )
+from app.services.selection_kernel.requested import Eligibility, UnreadableEligibility, Verdict, judge
 from app.services.thermo_selection.engine import decide
 from app.services.thermo_selection.models import (
     ASSESSMENT_SEMANTICS,
@@ -47,7 +48,6 @@ from app.services.thermo_selection.models import (
     Outcome,
     Subject,
 )
-from app.services.thermo_selection.rules import PreferenceRule, default_rules
 from app.services.trust.rubrics import COMPUTED_THERMO
 from app.versioning import same_value
 
@@ -66,9 +66,10 @@ def build_manifest(
     visible_candidates: int,
     cap: int,
     excluded_by_review: Sequence[dict[str, str]],
-    candidates: Sequence[tuple[NormalizedCandidate, CandidateAssessment, bool]],
+    candidates: Sequence[tuple[NormalizedCandidate, CandidateAssessment, Verdict]],
     decision: Decision | None,
     outcome: Outcome,
+    funnel: dict[str, Any],
 ) -> dict[str, Any]:
     """Assemble the manifest. ``decision`` is ``None`` only for a refused (over-cap) search."""
     ordered = sorted(candidates, key=lambda item: item[0].id_rank)
@@ -78,14 +79,24 @@ def build_manifest(
         "assessment_semantics": semantics_block(
             name=ASSESSMENT_SEMANTICS_NAME, version=ASSESSMENT_SEMANTICS_VERSION, evidence_rubric=COMPUTED_THERMO.ref
         ),
+        "read_profile": read_profile_block(),
         "request": {
             "quantity": QUANTITY,
             "temperature_k": REFERENCE_TEMPERATURE_K,
             "phase": PHASE,
             "target": {"kind": request.target_kind.value, "conformer_group_ref": conformer_group_ref},
+            # present only when the caller named a basin a merge had emptied: the decision was made on the group that
+            # took its members (named above), and a download must say the request was forwarded
+            **(
+                {"forwarded_from_conformer_group_ref": request.forwarded_from_conformer_group_ref}
+                if request.forwarded_from_conformer_group_ref is not None
+                else {}
+            ),
             "min_review_status": request.min_review_status.value if request.min_review_status else None,
             "effective_review_statuses": sorted((s.value for s in effective_statuses), key=lambda v: _rank(v)),
             "administrative_policy": request.admin_policy.value,
+            "filters": request.filters.to_record(),
+            "eligibility": request.eligibility.to_record(),
             "max_candidates": cap,
         },
         "subject": subject.to_dict(),
@@ -94,10 +105,19 @@ def build_manifest(
             "visible_candidates": visible_candidates,
             "assessed": len(ordered),
             "excluded_by_review": [dict(e) for e in excluded_by_review],
+            "funnel": dict(funnel),
         },
         "candidates": [
-            {**norm.to_dict(), "assessment": assessment.to_dict(), "eligible": eligible}
-            for norm, assessment, eligible in ordered
+            {
+                **norm.to_dict(),
+                "assessment": assessment.to_dict(),
+                "eligible": verdict.competes,
+                "eligibility": {
+                    "blocked_by": list(verdict.blocked_by),
+                    "passed_only_by_override": list(verdict.passed_only_by_override),
+                },
+            }
+            for norm, assessment, verdict in ordered
         ],
         "decision": decision.to_dict() if decision is not None else None,
         "outcome": outcome.value,
@@ -105,20 +125,23 @@ def build_manifest(
 
 
 def _rank(status_value: str) -> int:
-    for status, rank in REVIEW_RANK.items():
+    for status, rank in REVIEW_FLOOR_ORDER.items():
         if status.value == status_value:
             return rank
     raise ValueError(status_value)  # pragma: no cover
 
 
-def replay_decision(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule] | None = None) -> dict[str, Any]:
+def replay_decision(manifest: dict[str, Any]) -> dict[str, Any]:
     """Recompute the decision from the manifest's recorded inputs; no database.
 
     :returns: ``Decision.to_dict()`` (``{"outcome": "bounded_search_exceeded"}`` for a refused search).
-    :raises ReplayError: if the manifest's format, policy version or a rule version is not carried by
+    :raises ReplayError: if the manifest's format, policy version or assessment semantics is not carried by
         the running registry.
     """
     read_manifest_format(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME, manifest, ReplayError)
+    problem = check_read_profile_block(manifest.get("read_profile"))
+    if problem is not None:
+        raise ReplayError(problem)
     if not same_value(manifest["policy"], {"name": POLICY_NAME, "version": POLICY_VERSION}):
         raise ReplayError(f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} version {POLICY_VERSION}")
     try:
@@ -127,39 +150,53 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule]
         raise ReplayError(str(exc)) from exc
     if manifest["decision"] is None:
         return {"outcome": manifest["outcome"]}
-    registry = rules_registry("thermo_selection_rules", default_rules() if rules is None else rules)
-    used = []
-    for entry in manifest["decision"]["rules"]:
-        key = (entry["rule_id"], entry["version"])
-        rule = rule_recorded_in(registry, entry, ReplayError)
-        # The rule's audited manifest is part of what the decision rests on: the same (id, version) over different
-        # audited bytes is a different rule, so the replay is refused rather than re-answered.
-        if rule.describe().get("manifest_sha256") != entry.get("manifest_sha256"):
-            raise ReplayError(f"rule {key[0]} version {key[1]} now rests on a different audited manifest")
-        used.append(rule)
+    try:
+        eligibility = Eligibility.from_record(manifest["request"].get("eligibility"))
+    except UnreadableEligibility as exc:
+        raise ReplayError(str(exc)) from exc
     for c in manifest["candidates"]:
-        if c["eligible"] != c["assessment"]["physically_eligible"]:
+        verdict = judge(
+            applicable=c["assessment"]["applicability"] == Applicability.applicable.value,
+            review_status=RecordReviewStatus(c["review_status"]),
+            blocking=c["assessment"]["blocking"],
+            eligibility=eligibility,
+        )
+        recorded = c.get("eligibility") or {}
+        if (
+            c["eligible"] != verdict.competes
+            or recorded.get("blocked_by") != list(verdict.blocked_by)
+            or recorded.get("passed_only_by_override") != list(verdict.passed_only_by_override)
+        ):
             raise ReplayError(
-                f"candidate {c['thermo_ref']} records eligible={c['eligible']} but its assessment says "
-                f"physically_eligible={c['assessment']['physically_eligible']}"
+                f"candidate {c['thermo_ref']} records eligible={c['eligible']} but its assessment under the recorded "
+                f"eligibility settings says eligible={verdict.competes}"
             )
+    _check_funnel(manifest)
     eligible = [NormalizedCandidate.from_dict(c) for c in manifest["candidates"] if c["eligible"]]
-    decision = decide(
-        eligible,
-        subject=Subject.from_dict(manifest["subject"]),
-        admin_policy=SelectionPolicy(manifest["request"]["administrative_policy"]),
-        rules=tuple(used),
-    )
+    decision = decide(eligible, admin_policy=SelectionPolicy(manifest["request"]["administrative_policy"]))
     return decision.to_dict()
 
 
-def replay_matches(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule] | None = None) -> bool:
+def _check_funnel(manifest: dict[str, Any]) -> None:
+    """The funnel's ``remaining`` and the per-default counts of the assessed defaults must follow from the candidates."""
+    funnel = (manifest.get("population") or {}).get("funnel") or {}
+    candidates = manifest["candidates"]
+    blocked = [c for c in candidates if c["eligibility"]["blocked_by"]]
+    if funnel.get("remaining") != len(candidates) - len(blocked):
+        raise ReplayError("the recorded funnel's `remaining` is not the number of assessed candidates no default blocks")
+    for name in ("evidence_hard_fail", "confirmed_blocking_findings"):
+        counted = sum(1 for c in candidates if name in c["eligibility"]["blocked_by"])
+        if (funnel.get("excluded_by_default") or {}).get(name, 0) != counted:
+            raise ReplayError(f"the recorded funnel counts {name} differently from the candidates that fail it")
+
+
+def replay_matches(manifest: dict[str, Any]) -> bool:
     """True when replaying the manifest reproduces the decision it records and the outcome it states.
 
     The top-level ``outcome`` is compared too: it is a summary a reader trusts, so an edit of it that the decision
     does not support must not "match".
     """
-    replayed = replay_decision(manifest, rules=rules)
+    replayed = replay_decision(manifest)
     recorded = manifest["decision"] if manifest["decision"] is not None else {"outcome": manifest["outcome"]}
     return replayed == recorded and replayed["outcome"] == manifest["outcome"]
 

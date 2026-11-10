@@ -20,7 +20,6 @@ from app.db.models.common import (
     SubmissionRecordType,
 )
 from app.db.models.kinetics import KineticsSourceCalculation
-from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
 from app.schemas.reads.scientific_kinetics import KineticsReadRequest
 from app.schemas.reads.scientific_kinetics_search import KineticsSearchRequest
 from app.services.scientific_read.export import SeedSelection, build_export_record_set
@@ -91,7 +90,7 @@ def _read_all(db_session, entry, **kw):
 
 
 def _read_first(db_session, entry, **kw):
-    resp = _read_all(db_session, entry, collapse=CollapseMode.first, **kw)
+    resp = _read_all(db_session, entry, **kw)
     return resp.records[0].kinetics_id
 
 
@@ -100,12 +99,10 @@ def _export_first(db_session, entry):
         db_session,
         seed=SeedSelection(reaction_refs=[entry.public_ref]),
         min_review_status=None,
-        collapse=CollapseMode.first,
-        selection_policy=SelectionPolicy.default,
     )
     (rr,) = rs.reaction_records
-    (sel,) = rr.kinetics
-    return sel.kinetics.id
+    # The export lists every record, in the same display order as the read; its first is the read's first.
+    return rr.kinetics[0].kinetics.id
 
 
 def test_newer_experimental_beats_older_computed_with_same_review(db_session):
@@ -160,9 +157,8 @@ def test_requested_temperature_range_does_not_reorder(db_session):
     resp = _read_all(
         db_session,
         entry,
-        collapse=CollapseMode.first,
-        temperature_min=400.0,
-        temperature_max=1000.0,
+        coverage_temperature_min_k=400.0,
+        coverage_temperature_max_k=1000.0,
     )
     assert resp.records[0].kinetics_id == newer.id
 

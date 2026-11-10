@@ -9,7 +9,7 @@ ordinary browse order is untouched. See ``backend/docs/specs/structure_selection
 is and is not, and ``docs/guides/selecting_structures.md`` for how to read one.
 
 The requests are strict: unknown fields are refused, references are public refs (never a database id), there is no
-caller-authored rule, no sort expression and no pagination (a selection is over the *complete* authorized
+sort expression and no pagination (a selection is over the *complete* authorized
 population, or it refuses), and the engineering bounds are the server's. A caller cannot set ``bounds`` or any limit.
 Every violation of a request's own rules is an ordinary 422 naming the field.
 """
@@ -25,16 +25,23 @@ from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
 from app.db.models.common import CalculationQuality, RecordReviewStatus
 from app.schemas.reads.scientific_common import ProfiledRequestEcho
+from app.schemas.reads.scientific_selection_common import (
+    CalculationProvenanceFilters,
+    CandidateEligibility,
+    FindingsEligibilityIn,
+    SelectionStepsAnswer,
+)
+from app.services.selection_kernel.requested import OFFER_FINDINGS, Eligibility
 from app.services.structure_selection.models import (
     DEFERRED_QUANTITIES,
     AdminPolicy,
     CoverageRequirement,
     Grain,
     Intent,
-    Objective,
     Quantity,
     RepeatPolicy,
     ResultMode,
+    StructureFilters,
     StructureOutcome,
     StructureRequest,
     ValidationClaim,
@@ -44,6 +51,15 @@ from app.services.structure_selection.models import (
 _QUANTITY_NAMES = frozenset({q.value for q in Quantity} | DEFERRED_QUANTITIES)
 
 _REF = Field(min_length=1, max_length=64)
+
+
+class StructureSelectionFilters(CalculationProvenanceFilters):
+    """The filters the calculation, conformer and transition-state searches offer, with their meaning.
+
+    A unit is kept when at least one of the calculations it rests on that the read profile shows matches every supplied
+    field: the calculation itself at the calculation grain, the calculations a determination pins as its sources at the
+    conformer and transition-state grains. Applied before eligibility; a filter excludes on a fact and ranks nothing.
+    """
 
 
 class _StrictRequest(BaseModel):
@@ -92,13 +108,20 @@ class _StrictRequest(BaseModel):
     require_stable_reference: bool = False
     administrative_policy: AdminPolicy = Field(
         default=AdminPolicy.default,
-        description="Administrative order within a scientific front or among exact ties. Never reorders fronts.",
+        description="Administrative order of exact ties and tied cohorts: display order, never a method preference.",
     )
     result_mode: ResultMode = ResultMode.all
-    apply_rules: bool = Field(default=True, description="Whether the audited rule registry takes part (it holds no active rule in this release).")
-    objective: Objective | None = Field(default=None, description="Required for protocol_preferred; refused otherwise.")
-    reference_model: str | None = Field(default=None, min_length=1, max_length=200)
     repeat_policy: RepeatPolicy = RepeatPolicy.retain_alternates
+    filters: StructureSelectionFilters = Field(
+        default_factory=StructureSelectionFilters,
+        description="Narrow the units by facts before eligibility, with the searches' own provenance filters.",
+    )
+    eligibility: FindingsEligibilityIn = Field(
+        default_factory=FindingsEligibilityIn,
+        description="Lift named eligibility defaults: a unit's rejected or deprecated review status, a confirmed finding "
+        "about a source. A rejected calculation quality is lifted by listing `rejected` in `permitted_quality`. Every "
+        "default is applied unless lifted; the answer lists each.",
+    )
 
     @field_validator("quantity")
     @classmethod
@@ -138,10 +161,9 @@ def _build(body: _StrictRequest, grain: Grain, intent: Intent, *, claim: Validat
         require_connectivity=connectivity,
         admin_policy=body.administrative_policy,
         result_mode=body.result_mode,
-        apply_rules=body.apply_rules,
-        objective=body.objective,
-        reference_model=body.reference_model,
         repeat_policy=body.repeat_policy,
+        filters=StructureFilters(**body.filters.model_dump(exclude_none=True)),
+        eligibility=Eligibility.from_request(body.eligibility, OFFER_FINDINGS),
     )
 
 
@@ -168,7 +190,7 @@ def _validate_against_service(body: Any, grain: Grain) -> None:
 class CalculationSelectionRequest(_StrictRequest):
     """Which of one species entry's calculations supplies the lowest comparable recorded energy (or which protocol)."""
 
-    intent: Literal[Intent.recorded_minimum, Intent.protocol_preferred] = Intent.recorded_minimum
+    intent: Literal[Intent.recorded_minimum, Intent.protocol_coverage] = Intent.recorded_minimum
 
     @model_validator(mode="after")
     def _service_rules(self) -> CalculationSelectionRequest:
@@ -182,9 +204,9 @@ class CalculationSelectionRequest(_StrictRequest):
 
 
 class ConformerSelectionRequest(_StrictRequest):
-    """Which of one species entry's validated conformer basins is lowest, which support a claim, or which protocol."""
+    """Which of one species entry's validated conformer basins is lowest, which support a claim, or which protocols cover it."""
 
-    intent: Literal[Intent.validated_minimum, Intent.qualify_evidence, Intent.protocol_preferred] = Intent.validated_minimum
+    intent: Literal[Intent.validated_minimum, Intent.qualify_evidence, Intent.protocol_coverage] = Intent.validated_minimum
 
     @model_validator(mode="after")
     def _service_rules(self) -> ConformerSelectionRequest:
@@ -198,13 +220,13 @@ class ConformerSelectionRequest(_StrictRequest):
 
 
 class TransitionStateEvidenceSelectionRequest(_StrictRequest):
-    """Which of one transition state entry's saddle determinations support a claim, are lowest, or which protocol.
+    """Which of one transition state entry's saddle determinations support a claim, are lowest, or which protocols cover it.
 
     One entry only: comparison across several entries needs an explicit validated same-path declaration, which this
     release does not take, so sibling entries are assessed one at a time.
     """
 
-    intent: Literal[Intent.validated_saddle, Intent.qualify_evidence, Intent.protocol_preferred] = Intent.validated_saddle
+    intent: Literal[Intent.validated_saddle, Intent.qualify_evidence, Intent.protocol_coverage] = Intent.validated_saddle
     require_connectivity: bool = Field(
         default=False, description="Also require reactive-connectivity evidence (IRC or a supported alternative) bound to the saddle."
     )
@@ -250,10 +272,9 @@ class StructureSelectionRequestEcho(ProfiledRequestEcho):
     require_connectivity: bool
     administrative_policy: str
     result_mode: str
-    apply_rules: bool
-    objective: str | None = None
-    reference_model: str | None = None
     repeat_policy: str
+    filters: dict[str, Any] = Field(default_factory=dict, description="The filters as supplied, normalised.")
+    eligibility: dict[str, bool] = Field(default_factory=dict, description="The eligibility settings the decision was made under.")
     bounds: dict[str, Any] = Field(
         description="The server's engineering bounds this decision was made under (never settable by the caller)."
     )
@@ -261,7 +282,14 @@ class StructureSelectionRequestEcho(ProfiledRequestEcho):
 
 class StructureSelectionReview(BaseModel):
     effective_floor: RecordReviewStatus
-    effective_statuses: list[RecordReviewStatus]
+    effective_statuses: list[RecordReviewStatus] = Field(
+        description="What every source calculation must have. A request never lifts this."
+    )
+    candidate_statuses: list[RecordReviewStatus] = Field(
+        default_factory=list,
+        description="What a unit's own review status may be: the effective statuses plus the terminal ones the request "
+        "lifted (never under a read profile with a review floor).",
+    )
 
 
 class StructureSelectionReason(BaseModel):
@@ -269,11 +297,14 @@ class StructureSelectionReason(BaseModel):
     applicability: str
 
 
-class StructureSelectionUnit(BaseModel):
+class StructureSelectionUnit(CandidateEligibility):
     """One assessed unit (a calculation, or a basin or saddle determination) with every finding that fed its verdict."""
 
     unit_ref: str
-    review_status: RecordReviewStatus
+    review_status: RecordReviewStatus | None = Field(
+        description="The unit's own review standing; null for a determination with no review of its own (a species "
+        "entry is a scoping parent, so its status is not copied onto it)."
+    )
     created_at: datetime
     applicability: str
     reasons: list[StructureSelectionReason]
@@ -302,7 +333,7 @@ class StructureSelectionIntegrity(BaseModel):
     note: str
 
 
-class StructureSelectionResponse(BaseModel):
+class StructureSelectionResponse(SelectionStepsAnswer):
     """The outcome of a structure selection and everything it rests on, public refs only.
 
     ``outcome`` is the selection basis (13 values; see the spec). ``selected_refs`` holds every tied minimum, the
@@ -362,6 +393,8 @@ class StructureSelectionManifest(BaseModel):
     versions: dict[str, Any]
     request: StructureSelectionManifestRequest
     effective_review_statuses: list[RecordReviewStatus]
+    candidate_review_statuses: list[RecordReviewStatus] = Field(default_factory=list)
+    verdicts: dict[str, Any] = Field(default_factory=dict)
     read_profile: dict[str, Any]
     snapshot_isolation: str
     subject: dict[str, Any]

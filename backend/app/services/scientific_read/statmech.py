@@ -77,9 +77,16 @@ from app.schemas.reads.scientific_statmech import (
     StatmechTorsionSummary,
     StatmechTransitionStateContext,
 )
-from app.services.calculation_levels import RoleCalcInfo, derive_levels
+from app.services.calculation_levels import (
+    RoleCalcInfo,
+    derive_levels,
+    level_suppliers,
+    withhold_levels_from_calculations,
+)
 from app.services.composite_verification import verify_composite_calculations
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read.common import (
+    evidence_withheld_predicate,
     fetch_review_badges,
     review_summary,
     validate_includes,
@@ -103,7 +110,11 @@ from app.services.scientific_read.handles import resolve_statmech_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.role_settings import LevelPlan, attach_calculation_settings, make_level_plan
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
+    STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
 from app.services.scientific_read.supersession import fetch_supersession_notices
@@ -141,6 +152,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "frequencies",
     "conformers",
     "review",
+    "calculation_settings",
     "internal_ids",
     "assessments",
     "trust",
@@ -292,11 +304,16 @@ def get_statmech(
         includes=includes,
         supersession=supersessions.get(sm.id),
     )
+    if "calculation_settings" in includes:
+        attach_calculation_settings(session, [record])
 
     return ScientificStatmechDetailResponse(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([badge]),
         record=record,
+        **deposit_warning_envelope(
+            session, SubmissionRecordType.statmech, {sm.id: sm.public_ref}
+        ),
     )
 
 
@@ -339,8 +356,12 @@ def build_statmech_record(
     wf_summary = _build_workflow_summary(session, sm.workflow_tool_release_id)
     lit_summary = _build_literature_summary(session, sm.literature_id)
 
-    source_rows = _load_source_rows(session, sm.id)
-    torsion_rows = _load_torsion_rows(session, sm.id)
+    source_rows, withheld_source_calc_ids = _load_source_rows(session, sm.id)
+    torsion_rows, withheld_scan_calc_ids = _load_torsion_rows(session, sm.id)
+    # Evidence rule (ADR 0023): the counts, flags and levels below describe the source calculations the profile SHOWS. An
+    # unreviewed one is shown, with its badge; a rejected or deprecated one (under ``curated``) is withheld, so it is not
+    # counted and supplies no level. The blocks that name calculations keep every row: the ref guard removes the withheld.
+    shown_source_rows = [r for r in source_rows if r.calculation_id not in withheld_source_calc_ids]
     electronic_level_rows = _load_electronic_level_rows(session, sm.id)
     # Conformer groups hang off a species entry, so a TS-owned statmech has no
     # conformer context by construction — asking with a NULL id would always
@@ -356,19 +377,22 @@ def build_statmech_record(
     )
 
     evidence = _build_evidence_summary(
-        source_rows=source_rows,
+        source_rows=shown_source_rows,
         torsion_rows=torsion_rows,
+        withheld_scan_calc_ids=withheld_scan_calc_ids,
         has_frequency_scale_factor=fsf_summary is not None,
         has_conformer_context=has_conformer_context,
-        sp_from_optimization=_sp_role_is_an_optimization(session, source_rows),
+        sp_from_optimization=_sp_role_is_an_optimization(session, shown_source_rows),
     )
-    levels = _build_levels(session, source_rows, sm.energy_level_of_theory_id)
+    levels, level_plan = _build_levels(
+        session, source_rows, sm.energy_level_of_theory_id, withheld_calculation_ids=withheld_source_calc_ids
+    )
     available = AvailableStatmechSections(
-        has_source_calculations=bool(source_rows),
+        has_source_calculations=bool(shown_source_rows),
         has_torsions=bool(torsion_rows),
         has_electronic_levels=bool(electronic_level_rows),
         has_frequencies=any(
-            r.role == StatmechCalculationRole.freq for r in source_rows
+            r.role == StatmechCalculationRole.freq for r in shown_source_rows
         ),
         has_conformers=has_conformer_context,
         has_review=_exists_review_for(
@@ -433,7 +457,7 @@ def build_statmech_record(
             review_status=badge.status,
         )
 
-    return ScientificStatmechRecord(
+    record = ScientificStatmechRecord(
         statmech=core,
         supersession=supersession,
         species=species_context,
@@ -453,6 +477,10 @@ def build_statmech_record(
         review_history=review_block,
         trust=trust_block,
     )
+    # The settings behind each level are resolved for the page, not per record: the caller attaches them
+    # (:func:`attach_calculation_settings`) after the records are built, in a fixed number of statements.
+    record._level_plan = level_plan
+    return record
 
 
 def build_statmech_trust_fragment(
@@ -471,25 +499,45 @@ def build_statmech_trust_fragment(
 
 def _load_source_rows(
     session: Session, statmech_id: int
-) -> list[StatmechSourceCalculation]:
-    return session.scalars(
-        select(StatmechSourceCalculation)
+) -> tuple[list[StatmechSourceCalculation], set[int]]:
+    """The record's source-calculation links, and the ids of the calculations among them the evidence rule withholds.
+
+    The verdict is read in the same statement as the rows (``SELECT link, <withheld>``), so a page of records costs no
+    statement per record for it. Without a review floor the second element is empty.
+    """
+    withheld = evidence_withheld_predicate(StatmechSourceCalculation.calculation_id, SubmissionRecordType.calculation)
+    columns = [StatmechSourceCalculation] + ([withheld.label("withheld")] if withheld is not None else [])
+    rows = session.execute(
+        select(*columns)
         .where(StatmechSourceCalculation.statmech_id == statmech_id)
         .order_by(
             StatmechSourceCalculation.role.asc(),
             StatmechSourceCalculation.calculation_id.asc(),
         )
     ).all()
+    links = [row[0] for row in rows]
+    withheld_ids = {row[0].calculation_id for row in rows if withheld is not None and row[1]}
+    return links, withheld_ids
 
 
 def _load_torsion_rows(
     session: Session, statmech_id: int
-) -> list[StatmechTorsion]:
-    return session.scalars(
-        select(StatmechTorsion)
+) -> tuple[list[StatmechTorsion], set[int]]:
+    """The record's torsions, and the ids of the scan calculations among them the evidence rule withholds."""
+    withheld = evidence_withheld_predicate(StatmechTorsion.source_scan_calculation_id, SubmissionRecordType.calculation)
+    columns = [StatmechTorsion] + ([withheld.label("withheld")] if withheld is not None else [])
+    rows = session.execute(
+        select(*columns)
         .where(StatmechTorsion.statmech_id == statmech_id)
         .order_by(StatmechTorsion.torsion_index.asc())
     ).all()
+    torsions = [row[0] for row in rows]
+    withheld_ids = {
+        row[0].source_scan_calculation_id
+        for row in rows
+        if withheld is not None and row[1] and row[0].source_scan_calculation_id is not None
+    }
+    return torsions, withheld_ids
 
 
 def _load_electronic_level_rows(
@@ -509,8 +557,13 @@ def _build_levels(
     session: Session,
     source_rows: list[StatmechSourceCalculation],
     declared_energy_lot_id: int | None = None,
-) -> ScientificLevelsSummary:
+    *,
+    withheld_calculation_ids: set[int] | frozenset[int] = frozenset(),
+) -> tuple[ScientificLevelsSummary, LevelPlan]:
     """R1: derive geometry/frequency/energy levels from this record's links.
+
+    The derivation reads every link. A level whose supplying calculations are all in ``withheld_calculation_ids`` (the
+    evidence rule, ADR 0023) is then nulled together with its source, never re-derived from what is left.
 
     ``source_rows`` is already ordered ``role.asc(), calculation_id.asc()``
     by :func:`_load_source_rows`, so appending in order already gives
@@ -529,10 +582,13 @@ def _build_levels(
         declared_energy_lot_id
     )
     if not role_calc_ids:
-        return ScientificLevelsSummary(
-            declared_energy=declared,
-            composite_energy_verification=None,
-            legacy_composite_shape=None,
+        return (
+            ScientificLevelsSummary(
+                declared_energy=declared,
+                composite_energy_verification=None,
+                legacy_composite_shape=None,
+            ),
+            LevelPlan(),
         )
 
     all_ids = {cid for ids in role_calc_ids.values() for cid in ids}
@@ -556,43 +612,57 @@ def _build_levels(
         session, {cid: calcs[cid].lot_id for cid in typed_composite_ids}
     )
 
-    def infos(role: str) -> list[RoleCalcInfo]:
+    def linked(role: str) -> list[tuple[int, RoleCalcInfo]]:
         if role == "composite":
             return [
-                composite_role_info(
-                    calc.lot_id,
-                    calc.freq_result is not None,
-                    composite_facts.get(cid),
+                (
+                    cid,
+                    composite_role_info(
+                        calc.lot_id,
+                        calc.freq_result is not None,
+                        composite_facts.get(cid),
+                    ),
                 )
                 for cid in typed_composite_ids
                 if (calc := calcs.get(cid)) is not None
             ]
         return [
-            RoleCalcInfo(
-                lot_id=calc.lot_id, carries_frequencies=calc.freq_result is not None
-            )
+            (cid, RoleCalcInfo(lot_id=calc.lot_id, carries_frequencies=calc.freq_result is not None))
             for cid in role_calc_ids.get(role, [])
             if (calc := calcs.get(cid)) is not None
         ]
 
+    # The legacy shape: a calculation of another type linked under the role ``composite``
+    # keeps the slot it had before the type existed.
+    legacy_linked = [
+        (cid, RoleCalcInfo(lot_id=calc.lot_id, carries_frequencies=calc.freq_result is not None))
+        for cid in role_calc_ids.get("composite", [])
+        if (calc := calcs.get(cid)) is not None and cid not in typed_composite_ids
+    ]
+    roles = {
+        "opts": linked("opt"),
+        "freqs": linked("freq"),
+        "sps": linked("sp"),
+        "composites": linked("composite"),
+        "importeds": linked("imported"),
+        "legacy_composites": legacy_linked,
+    }
     derived = derive_levels(
-        opts=infos("opt"),
-        freqs=infos("freq"),
-        sps=infos("sp"),
-        composites=infos("composite"),
-        importeds=infos("imported"),
-        # The legacy shape: a calculation of another type linked under the role
-        # ``composite`` keeps the slot it had before the type existed.
-        legacy_composites=[
-            RoleCalcInfo(lot_id=calc.lot_id, carries_frequencies=calc.freq_result is not None)
-            for cid in role_calc_ids.get("composite", [])
-            if (calc := calcs.get(cid)) is not None and cid not in typed_composite_ids
-        ],
+        opts=[info for _, info in roles["opts"]],
+        freqs=[info for _, info in roles["freqs"]],
+        sps=[info for _, info in roles["sps"]],
+        composites=[info for _, info in roles["composites"]],
+        importeds=[info for _, info in roles["importeds"]],
+        legacy_composites=[info for _, info in roles["legacy_composites"]],
     )
+    # Evidence rule: a level whose supplying calculations are all withheld goes, with its source (no re-derivation).
+    plan = make_level_plan(level_suppliers(derived, **roles), withheld_calculation_ids)
+    derived = withhold_levels_from_calculations(derived, withheld=withheld_calculation_ids, **roles)
+    shown_typed_composite_ids = [cid for cid in typed_composite_ids if cid not in withheld_calculation_ids]
     geometry = _build_lot_summary(session, derived.geometry_lot_id)
     frequency = _build_lot_summary(session, derived.frequency_lot_id)
     energy = _build_lot_summary(session, derived.energy_lot_id)
-    return ScientificLevelsSummary(
+    levels = ScientificLevelsSummary(
         geometry=geometry,
         frequency=frequency,
         energy=energy,
@@ -602,17 +672,18 @@ def _build_levels(
         declared_energy=declared,
         composite_energy_verification=record_composite_verification(
             energy_source=derived.energy_source,
-            typed_composite_ids=typed_composite_ids,
+            typed_composite_ids=shown_typed_composite_ids,
             # Derived now from the stored inputs / recorded log checks, never read from a stored verdict.
             verifications=(
-                verify_composite_calculations(session, typed_composite_ids)
+                verify_composite_calculations(session, shown_typed_composite_ids)
                 if derived.energy_source == "composite"
                 else {}
             ),
         ),
         legacy_composite_shape=legacy_composite_shape(
             composite_role_on_non_composite=any(
-                cid in calcs and cid not in typed_composite_ids for cid in role_calc_ids.get("composite", [])
+                cid in calcs and cid not in typed_composite_ids and cid not in withheld_calculation_ids
+                for cid in role_calc_ids.get("composite", [])
             ),
             geometry=geometry,
             geometry_source=derived.geometry_source,
@@ -622,6 +693,7 @@ def _build_levels(
             energy_source=derived.energy_source,
         ),
     )
+    return levels, plan
 
 
 def _exists_review_for(
@@ -703,11 +775,12 @@ def _build_species_context(
             # entry of the species this record belongs to. Selected here
             # under their own names because species_entry_label_for()
             # reads them by attribute.
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         )
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.id == species_entry_id)
@@ -720,6 +793,7 @@ def _build_species_context(
         species_entry_id=row.entry_id,
         species_entry_ref=row.entry_ref,
         species_entry_label=species_entry_label_for(row),
+        **entry_facets_of(row),
         canonical_smiles=row.smiles,
         inchi_key=row.inchi_key,
         charge=row.charge,
@@ -774,6 +848,9 @@ def _build_lot_summary(
         solvent=lot.solvent,
         spin_treatment=lot.spin_treatment,
         core_treatment=lot.core_treatment,
+        relativistic_hamiltonian=lot.relativistic_hamiltonian,
+        pno_truncation=lot.pno_truncation,
+        ri_approximation=lot.ri_approximation,
         aux_basis=lot.aux_basis,
         cabs_basis=lot.cabs_basis,
         solvent_model=lot.solvent_model,
@@ -846,8 +923,10 @@ def _build_literature_summary(
         id=lit.id,
         literature_ref=lit.public_ref,
         title=getattr(lit, "title", None),
+        title_source=getattr(lit, "title_source", None),
         year=getattr(lit, "year", None),
         doi=getattr(lit, "doi", None),
+        isbn=getattr(lit, "isbn", None),
     )
 
 
@@ -937,6 +1016,9 @@ def _bulk_lot_summaries(
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
             core_treatment=lot.core_treatment,
+            relativistic_hamiltonian=lot.relativistic_hamiltonian,
+            pno_truncation=lot.pno_truncation,
+            ri_approximation=lot.ri_approximation,
             aux_basis=lot.aux_basis,
             cabs_basis=lot.cabs_basis,
             solvent_model=lot.solvent_model,
@@ -1243,10 +1325,13 @@ def _build_evidence_summary(
     has_frequency_scale_factor: bool,
     has_conformer_context: bool,
     sp_from_optimization: bool = False,
+    withheld_scan_calc_ids: set[int] | frozenset[int] = frozenset(),
 ) -> StatmechEvidenceSummary:
+    """The evidence checklist. ``source_rows`` are the links the evidence rule SHOWS (the caller drops the withheld)."""
     roles = {r.role for r in source_rows}
     has_rotor_scans = any(
-        t.source_scan_calculation_id is not None for t in torsion_rows
+        t.source_scan_calculation_id is not None and t.source_scan_calculation_id not in withheld_scan_calc_ids
+        for t in torsion_rows
     )
     return StatmechEvidenceSummary(
         source_calculation_count=len(source_rows),

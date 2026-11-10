@@ -38,7 +38,7 @@ from app.db.models.species import Species, SpeciesEntry
 from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
 from app.db.models.transport import Transport
-from app.schemas.reads.scientific_common import RecordReviewBadge
+from app.schemas.reads.scientific_common import RecordReviewBadge, browse_order
 from app.schemas.reads.scientific_literature_records import (
     SUPPORTED_RECORD_TYPES,
     LiteratureLinkedRecordSummary,
@@ -56,9 +56,14 @@ from app.services.scientific_read.common import (
     visible_statuses,
 )
 from app.services.scientific_read.handles import resolve_literature_handle
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "review",
@@ -123,6 +128,13 @@ def get_literature_records(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging(
+        "/scientific/literature/{literature_ref_or_id}/records",
+        request,
+        offset=offset,
+        limit=limit,
+        scope_extra={"literature_handle": literature_handle},
+    )
 
     includes = validate_includes(
         request.include,
@@ -162,29 +174,39 @@ def get_literature_records(
         include_deprecated=request.include_deprecated,
     )
     badges = _load_badges(session, rows)
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (
+                badges[(r.record_type, r.record_id)].status
+                for r in rows
+                if _is_reviewable(r.record_type) and (r.record_type, r.record_id) in badges
+            ),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+        )
+    )
     rows = [
         r for r in rows
         if _is_visible(r.record_type, r.record_id, badges, visible)
     ]
 
     # Deterministic ordering: record_type ASC, created_at DESC NULLS LAST,
-    # record_id DESC.
-    rows.sort(
-        key=lambda r: (
+    # record_id DESC. Record ids of different tables are not comparable, so the snapshot bounds each type by its own.
+    rows = paging.snapshot(rows, id_of=lambda r: r.record_id, group_of=lambda r: r.record_type)
+    page = paging.window(
+        rows,
+        key_of=lambda r: (
             r.record_type,
             r.created_at is None,
             -(r.created_at.timestamp() if r.created_at is not None else 0),
             -r.record_id,
-        )
+        ),
     )
-
-    total = len(rows)
-    page = rows[offset : offset + limit]
 
     want_review = "review" in includes
     summaries = [
         _to_summary(r, badge=badges.get((r.record_type, r.record_id)), want_review=want_review)
-        for r in page
+        for r in page.items
     ]
 
     rs = review_summary(
@@ -194,14 +216,15 @@ def get_literature_records(
     return ScientificLiteratureRecordsResponse(
         request=RequestEcho(
             filter=_echo_filter(request, lit_ref=lit.public_ref, lit_id=lit.id),
-            sort="default",
+            sort=browse_order("record_type", "created_at", "id"),
             include=sorted(includes),
         ),
         review_summary=rs,
         records=summaries,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(summaries), total=total
+            offset=offset, limit=limit, returned=len(summaries), total=page.total, page=page
         ),
+        **page.envelope(),
     )
 
 

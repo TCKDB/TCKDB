@@ -3,7 +3,6 @@ from typing import Any
 from pydantic import BaseModel, Field, StrictInt
 
 from app.db.models.common import (
-    CalculationQuality,
     ConformerAssignmentScopeKind,
     ConformerSelectionKind,
     ScientificOriginKind,
@@ -67,40 +66,6 @@ class SpeciesEntryConformerGroupsRead(BaseModel):
     conformer_group_count: int
     conformer_observation_count: int
     groups: list[ConformerGroupSummaryRead] = Field(default_factory=list)
-
-
-class LowestSPConformerObservationRead(BaseModel):
-    """Lowest qualifying SP conformer observation at a specified LoT.
-
-    This is an explicitly contextual result, not a universal best-conformer
-    claim. It only asserts that under the supplied `lot_id` (and optional
-    `calculation_quality`), this observation had the lowest qualifying SP
-    electronic energy among the species entry's conformer observations.
-    """
-
-    species_entry_id: int
-    lot_id: int
-
-    conformer_group_id: int
-    conformer_observation_id: int
-    calculation_id: int
-
-    electronic_energy_hartree: float
-    calculation_quality: CalculationQuality
-
-
-class LowestSPConformerObservationResultRead(BaseModel):
-    """Result wrapper for the lowest-SP conformer observation query.
-
-    `result` is `None` when no qualifying SP calculation exists under the
-    requested comparison context. This is a normal `200` response, not an
-    error: the question is well-formed but simply has no answer yet.
-    """
-
-    species_entry_id: int
-    lot_id: int
-    calculation_quality: CalculationQuality | None = None
-    result: LowestSPConformerObservationRead | None = None
 
 
 # Conformer Observation

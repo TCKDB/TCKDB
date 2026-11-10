@@ -154,8 +154,8 @@ def test_the_export_route_given_get_dbs_kind_of_session_fails_loudly(client, db_
     import json
 
     from app.services.network_selection import select_network
+    from tests.services.network_selection._protocol import protocol
     from tests.services.network_selection._requests import channel_request
-    from tests.services.network_selection._rules import protocol
     from tests.services.network_selection._world import add_solve, fit_spec
 
     world = build_world(db_session)

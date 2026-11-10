@@ -2,10 +2,10 @@
 
 Frozen-core and all-electron CCSD(T)/cc-pCVTZ are different levels of theory
 (their difference is the core-valence term of a focal-point scheme), and until
-this field existed they collapsed to one row unless a depositor happened to
-spell it into ``keywords``. The field is hashed **only when it is set**, so a
-level that does not state it is the level it always was: no existing
-``lot_hash`` changes and no row is re-keyed.
+this field existed they collapsed to one row. The field is hashed **only when it is set**, so a
+level that does not state it keeps the hash it has without the field: the field itself
+adds no key and re-keys no row. (Stage 2, the keywords decision, did change every hash by removing the ``keywords``
+key; that is separate from this field.)
 
 What is held here:
 
@@ -42,23 +42,25 @@ from app.db.models.common import CoreTreatment
 from app.db.models.level_of_theory import LevelOfTheory
 from app.services.calculation_resolution import _level_of_theory_hash, resolve_level_of_theory_ref
 from app.services.scientific_read.lot_identity_filters import method_matches
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 
 _VERSIONS = pathlib.Path(__file__).parents[2] / "alembic" / "versions"
 _SCRIPT = pathlib.Path(__file__).parents[2] / "scripts" / "ops" / "merge_duplicate_levels_of_theory.py"
 
-#: Produced by the application as it stood at ``d22f2918`` (before this field),
-#: run from a checkout of that commit. A change to any of these is a re-key of
-#: every level of theory that spelled itself this way: a migration, not a test edit.
-_PRE_P4_HASHES: list[tuple[dict, str]] = [
-    ({"method": "wb97xd", "basis": "def2tzvp"}, "9a489fb119cbc3cadc54fbdaae38959f622c6c9a5010476b70842df832c26b9e"),
-    ({"method": "CCSD(T)", "basis": "cc-pCVTZ"}, "ad379e6d398f9c67417f8a7a12857ddc0bf12914b09792d8db4d768d6eca9d95"),
+#: Levels that state no method qualifier, pinned as the application computes them after the keywords decision
+#: (Stage 2: the free-text ``keywords`` key left the payload, so every hash differs from the pre-Stage-2 one by
+#: design; the instance is reseeded, not re-keyed). A change to any of these from here on is a re-key of every
+#: level of theory that spelled itself this way: a migration, not a test edit.
+_NO_QUALIFIER_HASHES: list[tuple[dict, str]] = [
+    ({"method": "wb97xd", "basis": "def2tzvp"}, "1ba2d643d5757c406f5c28afe2e5f6314ca850a02833b6fbeda4f3347c7baa0d"),
+    ({"method": "CCSD(T)", "basis": "cc-pCVTZ"}, "6fa4d7f048b76844d934505442b982faed2dde442ff347ae1013a94d83e3691b"),
     (
         {"method": "CCSD(T)-F12", "basis": "cc-pVTZ-F12", "cabs_basis": "cc-pVTZ-F12-CABS"},
-        "7d3f2bb0389dfad852f6d604044bb017f7b142d6cfd16d56e44634be744d3134",
+        "70e98893e288a3ee2e4a204435db2c0641a9e2258a612ae6b1af9d54390f5b6f",
     ),
     (
         {"method": "MRCI+Davidson", "basis": "aug-cc-pV(T+d)Z"},
-        "b8a63b669e65e17271a260c56e0eedcc5c629869477dd18d7e9696cf7941c0d6",
+        "4955157382ef4be0539748ea19418864fc2ec006023520a04715cf60b5e74c44",
     ),
     (
         {
@@ -67,18 +69,17 @@ _PRE_P4_HASHES: list[tuple[dict, str]] = [
             "dispersion": "d3bj",
             "solvent": "water",
             "solvent_model": "smd",
-            "keywords": "int=ultrafine",
             "spin_treatment": "unrestricted",
         },
-        "5466204b5cc42eb2f1e39aab136030ca0cba0b77bc5657d22acf542487d71793",
+        "0ca9b853d518fedc3b32b703138f69772913522db035f17adf03af723cde5666",
     ),
-    ({"method": "CBS-QB3"}, "838e773298da11c3728cecd4da5c5aefb00c1b2ebe3a6d58964098c424abb43d"),
-    ({"method": "cbsqb3"}, "838e773298da11c3728cecd4da5c5aefb00c1b2ebe3a6d58964098c424abb43d"),
+    ({"method": "CBS-QB3"}, "112ef295e50169ffd82d88aee89e30359e4462c5131a7270f45698d0b6c76495"),
+    ({"method": "cbsqb3"}, "112ef295e50169ffd82d88aee89e30359e4462c5131a7270f45698d0b6c76495"),
 ]
 
 
 def _old_formula(ref: LevelOfTheoryRef) -> str:
-    """The hash payload exactly as it was before the field: nine keys, no core treatment."""
+    """The hash payload with no stated method qualifier: eight keys, no core treatment."""
     method_key, dispersion_key = level_identity_keys(ref.method, ref.dispersion)
     payload = {
         "method": method_key,
@@ -88,13 +89,12 @@ def _old_formula(ref: LevelOfTheoryRef) -> str:
         "dispersion": dispersion_key,
         "solvent": component_identity_key(ref.solvent),
         "solvent_model": component_identity_key(ref.solvent_model),
-        "keywords": ref.keywords,
         "spin_treatment": getattr(ref.spin_treatment, "value", ref.spin_treatment) or "unknown",
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
-@pytest.mark.parametrize(("fields", "expected"), _PRE_P4_HASHES)
+@pytest.mark.parametrize(("fields", "expected"), _NO_QUALIFIER_HASHES)
 def test_a_level_with_no_core_treatment_keeps_the_hash_it_had_before_the_field(fields, expected):
     ref = LevelOfTheoryRef(**fields)
     assert ref.core_treatment is None
@@ -104,8 +104,8 @@ def test_a_level_with_no_core_treatment_keeps_the_hash_it_had_before_the_field(f
 
 def test_the_pinned_corpus_is_not_vacuous():
     # A list a refactor emptied would pass every parametrised case above.
-    assert len(_PRE_P4_HASHES) >= 7
-    assert len({h for _f, h in _PRE_P4_HASHES}) == 6  # cbsqb3 and CBS-QB3 are one level
+    assert len(_NO_QUALIFIER_HASHES) >= 7
+    assert len({h for _f, h in _NO_QUALIFIER_HASHES}) == 6  # cbsqb3 and CBS-QB3 are one level
 
 
 def test_frozen_core_all_electron_and_unstated_are_three_levels():
@@ -158,7 +158,7 @@ def merge():
 
 def test_the_stored_row_and_the_merge_script_rehash_to_the_same_value(db_session, merge):
     """Column -> hash (merge script, from stored text) agrees with ref -> hash (resolution)."""
-    for core in (None, "frozen_core", "all_electron"):
+    for core in (None, "frozen_core", "all_electron", "window"):
         ref = LevelOfTheoryRef(method="CCSD(T)", basis="cc-pCVTZ", core_treatment=core)
         row = resolve_level_of_theory_ref(db_session, ref)
         db_session.flush()
@@ -168,6 +168,38 @@ def test_the_stored_row_and_the_merge_script_rehash_to_the_same_value(db_session
             {"i": row.id},
         ).mappings().one()
         assert merge._identity_hash(mapping) == row.lot_hash == _level_of_theory_hash(ref)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("relativistic_hamiltonian", "dkh2"),
+        ("relativistic_hamiltonian", "none"),
+        ("pno_truncation", "tight"),
+        ("ri_approximation", "rijcosx"),
+        ("ri_approximation", "none"),
+        ("core_treatment", "window"),
+    ],
+)
+def test_the_merge_script_rehashes_every_method_qualifier_to_the_stored_hash(db_session, merge, field, value):
+    """Each typed qualifier (explicit ``none`` and ``window`` included) is in the script's identity hash.
+
+    A script that left one out would recompute the unstated level's hash for a stated row and fold the two together.
+    """
+    ref = LevelOfTheoryRef(method="DLPNO-CCSD(T)", basis="cc-pVTZ", **{field: value})
+    row = resolve_level_of_theory_ref(db_session, ref)
+    db_session.flush()
+    mapping = db_session.execute(
+        text("SELECT " + ", ".join(merge._LOT_COLUMNS) + " FROM level_of_theory WHERE id = :i"), {"i": row.id}
+    ).mappings().one()
+    assert merge._identity_hash(mapping) == row.lot_hash == _level_of_theory_hash(ref)
+    unstated = _level_of_theory_hash(LevelOfTheoryRef(method="DLPNO-CCSD(T)", basis="cc-pVTZ"))
+    assert row.lot_hash != unstated
+
+
+def test_the_merge_script_lists_every_method_qualifier_among_the_columns_it_regroups_by(merge):
+    for column in ("core_treatment", "relativistic_hamiltonian", "pno_truncation", "ri_approximation"):
+        assert column in merge._LOT_COLUMNS
 
 
 def test_the_merge_script_lists_core_treatment_among_the_columns_it_regroups_by(merge):
@@ -188,13 +220,16 @@ def test_the_frozen_migration_copy_agrees_for_a_null_core_treatment_and_is_blind
         "spin_treatment": None,
     }
     row = SimpleNamespace(_mapping=fields)
-    unstated = LevelOfTheoryRef(method="CCSD(T)", basis="cc-pCVTZ")
-    assert mig._lot_hash(row, aliased=True) == _level_of_theory_hash(unstated)
+    # The frozen revision copy hashes the pre-Stage-2 payload, so it agrees with the frozen helper, not the live hash.
+    assert mig._lot_hash(row, aliased=True) == frozen_level_of_theory_hash(method="CCSD(T)", basis="cc-pCVTZ")
     # The frozen copy runs below the revision that adds the column, where every
     # row is NULL. It has no notion of the field, and that is safe only because
     # downgrade refuses while any level states one.
     stated = LevelOfTheoryRef(method="CCSD(T)", basis="cc-pCVTZ", core_treatment="frozen_core")
-    assert mig._lot_hash(row, aliased=True) != _level_of_theory_hash(stated)
+    assert mig._lot_hash(row, aliased=True) != frozen_level_of_theory_hash(
+        method="CCSD(T)", basis="cc-pCVTZ", core_treatment="frozen_core"
+    )
+    assert stated.core_treatment is not None
 
 
 def test_the_sql_name_filters_ignore_core_treatment(db_session):

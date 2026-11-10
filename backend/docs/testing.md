@@ -244,6 +244,10 @@ Then restart the backend database service so Compose uses the selected
 port. This recovery procedure is backend tooling and applies equally to
 local development environments and automation.
 
+## Slow-statement diagnostics
+
+When the harness creates a test database (`_apply_test_database_diagnostics` in `backend/tests/conftest.py`) it sets `log_lock_waits = on`, `deadlock_timeout = 1s` (Postgres's default, pinned because the lock-wait line fires at that value), and loads `auto_explain` with a 3 s threshold (`log_analyze = off`, nested statements on). This exists because one `statement_timeout` (30 s, sqlstate 57014) hit a browse count query in CI that takes under a millisecond locally, and nothing recorded why. What each piece shows: a statement that waits on a lock for over a second logs the waiter and holder pids to the Postgres server log (the CI service container's log is printed when the job ends); a stalled runner shows only indirectly, as other statements logged by `auto_explain` for taking over 3 s. `auto_explain` logs only statements that finish, so it never records the statement a `statement_timeout` cancelled. For that, a `handle_error` hook on the test engine (`_explain_statement_on_timeout`) catches sqlstate 57014, runs a plain `EXPLAIN` (never `ANALYZE`) of the cancelled statement on a separate connection with its own 5 s timeout, and prints it to stderr between `TCKDB-TIMEOUT-PLAN` markers, so it appears in the failed test's captured output. That connection cannot see the test's uncommitted rows, so the plan is the planner's estimate from table-level statistics. When no plan can be produced the hook still prints a reason: `TCKDB-TIMEOUT-PLAN unavailable (<error>, <sqlstate>)`, or `(executemany)` / `(already an EXPLAIN)`; a `QueryCanceled` (57014) there means the `EXPLAIN` itself waited past its 5 s bound, which points at a lock wait. The hook is registered on the harness `db_engine` only (the engine `client` and `db_session` use), not on the derived stamp engine or on engines that individual real-database tests build for themselves; a class-wide `Engine` listener was rejected because it would also fire for the admin and probe engines. All of this is test harness only and changes no application or deployed configuration. The settings need a role that may `ALTER DATABASE ... SET` (superuser, as in CI and the compose database); otherwise the harness emits a `RuntimeWarning` (shown in the pytest warnings summary) and carries on. The `_get` helpers in three curated scientific read tests also assert a 200 and show the response body, so a failed request reads as its error rather than as a `KeyError`.
+
 ## Profiling slow tests
 
 `test-profile.sh` runs the requested subset with `--durations=50` so
@@ -813,8 +817,11 @@ The workflow uses the same RDKit-enabled Postgres image as local
 development:
 
 ```text
-informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3
+ghcr.io/tckdb/rdkit-cartridge-debian@sha256:96c34a5b88d0cbe02bf57290531f27f3cb97f5d3e494f03baea75ea99749b5ef
 ```
+
+This is the GHCR mirror (`mirror-ci-images.yml`) of
+`informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3`, pinned by digest.
 
 Plain Postgres is not sufficient because the Alembic chain enables the
 `rdkit` extension and the schema includes RDKit cartridge types and
@@ -855,9 +862,12 @@ The gate runs:
 
 The API gate ignores both `tests/api/scientific/` (covered by the scientific
 job) and `tests/api/test_openapi_snapshot.py` (run once by its dedicated
-golden-snapshot step). The final `Backend CI` job is a stable aggregate status
-check: it runs even after an upstream failure or cancellation and fails unless
-the matrix result is `success`, while leaving every detailed gate check visible.
+golden-snapshot step, which now lives in the `quick-checks` job). The final
+`Backend CI` job is a stable aggregate status check: it runs even after an
+upstream failure or cancellation and fails unless both `quick-checks` and every
+slice of the matrix are `success`, and then runs
+`scripts/check_gate_shards.py` over the slices' reports (see "Slices of a
+gate" below), while leaving every detailed gate check visible.
 
 ### The ambient database is never migrated
 
@@ -877,10 +887,12 @@ nights, attached to no PR and explained by nothing in the file. Both workflows
 now present the same empty database, so that class of coupling fails the pull
 request that introduces it.
 
-Each CI job owns an isolated Postgres service and SeaweedFS service (MinIO
-until #541). Its
-`DB_TEST_NAME` and `S3_BUCKET` include both the GitHub run id/attempt and the
-job role, so concurrent jobs and workflow runs do not share test resources.
+Each CI test job owns an isolated Postgres service and SeaweedFS service
+(MinIO until #541); `quick-checks` has Postgres only (nothing it runs touches
+the object store). `DB_TEST_NAME` includes the gate, the slice number and the
+GitHub run id/attempt; `S3_BUCKET` includes the gate and the run id/attempt
+(the slice is not needed there: every job has its own SeaweedFS), so
+concurrent jobs and workflow runs do not share test resources.
 The run token now makes the `DB_TEST_NAME` half of that redundant for
 isolation — it stays because it makes a job's databases identifiable.
 
@@ -903,6 +915,61 @@ gate means a regression rather than an unlucky draw, and the nightly draws
 `TCKDB_TEST_SEED=random` and echoes it, so an order-dependent defect surfaces
 somewhere. `make test-full` locally remains the cheapest way to get both at
 once before pushing.
+
+## Slices of a gate, and the quick-checks job
+
+Each of the three gates runs in CI as several jobs ("slices"), each taking a
+share of the gate's test **files**, so a pull request waits for the slowest
+slice rather than the slowest gate. A job named `Backend API gate (2/2)` is
+`TCKDB_TEST_SHARD=api:2/2`; the gate script and its arguments are the same
+ones you run locally, and an unset variable (every local run, and the
+nightly) deselects nothing.
+
+- **Assignment.** A file listed in
+  [`../tests/ci_shard_plan.json`](../tests/ci_shard_plan.json) goes to the
+  slice the plan gives it (a duration-balanced assignment); any other file
+  goes to `crc32(path) % n + 1`. A new test file therefore runs from the day
+  it exists with no plan entry; a stale plan makes a slice slower, never a
+  test unrun. See [`../tests/ci_sharding.py`](../tests/ci_sharding.py).
+- **Why no test can be dropped.** `tests/scripts/test_gate_coverage.py`
+  requires the workflow matrix to hold exactly slices `1..n` of each gate and
+  every file a gate selects to land in one of them; and each slice writes a
+  report (`TCKDB_TEST_SHARD_REPORT`) that the `Backend CI` job sums with
+  [`../scripts/check_gate_shards.py`](../scripts/check_gate_shards.py): all
+  slices present, same collected total, shares add up to it, every selected
+  test reported, and the DR-0028 body-sweep floor held on the **sum** (one
+  slice sees a fraction of the bodies, so the per-run floor is skipped in a
+  slice).
+- **Rebalancing.** When one slice's job time drifts from its siblings,
+  add `--junitxml=junit-<gate>-<k>.xml` to the gate step on a scratch branch
+  (a sliced run is the right profile: it has the contention a slice really
+  has), then pass every slice's file for a gate, comma-separated, with the
+  slice count after the colon:
+  `python backend/scripts/ci_shard_plan.py --write --gate api=junit-api-1.xml,junit-api-2.xml:2 --gate ...`.
+  Changing the *number* of slices means editing the matrix `slices:` and
+  regenerating the plan in the same change (the coverage test refuses a plan
+  built for another count).
+- **Reproducing a red slice locally.** Run the gate script the slice runs,
+  with the slice set, and the same seed: for example
+  `TCKDB_TEST_SHARD=rest:3/4 bash backend/scripts/test-rest.sh --maxfail=5`
+  from the repo root (add `--ignore=...` exactly as the workflow step does for
+  the API gate). Or skip the slicing and run the one failing file
+  (`backend/scripts/test-fast.sh tests/path/test_x.py`); the file's slice only
+  decides *which job* runs it, never *how*.
+- **Quick checks.** Lint, mypy, the runtime-ASCII scan, hygiene, the Alembic
+  upgrade/drift checks, the OpenAPI snapshot and the MCP gate are one job
+  (`quick-checks`) that runs beside the slices, so a lint error is a red check
+  minutes in, not at the end of a half-hour job. `Backend CI` requires it and
+  every slice.
+
+### Why a test's setup is cheap
+
+`client` builds a fresh app per test (settings are read at construction and
+many tests change one first). `tests/route_build_cache.py` memoises FastAPI's
+`get_dependant` for the test process, which was ~0.5-1 s of every API test;
+a dependency override lives on the app, not in the cached value, and
+`tests/test_route_build_cache.py` pins that and the OpenAPI equality.
+`TCKDB_TEST_ROUTE_CACHE=0` turns it off when bisecting.
 
 ## OpenAPI golden snapshot
 

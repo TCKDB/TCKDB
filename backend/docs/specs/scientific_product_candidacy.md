@@ -79,39 +79,33 @@ always accompanied by the full candidate set it was chosen from.
 
 ## Read contract
 
-Read paths return candidates, and collapse to one only under explicit policy:
+Read paths return every candidate in display order and never pick one. Picking one is the select endpoints' job, under a policy the request states:
 
 | Path | Returns |
 |------|---------|
-| `GET /api/v1/scientific/species-entries/{id}/thermo` | list (paginated); honors `collapse` + `selection_policy` |
-| `GET /api/v1/scientific/species-entries/{id}/statmech` | list (paginated); honors `collapse` + `selection_policy` |
-| `GET /api/v1/scientific/species-entries/{id}/transport` | list (paginated); honors `collapse` + `selection_policy` |
+| `GET /api/v1/scientific/species-entries/{id}/thermo` | list (paginated); every record, display order |
+| `GET /api/v1/scientific/species-entries/{id}/statmech` | list (paginated); every record, display order |
+| `GET /api/v1/scientific/species-entries/{id}/transport` | list (paginated); every record, display order |
 | `GET /api/v1/scientific/{thermo,statmech,transport}/search` | list (paginated); broad search returns all candidates |
 | `GET /api/v1/lookup/{thermo,statmech,transport}` | all matching records |
 | `GET /api/v1/{thermo,statmech,transport}` (primitive) | list (paginated) |
 | `GET /api/v1/{thermo,statmech,transport}/{id}` | single record by explicit id |
 
-- **Default is non-canonical.** All three per-species reads default to
-  `collapse=all` + `selection_policy=default`, returning every candidate.
-- **Single-record collapse is explicit and named.** `collapse=first` returns
-  exactly one record, chosen by an explicit, named `selection_policy`. The
-  chosen `collapse` and `selection_policy` are echoed in the response; the
-  pre-collapse candidate count stays in `pagination.total`, while
-  `pagination.post_collapse_total` reports the count after selection collapse
-  and before offset/limit slicing.
+- **A read never picks.** The per-species reads list every candidate: review rank, then newest deposited, then id.
+  `collapse` and `selection_policy` are refused (422 `browse_parameter_removed`), and the refusal names the select
+  endpoint that answers "give me one" (`POST .../thermo/select`, `POST /statmech/select`; transport has none yet).
 
 ### Named selection policies
 
-`selection_policy` (enum, defined in
-`app/schemas/reads/scientific_common.py::SelectionPolicy`) governs *only* which
-single record `collapse=first` returns — it never reorders the full
-`collapse=all` candidate list, and it never persists a choice:
+`policy` on a select request (enum, defined in
+`app/schemas/reads/scientific_common.py::SelectionPolicy`) names the administrative order the select endpoint lists
+eligible records in; it is not a parameter of any browse read, and it never persists a choice:
 
 | Policy | Selects |
 |--------|---------|
 | `default` | the endpoint's standard ranking — for thermo, statmech and transport: review rank → recency → id (thermo's temperature coverage and evidence score are displayed, not ranked; #648) |
 | `latest` | the most recently created candidate (recency → id) |
-| `most_reviewed` | best review status first, then recency → id |
+| `most_reviewed` | review status first (approved before the rest), then recency → id |
 
 Policies that would require a *stored* curator decision (e.g.
 `benchmark_reference`, `curator_pick`) are intentionally **absent**: they cannot
@@ -138,8 +132,8 @@ to: its own `thermo.statmech_id` and its own `ThermoSourceCalculation` rows
   `has_statmech_source` means `thermo.statmech_id` is set, and
   `has_source_calculations` / `has_frequency_evidence` /
   `has_sp_or_energy_evidence` count the record's own sources plus its linked
-  statmech's. The score feeds the default sort and `collapse=first`, so an
-  unlinked (say experimental) value no longer ranks like a linked computed one.
+  statmech's. The score is displayed, not ranked, so an
+  unlinked (say experimental) value is not ordered below a linked computed one.
 - The derived `levels.*` (#636) and `levels.declared_energy` (#633) follow the
   same rule.
 
@@ -187,37 +181,36 @@ The per-species read contract now also depends on `?profile=`:
 - `profile=exploratory` (**default**) — unchanged from everything above: all
   candidates, no TCKDB recommendation, explicitly labelled as such in the
   response's `request.profile_recommendation`.
-- `profile=curated` — the review floor rises to `approved`, and the response
-  reports the dataset release backing it (or honestly reports
-  `recommendation: none` when no release has been published yet).
+- `profile=curated` — the review floor rises to `approved` for the records a
+  list, search, browse, select or export returns, and the response reports
+  `profile_recommendation: approved_floor_only` (no release is reported on the
+  general read surface; `profile_release_ref` is null). Linked evidence is shown with
+  its badge; only rejected and deprecated records are withheld (ADR 0023).
 
 The resolved profile is echoed in every scientific response and every dataset
 manifest.
 
-## Method-aware H298 selection
+## H298 selection
 
 Browsing is unchanged. A separate, opt-in read, `POST /scientific/species-entries/{ref}/thermo/select`,
-answers one quantity (gas-phase formation enthalpy at 298.15 K) and applies a versioned, typed rule
-registry (rule E1, standard G4 over standard G3 for an audited hydrocarbon manifest) before the review and
-recency order, which then only sorts within a preference front. It returns one of `policy_preferred`,
-`incomparable_alternatives`, `sole_eligible_candidate`, `no_applicable_candidate` or `policy_conflict`,
-with the assessments, relations, fronts, rule versions and disclosures, and a
+answers one quantity (gas-phase formation enthalpy at 298.15 K): which records are eligible, and their display order
+([`docs/specs/browse_order.md`](../../../docs/specs/browse_order.md)). TCKDB ranks no method above another. It returns one
+of `incomparable_alternatives`, `sole_eligible_candidate` or `no_applicable_candidate`,
+with the assessments, the front and disclosures, and a
 replayable decision manifest (`/thermo/select/manifest`). More than 500 visible records is refused
 (422 `thermo_selection_population_too_large`). It persists nothing and creates no endorsement. Records
 outside the effective review floor are listed only when the read profile has no floor of its own. Guide:
 [`docs/guides/selecting_thermo_for_h298.md`](../../../docs/guides/selecting_thermo_for_h298.md).
 
-## Method-aware kinetics selection
+## Kinetics selection
 
 Browsing is unchanged. A separate, opt-in read, `POST /scientific/reaction-entries/{ref}/kinetics/select`, answers one
 stated gas-phase rate-coefficient question (direction, target, coefficient basis, temperature window, pressure,
 collider). A record answers it only if its stored claims say so (`applicable`, `incompatible`, `unsupported` or
 `unresolved`; unstated is unknown, never a default); alternate fits of one determination are one candidate. A
-pressure-independent record also answers a high-pressure-limit request. A versioned, typed rule registry orders
-determinations before the review and recency order, which then only sorts within a preference front; every rule in
-this release is inactive, so the answer is usually `incomparable_alternatives` or `sole_eligible_candidate`. It
-returns one of `policy_preferred`, `incomparable_alternatives`, `sole_eligible_candidate`, `no_applicable_candidate`
-or `policy_conflict`, with the assessments, determinations, relations, fronts, rule versions and disclosures, and a
+pressure-independent record also answers a high-pressure-limit request. Determinations are listed in display order and
+none is ranked above another, so the answer is `incomparable_alternatives`, `sole_eligible_candidate` or
+`no_applicable_candidate`, with the assessments, determinations, the front and disclosures, and a
 replayable decision manifest (`/kinetics/select/manifest`) read in one read-only REPEATABLE READ snapshot. More than
 500 visible records is refused (422 `kinetics_selection_population_too_large`). It persists nothing and creates no
 endorsement. Records outside the effective review floor are listed only when the read profile has no floor of its own.

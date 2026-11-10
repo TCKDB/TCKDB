@@ -80,12 +80,12 @@ The structure assessment's own bound codes pass through unchanged. Order of ref 
 
 ## Disclosure
 
-Under `curated` a hidden group, observation, determination or pinned calculation is not in the world: it is filtered
-before the assessment, so it is not listed, counted, used or named in the response or the manifest. Nothing is borrowed
+Under `curated` a group below the record floor is not in the world, and a withheld (rejected or deprecated) observation,
+determination or pinned calculation is not either: it is filtered before the assessment, so it is not listed, counted, used
+or named in the response or the manifest. Nothing is borrowed
 from a visible sibling. The response carries no database id and is returned directly (not through the internal-id
 stripper), so the central curated ref guard (`scientific_read/ref_guard.py`) does not see these routes: they are listed
-as unguarded in the curated sweep. **The population filter is the only line of defence** until the guard's selection-seam
-PR adds `run_relative_energies` to that seam. It is tested at the API level and by the sweep, which finds no hidden ref.
+as unguarded in the curated sweep. **The population filter is the line of defence** here: the response-level guard does not see these routes. It is tested at the API level and by the sweep, which finds no withheld ref.
 Under `curated` the compared population shrinks by design, so `coverage.requested_members` and `coverage.absent` count
 visible members only.
 
@@ -94,7 +94,7 @@ before the entry is looked up: it is the same 422 for an unknown entry, and noth
 
 ## Manifest and replay
 
-`format: relative_conformer_energy_manifest`, version 1: versions, the normalised request, read profile, effective
+`format: relative_conformer_energy_manifest`, version 2: versions, the normalised request, read profile, effective
 statuses, snapshot isolation, subject, the compared groups and determinations, every normalised calculation and
 determination with a per-input digest, every assessment, the computed `result` and a whole-manifest digest. The response
 is built from the manifest, so they cannot disagree. `replay_relative_energies(manifest)` recomputes every assessment
@@ -177,17 +177,16 @@ claim that one protocol is more accurate; none is evaluated yet, so all seven ar
 | E4 | Coverage and sameness: the full named member set, the same geometries for both candidates, the same named reference conformer as the source. |
 | E5 | Domain: the claim is scoped to the member set measured; transfer to other molecules needs evidence on them. |
 | E6 | Established protocol facts: every setting that defines the protocol (thresholds, PNO cut-offs, extrapolation, core treatment, corrections) is typed and established, not read from a label. |
-| E7 | Owner acceptance of the rule that would carry the claim, and its predicates implemented and reviewed. |
+| E7 | Owner acceptance of the claim itself, and its predicates implemented and reviewed. |
 
-Even with E1–E7 met, a preference is an audited rule edge through the selection kernel, never a by-product of this comparison.
+Even with E1–E7 met, the comparison describes agreement between two protocols. TCKDB ranks no method above another, so it never becomes a preference.
 
-**Boundary.** The comparison never builds a selection-kernel `Edge` and never consults the rule registry: none of
-`compare.py`, `service.py`, `manifest.py` or `public.py` directly imports `structure_selection.rules` or
-`selection_kernel`, and none references `Edge` (a test reads their imports and names; it does not cover transitive
-imports, and the certificate legitimately comes through `structure_selection.public`). A
-mean absolute deviation is a description and cannot become a rule input.
+**Boundary.** The comparison ranks nothing: none of `compare.py`, `service.py`, `manifest.py` or `public.py` directly
+imports `selection_kernel` or names a decision function (a test reads their imports and names; it does not cover
+transitive imports, and the certificate legitimately comes through `structure_selection.public`). A
+mean absolute deviation is a description and cannot become a selection input.
 
-**Manifest.** `format: relative_conformer_energy_comparison_manifest`, version 1. It holds the shared request, both
+**Manifest.** `format: relative_conformer_energy_comparison_manifest`, version 2. It holds the shared request, both
 protocols, the pairing, the read profile and snapshot isolation, **both runs' complete relative-energy manifests** (each
 with its inputs, assessments, answer and checksums), the `result` and a whole-manifest digest. The combined manifest is checked against the manifest size bound (422
 `structure_selection_manifest_too_large`), not only each run. The response is built
@@ -206,6 +205,5 @@ this release. Owner decisions O2, O3 and O4 of 2026-10-13 defer them until a rea
 
 ## Related
 
-The legacy `GET /api/v1/species-entries/{id}/conformer-observations/lowest-sp` collapses several single points on one
-observation to the lowest, the opposite of "repeats are alternates". It is **deprecated** in favour of this operation and
-will be removed once unused.
+The old `GET /api/v1/species-entries/{id}/conformer-observations/lowest-sp`, which collapsed several single points on one
+observation to the lowest (the opposite of "repeats are alternates"), is removed. This operation replaces it.

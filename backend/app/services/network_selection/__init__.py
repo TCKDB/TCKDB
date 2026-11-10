@@ -2,9 +2,9 @@
 
 Chunk 2: a bounded, consistent snapshot of one network's authorized population and a deterministic applicability
 assessment of its determinations (one channel) or declared product sets (a requested bundle). Chunk 3: the
-preference engine and the replayable manifest, on the shared :mod:`app.services.selection_kernel` (conflicts, fronts
-and outcomes are the kernel's and are not re-implemented here), with two replay levels. No rule is active in this
-release, so a decision is an honest statement of which candidates are eligible and why none is ranked.
+ordering engine and the replayable manifest, on the shared :mod:`app.services.selection_kernel` (outcomes and the
+administrative order are the kernel's and are not re-implemented here), with two replay levels. TCKDB ranks no method
+above another, so a decision is an honest statement of which candidates are eligible and in what display order.
 """
 
 from app.services.network_selection.assessment import (
@@ -42,7 +42,6 @@ from app.services.network_selection.models import (
     Scope,
     SelectionBounds,
 )
-from app.services.network_selection.rules import NetworkRepresentationRule, NetworkRule, default_rules
 from app.services.network_selection.selection import NetworkSelection, select_network
 from app.services.network_selection.service import assess_network
 
@@ -58,9 +57,7 @@ __all__ = [
     "DeterminationAssessment",
     "NetworkAssessmentResult",
     "NetworkDecision",
-    "NetworkRepresentationRule",
     "NetworkRequest",
-    "NetworkRule",
     "NetworkSelection",
     "OutputRequest",
     "PartitionRequest",
@@ -76,7 +73,6 @@ __all__ = [
     "check_bound",
     "check_snapshot_size",
     "decide",
-    "default_rules",
     "replay_matches",
     "replay_network",
     "replay_network_assessment",

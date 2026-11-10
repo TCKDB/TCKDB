@@ -91,12 +91,15 @@ from app.schemas.reads.scientific_transition_state import (
     TransitionStateValidationDescriptor,
     TransitionStateValidationEvidenceSummary,
 )
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
+    evidence_visible_statuses,
     fetch_review_badges,
-    ids_below_review_floor,
-    review_floor_predicate,
+    ids_withheld_as_evidence,
+    linked_evidence_predicate,
     review_summary,
+    shown_predicate,
     validate_includes,
     visible_statuses,
     where_visible,
@@ -111,6 +114,7 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.reaction_participants import format_reaction_equation
 from app.services.scientific_read.species_calculations_search import (
     _build_energy_block,
     _load_sp_lot_pairs,
@@ -334,9 +338,10 @@ def get_transition_state(
         .order_by(TransitionStateEntry.id.asc())
     ).all()
     entry_ids = [e.id for e in entries]
-    # Owner decision D5: counts and flags answer what the list would show. The lists keep every entry (the ref guard
-    # removes the hidden ones from them); what is COUNTED follows the review floor.
-    hidden_entry_ids = ids_below_review_floor(
+    # Counts and flags answer what this page lists. The page lists every entry that is not withheld (the ref guard removes
+    # the rejected and deprecated ones), so a served detail counts by the evidence rule, not the record floor (ADR 0023
+    # step 7, Q9): an unreviewed entry that is listed is counted.
+    hidden_entry_ids = ids_withheld_as_evidence(
         session, record_type=SubmissionRecordType.transition_state_entry, record_ids=entry_ids
     )
     counted_entries = [e for e in entries if e.id not in hidden_entry_ids]
@@ -401,17 +406,18 @@ def get_transition_state(
                 trust_scope=ListScope(),
                 levels_index=levels_index,
                 saddle_point_index=saddle_point_index,
+                detail=True,
             )
             for e in entries
         ]
 
     ts_calcs_block: list[TransitionStateCalculationSummary] | None = None
     if "calculations" in includes:
-        ts_calcs_block = _build_calculations_summary(session, entry_ids)
+        ts_calcs_block = _build_calculations_summary(session, counted_entry_ids)
 
     ts_geoms_block: list[CalculationGeometryLinkSummary] | None = None
     if "geometries" in includes:
-        ts_geoms_block = _build_output_geometry_links(session, entry_ids)
+        ts_geoms_block = _build_output_geometry_links(session, counted_entry_ids)
 
     ts_review_block: list[TransitionStateReviewEntry] | None = None
     if "review" in includes:
@@ -468,6 +474,10 @@ def get_transition_state(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([ts_badge]),
         record=record,
+        **deposit_warning_envelope(
+            # Only the entries the page lists: a withheld entry's warnings (and its submission's) are not ours to show.
+            session, SubmissionRecordType.transition_state_entry, {e.id: e.public_ref for e in counted_entries}
+        ),
     )
 
 
@@ -540,12 +550,16 @@ def get_transition_state_entry(
         entry_badge=tse_badge,
         includes=includes,
         trust_scope=DetailScope(),
+        detail=True,
     )
 
     return ScientificTransitionStateEntryDetailResponse(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([tse_badge]),
         record=record,
+        **deposit_warning_envelope(
+            session, SubmissionRecordType.transition_state_entry, {tse.id: tse.public_ref}
+        ),
     )
 
 
@@ -602,8 +616,13 @@ def _build_entry_record(
     saddle_point_index: (
         dict[int, TransitionStateSaddlePointEvidence | None] | None
     ) = None,
+    detail: bool = False,
 ) -> ScientificTransitionStateEntryRecord:
     """Project one TS entry into the shared record shape.
+
+    ``detail`` is True when a served detail builds the record (the TS detail's ``entries``, the entry detail and its
+    siblings): the sibling flag then counts the entries that page lists, by the evidence rule. A search row
+    (``detail=False``) counts the record floor's entries, as a list does.
 
     ``entries_block`` lets a caller that has already grouped the sibling
     entries over a whole page hand them in, so the search surface pays one
@@ -647,6 +666,7 @@ def _build_entry_record(
         session,
         transition_state_id=entry.transition_state_id,
         exclude_entry_id=entry.id,
+        detail=detail,
     )
     available = _build_available_sections(
         session,
@@ -696,6 +716,7 @@ def _build_entry_record(
             ts_core=ts_core,
             reaction=reaction,
             includes=includes,
+            detail=detail,
         )
 
     # ``trust`` is populated wherever the token is legal — the standalone
@@ -748,6 +769,7 @@ def build_sibling_entry_records(
     ts_core: TransitionStateCoreBlock,
     reaction: TransitionStateReactionContext,
     includes: set[str],
+    detail: bool = False,
 ) -> list[ScientificTransitionStateEntryRecord]:
     """Public alias for :func:`_build_sibling_entry_records`.
 
@@ -760,6 +782,7 @@ def build_sibling_entry_records(
         ts_core=ts_core,
         reaction=reaction,
         includes=includes,
+        detail=detail,
     )
 
 
@@ -770,6 +793,7 @@ def _build_sibling_entry_records(
     ts_core: TransitionStateCoreBlock,
     reaction: TransitionStateReactionContext,
     includes: set[str],
+    detail: bool = False,
 ) -> list[ScientificTransitionStateEntryRecord]:
     """Every entry under *entry*'s parent transition state, this one included.
 
@@ -824,6 +848,7 @@ def _build_sibling_entry_records(
             trust_scope=sibling_scope,
             levels_index=levels_index,
             saddle_point_index=saddle_point_index,
+            detail=detail,
         )
         for sibling in siblings
     ]
@@ -969,12 +994,11 @@ def _format_equation(
     ).all()
     if not rows:
         return None
-    reactants = [r.smiles for r in rows if r.role == ReactionRole.reactant]
-    products = [r.smiles for r in rows if r.role == ReactionRole.product]
+    reactants = [(r.participant_index, r.smiles) for r in rows if r.role == ReactionRole.reactant]
+    products = [(r.participant_index, r.smiles) for r in rows if r.role == ReactionRole.product]
     if not reactants and not products:
         return None
-    arrow = "<=>" if reversible else "->"
-    return f"{' + '.join(reactants)} {arrow} {' + '.join(products)}"
+    return format_reaction_equation(reactants, products, reversible)
 
 
 # ---------------------------------------------------------------------------
@@ -1054,7 +1078,7 @@ def _build_concept_evidence_summary(
                 func.count(Calculation.id),
                 func.count(func.distinct(Calculation.transition_state_entry_id)),
             ).where(Calculation.transition_state_entry_id.in_(entry_ids)),
-            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+            linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
         ).group_by(Calculation.type)
     ).all()
     calc_counts: dict[CalculationType, int] = {row[0]: row[1] for row in type_rows}
@@ -1120,7 +1144,7 @@ def _entry_coverage_via_join(
                 .select_from(Calculation)
                 .join(joined, onclause)
                 .where(Calculation.transition_state_entry_id.in_(entry_ids)),
-                review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+                linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
             )
         )
         or 0
@@ -1142,7 +1166,7 @@ def _build_entry_evidence_summary(
     :class:`TransitionStateEvidenceSummary`).
     """
     entry_ids = [entry_id]
-    calc_visible = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
+    calc_visible = linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation)
     type_rows = session.execute(
         where_visible(
             select(Calculation.type, func.count(Calculation.id)).where(
@@ -1231,7 +1255,7 @@ def _build_available_sections(
     """
     has_calcs = False
     has_geoms = False
-    calc_visible = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
+    calc_visible = linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation)
     if entry_ids:
         has_calcs = bool(
             session.scalar(
@@ -1287,14 +1311,15 @@ def _build_available_sections(
 
 
 def _evidence_visible():
-    """The review-floor condition on a validation evidence row, for the flags and the descriptor built from it.
+    """The evidence-rule condition on a validation evidence row, for the flags and the descriptor built from it.
 
-    An evidence row rests on the calculation that reconstructed it (the IRC, the frequency job). When that calculation
-    is below the floor, the flag "this entry has IRC evidence" would say a hidden record exists (D5), so the row is not
-    counted. A row with no source calculation (``energy_ordering``) is a deposited claim and is always counted. The
-    LISTS of evidence are left whole: the ref guard removes the rows and energies that name a hidden calculation.
+    An evidence row rests on the calculation that reconstructed it (the IRC, the frequency job). Under ``curated`` that
+    calculation is evidence (ADR 0023): the row is counted unless the calculation is rejected or deprecated, so an
+    unreviewed IRC still makes the flag "this entry has IRC evidence" true, as the list of evidence shows it. A row with
+    no source calculation (``energy_ordering``) is a deposited claim and is always counted. The LISTS of evidence are
+    left whole: the ref guard removes the rows and energies that name a withheld calculation.
     """
-    visible = review_floor_predicate(
+    visible = linked_evidence_predicate(
         TransitionStateValidationEvidence.reconstruction_calculation_id, SubmissionRecordType.calculation
     )
     if visible is None:
@@ -1307,6 +1332,7 @@ def _exists_other_entries_in_ts(
     *,
     transition_state_id: int,
     exclude_entry_id: int,
+    detail: bool = False,
 ) -> bool:
     """Whether *transition_state_id* has an entry besides the excluded one.
 
@@ -1333,8 +1359,8 @@ def _exists_other_entries_in_ts(
                             TransitionStateEntry.id != exclude_entry_id,
                         )
                     ),
-                    review_floor_predicate(
-                        TransitionStateEntry.id, SubmissionRecordType.transition_state_entry
+                    shown_predicate(
+                        TransitionStateEntry.id, SubmissionRecordType.transition_state_entry, detail=detail
                     ),
                 )
             )
@@ -1625,9 +1651,10 @@ def _build_saddle_point_index(
         )
         .exists()
     )
-    # Hidden == absent (D6): a frequency calculation the read profile hides is not a candidate, so it is neither
-    # described nor counted as a pin; the block then describes the newest visible result, with no trace of the hidden one.
-    shown = visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
+    # A frequency calculation the evidence rule withholds (rejected or deprecated under ``curated``) is not a candidate, so
+    # it is neither described nor counted as a pin; the block then describes the newest shown result, with no trace of the
+    # withheld one. An unreviewed one is shown (ADR 0023).
+    shown = evidence_visible_statuses()
     rows = session.execute(
         select(Calculation, CalculationFreqResult, pinned_by_declaration)
         .join(
@@ -1847,6 +1874,9 @@ def _bulk_lot_summaries(
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
             core_treatment=lot.core_treatment,
+            relativistic_hamiltonian=lot.relativistic_hamiltonian,
+            pno_truncation=lot.pno_truncation,
+            ri_approximation=lot.ri_approximation,
             aux_basis=lot.aux_basis,
             cabs_basis=lot.cabs_basis,
             solvent_model=lot.solvent_model,
@@ -1928,24 +1958,29 @@ def _build_output_geometry_links(
     if not entry_ids:
         return []
     rows = session.execute(
-        select(
-            Geometry.id.label("geometry_id"),
-            Geometry.public_ref.label("geometry_ref"),
-            Geometry.natoms.label("natoms"),
-            Geometry.geom_hash.label("geom_hash"),
-            CalculationOutputGeometry.output_order.label("output_order"),
-            CalculationOutputGeometry.role.label("role"),
-            Calculation.id.label("calculation_id"),
+        where_visible(
+            select(
+                Geometry.id.label("geometry_id"),
+                Geometry.public_ref.label("geometry_ref"),
+                Geometry.natoms.label("natoms"),
+                Geometry.geom_hash.label("geom_hash"),
+                CalculationOutputGeometry.output_order.label("output_order"),
+                CalculationOutputGeometry.role.label("role"),
+                Calculation.id.label("calculation_id"),
+            )
+            .join(
+                CalculationOutputGeometry,
+                CalculationOutputGeometry.geometry_id == Geometry.id,
+            )
+            .join(
+                Calculation,
+                Calculation.id == CalculationOutputGeometry.calculation_id,
+            )
+            .where(Calculation.transition_state_entry_id.in_(entry_ids)),
+            # A link carries no calculation ref the guard could remove, so the geometry of a withheld calculation is left
+            # out here, as ``has_geometries`` leaves it out (ADR 0023).
+            linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
         )
-        .join(
-            CalculationOutputGeometry,
-            CalculationOutputGeometry.geometry_id == Geometry.id,
-        )
-        .join(
-            Calculation,
-            Calculation.id == CalculationOutputGeometry.calculation_id,
-        )
-        .where(Calculation.transition_state_entry_id.in_(entry_ids))
         .order_by(
             Calculation.id.asc(),
             CalculationOutputGeometry.output_order.asc(),

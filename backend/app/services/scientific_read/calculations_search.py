@@ -13,7 +13,7 @@ Composition:
    needs so the filter pass stays cheap.
 5. Gate, rank, order and slice **in SQL**, over that query as a
    subquery: LEFT JOIN ``record_review``, apply the visible-statuses
-   gate (default trust posture), order by review rank → quality rank →
+   gate (default trust posture), order by review rank →
    created_at desc → id desc (``evidence_completeness`` is deferred),
    and take one page. The ``review_summary`` comes from a single
    aggregate over the same filtered, pre-pagination set.
@@ -40,9 +40,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, case, exists, or_, select
+from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.orm import Session
 
+from app.chemistry.method_families import MethodClassFilter
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -81,6 +82,7 @@ from app.schemas.reads.scientific_calculation_search import (
     RequestEcho,
     ScientificCalculationsSearchResponse,
 )
+from app.schemas.reads.scientific_common import browse_order
 from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.calculations import (
     _INTERNAL_INCLUDE_TOKENS,
@@ -92,6 +94,7 @@ from app.services.scientific_read.calculations import (
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     reject_client_sort,
     review_summary,
     validate_includes,
@@ -102,10 +105,12 @@ from app.services.scientific_read.handles import (
     level_of_theory_ref_clause,
     resolve_filter_ref,
 )
+from app.services.scientific_read.hidden_by_default import hidden_by_default_block, record_hidden_by_default
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
+from app.services.scientific_read.keyset import Paging
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_family_matches, method_matches
 from app.services.scientific_read.sql_review import (
     join_review,
     review_rank_expr,
@@ -137,6 +142,9 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "basis",
     "lot_ref",
     "lot_hash",
+    "method_family",
+    "dft_rung_min",
+    "dft_rung_max",
     "software",
     "software_version",
     "workflow_tool",
@@ -150,32 +158,6 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "canonical_parameter_key",
 )
 
-# Quality rank: lower-is-better. ``rejected`` only appears when
-# ``include_rejected_quality=true``; place it last regardless.
-_QUALITY_RANK: dict[CalculationQuality, int] = {
-    CalculationQuality.curated: 0,
-    CalculationQuality.raw: 1,
-    CalculationQuality.rejected: 2,
-}
-
-#: Rank for a quality value the mapping above does not name. Only reachable
-#: if a new ``CalculationQuality`` member is added without being ranked; it
-#: sorts last rather than raising, which is what the Python dict lookup
-#: could not do.
-_UNRANKED_QUALITY = max(_QUALITY_RANK.values()) + 1
-
-
-def _quality_rank_expr(quality_column):
-    """SQL ``quality_rank`` (lower is better) mirroring :data:`_QUALITY_RANK`."""
-    return case(
-        *(
-            (quality_column == quality, rank)
-            for quality, rank in _QUALITY_RANK.items()
-        ),
-        else_=_UNRANKED_QUALITY,
-    )
-
-
 # Per-calc-type primary result table — drives the ``has_result`` filter.
 _PRIMARY_RESULT_TABLE: dict[CalculationType, type] = {
     CalculationType.sp: CalculationSPResult,
@@ -188,7 +170,7 @@ _PRIMARY_RESULT_TABLE: dict[CalculationType, type] = {
 }
 
 
-_DEFAULT_SORT_ECHO = "review_rank,quality_rank,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def search_calculations(
@@ -201,6 +183,7 @@ def search_calculations(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/calculations/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -289,10 +272,8 @@ def search_calculations(
     if short_circuit:
         return _empty_response(request, includes, offset, limit)
 
-    # Build the filter query. ``quality`` rides along because the ranking
-    # needs it; carrying it here rather than re-reading it per page keeps
-    # the whole ordering expressible over one subquery.
-    stmt = select(Calculation.id, Calculation.created_at, Calculation.quality)
+    # Build the filter query. ``quality`` is a filter (below), never an ordering key.
+    stmt = select(Calculation.id, Calculation.created_at)
     stmt = _apply_owner_filters(
         stmt,
         species_entry_id=species_entry_id,
@@ -341,7 +322,17 @@ def search_calculations(
     # LEFT JOIN is load-bearing: a calculation with no ``record_review`` row
     # is ``not_reviewed`` and visible by default, and an inner join would
     # drop every one of them.
-    candidates = stmt.subquery("candidates")
+    candidates = paging.restrict(stmt, Calculation.id).subquery("candidates")
+    record_hidden_by_default(
+        hidden_by_default_block(
+            session,
+            record_type=SubmissionRecordType.calculation,
+            ids=select(candidates.c.id),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
+    )
     ranked_base = select(candidates.c.id, candidates.c.created_at)
     ranked_base, review = join_review(
         ranked_base, candidates.c.id, SubmissionRecordType.calculation
@@ -350,7 +341,6 @@ def search_calculations(
         ranked_base.add_columns(
             review_rank_expr(review).label("review_rank"),
             review_status_expr(review).label("review_status"),
-            _quality_rank_expr(candidates.c.quality).label("quality_rank"),
         )
         .where(visible_review_filter(review, visible))
         .subquery("visible_candidates")
@@ -365,21 +355,16 @@ def search_calculations(
         return _empty_response(request, includes, offset, limit)
 
     # ``id`` desc is the tiebreak that makes this a total order — without it
-    # two rows equal on rank, quality and created_at (every row inserted in
+    # two rows equal on rank and created_at (every row inserted in
     # one transaction shares ``created_at``) would page non-deterministically.
-    page_ids = list(
-        session.scalars(
-            select(ranked.c.id)
-            .order_by(
-                ranked.c.review_rank.asc(),
-                ranked.c.quality_rank.asc(),
-                ranked.c.created_at.desc(),
-                ranked.c.id.desc(),
-            )
-            .offset(offset)
-            .limit(limit)
-        )
+    page = paging.sql_window(
+        session,
+        ranked,
+        columns=[ranked.c.id, ranked.c.review_rank, ranked.c.created_at],
+        keys=[(ranked.c.review_rank, "asc"), (ranked.c.created_at, "desc"), (ranked.c.id, "desc")],
+        total=total,
     )
+    page_ids = [int(row.id) for row in page.items]
 
     # Badges for the page only — bounded by ``limit``, never by the match.
     badges = fetch_review_badges(
@@ -444,8 +429,9 @@ def search_calculations(
         review_summary=summary,
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset, limit=limit, returned=len(records), total=total, page=page
         ),
+        **page.envelope(),
     )
 
 
@@ -651,14 +637,18 @@ def _apply_exists_filter(stmt, table, *, want: bool):
 
 
 def _apply_lot_filters(stmt, request: CalculationsSearchRequest):
+    classification = MethodClassFilter.from_request(request)
     if (
         request.method is None
         and request.basis is None
         and request.lot_ref is None
         and request.lot_hash is None
+        and not classification.active
     ):
         return stmt
     stmt = stmt.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
+    if classification.active:
+        stmt = stmt.where(method_family_matches(classification))
     if request.method is not None:
         stmt = stmt.where(method_matches(request.method))
     if request.basis is not None:
@@ -791,11 +781,15 @@ def _apply_dependency_filters(
         # is parameterless w.r.t. Calculation.id; pair it with
         # ``Calculation.id IN (parent, child)`` to scope the result to
         # the two endpoints.
+        # Evidence rule (ADR 0023): an edge with an end the rule withholds (rejected / deprecated under curated) is not
+        # an edge, whichever end the caller named.
         exact_edge_exists = exists().where(
             _and(
                 CalculationDependency.parent_calculation_id == parent_calc_id,
                 CalculationDependency.child_calculation_id == child_calc_id,
                 role_clause,
+                linked_evidence_predicate(CalculationDependency.parent_calculation_id, SubmissionRecordType.calculation),
+                linked_evidence_predicate(CalculationDependency.child_calculation_id, SubmissionRecordType.calculation),
             )
         )
         return stmt.where(
@@ -815,6 +809,10 @@ def _apply_dependency_filters(
                     CalculationDependency.child_calculation_id
                     == Calculation.id,
                     role_clause,
+                    # The named far end is linked evidence: a rejected / deprecated one matches nothing.
+                    linked_evidence_predicate(
+                        CalculationDependency.parent_calculation_id, SubmissionRecordType.calculation
+                    ),
                 )
             )
         )
@@ -829,6 +827,9 @@ def _apply_dependency_filters(
                     CalculationDependency.parent_calculation_id
                     == Calculation.id,
                     role_clause,
+                    linked_evidence_predicate(
+                        CalculationDependency.child_calculation_id, SubmissionRecordType.calculation
+                    ),
                 )
             )
         )
@@ -836,15 +837,23 @@ def _apply_dependency_filters(
     if dependency_role is not None:
         # Role-only filter: match any calc participating in an edge of
         # that role, on either side.
+        # An edge whose OTHER end the evidence rule withholds (rejected / deprecated under curated) is not an edge:
+        # matching through it would say such a calculation sits on the far side with this role.
+        child_shown = linked_evidence_predicate(
+            CalculationDependency.child_calculation_id, SubmissionRecordType.calculation
+        )
+        parent_shown = linked_evidence_predicate(
+            CalculationDependency.parent_calculation_id, SubmissionRecordType.calculation
+        )
+        as_parent = CalculationDependency.parent_calculation_id == Calculation.id
+        as_child = CalculationDependency.child_calculation_id == Calculation.id
         return stmt.where(
             exists().where(
                 and_(
                     CalculationDependency.dependency_role == dependency_role,
                     or_(
-                        CalculationDependency.parent_calculation_id
-                        == Calculation.id,
-                        CalculationDependency.child_calculation_id
-                        == Calculation.id,
+                        and_(as_parent, child_shown) if child_shown is not None else as_parent,
+                        and_(as_child, parent_shown) if parent_shown is not None else as_child,
                     ),
                 )
             )
@@ -944,6 +953,8 @@ def _request_filter_echo(request: CalculationsSearchRequest) -> dict[str, Any]:
             continue
         if isinstance(value, datetime):
             out[name] = value.isoformat()
+        elif isinstance(value, list):
+            out[name] = sorted({getattr(v, "value", v) for v in value})
         else:
             out[name] = value.value if hasattr(value, "value") else value
     return out

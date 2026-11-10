@@ -133,12 +133,13 @@ def test_molecular_or_malformed_terms_are_not_atomic(text):
 
 @pytest.mark.parametrize(
     "text,expected",
-    [("3P", 3), ("^3P_2", 3), ("2P_{3/2}", 2), ("3Po", 3), ("1A1", 1), ("2Pi", 2), ("3Sigma-g", 3)],
+    [("3P", 3), ("^3P_2", 3), ("2P_{3/2}", 2), ("3Po", 3), ("1A1", 1), ("2Pi", 2), ("3Sigma-g", 3),
+     ("X2Pi", 2), ("X 1A1", 1), ("X^2Pi", 2), ("a 3B1", 3), ("2Π", 2), ("X̃²A₁", 2)],
 )
-def test_declared_multiplicity_is_read_from_a_leading_digit(text, expected):
+def test_declared_multiplicity_is_read_past_a_state_letter_when_the_term_is_strict(text, expected):
     assert declared_term_multiplicity(text) == expected
 
 
-@pytest.mark.parametrize("text", ["X2Pi", "A1", "B1u", "2Π", "", None])
+@pytest.mark.parametrize("text", ["A1", "B1u", "X", "T1", "", None])
 def test_ambiguous_terms_state_no_multiplicity(text):
     assert declared_term_multiplicity(text) is None

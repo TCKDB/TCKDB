@@ -118,8 +118,8 @@ def test_a_component_task_implies_its_observable_and_an_internal_model_echoes_in
         ({"conditions__normalization": "fixed_volume"}, "needs volume_m3"),
         ({"conditions__pressure_pa": 1e5}, "does not belong to normalization internal_only"),
         ({"conditions__energy_domain_kj_mol": {"min": 0.0, "max": 10.0}}, "states its energy_reference"),
-        ({"intent": "protocol_preferred"}, "comparison_objective"),
-        ({"comparison_objective": "physical_accuracy"}, "compares nothing"),
+        ({"comparison_objective": "physical_accuracy"}, "comparison_objective"),
+        ({"reference_model_ref": SMD}, "reference_model_ref"),
         ({"result_mode": "first"}, "contradictory"),
         ({"target__scope": {"kind": "ts_determination", "determination_ref": SDET}}, "takes a"),
         ({"target__scope": {"kind": "explicit_equilibrium_ensemble", "ensemble_declaration_ref": SMD}}, "takes a"),
@@ -229,13 +229,12 @@ def test_a_ts_transverse_request_needs_a_ts_owner_a_determination_a_dividing_sur
     refuses(make(TS, target__scope={"kind": "atom"}), "takes a")
 
 
-def test_protocol_preference_states_its_objective_and_a_fidelity_objective_its_pinned_reference():
-    pref = make(THERMAL, intent="protocol_preferred", comparison_objective="expected_accuracy")
-    assert accepts(pref).objective.value == "expected_accuracy"
-    refuses(make(pref, comparison_objective="model_fidelity"), "reference_model_ref")
-    assert accepts(make(pref, comparison_objective="model_fidelity", reference_model_ref=SMD)).reference_model_ref == SMD
+def test_a_protocol_listing_takes_no_objective_or_reference_model():
+    pref = make(THERMAL, intent="protocol_coverage")
+    assert accepts(pref).intent.value == "protocol_coverage"
+    refuses(make(pref, comparison_objective="expected_accuracy"), "comparison_objective")
     refuses(make(pref, reference_model_ref=SMD), "reference_model_ref")
-    refuses(make(pref, comparison_objective="best"), "Input should be")
+    assert "comparison_objective" not in accepts(pref).to_dict()
 
 
 def test_populations_are_all_authorized_explicit_revisions_or_a_release_never_a_page_prefix():
@@ -285,12 +284,12 @@ def test_outcomes_and_reason_codes_are_closed_lists_with_a_stated_precedence():
     assert {o.value for o in Outcome} >= {
         "qualified_models", "no_candidates", "no_applicable_candidate", "unresolved_applicability",
         "missing_required_data", "unsupported_task", "unsupported_model", "evidence_conflict",
-        "unresolved_comparability", "policy_conflict", "sole_eligible_candidate", "policy_preferred",
-        "incomparable_alternatives",
+        "sole_eligible_candidate", "incomparable_alternatives",
     }
-    assert len(Outcome) == 13
+    assert not {"policy_preferred", "policy_conflict", "unresolved_comparability"} & {o.value for o in Outcome}
+    assert len(Outcome) == 10
     assert len(set(REASON_CODES)) == len(REASON_CODES)
-    assert OUTCOME_PRECEDENCE[0].startswith("bounded_refusal") and OUTCOME_PRECEDENCE[-1].startswith("preference")
+    assert OUTCOME_PRECEDENCE[0].startswith("bounded_refusal") and OUTCOME_PRECEDENCE[-1].startswith("listing")
 
 
 def test_the_normalised_request_refuses_an_ensemble_without_a_declaration_on_its_own():

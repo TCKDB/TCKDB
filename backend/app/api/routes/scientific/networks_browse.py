@@ -42,12 +42,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     NETWORK_RECORD_SECTIONS,
     SEARCH_SCOPE,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_network_search import (
     NetworkBrowseRequest,
@@ -56,7 +57,7 @@ from app.schemas.reads.scientific_network_search import (
 from app.services.scientific_read.internal_ids import apply_internal_ids_visibility
 from app.services.scientific_read.networks_search import browse_networks
 
-router = APIRouter(prefix="/networks")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/networks")
 
 
 @router.get("/browse", response_model=ScientificNetworkSearchResponse)
@@ -91,7 +92,8 @@ def scientific_networks_browse(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """List networks with no filter required, for a catalogue page.
@@ -112,7 +114,8 @@ def scientific_networks_browse(
     rejected with 422 (``client_sort_not_supported``), matching the
     sibling endpoint.
     """
-    request = NetworkBrowseRequest(
+    request = caller_input(
+        NetworkBrowseRequest,
         network_ref=network_ref,
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,
@@ -143,6 +146,7 @@ def scientific_networks_browse(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = browse_networks(session, request)

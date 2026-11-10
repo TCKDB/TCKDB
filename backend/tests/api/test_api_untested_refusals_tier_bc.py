@@ -72,7 +72,7 @@ import pytest
 from sqlalchemy import text
 
 from app.db.models.app_user import AppUser
-from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionRecordType
 from app.services.record_review import set_record_review_status
 from tests.services.release._attest import attest_thermo
 from tests.services.scientific_read._factories import (
@@ -563,12 +563,17 @@ def test_publishing_a_selection_demoted_after_it_was_made_is_refused(
 
     # Restore the approval and the identical request is accepted — the guard
     # reads current review state, it does not refuse this release forever.
+    # By a second curator: ``curator`` deposited this record (see ``attest_thermo``)
+    # and may not approve it.
+    second_curator = AppUser(username="second_curator_restores", role=AppUserRole.curator)
+    db_session.add(second_curator)
+    db_session.flush()
     set_record_review_status(
         db_session,
         record_type=SubmissionRecordType.thermo,
         record_id=chosen.id,
         status=RecordReviewStatus.approved,
-        actor=curator,
+        actor=second_curator,
     )
     db_session.flush()
     accepted = as_curator.post(f"/api/v1/releases/{TAG}/publish")

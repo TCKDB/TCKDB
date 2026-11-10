@@ -452,9 +452,56 @@ The distinction worth building on is what a client should *do*:
 | `species_geometry_composition_mismatch`, `species_geometry_isotope_mismatch`, `species_smiles_charge_mismatch` | the structure you deposited and the label you gave it describe different molecules | fix the payload and retry — one of the two is a typo |
 | `reaction_mass_balance_failed`, `reaction_charge_not_conserved`, `transition_state_composition_mismatch`, `transition_state_charge_mismatch` | the reaction as written is not a reaction | stop and investigate; retrying the same thing cannot help |
 | `atom_map_*`, `transition_state_irc_mapping_element_mismatch` | the mechanism you described contradicts itself, or an index counts against the wrong geometry | correct the mapping; note that indices are geometry-relative (ADR 0011) |
-| `transition_state_no_imaginary_mode`, `transition_state_reaction_coordinate_*`, `n_imag_contradicts_minimum` | the frequency evidence contradicts the kind of stationary point declared | re-declare the entry as what it is, or deposit no frequency evidence |
+| `transition_state_no_imaginary_mode`, `transition_state_reaction_coordinate_*`, `n_imag_contradicts_minimum` | the frequency evidence contradicts the kind of stationary point declared; for a minimum, at least one imaginary mode is at or above the protocol's tolerance `tau` (or its magnitude was not deposited) | re-declare the entry as what it is, or deposit no frequency evidence; for a minimum, deposit the full frequency list so each mode can be judged against `tau` |
 | `arrhenius_a_units_molecularity_mismatch` | `a_units` do not have the dimensionality the reaction order requires | fix the unit token |
 | `validation_error` | a refusal that carries no more specific code | read `detail`; and please report it, because a scientific refusal reaching you as this is a gap |
+
+### A soft imaginary mode on a minimum
+
+A species entry declared a minimum is not refused for a small imaginary
+mode. Integration-grid noise, a very soft torsion or a loose convergence
+produce -10 to -40 cm-1 modes in correct calculations, so each imaginary
+mode is compared with `tau`, the noise floor of the protocol that produced it.
+
+- **Below `tau`:** the entry is accepted with the warning
+  `minimum_imaginary_modes_below_tau`, and the server records the `tau`
+  that decided it on the frequency result.
+- **At or above `tau`:** `n_imag_contradicts_minimum` (422), as before.
+  Re-optimise or declare the entry as what it is; a van der Waals complex
+  (`species_entry_kind='vdw_complex'`) or a transition-state payload are the
+  doors that remain.
+- **Where `tau` comes from:** the parameters you deposit on the frequency
+  calculation (`freq.hessian_method`, `grid.quality`, `opt.convergence`):
+  15, 30, 50 or 80 cm-1 by protocol. When you do not record the Hessian
+  method, TCKDB first reads an input deck attached inline to the same
+  calculation (`artifacts` with `kind: input`; Gaussian `Freq=Numer` or
+  `EnOnly`, ORCA `NumFreq` or `AnFreq`) and uses the method it states. A
+  recorded value that contradicts the deck is refused
+  (`hessian_method_contradicts_input_deck`); a deck with no frequency
+  directive says nothing. A deck that arrives later through the artifact
+  route, or a standalone calculation payload that has no `artifacts`, is not
+  seen at validation. Only then does TCKDB assume the producing program's
+  documented default for the level of theory and store that it was assumed
+  (`assumed_analytic_default` and its siblings). Gaussian HF, DFT, MP2, CIS
+  and CASSCF and ORCA HF and DFT are analytic (30 cm-1). ORCA meta-GGA
+  functionals are analytic from ORCA 5 and assumed numerical (50 cm-1) before
+  it; with no usable ORCA version they get no assumption (50 cm-1). ORCA
+  double-hybrid and VV10 functionals are assumed numerical (50 cm-1) on any
+  version. Gaussian MP3, MP4, QCISD, CCSD, CISD and CID and
+  ORCA MP2, coupled cluster and DLPNO are finite-difference from gradients
+  (50 cm-1). Gaussian CCSD(T) and QCISD(T) are finite-difference from
+  energies (80 cm-1), looser than the 50 cm-1 fallback. Any other program or
+  method family falls back to 50 cm-1 (`protocol_not_recorded`). A recorded
+  method always wins, and a `freq.hessian_method` value TCKDB cannot read
+  (for example `numer`) keeps 50 cm-1 instead of being replaced by an
+  assumption.
+  An analytic Hessian on a tight grid has the smallest `tau`, so depositing
+  the protocol makes the check stricter, not looser; recording a numerical
+  Hessian (`Freq=Numer`, `NumFreq`) raises it to 50 or 80.
+- **What to send:** the frequency list (`freq_result.modes`), or
+  `imag_freq_cm1` when exactly one mode is imaginary. A count with no
+  magnitudes cannot be judged and is refused, because a mode nobody measured
+  is never assumed soft.
 
 ### What `context` carries, and when it is empty
 
@@ -528,7 +575,18 @@ what a sentence needs, and these are already structured.
 
 A warning is not a refusal: an accepted upload returns `201` with a
 `warnings` list whose entries carry their own `code`. The register's
-`upload_warning` rows are those.
+`upload_warning` rows are those, but not every warning is in the register: every warning code, with its sentence and its
+register entry if it has one, is listed in `WARNING_CODES.md` beside `REFUSAL_CODES.md` in the installed package
+(`python -m tckdb_schemas.contract --warnings` prints its path). Each warning may also carry a `context` (the
+values that triggered it; `null` when the check states none). The same warnings
+are stored with the records the deposit created and shown to every later reader
+as `record_warnings` (and, for a warning no one record could take, `deposit_warnings`) on those records' detail reads
+(see `docs/guides/public_hosted_querying.md`). A warning's `message` is TCKDB's sentence for its `code`, built from the
+code and the `context`; it never quotes text you typed (a label, a local key, a file name), and the upload response, the job
+result and every later read give the same sentence. **Match on `code`, never on `message`**: the wording can change, the
+code and `context` are the contract. A label that helps you find the problem is under `context.depositor_supplied`
+(for example `{"transition_state_label": "TS0"}`), which is depositor-typed text and should be shown as such. `field` is the
+path into your own request and may name your local keys.
 
 ---
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.db.models.common import (
     RecordReviewStatus,
@@ -32,12 +32,15 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
+from app.schemas.reads.scientific_assessment import refuse_check_inputs_in_body
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
+    CursorToken,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
-    SelectionPolicy,
+    ScientificResponse,
+    WatermarkEcho,
 )
 from app.schemas.reads.scientific_transport import (
     ScientificTransportRecord,
@@ -58,6 +61,12 @@ class TransportSearchRequest(BaseModel):
     ``model_kind`` filter name to match the spec's vocabulary. The
     public ``ScientificOriginKind`` enum drives the column lookup.
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_check_inputs(cls, data):
+        return refuse_check_inputs_in_body(data)
+
 
     # --- identity filters ------------------------------------------------
     species_ref: str | None = Field(
@@ -101,31 +110,32 @@ class TransportSearchRequest(BaseModel):
     sort: str | None = None  # rejected non-None per v0 sort policy
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
 
 class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope.
 
-    ``collapse`` / ``selection_policy`` are populated by the per-species
-    subresource read (which supports an explicit named single-record policy)
-    and left ``null`` by broad search, which always returns all candidates.
+    Both the broad search and the per-species read return every matching record in ``sort`` order; neither picks one.
     """
 
     filter: dict[str, Any]
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
-    collapse: CollapseMode | None = None
-    selection_policy: SelectionPolicy | None = None
 
 
-class ScientificTransportSearchResponse(BaseModel):
+class ScientificTransportSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/transport/search."""
 
     request: RequestEcho
     review_summary: ReviewStatusSummary
     records: list[ScientificTransportRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [

@@ -29,7 +29,7 @@ from tckdb_schemas.network_declarations import NetworkObservable
 from app.db.models.common import RecordReviewStatus
 from app.db.models.network import Network
 from app.db.models.species import SpeciesEntry
-from app.schemas.reads.scientific_common import REVIEW_RANK, SelectionPolicy
+from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER, SelectionPolicy
 from app.schemas.reads.scientific_network_selection import (
     NetworkSelectionDisclosures,
     NetworkSelectionMember,
@@ -38,25 +38,28 @@ from app.schemas.reads.scientific_network_selection import (
     NetworkSelectionPick,
     NetworkSelectionPolicy,
     NetworkSelectionPolicyInfo,
-    NetworkSelectionRelations,
     NetworkSelectionRequest,
     NetworkSelectionRequestEcho,
     NetworkSelectionResponse,
     NetworkSelectionReview,
     NetworkSelectionScope,
+    NetworkSelectionSolve,
 )
+from app.schemas.reads.scientific_selection_common import ELIGIBILITY_DEPRECATED, ELIGIBILITY_REJECTED
 from app.services.network_selection.manifest import manifest_digest
 from app.services.network_selection.models import (
     BathRequest,
+    NetworkFilters,
     NetworkRequest,
     OutputRequest,
     PartitionRequest,
     Scope,
 )
 from app.services.network_selection.selection import NetworkSelection, select_network
-from app.services.scientific_read.handles import is_ref_handle, resolve_path_handle
+from app.services.scientific_read.handles import is_ref_handle, resolve_selection_handle
 from app.services.scientific_read.profile import current_read_profile
 from app.services.selection_kernel import Outcome
+from app.services.selection_kernel.requested import OFFER_REVIEW, Eligibility, answer_steps, review_default
 
 #: ``Session.info`` key a TEST harness sets, explicitly, to be read under whatever isolation it already has.
 SNAPSHOT_OPT_OUT = "tckdb_read_snapshot_opt_out"
@@ -66,7 +69,7 @@ def _ref_only(session: Session, model_cls: type, handle: str, *, kind_label: str
     """Resolve a public ref to a row id, refusing an integer id outright (``invalid_handle``)."""
     if not is_ref_handle(handle):
         raise ValueError(f"invalid_handle: {handle!r} is not a <prefix>_<body> public ref")
-    return resolve_path_handle(session, model_cls, handle, kind_label=kind_label)
+    return resolve_selection_handle(session, model_cls, handle, kind_label=kind_label)
 
 
 def resolve_network_ref(session: Session, ref: str) -> int:
@@ -79,9 +82,20 @@ def check_request_refs(session: Session, body: NetworkSelectionRequest) -> None:
         _ref_only(session, SpeciesEntry, component.species_ref, kind_label="species_entry")
 
 
+#: The eligibility defaults a network selection applies, in the order the answer lists them: a solve's review status.
+NETWORK_DEFAULTS = (ELIGIBILITY_REJECTED, ELIGIBILITY_DEPRECATED)
+
+
+def _passed_only_by_override(manifest: dict[str, Any]) -> dict[str, list[str]]:
+    """Per solve ref, the review defaults the solve would fail but the request lifted."""
+    out: dict[str, list[str]] = {}
+    for solve in manifest["solves"]:
+        default = review_default(RecordReviewStatus(solve["review_status"]))
+        out[solve["solve_ref"]] = [default] if default is not None else []
+    return out
+
+
 def _admin_policy(policy: NetworkSelectionPolicy) -> SelectionPolicy:
-    if policy is NetworkSelectionPolicy.method_preferred:
-        return SelectionPolicy.default
     return SelectionPolicy(policy.value)
 
 
@@ -114,14 +128,19 @@ def to_service_request(body: NetworkSelectionRequest, *, network_ref: str) -> Ne
         initial_state_hashes=tuple(body.regime.initial_state_hashes),
         source_composition_hash=body.source_composition_hash,
         sink_composition_hash=body.sink_composition_hash,
-        objective=body.objective,
-        reference_model_ref=body.reference_model_ref,
-        reference_outputs=body.reference_outputs,
         min_review_status=body.min_review_status,
         admin_policy=_admin_policy(body.policy),
         first_only=body.mode is NetworkSelectionMode.first,
-        # The route, not the engine, decides whether rules apply: only ``method_preferred`` consults any.
-        apply_rules=body.policy is NetworkSelectionPolicy.method_preferred,
+        filters=NetworkFilters(
+            model_kind=body.filters.model_kind.value if body.filters.model_kind is not None else None,
+            method=body.filters.method,
+            basis=body.filters.basis,
+            software=body.filters.software,
+            software_version=body.filters.software_version,
+            workflow_tool=body.filters.workflow_tool,
+            workflow_tool_version=body.filters.workflow_tool_version,
+        ),
+        eligibility=Eligibility.from_request(body.eligibility, OFFER_REVIEW),
     )
 
 
@@ -168,7 +187,7 @@ def _effective_floor(
 ) -> tuple[RecordReviewStatus, list[RecordReviewStatus]]:
     statuses = sorted(
         (RecordReviewStatus(v) for v in manifest["request"]["effective_review_statuses"]),
-        key=lambda s: REVIEW_RANK[s],
+        key=lambda s: REVIEW_FLOOR_ORDER[s],
     )
     floor = statuses[-1] if statuses else (fallback or RecordReviewStatus.approved)
     return floor, statuses
@@ -198,7 +217,7 @@ def _pick(manifest: dict[str, Any], mode: NetworkSelectionMode) -> NetworkSelect
     decision = manifest["decision"]
     outcome = decision["outcome"]
     scope = NetworkSelectionScope(manifest["request"]["scope"])
-    if outcome in (Outcome.policy_preferred.value, Outcome.sole_eligible_candidate.value):
+    if outcome == Outcome.sole_eligible_candidate.value:
         node_ref = decision["selected_ref"]
         basis, administrative, explanation = outcome, False, decision["basis"]
     else:
@@ -226,15 +245,15 @@ def build_response(
     floor, statuses = _effective_floor(manifest, body.min_review_status)
     population = manifest["population"]
     disclosures = manifest.get("disclosures", {})
+    lifted = _passed_only_by_override(manifest)
     return NetworkSelectionResponse(
+        # Stored, server-built: a ValidationError here is a server fault (ServerFaultRoute -> 500), not a 422.
         request=NetworkSelectionRequestEcho.model_validate(manifest["request"]),
         review=NetworkSelectionReview(effective_floor=floor, effective_statuses=statuses),
         policy=NetworkSelectionPolicyInfo(
             name=manifest["policy"]["name"],
             version=manifest["policy"]["version"],
             bounds_version=manifest["policy"]["bounds_version"],
-            rules_applied=decision["rules_applied"],
-            rules=decision["rules"],
         ),
         outcome=NetworkSelectionOutcome(manifest["outcome"]),
         basis=decision["basis"],
@@ -243,16 +262,20 @@ def build_response(
         administrative_order=decision["administrative_order"],
         determinations=manifest["assessments"]["determinations"],
         bundles=manifest["assessments"]["bundles"],
-        relations=NetworkSelectionRelations(
-            edges=decision["edges"],
-            overridden_edges=decision["overridden_edges"],
-            opposing_pairs=decision["opposing_pairs"],
-            cycles=decision["cycles"],
-            unused_edges=decision["unused_edges"],
-        ),
+        solves=[
+            NetworkSelectionSolve(solve_ref=ref, review_status=status, passed_only_by_override=lifted[ref])
+            for ref, status in sorted(
+                ((s["solve_ref"], s["review_status"]) for s in manifest["solves"]), key=lambda item: item[0]
+            )
+        ],
         representations=decision["representations"],
-        rule_matches=decision["rule_matches"],
-        pair_checks=decision["pair_checks"],
+        **answer_steps(
+            request_filters=manifest["request"]["filters"],
+            eligibility_record=manifest["request"]["eligibility"],
+            funnel_record=population["funnel"],
+            names=NETWORK_DEFAULTS,
+            profile_floor=profile_has_floor(),
+        ),
         disclosures=NetworkSelectionDisclosures(
             unresolved_refs=disclosures.get("unresolved_refs", []),
             unsupported_refs=disclosures.get("unsupported_refs", []),

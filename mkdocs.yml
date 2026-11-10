@@ -75,7 +75,6 @@ nav:
       - Declaring Calculation and Structure Evidence: guides/declaring_structure_evidence.md
       - Declaring Statmech Models: guides/declaring_statmech_models.md
       - Declaring a Network Solve: guides/declaring_a_network_solve.md
-      - Network Selection Rules: guides/network_selection_rules.md
       - Selecting Thermo for H298: guides/selecting_thermo_for_h298.md
       - Selecting Structures: guides/selecting_structures.md
       - Selecting Statmech Models: guides/selecting_statmech_models.md
@@ -101,6 +100,7 @@ nav:
   - Project:
       - Documentation Index: README.md
       - Public Read Abuse Controls: specs/public_read_abuse_controls.md
+      - Browse Order: specs/browse_order.md
       - API Containerization Notes: deployment/api_containerization_notes.md
 
 # Internal/dev-facing docs kept on disk but untracked and unpublished.

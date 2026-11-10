@@ -266,7 +266,8 @@ def _parse_thermo_block(
 
         name = line1[:18].split()[0] if line1[:18].strip() else line1.split()[0]
         comp = _parse_composition(line1)
-        phase = line1[44:45].strip() or "G"
+        # Column 45 is the phase letter; blank stays blank.
+        phase = line1[44:45].strip()
         # Temperatures in columns 46-73 (three E10 fields), fallback to split.
         temp_region = line1[45:73]
         temps = _fortran_floats(temp_region, width=10)
@@ -489,6 +490,7 @@ def _parse_reactions_block(
             continue
         if kw in ("DUP", "DUPLICATE"):
             current.duplicate = True
+            current.duplicate_line_no = no
             continue
         if kw == "LOW":
             vals = _slash_floats(text)

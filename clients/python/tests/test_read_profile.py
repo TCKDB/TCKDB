@@ -74,6 +74,7 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "evaluate_network_kinetics_batch": ("net_1",),
     "export_chemkin": ({"species_refs": ["spc_1"]},),
     "get_calculation": ("calc_1",),
+    "get_calculation_hessian": (1,),
     "get_calculation_irc": ("calc_1",),
     "get_calculation_path_search": ("calc_1",),
     "get_calculation_scan": ("calc_1",),
@@ -241,9 +242,9 @@ def test_omitting_profile_sends_no_profile_parameter(method_name):
 # ---------------------------------------------------------------------------
 
 _POST_SEARCHES = (
-    ("search_reactions", "method"),
-    ("search_thermo", "method"),
-    ("search_kinetics", "method"),
+    ("search_reactions", "method_http"),
+    ("search_thermo", "method_http"),
+    ("search_kinetics", "method_http"),
     ("search_species_calculations", "method_http"),
     ("search_species_structures", "method_http"),
     ("search_conformers", "method_http"),
@@ -413,8 +414,8 @@ def test_the_release_endpoints_are_reachable_but_not_typed():
         assert entry.client_method is None
 
 
-def test_the_remedy_for_release_scoping_is_documented_in_the_readme():
-    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(
+def test_the_remedy_for_release_scoping_is_documented_in_the_reads_guide():
+    readme = (Path(__file__).resolve().parents[1] / "docs" / "reads.md").read_text(
         encoding="utf-8"
     )
     assert "profile=" in readme

@@ -2,9 +2,10 @@
 
 The Hessian eigenvalue spectrum is what a stationary point *is*: zero
 imaginary modes is a minimum, one is a first-order saddle point, two or
-more is a higher-order saddle. For minima that statement survives the
-translation into a database row unchanged, and this module still refuses
-a minimum whose own frequency evidence contradicts it.
+more is a higher-order saddle. For minima that statement survives only
+above the noise floor: this module refuses a minimum whose own frequency
+evidence shows an imaginary mode at or above tau, and accepts one whose
+modes are all below it (ADR 0012's 2026-10-29 note).
 
 For transition states it does not survive, and
 `ADR 0012 <../../../../docs/adr/0012-imaginary-modes-are-judged-by-magnitude-not-counted.md>`_
@@ -22,7 +23,8 @@ What replaces it is narrower and does survive:
 ======================  ==========================================  =====================
 declared                rule                                        tier
 ======================  ==========================================  =====================
-``minimum``             ``n_imag == 0``                             block
+``minimum``             no imaginary mode at or above τ             block
+``minimum``             imaginary modes, all below τ                warn
 ``vdw_complex``         ``n_imag == 0`` *expected*                  warn
 transition state        at least one imaginary mode                 block
 transition state        exactly one designated reaction coordinate  block
@@ -40,21 +42,24 @@ execution provenance the record actually carries — see
 :func:`resolve_tau` — and every finding it decides carries the τ it used
 and why, so a reader can re-decide later.
 
-**τ never decides between blocking and warning.** Every blocking rule
-above is a contract about what the record *says*, not about magnitude;
-τ only separates a quiet warning from a flagged one. That is what makes
-it safe to resolve τ from provenance that a payload may or may not
-carry: missing provenance changes how loudly a record is flagged, never
-whether it is accepted.
+**For a transition state τ never decides between blocking and warning.**
+Every blocking transition-state rule above is a contract about what the
+record *says*, not about magnitude; τ only separates a quiet warning from
+a flagged one. That is what makes it safe to resolve τ from provenance
+that a payload may or may not carry: missing provenance changes how loudly
+a record is flagged, never whether it is accepted. **For a declared minimum
+τ is the line between the warning and the refusal**, and missing provenance
+leaves that line at the conservative "protocol not recorded" value.
 
 Why the two minimum kinds split, given that a van der Waals complex is
 formally also a minimum:
 
 * A covalently bound **minimum** whose own frequency evidence reports an
-  imaginary mode is mislabelled. The correct response is to re-optimise
-  on a tighter integration grid or to declare it as something else, so
-  refusing the deposit is right — no correct calculation produces the
-  record as submitted.
+  imaginary mode at or above τ is mislabelled. The correct response is to
+  re-optimise on a tighter integration grid or to declare it as something
+  else, so refusing the deposit is right. Below τ the protocol cannot tell
+  the sign of the curvature from zero, correct published calculations
+  carry such modes, and the record is accepted with a warning.
 * A **van der Waals complex** is held together by intermolecular forces,
   and its intermolecular stretch, bends and hindered internal rotations
   sit below roughly 50 cm⁻¹. That is the region where numerical noise in
@@ -92,6 +97,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import (
@@ -187,7 +193,7 @@ class TauBasis(str, Enum):
     Gaussian record ever written. When the method is not recorded,
     TCKDB now assumes the producing program's documented default for the
     level-of-theory's method family (see
-    ``app/services/hessian_method_inference.py`` on the backend), records
+    ``tckdb_schemas.hessian_method_assumption``), records
     that it was *assumed*, and gives the assumed method the same τ as its
     recorded counterpart. An assumption must never be confusable with a
     recorded statement — hence the separate member rather than reusing
@@ -231,6 +237,12 @@ class TauResolution:
         recorded, or ``None`` when it was not recorded.
     :param grid_quality: ``grid.quality`` as recorded, or ``None``.
     :param opt_convergence: ``opt.convergence`` as recorded, or ``None``.
+    :param assumed_software: For an ``assumed_*`` basis, the table's program (``gaussian`` or ``orca``).
+    :param assumed_family: For an ``assumed_*`` basis, the method family the recogniser assigned.
+    :param refined_from: The recorded method (``finite_difference_gradient``) refined to ``finite_difference_energy``, else ``None``.
+    :param assumption_rule: For an ``assumed_*`` basis, which rule chose it: ``program_default``,
+        ``orca_meta_gga_analytic_from_5``, ``orca_numerical_documented_vv10``,
+        ``orca_numerical_documented_double_hybrid`` or ``orca_pre5_meta_gga_no_analytic``.
     """
 
     tau_cm1: float
@@ -239,6 +251,34 @@ class TauResolution:
     hessian_method: HessianMethod | None = None
     grid_quality: str | None = None
     opt_convergence: str | None = None
+    assumed_software: str | None = None
+    assumed_family: str | None = None
+    assumption_rule: str | None = None
+    refined_from: str | None = None
+
+
+def _grid_or_opt_token(value: str | None, tight: frozenset[str]) -> str:
+    """A recorded ``grid.quality`` / ``opt.convergence`` as a closed token: the tight value itself, or not tight."""
+    if value is None:
+        return "not_recorded"
+    return value if value in tight else "not_tight"
+
+
+def _tau_context(tau: TauResolution) -> dict[str, Any]:
+    """The threshold a finding was decided against, as plain values for a warning's context.
+
+    Every string is a closed token: the basis, the table's program and method family for an assumption, and the grid
+    and optimisation values only when they are among the tight ones this module knows.
+    """
+    context: dict[str, Any] = {"tau_cm1": tau.tau_cm1, "tau_basis": tau.basis.value}
+    if tau.assumption_rule is not None:
+        context["tau_assumption_rule"] = tau.assumption_rule
+        context["tau_software"] = tau.assumed_software
+        context["tau_method_family"] = tau.assumed_family
+    if tau.basis in (TauBasis.analytic_tight, TauBasis.analytic_default):
+        context["tau_grid"] = _grid_or_opt_token(tau.grid_quality, _TIGHT_GRID_VALUES)
+        context["tau_opt"] = _grid_or_opt_token(tau.opt_convergence, _TIGHT_OPT_VALUES)
+    return context
 
 
 def _normalise(value: str | None) -> str | None:
@@ -256,9 +296,11 @@ def resolve_tau(
     """Resolve ADR 0012's τ from recorded execution provenance.
 
     The table is ADR 0012's, and the fallback is the conservative row:
-    an unrecorded Hessian method is never assumed analytic, because
-    assuming the better case would flag genuine noise as a structural
-    finding.
+    this function never assumes a Hessian method: an absent one is
+    ``protocol_not_recorded``. The producing program's assumed default is
+    applied one level up, by
+    :func:`tckdb_schemas.hessian_method_assumption.resolve_tau_with_assumption`,
+    which every validation adapter calls.
 
     Note what is deliberately *not* consulted. ``opt.initial_hessian``
     (Gaussian ``CalcFC`` / ``CalcAll``) names where the optimiser got its
@@ -415,6 +457,13 @@ def resolve_tau_from_parameters(
 #: code names the *finding*; the declared kind decides the tier.
 W_N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
 
+#: Every imaginary mode on an entry declared a minimum is below tau, the
+#: protocol-resolved noise floor (ADR 0012, extended to minima by its
+#: 2026-10-29 note). Accepted with a warning and the deciding tau recorded;
+#: a mode at or above tau keeps the refusal under
+#: ``W_N_IMAG_CONTRADICTS_MINIMUM`` / ``W_N_IMAG_HIGHER_ORDER_SADDLE``.
+W_MINIMUM_IMAGINARY_MODES_BELOW_TAU = "minimum_imaginary_modes_below_tau"
+
 #: Two or more imaginary modes. Folded into the blocking message for
 #: ``minimum``; reported as a warning for ``vdw_complex``.
 W_N_IMAG_HIGHER_ORDER_SADDLE = "n_imag_higher_order_saddle"
@@ -565,6 +614,11 @@ class StationaryPointFinding:
     :param tau: The τ this finding was decided against, and why that τ.
         ``None`` on findings no threshold took part in. ADR 0012 requires
         it so a reader can re-decide the mode later.
+    :param context: The numbers the finding was decided on (counts, mode
+        magnitudes, τ), for the warning built from a warn-tier finding. A
+        warning's sentence is rendered from its code and this, never from
+        ``message``, which quotes ``location`` and so can quote the
+        depositor's own keys. ``None`` on blocking findings.
     """
 
     tier: ValidationTier
@@ -573,6 +627,7 @@ class StationaryPointFinding:
     message: str
     structural_flag: bool = False
     tau: TauResolution | None = field(default=None, compare=True)
+    context: dict[str, Any] | None = field(default=None, compare=False, hash=False)
 
 
 def expects_zero_imaginary_modes(kind: StationaryPointKind) -> bool:
@@ -585,32 +640,120 @@ def expects_zero_imaginary_modes(kind: StationaryPointKind) -> bool:
 # ---------------------------------------------------------------------------
 
 
+#: A recorded finite difference of gradients was refined to energies (ORCA ``NumFreq`` on a method with no analytic gradient).
+W_HESSIAN_METHOD_REFINED = "hessian_method_refined"
+
+
+def _refinement_findings(tau: TauResolution | None, *, location: str) -> list[StationaryPointFinding]:
+    if tau is None or tau.refined_from is None:
+        return []
+    return [
+        StationaryPointFinding(
+            tier=ValidationTier.warn,
+            code=W_HESSIAN_METHOD_REFINED,
+            location=location,
+            tau=tau,
+            context={
+                "recorded": tau.refined_from,
+                "stored_method": HessianMethod.finite_difference_energy.value,
+                "stored_basis": tau.basis.value,
+                "refined_because": "no_analytic_gradient",
+            },
+            message=(
+                f"{location}: the recorded Hessian method was refined from {tau.refined_from} to "
+                f"{HessianMethod.finite_difference_energy.value} ({W_HESSIAN_METHOD_REFINED}): ORCA's NumFreq "
+                "differentiates gradients, and for a method with no analytic gradient those gradients are themselves "
+                f"numerical. tau = {tau.tau_cm1:.0f} cm-1 is stored."
+            ),
+        )
+    ]
+
+
 def evaluate_species_entry_frequency(
     kind: StationaryPointKind,
     n_imag: int | None,
     imag_freq_cm1: float | None = None,
     *,
     location: str,
+    imaginary_modes: Sequence[ImaginaryMode] | None = None,
+    tau: TauResolution | None = None,
+    reaction_coordinate_mode_index: int | None = None,
+) -> list[StationaryPointFinding]:
+    """The findings of :func:`_evaluate_species_entry_frequency`, plus the refinement note when ``tau`` carries one."""
+    findings = _evaluate_species_entry_frequency(
+        kind,
+        n_imag,
+        imag_freq_cm1,
+        location=location,
+        imaginary_modes=imaginary_modes,
+        tau=tau,
+        reaction_coordinate_mode_index=reaction_coordinate_mode_index,
+    )
+    if n_imag is None:
+        return findings
+    return [*findings, *_refinement_findings(tau, location=location)]
+
+
+def _evaluate_species_entry_frequency(
+    kind: StationaryPointKind,
+    n_imag: int | None,
+    imag_freq_cm1: float | None = None,
+    *,
+    location: str,
+    imaginary_modes: Sequence[ImaginaryMode] | None = None,
+    tau: TauResolution | None = None,
+    reaction_coordinate_mode_index: int | None = None,
 ) -> list[StationaryPointFinding]:
     """Judge one species entry's declared kind against its own frequency evidence.
 
-    Untouched by ADR 0012, which changed the transition-state rule only.
+    ADR 0012 changed the transition-state rule; its 2026-10-29 note extends
+    the same magnitude judgement to a declared ``minimum``: imaginary modes
+    all below tau are a numerical artefact the protocol cannot tell from
+    zero (warn), and one at or above tau is real negative curvature
+    (refuse).
 
     :param kind: The stationary-point kind the uploader declared.
     :param n_imag: Imaginary-mode count parsed from the frequency evidence
         deposited with that same entry. ``None`` means no evidence was
         supplied — absence is not contradiction, so nothing is reported.
     :param imag_freq_cm1: Magnitude of the imaginary mode, if reported.
-        Only consulted for ``vdw_complex``, to tell a soft intermolecular
-        artifact from a genuine reaction coordinate.
+        For ``vdw_complex`` it tells a soft intermolecular artifact from a
+        genuine reaction coordinate. For ``minimum`` it is the magnitude
+        of the only mode when ``n_imag == 1`` and no mode list is given.
     :param location: Path to the offending payload element.
+    :param imaginary_modes: The imaginary modes of the deposited list.
+        Used for ``minimum`` only. When fewer magnitudes are available
+        than ``n_imag`` counts, the rest are not assumed soft and the
+        refusal stands.
+    :param tau: The protocol-derived threshold, from :func:`resolve_tau`.
+        Used for ``minimum`` only; ``None`` selects the "protocol not
+        recorded" row, exactly as the transition-state rule does.
+    :param reaction_coordinate_mode_index: The designated reaction
+        coordinate, if the deposit named one. Used for ``minimum`` only: a
+        minimum has no reaction coordinate, so a designation contradicts it.
     :returns: Findings, possibly empty. Never raises.
     """
     if n_imag is None or n_imag <= 0:
         return []
 
     if kind == StationaryPointKind.minimum:
-        return [_minimum_contradiction(n_imag, location=location)]
+        if reaction_coordinate_mode_index is not None:
+            return [
+                _minimum_reaction_coordinate_finding(
+                    reaction_coordinate_mode_index,
+                    tau if tau is not None else resolve_tau(),
+                    location=location,
+                )
+            ]
+        return [
+            _minimum_finding(
+                n_imag,
+                imag_freq_cm1,
+                imaginary_modes,
+                tau if tau is not None else resolve_tau(),
+                location=location,
+            )
+        ]
 
     if kind == StationaryPointKind.vdw_complex:
         return _vdw_complex_findings(n_imag, imag_freq_cm1, location=location)
@@ -621,35 +764,150 @@ def evaluate_species_entry_frequency(
     return []
 
 
-def _minimum_contradiction(
-    n_imag: int, *, location: str
+def _minimum_magnitudes(
+    n_imag: int,
+    imag_freq_cm1: float | None,
+    imaginary_modes: Sequence[ImaginaryMode] | None,
+) -> list[float] | None:
+    """Magnitudes of every imaginary mode of a minimum, or ``None``.
+
+    ``None`` means the evidence cannot account for all ``n_imag`` modes,
+    and a mode nobody measured is never assumed soft.
+    """
+    if imaginary_modes:
+        magnitudes = [mode.magnitude_cm1 for mode in imaginary_modes]
+    elif n_imag == 1 and imag_freq_cm1 is not None:
+        magnitudes = [abs(imag_freq_cm1)]
+    else:
+        return None
+    if len(magnitudes) < n_imag:
+        return None
+    return magnitudes
+
+
+def _minimum_finding(
+    n_imag: int,
+    imag_freq_cm1: float | None,
+    imaginary_modes: Sequence[ImaginaryMode] | None,
+    tau: TauResolution,
+    *,
+    location: str,
 ) -> StationaryPointFinding:
-    if n_imag == 1:
-        detail = (
-            "One imaginary mode is a first-order saddle point, which belongs "
-            "on a transition-state entry — deposit it through a "
-            "transition-state or computed-reaction payload instead."
+    magnitudes = _minimum_magnitudes(n_imag, imag_freq_cm1, imaginary_modes)
+    if magnitudes is not None and all(m < tau.tau_cm1 for m in magnitudes):
+        listed = ", ".join(f"{m:.1f}" for m in sorted(magnitudes, reverse=True))
+        return StationaryPointFinding(
+            tier=ValidationTier.warn,
+            code=W_MINIMUM_IMAGINARY_MODES_BELOW_TAU,
+            location=location,
+            tau=tau,
+            context={
+                "n_imag": n_imag,
+                "imaginary_modes_cm1": [round(m, 1) for m in sorted(magnitudes, reverse=True)],
+                **_tau_context(tau),
+            },
+            message=(
+                f"{location}: species_entry_kind is 'minimum' and the "
+                f"frequency analysis reports {n_imag} imaginary mode"
+                f"{'s' if n_imag != 1 else ''} ({listed} cm-1), all below "
+                f"tau = {tau.tau_cm1:.0f} cm-1, where the sign of the "
+                f"curvature is not determined at this protocol "
+                f"({W_MINIMUM_IMAGINARY_MODES_BELOW_TAU}). The record is "
+                f"accepted, with tau recorded alongside it. {tau.reason} "
+                f"{_REMEDIATION}"
+            ),
+        )
+    return _minimum_contradiction(
+        n_imag, tau=tau, magnitudes=magnitudes, location=location
+    )
+
+
+def _minimum_contradiction(
+    n_imag: int,
+    *,
+    tau: TauResolution,
+    magnitudes: list[float] | None,
+    location: str,
+) -> StationaryPointFinding:
+    plural = "s" if n_imag != 1 else ""
+    if magnitudes is None:
+        # Nothing here is known about size, so nothing is said about what
+        # the structure is: two unmeasured modes are not "a higher-order
+        # saddle point" until a magnitude says so.
+        why = (
+            f"The magnitude of every imaginary mode was not deposited, so "
+            f"they cannot be judged against tau = {tau.tau_cm1:.0f} cm-1 and "
+            f"none is assumed soft. Supply the frequency list "
+            f"(freq_result.modes), or imag_freq_cm1 when exactly one mode "
+            f"is imaginary."
         )
     else:
-        detail = (
-            f"{n_imag} imaginary modes is a higher-order saddle point "
-            f"({W_N_IMAG_HIGHER_ORDER_SADDLE}) — neither a minimum nor a "
-            f"transition state."
-        )
+        real = [m for m in magnitudes if m >= tau.tau_cm1]
+        if len(real) == 1 and len(magnitudes) > 1:
+            # One mode the protocol can resolve plus noise: under ADR 0012
+            # that is a transition state with extra soft modes.
+            why = (
+                f"One mode ({real[0]:.1f} cm-1) is at or above tau = "
+                f"{tau.tau_cm1:.0f} cm-1, so at this protocol its negative "
+                f"curvature is real; the others are below tau. That is a "
+                f"first-order saddle point with noise, which belongs on a "
+                f"transition-state entry: deposit it through a "
+                f"transition-state or computed-reaction payload and "
+                f"designate the reaction coordinate."
+            )
+        elif len(real) == 1:
+            why = (
+                f"The mode is at or above tau = {tau.tau_cm1:.0f} cm-1, so "
+                f"at this protocol its negative curvature is real rather "
+                f"than numerical noise. One real imaginary mode is a "
+                f"first-order saddle point, which belongs on a "
+                f"transition-state entry: deposit it through a "
+                f"transition-state or computed-reaction payload instead."
+            )
+        else:
+            why = (
+                f"{len(real)} modes are at or above tau = "
+                f"{tau.tau_cm1:.0f} cm-1, so at this protocol the negative "
+                f"curvature is real rather than numerical noise. That is a "
+                f"higher-order saddle point ({W_N_IMAG_HIGHER_ORDER_SADDLE}) "
+                f"-- neither a minimum nor a transition state."
+            )
     return StationaryPointFinding(
         tier=ValidationTier.block,
         code=W_N_IMAG_CONTRADICTS_MINIMUM,
         location=location,
+        tau=tau,
         message=(
             f"{location}: species_entry_kind is 'minimum' but the frequency "
-            f"analysis reports {n_imag} imaginary mode"
-            f"{'s' if n_imag != 1 else ''} "
-            f"({W_N_IMAG_CONTRADICTS_MINIMUM}). A minimum has zero imaginary "
-            f"modes by definition. {detail} Re-optimise on a tighter "
-            f"integration grid, or declare the entry as what it actually is. "
-            f"If the soft mode is intermolecular and this is a van der Waals "
-            f"complex, declare species_entry_kind='vdw_complex', which "
-            f"records the mode with a warning instead."
+            f"analysis reports {n_imag} imaginary mode{plural} "
+            f"({W_N_IMAG_CONTRADICTS_MINIMUM}). {why} Re-optimise on a "
+            f"tighter integration grid, or declare the entry as what it "
+            f"actually is. If the soft mode is intermolecular and this is a "
+            f"van der Waals complex, declare species_entry_kind="
+            f"'vdw_complex', which records the mode with a warning "
+            f"instead. {tau.reason}"
+        ),
+    )
+
+
+def _minimum_reaction_coordinate_finding(
+    reaction_coordinate_mode_index: int,
+    tau: TauResolution,
+    *,
+    location: str,
+) -> StationaryPointFinding:
+    return StationaryPointFinding(
+        tier=ValidationTier.block,
+        code=W_N_IMAG_CONTRADICTS_MINIMUM,
+        location=location,
+        tau=tau,
+        message=(
+            f"{location}: species_entry_kind is 'minimum' but "
+            f"reaction_coordinate_mode_index={reaction_coordinate_mode_index} "
+            f"designates a reaction coordinate ({W_N_IMAG_CONTRADICTS_MINIMUM}). "
+            f"A minimum has no reaction coordinate: designating one declares "
+            f"a saddle point. Drop the designation, or deposit the structure "
+            f"through a transition-state or computed-reaction payload."
         ),
     )
 
@@ -672,6 +930,7 @@ def _vdw_complex_findings(
             tier=ValidationTier.warn,
             code=code,
             location=location,
+            context={"n_imag": n_imag},
             message=(
                 f"{location}: species_entry_kind is 'vdw_complex' but the "
                 f"frequency analysis reports {count_phrase}. A van der Waals "
@@ -694,6 +953,10 @@ def _vdw_complex_findings(
                 tier=ValidationTier.warn,
                 code=W_N_IMAG_SUGGESTS_TS,
                 location=location,
+                context={
+                    "imaginary_frequency_cm1": round(abs(imag_freq_cm1), 1),
+                    "ts_minimum_cm1": TS_IMAGINARY_FREQUENCY_MIN_CM1,
+                },
                 message=(
                     f"{location}: the imaginary mode is "
                     f"{abs(imag_freq_cm1):.1f} cm-1, at or above "
@@ -723,7 +986,39 @@ def _describe(mode: ImaginaryMode) -> str:
     return f"{index} at {mode.frequency_cm1:.1f} cm-1 ({disposition})"
 
 
+def _mode_context(mode: ImaginaryMode) -> dict[str, Any]:
+    """One imaginary mode as plain values: its position in the list, its size and the disposition declared for it."""
+    return {
+        "mode_index": mode.mode_index,
+        "magnitude_cm1": round(mode.magnitude_cm1, 1),
+        "disposition": mode.disposition.value if mode.disposition is not None else None,
+    }
+
+
 def evaluate_transition_state_frequency(
+    n_imag: int | None,
+    imag_freq_cm1: float | None = None,
+    *,
+    location: str,
+    imaginary_modes: Sequence[ImaginaryMode] | None = None,
+    reaction_coordinate_mode_index: int | None = None,
+    tau: TauResolution | None = None,
+) -> list[StationaryPointFinding]:
+    """The findings of :func:`_evaluate_transition_state_frequency`, plus the refinement note when ``tau`` carries one."""
+    findings = _evaluate_transition_state_frequency(
+        n_imag,
+        imag_freq_cm1,
+        location=location,
+        imaginary_modes=imaginary_modes,
+        reaction_coordinate_mode_index=reaction_coordinate_mode_index,
+        tau=tau,
+    )
+    if n_imag is None:
+        return findings
+    return [*findings, *_refinement_findings(tau, location=location)]
+
+
+def _evaluate_transition_state_frequency(
     n_imag: int | None,
     imag_freq_cm1: float | None = None,
     *,
@@ -817,6 +1112,11 @@ def evaluate_transition_state_frequency(
                 location=location,
                 structural_flag=True,
                 tau=resolved_tau,
+                context={
+                    "reaction_coordinate_mode_index": reaction_coordinate_mode_index,
+                    "extra_imaginary_mode_count": n_imag - 1,
+                    **_tau_context(resolved_tau),
+                },
                 message=(
                     f"{location}: mode "
                     f"{reaction_coordinate_mode_index} is designated the "
@@ -884,6 +1184,11 @@ def evaluate_transition_state_frequency(
                 location=location,
                 structural_flag=True,
                 tau=resolved_tau,
+                context={
+                    "extra_imaginary_mode_count": len(above_tau),
+                    "extra_imaginary_modes": [_mode_context(m) for m in above_tau],
+                    **_tau_context(resolved_tau),
+                },
                 message=(
                     f"{location}: "
                     f"{', '.join(_describe(m) for m in above_tau)} "
@@ -908,6 +1213,11 @@ def evaluate_transition_state_frequency(
                 code=W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU,
                 location=location,
                 tau=resolved_tau,
+                context={
+                    "extra_imaginary_mode_count": len(extras),
+                    "extra_imaginary_modes": [_mode_context(m) for m in extras],
+                    **_tau_context(resolved_tau),
+                },
                 message=(
                     f"{location}: "
                     f"{', '.join(_describe(m) for m in extras)} "
@@ -971,6 +1281,11 @@ def _soft_reaction_coordinate_findings(
             code=W_TS_IMAG_FREQ_TOO_SMALL,
             location=location,
             tau=tau,
+            context={
+                "reaction_coordinate_cm1": round(magnitude_cm1, 1),
+                "ts_minimum_cm1": TS_IMAGINARY_FREQUENCY_MIN_CM1,
+                **_tau_context(tau),
+            },
             message=(
                 f"{location}: the transition state's reaction coordinate is "
                 f"{magnitude_cm1:.1f} cm-1, below "
@@ -1069,6 +1384,7 @@ __all__ = [
     "TauBasis",
     "TauResolution",
     "ValidationTier",
+    "W_MINIMUM_IMAGINARY_MODES_BELOW_TAU",
     "W_N_IMAG_CONTRADICTS_MINIMUM",
     "W_N_IMAG_HIGHER_ORDER_SADDLE",
     "W_N_IMAG_SUGGESTS_TS",
@@ -1080,6 +1396,7 @@ __all__ = [
     "W_TS_REACTION_COORDINATE_AMBIGUOUS",
     "W_TS_REACTION_COORDINATE_NOT_DESIGNATED",
     "blocking_findings",
+    "W_HESSIAN_METHOD_REFINED",
     "evaluate_species_entry_frequency",
     "evaluate_transition_state_frequency",
     "expects_zero_imaginary_modes",

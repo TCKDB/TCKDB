@@ -23,7 +23,7 @@ import pathlib
 import re
 
 import pytest
-from sqlalchemy import event
+from sqlalchemy import event, update
 
 from app.api.error_contract import CodedValueError
 from app.db.models.common import (
@@ -31,8 +31,10 @@ from app.db.models.common import (
     StructureDeterminationTargetKind,
     StructureFindingKind,
     StructureSourceRole,
+    SubmissionRecordType,
 )
-from app.services.structure_selection import DECISION_VERSION
+from app.db.models.record_review import RecordReview
+from app.services.structure_selection import ADMIN_KEY_VERSION, DECISION_VERSION
 from app.services.structure_selection.models import (
     ASSESSMENT_VERSION,
     NORMALIZER_VERSION,
@@ -50,7 +52,7 @@ from app.services.trust.models import (
     TransitionStateScopedAssessmentStatus,
 )
 from app.services.trust.rubrics import TS_SCOPED_STRUCTURE_VERSIONS
-from tests.services.scientific_read._factories import make_geometry
+from tests.services.scientific_read._factories import make_geometry, set_review
 from tests.services.structure_selection._support import make_ts_world
 from tests.services.structure_selection.test_service import build_basin
 
@@ -131,7 +133,12 @@ def test_a_detail_read_runs_the_assessment_and_a_qualifying_target_adds_no_warni
         "coverage_requirement": "known_values",
     }
     assert WARNING not in trust["evidence"]["checks"]  # a passed warning is absent from the map, as for every warning
-    assert block["versions"] == {"assessment": ASSESSMENT_VERSION, "normalizer": NORMALIZER_VERSION, "decision": DECISION_VERSION}
+    assert block["versions"] == {
+        "assessment": ASSESSMENT_VERSION,
+        "normalizer": NORMALIZER_VERSION,
+        "decision": DECISION_VERSION,
+        "administrative_key": ADMIN_KEY_VERSION,
+    }
     assert trust["is_certified"] is False
 
 
@@ -661,10 +668,11 @@ def test_without_a_declaration_the_saddle_point_block_describes_the_newest_attac
 def test_a_target_resting_on_a_hidden_calculation_is_unresolved_under_curated_and_warns(client, db_session):
     """Kills: the assessment run under the wrong profile, or cached across profiles."""
     world = make_ts_world(db_session)
-    d, opt, sp, f = saddle(world, statuses={"freq": None})  # the curvature witness is below the curated floor
+    d, opt, sp, f = saddle(world, statuses={"freq": None})  # the curvature witness has no review yet
     world.settle()
-    exploratory = detail(client, world.entry)
-    curated = detail(client, world.entry, profile="curated")
+    exploratory = detail(client, world.entry)  # read while the witness is merely unreviewed: the control
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=f.id, status=RecordReviewStatus.rejected)
+    curated = detail(client, world.entry, profile="curated")  # now withheld as evidence
     assert exploratory["structure_assessment"]["outcome"] == "qualified_evidence"
     assert WARNING not in exploratory["evidence"]["checks"]
     block = curated["structure_assessment"]
@@ -673,19 +681,28 @@ def test_a_target_resting_on_a_hidden_calculation_is_unresolved_under_curated_an
     assert curated["evidence"]["checks"][WARNING] == "warning"
     text = json.dumps(curated)
     assert f.public_ref not in text  # nothing names the hidden calculation
-    # And back again: nothing was kept from the curated read.
+    # And back again: nothing was kept from the curated read (the control, with the witness unreviewed again).
+    db_session.execute(
+        update(RecordReview)
+        .where(RecordReview.record_type == SubmissionRecordType.calculation, RecordReview.record_id == f.id)
+        .values(status=RecordReviewStatus.under_review)
+    )
+    db_session.expire_all()
     assert detail(client, world.entry)["structure_assessment"]["outcome"] == "qualified_evidence"
 
 
-def test_the_hidden_pin_falls_back_to_the_newest_attached_visible_result_under_curated(client, db_session):
+def test_the_withheld_pin_falls_back_to_the_newest_attached_visible_result_under_curated(client, db_session):
     world = make_ts_world(db_session)
-    saddle(world, statuses={"freq": None})
+    d, opt, sp, f = saddle(world, statuses={"freq": None})
     world.freq("visible", frequencies=THREE)
     world.settle()
-    # The hidden pinned witness is out of the shown graph, so the rule falls back; the visible undesignated result is read.
+    key = "reaction_coordinate_designated_for_ts"
     # (exploratory: the pin is visible and chosen.)
-    assert detail(client, world.entry, profile="curated")["evidence"]["checks"]["reaction_coordinate_designated_for_ts"] == "missing"
-    assert detail(client, world.entry)["evidence"]["checks"]["reaction_coordinate_designated_for_ts"] == "passed"
+    assert detail(client, world.entry)["evidence"]["checks"][key] == "passed"
+    # Withheld (rejected) under curated, the pinned witness is out of the shown graph, so the rule falls back; the visible
+    # undesignated result is read. Unreviewed, it would have been read (the test above).
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=f.id, status=RecordReviewStatus.rejected)
+    assert detail(client, world.entry, profile="curated")["evidence"]["checks"][key] == "missing"
 
 
 def _box(client, entry, *, profile=None):
@@ -694,13 +711,15 @@ def _box(client, entry, *, profile=None):
 
 
 def test_under_curated_a_hidden_pinned_result_is_absent_for_the_box_and_the_check_alike(client, db_session):
-    """Hidden == absent (D6): the box and the trust check both read the newest visible result, and say nothing of the hidden one.
+    """A WITHHELD pinned result is absent: the box and the trust check both read the newest shown result, and say nothing of it.
 
-    The expected answer is what exploratory gives on a world where the hidden calculation does not exist.
-    Kills: the box going blank, or still describing/naming the hidden pinned result.
+    The pinned witness is REJECTED (ADR 0023, step 3: the box follows the evidence rule, which withholds rejected and
+    deprecated evidence; an unreviewed pinned witness is shown, see the next test). The expected answer is what exploratory
+    gives on a world where the withheld calculation does not exist.
+    Kills: the box going blank, or still describing/naming the withheld pinned result.
     """
     hidden_world = make_ts_world(db_session)
-    d, opt, sp, f = saddle(hidden_world, statuses={"freq": None})  # the pinned witness is below the curated floor
+    d, opt, sp, f = saddle(hidden_world, statuses={"freq": RecordReviewStatus.rejected})  # the pinned witness is withheld
     visible = hidden_world.freq("visible", frequencies=THREE)
     hidden_world.settle()
 
@@ -736,6 +755,31 @@ def test_under_curated_a_hidden_pinned_result_is_absent_for_the_box_and_the_chec
     # and a list agrees with the entry's own page
     listed = _record_in(search(client, profile="curated"), hidden_world.entry.public_ref)["saddle_point"]
     assert listed == curated
+
+
+def test_under_curated_an_unreviewed_pinned_result_is_the_one_the_box_describes(client, db_session):
+    """Step 3 of ADR 0023: the box describes the declared (pinned) frequency result when it is merely unreviewed, as the
+    entry's calculation list names it, instead of falling back to the newest other result.
+
+    Since step 5 the trust check's own population reads the same pin (the assessment and the checklist follow the
+    evidence rule too), so the box and the check agree for an unreviewed pin: both read the pin, not the newest other result.
+    Kills: the box keeping the record floor and describing the newest other result (``latest_direct_frequency``); the
+    checklist or the scoped assessment keeping the record floor and reading the other (undesignated) result.
+    """
+    world = make_ts_world(db_session)
+    d, opt, sp, f = saddle(world, statuses={"freq": None})
+    world.freq("visible", frequencies=THREE)
+    world.settle()
+    box = _box(client, world.entry, profile="curated")
+    assert box["basis"] == "declared_curvature_witness" and box["calculation_ref"] == f.public_ref
+    assert _box(client, world.entry)["calculation_ref"] == f.public_ref  # exploratory: the same pin
+    # The check reads the same population as the box (step 5): the unreviewed pin is read, so the designation check
+    # passes exactly as it does under exploratory, and the scoped assessment is not left unresolved by the unreviewed pin.
+    curated_detail, exploratory_detail = detail(client, world.entry, profile="curated"), detail(client, world.entry)
+    key = "reaction_coordinate_designated_for_ts"
+    assert curated_detail["evidence"]["checks"][key] == exploratory_detail["evidence"]["checks"][key] == "passed"
+    assert curated_detail["structure_assessment"]["outcome"] == exploratory_detail["structure_assessment"]["outcome"]
+    assert curated_detail["evidence"]["checks"].get(WARNING) == exploratory_detail["evidence"]["checks"].get(WARNING)
 
 
 def test_a_deprecated_declared_entry_has_the_same_counts_on_its_page_and_on_a_list(client, db_session):
@@ -897,13 +941,14 @@ def test_the_pin_is_a_literal_tied_to_the_rubric_version():
     Kills: changing the structure versions (or the dict) while the TS rubric stays at its version.
     """
     assert (COMPUTED_TRANSITION_STATE.version, TS_SCOPED_STRUCTURE_VERSIONS) == (
-        1,
-        {"assessment": 1, "normalizer": 1, "decision": 1},
+        2,
+        {"assessment": 1, "normalizer": 1, "decision": 1, "administrative_key": 2},
     )
     assert TS_SCOPED_STRUCTURE_VERSIONS == {
         "assessment": ASSESSMENT_VERSION,
         "normalizer": NORMALIZER_VERSION,
         "decision": DECISION_VERSION,
+        "administrative_key": ADMIN_KEY_VERSION,
     }
 
 
@@ -917,6 +962,16 @@ def test_drift_fails_the_boot_not_a_request(monkeypatch):
         ts_scoped.validate_ts_scoped_structure_versions()
     with pytest.raises(RuntimeError, match="deliberate rubric bump"):
         create_app()
+
+
+def test_a_change_of_the_administrative_key_version_fails_the_boot_until_the_rubric_is_bumped(monkeypatch):
+    """Kills: leaving the administrative key out of the pin, so the badge's ``qualifying_refs`` order moves unmarked."""
+    from app.services.trust import rubrics, ts_scoped
+
+    assert "administrative_key" in rubrics.TS_SCOPED_STRUCTURE_VERSIONS
+    monkeypatch.setitem(rubrics.TS_SCOPED_STRUCTURE_VERSIONS, "administrative_key", ADMIN_KEY_VERSION + 1)
+    with pytest.raises(RuntimeError, match="deliberate rubric bump"):
+        ts_scoped.validate_ts_scoped_structure_versions()
 
 
 def test_the_outcome_vocabulary_is_the_structure_selection_vocabulary_narrowed_to_the_evidence_question():

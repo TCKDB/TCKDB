@@ -20,7 +20,13 @@ from app.services.calculation_resolution import (
 )
 from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
-from app.services.conformer_resolution import resolve_conformer_group
+from app.services.conformer_resolution import (
+    current_conformer_group_targets,
+    primary_structure,
+    resolve_conformer_group,
+    settle_conformer_basin,
+)
+from app.services.deposit_warnings import note_anchor
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -32,6 +38,7 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scan_coordinate_conformance import collect_scan_coordinate_warnings
 from app.services.species_resolution import resolve_species_entry
 from app.services.statmech_resolution import (
     collect_frequency_scale_factor_software_mismatch_warnings,
@@ -39,6 +46,7 @@ from app.services.statmech_resolution import (
 )
 from app.services.structure_determination_resolution import DeterminationOwner, persist_structure_determinations
 from app.services.transport_resolution import resolve_and_create_transport
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 
 
 @dataclass(frozen=True)
@@ -169,16 +177,17 @@ def persist_conformer_upload(
         )
 
     # Parse XYZ for torsion fingerprinting
-    parsed = parse_xyz(GeometryPayload(xyz_text=request.geometry.xyz_text))
+    structure = primary_structure(request.calculation, request.geometry.xyz_text)
+    parsed = parse_xyz(GeometryPayload(xyz_text=structure.xyz_text))
     smiles = request.species_entry.smiles
 
     conformer_group, fingerprint, scheme = resolve_conformer_group(
         session,
         species_entry,
-        label=request.label,
         created_by=created_by,
         smiles=smiles,
         xyz_atoms=parsed.atoms,
+        defining=structure.defining,
     )
     observation = ConformerObservation(
         conformer_group_id=conformer_group.id,
@@ -190,6 +199,7 @@ def persist_conformer_upload(
     )
     session.add(observation)
     session.flush()
+    settle_conformer_basin(session, observation, fingerprint, smiles=smiles)
 
     # Anchor ALL calculations (primary + additional) to this conformer
     # observation so the structure context is unambiguous.
@@ -299,6 +309,7 @@ def persist_conformer_upload(
                 source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                field=f"applied_energy_corrections[{index}]",
                 warnings_out=provenance_warnings,
             )
         )
@@ -354,9 +365,18 @@ def persist_conformer_upload(
         RecordRef(SubmissionRecordType.applied_energy_correction, aec.id)
         for aec in applied_corrections
     )
+    note_anchor(session, "", SubmissionRecordType.conformer_observation, observation.id)
+    if statmech_row is not None:
+        note_anchor(session, "statmech", SubmissionRecordType.statmech, statmech_row.id)
+    note_anchor(session, "calculation", SubmissionRecordType.calculation, calculation.id)
+    note_anchor(session, "calculations[0]", SubmissionRecordType.calculation, calculation.id)
+    for position, child in enumerate(additional_calcs):
+        note_anchor(session, f"additional_calculations[{position}]", SubmissionRecordType.calculation, child.id)
+        # ``calculations[i]`` counts the primary first, then the additional ones.
+        note_anchor(session, f"calculations[{position + 1}]", SubmissionRecordType.calculation, child.id)
     apply_review_policy(
         session,
-        targets=review_targets,
+        targets=current_conformer_group_targets(session, review_targets),
         policy=review_policy,
         created_by=created_by,
     )
@@ -371,6 +391,18 @@ def persist_conformer_upload(
     energy_warnings.extend(composite_input_warnings)
     energy_warnings.extend(
         collect_named_composite_deposit_warnings(
+            session,
+            [calculation.id, *(c.id for c in additional_calcs)],
+        )
+    )
+    energy_warnings.extend(
+        collect_scan_coordinate_warnings(
+            session,
+            [calculation.id, *(c.id for c in additional_calcs)],
+        )
+    )
+    energy_warnings.extend(
+        collect_wavefunction_reliability_warnings(
             session,
             [calculation.id, *(c.id for c in additional_calcs)],
         )

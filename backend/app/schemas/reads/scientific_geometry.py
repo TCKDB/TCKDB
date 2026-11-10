@@ -15,9 +15,11 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
+    OrderEcho,
     ProfiledRequestEcho,
+    ScientificResponse,
 )
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 
 
 class GeometryReadRequest(BaseModel):
@@ -36,14 +38,13 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query for the geometry detail endpoint.
 
     The endpoint has no scientific filters, so ``filter`` is always
-    ``{}`` and ``sort`` / ``collapse`` are present only for shape
+    ``{}`` and ``sort`` is present only for shape
     consistency with the other scientific read envelopes (so callers
     can rely on a stable response top-level).
     """
 
     filter: dict[str, object] = Field(default_factory=dict)
-    sort: str = ""
-    collapse: CollapseMode = CollapseMode.all
+    sort: OrderEcho | None = None
     include: list[str] = Field(default_factory=list)
 
 
@@ -106,7 +107,7 @@ class GeometryProvenance(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class GeometrySpeciesIdentity(BaseModel):
+class GeometrySpeciesIdentity(EntryFacetFields):
     """Identity of a species-owned geometry's owning entry.
 
     ``formula`` is derived server-side (RDKit cartridge, Hill notation)
@@ -203,7 +204,7 @@ class GeometryIdentity(BaseModel):
     ambiguous_owners: list[GeometryIdentityOwnerRef] = Field(default_factory=list)
 
 
-class ScientificGeometryResponse(BaseModel):
+class ScientificGeometryResponse(ScientificResponse):
     """Response envelope for ``/api/v1/scientific/geometries/{geometry_handle}``.
 
     Phase D: ``geometry_id`` is hidden in the default response (Phase D

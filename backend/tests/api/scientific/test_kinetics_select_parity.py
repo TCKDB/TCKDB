@@ -16,8 +16,6 @@ from tckdb_client import TCKDBClient
 from tckdb_client.errors import TCKDBHTTPError
 
 from app.db.models.common import RecordReviewStatus as S
-from app.services.kinetics_selection import selection as selection_module
-from tests.services.kinetics_selection.test_engine import LabelRule
 from tests.services.kinetics_selection.test_service import declared, determination
 from tests.services.scientific_read._factories import make_species, next_inchi_key
 
@@ -34,7 +32,6 @@ TOOL = "tckdb_select_reaction_entry_kinetics"
 BASE = "http://testserver/api/v1"
 PREFERRED = {"version": 1, "method_kind": "saddle_point_tst"}
 YIELDING = {"version": 1, "method_kind": "variational_tst"}
-RULE = LabelRule("TEST-R1", {"saddle_point_tst"}, {"variational_tst"})
 QUESTION = {
     "direction": "forward",
     "target": {"kind": "whole_reaction"},
@@ -113,19 +110,10 @@ def test_an_unranked_population_is_the_same_answer_through_all_three(client, sdk
     assert api == via_sdk == via_mcp
     assert api["outcome"] == "incomparable_alternatives" and api["selection"] is None
     assert {c["kinetics_ref"] for c in api["candidates"]} == {good.public_ref, other.public_ref}
-    # Provenance rides along unchanged: the registry entries consulted and each candidate's declared protocol.
-    assert api["policy"]["rules"][0]["rule_id"] == "K-XYG3-B3LYP-BARRIER"
+    # Provenance rides along unchanged: each candidate's declared protocol.
     assert {c["determination_ref"]: c["protocol"]["method_kind"] for c in api["candidates"]} == {
         det_good.public_ref: "saddle_point_tst", det_other.public_ref: "variational_tst",
     }
-
-
-def test_a_scoped_preference_is_the_same_answer_through_all_three(client, sdk, mcp, world, two, monkeypatch):
-    monkeypatch.setattr(selection_module, "default_rules", lambda: (RULE,))
-    (good, det_good), _ = two
-    api, via_sdk, via_mcp = _three_ways(client, sdk, mcp, world.entry)
-    assert api == via_sdk == via_mcp
-    assert api["outcome"] == "policy_preferred" and api["selection"]["determination_ref"] == det_good.public_ref
 
 
 def test_an_administrative_first_pick_is_labelled_the_same_way_through_all_three(client, sdk, mcp, world, two):

@@ -7,6 +7,7 @@ import { Formula } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
+import { hiddenByDefaultNote } from "../domain/paging"
 import { facetChips } from "../domain/recordFacets"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { useSpeciesOverview } from "../hooks/useSpeciesOverview"
@@ -80,6 +81,7 @@ function State({ title, ref, busy, alert, message }: {
 
 function SpeciesDocument({ species }: { species: SpeciesOverview }) {
     const entryGroups = groupEntriesByState(species.entries)
+    const hiddenEntriesNote = hiddenByDefaultNote(species.entriesHiddenByDefault, "entries")
     return (
         <section className="species-overview">
             <nav className="record-breadcrumbs" aria-label="Breadcrumb">
@@ -150,6 +152,7 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
                     ground-state records stay distinct without reading as interchangeable duplicates. Each row links
                     to its own state-specific record.
                 </p>
+                {hiddenEntriesNote && <p className="entry-index-intro" role="note">{hiddenEntriesNote}</p>}
                 {species.entries.length ? (
                     <ul className="entry-state-groups">
                         {[...entryGroups].map(([state, entries]) => (
@@ -221,8 +224,8 @@ function Identity({ label, value, identifier, wide }: { label: string; value: st
  * pills used to read (`domain/recordFacets.ts`), so the "bare R" bug this
  * replaced (a heading collapsing to the single character "R" for an entry
  * distinguished only by stereochemistry) stays fixed: the heading is never
- * `species_entry_label` (a compact SERVER discriminator, not free text --
- * see that module's docstring) and always includes kind + state.
+ * `species_entry_label` (a joined server discriminator that includes
+ * depositor-typed parts) and always includes kind + state.
  *
  * `groupHeadingId` points at the enclosing `EntryStateGroup`'s own `<h3>`
  * ("ground electronic state", "excited electronic state") -- since every

@@ -79,7 +79,7 @@ record of both runs.
 
 ## The old route
 
-`GET /api/v1/species-entries/{id}/conformer-observations/lowest-sp` is **deprecated**. It collapses several single points on
+`GET /api/v1/species-entries/{id}/conformer-observations/lowest-sp` is removed. It collapsed several single points on
 one observation to the lowest, which this operation deliberately does not do. Use the route on this page.
 
 See also: `docs/guides/selecting_structures.md` for choosing a conformer basin (a different question).

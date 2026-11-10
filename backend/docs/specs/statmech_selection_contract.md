@@ -6,9 +6,8 @@ yet; the sections say what each later stage adds.
 
 ## What the operation answers
 
-"Which supplied statistical model supports this declared use, and is any applicable whole recipe preferred by
-scoped evidence?" It returns qualification, honest alternatives and, only where an audited rule says so, a
-preference with its basis. It selects existing interpretations. It never assembles a favourable combination of
+"Which supplied statistical models support this declared use, and in what display order?" It returns qualification
+and honest alternatives. TCKDB ranks no model above another, so it never returns a preference. It selects existing interpretations. It never assembles a favourable combination of
 energies, frequencies or rotors, and it never computes a partition function, a thermochemical value, a
 population or a rate.
 
@@ -20,24 +19,23 @@ membership or post-processing settings it does not state.
 ## Request
 
 `POST /api/v1/scientific/statmech/select` (stage 5), one typed target union. Schema:
-`app/schemas/reads/scientific_statmech_selection.py`; the rules live in
+`app/schemas/reads/scientific_statmech_selection.py`; the cross-field checks live in
 `app/services/statmech_selection/models.py`.
 
 | Field | Meaning |
 | --- | --- |
 | `contract_version` | integer `1` |
-| `intent` | `qualify` (no comparison, no selection ref) or `protocol_preferred` (also compares whole recipes) |
+| `intent` | `qualify` (no comparison, no selection ref) or `protocol_coverage` (also lists the qualified whole recipes in display order; nothing is ranked) |
 | `task` | one of six supported tasks, or a recognised deferred one (below) |
 | `observable` | what is qualified; implied for the three component tasks |
 | `target` | `species_entry` or `transition_state_entry`, a scope, and the isotope, electronic-state and stereochemical conventions |
 | `conditions` | temperature domain (K), environment, normalization (`volume_m3`, `pressure_pa`, `concentration_mol_m3`), energy reference |
 | `population` | all authorized matching models, explicit model revision refs, or a pinned release. Never a page prefix |
 | `coverage_requirement` | `entire_requested_domain` (a complete claim; refuses when coverage is missing) or `eligible_population` |
-| `comparison_objective` | `protocol_preferred` only: `physical_accuracy`, `expected_accuracy` or `model_fidelity` (which needs a pinned `reference_model_ref`) |
-| `administrative_policy`, `result_mode`, `min_review_status` | presentation within a front; a stricter record-review floor that never relaxes the read profile's |
+| `administrative_policy`, `result_mode`, `min_review_status` | display order of the front; a stricter record-review floor that never relaxes the read profile's |
 
-Strict by construction: unknown fields, database ids, pagination, sort expressions, rule expressions and any
-bound are refused. A misspelled token is a validation error (422). Units are fixed by field name: `cm1`,
+Strict by construction: unknown fields (including the retired `comparison_objective` and `reference_model_ref`),
+database ids, pagination, sort expressions and any bound are refused. A misspelled token is a validation error (422). Units are fixed by field name: `cm1`,
 `relative_energy_kj_mol`, kelvin, `pa`, `m3`, `mol_m3`; there are no free-text units and no non-finite numbers.
 
 ### Tasks
@@ -69,18 +67,18 @@ exclusion reasons. Applicability is not comparison coverage: a known applicable 
 accuracy.
 
 Outcomes: `qualified_models`, `no_candidates`, `no_applicable_candidate`, `unresolved_applicability`,
-`missing_required_data`, `unsupported_task`, `unsupported_model`, `evidence_conflict`, `unresolved_comparability`,
-`policy_conflict`, `sole_eligible_candidate`, `policy_preferred`, `incomparable_alternatives`.
+`missing_required_data`, `unsupported_task`, `unsupported_model`, `evidence_conflict`,
+`sole_eligible_candidate`, `incomparable_alternatives`.
 
 Summary precedence: bounded refusal, unsupported request, no candidates, then (when none qualifies)
 `evidence_conflict`, `unsupported_model`, `missing_required_data`, `unresolved_applicability`,
-`no_applicable_candidate`, then the preference decision. Every per-candidate reason is kept. With qualifying
+`no_applicable_candidate`, then the listing of the qualified models (sole eligible, or incomparable alternatives). Every per-candidate reason is kept. With qualifying
 candidates and unresolved alternatives the outcome is scoped to the eligible population and a required-full-coverage
 claim is not certified.
 
-`scientific_ref`, `sole_eligible_ref` and `administrative_ref` are mutually exclusive. A representative or
+`sole_eligible_ref` and `administrative_ref` are mutually exclusive. A representative or
 administrative pick is never labelled a minimum or a preferred model. `result_mode=first` may set an attributed
-administrative ref among incomparable first-front alternatives only; it cannot rescue a conflict, incomplete
+administrative ref among incomparable first-front alternatives only; it never overrides a conflict, incomplete
 coverage or a refusal, and it is suppressed when any group is unordered.
 
 ## What an existing record establishes
@@ -132,36 +130,26 @@ three hundred mode rows and a few hundred scan points, so roughly seven hundred 
 thirty-five such candidates or the full 500 small ones, and their normalised payload stays far under 10 MiB. These
 figures are provisional and are revised from measured payloads when the loader lands.
 
-## Rules
+## No ranking
 
-Zero active literature preference rules ship. Synthetic rules exist only in tests. A rule is inactive until an
-audited manifest pinned by content says otherwise, and no council example is activated by being written down.
+TCKDB ships no preference rule and the request carries no objective or reference model. A council example written down
+activates nothing.
 
 ## Decision
 
-Qualification is the floor. `qualify` returns the qualification summary and no selection reference. `protocol_preferred`
+Qualification is the floor. `qualify` returns the qualification summary and no selection reference. `protocol_coverage`
 compares only a decided population: if the summary is anything but `qualified_models` (an unsupported request, no
 candidates, nothing qualifying, or qualified models alongside undecided alternatives under a request for the entire
 domain) that outcome is the answer, every selection reference is null and the qualified subset stays visible.
 
-Preference runs on whole models that are each `applicable`, through the shared graph kernel: rule supersession is settled
-before any opposition is judged; a surviving opposing pair or a cycle is a `policy_conflict` with no selection; fronts and
-the administrative order come out. A rule applies only when its task, observable and objective (and, for `model_fidelity`,
-its pinned reference model) are the request's, its scope contains the request and its audited coverage contains the
-*entire* requested scope. An edge needs the preferred side, the yielding side and the pair's compatibility all true.
-
-A pair for which a rule might give an edge, with a prerequisite unknown on one side (or an unknown scope or coverage), is
-listed under `undecided` and the outcome is `unresolved_comparability`: nothing is selected, and an administrative
-reference cannot rescue it. A refuted prerequisite is a clean "no", not undecided, and a rule whose scope is unknown but
-which touches neither model leaves nothing undecided.
-
-Precedence among preference outcomes: `policy_conflict` (an established opposition or cycle stays a conflict however much
-else is undecided, unless an undecided rule declares it supersedes one of the conflicting rules), `unresolved_comparability`,
-`sole_eligible_candidate`, `policy_preferred`, `incomparable_alternatives`. The selection block carries three mutually exclusive references, each with
-its basis and population limit: `scientific_ref` (supported dominance over every eligible alternative), `sole_eligible_ref`
-(noncomparative), `administrative_ref` (only `result_mode=first`, among incomparable first-front alternatives, never over a
-conflict, an unresolved comparability or an incomplete population). Administrative key, versioned: own review rank
-ascending, creation time descending, public ordinal descending; `latest` is time and ordinal descending only.
+The qualified models go to the shared kernel (`decide_alternatives`): one qualified model is a
+`sole_eligible_candidate`, several are `incomparable_alternatives` in one front, in the administrative order below. Models
+are whole: nothing assembles a favourable combination of pieces. The selection block carries two mutually exclusive
+references, each with its basis and population limit: `sole_eligible_ref` (noncomparative) and `administrative_ref`
+(only `result_mode=first`, among incomparable alternatives: the first in display order, never over an unresolved outcome
+or an incomplete population). Administrative key, version `2`: own review rank (approved first; `under_review` and
+`not_reviewed` rank equally) ascending, creation time descending, public ordinal descending; `latest` is time and ordinal
+descending only.
 
 Per-candidate advisories travel with the decision: `advisories` maps each candidate to its advisory codes, and `notices`
 says in words what `imported_parameters_not_revalidated:<role>` and `source_literature_unidentified:<role>` mean. Both are
@@ -174,15 +162,14 @@ transition-state determination (a basin is one conformer group, a transition-sta
 ## Manifest and replay
 
 The manifest carries the normalised request, profile and effective statuses, subject, population counts, every candidate's
-facts and every source calculation (no database id), each assessment, the registry entries consulted and the decision.
+facts and every source calculation (no database id), each assessment and the decision.
 Three offline operations: `reproduce_statmech_ordering` runs the decision over the *recorded* assessments (`reassessed:
 false`); `reassess_statmech_captured_inputs`
 recomputes every assessment from the captured facts and refuses any difference, never trusting a recorded flag even when
 coordinated edits agree; `replay_statmech_decision` reassesses, re-decides over the recomputed assessments and refuses
 (`decision_mismatch`) a decision that is not the one recorded. A
-manifest format, semantics, rule or decision version this release does not carry is refused (`UnknownVersion`, surfaced
-as the engine's `ReplayError`), never substituted. There are no replay-only legacy versions: every TCKDB-owned version is
-1, and a manifest recorded under any other one is not replayed. Digests are checksums, not signatures; replay verifies the consequences of captured
+manifest format (the shape that held a protocol block with rules and edges is not read), semantics or decision version this release does not carry is refused (`UnknownVersion`, surfaced
+as the engine's `ReplayError`), never substituted. There are no replay-only legacy versions: a manifest recorded under any other version is not replayed. Digests are checksums, not signatures; replay verifies the consequences of captured
 inputs, not scientific truth, provenance or completeness of the captured population.
 
 ## Surface behavior, old and new

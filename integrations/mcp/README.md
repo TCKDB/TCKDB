@@ -425,7 +425,6 @@ offset?: integer (>=0, default 0)
 limit?: integer (>=1, capped at TCKDB_MCP_MAX_LIMIT)
 include?: string[]           # subset of {thermo, statmech, transport,
                              #            conformers, review, all}
-collapse?: "all" | "first"   # default "all"
 ```
 
 Example:
@@ -466,7 +465,6 @@ offset?: integer (>=0, default 0)
 limit?: integer (>=1, capped at TCKDB_MCP_MAX_LIMIT)
 include?: string[]              # subset of {species, kinetics,
                                 #            transition_states, review, all}
-collapse?: "all" | "first"      # default "all"
 ```
 
 Example:
@@ -483,6 +481,11 @@ Example:
 Output: the server search envelope (`request`, `pagination`, `records`,
 `review_summary`) propagated unchanged.
 
+> **List reads never pick a record.** The search and per-entry read tools below return every matching record in display order (review
+> status, newest deposited, id) and no longer take `collapse`; the first record is first in display order, not a recommendation. For
+> "give me one", use the `tckdb_select_*` tools. `coverage_temperature_min_k` / `coverage_temperature_max_k` filter nothing: they set the
+> window each record's `temperature_coverage` is computed against.
+
 ### `tckdb_get_reaction_entry_kinetics`
 
 Fetch kinetics records scoped to a single reaction entry by its public
@@ -492,8 +495,8 @@ after both prefix and path-safety validation.
 ```text
 reaction_entry_ref: string         # REQUIRED, must start with "rxe_"
 quantity?: "rate_coefficient"      # must be this if given (server refuses otherwise)
-temperature_min?: number
-temperature_max?: number
+coverage_temperature_min_k?: number
+coverage_temperature_max_k?: number
 pressure?: number
 model_kind?: string                # validated server-side
 level_of_theory_ref?: string       # must start with "lot_"
@@ -507,7 +510,6 @@ include?: string[]                 # subset of {provenance, calculations,
                                    #            transition_states, path_search,
                                    #            irc, review, artifacts, all};
                                    # defaults to ["provenance"]
-collapse?: "all" | "first"         # default "all"
 ```
 
 Example:
@@ -515,8 +517,8 @@ Example:
 ```json
 {
   "reaction_entry_ref": "rxe_01HZY3K9X2",
-  "temperature_min": 300,
-  "temperature_max": 2000,
+  "coverage_temperature_min_k": 300,
+  "coverage_temperature_max_k": 2000,
   "include": ["provenance", "transition_states"]
 }
 ```
@@ -531,8 +533,8 @@ Fetch thermo records scoped to a single species entry by its public
 
 ```text
 species_entry_ref: string         # REQUIRED, must start with "spe_"
-temperature_min?: number
-temperature_max?: number
+coverage_temperature_min_k?: number
+coverage_temperature_max_k?: number
 model_kind?: string                # validated server-side
 level_of_theory_ref?: string       # must start with "lot_"
 software?: string
@@ -544,7 +546,6 @@ limit?: integer (>=1, capped at TCKDB_MCP_MAX_LIMIT)
 include?: string[]                 # subset of {provenance, calculations,
                                    #            statmech, review, artifacts,
                                    #            all}; defaults to ["provenance"]
-collapse?: "all" | "first"         # default "all"
 ```
 
 Example:
@@ -552,8 +553,8 @@ Example:
 ```json
 {
   "species_entry_ref": "spe_01HZ5K9X2A",
-  "temperature_min": 298,
-  "temperature_max": 1500,
+  "coverage_temperature_min_k": 298,
+  "coverage_temperature_max_k": 1500,
   "include": ["provenance", "statmech"]
 }
 ```
@@ -572,7 +573,7 @@ species_entry_ref: string          # REQUIRED, must start with "spe_"
 target: object                     # REQUIRED
   kind: "equilibrium_ensemble" | "single_conformer"
   conformer_group_ref?: string     # "cg_...", required for single_conformer
-policy?: "method_preferred" | "default" | "most_reviewed" | "latest"
+policy?: "default" | "most_reviewed" | "latest"   # administrative display order only
 result_mode?: "all" | "first"      # default "all"
 min_review_status?: string
 temperature_k?: number             # must be 298.15 if given (server refuses otherwise)
@@ -582,9 +583,9 @@ profile?: "exploratory" | "curated"
 
 Output: the server response, unchanged. `outcome` and `basis` are the
 server's explanation and should be quoted verbatim.
-`incomparable_alternatives` and `policy_conflict` mean nothing was
-scientifically selected, and a `selection` with `administrative: true` is a
-review and recency choice, not a method claim. There is no candidate-cap
+`incomparable_alternatives` means several records are eligible and none is
+preferred, and a `selection` with `administrative: true` is first in display
+order, not a method claim. There is no candidate-cap
 argument: the cap is fixed by the server. See
 `docs/guides/selecting_thermo_for_h298.md`.
 
@@ -610,7 +611,7 @@ pressure: object                   # REQUIRED
   max_bar?: number                 # finite only (equal for a point)
 collider?: object                  # required for a finite pressure and a composition-effective coefficient
   components: [{species_ref: "spc_...", mole_fraction?: number}]
-policy?: "method_preferred" | "default" | "most_reviewed" | "latest"
+policy?: "default" | "most_reviewed" | "latest"   # administrative display order only
 mode?: "all" | "first"             # default "all"
 min_review_status?: string
 phase?: string                     # must be "gas" if given (server refuses otherwise)
@@ -618,11 +619,10 @@ profile?: "exploratory" | "curated"
 ```
 
 Output: the server response, unchanged. `outcome` and `basis` are the server's explanation and should be quoted
-verbatim. `incomparable_alternatives` and `policy_conflict` mean nothing was scientifically selected,
-`sole_eligible_candidate` is not a comparative accuracy claim, and a `selection` with `administrative: true` is a
-review and recency choice, not a method claim. A selection names a determination with every eligible fitted
-representation of it, and `disclosures` lists the records that did not compete. Every rule in this release is
-inactive, so `method_preferred` ranks nothing yet. There is no candidate-cap or paging argument: the cap is fixed by
+verbatim. `incomparable_alternatives` means several determinations are eligible and none is preferred,
+`sole_eligible_candidate` is not a comparative accuracy claim, and a `selection` with `administrative: true` is first
+in display order, not a method claim. A selection names a determination with every eligible fitted
+representation of it, and `disclosures` lists the records that did not compete. There is no candidate-cap or paging argument: the cap is fixed by
 the server and this tool never pages the population. See `docs/guides/selecting_kinetics.md`.
 
 ### `tckdb_select_network_kinetics`
@@ -647,10 +647,7 @@ degeneracy_applied?: boolean
 boundaries?: [{state, kind}]
 regime?: {kind?: "time_independent" | "initial_population_restricted", initial_state_hashes?: [string]}
 source_composition_hash?, sink_composition_hash?: string
-objective?: "physical_accuracy" | "model_fidelity" | "representation_fidelity"
-reference_model_ref?: string       # "nsolve_...", model_fidelity only
-reference_outputs?: string         # representation_fidelity only
-policy?: "method_preferred" | "default" | "most_reviewed" | "latest"
+policy?: "default" | "most_reviewed" | "latest"   # administrative display order only
 mode?: "all" | "first"             # default "all"
 min_review_status?: string
 phase?: string                     # must be "gas" if given (server refuses otherwise)
@@ -658,10 +655,9 @@ profile?: "exploratory" | "curated"
 ```
 
 Output: the server response, unchanged. `outcome` and `basis` are the server's explanation and should be quoted
-verbatim. `incomparable_alternatives` and `policy_conflict` mean nothing was scientifically selected,
-`sole_eligible_candidate` is not a comparative accuracy claim, and a `selection` with `administrative: true` is a
-review and recency choice, not a method claim. Every rule in this release is inactive, so `method_preferred` ranks
-nothing yet. Integer ids, a candidate cap, bounds and paging arguments are refused: the bounds are the server's (a
+verbatim. `incomparable_alternatives` means several nodes are eligible and none is preferred,
+`sole_eligible_candidate` is not a comparative accuracy claim, and a `selection` with `administrative: true` is first
+in display order, not a method claim. Integer ids, a candidate cap, bounds and paging arguments are refused: the bounds are the server's (a
 422 `network_selection_population_too_large` over one) and this tool never pages the population. See
 `docs/guides/selecting_network_kinetics.md`.
 
@@ -696,22 +692,22 @@ transition-state concept (`ts_`).
 
 ```text
 <entry ref>: string                 # REQUIRED: species_entry_ref ("spe_") or transition_state_entry_ref ("tse_")
-intent?: string                     # recorded_minimum | protocol_preferred (calculations);
-                                    # validated_minimum | qualify_evidence | protocol_preferred (conformers);
-                                    # validated_saddle | qualify_evidence | protocol_preferred (transition states)
+intent?: string                     # recorded_minimum | protocol_coverage (calculations);
+                                    # validated_minimum | qualify_evidence | protocol_coverage (conformers);
+                                    # validated_saddle | qualify_evidence | protocol_coverage (transition states)
 quantity?: string | null            # electronic_energy (default) | zero_kelvin_energy; null only for qualify_evidence
 coverage_requirement?: "known_values" | "all_requested_members"
 validation_claim?: "local_minimum" | "first_order_saddle" | "higher_order_saddle" | "reactive_connectivity"
 min_review_status?, permitted_quality?, geometry_ref? ("geom_"), member_refs?, recipe?, require_stable_reference?
 require_connectivity?: boolean      # transition states only
-administrative_policy?, result_mode?, apply_rules?, objective?, reference_model?, repeat_policy?
+administrative_policy?, result_mode?, repeat_policy?
 profile?: "exploratory" | "curated"
 ```
 
-Output: the server response, unchanged. Quote its `outcome` and `basis` verbatim: `incomparable_alternatives`,
-`unresolved_comparability`, `evidence_conflict` and `policy_conflict` mean nothing was selected, and a
+Output: the server response, unchanged. Quote its `outcome` and `basis` verbatim: `incomparable_alternatives`
+(several cohorts or protocols, none preferred), `unresolved_comparability` and `evidence_conflict` mean nothing was selected, and a
 `representative_minimum` is not the minimum of all stored values. Integer ids, `bounds`, `max_candidates`, `manifest_bytes`
-and any paging, sort or rule field are refused here; the engineering bounds are the server's and above them it refuses with
+and any paging or sort field are refused here; the engineering bounds are the server's and above them it refuses with
 a coded 422 (`structure_selection_population_too_large`, `..._evidence_too_large`, `..._traversal_too_deep`,
 `..._manifest_too_large`). A deferred quantity (enthalpy, Gibbs energy, barrier, rate) is
 `structure_selection_unsupported`. See `docs/guides/selecting_structures.md`.
@@ -739,26 +735,26 @@ reference conformer you named. See `docs/guides/relative_conformer_energies.md`.
 ### `tckdb_select_statmech_models`
 
 Statmech selection: which supplied statistical-mechanics model of ONE species entry or transition state entry supports a
-stated use, and, only where an audited rule says so, which whole model is preferred. Read-only; browse orders are
+stated use, and, with `protocol_coverage`, the qualified whole models in display order (none is preferred). Read-only; browse orders are
 unchanged; no computed value is returned.
 
 ```text
-intent: "qualify" | "protocol_preferred"          # REQUIRED
+intent: "qualify" | "protocol_coverage"          # REQUIRED
 task: string                                      # REQUIRED: within_basin_thermal, canonical_model, zpe_component, ...
 target: object                                    # REQUIRED: {kind: species_entry|transition_state_entry,
                                                   #   species_entry_ref ("spe_") | transition_state_entry_ref ("tse_"),
                                                   #   scope: {...}, isotope_convention, electronic_scope, stereochemical_scope}
 observable?, conditions?, population?             # population.model_refs are "sm_" / "smd_" refs
-coverage_requirement?, comparison_objective?, reference_model_ref? ("smd_"), administrative_policy?, result_mode?,
+coverage_requirement?, administrative_policy?, result_mode?,
 min_review_status?, profile?: "exploratory" | "curated"
 ```
 
 Output: the server response, unchanged. Quote its `outcome` and `basis` verbatim and read each candidate's `advisory` and the
 response `notices`: `imported_parameters_not_revalidated:<role>` and `source_literature_unidentified:<role>` are disclosed
-there. This server ships no active preference rule, so the answer is the qualified models, a sole eligible model or
-`incomparable_alternatives` (unranked, not equally accurate); `unresolved_comparability`, `policy_conflict` and every
-unresolved outcome mean nothing was selected. Integer ids, `bounds`, `max_candidates`, `manifest_bytes` and any paging,
-sort or rule field are refused here; above the server's bounds it refuses with the coded 422
+there. TCKDB ranks no model above another, so the answer is the qualified models, a sole eligible model or
+`incomparable_alternatives` (listed in display order, none preferred); `evidence_conflict` and every
+unresolved outcome mean nothing was selected. Integer ids, `bounds`, `max_candidates`, `manifest_bytes` and any paging
+or sort field are refused here; above the server's bounds it refuses with the coded 422
 `statmech_selection_bound_exceeded`; a ref that belongs to another entry than the target is the coded 422 `statmech_selection_scope_owner_mismatch`, and a hidden ref is the same 404 as an unknown one. See `docs/guides/selecting_statmech_models.md`.
 
 ### `tckdb_get_geometry`
@@ -842,8 +838,8 @@ electronic_state_kind?: string
 species_entry_kind?: string
 species_ref?: string                 # must start with "spc_"
 species_entry_ref?: string           # must start with "spe_"
-temperature_min?: number (> 0 K)
-temperature_max?: number (> 0 K)     # min <= max if both provided
+coverage_temperature_min_k?: number (> 0 K)
+coverage_temperature_max_k?: number (> 0 K)     # min <= max if both provided
 model_kind?: "nasa" | "points" | "scalar"
 level_of_theory_ref?: string         # must start with "lot_"
 software?: string
@@ -855,13 +851,12 @@ limit?: integer (>= 1, capped at TCKDB_MCP_MAX_LIMIT)
 include?: string[]                   # subset of {provenance, calculations,
                                      #            artifacts, review, all};
                                      # defaults to ["provenance"]
-collapse?: "all" | "first"           # default "all"
 ```
 
 Example by SMILES:
 
 ```json
-{"smiles": "CCO", "temperature_min": 298, "temperature_max": 1500}
+{"smiles": "CCO", "coverage_temperature_min_k": 298, "coverage_temperature_max_k": 1500}
 ```
 
 Example by InChIKey:
@@ -903,8 +898,8 @@ match?: "contains" | "exact"         # modifier; default "contains"
 family?: string
 reaction_ref?: string                # must start with "rxn_"
 reaction_entry_ref?: string          # must start with "rxe_"
-temperature_min?: number (> 0)
-temperature_max?: number (> 0)       # min <= max if both provided
+coverage_temperature_min_k?: number (> 0)
+coverage_temperature_max_k?: number (> 0)       # min <= max if both provided
 pressure?: number (> 0)
 model_kind?: "arrhenius" | "modified_arrhenius"
 level_of_theory_ref?: string         # must start with "lot_"
@@ -919,7 +914,6 @@ include?: string[]                   # subset of {provenance, calculations,
                                      #            transition_states, path_search,
                                      #            irc, all};
                                      # defaults to ["provenance"]
-collapse?: "all" | "first"           # default "all"
 ```
 
 Example by reactants/products:
@@ -928,8 +922,8 @@ Example by reactants/products:
 {
   "reactants": ["[OH]", "CC"],
   "products": ["O", "[CH2]C"],
-  "temperature_min": 300,
-  "temperature_max": 2000,
+  "coverage_temperature_min_k": 300,
+  "coverage_temperature_max_k": 2000,
   "include": ["provenance", "transition_states"]
 }
 ```
@@ -1056,7 +1050,7 @@ which field. Common causes:
   but not this one (`statmech` on `tckdb_search_thermo`,
   `transition_states` on `tckdb_get_species_entry_thermo`, etc.). The
   error lists the legal tokens for this tool.
-- A search tool was called with only modifiers (e.g. `temperature_min`
+- A search tool was called with only modifiers (e.g. `coverage_temperature_min_k`
   alone) and no identity discriminator. Add at least one of
   `smiles`/`inchi`/`inchi_key`/`formula`/`species_ref`/`species_entry_ref`
   (species and thermo searches) or

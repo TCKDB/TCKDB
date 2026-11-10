@@ -653,15 +653,7 @@ def test_the_observer_watches_the_status_and_not_only_the_code() -> None:
 
 
 def test_a_refusal_that_is_not_science_is_importable_by_a_client() -> None:
-    """The point of the work, stated as a test.
-
-    ``thermo_source_role_type_mismatch`` is one of the seven refusals #159
-    declared. It is correctly absent from the scientific check register --
-    a role/type mismatch cannot be wrong in an interesting way -- and
-    before the catalogue existed that also meant no client could name it.
-    ``missing_filter`` is one of the twenty-four read-API codes in the
-    same position.
-    """
+    """A code that is not a scientific check is still importable by a client (``missing_filter`` is one)."""
     exported = {entry.code for entry in client_facing()}
     scientific = {
         code
@@ -670,13 +662,9 @@ def test_a_refusal_that_is_not_science_is_importable_by_a_client() -> None:
         for code in check.codes
     }
 
-    for code in ("thermo_source_role_type_mismatch", "missing_filter"):
+    for code in ("missing_filter",):
         assert code in exported, f"{code} is not exported to a client"
-        assert code not in scientific, (
-            f"{code} has been added to the scientific check register. That is "
-            "the decision #164 refused; if it has been revisited, this test "
-            "should be changed deliberately and not merely to go green."
-        )
+        assert code not in scientific, f"{code} has been added to the scientific check register"
 
 
 #: The codes #184 and #186 classified as guards. Named here rather than

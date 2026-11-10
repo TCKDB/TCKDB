@@ -6,12 +6,10 @@ decision record. Browse order and every existing read are untouched.
 
 Flow: scan the visible population (review floor first, rejected and deprecated out) and
 refuse above the cap; load and normalise it; assess every record for H298 applicability;
-hand the physically eligible ones to the preference engine; build the manifest.
+hand the physically eligible ones to the ordering engine; build the manifest.
 """
 
 from __future__ import annotations
-
-from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -23,7 +21,10 @@ from app.db.models.thermo import Thermo
 from app.services.calculation_ownership import assert_owned_by
 from app.services.read_snapshot import begin_read_snapshot
 from app.services.scientific_read.ref_guard import withhold_selection_facts
+from app.services.selection_kernel import Applicability
 from app.services.selection_kernel.evidence_view import evidence_subject
+from app.services.selection_kernel.requested import funnel as kernel_funnel
+from app.services.selection_kernel.requested import judge
 from app.services.structure_selection.source_findings import assess_source_findings, thermo_uses
 from app.services.thermo_declaration_resolution import W_THERMO_TARGET_GROUP_OWNER_MISMATCH
 from app.services.thermo_selection.assessment import assess_candidate
@@ -36,13 +37,11 @@ from app.services.thermo_selection.loader import (
 )
 from app.services.thermo_selection.manifest import build_manifest
 from app.services.thermo_selection.models import (
-    Applicability,
     CandidateAssessment,
     H298Request,
     H298Selection,
     Outcome,
 )
-from app.services.thermo_selection.rules import PreferenceRule, default_rules
 from app.services.trust import evaluate_loaded_thermo
 
 
@@ -58,6 +57,16 @@ def _excluded_refs(session: Session, scan: PopulationScan) -> list[dict[str, str
         {"thermo_ref": refs[i], "review_status": status.value, "reason": reason}
         for i, status, reason in scan.excluded
     ]
+
+
+def funnel(scan: PopulationScan, verdicts: list) -> dict:
+    return kernel_funnel(
+        considered=scan.considered,
+        removed_by_filters=scan.removed_by_filters,
+            removed_by_floor=scan.removed_by_floor,
+        terminal_excluded=scan.terminal_excluded,
+        verdicts=verdicts,
+    )
 
 
 def _group_ref(session: Session, request: H298Request, species_entry_id: int) -> str | None:
@@ -84,13 +93,10 @@ def select_h298(
     *,
     species_entry_id: int,
     request: H298Request,
-    rules: Sequence[PreferenceRule] | None = None,
     require_snapshot: bool = True,
 ) -> H298Selection:
     """Assess every visible thermo record of a species entry for H298 and decide among the eligible.
 
-    :param rules: The registry to apply; defaults to the rules shipped with this release (E1).
-        Tests pass additional rules to build conflicts and cycles.
     :param require_snapshot: Insist that the read runs in one read-only REPEATABLE READ snapshot, so the review
         states, rows, children and source findings are one consistent state (``SnapshotNotConsistentError``
         otherwise). A route opens a session for the purpose (``get_snapshot_db``); only a caller that cannot hold
@@ -100,19 +106,19 @@ def select_h298(
         (``thermo_target_group_owner_mismatch``).
     """
     begin_read_snapshot(session, require=require_snapshot)
-    registry = tuple(default_rules() if rules is None else rules)
     group_ref = _group_ref(session, request, species_entry_id)
     scan = scan_population(session, species_entry_id=species_entry_id, request=request)
     excluded = _excluded_refs(session, scan)
 
     if scan.over_cap:
-        # Refuse before loading or assessing anything: a winner chosen from a prefix would be a claim
+        # Refuse before loading or assessing anything: an answer chosen from a prefix would be a claim
         # about a population that was never examined.
         manifest = build_manifest(
             request=request, conformer_group_ref=group_ref, effective_statuses=scan.effective_statuses,
             subject=load_subject(session, species_entry_id)[1], total_rows=scan.total_rows,
             visible_candidates=len(scan.population_ids), cap=scan.cap,
             excluded_by_review=excluded, candidates=[], decision=None, outcome=Outcome.bounded_search_exceeded,
+            funnel=funnel(scan, []),
         )
         return H298Selection(
             outcome=Outcome.bounded_search_exceeded, selected_ref=None, assessments=(), decision=None,
@@ -126,6 +132,7 @@ def select_h298(
     loaded.subject, loaded.candidates = withhold_selection_facts(session, (loaded.subject, loaded.candidates))
     assessments: list[CandidateAssessment] = []
     rows = []
+    elig = request.eligibility
     source_findings = assess_source_findings(session, {t.id: thermo_uses(t, loaded.unavailable) for t in loaded.rows})
     for thermo in loaded.rows:
         evidence = evaluate_loaded_thermo(evidence_subject(thermo, loaded.unavailable)) if thermo.scientific_origin is ScientificOriginKind.computed else None
@@ -133,15 +140,22 @@ def select_h298(
             thermo, request=request, evidence=evidence, source_findings=source_findings[thermo.id]
         )
         assessments.append(assessment)
-        rows.append((loaded.candidates[thermo.id], assessment, assessment.physically_eligible))
+        verdict = judge(
+            applicable=assessment.applicability is Applicability.applicable,
+            review_status=scan.review_status[thermo.id],
+            blocking=assessment.blocking,
+            eligibility=elig,
+        )
+        rows.append((loaded.candidates[thermo.id], assessment, verdict))
 
-    eligible = [norm for norm, _, ok in rows if ok]
-    decision = decide(eligible, subject=loaded.subject, admin_policy=request.admin_policy, rules=registry)
+    eligible = [norm for norm, _, verdict in rows if verdict.competes]
+    decision = decide(eligible, admin_policy=request.admin_policy)
     manifest = build_manifest(
         request=request, conformer_group_ref=group_ref, effective_statuses=scan.effective_statuses,
         subject=loaded.subject, total_rows=scan.total_rows,
         visible_candidates=len(scan.population_ids), cap=scan.cap, excluded_by_review=excluded,
         candidates=rows, decision=decision, outcome=decision.outcome,
+        funnel=funnel(scan, [v for _, _, v in rows]),
     )
     unresolved = tuple(a.thermo_ref for a in assessments if a.applicability is Applicability.unresolved)
     unsupported = tuple(a.thermo_ref for a in assessments if a.applicability is Applicability.unsupported)

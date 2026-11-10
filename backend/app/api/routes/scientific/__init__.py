@@ -1,7 +1,7 @@
 """FastAPI route wrappers for the /api/v1/scientific/* read surface.
 
 Thin handlers that translate HTTP requests into Phase 3 service calls and
-back. All business logic (filter, sort, collapse, pagination, evidence,
+back. All business logic (filter, sort, pagination, evidence,
 provenance) lives in ``app/services/scientific_read``.
 
 Sub-routers:
@@ -102,12 +102,17 @@ from app.api.routes.scientific import (
     transport,
 )
 from app.api.routes.scientific._profile import resolve_profile_dependency
+from app.api.routes.scientific._removed_parameters import refuse_picking_parameters
+from app.api.server_faults import ServerFaultRoute
 
 # The ``?profile=`` dependency is attached to the whole router, not to
 # individual operations, so that *every* scientific endpoint declares and
 # honours the curated/exploratory contract. A profile that only some
 # endpoints support is worse than none: it teaches consumers to trust it.
-scientific_router = APIRouter(dependencies=[Depends(resolve_profile_dependency)])
+scientific_router = APIRouter(
+    route_class=ServerFaultRoute,
+    dependencies=[Depends(resolve_profile_dependency), Depends(refuse_picking_parameters)]
+)
 # Register the RDKit-backed structure search router before the
 # identity-search router so that /species/structure-search resolves
 # before any future generic /species/{handle} catch-all that might be
@@ -140,7 +145,7 @@ scientific_router.include_router(structure_selection.tse_router)
 # Relative conformer energies against a named reference conformer: a sibling of the conformer basin selection,
 # same prefix, a distinct deeper path (a read, not a selection: no rank, no winner).
 scientific_router.include_router(relative_conformer_energy.router)
-# Statmech selection (qualify supplied statistical models; prefer only where audited rules say so): one typed target
+# Statmech selection (qualify supplied statistical models, listed in display order; none is ranked): one typed target
 # union under /statmech, sibling of the statmech search and detail reads (POST /select, GET /{ref}).
 scientific_router.include_router(statmech_selection.router)
 # Sibling per-entry subresource reads (statmech / transport) sharing the

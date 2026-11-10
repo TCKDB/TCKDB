@@ -168,9 +168,8 @@ def test_links_that_supply_no_structural_role_are_not_consulted(db_session, worl
 
 def test_k2_two_determinations_one_with_a_geometry_fail_now_compete_and_the_flagged_one_says_so(db_session, world):
     """Reviewer case K2. Main: the flagged determination was excluded, leaving ``sole_eligible_candidate``. Now both are
-    eligible and no rule ranks them: ``incomparable_alternatives``, nothing selected, with the geometry warning disclosed on
+    eligible and TCKDB ranks none above another: ``incomparable_alternatives``, nothing selected, with the geometry warning disclosed on
     the flagged record's assessment."""
-    from app.services.kinetics_selection.rules import default_rules
     from tests.services.kinetics_selection.test_selection import select
 
     sources = Sources(db_session, world)
@@ -185,7 +184,7 @@ def test_k2_two_determinations_one_with_a_geometry_fail_now_compete_and_the_flag
         )
     )
     db_session.flush()
-    result = select(db_session, world.entry, rules=default_rules())
+    result = select(db_session, world.entry)
     assert result.outcome.value == "incomparable_alternatives" and result.selected_determination_ref is None
     advisory = {a.kinetics_ref: a.advisory for a in result.assessment.assessments}
     assert any("geometry_validation_not_failed_for_source_calculations" in i for i in advisory[flagged.public_ref])

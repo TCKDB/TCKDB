@@ -66,7 +66,7 @@ from app.db.models.common import CalculationType, SubmissionRecordType
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.species import ConformerObservation
 from app.schemas.reads.scientific_common import LevelOfTheorySummary
-from app.services.scientific_read.common import review_floor_predicate, where_visible
+from app.services.scientific_read.common import linked_evidence_predicate, where_visible
 from app.services.scientific_read.composite_binding import composite_scheme_summaries
 
 #: Key order for the emitted map. The declaration order of
@@ -84,7 +84,8 @@ def _type_key(value: object) -> str:
     return value.value if isinstance(value, CalculationType) else str(value)
 
 
-def _ordered(types: Iterable[str]) -> list[str]:
+def ordered_calculation_types(types: Iterable[str]) -> list[str]:
+    """Calculation-type keys in :class:`CalculationType` declaration order, an unknown type after the known ones."""
     seen = set(types)
     known = [t for t in _TYPE_ORDER if t in seen]
     # A type the enum does not know about still gets emitted, after the
@@ -121,7 +122,7 @@ class LevelsOfTheoryIndex:
         found = self.by_owner.get(owner_id)
         if not found:
             return {}
-        return {key: list(found[key]) for key in _ordered(found)}
+        return {key: list(found[key]) for key in ordered_calculation_types(found)}
 
     def merged(self, owner_ids: Sequence[int]) -> LevelsOfTheoryMap:
         """Return the union of *owner_ids*' maps, deduplicated per type."""
@@ -132,7 +133,7 @@ class LevelsOfTheoryIndex:
                 for summary in summaries:
                     bucket[summary.level_of_theory_id] = summary
         return {
-            key: _sorted_levels(pooled[key].values()) for key in _ordered(pooled)
+            key: _sorted_levels(pooled[key].values()) for key in ordered_calculation_types(pooled)
         }
 
 
@@ -184,6 +185,9 @@ def _build(
         LevelOfTheory.cabs_basis,
         LevelOfTheory.solvent_model,
         LevelOfTheory.spin_treatment,
+        LevelOfTheory.relativistic_hamiltonian,
+        LevelOfTheory.pno_truncation,
+        LevelOfTheory.ri_approximation,
     ).select_from(Calculation)
     if join is not None:
         target, onclause = join
@@ -193,9 +197,10 @@ def _build(
         .where(owner_column.in_(ids))
         .distinct()
     )
-    # Owner decision D5: a calculation the active profile hides contributes neither its type nor its level. The keys of
-    # this map are calculation types, so a hidden IRC would otherwise print ``"irc": []`` beside ``has_irc: false``.
-    stmt = where_visible(stmt, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
+    # Evidence rule (ADR 0023): a calculation the profile withholds (rejected or deprecated under ``curated``) contributes
+    # neither its type nor its level; an unreviewed one does. The keys of this map are calculation types, so a withheld IRC
+    # would otherwise print ``"irc": []`` beside ``has_irc: false``.
+    stmt = where_visible(stmt, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
 
     rows = session.execute(stmt).all()
     schemes = composite_scheme_summaries(session, [row.id for row in rows])
@@ -216,6 +221,9 @@ def _build(
             dispersion=row.dispersion,
             solvent=row.solvent,
             core_treatment=row.core_treatment,
+            relativistic_hamiltonian=row.relativistic_hamiltonian,
+            pno_truncation=row.pno_truncation,
+            ri_approximation=row.ri_approximation,
             aux_basis=row.aux_basis,
             cabs_basis=row.cabs_basis,
             solvent_model=row.solvent_model,

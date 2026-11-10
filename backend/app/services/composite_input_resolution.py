@@ -86,6 +86,7 @@ from app.db.models.common import (
     CalculationGeometryRole,
     CalculationType,
     CompositeInputSlot,
+    SubmissionRecordType,
 )
 from app.db.models.composite_scheme import (
     CompositeSchemeTerm,
@@ -96,6 +97,7 @@ from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.schemas.upload_warning import UploadWarning
 from app.services.calculation_ownership import W_COMPOSITE_INPUT_OWNER_MISMATCH, assert_calculation_owned_by
 from app.services.composite_scheme_resolution import term_positions_for
+from app.services.deposit_warnings import note_warning_subject
 from app.services.local_key_resolution import resolve_calculation_key
 from app.services.upload_reference import W_UNKNOWN_CALCULATION_REF, unknown_reference
 
@@ -459,7 +461,9 @@ def _finalize_one(
     check = check_composite_total(item.definition, energies_for, payload.electronic_energy_hartree)
     assert_composite_total_recomputes(check)
     if check.status == "unverifiable":
-        warnings.append(_unverifiable_warning(check))
+        unverifiable = _unverifiable_warning(check)
+        note_warning_subject(session, unverifiable, SubmissionRecordType.calculation, composite.id)
+        warnings.append(unverifiable)
     return warnings
 
 
@@ -480,17 +484,13 @@ def _check_geometries(
         if geometries:
             declared.append((name, geometries))
         else:
-            warnings.append(
-                UploadWarning(
-                    field=f"composite_result.inputs[{index}]",
-                    code=W_COMPOSITE_INPUT_GEOMETRY_UNDECLARED,
-                    message=(
-                        f"The input {name!r} declares no geometry, so TCKDB cannot check that every input "
-                        "of this composite was computed at one geometry. Declare the single point's input "
-                        "geometry (or the optimisation's final one) to make that checkable."
-                    ),
-                )
+            undeclared = UploadWarning.from_code(
+                field=f"composite_result.inputs[{index}]",
+                code=W_COMPOSITE_INPUT_GEOMETRY_UNDECLARED,
+                context={"depositor_supplied": {"input": name}},
             )
+            note_warning_subject(session, undeclared, SubmissionRecordType.calculation, composite.id)
+            warnings.append(undeclared)
     own = _composite_input_geometry_ids(session, composite)
     if own:
         declared.append(("the composite itself", own))
@@ -507,28 +507,10 @@ def _check_geometries(
     return warnings
 
 
-_REASON_TEXT = {
-    "input_energy_not_stated": "an input calculation has no stored energy",
-    "component_not_stated": "an input does not state the energy component the scheme reads",
-    "correlation_convention_undeterminable": (
-        "an input's correlation component cannot be tied to its energy (the reference energy, the "
-        "correlation or the energy is not stated, or they do not add up), so whether (T) is inside "
-        "it is not known"
-    ),
-    "extrapolation_degenerate": "the extrapolation is degenerate for these energies",
-    "no_total_deposited": "no electronic_energy_hartree was deposited to compare",
-}
-
-
 def _unverifiable_warning(check: TotalCheck) -> UploadWarning:
     reason = check.reason or ""
-    where = f" (term {check.term_key!r})" if check.term_key else ""
-    return UploadWarning(
+    return UploadWarning.from_code(
         field="composite_result.electronic_energy_hartree",
         code=W_COMPOSITE_TOTAL_UNVERIFIABLE,
-        message=(
-            f"The deposited total could not be checked against the inputs{where}: "
-            f"{_REASON_TEXT.get(reason, reason)}. It was stored as sent; TCKDB recomputes a total only "
-            "to check it and never stores one."
-        ),
+        context={"reason": reason, "depositor_supplied": {"term_key": check.term_key}},
     )

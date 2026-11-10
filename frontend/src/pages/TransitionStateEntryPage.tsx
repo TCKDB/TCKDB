@@ -1,22 +1,27 @@
-import { useEffect, useState, type ReactNode } from "react"
+import type { ReactNode } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../transition-state-entry.css"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
-import type { StructureAssessment, TransitionStateEntryRecord, TransitionStateSiblingRecord } from "../api/transitionStateEntryApi"
-import { loadTransitionStateEntry, loadTransitionStateSiblings } from "../api/transitionStateEntryApi"
+import type { StructureAssessment, TransitionStateEntryRecord } from "../api/transitionStateEntryApi"
+import { loadTransitionStateEntry } from "../api/transitionStateEntryApi"
 import { Disclosure } from "../components/Disclosure"
+import { ListPager } from "../components/ListPager"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { RefsDisclosure } from "../components/RefsDisclosure"
+import { MadeUnderLine } from "../components/MadeUnderLine"
+import { liveMadeUnder } from "../domain/madeUnder"
+import { SIBLING_SUMMARY_STAGE_NOTE, summariseSiblingStage } from "../domain/transitionStateSiblings"
 import { formatEnergyForDisplay } from "../domain/energyUnits"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import type { TransitionStateIdentity } from "../domain/recordIdentity"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
+import { useTransitionStateSiblings } from "../hooks/useTransitionStateSiblings"
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
@@ -54,6 +59,10 @@ const GEOMETRY_ROLE_ORDER = ["irc_forward", "irc_reverse"]
 // returned them."), which this sort makes untrue and which was dropped
 // along with it. Ties within a stage keep their original relative order
 // (a stable sort, via the `index` tiebreak below).
+export const CALCULATION_ROW_ORDER_NOTE =
+    "Rows are grouped by stage (opt, freq, sp, irc, path search), and keep the order the archive returned "
+    + "within a stage. That is a display order for reading, not a ranking: no row is preferred over another."
+
 const STAGE_ORDER: Record<string, number> = {
     opt: 0,
     freq: 1,
@@ -71,21 +80,6 @@ function sortCalculationsByStage(calculations: Calculation[]): Calculation[] {
             return rankA !== rankB ? rankA - rankB : a.index - b.index
         })
         .map(({ calc }) => calc)
-}
-
-// Priority order for picking one "primary" calculation off a sibling
-// entry's calc list to summarise its level of theory/software with --
-// `sp` first (the most-refined stage, and the one this archive's own
-// hydrazine siblings actually differ on: wb97xd opt/freq, MRCI+Davidson
-// or CCSD(T)-F12 sp), falling down through progressively earlier stages.
-const SIBLING_PRIMARY_STAGE_PRIORITY = ["sp", "irc", "freq", "opt", "path_search"]
-
-function pickPrimaryCalcSummary(calculations: Calculation[]): Calculation | null {
-    for (const stage of SIBLING_PRIMARY_STAGE_PRIORITY) {
-        const found = calculations.find((calc) => calc.type === stage)
-        if (found) return found
-    }
-    return calculations[0] ?? null
 }
 
 function energyKindLabel(kind: string): string {
@@ -202,7 +196,6 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         // Never served on this endpoint (see `TransitionStateEntryCoreBlock`)
         // -- a TS has no molecular-graph formula the way a species does.
         formula: null,
-        unmappedSmiles: entry.unmapped_smiles ?? null,
         charge: entry.charge,
         multiplicity: entry.multiplicity,
         transitionStateRef: ts?.transition_state_ref,
@@ -277,7 +270,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         ...(reaction.reaction_entry_ref ? [{ label: "Reaction entry", value: reaction.reaction_entry_ref }] : []),
     ]
 
-    const { siblings, status: siblingsStatus } = useTransitionStateSiblings(reaction.reaction_ref, entry.transition_state_entry_ref)
+    const { siblings, meta: siblingsMeta, status: siblingsStatus, busy: siblingsBusy, goTo: goToSiblingsPage } = useTransitionStateSiblings(reaction.reaction_ref, entry.transition_state_entry_ref)
     const siblingsFailed = siblingsStatus === "error"
 
     return (
@@ -337,14 +330,21 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                         <dl className="kv-list">
                             <div><dt>Entry status</dt><dd>{statusLabel(entry.status)}</dd></div>
                             <div><dt>Deposited</dt><dd>{isoDate(entry.created_at)}</dd></div>
-                            {ts?.note && <div><dt>Transition state note</dt><dd>{ts.note}</dd></div>}
+                            {/* No `ts.note`: depositor free text (house rule, owner decision 2026-11-03). */}
                             {/* A plain fact, not a second pill -- see the
                                 comment on `RecordIdentityHeader`'s `pill`
                                 prop above. */}
                             {trust && (
                                 <div>
                                     <dt>Trust</dt>
-                                    <dd>{statusLabel(trust.trust_status)} · {trust.evidence.passed_count}/{trust.evidence.possible_count}</dd>
+                                    <dd>
+                                        {statusLabel(trust.trust_status)} · {trust.evidence.passed_count}/{trust.evidence.possible_count}
+                                        {/* Under the Trust fact it describes, not under all four facts: the structure
+                                            assessment beside it is a different procedure and is not covered by this line. */}
+                                        {trust.evidence.rubric && trust.evidence.rubric_version != null && (
+                                            <MadeUnderLine madeUnder={liveMadeUnder(trust.evidence.rubric, trust.evidence.rubric_version)} />
+                                        )}
+                                    </dd>
                                 </div>
                             )}
                             {trust?.structure_assessment && (
@@ -380,7 +380,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 </dl>
             </section>
 
-            {siblings.length > 0 && (
+            {(siblings.length > 0 || (siblingsMeta?.pagination.total ?? 0) > 1) && (
                 <section className="ledger-section" aria-labelledby="siblings-ledger">
                     <SectionHeading
                         id="siblings-ledger"
@@ -389,9 +389,23 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                     >
                         Other saddle points deposited for this reaction
                     </SectionHeading>
+                    {siblingsMeta && (
+                        <ListPager
+                            meta={siblingsMeta}
+                            noun="saddle point"
+                            onPage={goToSiblingsPage}
+                            busy={siblingsBusy}
+                            label="Other saddle points paging"
+                        />
+                    )}
+                    <p className="note tse-siblings-note">
+                        This entry is left out of the list below; a count above includes it unless it is hidden by default. {SIBLING_SUMMARY_STAGE_NOTE}
+                    </p>
+                    {siblings.length === 0 && <p className="empty-projection">No other saddle points are on this page.</p>}
                     <ul className="tse-siblings-list">
                         {siblings.map((sibling) => {
-                            const primary = pickPrimaryCalcSummary(sibling.calculations ?? [])
+                            const summary = summariseSiblingStage(sibling.calculations ?? [])
+                            const primary = summary?.calculation ?? null
                             const siblingRef = sibling.transition_state_entry.transition_state_entry_ref
                             const reviewStatus = sibling.transition_state_entry.review.status
                             return (
@@ -411,8 +425,20 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                         {siblingRef}
                                     </Link>
                                     <span>deposited {isoDate(sibling.transition_state_entry.created_at)}</span>
-                                    <span>{primary?.level_of_theory ? <LevelOfTheoryLink levelOfTheory={primary.level_of_theory} /> : "level of theory not recorded"}</span>
-                                    <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>
+                                    {summary && summary.varies ? (
+                                        <span>
+                                            {summary.stageCalculationCount} calculations at the {statusLabel(summary.stage)} stage differ in
+                                            level of theory or software; open the entry to see them
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <span>
+                                                {summary ? `${statusLabel(summary.stage)} stage: ` : ""}
+                                                {primary?.level_of_theory ? <LevelOfTheoryLink levelOfTheory={primary.level_of_theory} /> : "level of theory not recorded"}
+                                            </span>
+                                            <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>
+                                        </>
+                                    )}
                                     <span className={reviewPillClass(reviewStatus)}>
                                         {statusLabel(reviewStatus)}
                                     </span>
@@ -442,7 +468,10 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 <SectionHeading id="calc-ledger" kicker="Machine detail">Calculation evidence</SectionHeading>
                 <EvidencePills evidence={evidence} entryRef={entry.transition_state_entry_ref} />
                 {calculationsAvailability === "populated" ? (
-                    <CalculationTable calculations={calculations} entryRef={entry.transition_state_entry_ref} />
+                    <>
+                        <p className="note calculation-order-note">{CALCULATION_ROW_ORDER_NOTE}</p>
+                        <CalculationTable calculations={calculations} entryRef={entry.transition_state_entry_ref} />
+                    </>
                 ) : (
                     <SectionEmptyMessage
                         availability={calculationsAvailability}
@@ -569,53 +598,6 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     )
 }
 
-type SiblingsFetchStatus = "loading" | "loaded" | "error"
-
-/**
- * Fetches "Other saddle points deposited for this reaction" as soon as
- * the reaction ref is known (a second, best-effort round trip -- see
- * `loadTransitionStateSiblings`). A still-loading fetch renders as no
- * siblings (the section simply hasn't appeared yet) -- this section is
- * additive context, and it must never block the rest of an otherwise-
- * successful page render. A FAILED fetch is distinguished from "this
- * reaction genuinely has no siblings": both return an empty
- * `siblings` array, but `status === "error"` lets the caller render a
- * short "could not load" line instead of silently claiming there are
- * none. MEASURED gap this fixes: the previous version's `.catch(() =>
- * setSiblings([]))` made a network failure look identical to zero
- * siblings.
- */
-function useTransitionStateSiblings(
-    reactionRef: string | null | undefined,
-    excludeEntryRef: string,
-): { siblings: TransitionStateSiblingRecord[]; status: SiblingsFetchStatus } {
-    // Keyed on (reactionRef, excludeEntryRef) rather than reset with a
-    // synchronous `setState([])` at the top of the effect (the
-    // `useScientificRecord` pattern): a stale result is discarded by
-    // comparing the key at READ time instead, so the effect body only
-    // ever calls `setState` from inside the async callback.
-    const key = `${reactionRef ?? ""}:${excludeEntryRef}`
-    const [state, setState] = useState<{
-        key: string
-        siblings: TransitionStateSiblingRecord[]
-        status: SiblingsFetchStatus
-    }>({ key, siblings: [], status: "loading" })
-    const current = state.key === key ? state : { key, siblings: [] as TransitionStateSiblingRecord[], status: "loading" as const }
-
-    useEffect(() => {
-        if (!reactionRef) return
-        const controller = new AbortController()
-        loadTransitionStateSiblings(reactionRef, excludeEntryRef, controller.signal)
-            .then((records) => {
-                if (!controller.signal.aborted) setState({ key, siblings: records, status: "loaded" })
-            })
-            .catch(() => {
-                if (!controller.signal.aborted) setState({ key, siblings: [], status: "error" })
-            })
-        return () => controller.abort()
-    }, [key, reactionRef, excludeEntryRef])
-    return { siblings: current.siblings, status: current.status }
-}
 
 /**
  * The first evidence statement on the page, directly under identity --

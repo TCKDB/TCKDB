@@ -2,7 +2,7 @@
 from sqlalchemy import select
 
 from app.db.models.kinetics import Kinetics
-from app.db.models.species import SpeciesEntry
+from app.db.models.species import ConformerGroup, SpeciesEntry
 from app.db.models.thermo import Thermo
 from app.services.consistency.core import AdvisoryResult, currency, record_result
 from app.services.consistency.gibbs import compare_gibbs
@@ -11,6 +11,7 @@ from app.services.consistency.isotope_identity import compare_isotope_identity
 from app.services.consistency.kinetics import compare_kinetics
 from app.services.consistency.kirchhoff import compare_kirchhoff
 from app.services.consistency.thermo import compare_thermo
+from app.services.consistency.wide_basin import compare_wide_basin
 
 
 def _resolve(session, model, ref, prefix):
@@ -40,6 +41,10 @@ def compare(session, *, check, target_ref, comparison_thermo_ref=None, reverse_k
             if comparison_thermo_ref is not None or reverse_kinetics_ref is not None or thermo_mapping or temperature_grid:
                 raise ValueError("isotope-identity takes a species-entry reference alone")
             return compare_isotope_identity(_resolve(session, SpeciesEntry, target_ref, "spe_"))
+        if check == "wide-basin":
+            if comparison_thermo_ref is not None or reverse_kinetics_ref is not None or thermo_mapping or temperature_grid:
+                raise ValueError("wide-basin takes a conformer-group reference alone")
+            return compare_wide_basin(_resolve(session, ConformerGroup, target_ref, "cg_"))
         if check == "hess":
             if comparison_thermo_ref is not None or reverse_kinetics_ref is not None or temperature_grid:
                 raise ValueError("hess uses the kinetics record's own reaction energy and a spe=thm[:rep] mapping")

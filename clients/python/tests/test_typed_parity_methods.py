@@ -29,7 +29,6 @@ def _envelope(records=None) -> dict:
             "limit": 50,
             "returned": len(records or []),
             "total": len(records or []),
-            "post_collapse_total": len(records or []),
         },
     }
 
@@ -104,21 +103,31 @@ class TestStructureSearch:
         assert query["mode"] == ["similarity"]
         assert query["similarity_threshold"] == ["0.7"]
 
+    def test_isomeric_exact_search_is_sent_on_the_wire(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.search_species_structures(query_smiles="C/C=C/C", mode="exact", isomeric=True, method_http="GET")
+
+        assert _query_of(str(seen[0].url))["isomeric"] == ["true"]
+
     def test_iterator_walks_pages_and_yields_records(self):
         pages = [
             {
                 **_envelope([{"species_ref": "sp_a"}]),
                 "pagination": {
                     "offset": 0, "limit": 1, "returned": 1,
-                    "total": 2, "post_collapse_total": 2,
+                    "total": 2,
                 },
+                "next_cursor": "c1",
             },
             {
                 **_envelope([{"species_ref": "sp_b"}]),
                 "pagination": {
-                    "offset": 1, "limit": 1, "returned": 1,
-                    "total": 2, "post_collapse_total": 2,
+                    "offset": 0, "limit": 1, "returned": 1,
+                    "total": 2,
                 },
+                "next_cursor": None,
             },
         ]
         calls: list[httpx.Request] = []
@@ -873,15 +882,17 @@ class TestLiterature:
                 **_envelope([{"record_ref": "kin_1"}]),
                 "pagination": {
                     "offset": 0, "limit": 1, "returned": 1,
-                    "total": 2, "post_collapse_total": 2,
+                    "total": 2,
                 },
+                "next_cursor": "c1",
             },
             {
                 **_envelope([{"record_ref": "kin_2"}]),
                 "pagination": {
-                    "offset": 1, "limit": 1, "returned": 1,
-                    "total": 2, "post_collapse_total": 2,
+                    "offset": 0, "limit": 1, "returned": 1,
+                    "total": 2,
                 },
+                "next_cursor": None,
             },
         ]
         seen: list[httpx.Request] = []
@@ -1159,6 +1170,39 @@ class TestExports:
             "seed": {"reaction_refs": ["rxe_1"]},
             "energy_units": "kcal/mol",
         }
+
+    def test_export_chemkin_sends_the_named_records_and_never_a_selection_policy(self):
+        handler, seen = _capture(b"PK\x03\x04zip-bytes")
+        client, _ = make_client(handler)
+
+        client.export_chemkin(
+            {"reaction_refs": ["rxe_1"]},
+            thermo_refs=["thm_a"],
+            transport_refs=("trn_a",),
+            kinetics_refs=["kin_a", "kin_b"],
+        )
+
+        body = json.loads(seen[0].content)
+        assert body["thermo_refs"] == ["thm_a"]
+        assert body["transport_refs"] == ["trn_a"]
+        assert body["kinetics_refs"] == ["kin_a", "kin_b"]
+        assert "selection_policy" not in body and "collapse" not in body
+
+    def test_export_chemkin_and_ndjson_no_longer_take_a_selection_policy(self):
+        client, _ = make_client(lambda request: _ok({}))
+        with pytest.raises(TypeError, match="selection_policy"):
+            client.export_chemkin({"all_reactions": True}, selection_policy="latest")  # type: ignore[call-arg]
+        with pytest.raises(TypeError, match="selection_policy"):
+            client.export_ndjson(all=True, selection_policy="latest")  # type: ignore[call-arg]
+
+    def test_export_ndjson_sends_no_selection_parameter(self):
+        handler, seen = _capture('{"a": 1}\n')
+        client, _ = make_client(handler)
+
+        list(client.export_ndjson(reaction_ref=["rxe_1"]))
+
+        query = _query_of(str(seen[0].url))
+        assert "selection_policy" not in query and "collapse" not in query
 
     def test_export_chemkin_rejects_a_non_mapping_seed(self):
         client, _ = make_client(lambda request: _ok({}))

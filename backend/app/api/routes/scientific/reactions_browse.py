@@ -35,6 +35,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads._field_bounds import (
     MAX_PARTICIPANTS_PER_REACTION as _MAX_PARTICIPANTS_PER_REACTION,
@@ -49,7 +51,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.reactions import browse_reactions
 
-router = APIRouter(prefix="/reactions")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/reactions")
 
 
 def _drop_blank_smiles(values: list[str] | None) -> list[str]:
@@ -166,7 +168,8 @@ def scientific_reactions_browse(
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ) -> ScientificReactionSearchResponse:
     """List reaction entries with no filter required, for a catalogue page.
@@ -210,7 +213,8 @@ def scientific_reactions_browse(
     set; ``matched_direction`` on each record still reports which
     orientation matched.
     """
-    request = ReactionsBrowseRequest(
+    request = caller_input(
+        ReactionsBrowseRequest,
         family=family,
         reactant_smiles=_drop_blank_smiles(reactant_smiles),
         product_smiles=_drop_blank_smiles(product_smiles),
@@ -221,6 +225,7 @@ def scientific_reactions_browse(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     return apply_internal_ids_visibility(browse_reactions(session, request))

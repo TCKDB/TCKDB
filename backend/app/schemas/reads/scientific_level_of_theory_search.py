@@ -12,7 +12,13 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.db.models.common import CoreTreatment, SpinTreatment
+from app.db.models.common import (
+    CoreTreatment,
+    PnoTruncation,
+    RelativisticHamiltonian,
+    RiApproximation,
+    SpinTreatment,
+)
 from app.schemas.reads._field_bounds import (
     MAX_BASIS_LENGTH as _MAX_BASIS_LENGTH,
 )
@@ -28,10 +34,15 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_SOLVENT_LENGTH as _MAX_SOLVENT_LENGTH,
 )
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
 from app.schemas.reads.scientific_common import (
+    CursorToken,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
+    WatermarkEcho,
 )
 from app.schemas.reads.scientific_level_of_theory import (
     ScientificLevelOfTheoryRecord,
@@ -65,10 +76,17 @@ class LevelOfTheorySearchRequest(BaseModel):
         default=None, max_length=_MAX_DISPERSION_LENGTH
     )
     solvent: str | None = Field(default=None, max_length=_MAX_SOLVENT_LENGTH)
+    #: A classification of the method (not a measure of accuracy); see ``app/schemas/reads/_method_family.py``.
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
     spin_treatment: SpinTreatment | None = None
     #: Frozen-core or all-electron (ADR 0021). Matches only levels that *state* it; a level whose
     #: producer did not say is never "frozen core by default", so it matches neither value.
     core_treatment: CoreTreatment | None = None
+    relativistic_hamiltonian: RelativisticHamiltonian | None = None
+    pno_truncation: PnoTruncation | None = None
+    ri_approximation: RiApproximation | None = None
 
     # --- evidence filters ----------------------------------------------------
     has_correction_schemes: bool | None = None
@@ -83,6 +101,7 @@ class LevelOfTheorySearchRequest(BaseModel):
     sort: str | None = None  # rejected non-None per v0 sort policy
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
 
@@ -123,10 +142,17 @@ class LevelOfTheoryBrowseRequest(BaseModel):
         default=None, max_length=_MAX_DISPERSION_LENGTH
     )
     solvent: str | None = Field(default=None, max_length=_MAX_SOLVENT_LENGTH)
+    #: A classification of the method (not a measure of accuracy); see ``app/schemas/reads/_method_family.py``.
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
     spin_treatment: SpinTreatment | None = None
     #: Frozen-core or all-electron (ADR 0021). Matches only levels that *state* it; a level whose
     #: producer did not say is never "frozen core by default", so it matches neither value.
     core_treatment: CoreTreatment | None = None
+    relativistic_hamiltonian: RelativisticHamiltonian | None = None
+    pno_truncation: PnoTruncation | None = None
+    ri_approximation: RiApproximation | None = None
 
     # --- evidence filters ----------------------------------------------------
     has_correction_schemes: bool | None = None
@@ -141,6 +167,7 @@ class LevelOfTheoryBrowseRequest(BaseModel):
     sort: str | None = None  # rejected non-None per v0 sort policy
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
 
@@ -148,11 +175,11 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request -- surfaced in the response envelope."""
 
     filter: dict[str, Any]
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificLevelOfTheorySearchResponse(BaseModel):
+class ScientificLevelOfTheorySearchResponse(ScientificResponse):
     """Response envelope for the level-of-theory search endpoint.
 
     Reused verbatim (not subclassed) for
@@ -168,6 +195,10 @@ class ScientificLevelOfTheorySearchResponse(BaseModel):
     review_summary: ReviewStatusSummary
     records: list[ScientificLevelOfTheoryRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [

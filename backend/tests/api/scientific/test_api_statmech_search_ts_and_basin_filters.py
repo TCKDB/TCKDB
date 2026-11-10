@@ -240,7 +240,10 @@ def test_curated_hidden_basin_is_indistinguishable_from_an_unknown_ref(client, d
 
 
 def test_curated_approved_statmech_under_a_not_approved_ts_entry_is_returned(client, db_session):
-    """Kills: gating the filter subject (the TS entry's review) instead of the returned record's own floor."""
+    """Kills: gating the filter subject (the TS entry's review) instead of the returned record's own floor.
+
+    ADR 0023: the statmech is the record; the transition-state entry it hangs on is context, shown with its badge while it
+    is merely not reviewed."""
     ts = _ts_entry(db_session)
     sm = _ts_statmech(db_session, ts)
     set_review(
@@ -249,7 +252,25 @@ def test_curated_approved_statmech_under_a_not_approved_ts_entry_is_returned(cli
     for resp in _both_verbs(client, "transition_state_entry_ref", ts.public_ref):
         assert resp.status_code == 200, resp.text
         assert _refs(resp.json()) == {sm.public_ref}
-        # The record stays; the TS context naming the not-approved entry is withheld by the ref guard (the caller's
-        # own filter ref is echoed under ``request`` only).
+        (context,) = [r["transition_state"] for r in resp.json()["records"]]
+        # ``StatmechTransitionStateContext`` has no review badge field: the entry is named and nothing more.
+        assert context is not None and context["transition_state_entry_ref"] == ts.public_ref
+
+
+def test_curated_approved_statmech_under_a_withheld_ts_entry_is_returned_without_it(client, db_session):
+    """The twin: once the entry is rejected the statmech still comes back and the context naming the entry is withheld by
+    the ref guard (the caller's own filter ref is echoed under ``request`` only)."""
+    ts = _ts_entry(db_session)
+    sm = _ts_statmech(db_session, ts)
+    set_review(
+        db_session, record_type=SubmissionRecordType.statmech, record_id=sm.id, status=RecordReviewStatus.approved
+    )
+    set_review(
+        db_session, record_type=SubmissionRecordType.transition_state_entry, record_id=ts.id,
+        status=RecordReviewStatus.rejected,
+    )
+    for resp in _both_verbs(client, "transition_state_entry_ref", ts.public_ref):
+        assert resp.status_code == 200, resp.text
+        assert _refs(resp.json()) == {sm.public_ref}
         assert [r["transition_state"] for r in resp.json()["records"]] == [None]
         assert ts.public_ref not in json.dumps(resp.json()["records"])

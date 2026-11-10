@@ -1,5 +1,6 @@
 import { z } from "zod"
-import { recordReviewSchema } from "./scientificSchemas"
+import { publicStateLabel } from "../domain/participantFacets"
+import { recordReviewSchema, entryFacetFields } from "./scientificSchemas"
 import { loadEntryThermo } from "./thermoApi"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
@@ -55,6 +56,9 @@ const workflowToolReleaseSummarySchema = z.object({
 const literatureSummarySchema = z.object({
     literature_ref: z.string().optional(),
     title: z.string().nullable().optional(),
+    title_source: z.string().nullable().optional(),
+    doi: z.string().nullable().optional(),
+    isbn: z.string().nullable().optional(),
 }).passthrough()
 
 // ---------------------------------------------------------------------------
@@ -94,6 +98,7 @@ const stateParticipantSchema = z.object({
     species_ref: z.string(),
     canonical_smiles: z.string(),
     species_entry_label: z.string().nullable().optional(),
+    ...entryFacetFields,
     stoichiometry: z.number(),
 }).passthrough()
 
@@ -101,11 +106,14 @@ const stateCompositionSchema = z.object({
     participants: z.array(stateParticipantSchema).default([]),
     participant_count_total: z.number().default(0),
     participants_truncated: z.boolean().default(false),
-    // Server-computed, safe to render (never `network_state.label`, which is
-    // depositor free text and null on every state measured against the live
-    // archive) -- see `backend/app/schemas/reads/scientific_network_composition.py`.
+    // Rebuilt below from the participants. Never `network_state.label` (depositor free text).
     state_label: z.string().default(""),
-}).passthrough()
+}).passthrough().transform((composition) => ({
+    ...composition,
+    // The served `state_label` embeds each participant's `species_entry_label` (which joins in typed
+    // parts), so it is always rebuilt from the participants' SMILES and stoichiometry.
+    state_label: publicStateLabel(composition),
+}))
 
 const stateSchema = z.object({
     composition_hash: z.string(),

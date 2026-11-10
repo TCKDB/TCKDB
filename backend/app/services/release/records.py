@@ -122,6 +122,7 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
         ChildTable("kinetics_plog", "kinetics_id"),
         ChildTable("kinetics_falloff", "kinetics_id"),
         ChildTable("kinetics_third_body_efficiency", "kinetics_id"),
+        ChildTable("kinetics_bath_gas", "kinetics_id"),
         ChildTable("kinetics_tunneling_application", "kinetics_id"),
         ChildTable("kinetics_source_calculation", "kinetics_id"),
         # Interpretation provenance, not a curation overlay. It carries

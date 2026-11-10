@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_optional_current_user, get_snapshot_db
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.schemas.reads.scientific_network_export import (
     NetworkSelectedKineticsExport,
@@ -27,8 +28,9 @@ from app.schemas.reads.scientific_network_export import (
 from app.services.network_selection.export import ExportChoice, export_selected
 from app.services.network_selection.public import SNAPSHOT_OPT_OUT, resolve_network_ref
 from app.services.scientific_read.profile import stamp_read_profile
+from app.services.scientific_read.ref_guard import attach_review_statuses
 
-router = APIRouter(prefix="/networks")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/networks")
 
 _ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
@@ -93,4 +95,5 @@ def export_selected_network_kinetics(
         **result,
     )
     stamp_read_profile(payload)
+    attach_review_statuses(payload)
     return payload

@@ -230,9 +230,11 @@ Notes:
 - `dispersion`
 - `solvent`
 - `solvent_model`
-- `keywords`
 - `spin_treatment` (nullable)
-- `core_treatment` (nullable: `frozen_core | all_electron`)
+- `core_treatment` (nullable: `frozen_core | all_electron | window`)
+- `relativistic_hamiltonian` (nullable: `none | dkh0 | dkh2 | dkhso | resc | x2c | zora | iora`)
+- `pno_truncation` (nullable: `loose | normal | tight`)
+- `ri_approximation` (nullable: `none | rij | rijcosx | rijk | rijonx`)
 - `lot_hash`
 - `created_at`
 
@@ -243,7 +245,7 @@ Notes:
 - workflow-tool release dedupe is enforced on `(workflow_tool_id, version, git_commit)`
 - `lot_hash` is unique
 - `lot_hash` hashes each basis name (`basis`, `aux_basis`, `cabs_basis`) by its identity key, not verbatim: lower case, with the family hyphen in `def2-` and `cc-p` restored (`app/chemistry/basis_set_names.py`, #574). `def2tzvp` and `def2-TZVP` are one level of theory; `6-31G*` and `6-31G**` stay two. The row stores the first spelling it was uploaded with.
-- `core_treatment` (ADR 0021) joins the `lot_hash` payload **only when it is set**. A NULL adds no key, so every level that did not state it keeps the hash it had before the column existed; no row was re-keyed. `frozen_core` and `all_electron` are two levels, and "not stated" is a third that is neither. A partial core treatment (an energy window, Gaussian `FC=1`) has no value; it stays NULL and is described in `keywords`. The column is in `snapshot_defaults.UNCHANGED_DEFAULTS` so a whole-row digest of a level does not go stale for a NULL. `scripts/ops/merge_duplicate_levels_of_theory.py` regroups by the recomputed hash and lists the column, so it never folds one treatment into the other.
+- `core_treatment` (ADR 0021) joins the `lot_hash` payload **only when it is set**. A NULL adds no key, so every level that did not state it keeps the hash it had before the column existed; no row was re-keyed. `frozen_core` and `all_electron` are two levels, and "not stated" is a third that is neither. A partial core treatment (an energy window, a Gaussian `Window=(m,n)`) is the value `window`; which window stays on the calculation's `core.frozen` parameter rows. The three method qualifiers (`relativistic_hamiltonian`, `pno_truncation`, `ri_approximation`) follow the same rule (docs/adr/0024), and `level_of_theory` has no free-text `keywords` column since revision `d5f2b8c1a704`. The column is in `snapshot_defaults.UNCHANGED_DEFAULTS` so a whole-row digest of a level does not go stale for a NULL. `scripts/ops/merge_duplicate_levels_of_theory.py` regroups by the recomputed hash and lists the column, so it never folds one treatment into the other.
 - A level of theory's `public_ref` is minted from `lot_hash` **once, at insert**, and never recomputed. Revision `38b06819f099` re-keyed every row whose basis spelling differs from its identity key and left `public_ref` alone, so for those rows `public_ref` is no longer what their content would mint on a fresh instance. A LOT ref identifies a row; it is not re-derivable from content after a re-key.
 - `lot_hash` values of re-keyed rows changed in `38b06819f099`. Anything holding an old value (a `lot_hash=` query, an ML export row, a stored consistency-check snapshot) no longer matches.
 
@@ -451,8 +453,12 @@ Notes:
 - `species_entry_id`
 - `label`
 - `note`
-- `representative_fingerprint_json`
-- `representative_coords_json`
+- `representative_fingerprint_json` (derived: the medoid's)
+- `representative_coords_json` (derived: the medoid's)
+- `representative_observation_id` (nullable FK: the observation the representative was taken from)
+- `merged_into_conformer_group_id` (nullable self-FK: set on a group a merge emptied)
+- `basin_is_clique` (nullable: whether every pair of defining members matches; `false` is a wide basin)
+- `basin_span_deg` (nullable: largest per-rotor torsion difference between two defining members)
 - `created_at`
 - `created_by`
 
@@ -464,8 +470,20 @@ Notes:
 - `scientific_origin`
 - `note`
 - `torsion_fingerprint_json`
+- `mapped_coords_json` (nullable: the structure in the species' canonical atom order)
 - `created_at`
 - `created_by`
+
+`conformer_group_merge_pending` fields (a merge a live upload decided on but could not make):
+
+- `id`
+- `species_entry_id`
+- `kept_conformer_group_id` (the older group)
+- `absorbed_conformer_group_id` (the younger group, to be emptied)
+- `conformer_observation_id` (the upload whose structure linked the two)
+- `reason`
+- `completed_at`, `completed_by_revision` (stamped by the owner-role reassignment)
+- `created_at`
 
 `conformer_selection` fields:
 
@@ -482,6 +500,7 @@ Notes:
 - `conformer_group` is indexed by `species_entry_id`
 - `conformer_group` is unique on `(species_entry_id, label)`
 - `conformer_group` is the deduplicated conformational-basin identity for one `species_entry`
+- from scheme `torsion_basin` version 3 a basin is a connected component of the entry's *defining* observations (converged `opt` or `composite` primary with a final geometry), two linked when the matching rule says they share a basin, so the partition is a function of the set of structures and not of the order they were uploaded in; other observations are filed into a basin but never link two; the representative is the medoid and is derived, not identity; a group a merge empties keeps its row with `merged_into_conformer_group_id` set; a merge that would change an approved record is recorded in `conformer_group_merge_pending` and completed by the owner-role reassignment through the declared-repair path
 - `conformer_observation` is one provenance-bearing uploaded or imported observation assigned to a group; multiple observations per group are expected and valid
 - matching an existing basin reuses the `conformer_group` only; distinct uploads must not be silently collapsed into one shared `conformer_observation` merely because they land in the same basin
 - `conformer_observation` no longer stores `calculation_id`; `calculation.conformer_observation_id` carries the optional anchor to the specific observation the calculation came with
@@ -795,6 +814,10 @@ Notes:
 - `value_type`
 - `unit`
 - `parameter_index`
+- `source` (`parser`, `upload` or `curated`)
+- `parser_name`, `parser_version` (parser rows only)
+- `artifact_kind` (parser rows only: `input` for a deck, `output_log` for the input a log echoes)
+- `statement_kind` (parser rows only: `requested` for what a deck or echoed input asks for, `reported` for a value an output log prints as used; `reported` only on `output_log` rows)
 - `created_at`
 
 `calculation_constraint` fields:
@@ -829,6 +852,7 @@ Notes:
 - `calculation_parameter_vocab` is keyed directly by `canonical_key`
 - `calculation_parameter` is an EAV-style parsed-parameter store with indexes on calculation, raw-key/section, and canonical key/value
 - `parameter_index` must be null or non-negative
+- `artifact_kind` is set only on `source = 'parser'` rows, and only to `input` or `output_log` (check constraint). A re-parse replaces only the parser rows of its own kind. Where a deck and a log's echoed input state the same setting, the log's row is the one stored, whichever arrived first (`app/services/parameter_reconciliation.py`). A `reported` row (a number the log prints, under its own `grid.*` / `scf.tol_*` key) is kept beside the requested rows and never replaces one. `statement_kind` is set only on parser rows, and `reported` only with `artifact_kind = 'output_log'` (check constraint).
 - One raw token may emit multiple canonical observations. Gaussian `IOp(5/13=1)` (instructs the SCF to continue when convergence fails) is stored as three rows: a generic `internal_option.iop` row plus two specialized canonicals — `scf.convergence_failure_ignored = true` and `scf.convergence_failure_action = continue`. This is a calculation **trust** flag, not SCF wavefunction stability evidence; it must not populate `calc_scf_stability`. Future high-severity trust flags may be promoted into a dedicated `calculation_diagnostic_flag` / read-warning surface.
 - `calculation_constraint` uses `(calculation_id, constraint_index)` as its composite primary key
 - constraint-arity checks enforce valid atom usage for cartesian, bond, angle, and dihedral/improper constraints
@@ -2358,7 +2382,10 @@ A statmech row is an interpretation container. A declaration says which model th
   repeated record is never another state. Several members may sit in one basin: one observation per basin is not a chemical
   uniqueness rule.
 - `counting_multiplicity` is the depositor's attributed multiplicity; NULL is "not stated", never one.
-  `relative_energy_kj_mol` is finite. `region_key` names the configurational region it covers.
+  `relative_energy_kj_mol` is finite. `relative_energy_convention` (`energy_correction_convention`, the vocabulary network
+  state energies use) is present if and only if the energy is (`relative_energy_convention_with_energy`); `other` is not
+  allowed (`relative_energy_convention_not_other`) because a member has no note column. `region_key` names the
+  configurational region it covers.
 
 ### `statmech_model_source`
 
@@ -2371,8 +2398,10 @@ A statmech row is an interpretation container. A declaration says which model th
 ### Lifecycle
 
 A declared model is an immutable revision: "immutable" here means UPDATE. Its three tables refuse every UPDATE, approved or not
-(`tckdb_statmech_model_immutable`), so the owner guards, which run on INSERT, cannot be bypassed by an edit and `content_hash`
-cannot go stale. The declaration, its members and its sources are scientific content of the declaring statmech record: the accepted-science
+(`tckdb_statmech_model_immutable`), with one exception: `conformer_group_id` on the declaration and on a member, under a declared
+repair (`accepted_science_repair`, revision `a5d9c3e7b1f2`), because which `conformer_group` row a basin is filed under is identity, not a
+stated value; no other column, and no undeclared edit, is allowed. So the owner guards, which run on INSERT, cannot be bypassed by an edit, and `content_hash` is rewritten only
+with a basin move, recomputed in the same repair. The declaration, its members and its sources are scientific content of the declaring statmech record: the accepted-science
 triggers (`tckdb_guard_accepted_child` / `_via_child`) freeze them with it, and TRUNCATE is refused. Approving a record that is
 only cited as a member does not freeze the ensemble that cites it. Children are frozen at approval, not before: until then a child INSERT or DELETE by raw SQL is possible and would leave
 `content_hash` stale (no application path does it; the checksum is computed before the first INSERT). Correcting a declared model means a new, superseding statmech

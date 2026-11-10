@@ -358,55 +358,15 @@ describe("ReactionBrowseRow: stretched-link CSS mechanic (computed styles)", () 
         expect(window.getComputedStyle(footer).position).toBe("relative")
     })
 
-    // Review follow-up (round 2): the row re-created the exact stereo-chip
-    // defect `reaction-entry.css`'s `.record-identity-title
-    // .reaction-equation-chip` rule already fixed on the entry/chooser
-    // pages -- that fix is scoped to `.record-identity-title` and does not
-    // reach this row (`reaction-entry.css` is not even in this page's CSS
-    // chunk). MEASURED before the fix (real Chrome, not jsdom): chip and
-    // formula both rendered at the row title's own 20px step, a 1.00
-    // ratio; after the fix, 13px chip / 20px formula (see the PR body's
-    // measurement table for the exact numbers, both themes, 1920 and 680).
-    //
-    // This suite does NOT assert that ratio via `getComputedStyle` here --
-    // confirmed empirically (see the investigation this comment survives
-    // from) that this project's jsdom/cssstyle version does not resolve
-    // `var(...)` custom properties AT ALL, in either shorthand (`font:
-    // var(--type-note-font)`) or plain longhand (`font-size: var(--x)`)
-    // declarations: `getComputedStyle(...).fontSize` returns the literal
-    // string `"var(--type-note-font)"`, not a pixel value, for both the
-    // BROKEN and the FIXED rule alike. No test anywhere in this codebase
-    // asserts a computed pixel font-size for a token-driven rule for the
-    // same reason -- the established pattern for exactly this class of
-    // regression (`reaction-entry.css.test.ts`'s own two tests for the
-    // IDENTICAL entry-page defect) is a source-text regex against the
-    // stylesheet, in `browse.css.test.ts`. That is the load-bearing
-    // regression guard for the actual font-size/color values; the real,
-    // rendered ratio is verified in a genuine browser as part of the PR's
-    // manual verification pass (screenshot + measurement in the PR body),
-    // not reproducible as a computed-style assertion in this test runner.
-    //
-    // What CAN be asserted here, and is: the two elements resolve to
-    // DIFFERENT (unresolved) `var()` references, proving the chip rule
-    // does not simply inherit the title's own token -- a regression where
-    // someone pointed `.reaction-equation-chip` back at
-    // `--type-heading-2-font` would flip this from failing to passing on
-    // the identical string, so it still catches the "same token" class of
-    // mistake even without resolving either to a pixel value.
-    it("the stereo-chip's font-size declaration references a DIFFERENT (unresolved) custom property than the title's own", () => {
+    it("never prints a participant's species_entry_label (it joins in depositor-typed parts)", () => {
         renderRow(record({
             reactants: [
-                { species_entry_ref: "spe_nn", species_entry_label: "S", smiles: "N=N", formula: "H2N2", stoichiometry: 1, participant_index: 1 },
+                { species_entry_ref: "spe_nn", species_entry_label: "R DEPOSITOR_SENTINEL_label", smiles: "N=N", formula: "H2N2", stoichiometry: 1, participant_index: 1 },
             ],
         }))
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
-        const chip = row.querySelector(".reaction-equation-chip") as HTMLElement
-        const title = row.querySelector(".reaction-browse-row-title") as HTMLElement
-        expect(chip).toBeTruthy()
-        const chipFont = window.getComputedStyle(chip).font
-        const titleFont = window.getComputedStyle(title).font
-        expect(chipFont).not.toBe("")
-        expect(chipFont).not.toBe(titleFont)
+        expect(row.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
+        expect(row.textContent).not.toContain("enantiomer")
     })
 })
 
@@ -466,5 +426,20 @@ describe("ReactionBrowseRow: design-system primitive adoption", () => {
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
         expect(row).toHaveClass("card")
         expect(row).toHaveClass("browse-row")
+    })
+})
+
+describe("ReactionBrowseRow: electronic-state facets reach the equation chips", () => {
+    it("shows a participant's grammar-valid state label and term symbol, and hides one outside the grammar", () => {
+        const base = record()
+        const { container } = renderRow(record({
+            reactants: [
+                { ...base.reactants[0], species_entry_kind: "minimum", electronic_state_kind: "excited", electronic_state_label: "T1", term_symbol: "\u00b3B\u2081" },
+                { ...base.reactants[1], species_entry_kind: "minimum", electronic_state_kind: "excited", electronic_state_label: "R", term_symbol: "DEPOSITOR_SENTINEL" },
+            ],
+        }))
+        const text = container.textContent ?? ""
+        expect(text).toContain("excited state, state T1, \u00b3B\u2081")
+        expect(text).not.toMatch(/state R|DEPOSITOR_SENTINEL/)
     })
 })

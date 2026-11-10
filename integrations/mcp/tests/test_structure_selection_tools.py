@@ -64,7 +64,7 @@ def test_the_three_tools_are_listed_with_closed_schemas():
         assert "outcome" in listed[name]["description"] and "basis" in listed[name]["description"]
     assert "require_connectivity" in listed[EVIDENCE]["inputSchema"]["properties"]
     assert "require_connectivity" not in listed[CONFORMERS]["inputSchema"]["properties"]
-    assert listed[EVIDENCE]["inputSchema"]["properties"]["intent"]["enum"] == ["validated_saddle", "qualify_evidence", "protocol_preferred"]
+    assert listed[EVIDENCE]["inputSchema"]["properties"]["intent"]["enum"] == ["validated_saddle", "qualify_evidence", "protocol_coverage"]
 
 
 @pytest.mark.parametrize(("name", "ref_field", "ref", "path"), CASES)
@@ -87,14 +87,14 @@ def test_forwards_what_was_asked_and_drops_nothing_else():
                 "transition_state_entry_ref": TSE, "intent": "qualify_evidence", "quantity": None,
                 "validation_claim": "first_order_saddle", "require_connectivity": True, "result_mode": "first",
                 "geometry_ref": "geom_abc", "member_refs": ["sdet_a", "sdet_b"], "permitted_quality": ["raw"],
-                "coverage_requirement": "all_requested_members", "objective": None, "profile": "curated",
+                "coverage_requirement": "all_requested_members", "profile": "curated",
             },
         )
     assert json.loads(seen[0].content) == {
         "intent": "qualify_evidence", "quantity": None, "validation_claim": "first_order_saddle",
         "require_connectivity": True, "result_mode": "first", "geometry_ref": "geom_abc",
         "member_refs": ["sdet_a", "sdet_b"], "permitted_quality": ["raw"], "coverage_requirement": "all_requested_members",
-    }  # quantity null is sent (no energy asked); a null objective is simply not given
+    }  # quantity null is sent (no energy asked); a null field is simply not given
     assert dict(seen[0].url.params) == {"profile": "curated"}
     assert out == {"outcome": "qualified_evidence", "basis": "b"}
 

@@ -142,10 +142,10 @@ def _reaction_payload() -> dict:
     return {
         "reversible": True,
         "reactants": [
-            {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+            {"species_entry": {"smiles": "CC=O", "charge": 0, "multiplicity": 1}},
         ],
         "products": [
-            {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+            {"species_entry": {"smiles": "C=CO", "charge": 0, "multiplicity": 1}},
         ],
     }
 
@@ -203,20 +203,33 @@ class TestMinimumImaginaryModeBlocks:
 
     def test_minimum_with_higher_order_saddle_returns_422(self, client):
         payload = _hydrogen_conformer_payload(label="conf-saddle")
-        payload["additional_calculations"] = [_freq_calc(n_imag=2)]
+        payload["additional_calculations"] = [
+            _freq_calc(n_imag=2, frequencies=[-300.0, -200.0, 900.0, 1500.0])
+        ]
         resp = client.post("/api/v1/uploads/conformers", json=payload)
         assert resp.status_code == 422
         assert "n_imag_higher_order_saddle" in resp.text
 
-    def test_minimum_blocking_ignores_magnitude(self, client):
-        """ADR 0008 forbids a magnitude threshold on a blocking check, so a
-        tiny imaginary mode on a declared minimum is refused just the same."""
-        payload = _hydrogen_conformer_payload(label="conf-tiny-imag")
+    def test_minimum_with_unmeasured_modes_names_no_saddle_order(self, client):
+        payload = _hydrogen_conformer_payload(label="conf-unmeasured")
+        payload["additional_calculations"] = [_freq_calc(n_imag=2)]
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 422
+        assert "freq_result.modes" in resp.text
+        assert "higher-order saddle" not in resp.text
+
+    def test_minimum_with_a_stiff_imaginary_mode_returns_422(self, client):
+        """A mode at or above the protocol's tau is real curvature, so a
+        declared minimum carrying one is refused (ADR 0012 note, 2026-10-29;
+        a mode below tau is accepted with a warning, see
+        ``test_api_minimum_imaginary_tau.py``)."""
+        payload = _hydrogen_conformer_payload(label="conf-stiff-imag")
         payload["additional_calculations"] = [
-            _freq_calc(n_imag=1, imag_freq_cm1=-3.0)
+            _freq_calc(n_imag=1, imag_freq_cm1=-80.0)
         ]
         resp = client.post("/api/v1/uploads/conformers", json=payload)
         assert resp.status_code == 422
+        assert "n_imag_contradicts_minimum" in resp.text
 
     def test_zero_imaginary_modes_still_uploads(self, client):
         payload = _hydrogen_conformer_payload(label="conf-real-min")
@@ -383,7 +396,9 @@ class TestTransitionStateImaginaryModeTiers:
         )
         assert resp.status_code == 201, resp.text
         codes = {w["code"] for w in resp.json()["warnings"]}
-        assert "transition_state_extra_imaginary_modes_below_tau" in codes
+        # Gaussian DFT, no recorded Hessian method: assumed tau 30, so -42 is
+        # real curvature (flagged) rather than below tau.
+        assert "transition_state_extra_imaginary_mode_above_tau" in codes
         assert "transition_state_reaction_coordinate_not_designated" not in codes
 
     def test_a_tight_recorded_protocol_flags_the_same_record(self, client):

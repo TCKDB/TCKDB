@@ -8,8 +8,7 @@ finds, and ``python -m tests.versioned_names_scan`` prints the current findings
 in the form ``tests/versioned_names_debt.py`` holds them.
 
 What is scanned (see ``SCAN_ROOTS``): ``backend/app``, the ``tckdb_schemas``
-wire package, the ``tckdb_client`` and ``tckdb_mcp`` packages, the YAML rule
-manifests under ``backend/app/chemistry``, non-test ``frontend/src``, and the
+wire package, the ``tckdb_client`` and ``tckdb_mcp`` packages, non-test ``frontend/src``, and the
 OpenAPI golden. Deliberately not scanned, with the reason:
 
 * The QCSchema and Chemkin adapters: their ``v1``/``v2`` names are MolSSI's and
@@ -45,9 +44,6 @@ Eight kinds of finding, by what carries the version:
 ``build``
     A string assembled at run time into a versioned name without an f-string:
     ``"{}_v{}".format(n, v)``, ``"%s_v%d" % (n, v)``, ``n + "_v" + str(v)``.
-``yaml``
-    A scalar value in a YAML file under ``backend/app/chemistry`` (rule
-    manifests): ``rule_id: thing_v2``, ``manifest: foo/0.1.0``.
 ``frontend``
     A string literal or identifier in non-test ``frontend/src`` TypeScript,
     found by a tokenising regex (comments skipped), not a parser.
@@ -69,7 +65,6 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml  # type: ignore[import-untyped]
 from tckdb_schemas.fragments.version import (
     AT_VERSION,
     CAMEL_VERSION,
@@ -87,7 +82,6 @@ SCAN_ROOTS: tuple[Path, ...] = (
     REPO_ROOT / "integrations" / "mcp" / "src",
 )
 
-YAML_ROOTS: tuple[Path, ...] = (REPO_ROOT / "backend" / "app" / "chemistry",)
 FRONTEND_ROOT = REPO_ROOT / "frontend" / "src"
 
 OPENAPI_GOLDEN = REPO_ROOT / "backend" / "tests" / "api" / "golden" / "openapi.json"
@@ -303,28 +297,6 @@ def scan_openapi(golden: Path = OPENAPI_GOLDEN, repo_root: Path = REPO_ROOT) -> 
     return findings
 
 
-def scan_yaml(roots: tuple[Path, ...] = YAML_ROOTS, repo_root: Path = REPO_ROOT) -> list[Finding]:
-    """Scalar string values in the YAML files under *roots*."""
-    findings: list[Finding] = []
-
-    def walk(node: object, rel: str) -> None:
-        if isinstance(node, dict):
-            for value in node.values():
-                walk(value, rel)
-        elif isinstance(node, list):
-            for item in node:
-                walk(item, rel)
-        elif isinstance(node, str) and is_versioned_string(node):
-            findings.append(Finding(rel, "yaml", _clip(node)))
-
-    for root in roots:
-        for file in sorted([*root.rglob("*.yaml"), *root.rglob("*.yml")]):
-            rel = file.relative_to(repo_root).as_posix()
-            for document in yaml.safe_load_all(file.read_text(encoding="utf-8")):
-                walk(document, rel)
-    return findings
-
-
 #: Comments are skipped; strings and identifiers are checked.
 _TS_TOKEN = re.compile(
     r"//[^\n]*|/\*.*?\*/|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`|[A-Za-z_$][\w$]*",
@@ -353,7 +325,7 @@ def scan_frontend(root: Path = FRONTEND_ROOT, repo_root: Path = REPO_ROOT) -> li
 
 
 def scan_all() -> list[Finding]:
-    return scan_code() + scan_names() + scan_openapi() + scan_yaml() + scan_frontend()
+    return scan_code() + scan_names() + scan_openapi() + scan_frontend()
 
 
 def counts(findings: list[Finding]) -> Counter[tuple[str, str, str]]:

@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.schemas.reads.scientific_common import ProfiledRequestEcho
+from app.schemas.reads.scientific_common import ProfiledRequestEcho, ScientificResponse
 
 
 class NetworkSelectedKineticsExportRequest(BaseModel):
@@ -68,7 +68,7 @@ class NetworkExportRequestEcho(ProfiledRequestEcho):
     include_reported: bool = False
 
 
-class NetworkSelectedKineticsExport(BaseModel):
+class NetworkSelectedKineticsExport(ScientificResponse):
     """The serialised selection, with the provenance and assumptions that bound it."""
 
     request: NetworkExportRequestEcho

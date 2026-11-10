@@ -114,7 +114,6 @@ def test_rejected_quality_is_never_permitted_unless_the_caller_names_it():
             require_stable_reference=True,
             admin_policy=AdminPolicy.earliest,
             result_mode=ResultMode.first,
-            apply_rules=False,
             bounds=SelectionBounds(version=9, candidates=3, nested_rows=4, dependency_depth=2, manifest_bytes=5),
         ),
         StructureRequest(Grain.transition_state, Intent.validated_saddle, require_connectivity=True),
@@ -131,18 +130,13 @@ def test_a_request_round_trips_through_its_manifest_form(request_):
     ("grain", "intent", "claim"),
     [
         (Grain.conformer, Intent.validated_minimum, "local_minimum"),
-        (Grain.conformer, Intent.protocol_preferred, "local_minimum"),
+        (Grain.conformer, Intent.protocol_coverage, "local_minimum"),
         (Grain.transition_state, Intent.validated_saddle, "first_order_saddle"),
-        (Grain.transition_state, Intent.protocol_preferred, "first_order_saddle"),
+        (Grain.transition_state, Intent.protocol_coverage, "first_order_saddle"),
     ],
 )
 def test_every_structure_consuming_intent_defaults_to_the_conventional_characterization(grain, intent, claim):
-    from app.services.structure_selection import models
-
-    # Protocol preference states its objective once the decision stage exists; before it, there is nothing to state.
-    objective = getattr(models, "Objective", None)
-    extra = {"objective": objective.physical_accuracy} if objective is not None and intent is Intent.protocol_preferred else {}
-    request = StructureRequest(grain, intent, **extra)
+    request = StructureRequest(grain, intent)
     assert request.effective_claim.value == claim and request.to_dict()["validation_claim"] == claim
     # A calculation-grain request states no structural claim at all.
     assert StructureRequest(Grain.calculation, Intent.recorded_minimum).effective_claim is None

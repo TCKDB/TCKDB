@@ -12,10 +12,37 @@ from typing import Any, Generic, Literal, NotRequired, Required, TypeAlias, Type
 JSONDict: TypeAlias = dict[str, Any]
 
 
-class ReproducibilityAssessmentSummary(TypedDict):
-    """Compact immutable assessment identity and freshness state."""
+class MadeUnder(TypedDict):
+    """Which rubric judged an assessment, at which version, and whether that is still the current one.
 
-    state: Required[str]
+    ``state`` is ``current`` (the version in force, and the inputs were compared with today's), ``inputs_unchecked``
+    (the version in force, but this route does not compare the inputs: a list or search read never says ``current``),
+    ``stale`` (another version, or the same version over inputs that have changed) or ``unassessed`` (nothing to name).
+    ``assessed_version`` 0 means "stamped before the 2026-10 versioning reset" and is never current.
+    ``stale_reason`` is ``rubric_version``, ``prompt_version`` (a stored machine review) or ``inputs_changed`` when
+    ``state`` is ``stale``. ``inputs_checked`` is true only on a route that compares the inputs, ``None`` when
+    there is nothing to compare. The comparison is the same under the ``curated`` and ``exploratory`` profiles: whether
+    a stamp is current is a property of the record and its stamp, not of the reader.
+    """
+
+    state: Literal["current", "stale", "unassessed", "inputs_unchecked"]
+    rubric: str | None
+    assessed_version: int | None
+    current_rubric: str | None
+    current_version: int | None
+    stale_reason: Literal["rubric_version", "prompt_version", "inputs_changed"] | None
+    inputs_checked: bool | None
+
+
+class ReproducibilityAssessmentSummary(TypedDict):
+    """The latest stored reproducibility assessment: its identity and what it was made under.
+
+    ``state`` mirrors ``made_under.state``. Thermo and kinetics lists compare inputs only when asked
+    (``check_inputs=True``, at most 10 records); statmech and transport by-ref reads always do.
+    """
+
+    state: Required[Literal["current", "stale", "unassessed", "inputs_unchecked"]]
+    made_under: MadeUnder | None
     assessment_ref: str | None
     rubric: str | None
     rubric_version: int | None
@@ -23,9 +50,19 @@ class ReproducibilityAssessmentSummary(TypedDict):
     assessed_at: str | None
 
 
+class DeterministicTrustSummary(TypedDict):
+    """The code-defined evidence assessment, evaluated at read time (so ``made_under.state`` is always ``current``)."""
+
+    rubric: str
+    rubric_version: int
+    grade: str
+    hard_fail: str | None
+    made_under: MadeUnder | None
+
+
 class PublicAssessmentSummary(TypedDict):
-    deterministic_trust: Required[JSONDict]
-    reproducibility: Required[ReproducibilityAssessmentSummary]
+    deterministic_trust: DeterministicTrustSummary
+    reproducibility: ReproducibilityAssessmentSummary
 
 
 class Pagination(TypedDict):
@@ -33,13 +70,32 @@ class Pagination(TypedDict):
     limit: int
     returned: int
     total: int
-    post_collapse_total: NotRequired[int]
+    #: ``offset`` (random access, deterministic only for a static corpus) or ``cursor`` (a stable traversal).
+    mode: Literal["offset", "cursor"]
+
+
+class OrderKeyEcho(TypedDict):
+    """One key of a display order: its name, direction and plain meaning."""
+
+    key: str
+    direction: Literal["asc", "desc"]
+    meaning: str
+
+
+class OrderEcho(TypedDict):
+    """The display order a browse or list response applied. It is display order, never a scientific preference."""
+
+    kind: Literal["display_order"]
+    keys: list[OrderKeyEcho]
+    statement: str
+    #: Set when the request itself asked for this order (``ranking=lowest_energy``, ``mode=similarity``); ``None``
+    #: for the default display order.
+    requested_by: NotRequired[str | None]
 
 
 class ScientificRequestEcho(TypedDict, total=False):
     filter: JSONDict
-    sort: str
-    collapse: str
+    sort: OrderEcho
     ranking: str
     include: list[str]
 
@@ -62,11 +118,16 @@ class ErrorEnvelope(TypedDict):
 RecordT = TypeVar("RecordT")
 
 
-class ScientificSearchResponse(TypedDict, Generic[RecordT]):
-    request: ScientificRequestEcho
-    review_summary: ReviewStatusSummary
-    records: list[RecordT]
-    pagination: Pagination
+class ScientificSearchResponse(TypedDict, Generic[RecordT], total=False):
+    """A list envelope. ``next_cursor`` is the stable traversal: pass it back as ``cursor``; it is ``None`` on the last
+    page. ``iter_*`` follows it. ``offset`` is random access and is deterministic only for a static corpus."""
+
+    request: Required[ScientificRequestEcho]
+    review_summary: Required[ReviewStatusSummary]
+    records: Required[list[RecordT]]
+    pagination: Required[Pagination]
+    next_cursor: str | None
+    watermark: WatermarkEcho | None
 
 
 class ScientificDetailResponse(TypedDict, Generic[RecordT]):
@@ -87,8 +148,8 @@ class SpeciesRecord(TypedDict, total=False):
 
     ``canonical_smiles``, ``inchi_key``, ``charge`` and ``multiplicity`` are
     the *graph* identity and are shared by every entry beneath it. What
-    separates one entry from another lives on the entry: ``stereo_label``,
-    ``electronic_state_kind``, ``electronic_state_label``, ``term_symbol``
+    separates one entry from another lives on the entry: ``stereo_descriptor``
+    (``stereo_label`` is its display text), ``electronic_state_kind``, ``electronic_state_label``, ``term_symbol``
     and ``isotope_key``, plus the one-string ``species_entry_label`` derived
     from them. Never pick an entry by position or by the species-level
     fields -- ``N=N`` carries a ``Z`` entry (cis-diazene) and an ``E`` entry
@@ -96,9 +157,9 @@ class SpeciesRecord(TypedDict, total=False):
     species-level field there is.
 
     ``stereo_kind`` is the species' own: ``achiral`` means a null
-    ``stereo_label`` on an entry has nothing to label, while ``ez_isomer``
-    or ``enantiomer`` means stereoisomers exist and this entry has simply
-    not been labelled.
+    ``stereo_descriptor`` on an entry has nothing to describe, while ``ez_isomer``
+    or ``enantiomer`` means stereoisomers exist and the entry's descriptor
+    says which one (``?`` per element nothing pinned down).
     """
 
     species_ref: Required[str]
@@ -116,9 +177,9 @@ class ReactionParticipantRecord(TypedDict, total=False):
     """One reactant/product participant, from ``reactions/search`` or ``/browse``.
 
     ``formula`` is the RDKit Hill-notation formula derived from ``smiles``
-    (``null`` when the SMILES fails to parse); ``stoichiometry`` is the
-    graph-identity coefficient ("this equation consumes two of this
-    species"), not a property of any one deposit. Same shape as
+    (``null`` when the SMILES fails to parse); ``stoichiometry`` is how many
+    times this species entry occurs on this side of the reaction entry
+    (``H + H -> H2`` lists the one H entry once, with 2). Same shape as
     ``ReactionFullSpeciesParticipant`` on ``get_reaction_full``'s
     ``species.reactants`` / ``species.products``.
     """
@@ -192,6 +253,8 @@ class ThermoDetailRecord(TypedDict, total=False):
     """
 
     thermo_ref: Required[str]
+    #: Deposition time (when the row was created in TCKDB): the second key of the display order.
+    created_at: Required[str]
     scientific_origin: Required[str]
     model_kind: Required[str]
     review: Required[JSONDict]
@@ -251,6 +314,8 @@ class KineticsDetailRecord(TypedDict, total=False):
     """
 
     kinetics_ref: Required[str]
+    #: Deposition time (when the row was created in TCKDB): the second key of the display order.
+    created_at: Required[str]
     scientific_origin: Required[str]
     model_kind: Required[str]
     review: Required[JSONDict]
@@ -269,9 +334,10 @@ class KineticsDetailRecord(TypedDict, total=False):
     # What the depositor declared (attributed claims, not verified facts): the determination
     # this record is a representation of, what the coefficient is, and how the rate was
     # produced. ``null`` means not stated, never "standalone" or "universally valid". Under ``profile="curated"``
-    # ``determination`` is also ``null`` when its target (a transition-state entry or a network channel) is not
-    # approved, ``tunneling_application`` is ``null`` when it cites an unapproved entry or calculation, and
-    # ``provenance["irc"]`` is ``null`` when its calculation is not approved.
+    # ``determination`` is also ``null`` when its target (a transition-state entry or a network channel) is
+    # rejected or deprecated, ``tunneling_application`` is ``null`` when it cites a rejected or deprecated entry or
+    # calculation, and ``provenance["irc"]`` is ``null`` when its calculation is rejected or deprecated. An
+    # unreviewed one is shown.
     determination: JSONDict | None
     applicability: JSONDict | None
     protocol: JSONDict | None
@@ -293,6 +359,7 @@ class KineticsDetailRecord(TypedDict, total=False):
     chebyshev: JSONDict | None
     falloff: JSONDict | None
     third_body_efficiencies: list[JSONDict] | None
+    bath_gas: list[JSONDict] | None
     temperature_coverage: JSONDict | None
     trust: JSONDict | None
     assessments: PublicAssessmentSummary | None
@@ -561,8 +628,8 @@ class NetworkSolveRecord(TypedDict, total=False):
     """One scientific network-solve record from search or detail reads."""
 
     network_solve: Required[JSONDict]
-    # ``None`` when the read used ``profile="curated"`` and the network this solve belongs to is not approved: the solve
-    # is shown, the network is not named (the key is always present).
+    # ``None`` when the read used ``profile="curated"`` and the network this solve belongs to is rejected or
+    # deprecated: the solve is shown, the network is not named (the key is always present).
     network: Required[JSONDict | None]
     evidence_summary: Required[JSONDict]
     available_sections: Required[JSONDict]
@@ -578,8 +645,8 @@ class NetworkSolveRecord(TypedDict, total=False):
 
 class NetworkKineticsRecord(TypedDict, total=False):
     network_kinetics: Required[JSONDict]
-    # ``None`` when the read used ``profile="curated"`` and the network is not approved: the fit is shown (it is
-    # reviewed through its solve), the network is not named (the key is always present).
+    # ``None`` when the read used ``profile="curated"`` and the network is rejected or deprecated: the fit is shown
+    # (it is reviewed through its solve), the network is not named (the key is always present).
     network: Required[JSONDict | None]
     network_solve: Required[JSONDict]
     network_channel: Required[JSONDict]
@@ -681,7 +748,7 @@ class StatmechRecord(TypedDict, total=False):
     statmech: Required[JSONDict]
     # ``None`` on a transition-state-owned record (it has a ``transition_state`` block instead). Under
     # ``profile="curated"`` BOTH ``species`` and ``transition_state`` are ``None`` when the record's subject is a
-    # transition-state entry that is not approved: the subject is withheld, not absent.
+    # transition-state entry that is rejected or deprecated: the subject is withheld, not absent.
     species: JSONDict | None
     transition_state: JSONDict | None
     supersession: SupersessionNotice | None
@@ -736,8 +803,10 @@ class SpeciesStructureRecord(TypedDict, total=False):
     ``electronic_state_kind``, ``electronic_state_label``, ``term_symbol``
     and ``isotope_key`` are the entry's own and are what tell those rows
     apart; ``species_entry_label`` is the same five rendered as one short
-    string. Each is ``None`` when the entry carries no such label -- never
-    an empty string.
+    string. Each is ``None`` when the entry carries no such label, and
+    ``electronic_state_label`` and ``term_symbol`` are also ``None`` when the
+    stored value does not satisfy the write-time grammar (a row stored before
+    it) -- never an empty string. A served value is in its canonical spelling.
     """
 
     species_ref: Required[str]
@@ -750,6 +819,10 @@ class SpeciesStructureRecord(TypedDict, total=False):
     species_entry_kind: Required[str]
     electronic_state_kind: Required[str]
     stereo_label: str | None
+    stereo_descriptor: str | None
+    stereo_resolution: str | None
+    stereo_smiles: str | None
+    stereo_not_represented: list[str]
     electronic_state_label: str | None
     term_symbol: str | None
     isotope_key: str | None
@@ -780,8 +853,8 @@ class ConformerRecord(TypedDict, total=False):
 class ConformerObservationRecord(TypedDict, total=False):
     """One observation, with the group and species it belongs to attached.
 
-    ``conformer_group`` is ``None`` when the read used ``profile="curated"`` and the observation's group is not
-    approved: the observation is shown, the group it sits in is not named.
+    ``conformer_group`` is ``None`` when the read used ``profile="curated"`` and the observation's group is
+    rejected or deprecated: the observation is shown, the group it sits in is not named.
     """
 
     conformer_observation: Required[JSONDict]
@@ -805,8 +878,8 @@ class TransitionStateEntryRecord(TypedDict, total=False):
     """
 
     transition_state_entry: Required[JSONDict]
-    # ``None`` when the read used ``profile="curated"`` and the owning transition state is not approved: the entry is
-    # shown, the transition state it belongs to is not named (the key is always present).
+    # ``None`` when the read used ``profile="curated"`` and the owning transition state is rejected or deprecated:
+    # the entry is shown, the transition state it belongs to is not named (the key is always present).
     transition_state: Required[JSONDict | None]
     reaction: Required[JSONDict]
     evidence_summary: Required[JSONDict]
@@ -958,8 +1031,7 @@ class LiteratureLinkedRecord(TypedDict, total=False):
 
 class AnalyticsRequestEcho(TypedDict, total=False):
     filter: Required[JSONDict]
-    sort: Required[str]
-    pagination_mode: Required[str]
+    sort: Required[OrderEcho]
     include: list[str]
     profile: str
     profile_recommendation: str
@@ -1125,6 +1197,74 @@ class SpeciesThermoResponse(ScientificSearchResponse[ThermoDetailRecord]):
     species_entry_id: NotRequired[int]
 
 
+class SelectionEligibilityIn(TypedDict, total=False):
+    """The eligibility defaults a select request may lift; every one is applied unless set ``true``.
+
+    Which of these a route offers depends on the record kind: a network solve offers only the two review ones, a statmech
+    candidate and a structure unit add ``include_confirmed_findings``, thermo and kinetics offer all four. The read
+    profile's record floor (``curated``: a select returns approved records only) is not one of them and no request
+    lifts it.
+    """
+
+    include_rejected: bool
+    include_deprecated: bool
+    include_hard_failed_evidence: bool
+    include_confirmed_findings: bool
+
+
+class SelectionFilters(TypedDict, total=False):
+    """The filters a select request may carry, with the matching search's vocabulary (a route accepts its own subset).
+
+    thermo and kinetics: ``model_kind``, ``scientific_origin``, ``level_of_theory_ref`` and the provenance fields
+    (``method``, ``basis``, ``software``, ``software_version``, ``workflow_tool``, ``workflow_tool_version``,
+    ``method_family``, ``dft_rung_min``, ``dft_rung_max``): ONE source calculation has to match all the supplied
+    provenance fields. network: ``model_kind`` and the six provenance fields. statmech: also ``scientific_origin``.
+    structure: the six provenance fields. ``method_family`` and the DFT rung are a classification of the method, not a
+    measure of accuracy. An unknown filter is a 422, never ignored.
+    """
+
+    model_kind: str
+    scientific_origin: str
+    level_of_theory_ref: str
+    method_family: list[str]
+    dft_rung_min: int
+    dft_rung_max: int
+    method: str
+    basis: str
+    software: str
+    software_version: str
+    workflow_tool: str
+    workflow_tool_version: str
+
+
+class EligibilityDefaultEcho(TypedDict):
+    """One named eligibility default, as applied to the answer: ``source`` is ``default``, ``request`` or ``read_profile``."""
+
+    name: str
+    override_field: str | None
+    applied: bool
+    source: Literal["default", "request", "read_profile"]
+    excluded: int
+    admitted_by_override: int
+
+
+class SelectionFunnel(TypedDict):
+    """How many candidates each step removed (``unit`` says what is counted)."""
+
+    unit: str
+    considered: int
+    removed_by_filters: int
+    removed_by_floor: int
+    removed_by_eligibility: int
+    remaining: int
+
+
+class SelectionFilterAnswer(TypedDict):
+    applied: JSONDict
+    removed: int
+    note: str | None
+
+
 class ThermoSelectionTargetIn(TypedDict, total=False):
     """The thermodynamic target of a selection request.
 
@@ -1147,29 +1287,29 @@ class ThermoSelectionRequest(TypedDict, total=False):
     quantity: Literal["formation_enthalpy_298k"]
     temperature_k: float
     phase: Literal["gas"]
-    policy: Literal["method_preferred", "default", "most_reviewed", "latest"]
+    policy: Literal["default", "most_reviewed", "latest"]
     result_mode: Literal["all", "first"]
     min_review_status: str
+    filters: SelectionFilters
+    eligibility: SelectionEligibilityIn
 
 
 ThermoSelectionOutcomeToken: TypeAlias = Literal[
-    "policy_preferred",
     "incomparable_alternatives",
     "sole_eligible_candidate",
     "no_applicable_candidate",
-    "policy_conflict",
 ]
 
 
 class ThermoSelectionPick(TypedDict):
     """The one record the response names, and exactly why.
 
-    ``administrative`` is true when the record was chosen by review/recency order among
-    alternatives the method rules do not rank: that is not a claim it is method-superior.
+    ``administrative`` is true when the record is first in display order among several eligible
+    alternatives: that is not a claim it is better, preferred or method-superior.
     """
 
     thermo_ref: str
-    basis: Literal["policy_preferred", "sole_eligible_candidate", "administrative_first"]
+    basis: Literal["sole_eligible_candidate", "administrative_first"]
     administrative: bool
     explanation: str
 
@@ -1194,6 +1334,8 @@ class ThermoSelectionCandidate(TypedDict):
     blocking: list[str]
     advisory: list[str]
     eligible: bool
+    blocked_by: list[str]
+    passed_only_by_override: list[str]
 
 
 class ThermoSelectionDisclosures(TypedDict):
@@ -1209,11 +1351,12 @@ class ThermoSelectionResponse(TypedDict):
     """The decision, its basis, and everything it rests on, as public refs only.
 
     ``outcome`` is the selection basis. Preserve it and ``basis`` verbatim when
-    reporting a result: ``incomparable_alternatives`` and ``policy_conflict`` mean
-    nothing was scientifically selected.
+    reporting a result: ``incomparable_alternatives`` means several records are eligible and TCKDB
+    ranks none above another.
     """
 
     request: JSONDict
+    forwarded_from_conformer_group_ref: str | None
     review: JSONDict
     policy: JSONDict
     outcome: ThermoSelectionOutcomeToken
@@ -1222,9 +1365,10 @@ class ThermoSelectionResponse(TypedDict):
     fronts: list[list[str]]
     administrative_order: list[str]
     candidates: list[ThermoSelectionCandidate]
-    relations: JSONDict
-    rule_matches: list[JSONDict]
     disclosures: ThermoSelectionDisclosures
+    filters: SelectionFilterAnswer
+    eligibility: list[EligibilityDefaultEcho]
+    funnel: SelectionFunnel
 
 
 class KineticsSelectionTargetIn(TypedDict, total=False):
@@ -1276,30 +1420,31 @@ class KineticsSelectionRequest(TypedDict, total=False):
     collider: KineticsSelectionColliderIn
     quantity: Literal["rate_coefficient"]
     phase: Literal["gas"]
-    policy: Literal["method_preferred", "default", "most_reviewed", "latest"]
+    policy: Literal["default", "most_reviewed", "latest"]
     mode: Literal["all", "first"]
     min_review_status: str
+    filters: SelectionFilters
+    eligibility: SelectionEligibilityIn
 
 
 KineticsSelectionOutcomeToken: TypeAlias = Literal[
-    "policy_preferred",
     "incomparable_alternatives",
     "sole_eligible_candidate",
     "no_applicable_candidate",
-    "policy_conflict",
 ]
 
 
 class KineticsSelectionPick(TypedDict):
     """The determination the response names (with every eligible fitted representation of it), and exactly why.
 
-    ``administrative`` is true when it was chosen by review/recency order among alternatives the rules do not rank:
-    that is not a claim it is method-superior. Alternate fits of one determination are not independent confirmation.
+    ``administrative`` is true when it is first in display order among several eligible alternatives: that is not a
+    claim it is better, preferred or method-superior. Alternate fits of one determination are not independent
+    confirmation.
     """
 
     determination_ref: str
     kinetics_refs: list[str]
-    basis: Literal["policy_preferred", "sole_eligible_candidate", "administrative_first"]
+    basis: Literal["sole_eligible_candidate", "administrative_first"]
     administrative: bool
     explanation: str
 
@@ -1322,6 +1467,8 @@ class KineticsSelectionCandidate(TypedDict):
     blocking: list[str]
     advisory: list[str]
     eligible: bool
+    blocked_by: list[str]
+    passed_only_by_override: list[str]
 
 
 class KineticsSelectionDisclosures(TypedDict):
@@ -1338,8 +1485,8 @@ class KineticsSelectionResponse(TypedDict):
     """The decision, its basis, and everything it rests on, as public refs only.
 
     ``outcome`` is the selection basis. Preserve it and ``basis`` verbatim when reporting a result:
-    ``incomparable_alternatives`` and ``policy_conflict`` mean nothing was scientifically selected, and a
-    ``sole_eligible_candidate`` is not a comparative accuracy claim. A winner is scoped to the eligible population;
+    ``incomparable_alternatives`` means several are eligible and TCKDB ranks none above another, and a
+    ``sole_eligible_candidate`` is not a comparative accuracy claim. The answer is scoped to the eligible population;
     ``disclosures`` lists the candidates that did not compete.
     """
 
@@ -1353,10 +1500,10 @@ class KineticsSelectionResponse(TypedDict):
     administrative_order: list[str]
     determinations: list[JSONDict]
     candidates: list[KineticsSelectionCandidate]
-    relations: JSONDict
-    rule_matches: list[JSONDict]
-    pair_checks: list[JSONDict]
     disclosures: KineticsSelectionDisclosures
+    filters: SelectionFilterAnswer
+    eligibility: list[EligibilityDefaultEcho]
+    funnel: SelectionFunnel
 
 
 class NetworkSelectionBathComponent(TypedDict, total=False):
@@ -1399,8 +1546,7 @@ class NetworkSelectionRequest(TypedDict, total=False):
 
     ``coefficient_basis``, the temperature and pressure windows, ``bath`` and ``partition`` are required. A
     single-channel question names ``channel_key`` and ``observable``; a bundle or full-network question lists
-    ``outputs`` instead. ``objective`` defaults to physical accuracy; ``model_fidelity`` needs
-    ``reference_model_ref`` (an ``nsolve_...`` ref) and ``representation_fidelity`` needs ``reference_outputs``.
+    ``outputs`` instead.
     """
 
     coefficient_basis: Required[Literal["kernel", "composition_effective"]]
@@ -1419,22 +1565,19 @@ class NetworkSelectionRequest(TypedDict, total=False):
     regime: NetworkSelectionRegimeIn
     source_composition_hash: str
     sink_composition_hash: str
-    objective: Literal["physical_accuracy", "model_fidelity", "representation_fidelity"]
-    reference_model_ref: str
-    reference_outputs: str
     quantity: Literal["rate_coefficient"]
     phase: Literal["gas"]
-    policy: Literal["method_preferred", "default", "most_reviewed", "latest"]
+    policy: Literal["default", "most_reviewed", "latest"]
     mode: Literal["all", "first"]
     min_review_status: str
+    filters: SelectionFilters
+    eligibility: SelectionEligibilityIn
 
 
 NetworkSelectionOutcomeToken: TypeAlias = Literal[
-    "policy_preferred",
     "incomparable_alternatives",
     "sole_eligible_candidate",
     "no_applicable_candidate",
-    "policy_conflict",
 ]
 
 
@@ -1447,15 +1590,16 @@ class NetworkSelectionMember(TypedDict):
 class NetworkSelectionPick(TypedDict):
     """The node the response names: a determination of one channel, or a declared product set of one solve.
 
-    ``administrative`` is true when it was chosen by review/recency order among alternatives the rules do not rank:
-    that is not a claim it is method-superior. Alternate fits of one determination are not independent confirmation.
+    ``administrative`` is true when it is first in display order among several eligible alternatives: that is not a
+    claim it is better, preferred or method-superior. Alternate fits of one determination are not independent
+    confirmation.
     """
 
     node_ref: str
     scope: Literal["single_channel", "projected_bundle", "full_network"]
     solve_ref: str
     members: list[NetworkSelectionMember]
-    basis: Literal["policy_preferred", "sole_eligible_candidate", "administrative_first"]
+    basis: Literal["sole_eligible_candidate", "administrative_first"]
     administrative: bool
     explanation: str
 
@@ -1475,8 +1619,8 @@ class NetworkSelectionResponse(TypedDict):
     """The decision, its basis and everything it rests on, as public refs only.
 
     ``outcome`` is the selection basis. Preserve it and ``basis`` verbatim when reporting a result:
-    ``incomparable_alternatives`` and ``policy_conflict`` mean nothing was scientifically selected, and a
-    ``sole_eligible_candidate`` is not a comparative accuracy claim. A winner is scoped to the eligible population;
+    ``incomparable_alternatives`` means several are eligible and TCKDB ranks none above another, and a
+    ``sole_eligible_candidate`` is not a comparative accuracy claim. The answer is scoped to the eligible population;
     ``disclosures`` lists what did not compete.
     """
 
@@ -1490,10 +1634,11 @@ class NetworkSelectionResponse(TypedDict):
     administrative_order: list[str]
     determinations: list[JSONDict]
     bundles: list[JSONDict]
-    relations: JSONDict
+    solves: list[JSONDict]
+    filters: SelectionFilterAnswer
+    eligibility: list[EligibilityDefaultEcho]
+    funnel: SelectionFunnel
     representations: list[JSONDict]
-    rule_matches: list[JSONDict]
-    pair_checks: list[JSONDict]
     disclosures: NetworkSelectionDisclosures
 
 
@@ -1699,6 +1844,7 @@ __all__ = [
     "KineticsSelectionOutcomeToken",
     "KineticsSelectionPick",
     "KineticsSelectionPressureIn",
+    "EligibilityDefaultEcho",
     "KineticsSelectionRequest",
     "KineticsSelectionResponse",
     "KineticsSelectionTargetIn",
@@ -1743,9 +1889,13 @@ __all__ = [
     "ReactionParticipantRecord",
     "ReactionRecord",
     "ReactionSearchResponse",
+    "DeterministicTrustSummary",
+    "MadeUnder",
     "ReproducibilityAssessmentSummary",
     "ReviewStatusSummary",
     "ScientificDetailResponse",
+    "OrderEcho",
+    "OrderKeyEcho",
     "ScientificRequestEcho",
     "ScientificSearchResponse",
     "ScientificSoftwareReleaseIdentity",
@@ -1773,6 +1923,10 @@ __all__ = [
     "ThermoSelectionDisclosures",
     "ThermoSelectionOutcomeToken",
     "ThermoSelectionPick",
+    "SelectionEligibilityIn",
+    "SelectionFilterAnswer",
+    "SelectionFilters",
+    "SelectionFunnel",
     "ThermoSelectionRequest",
     "ThermoSelectionResponse",
     "ThermoSelectionTargetIn",
@@ -1801,19 +1955,17 @@ StructureSelectionOutcomeToken: TypeAlias = Literal[
     "representative_minimum",
     "qualified_evidence",
     "validated_corpus_minimum",
-    "policy_preferred",
     "sole_eligible_candidate",
     "incomparable_alternatives",
-    "policy_conflict",
     "evidence_conflict",
 ]
-"""The 13 outcomes of a structure selection. ``incomparable_alternatives`` means more than one cohort (or protocol)
+"""The 11 outcomes of a structure selection. ``incomparable_alternatives`` means more than one cohort (or protocol)
 survived and none is named: total energies of different protocols are not on one scale. ``representative_minimum`` is
 the lowest administrative *representative* per target and is never the minimum of all stored values."""
 
 
 class _StructureSelectionRequestBase(TypedDict, total=False):
-    """Fields every structure selection request may carry. Nothing here is a database id, a bound, a sort or a rule.
+    """Fields every structure selection request may carry. Nothing here is a database id, a bound or a sort.
 
     ``quantity`` is ``electronic_energy`` (the server default) or ``zero_kelvin_energy``; send ``None`` explicitly (JSON
     null) only for evidence-only qualification. A recognised deferred quantity (enthalpy, Gibbs energy, barrier, rate,
@@ -1825,28 +1977,27 @@ class _StructureSelectionRequestBase(TypedDict, total=False):
     validation_claim: Literal["local_minimum", "first_order_saddle", "higher_order_saddle", "reactive_connectivity"]
     min_review_status: str
     permitted_quality: list[Literal["raw", "curated", "rejected"]]
+    filters: SelectionFilters
+    eligibility: SelectionEligibilityIn
     geometry_ref: str
     member_refs: list[str]
     recipe: JSONDict
     require_stable_reference: bool
     administrative_policy: Literal["default", "latest", "earliest"]
     result_mode: Literal["all", "first"]
-    apply_rules: bool
-    objective: Literal["physical_accuracy", "expected_accuracy", "model_fidelity"]
-    reference_model: str
     repeat_policy: Literal["retain_alternates", "administrative_representative"]
 
 
 class CalculationSelectionRequest(_StructureSelectionRequestBase, total=False):
     """Body of ``POST .../species-entries/{ref}/calculations/select``."""
 
-    intent: Literal["recorded_minimum", "protocol_preferred"]
+    intent: Literal["recorded_minimum", "protocol_coverage"]
 
 
 class ConformerSelectionRequest(_StructureSelectionRequestBase, total=False):
     """Body of ``POST .../species-entries/{ref}/conformers/select``."""
 
-    intent: Literal["validated_minimum", "qualify_evidence", "protocol_preferred"]
+    intent: Literal["validated_minimum", "qualify_evidence", "protocol_coverage"]
 
 
 class TransitionStateEvidenceSelectionRequest(_StructureSelectionRequestBase, total=False):
@@ -1856,7 +2007,7 @@ class TransitionStateEvidenceSelectionRequest(_StructureSelectionRequestBase, to
     taken yet.
     """
 
-    intent: Literal["validated_saddle", "qualify_evidence", "protocol_preferred"]
+    intent: Literal["validated_saddle", "qualify_evidence", "protocol_coverage"]
     require_connectivity: bool
 
 
@@ -1875,6 +2026,8 @@ class StructureSelectionUnit(TypedDict):
     recipe: JSONDict | None
     claim: JSONDict | None
     eligible: bool
+    blocked_by: list[str]
+    passed_only_by_override: list[str]
 
 
 class StructureSelectionDisclosures(TypedDict):
@@ -1913,6 +2066,9 @@ class StructureSelectionResponse(TypedDict):
     notes: list[str]
     units: list[StructureSelectionUnit]
     disclosures: StructureSelectionDisclosures
+    filters: SelectionFilterAnswer
+    eligibility: list[EligibilityDefaultEcho]
+    funnel: SelectionFunnel
     versions: JSONDict
     snapshot_isolation: str
     integrity: JSONDict
@@ -2101,7 +2257,7 @@ class RelativeConformerEnergyCompareManifest(TypedDict, total=False):
 
 
 # ---------------------------------------------------------------------------
-# Statmech selection (qualify supplied statistical models; prefer only where audited rules say so)
+# Statmech selection (qualify supplied statistical models; list the qualified ones in display order)
 # ---------------------------------------------------------------------------
 
 StatmechSelectionOutcomeToken: TypeAlias = Literal[
@@ -2113,14 +2269,11 @@ StatmechSelectionOutcomeToken: TypeAlias = Literal[
     "unsupported_task",
     "unsupported_model",
     "evidence_conflict",
-    "unresolved_comparability",
-    "policy_conflict",
     "sole_eligible_candidate",
-    "policy_preferred",
     "incomparable_alternatives",
 ]
-"""The 13 outcomes of a statmech selection. ``incomparable_alternatives`` means more than one applicable whole model and
-no active rule that ranks them: unranked, not equally accurate. A valid negative outcome is an HTTP 200."""
+"""The 10 outcomes of a statmech selection. ``incomparable_alternatives`` means more than one applicable whole model and
+TCKDB ranks none above another. A valid negative outcome is an HTTP 200."""
 
 
 class StatmechSelectionRequest(TypedDict, total=False):
@@ -2128,22 +2281,22 @@ class StatmechSelectionRequest(TypedDict, total=False):
 
     ``target`` is ``{"kind": "species_entry", "species_entry_ref": "spe_...", "scope": {...}, ...}`` or
     ``{"kind": "transition_state_entry", "transition_state_entry_ref": "tse_...", "scope": {...}, ...}``; every ref is a
-    public ref. Nothing here is a database id, a bound, a page, a sort or a rule.
+    public ref. Nothing here is a database id, a bound, a page or a sort.
     """
 
     contract_version: Literal[1]
-    intent: Literal["qualify", "protocol_preferred"]
+    intent: Literal["qualify", "protocol_coverage"]
     task: str
     observable: str
     target: JSONDict
     conditions: JSONDict
     population: JSONDict
     coverage_requirement: Literal["entire_requested_domain", "eligible_population"]
-    comparison_objective: Literal["physical_accuracy", "expected_accuracy", "model_fidelity"]
-    reference_model_ref: str
     administrative_policy: Literal["default", "latest", "most_reviewed"]
     result_mode: Literal["all", "first"]
     min_review_status: str
+    filters: SelectionFilters
+    eligibility: SelectionEligibilityIn
 
 
 class StatmechSelectionCandidate(TypedDict):
@@ -2162,12 +2315,13 @@ class StatmechSelectionCandidate(TypedDict):
     recipe: JSONDict | None
     supersession: JSONDict | None
     eligible: bool
+    blocked_by: list[str]
+    passed_only_by_override: list[str]
 
 
 class StatmechSelectionSelection(TypedDict):
-    """The three mutually exclusive references; at most one is set, with its basis and population limit."""
+    """The two mutually exclusive references; at most one is set, with its basis and population limit."""
 
-    scientific_ref: str | None
     sole_eligible_ref: str | None
     administrative_ref: str | None
     basis: str | None
@@ -2184,6 +2338,7 @@ class StatmechSelectionResponse(TypedDict):
     """
 
     request: JSONDict
+    forwarded_from_conformer_group_ref: str | None
     review: JSONDict
     versions: JSONDict
     outcome: StatmechSelectionOutcomeToken
@@ -2193,13 +2348,14 @@ class StatmechSelectionResponse(TypedDict):
     population: JSONDict
     coverage: JSONDict
     candidates: list[StatmechSelectionCandidate]
-    edges: list[JSONDict]
     fronts: list[list[str]]
-    conflicts: JSONDict
-    undecided: list[JSONDict]
+    filters: SelectionFilterAnswer
+    eligibility: list[EligibilityDefaultEcho]
+    funnel: SelectionFunnel
+    administrative_order: list[str]
+    administrative_key: JSONDict
     advisories: dict[str, list[str]]
     notices: list[str]
-    protocol: JSONDict
     manifest: JSONDict
     snapshot_isolation: str
     integrity: JSONDict

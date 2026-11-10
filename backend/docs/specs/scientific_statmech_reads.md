@@ -92,29 +92,28 @@ calculation id. It is a stored-result presence fact only: it does not say the
 curvature is at the pinned geometry, usable, or eligible for any task (that is
 qualified by `POST /scientific/statmech/select`), and no witness is ranked or
 picked. Only calculations the record itself links are consulted; a calculation of
-the same owner that the record does not link is never borrowed. Witnesses follow
-the read profile's calculation visibility, the same floor
-`GET /scientific/calculations/{ref}` applies: under `profile=curated` a linked
-calculation below `approved` is omitted (so its existence, review state and
-whether it stores a Hessian are not confirmed), under `exploratory` every linked
-calculation with curvature is listed. The existing `source_freq_calculation_refs`
-pointer and the `source_calculations` block follow the same rule: under `profile=curated` they omit linked
-calculations below `approved`, so a statmech read never names a calculation that
-`GET /scientific/calculations/{ref}` answers 404 for, and a torsion's `source_scan_calculation_ref` / `_id` is
-null when that scan calculation is hidden. **Scope decision (owner may overrule):** only those
-blocks, which identify a calculation, are filtered. Record-level facts (`levels`, the `evidence_summary`
-counts, the `available_sections` flags including `has_frequencies`, and trust) describe the approved
-statmech's own provenance and are computed from every link in every profile, so they do not vary by profile.
-Release, archive and export copy raw provenance tables and are unaffected. Exploratory output is unchanged.
+the same owner that the record does not link is never borrowed. Witnesses follow the
+evidence rule of the read profile (ADR 0023): under `profile=curated` a linked calculation that is `rejected` or `deprecated` is
+omitted (so its existence, review state and whether it stores a Hessian are not confirmed); an unreviewed or under-review one is
+listed, with its badge in `review_status_by_ref`. Under `exploratory` every linked calculation with curvature is listed. The
+existing `source_freq_calculation_refs` pointer and the `source_calculations` block follow the same rule, and a torsion's
+`source_scan_calculation_ref` / `_id` is null when that scan calculation is withheld.
 
-The same rule now applies to the transition-state-entry read's `include=statmech` (`statmech[].source_calculations`), the thermo
+**Record-level facts follow the same rule (step 3).** The `levels`, the `evidence_summary` counts and flags
+(`source_calculation_count`, `has_opt_calculation`, `has_freq_calculation`, `has_sp_calculation`, `has_rotor_scans`), and the
+`available_sections` flags `has_source_calculations` and `has_frequencies` describe the source calculations the profile shows: a
+withheld calculation is not counted, and a level only it supplied is null together with its `*_source` (the derivation reads every
+link, so no other calculation's level is put in its place). An unreviewed calculation is counted and supplies its level. Under
+`exploratory` nothing is withheld, so these are computed from every link, as before. Trust is a separate verdict and is unchanged.
+Release, archive and export copy raw provenance tables and are unaffected.
+
+The same rule applies to the transition-state-entry read's `include=statmech` (`statmech[].source_calculations`), the thermo
 provenance's source calculations (the thermo's own and the statmech fallback), its target conformer group, statmech link and traced
-conformer refs, and statmech `include=conformers`
-(`conformer_group_ref`).
+conformer refs, its primary level of theory and derived levels, and statmech `include=conformers` (`conformer_group_ref`).
 
-**Not yet covered:** curated reads are not yet complete. Other surfaces may still name records the curated profile hides (a
-follow-up lists them), and supersession notices can name a successor that has since become hidden (an owner decision). Do not
-assume a curated read hides every unapproved ref.
+Detail-by-ref follows the withheld set (step 7): a ref to an unreviewed calculation that a curated read names resolves on its own
+route, badged, and only a `rejected` or `deprecated` one answers 404. Search and select matching on a level or software follows the
+evidence rule (step 4). Supersession notices name a successor that is shown with its badge.
 
 `statmech` also does **not** link to a conformer directly. The
 linkage is at the `species_entry` level: the `include=conformers`
@@ -271,26 +270,20 @@ statmech_id DESC
 ### What the response reports about the order and the exclusions
 
 The search response and the species-entry statmech response (`GET
-/scientific/species-entries/{id}/statmech`) carry three additive fields on
+/scientific/species-entries/{id}/statmech`) carry one additive field on
 `request`, filled on every response, empty pages included:
 
-- `effective_order`: the keys and directions (`review_rank`/`created_at`/`id`,
-  `asc`/`desc`) that actually ordered the returned records. Search and
-  `collapse=all` give `review_rank asc, created_at desc, id desc`. On the species
-  read, `collapse=first` with `selection_policy=latest` gives `created_at desc,
-  id desc`; `default` and `most_reviewed` keep the review-rank order.
-- `selection_policy_applied`: `true` only when `collapse=first` (the policy chose
-  the record); `false` on `collapse=all`, where the policy is echoed but orders
-  nothing; `null` on search, which has no policy.
 - `review_visibility`: `visible_statuses`, `excluded_statuses` and
   `profile_floor_applied`, derived from the same visibility set the read filtered
   with. `request.filter` keeps the flags the caller *sent*; `review_visibility` is
   what was *effective* (the `curated` profile floor overrides `include_rejected`
   and `include_deprecated`).
 
-`sort` keeps its string and means the candidate-list (`collapse=all`) order; it
-is not the order that chose a `collapse=first` record. The actual orders are
-unchanged. The thermo and transport species reads still carry the older echo.
+`sort` is the order the records were served in (`review_rank asc, created_at desc,
+id desc`). Neither read picks a record: `collapse` and `selection_policy` are
+refused (422 `browse_parameter_removed`, which names `POST /statmech/select`), and
+the former `effective_order` and `selection_policy_applied` echoes are gone with
+them.
 
 ## 6. Review/trust behavior
 

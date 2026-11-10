@@ -86,6 +86,7 @@ def test_ts_and_reaction_routes_name_no_hidden_record_under_curated(client, db_s
     hidden = world.hidden_refs()
 
     exploratory = run_pass(client, db_session, specs, world, spy, profile="exploratory")
+    world.withhold_hidden(db_session)  # the crawl above saw the records unlisted; from here they are withheld (ADR 0023)
     curated = run_pass(client, db_session, specs, world, spy, profile="curated")
     monkeypatch.setattr(settings, "allow_public_internal_ids", True)
     curated_ids = run_pass(client, db_session, specs, world, spy, profile="curated", with_ids=True)
@@ -124,8 +125,17 @@ def test_ts_and_reaction_routes_name_no_hidden_record_under_curated(client, db_s
 # ---------------------------------------------------------------------------
 
 
-def _get(client, path, profile, **params):
+def _get_raw(client, path, profile, **params):
+    """A request that asserts nothing: for callers that accept a fail-closed answer."""
     return client.get(f"{BASE}{path}", params={**params, "profile": profile})
+
+
+def _get(client, path, profile, **params):
+    response = _get_raw(client, path, profile, **params)
+    # Fail with the body, not with a KeyError two lines later: a one-off
+    # statement timeout once surfaced as ``KeyError: 'records'``.
+    assert response.status_code == 200, (path, params, response.status_code, response.text)
+    return response
 
 
 def _walk(node):
@@ -152,7 +162,7 @@ def test_a_visible_entry_of_a_hidden_transition_state_stays_visible_with_the_own
     Kills: hiding the child (404 or dropped from the browse); leaving the owner named; blanking an owner that is
     visible; touching exploratory.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     hidden_ts = world.hidden["ts_h"].public_ref
     under_hidden = world.visible["tse_v"].public_ref
@@ -194,7 +204,7 @@ def test_widening_the_owner_field_alone_still_fails_closed(client, db_session, l
 
     Kills: treating the nullable field as enough; dropping the D1 registration.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     from app.schemas.reads.scientific_transition_state import TransitionStateCoreBlock
 
@@ -268,7 +278,7 @@ def test_every_block_the_family_registers_is_reached_and_matters(client, db_sess
     """
     import json
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     registry = ref_guard.POINTER_MODELS
     for model, (route, params) in _shapes(world):
@@ -277,7 +287,7 @@ def test_every_block_the_family_registers_is_reached_and_matters(client, db_sess
         assert registered.status_code == 200, (model.__name__, route, registered.text)
         monkeypatch.setattr(ref_guard, "POINTER_MODELS", registry - {model})
         try:
-            answer = _get(client, route, "curated", **params).text
+            answer = _get_raw(client, route, "curated", **params).text
         except ref_guard.RefGuardUnplaceable:
             answer = None
         finally:
@@ -299,7 +309,7 @@ def test_the_untyped_irc_block_of_a_kinetics_provenance_goes_whole(client, db_se
     Kills: leaving ``{"type": "irc", "calculation_ref": null}`` behind (it would say a hidden record exists);
     dropping the field from ``POINTER_FIELDS``.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     route = f"/reaction-entries/{world.extra['reaction_entry'].public_ref}/kinetics"
     exploratory = _get(client, route, "exploratory").json()["records"]
@@ -319,7 +329,7 @@ def test_a_determination_aimed_at_a_hidden_record_is_not_served(client, db_sessi
 
     Kills: nulling only the ref (a shell remains); serving the determination.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     route = f"/reaction-entries/{world.extra['reaction_entry'].public_ref}/kinetics"
     by_ref = {r["kinetics_ref"]: r for r in _get(client, route, "exploratory").json()["records"]}
@@ -341,7 +351,7 @@ def test_counts_and_flags_of_a_visible_entry_follow_the_floor(client, db_session
 
     Kills: counting hidden calculations, entries or evidence in a count or flag; touching exploratory.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     entry = world.visible["tse_vw"].public_ref
     cur = _get(client, f"/transition-state-entries/{entry}", "curated", include="all").json()["record"]
@@ -376,7 +386,7 @@ def test_reaction_availability_follows_the_floor(client, db_session, login_as):
     Kills: counting hidden records in ``kinetics_count`` or the flags; hiding the reaction entry itself (it is a
     scoping parent, never gated).
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     ref = world.extra["reaction_entry_all_hidden"].public_ref
 
@@ -401,7 +411,7 @@ def test_free_text_that_names_a_hidden_record_is_blanked(client, db_session, log
 
     Kills: leaving the note; blanking the visible label with it.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     hidden = world.hidden["calc_h_ts"].public_ref
     ts = world.visible["ts_v"]
@@ -427,7 +437,7 @@ def test_a_reaction_display_string_naming_a_hidden_record_is_blanked(db_session)
         equation: str
         species_entry_label: str | None = None
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     hidden = world.hidden["tse_h"].public_ref
     visible = world.visible["tse_v"].public_ref
     curated = ResolvedReadProfile(profile=ReadProfile.curated, recommendation=ProfileRecommendation.approved_floor_only)
@@ -445,7 +455,7 @@ def test_no_endpoint_url_of_the_full_read_names_a_hidden_record(client, db_sessi
 
     Kills: serving the endpoint of a hidden item; a world with no hidden item that carries an endpoint.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     route = f"/reaction-entries/{world.extra['reaction_entry'].public_ref}/full"
     hidden = list(world.hidden_refs().values())
@@ -463,7 +473,7 @@ def test_unreviewed_scoping_parents_are_not_hidden(client, db_session, login_as)
 
     Kills: treating a scoping parent as gated (404 or blanked participant).
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     unreviewed_entry = world.extra["species_entry_unreviewed"].public_ref
     for key in ("reaction_entry_unreviewed", "reaction_entry_hidden_participant"):
@@ -473,11 +483,11 @@ def test_unreviewed_scoping_parents_are_not_hidden(client, db_session, login_as)
             assert cur.status_code == 200, (key, suffix, cur.text)
     ref = world.extra["reaction_entry_hidden_participant"].public_ref
     cur = _get(client, f"/reaction-entries/{ref}/full", "curated")
-    # The /full participant list applies the floor to the species entries it lists (existing behaviour, not the
-    # guard's): the unreviewed entry is neither listed nor named, and the route still answers.
-    assert unreviewed_entry not in cur.text
+    # The /full participant list is an embedded record of a served detail (ADR 0023 step 7, Q9): the unreviewed entry is
+    # listed with its badge, as under exploratory, not left out by the record floor.
     exp = _get(client, f"/reaction-entries/{ref}/full", "exploratory")
     assert [p["species_entry_ref"] for p in exp.json()["species"]["reactants"]] == [unreviewed_entry]
+    assert [p["species_entry_ref"] for p in cur.json()["species"]["reactants"]] == [unreviewed_entry]
     unreviewed_rxe = world.extra["reaction_entry_unreviewed"].public_ref
     records = _get(client, f"/reaction-entries/{unreviewed_rxe}/kinetics", "curated").json()["records"]
     assert [r["kinetics_ref"] for r in records] == [world.visible["kin_vu"].public_ref]
@@ -497,7 +507,7 @@ def test_the_review_rows_of_a_full_read_do_not_list_hidden_records(client, db_se
     """
     from app.api.config import settings
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     route = f"/reaction-entries/{world.extra['reaction_entry'].public_ref}/full"
     params = {"include_review": "full", "include": ["internal_ids"]}
@@ -528,7 +538,7 @@ def test_levels_of_theory_name_only_the_calculation_types_the_profile_shows(clie
 
     Kills: building the map from hidden calculations; leaving kinetics ``levels.frequency`` to a hidden freq.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     entry = world.visible["tse_vw"].public_ref
     exp = _get(client, f"/transition-state-entries/{entry}", "exploratory").json()["record"]
@@ -551,8 +561,10 @@ def test_levels_of_theory_name_only_the_calculation_types_the_profile_shows(clie
     cur_k = next(r for r in _get(client, kinetics, "curated").json()["records"] if r["kinetics_ref"] == ref)
     assert exp_k["levels"]["frequency"] is not None and exp_k["levels"]["frequency_source"] == "freq"
     assert cur_k["levels"]["frequency"] is None and cur_k["levels"]["frequency_source"] is None
-    # The checklist counts the calculation types the profile shows: ``kin_vn`` cites nothing and reaches a freq only
-    # through the (hidden) calculations of the reaction's entries.
+    # The checklist counts the calculation types under the transition-state ENTRIES that clear the record floor (entries are
+    # records, ADR 0023 Q3), minus the calculations the evidence rule withholds: ``kin_vn`` cites nothing and reaches a freq
+    # only through the reaction's hidden entry, so it counts none. (A freq under a SHOWN entry counts even unreviewed: see
+    # test_curated_evidence_counts_and_levels.py.)
     ref = world.visible["kin_vn"].public_ref
     exp_n = next(r for r in _get(client, kinetics, "exploratory").json()["records"] if r["kinetics_ref"] == ref)
     cur_n = next(r for r in _get(client, kinetics, "curated").json()["records"] if r["kinetics_ref"] == ref)
@@ -560,27 +572,33 @@ def test_levels_of_theory_name_only_the_calculation_types_the_profile_shows(clie
     assert cur_n["evidence_completeness"]["checklist"]["has_ts_freq_evidence"] is False
 
 
-def _extra_hidden_calculation_world(db_session, world):
-    """A level of theory used ONLY by hidden calculations: one on a visible TS entry, one on a visible species entry."""
+def _extra_hidden_calculation_world(db_session, world, status=RecordReviewStatus.rejected):
+    """A level of theory used ONLY by calculations in ``status``: one on a visible TS entry, one on a visible species
+    entry. ``None`` leaves them never reviewed. Under the evidence rule (ADR 0023) a rejected calculation is withheld
+    from a match and a not-reviewed one is not."""
     lot = make_lot(db_session, method="zzhidden", basis="zzbasis")
     entry = make_transition_state_entry(db_session, transition_state=world.visible["ts_v"], multiplicity=8)
     set_review(db_session, record_type=R.transition_state_entry, record_id=entry.id, status=APPROVED)
-    make_calculation(db_session, type=CalculationType.freq, transition_state_entry_id=entry.id, lot_id=lot.id)
+    calc = make_calculation(db_session, type=CalculationType.freq, transition_state_entry_id=entry.id, lot_id=lot.id)
     species_entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("SWF")))
     set_review(db_session, record_type=R.species_entry, record_id=species_entry.id, status=APPROVED)
-    make_calculation(db_session, type=CalculationType.freq, species_entry_id=species_entry.id, lot_id=lot.id)
+    other = make_calculation(db_session, type=CalculationType.freq, species_entry_id=species_entry.id, lot_id=lot.id)
+    if status is not None:
+        for c in (calc, other):
+            set_review(db_session, record_type=R.calculation, record_id=c.id, status=status)
     db_session.flush()
     return entry, species_entry
 
 
 def test_search_filters_agree_with_the_flags_the_records_serve(client, db_session, login_as):
-    """Under curated a filter on evidence looks at the calculations the profile shows, so ``has_irc=true`` never
-    returns a record that serves ``has_irc: false``; the method/basis filter cannot find a level used only by hidden
-    calculations, on the transition-state routes or on the species browse.
+    """Under curated a filter on evidence ignores a rejected calculation, so ``has_irc=true`` never returns a record
+    that serves ``has_irc: false``; the method/basis filter cannot find a level used only by rejected calculations, on
+    the transition-state routes or on the species browse.
 
-    Kills: leaving any one filter on the unfloored calculation set.
+    Kills: leaving any one filter on the unfiltered calculation set. (A not-reviewed calculation DOES match, see the
+    twin below; the served flags follow in step 3 of ADR 0023.)
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     tse_x, species_entry = _extra_hidden_calculation_world(db_session, world)
     only_hidden = world.visible["tse_vw"].public_ref
@@ -625,13 +643,34 @@ def test_search_filters_agree_with_the_flags_the_records_serve(client, db_sessio
     assert _get(client, "/species/browse", "curated", basis="zzbasis", limit=100).json()["records"] == []
 
 
+def test_a_not_reviewed_calculation_matches_a_curated_method_filter(client, db_session, login_as):
+    """The twin of the test above: a calculation nobody has reviewed is evidence, so a curated method/basis filter finds
+    its level on the transition-state routes and on the species browse (ADR 0023, step 4).
+
+    Kills: matching only through approved calculations (the earlier rule).
+    """
+    world = build_sweep_world(db_session, withheld=True)
+    login_as(world.extra["curator"].id)
+    tse_x, species_entry = _extra_hidden_calculation_world(db_session, world, status=None)
+    for route in ("/transition-states/browse", "/transition-states/search"):
+        extra = {"reaction_entry_ref": world.extra["reaction_entry"].public_ref} if route.endswith("search") else {}
+        for profile in ("exploratory", "curated"):
+            found = _get(client, route, profile, method="zzhidden", limit=100, **extra).json()["records"]
+            assert [r["transition_state_entry"]["transition_state_entry_ref"] for r in found] == [tse_x.public_ref], (
+                route,
+                profile,
+            )
+    for profile in ("exploratory", "curated"):
+        assert _get(client, "/species/browse", profile, method="zzhidden", limit=100).json()["records"], profile
+
+
 def test_coverage_and_atom_map_counts_follow_the_floor(client, db_session, login_as):
     """The concept's geometry-validation and SCF-stability coverage, and a reaction's ``has_atom_map``, count only what
     the profile shows. The sweep comparator ignores these keys, so they are asserted here.
 
     Kills: removing the floor from the coverage join; removing it from ``has_atom_map``.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     ts = world.visible["ts_vw"].public_ref
     exp = _get(client, f"/transition-states/{ts}", "exploratory").json()["record"]["evidence_summary"][
@@ -708,7 +747,7 @@ def test_trust_verdicts_rest_only_on_the_evidence_the_profile_shows(client, db_s
 
     Kills: evaluating over the whole graph (a verdict that says a hidden record exists); leaving the graph swapped.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     entry = f"/transition-state-entries/{world.visible['tse_vw'].public_ref}"
     exp = _get(client, entry, "exploratory", include="trust").json()["record"]["trust"]["evidence"]["checks"]
@@ -738,7 +777,7 @@ def test_an_id_whose_type_sits_in_a_sibling_key_is_seen_by_the_leak_check(db_ses
     """
     import json
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     hidden = world.hidden["kin_h"]
     body = json.dumps(
         {"review_records": [{"record_type": "kinetics", "record_id": hidden.id, "status": "under_review"}]}
@@ -750,8 +789,8 @@ def test_an_id_whose_type_sits_in_a_sibling_key_is_seen_by_the_leak_check(db_ses
 
 def test_the_legacy_composite_annotation_follows_the_masked_levels():
     """``legacy_composite_shape`` says a named-method level (a catalogued recipe) sits on a non-composite calculation.
-    When the calculation that supplied that level is hidden the annotation goes with the level; one supplied by a
-    visible calculation stays.
+    When the calculation that supplied that level is withheld the annotation goes with the level; one supplied by a
+    shown calculation stays.
 
     Kills: computing the annotation before the mask and keeping it.
     """
@@ -760,7 +799,7 @@ def test_the_legacy_composite_annotation_follows_the_masked_levels():
         LevelOfTheorySummary,
         ScientificLevelsSummary,
     )
-    from app.services.scientific_read.kinetics import _without_levels_from_hidden_calculations
+    from app.services.scientific_read.kinetics import _without_levels_from_withheld_calculations
 
     named = LevelOfTheorySummary(
         level_of_theory_id=1,
@@ -776,14 +815,14 @@ def test_the_legacy_composite_annotation_follows_the_masked_levels():
         frequency_source="freq",
         legacy_composite_shape="named_method_level_on_non_composite_calculation",
     )
-    kept = _without_levels_from_hidden_calculations(levels, hidden=set(), opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
+    kept = _without_levels_from_withheld_calculations(levels, withheld=set(), opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
     assert kept.legacy_composite_shape is not None
-    # The freq is hidden: its level goes, and so does the annotation that rested on it.
-    masked = _without_levels_from_hidden_calculations(levels, hidden={11}, opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
+    # The freq is withheld: its level goes, and so does the annotation that rested on it.
+    masked = _without_levels_from_withheld_calculations(levels, withheld={11}, opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
     assert masked.frequency is None and masked.legacy_composite_shape is None
     assert masked.geometry == plain
-    # A hidden opt does not touch an annotation that rests on the visible freq.
-    other = _without_levels_from_hidden_calculations(levels, hidden={10}, opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
+    # A withheld opt does not touch an annotation that rests on the shown freq.
+    other = _without_levels_from_withheld_calculations(levels, withheld={10}, opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
     assert other.geometry is None and other.legacy_composite_shape is not None
 
 
@@ -794,7 +833,7 @@ def test_a_hidden_parent_of_a_visible_optimisation_is_neither_shown_nor_counted(
 
     Kills: letting the trust evaluation follow a dependency edge to a hidden calculation; the edge surviving in /full.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     hidden = world.hidden["calc_h_psp"].public_ref
     opt = world.visible["calc_vp_opt"].public_ref

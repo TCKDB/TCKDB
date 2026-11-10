@@ -1,7 +1,7 @@
 """Read schemas for /api/v1/scientific/reaction-entries/{id}/full.
 
 Composite document — joins species, kinetics, transition states, calculations,
-review summary in one response. See docs/specs/read_api_mvp.md §Endpoint 5.
+review summary in one response. See docs/specs/browse_order.md.
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
 )
 from app.schemas.reads.scientific_conformer import (
     AvailableConformerSections,
@@ -37,6 +38,7 @@ from app.schemas.reads.scientific_conformer import (
     ConformerObservationsSummary,
     ConformerSelectionSummary,
 )
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 from app.schemas.reads.scientific_kinetics import KineticsRecord
 from app.schemas.reads.scientific_transition_state import (
     TransitionStateEntryEvidenceSummary,
@@ -174,7 +176,7 @@ class ReactionEntrySummary(BaseModel):
     atom_maps: list[ReactionAtomMapBadge] = Field(default_factory=list)
 
 
-class ReactionFullSpeciesParticipant(BaseModel):
+class ReactionFullSpeciesParticipant(EntryFacetFields):
     """Reactant or product side participant in /full.
 
     Phase B: ``species_entry_ref`` is the public stable handle for the
@@ -199,12 +201,11 @@ class ReactionFullSpeciesParticipant(BaseModel):
     ``formula`` is the Hill-notation formula RDKit derives from ``smiles``
     (``app.services.scientific_read.common.molecular_formula_expr``, the
     same expression the species surface serves); ``null`` when ``smiles``
-    fails to parse. ``stoichiometry`` is the graph-identity coefficient
-    from ``chem_reaction.reaction_participant`` -- the reaction-level fact
-    ("this equation consumes two of this species"), joined by
-    ``(reaction_id, species_id, role)`` and *not* a property of this
-    particular deposit's structure-participant row, which lists a
-    repeated species once regardless of how many times it reacts.
+    fails to parse. ``stoichiometry`` is how many times THIS species entry occurs on this side of the entry's own
+    equation (``H + H -> H2`` serves the one H entry once, with ``stoichiometry`` 2). A deposit stores one
+    structure-participant row per occurrence; each distinct entry is served once per side, so a consumer that sums
+    ``stoichiometry`` over the rows gets the right count. It is the entry's count, not the species-level coefficient
+    (two entries of one species on one side each keep their own).
     """
 
     species_entry_id: int
@@ -520,7 +521,7 @@ class RequestEcho(ProfiledRequestEcho):
     include_review: ReviewDetail
 
 
-class ScientificReactionFullResponse(BaseModel):
+class ScientificReactionFullResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/reaction-entries/{id}/full.
 
     Sections that are not in the ``include`` set are omitted entirely.

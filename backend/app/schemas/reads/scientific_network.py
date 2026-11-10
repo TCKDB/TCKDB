@@ -54,9 +54,12 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
+from app.schemas.reads.scientific_deposit_warnings import RecordWarnings, SubmissionWarnings
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 from app.schemas.reads.scientific_network_composition import (
     NetworkStateComposition,
 )
@@ -112,7 +115,7 @@ class NetworkCoreBlock(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class NetworkSpeciesSummary(BaseModel):
+class NetworkSpeciesSummary(EntryFacetFields):
     """One ``network_species`` row projected for ``include=species``.
 
     Composite PK is ``(network_id, species_entry_id, role)`` so there's
@@ -389,9 +392,15 @@ class ScientificNetworkRecord(BaseModel):
     review_history: list[NetworkReviewEntry] | None = None
 
 
-class ScientificNetworkDetailResponse(BaseModel):
+class ScientificNetworkDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/networks/{handle}``."""
 
+    #: The deposit-time warnings of each record this response names, with its public ref (see
+    #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    record_warnings: list[RecordWarnings] = Field(default_factory=list)
+    #: Warnings about the deposit that no one record could take, once per submission a named record belongs to
+    #: (see ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    deposit_warnings: list[SubmissionWarnings] = Field(default_factory=list)
     request: RequestEcho
     review_summary: ReviewStatusSummary
     record: ScientificNetworkRecord
@@ -650,10 +659,16 @@ class ScientificNetworkSolveRecord(BaseModel):
     review_history: list[NetworkReviewEntry] | None = None
 
 
-class ScientificNetworkSolveDetailResponse(BaseModel):
+class ScientificNetworkSolveDetailResponse(ScientificResponse):
     """Response envelope for
     ``GET /scientific/network-solves/{handle}``."""
 
+    #: The deposit-time warnings of each record this response names, with its public ref (see
+    #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    record_warnings: list[RecordWarnings] = Field(default_factory=list)
+    #: Warnings about the deposit that no one record could take, once per submission a named record belongs to
+    #: (see ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    deposit_warnings: list[SubmissionWarnings] = Field(default_factory=list)
     request: RequestEcho
     review_summary: ReviewStatusSummary
     record: ScientificNetworkSolveRecord

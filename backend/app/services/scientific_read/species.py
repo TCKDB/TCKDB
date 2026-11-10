@@ -1,10 +1,10 @@
 """Service implementation for /api/v1/scientific/species/search.
 
-See docs/specs/read_api_mvp.md §Endpoint 1 for the contract.
+See docs/specs/browse_order.md for the contract.
 
 Where the work happens
 ----------------------
-A species record is ranked by its *best visible entry*, so review
+A species record is ordered by its *first visible entry in display order*, so review
 visibility and ranking are properties of the ``species_entry`` set, not of
 ``species``. Both are expressed in SQL (see
 :mod:`app.services.scientific_read.sql_review`) over one candidate-species
@@ -31,8 +31,10 @@ from sqlalchemy import and_, case, func, not_, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError, reject_unsupported_filters
+from app.chemistry.stereo import unrepresented_stereo_kinds
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
+    RecordReviewStatus,
     SubmissionRecordType,
 )
 from app.db.models.species import (
@@ -46,9 +48,12 @@ from app.db.models.transport import Transport
 from app.schemas.reads._field_bounds import (
     MAX_ELEMENT_SYMBOLS as _MAX_ELEMENT_SYMBOLS,
 )
+from app.schemas.reads._method_family import echo_method_class
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
+    OrderEcho,
     RecordReviewBadge,
+    browse_order,
 )
 from app.schemas.reads.scientific_species import (
     ElementMatchMode,
@@ -74,9 +79,9 @@ from app.services.scientific_read.calculation_provenance_filters import (
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     molecular_formula_expr,
     reject_client_sort,
-    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
@@ -88,10 +93,18 @@ from app.services.scientific_read.handles import (
     reconcile_species_entry_pair,
     reconcile_species_pair,
 )
+from app.services.scientific_read.hidden_by_default import (
+    excluded_by_default,
+    hidden_by_default_from_counts,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Page, Paging
 from app.services.scientific_read.species_identity import (
+    public_electronic_state_label,
+    public_term_symbol,
     species_entry_label_for,
 )
 from app.services.scientific_read.sql_review import (
@@ -102,6 +115,7 @@ from app.services.scientific_read.sql_review import (
     visible_review_filter,
 )
 from app.services.scientific_read.structure_query import (
+    constitution_smiles,
     enforce_mode_query_compatibility,
     inchi_key_from_query,
     parse_smarts,
@@ -150,7 +164,22 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 #: should never have handed them in the first place.
 _BROWSE_LEGAL_INCLUDE_TOKENS: set[str] = {"review", "internal_ids", "all"}
 
-_DEFAULT_SORT_ECHO = "review_rank,has_entries,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
+
+
+def _size_first_sort_echo(mode: StructureSearchMode) -> OrderEcho:
+    """A substructure or similarity browse leads with the size of the match (``order_by_size``): the request chose it."""
+    return browse_order(
+        "heavy_atom_count", "review_rank", "created_at", "id", requested_by=f"mode={mode.value}"
+    )
+
+
+def _browse_orders_by_size(request, structure_query) -> bool:
+    """True when a browse lists the smallest match first: a structure query in substructure or similarity mode."""
+    return structure_query is not None and request.mode in (
+        StructureSearchMode.substructure,
+        StructureSearchMode.similarity,
+    )
 
 #: The rank a species with no *visible* entry sorts at. Deliberately worse
 #: than every real review rank, so "has entries the caller may see" beats
@@ -517,6 +546,7 @@ def _apply_structure_filter(
         .select_from(SpeciesEntry)
         .where(SpeciesEntry.species_id == Species.id)
         .where(SpeciesEntry.mol.is_not(None))
+        .where(SpeciesEntry.merged_into_species_entry_id.is_(None))
     )
     if request.mode is StructureSearchMode.substructure:
         entry_select = entry_select.where(
@@ -539,23 +569,28 @@ def _apply_structure_filter(
 
 
 def search_species(
-    session: Session, request: SpeciesSearchRequest
+    session: Session, request: SpeciesSearchRequest, *, scope_entries: bool = False
 ) -> ScientificSpeciesSearchResponse:
     """Discover species by chemical identity, with per-entry trust + availability.
 
     Filters multiple identifiers with AND semantics; inconsistent identifiers
     return an empty result set rather than raising. Default sort is the L3
-    ``review_rank ASC, has_entries DESC, created_at DESC, id DESC``. Client-
+    ``review_rank ASC, created_at DESC, id DESC``. Client-
     supplied ``sort=`` is rejected (v0). ``rejected`` and ``deprecated``
     review states are excluded by default.
 
     :param session: SQLAlchemy session bound to the read DB.
     :param request: Parsed request model.
+    :param scope_entries: ``True`` when the caller uses the entries only to scope a search of RECORDS (thermo, calculations):
+        entries are scoping parents and a record is never dropped because its entry is unreviewed or rejected, so no
+        entry is filtered by review status and nothing is disclosed as hidden. The entry LISTING (the default) is a list of
+        entries and follows the entry visibility.
     :returns: ``ScientificSpeciesSearchResponse`` Pydantic model.
     :raises ValueError: 422 for sort/pagination/include validation failures.
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/species/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -609,27 +644,34 @@ def search_species(
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
+    if scope_entries:
+        visible = set(RecordReviewStatus)
 
     # The identity filter, as a subquery rather than a materialized id list —
     # the entry, count and ranking queries below all re-derive it in SQL, so
     # a match of any size stays a match rather than becoming bind parameters.
-    candidates = _candidate_species_stmt(
-        request,
-        species_ref_id=species_ref_id,
-        species_entry_ref_id=species_entry_ref_id,
+    candidates = paging.restrict(
+        _candidate_species_stmt(
+            request,
+            species_ref_id=species_ref_id,
+            species_entry_ref_id=species_entry_ref_id,
+        ),
+        Species.id,
     ).subquery("candidate_species")
 
-    # Pre-collapse total is the number of *species* matched, whether or not
+    # The total is the number of *species* matched, whether or not
     # any of their entries survived the trust gate: a species with none is
     # still a record, with an empty ``entries`` list.
-    pre_collapse_total = (
+    total = (
         session.scalar(select(func.count()).select_from(candidates)) or 0
     )
-    if pre_collapse_total == 0:
+    if total == 0:
         return _empty_response(request, includes, offset, limit)
 
-    # Pre-collapse review summary across every surviving entry, not just the
+    # The review summary covers every surviving entry, not just the
     # page's — one aggregate rather than one badge per candidate.
+    if not scope_entries:
+        _record_hidden_entries(session, candidates, request, species_entry_ref_id=species_entry_ref_id)
     summary = summary_from_sql(
         session,
         _visible_entry_rows(
@@ -640,21 +682,16 @@ def search_species(
         ),
     )
 
-    collapse_first = request.collapse.value == "first"
-    page_species_ids = _rank_and_slice_species(
+    page = _rank_and_slice_species(
         session,
         candidates,
         request,
         visible,
         species_entry_ref_id=species_entry_ref_id,
-        offset=0 if collapse_first else offset,
-        limit=1 if collapse_first else limit,
+        paging=paging,
+        total=total,
     )
-    if collapse_first:
-        # ``collapse=first`` keeps the single best record and *then* applies
-        # offset/limit to that one-element list, so any offset past it is
-        # an empty page. Mirrored here rather than folded into the SQL.
-        page_species_ids = page_species_ids[offset : offset + limit]
+    page_species_ids = [int(row.id) for row in page.items]
 
     returned_records = _build_page_records(
         session,
@@ -669,8 +706,8 @@ def search_species(
         offset=offset,
         limit=limit,
         returned=len(returned_records),
-        total=pre_collapse_total,
-        collapse_first=collapse_first,
+        total=total,
+        page=page,
     )
 
     request_filter = _filter_echo(request)
@@ -678,12 +715,12 @@ def search_species(
         request=RequestEcho(
             filter=request_filter,
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=summary,
         records=returned_records,
         pagination=pagination,
+        **page.envelope(),
     )
 
 
@@ -692,7 +729,7 @@ def browse_species(
 ) -> ScientificSpeciesBrowseResponse:
     """List species by secondary filter alone — no identifier required.
 
-    See docs/specs/read_api_mvp.md §Endpoint 1 for the sibling
+    See docs/specs/browse_order.md for the sibling
     ``/species/search`` contract this deliberately mirrors. The two
     surfaces exist because ``search_species`` rejects an identifier-free
     request (``missing_identifier``) by design: a caller who *knows* what
@@ -708,7 +745,7 @@ def browse_species(
     Everything downstream of "which candidate species" is shared with
     ``search_species`` verbatim: the same visibility gate
     (:func:`app.services.scientific_read.common.visible_statuses`), the
-    same ``review_rank ASC, has_entries DESC, created_at DESC, id DESC``
+    same ``review_rank ASC, created_at DESC, id DESC``
     order (:func:`_rank_and_slice_species`, whose ``id DESC`` tiebreak is
     what keeps pagination stable — see its docstring) *unless* a
     substructure/similarity structure filter is active, in which case
@@ -761,6 +798,7 @@ def browse_species(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/species/browse", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _BROWSE_LEGAL_INCLUDE_TOKENS,
@@ -783,10 +821,7 @@ def browse_species(
     # molecules of different sizes, which is exactly the incremental-typing
     # case the owner described (see _rank_and_slice_species's
     # ``order_by_size`` docstring for why ``exact`` is excluded).
-    order_by_size = structure_query is not None and request.mode in (
-        StructureSearchMode.substructure,
-        StructureSearchMode.similarity,
-    )
+    order_by_size = _browse_orders_by_size(request, structure_query)
 
     visible = visible_statuses(
         min_review_status=request.min_review_status,
@@ -794,43 +829,45 @@ def browse_species(
         include_deprecated=request.include_deprecated,
     )
 
-    candidates = _browse_candidate_species_stmt(
-        request,
-        element_symbols,
-        structure_query,
-        include_heavy_atom_count=order_by_size,
+    candidates = paging.restrict(
+        _browse_candidate_species_stmt(
+            request,
+            element_symbols,
+            structure_query,
+            include_heavy_atom_count=order_by_size,
+        ),
+        Species.id,
     ).subquery("candidate_species")
 
     # #277 (see the docstring above): always drop a candidate species that
     # has entries but none currently visible, unconditionally -- not just
     # when a specific request field triggered it.
-    pre_collapse_total = _browse_visible_species_total(
+    total = _browse_visible_species_total(
         session, candidates, request, visible
     )
-    if pre_collapse_total == 0:
+    if total == 0:
         return _empty_browse_response(
             request, includes, offset, limit, element_symbols, structure_query
         )
 
+    _record_hidden_entries(session, candidates, request, species_entry_ref_id=None)
     summary = summary_from_sql(
         session,
         _visible_entry_rows(candidates, request, visible, species_entry_ref_id=None),
     )
 
-    collapse_first = request.collapse.value == "first"
-    page_species_ids = _rank_and_slice_species(
+    page = _rank_and_slice_species(
         session,
         candidates,
         request,
         visible,
         species_entry_ref_id=None,
-        offset=0 if collapse_first else offset,
-        limit=1 if collapse_first else limit,
+        paging=paging,
+        total=total,
         require_visible_entries=True,
         order_by_size=order_by_size,
     )
-    if collapse_first:
-        page_species_ids = page_species_ids[offset : offset + limit]
+    page_species_ids = [int(row.id) for row in page.items]
 
     returned_records = _build_page_records(
         session,
@@ -845,20 +882,20 @@ def browse_species(
         offset=offset,
         limit=limit,
         returned=len(returned_records),
-        total=pre_collapse_total,
-        collapse_first=collapse_first,
+        total=total,
+        page=page,
     )
 
     return ScientificSpeciesBrowseResponse(
         request=RequestEcho(
             filter=_browse_filter_echo(request, element_symbols, structure_query),
-            sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
+            sort=_size_first_sort_echo(request.mode) if _browse_orders_by_size(request, structure_query) else _DEFAULT_SORT_ECHO,
             include=sorted(includes),
         ),
         review_summary=summary,
         records=returned_records,
         pagination=pagination,
+        **page.envelope(),
     )
 
 
@@ -879,9 +916,9 @@ def _candidate_species_stmt(
     the summary and the ranking, so the caller never holds the matching id
     set in Python.
     """
-    stmt = select(Species.id, Species.created_at)
+    stmt = select(Species.id, Species.created_at).where(Species.merged_into_species_id.is_(None))
     if request.smiles is not None:
-        stmt = stmt.where(Species.smiles == request.smiles)
+        stmt = stmt.where(Species.smiles == constitution_smiles(request.smiles))
     if request.inchi_key is not None:
         stmt = stmt.where(Species.inchi_key == request.inchi_key)
     if request.charge is not None:
@@ -957,7 +994,8 @@ def _browse_candidate_species_stmt(
     columns: list[Any] = [Species.id, Species.created_at]
     if include_heavy_atom_count:
         columns.append(_heavy_atom_count_expr().label("heavy_atom_count"))
-    stmt = select(*columns)
+    # A merged-away species is kept for its ref but is never a live record (DR-0038).
+    stmt = select(*columns).where(Species.merged_into_species_id.is_(None))
     if request.charge is not None:
         stmt = stmt.where(Species.charge == request.charge)
     if request.multiplicity is not None:
@@ -1042,14 +1080,14 @@ def _apply_provenance_filters(stmt, request: SpeciesBrowseRequest):
     return apply_calculation_provenance_filter(
         stmt,
         request,
-        # Only the calculations the profile shows can match (D5): a filter that matched a hidden calculation would
-        # return a species whose served flags say it has none.
+        # Evidence rule (ADR 0023 step 4): a rejected or deprecated calculation cannot match under curated; a
+        # not-reviewed one can.
         where_visible(
             select(Calculation.id)
             .select_from(Calculation)
             .join(SpeciesEntry, SpeciesEntry.id == Calculation.species_entry_id)
             .where(SpeciesEntry.species_id == Species.id),
-            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+            linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
         ),
     )
 
@@ -1057,8 +1095,12 @@ def _apply_provenance_filters(stmt, request: SpeciesBrowseRequest):
 def _entry_filter_predicates(
     request: SpeciesFilterRequest, species_entry_ref_id: int | None
 ) -> list:
-    """The per-entry ``where`` terms, in one place for all three uses."""
-    predicates = []
+    """The per-entry ``where`` terms, in one place for all three uses.
+
+    Live entries only: an entry merged into another keeps its row and forwards to the survivor, which holds the
+    results (DR-0038), so a listing never shows the kept row beside the entry that stands for it.
+    """
+    predicates = [SpeciesEntry.merged_into_species_entry_id.is_(None)]
     if request.electronic_state_kind is not None:
         predicates.append(
             SpeciesEntry.electronic_state_kind == request.electronic_state_kind
@@ -1178,6 +1220,10 @@ def _has_any_entry_expr(candidates):
     ) > 0
 
 
+#: Stands in for a NULL heavy-atom count (a SMILES the cartridge cannot parse) so it sorts after every real size.
+_UNPARSED_HEAVY_ATOM_COUNT = 2**31 - 1
+
+
 def _rank_and_slice_species(
     session: Session,
     candidates,
@@ -1185,14 +1231,14 @@ def _rank_and_slice_species(
     visible: set,
     *,
     species_entry_ref_id: int | None,
-    offset: int,
-    limit: int,
+    paging: Paging,
+    total: int,
     require_visible_entries: bool = False,
     order_by_size: bool = False,
-) -> list[int]:
-    """Order the candidate species and return one page of ids.
+) -> Page:
+    """Order the candidate species and return one page (its ``items`` are rows with an ``id``).
 
-    ``review_rank ASC, has_entries DESC, created_at DESC, id DESC``, where
+    ``review_rank ASC, created_at DESC, id DESC``, where
     ``review_rank`` is the best rank among a species' *visible* entries and
     :data:`_NO_VISIBLE_ENTRY_RANK` when it has none.
 
@@ -1220,7 +1266,7 @@ def _rank_and_slice_species(
         ``heavy_atom_count`` (:func:`_heavy_atom_count_expr`'s documented
         behaviour) rather than being dropped -- ``NULLS LAST`` sorts it
         after every species with a known size, not out of the listing, and
-        the remaining keys (``best_rank``, ``has_entries``, ``created_at``,
+        the remaining keys (``best_rank``, ``created_at``,
         ``id``) still total-order the unparseable rows among themselves.
 
         ``exact`` mode never sets this: :func:`_apply_structure_filter`
@@ -1231,7 +1277,7 @@ def _rank_and_slice_species(
         than one species row (distinct tautomers/charge/multiplicity/spin
         states that collapse to the same InChIKey). That is handled --
         those rows still page under the existing
-        ``best_rank/has_entries/created_at/id`` order -- but a size sort
+        ``best_rank/created_at/id`` order -- but a size sort
         was not added for them: rows sharing one InChIKey are, chemically,
         the same skeleton, so they are the same heavy-atom count in every
         case this schema can produce, and a sort key that can only ever
@@ -1278,7 +1324,7 @@ def _rank_and_slice_species(
     best_rank = func.coalesce(func.min(visible_rank), _NO_VISIBLE_ENTRY_RANK)
     has_entries = func.count(visible_rank) > 0
     group_by_cols = [candidates.c.id, candidates.c.created_at]
-    order_by_cols = []
+    key_columns = [best_rank.label("best_rank"), candidates.c.created_at.label("created_at")]
     if order_by_size:
         # heavy_atom_count is functionally dependent on candidates.c.id
         # (one row per candidate species), but Postgres doesn't infer that
@@ -1287,20 +1333,23 @@ def _rank_and_slice_species(
         # grouped explicitly for the same reason (see the module-level
         # note above), so heavy_atom_count follows the same pattern.
         group_by_cols.append(candidates.c.heavy_atom_count)
-        order_by_cols.append(candidates.c.heavy_atom_count.asc().nulls_last())
+        # NULLS LAST as a sentinel above any real count, so the key compares like a number and a cursor can carry it.
+        key_columns.insert(0, func.coalesce(candidates.c.heavy_atom_count, _UNPARSED_HEAVY_ATOM_COUNT).label("size_key"))
     stmt = stmt.group_by(*group_by_cols)
     if require_visible_entries:
         stmt = stmt.having(or_(not_(_has_any_entry_expr(candidates)), has_entries))
-    order_by_cols.extend(
-        [
-            best_rank.asc(),
-            has_entries.desc(),
-            candidates.c.created_at.desc(),
-            candidates.c.id.desc(),
-        ]
+    ranked = stmt.add_columns(*key_columns).subquery("ranked_species")
+    keys: list[tuple[Any, str]] = []
+    if order_by_size:
+        keys.append((ranked.c.size_key, "asc"))
+    keys.extend([(ranked.c.best_rank, "asc"), (ranked.c.created_at, "desc"), (ranked.c.id, "desc")])
+    return paging.sql_window(
+        session,
+        ranked,
+        columns=[ranked.c.id, *[col for col, _direction in keys if col is not ranked.c.id]],
+        keys=keys,
+        total=total,
     )
-    stmt = stmt.order_by(*order_by_cols).offset(offset).limit(limit)
-    return list(session.scalars(stmt))
 
 
 def _browse_visible_species_total(
@@ -1341,6 +1390,49 @@ def _browse_visible_species_total(
     keep = or_(not_(_has_any_entry_expr(candidates)), has_entries)
     counted = stmt.group_by(candidates.c.id).having(keep).subquery("kept_species")
     return session.scalar(select(func.count()).select_from(counted)) or 0
+
+
+def _record_hidden_entries(
+    session: Session,
+    candidates,
+    request: SpeciesFilterRequest,
+    *,
+    species_entry_ref_id: int | None,
+) -> None:
+    """Report how many entries of the candidate species the default visibility hid (one aggregate).
+
+    A species has no review status of its own, so what the default hides is entries; a species whose entries are all
+    hidden drops out of the list (#277). The count is of entries, and says so (``counted``).
+    """
+    statuses = excluded_by_default(
+        include_rejected=request.include_rejected,
+        include_deprecated=request.include_deprecated,
+        min_review_status=request.min_review_status,
+    )
+    if not statuses:
+        record_hidden_by_default(None)
+        return
+    stmt, review = _join_entries_and_reviews(
+        select(SpeciesEntry.id),
+        candidates,
+        request,
+        species_entry_ref_id=species_entry_ref_id,
+        outer=False,
+    )
+    rows = session.execute(
+        stmt.with_only_columns(review.status, func.count())
+        .where(review.status.in_(statuses))
+        .group_by(review.status)
+    ).all()
+    record_hidden_by_default(
+        hidden_by_default_from_counts(
+            dict(rows),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+            counted="species_entries",
+        )
+    )
 
 
 def _visible_entry_rows(
@@ -1644,6 +1736,13 @@ def _compute_section_ids(
     return result
 
 
+def _stereo_not_represented(entry: SpeciesEntry) -> list[str]:
+    """Why a ``?`` of this molecule can never be settled by data (a small-ring allene, an allene-dependent element, a tied end)."""
+    if entry.stereo_descriptor is None or "?" not in entry.stereo_descriptor:
+        return []
+    return list(unrepresented_stereo_kinds(entry.species.smiles))
+
+
 def _build_entry_record(
     entry: SpeciesEntry,
     badge: RecordReviewBadge,
@@ -1660,8 +1759,12 @@ def _build_entry_record(
         # SpeciesEntryScientificRecord for why they are in the default
         # projection rather than behind an include token.
         stereo_label=entry.stereo_label,
-        electronic_state_label=entry.electronic_state_label,
-        term_symbol=entry.term_symbol,
+        stereo_descriptor=entry.stereo_descriptor,
+        stereo_resolution=entry.stereo_resolution,
+        stereo_smiles=entry.stereo_smiles,
+        stereo_not_represented=_stereo_not_represented(entry),
+        electronic_state_label=public_electronic_state_label(entry.electronic_state_label),
+        term_symbol=public_term_symbol(entry.term_symbol),
         isotope_key=entry.isotope_key,
         species_entry_label=species_entry_label_for(entry),
         review=badge,
@@ -1711,7 +1814,6 @@ def _empty_response(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=review_summary([]),
@@ -1774,6 +1876,7 @@ def _browse_filter_echo(
         value = getattr(request, field)
         if value is not None:
             echo[field] = value
+    echo_method_class(request, echo)
     if structure_query is not None:
         kind, value = structure_query
         echo[f"query_{kind.value}"] = value
@@ -1807,8 +1910,7 @@ def _empty_browse_response(
     return ScientificSpeciesBrowseResponse(
         request=RequestEcho(
             filter=_browse_filter_echo(request, element_symbols, structure_query),
-            sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
+            sort=_size_first_sort_echo(request.mode) if _browse_orders_by_size(request, structure_query) else _DEFAULT_SORT_ECHO,
             include=sorted(includes),
         ),
         review_summary=review_summary([]),

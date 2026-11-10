@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { Link, useParams } from "react-router-dom"
 // See `ReactionEntryPage.tsx`'s own import-header comment for why these two
 // are imported directly here rather than relied on transitively: this page
@@ -18,9 +19,10 @@ import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { ReviewNote } from "../components/ReviewNote"
-import { computeSpeciesEnergyCoverage } from "../domain/networkEnergyCoverage"
+import { computeSpeciesEnergyCoverage, solveEnergySourceSentence, STATE_ENERGY_ORDER_NOTE } from "../domain/networkEnergyCoverage"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
+import { LiteratureCitation } from "../components/LiteratureCitation"
 
 /**
  * `/networks/:networkRef` -- PR 2 (§3: identity, evidence incl. the
@@ -60,10 +62,25 @@ function softwareText(release: { software: string; version?: string | null } | n
 
 function EntryDetail({ record }: { record: NetworkFullRecord }) {
     const { network } = record
-    const solve = record.solves[0]
+    const solves = record.solves
+    // A fact of "the" solve is stated per solve when there are several, never read off the first one.
+    const perSolve = (read: (solve: (typeof solves)[number]) => string | null | undefined): ReactNode => {
+        if (solves.length === 0) return <span className="record-identity-absent-inline">not recorded</span>
+        if (solves.length === 1) return read(solves[0]) ?? <span className="record-identity-absent-inline">not recorded</span>
+        return solves.map((solve, index) => (
+            <span key={solve.network_solve_ref}>
+                {index > 0 && "; "}{read(solve) ?? "not recorded"} ({solve.network_solve_ref})
+            </span>
+        ))
+    }
+    // Every deposited solve is listed; with several, each says which of how many it is (none is preferred).
+    const solveRefs: RefEntry[] = record.solves.map((solve, index) => ({
+        label: record.solves.length > 1 ? `Network solve ${index + 1} of ${record.solves.length}` : "Network solve",
+        value: solve.network_solve_ref,
+    }))
 
     const refs: RefEntry[] = [
-        ...(solve ? [{ label: "Network solve", value: solve.network_solve_ref }] : []),
+        ...solveRefs,
         ...(record.workflow_tool_release?.workflow_tool_release_ref
             ? [{ label: "Workflow tool release", value: record.workflow_tool_release.workflow_tool_release_ref }]
             : []),
@@ -84,11 +101,11 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                                 <span className="t-kicker record-identity-kicker">Pressure-dependent network · deposited scientific record</span>
                                 <span className={reviewPillClass(network.review.status)}>{statusLabel(network.review.status)}</span>
                             </div>
-                            {/* Depositor prose, displayed as-is (plan §7's ruling; the
-                                mock's own disclosure label below is the "as named by
-                                the depositor" qualifier -- no second inline caveat is
-                                layered on top of it). */}
-                            <h1 className="t-display-2 record-identity-title">{network.name ?? "not named"}</h1>
+                            {/* `network.name` and `network.description` are depositor
+                                prose and are not printed (house rule, owner decision
+                                2026-11-03, reversing plan §7's ruling): the heading is a
+                                TCKDB noun, the network is identified by its ref below. */}
+                            <h1 className="t-display-2 record-identity-title">Pressure-dependent network</h1>
                             <div className="record-identity-known">
                                 <dl className="kv-list record-identity-facts">
                                     <div>
@@ -114,19 +131,14 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                                                 : <span className="record-identity-absent-inline">not recorded</span>}
                                         </dd>
                                     </div>
-                                    <div><dt>ME method</dt><dd>{solve?.me_method ?? <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
-                                    <div><dt>Interpolation model</dt><dd>{solve?.interpolation_model ?? <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
+                                    <div><dt>ME method</dt><dd>{perSolve((solve) => solve.me_method)}</dd></div>
+                                    <div><dt>Interpolation model</dt><dd>{perSolve((solve) => solve.interpolation_model)}</dd></div>
                                     <div><dt>Software (solve)</dt><dd>{record.software_release ? softwareText(record.software_release) : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
                                     <div><dt>Workflow tool</dt><dd>{record.workflow_tool_release ? softwareText({ software: record.workflow_tool_release.workflow_tool, version: record.workflow_tool_release.version }) : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
-                                    <div><dt>Literature</dt><dd>{record.literature?.title ?? <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
+                                    <div><dt>Literature</dt><dd>{record.literature ? <LiteratureCitation literature={record.literature} /> : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
                                 </dl>
                             </div>
                         </div>
-                        {network.description && (
-                            <Disclosure summary="Description (depositor-authored)">
-                                <p className="t-body" style={{ margin: 0 }}>{network.description}</p>
-                            </Disclosure>
-                        )}
                         <RefsDisclosure refs={refs} />
                     </header>
                 )}
@@ -211,7 +223,9 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                         own review row). Renders nothing when absent (`ReviewNote`'s
                         own contract); not gated on either record's status. */}
                     <ReviewNote note={network.review.note} label="Network review note" />
-                    {solve && <ReviewNote note={solve.review.note} label="Network solve review note" />}
+                    {solves.map((solve) => (
+                        <ReviewNote key={solve.network_solve_ref} note={solve.review.note} label={solves.length > 1 ? `Network solve review note (${solve.network_solve_ref})` : "Network solve review note"} />
+                    ))}
                 </section>
             </PageShell>
         </section>
@@ -235,10 +249,16 @@ function speciesThermoSentence(withThermo: number, total: number): string {
     return `${withThermo} of the ${total} participant species entries carry a thermo (H298) record; the remaining ${total - withThermo} do not. A thermal free-energy surface needs every participant covered, so it cannot be drawn from species-level data today.`
 }
 
-function solveEnergySentence(meMethod: string | null | undefined, stateCovered: number, stateTotal: number, barrierCovered: number, channelTotal: number): string | null {
+/** Which solve the sentence about solve energies is about: the one solve, or the first of several (named, and not preferred). */
+function solveSubject(solveRefs: readonly string[]): string {
+    if (solveRefs.length <= 1) return "This network's own solve"
+    return `The first of this network's ${solveRefs.length} deposited solves (${solveRefs[0]}; the others are not read here, and it is not preferred over them)`
+}
+
+function solveEnergySentence(solveRefs: readonly string[], meMethod: string | null | undefined, stateCovered: number, stateTotal: number, barrierCovered: number, channelTotal: number): string | null {
     if (stateCovered === 0 && barrierCovered === 0) return null
     const solverLabel = meMethod ?? "master equation"
-    return `That is a different claim from "no energies are deposited on this network." This network's own solve separately carries a relative electronic-only energy, referenced to its own lowest state, for ${stateCovered} of ${stateTotal} states, and a forward/reverse electronic barrier for ${barrierCovered} of ${channelTotal} channels — real, deposited data. It is an internal ${solverLabel} solver input, not thermo-grade H298, and mixing the two conventions on one axis would misrepresent the surface — so it is shown below as its own disclosure, not folded into a potential-energy surface.`
+    return `That is a different claim from "no energies are deposited on this network." ${solveSubject(solveRefs)} separately carries a relative electronic-only energy, referenced to its own lowest state, for ${stateCovered} of ${stateTotal} states, and a forward/reverse electronic barrier for ${barrierCovered} of ${channelTotal} channels — real, deposited data. It is an internal ${solverLabel} solver input, not thermo-grade H298, and mixing the two conventions on one axis would misrepresent the surface — so it is shown below as its own disclosure, not folded into a potential-energy surface.`
 }
 
 function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
@@ -247,9 +267,10 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
     const channelBarriers = record.channelBarriers ?? []
     const stateTotal = record.evidence_summary.state_count
     const channelTotal = record.evidence_summary.channel_count
-    const solveSentence = solveEnergySentence(record.solves[0]?.me_method, stateEnergies.length, stateTotal, channelBarriers.length, channelTotal)
+    const solveSentence = solveEnergySentence(record.solves.map((solve) => solve.network_solve_ref), record.solves[0]?.me_method, stateEnergies.length, stateTotal, channelBarriers.length, channelTotal)
 
     const stateLabelByHash = new Map(record.states.map((state) => [state.composition_hash, state.composition.state_label]))
+    const solveSource = solveEnergySourceSentence(record.solves.map((solve) => solve.network_solve_ref))
     const sortedStateEnergies = [...stateEnergies].sort((a, b) => a.energy_kj_mol - b.energy_kj_mol)
 
     return (
@@ -273,9 +294,11 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
                     className="disclosure--inset"
                     summary="Solve-internal state & channel energies (electronic-only, referenced to the lowest state)"
                 >
+                    {solveSource && <p className="t-body" style={{ margin: "0 0 .6rem" }}>{solveSource}</p>}
                     {stateEnergies.length > 0 && (
                         <>
                             <p className="t-heading-2" style={{ font: "var(--type-heading-2-font)", margin: "0 0 .5rem" }}>{`States — ${stateEnergies.length} of ${stateTotal}`}</p>
+                            <p className="note state-energy-order-note">{STATE_ENERGY_ORDER_NOTE}</p>
                             <div className="table-scroll">
                                 <table className="data-table" aria-label="Solve-internal state energies">
                                     <thead><tr><th scope="col">State</th><th scope="col">Relative energy</th><th scope="col">Source calculation</th></tr></thead>
@@ -303,9 +326,9 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
                                 <table className="data-table" aria-label="Solve-internal channel barriers">
                                     <thead><tr><th scope="col">Channel</th><th scope="col">Forward barrier</th><th scope="col">Reverse barrier</th><th scope="col">Source calculation</th></tr></thead>
                                     <tbody>
-                                        {channelBarriers.map((row) => (
+                                        {channelBarriers.map((row, barrierIndex) => (
                                             <tr key={row.channel_key}>
-                                                <td data-label="Channel"><code className="data">{row.channel_key}</code></td>
+                                                <td data-label="Channel"><code className="data">{barrierIndex + 1}</code></td>
                                                 <td className="num" data-label="Forward barrier">{formatKjMol(row.forward_barrier_kj_mol)}</td>
                                                 <td className="num" data-label="Reverse barrier">{formatKjMol(row.reverse_barrier_kj_mol)}</td>
                                                 <td data-label="Source calculation">
@@ -332,6 +355,9 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
 
 type ReactionRow = {
     channelKey: string | null
+    /** 1-based position in the served channel list -- what the page prints in place of the
+     *  depositor-typed `channel_key` (house rule, owner decision 2026-11-03). */
+    channelNumber: number
     pathKind: string
     transitionStateEntryRef: string | null
     reactionEntryRef: string
@@ -339,8 +365,9 @@ type ReactionRow = {
 }
 
 function buildReactionRows(channels: NetworkChannel[], reactionEntries: Record<string, ReactionEntryLite>): ReactionRow[] {
-    return channels.flatMap((channel) => channel.microreactions.map((micro) => ({
+    return channels.flatMap((channel, channelIndex) => channel.microreactions.map((micro) => ({
         channelKey: channel.channel_key ?? null,
+        channelNumber: channelIndex + 1,
         pathKind: micro.path_kind,
         transitionStateEntryRef: micro.transition_state_entry_ref ?? null,
         reactionEntryRef: micro.reaction_entry_ref,
@@ -386,7 +413,7 @@ function ReactionsSection({ channels, reactionEntries, totalChannels }: {
                                     {row.entry ? <code className="data">{row.entry.equation}</code> : <span className="record-identity-absent-inline">not recorded</span>}
                                 </td>
                                 <td data-label="Channel">
-                                    {row.channelKey ? <code className="data">{row.channelKey}</code> : <span className="record-identity-absent-inline">not recorded</span>}
+                                    <code className="data">{row.channelNumber}</code>
                                 </td>
                                 <td data-label="Path kind">{statusLabel(row.pathKind)}</td>
                                 <td data-label="Transition state">

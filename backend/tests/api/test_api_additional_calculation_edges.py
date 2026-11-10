@@ -89,8 +89,9 @@ class TestAutoEdgesNeedAnOptParent:
         assert _edges(session) == []
         (warning,) = _edge_warnings(resp)
         assert warning["field"] == "additional_calculations[0]"
-        for fragment in ("freq_on", "'opt'", "'sp'", "type='freq'"):
+        for fragment in ("freq_on", "'opt'", "'sp'"):
             assert fragment in warning["message"]
+        assert warning["context"]["calculation_type"] == "freq"
 
     def test_freq_primary_with_extra_sp_writes_no_single_point_on_edge(
         self, client
@@ -105,5 +106,6 @@ class TestAutoEdgesNeedAnOptParent:
         assert _edges(session) == []
         (warning,) = _edge_warnings(resp)
         assert warning["field"] == "additional_calculations[0]"
-        for fragment in ("single_point_on", "'opt'", "'freq'", "type='sp'"):
+        for fragment in ("single_point_on", "'opt'", "'freq'"):
             assert fragment in warning["message"]
+        assert warning["context"]["calculation_type"] == "sp"

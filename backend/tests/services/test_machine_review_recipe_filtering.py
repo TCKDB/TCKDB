@@ -20,7 +20,7 @@ from datetime import datetime
 import pytest
 from tckdb_schemas.fragments.version import VersionRef
 
-from app.services.consistency import gibbs, hess, isotope_identity, kinetics, kirchhoff
+from app.services.consistency import gibbs, hess, isotope_identity, kinetics, kirchhoff, wide_basin
 from app.services.consistency import thermo as thermo_check
 from app.services.consistency.core import AdvisoryResult, currency
 from app.services.consistency.service import invoke
@@ -55,20 +55,22 @@ from app.services.trust.rubrics import (
     RUBRICS,
     THERMO_CONSISTENCY,
     THERMO_KINETICS_CONSISTENCY,
+    WIDE_BASIN_CONSISTENCY,
 )
 from tests.services._rubric_registry import bump, register_unrelated
 
 _DIGEST = MachineReviewContextDigest(context_hash="c" * 64, context_schema_version=1)
 _PROMPT = ACTIVE_MACHINE_REVIEW_PROMPT
 
-#: What each reviewer-family record type must store: exactly its own rubric (every rubric is at version 1).
+#: What each reviewer-family record type must store: exactly its own rubric (every rubric is at version 1 except the
+#: transition-state one, at 2: its qualifying refs are listed in the structure administrative key, version 2).
 _REVIEWER_RECIPES = {
     "calculation": VersionRef(name="computed_calculation", version=1),
     "kinetics": VersionRef(name="computed_kinetics", version=1),
     "thermo": VersionRef(name="computed_thermo", version=1),
     "statmech": VersionRef(name="computed_statmech", version=1),
     "transport": VersionRef(name="computed_transport", version=1),
-    "transition_state_entry": VersionRef(name="computed_transition_state", version=1),
+    "transition_state_entry": VersionRef(name="computed_transition_state", version=2),
 }
 
 #: Owner-scoped reviewer rubrics: selected per record by the rubric that evaluated it, so they are keyed by rubric
@@ -85,6 +87,7 @@ _ADVISORY_RECIPES = {
     (hess.RUNNER, HESS_CONSISTENCY): VersionRef(name="hess_consistency", version=1),
     (isotope_identity.RUNNER, ISOTOPE_IDENTITY_CONSISTENCY): VersionRef(name="isotope_identity_consistency", version=1),
     (kirchhoff.RUNNER, KIRCHHOFF_CONSISTENCY): VersionRef(name="kirchhoff_consistency", version=1),
+    (wide_basin.RUNNER, WIDE_BASIN_CONSISTENCY): VersionRef(name="wide_basin_consistency", version=1),
     (cp.RUNNER, EXTERNAL_CP_COMPARISON): VersionRef(name="external_cp_comparison", version=1),
 }
 
@@ -133,7 +136,7 @@ def test_reviewer_recipe_survives_an_unrelated_rubric(record_type, monkeypatch):
 def test_bumping_one_rubric_restales_only_its_own_reviews(record_type, monkeypatch):
     """The rubric of one record type changing never touches another record type's reviews."""
     stored = {rt: active_rubric_for_record_type(rt) for rt in _REVIEWER_RECIPES}
-    bump(monkeypatch, _REVIEWER_RECIPES[record_type].name, 2)
+    bump(monkeypatch, _REVIEWER_RECIPES[record_type].name, _REVIEWER_RECIPES[record_type].version + 1)
     for rt, ref in stored.items():
         result = _classify(ref, active_rubric_for_record_type(rt))
         if rt == record_type:

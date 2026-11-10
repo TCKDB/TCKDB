@@ -25,31 +25,23 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   full-suite:
     name: Full test suite
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # Was 120. The last seven nightlies took 82-94 minutes of job time, a 22%
+    # margin that the growing suite was eating; 150 leaves room for it.
+    timeout-minutes: 150
 
     services:
       postgres:
-        image: informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3
-        # Authenticated pull. On 2026-09-24 Docker Hub began refusing this
-        # public image to GitHub-hosted runners with "unauthorized: access to
-        # the requested resource is not authorized", mid-download, while it
-        # stayed pullable from anywhere else. That is Docker Hub throttling
-        # anonymous pulls from GitHub's shared address pool, and it failed
-        # "Initialize containers" on every backend gate before checkout, so
-        # every pull request went red at once with no test output -- the
-        # same failure class as the MinIO outage of 2026-09-12 (see the
-        # object store service below). The
-        # vendor publishes this image only on Docker Hub, so the fix is to
-        # authenticate rather than move registries. These are the same
-        # secrets build-api-image.yml already uses to push.
+        # Pulls the GHCR mirror, by digest (see mirror-ci-images.yml).
+        image: ghcr.io/tckdb/rdkit-cartridge-debian@sha256:96c34a5b88d0cbe02bf57290531f27f3cb97f5d3e494f03baea75ea99749b5ef
         credentials:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         env:
           POSTGRES_USER: tckdb
           POSTGRES_PASSWORD: tckdb
@@ -85,13 +77,8 @@ jobs:
         # (#541): Apache-2.0, actively released, one binary serving S3, with
         # linux/amd64 and linux/arm64 images published by the project.
         #
-        # Pinned by digest, not by tag: an unpinned upstream tag is what
-        # turned someone else's publishing change into this repo's outage on
-        # 2026-09-12. This is release 4.47 (the multi-arch index digest).
-        #
-        # The image is public and pulls anonymously, but the pull is still
-        # authenticated: anonymous Docker Hub pulls from GitHub's shared
-        # address pool are what the postgres service above was refused.
+        # Pinned by digest, not by tag. This is release 4.47 (the multi-arch
+        # index digest), pulled from the GHCR mirror (mirror-ci-images.yml).
         #
         # `weed mini` runs master, volume, filer and S3 gateway in one
         # process. The S3 gateway listens on 9000, where MinIO did, so
@@ -99,10 +86,10 @@ jobs:
         # admin identity; without them SeaweedFS accepts ANY request,
         # signed or not. Telemetry, WebDAV, the admin UI and the Iceberg and
         # Lance endpoints are off because nothing here uses them.
-        image: chrislusf/seaweedfs@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+        image: ghcr.io/tckdb/seaweedfs@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
         credentials:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         #
         # The internal ports are locked down exactly as docker-compose.yml
         # locks them (#545; the reasoning is there): JWT signing on the
@@ -190,6 +177,12 @@ jobs:
       # pytest-randomly prints the seed it drew, so anything this finds is
       # reproducible with TCKDB_TEST_SEED=<that value>.
       TCKDB_TEST_SEED: random
+      # The PR gates share one route table across the per-test apps
+      # (backend/tests/route_build_cache.py) to be fast. The nightly is the job
+      # that can afford the slow, literal version -- a genuinely fresh app per
+      # test -- so it keeps exercising that, and would catch the cache hiding
+      # something the gates cannot see.
+      TCKDB_TEST_ROUTE_CACHE: "0"
       AUTH_ALLOW_OPEN_REGISTRATION: "true"
       DEPLOYMENT_MODE: local
       EXPOSE_API_DOCS: "true"

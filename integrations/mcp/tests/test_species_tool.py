@@ -26,7 +26,6 @@ def _make_client(handler) -> TCKDBHttpClient:
 
 def _stub_response(records: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     return {
-        "request": {"offset": 0, "limit": 25, "collapse": "all", "include": []},
         "pagination": {"offset": 0, "limit": 25, "returned": 0, "total": 0},
         "records": records or [],
         "review_summary": {
@@ -180,13 +179,6 @@ def test_rejects_non_positive_limit() -> None:
     client.close()
 
 
-def test_rejects_bad_collapse_value() -> None:
-    client = _make_client(_ok_handler([]))
-    with pytest.raises(MCPToolError):
-        species_tool.run(client, _cfg(), {"smiles": "CCO", "collapse": "every"})
-    client.close()
-
-
 # ---------------------------------------------------------------------------
 # Limit cap & forwarding
 # ---------------------------------------------------------------------------
@@ -208,22 +200,6 @@ def test_default_limit_applied_when_omitted() -> None:
     client.close()
 
 
-def test_collapse_all_forwarded() -> None:
-    captured: list[dict[str, Any]] = []
-    client = _make_client(_ok_handler(captured))
-    species_tool.run(client, _cfg(), {"smiles": "CCO", "collapse": "all"})
-    assert captured[0]["query"]["collapse"] == "all"
-    client.close()
-
-
-def test_collapse_first_forwarded() -> None:
-    captured: list[dict[str, Any]] = []
-    client = _make_client(_ok_handler(captured))
-    species_tool.run(client, _cfg(), {"smiles": "CCO", "collapse": "first"})
-    assert captured[0]["query"]["collapse"] == "first"
-    client.close()
-
-
 def test_valid_payload_forwarded_with_all_supplied_fields() -> None:
     captured: list[dict[str, Any]] = []
     client = _make_client(_ok_handler(captured))
@@ -236,7 +212,6 @@ def test_valid_payload_forwarded_with_all_supplied_fields() -> None:
             "charge": 0,
             "multiplicity": 1,
             "include": ["thermo", "review"],
-            "collapse": "first",
             "offset": 10,
             "limit": 20,
             "include_rejected": False,
@@ -249,7 +224,6 @@ def test_valid_payload_forwarded_with_all_supplied_fields() -> None:
     assert body["charge"] == "0"
     assert body["multiplicity"] == "1"
     assert body["include"] == ["thermo", "review"]
-    assert body["collapse"] == "first"
     assert body["offset"] == "10"
     assert body["limit"] == "20"
     assert body["include_rejected"] == "false"

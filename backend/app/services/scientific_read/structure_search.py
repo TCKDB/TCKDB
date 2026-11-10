@@ -40,17 +40,21 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError
+from app.chemistry.stereo import unrepresented_stereo_kinds
 from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
 )
 from app.db.models.species import Species, SpeciesEntry
 from app.schemas.reads.scientific_common import (
+    OrderEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    browse_order,
 )
 from app.schemas.reads.scientific_structure_search import (
     DEFAULT_SIMILARITY_THRESHOLD,
@@ -70,14 +74,20 @@ from app.services.scientific_read.common import (
     validate_pagination,
     visible_statuses,
 )
+from app.services.scientific_read.hidden_by_default import hidden_by_default_from_counts, record_hidden_by_default
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import InvalidCursorError, Page, Paging, check_key_values
 from app.services.scientific_read.species_identity import (
+    public_electronic_state_label,
+    public_term_symbol,
     species_entry_label_for,
 )
+from app.services.scientific_read.sql_review import review_rank_case_sql
 from app.services.scientific_read.structure_query import (
     enforce_mode_query_compatibility,
+    entry_stereo_descriptor_of_query,
     inchi_key_from_query,
     parse_inchi_to_canonical_smiles,
     parse_smarts,
@@ -88,12 +98,10 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {"review", "internal_ids", "all"}
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
 
-_DEFAULT_SORT_BY_MODE: dict[StructureSearchMode, str] = {
-    StructureSearchMode.substructure: "review_rank,species_entry_id",
-    StructureSearchMode.similarity: (
-        "similarity_score_desc,review_rank,species_entry_id"
-    ),
-    StructureSearchMode.exact: "review_rank,species_entry_id",
+_DEFAULT_SORT_BY_MODE: dict[StructureSearchMode, OrderEcho] = {
+    StructureSearchMode.substructure: browse_order("review_rank", "species_entry_id"),
+    StructureSearchMode.similarity: browse_order("similarity_score", "review_rank", "species_entry_id"),
+    StructureSearchMode.exact: browse_order("review_rank", "species_entry_id"),
 }
 
 
@@ -114,6 +122,7 @@ def search_species_by_structure(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/species/structure-search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -139,38 +148,47 @@ def search_species_by_structure(
     #   2. an ordered ``LIMIT/OFFSET``-bounded row query that returns at
     #      most ``limit`` rows already in the response order.
     if request.mode is StructureSearchMode.substructure:
-        status_counts, page_rows = _run_substructure_query(
+        status_counts, page = _run_substructure_query(
             session,
             query_kind=query_kind,
             query_value=query_value,
             visible=visible,
-            offset=offset,
-            limit=limit,
+            paging=paging,
         )
     elif request.mode is StructureSearchMode.similarity:
-        status_counts, page_rows = _run_similarity_query(
+        status_counts, page = _run_similarity_query(
             session,
             query_kind=query_kind,
             query_value=query_value,
             threshold=threshold,
             visible=visible,
-            offset=offset,
-            limit=limit,
+            paging=paging,
         )
     else:  # exact
-        status_counts, page_rows = _run_exact_query(
+        status_counts, page = _run_exact_query(
             session,
             query_kind=query_kind,
             query_value=query_value,
+            isomeric=request.isomeric,
             visible=visible,
-            offset=offset,
-            limit=limit,
+            paging=paging,
         )
 
+    visible_values = {status.value for status in visible}
+    record_hidden_by_default(
+        hidden_by_default_from_counts(
+            {RecordReviewStatus(k): n for k, n in status_counts.items()},
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+            counted="species_entries",
+        )
+    )
+    status_counts = {k: n for k, n in status_counts.items() if k in visible_values}
     summary = _summary_from_counts(status_counts)
     total = summary.total
 
-    if not page_rows:
+    if not page.items:
         return _empty_response(
             request,
             includes,
@@ -181,7 +199,7 @@ def search_species_by_structure(
             total=total,
         )
 
-    entry_ids = [row[0] for row in page_rows]
+    entry_ids = [row.species_entry_id for row in page.items]
 
     # Badge load is page-scoped — the aggregate above already populated
     # the cross-page review summary, so we only need badges for the
@@ -198,7 +216,9 @@ def search_species_by_structure(
     )
 
     records: list[ScientificSpeciesStructureSearchRecord] = []
-    for eid, _sid, score, _status in page_rows:
+    for row in page.items:
+        eid = row.species_entry_id
+        score = float(row.similarity_score) if getattr(row, "similarity_score", None) is not None else None
         entry = entries.get(eid)
         if entry is None:  # pragma: no cover — race with delete
             continue
@@ -227,8 +247,9 @@ def search_species_by_structure(
         review_summary=summary,
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset, limit=limit, returned=len(records), total=total, page=page
         ),
+        **page.envelope(),
     )
 
 
@@ -329,17 +350,8 @@ _REVIEW_JOIN = (
 _REVIEW_STATUS_EXPR = (
     "COALESCE(rr.status::text, 'not_reviewed')"
 )
-# review_rank ASC matches REVIEW_RANK in scientific_common.py — the SQL
-# CASE keeps the Python ordering authoritative.
-_REVIEW_RANK_EXPR = (
-    f"CASE {_REVIEW_STATUS_EXPR} "
-    "WHEN 'approved' THEN 0 "
-    "WHEN 'under_review' THEN 1 "
-    "WHEN 'not_reviewed' THEN 2 "
-    "WHEN 'deprecated' THEN 3 "
-    "WHEN 'rejected' THEN 4 "
-    "ELSE 5 END"
-)
+# review_rank ASC, generated from REVIEW_RANK in scientific_common.py (the one definition of the display rank).
+_REVIEW_RANK_EXPR = review_rank_case_sql(_REVIEW_STATUS_EXPR)
 
 
 def _visible_status_values(
@@ -357,8 +369,9 @@ def _aggregate_status_counts(
     """Run ``GROUP BY review_status`` aggregate over the matched set.
 
     Returns ``{status_value: count}`` for every status that has at least
-    one visible row. The caller sums these for ``total`` and projects
-    them onto :class:`ReviewStatusSummary`.
+    one matching row, visible or not: the caller keeps the visible statuses
+    for ``total`` and the review summary, and reports the statuses the
+    default hid (``hidden_by_default``) from the same single statement.
 
     The query touches each matching row server-side exactly once but
     never returns per-row data — the wire result is at most five rows
@@ -374,12 +387,16 @@ def _aggregate_status_counts(
         JOIN species AS sp ON sp.id = se.species_id
         {_REVIEW_JOIN}
         WHERE {match_expr}
-          AND {_REVIEW_STATUS_EXPR} = ANY(:visible_statuses)
         GROUP BY {_REVIEW_STATUS_EXPR}
         """
     )
     rows = session.execute(sql, params).all()
     return {row.review_status: int(row.cnt) for row in rows}
+
+
+def _visible_total(counts: dict[str, int], visible: set[RecordReviewStatus]) -> int:
+    values = {status.value for status in visible}
+    return sum(n for status, n in counts.items() if status in values)
 
 
 def _summary_from_counts(counts: dict[str, int]) -> ReviewStatusSummary:
@@ -401,15 +418,97 @@ def _summary_from_counts(counts: dict[str, int]) -> ReviewStatusSummary:
     return summary
 
 
+def _bound(paging: Paging, match_expr: str, params: dict[str, Any]) -> str:
+    """Keep live rows only; under a cursor, add "existed when the traversal began" to the match (and its parameter).
+
+    A species or entry that was merged into another keeps its row (DR-0038) and forwards; the search returns
+    the survivor, which holds the results, never the kept row beside it.
+    """
+    match_expr = (
+        f"({match_expr}) AND se.merged_into_species_entry_id IS NULL AND sp.merged_into_species_id IS NULL"
+    )
+    if paging.resume is None:
+        return match_expr
+    params["watermark_id"] = paging.resume.watermark.max_id
+    return f"({match_expr}) AND se.id <= :watermark_id"
+
+
+def _keyset_page(
+    session: Session,
+    paging: Paging,
+    *,
+    match_expr: str,
+    params: dict[str, Any],
+    select_extra: str,
+    keys: list[tuple[str, str, str]],
+    total: int,
+) -> Page:
+    """One page of the matched set, ordered by ``keys`` and cut after the cursor's position.
+
+    ``keys`` is ``(sql expression, "asc"|"desc", result column)`` in sort order, ending in the unique entry id. The
+    "strictly after" predicate is the lexicographic expansion ``keyset_predicate`` builds for SQLAlchemy columns,
+    written out as text because these queries are raw SQL.
+    """
+    base_from = f"FROM species_entry AS se JOIN species AS sp ON sp.id = se.species_id {_REVIEW_JOIN}"
+    visible_clause = f"{_REVIEW_STATUS_EXPR} = ANY(:visible_statuses)"
+    if paging.resume is None:
+        max_id = session.execute(
+            text(f"SELECT max(se.id) {base_from} WHERE {match_expr} AND {visible_clause}"), params
+        ).scalar()
+        paging.begin(max_id)
+    where = [f"({match_expr})", visible_clause]
+    bind = dict(params)
+    if paging.resume is not None:
+        last = paging.resume.last_values
+        check_key_values(last, [float for _expr, _direction, _column in keys])  # rank, score and id are all numbers
+        branches = []
+        for i, (expr, direction, _column) in enumerate(keys):
+            terms = [f"{keys[j][0]} = :cursor_k{j}" for j in range(i)]
+            terms.append(f"{expr} {'>' if direction == 'asc' else '<'} :cursor_k{i}")
+            branches.append("(" + " AND ".join(terms) + ")")
+        where.append("(" + " OR ".join(branches) + ")")
+        bind.update({f"cursor_k{j}": value for j, value in enumerate(last)})
+    order = ", ".join(f"{expr} {direction.upper()}" for expr, direction, _column in keys)
+    offset_sql = "" if paging.resume is not None else " OFFSET :row_offset"
+    sql = text(
+        f"""
+        SELECT
+            se.id AS species_entry_id,
+            sp.id AS species_id,
+            {select_extra}
+            {_REVIEW_STATUS_EXPR} AS review_status,
+            {_REVIEW_RANK_EXPR} AS review_rank
+        {base_from}
+        WHERE {" AND ".join(where)}
+        ORDER BY {order}
+        LIMIT :row_limit{offset_sql}
+        """
+    )
+    bind["row_limit"] = paging.limit + 1
+    if paging.resume is None:
+        bind["row_offset"] = paging.offset
+    if paging.resume is None:
+        rows = list(session.execute(sql, bind).all())
+    else:
+        try:
+            with session.begin_nested():
+                rows = list(session.execute(sql, bind).all())
+        except DBAPIError as exc:
+            raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.") from exc
+    more = len(rows) > paging.limit
+    rows = rows[: paging.limit]
+    last_values = [getattr(rows[-1], column) for _e, _d, column in keys] if rows else None
+    return paging.finish(rows, more=more, last_values=last_values, total=total)
+
+
 def _run_substructure_query(
     session: Session,
     *,
     query_kind: StructureQueryKind,
     query_value: str,
     visible: set[RecordReviewStatus],
-    offset: int,
-    limit: int,
-) -> tuple[dict[str, int], list[tuple[int, int, float | None, str]]]:
+    paging: Paging,
+) -> tuple[dict[str, int], Page]:
     """Bounded substructure search.
 
     Returns ``(status_counts, page_rows)``. ``page_rows`` is
@@ -442,33 +541,20 @@ def _run_substructure_query(
         "query_text": bound_value,
         "visible_statuses": _visible_status_values(visible),
     }
+    match_expr = _bound(paging, match_expr, params)
     counts = _aggregate_status_counts(
         session, match_expr=match_expr, params=params
     )
-
-    page_sql = text(
-        f"""
-        SELECT
-            se.id AS species_entry_id,
-            sp.id AS species_id,
-            {_REVIEW_STATUS_EXPR} AS review_status
-        FROM species_entry AS se
-        JOIN species AS sp ON sp.id = se.species_id
-        {_REVIEW_JOIN}
-        WHERE {match_expr}
-          AND {_REVIEW_STATUS_EXPR} = ANY(:visible_statuses)
-        ORDER BY {_REVIEW_RANK_EXPR} ASC, se.id DESC
-        LIMIT :row_limit OFFSET :row_offset
-        """
+    page = _keyset_page(
+        session,
+        paging,
+        match_expr=match_expr,
+        params=params,
+        select_extra="",
+        keys=[(_REVIEW_RANK_EXPR, "asc", "review_rank"), ("se.id", "desc", "species_entry_id")],
+        total=_visible_total(counts, visible),
     )
-    rows = session.execute(
-        page_sql,
-        {**params, "row_limit": limit, "row_offset": offset},
-    ).all()
-    return counts, [
-        (row.species_entry_id, row.species_id, None, row.review_status)
-        for row in rows
-    ]
+    return counts, page
 
 
 def _run_similarity_query(
@@ -478,9 +564,8 @@ def _run_similarity_query(
     query_value: str,
     threshold: float,
     visible: set[RecordReviewStatus],
-    offset: int,
-    limit: int,
-) -> tuple[dict[str, int], list[tuple[int, int, float | None, str]]]:
+    paging: Paging,
+) -> tuple[dict[str, int], Page]:
     """Bounded similarity search.
 
     Returns ``(status_counts, page_rows)`` where ``page_rows`` is sorted
@@ -512,42 +597,24 @@ def _run_similarity_query(
         "threshold": threshold,
         "visible_statuses": _visible_status_values(visible),
     }
+    match_expr = _bound(paging, match_expr, params)
     counts = _aggregate_status_counts(
         session, match_expr=match_expr, params=params
     )
-
-    page_sql = text(
-        f"""
-        SELECT
-            se.id AS species_entry_id,
-            sp.id AS species_id,
-            {score_expr} AS similarity_score,
-            {_REVIEW_STATUS_EXPR} AS review_status
-        FROM species_entry AS se
-        JOIN species AS sp ON sp.id = se.species_id
-        {_REVIEW_JOIN}
-        WHERE {match_expr}
-          AND {_REVIEW_STATUS_EXPR} = ANY(:visible_statuses)
-        ORDER BY similarity_score DESC NULLS LAST,
-                 {_REVIEW_RANK_EXPR} ASC,
-                 se.id DESC
-        LIMIT :row_limit OFFSET :row_offset
-        """
+    page = _keyset_page(
+        session,
+        paging,
+        match_expr=match_expr,
+        params=params,
+        select_extra=f"{score_expr} AS similarity_score,",
+        keys=[
+            (score_expr, "desc", "similarity_score"),
+            (_REVIEW_RANK_EXPR, "asc", "review_rank"),
+            ("se.id", "desc", "species_entry_id"),
+        ],
+        total=_visible_total(counts, visible),
     )
-
-    rows = session.execute(
-        page_sql,
-        {**params, "row_limit": limit, "row_offset": offset},
-    ).all()
-    return counts, [
-        (
-            row.species_entry_id,
-            row.species_id,
-            float(row.similarity_score),
-            row.review_status,
-        )
-        for row in rows
-    ]
+    return counts, page
 
 
 def _run_exact_query(
@@ -555,10 +622,10 @@ def _run_exact_query(
     *,
     query_kind: StructureQueryKind,
     query_value: str,
+    isomeric: bool = False,
     visible: set[RecordReviewStatus],
-    offset: int,
-    limit: int,
-) -> tuple[dict[str, int], list[tuple[int, int, float | None, str]]]:
+    paging: Paging,
+) -> tuple[dict[str, int], Page]:
     """Bounded exact-match by canonical InChIKey.
 
     Computes the query's InChIKey via RDKit and matches against the
@@ -572,33 +639,28 @@ def _run_exact_query(
         "inchi_key": target_key,
         "visible_statuses": _visible_status_values(visible),
     }
+    if isomeric:
+        # The species key is stereo-blind; narrow to the entries whose stereo
+        # descriptor is the one the query's marks name. A query with no stereo
+        # element (or no marks to read) leaves the species-level match alone.
+        descriptor = entry_stereo_descriptor_of_query(query_kind, query_value)
+        if descriptor is not None:
+            match_expr += " AND se.stereo_descriptor = :stereo_descriptor"
+            params["stereo_descriptor"] = descriptor
+    match_expr = _bound(paging, match_expr, params)
     counts = _aggregate_status_counts(
         session, match_expr=match_expr, params=params
     )
-
-    page_sql = text(
-        f"""
-        SELECT
-            se.id AS species_entry_id,
-            sp.id AS species_id,
-            {_REVIEW_STATUS_EXPR} AS review_status
-        FROM species_entry AS se
-        JOIN species AS sp ON sp.id = se.species_id
-        {_REVIEW_JOIN}
-        WHERE {match_expr}
-          AND {_REVIEW_STATUS_EXPR} = ANY(:visible_statuses)
-        ORDER BY {_REVIEW_RANK_EXPR} ASC, se.id DESC
-        LIMIT :row_limit OFFSET :row_offset
-        """
+    page = _keyset_page(
+        session,
+        paging,
+        match_expr=match_expr,
+        params=params,
+        select_extra="",
+        keys=[(_REVIEW_RANK_EXPR, "asc", "review_rank"), ("se.id", "desc", "species_entry_id")],
+        total=_visible_total(counts, visible),
     )
-    rows = session.execute(
-        page_sql,
-        {**params, "row_limit": limit, "row_offset": offset},
-    ).all()
-    return counts, [
-        (row.species_entry_id, row.species_id, None, row.review_status)
-        for row in rows
-    ]
+    return counts, page
 
 
 # ---------------------------------------------------------------------------
@@ -657,8 +719,16 @@ def _build_record(
         # species come back as two byte-identical rows differing only in
         # an opaque ref.
         stereo_label=entry.stereo_label,
-        electronic_state_label=entry.electronic_state_label,
-        term_symbol=entry.term_symbol,
+        stereo_descriptor=entry.stereo_descriptor,
+        stereo_resolution=entry.stereo_resolution,
+        stereo_smiles=entry.stereo_smiles,
+        stereo_not_represented=(
+            list(unrepresented_stereo_kinds(species.smiles))
+            if entry.stereo_descriptor is not None and "?" in entry.stereo_descriptor
+            else []
+        ),
+        electronic_state_label=public_electronic_state_label(entry.electronic_state_label),
+        term_symbol=public_term_symbol(entry.term_symbol),
         isotope_key=entry.isotope_key,
         species_entry_label=species_entry_label_for(entry),
         match=StructureMatchSummary(

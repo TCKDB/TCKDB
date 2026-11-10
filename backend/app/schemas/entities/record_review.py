@@ -10,6 +10,7 @@ from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
     StationaryPointKind,
+    StereoResolution,
     SubmissionRecordType,
 )
 from app.schemas.common import (
@@ -106,6 +107,16 @@ class RecordReviewRead(TimestampedCreatedByReadSchema):
         ),
     )
     status: RecordReviewStatus
+    #: Whether the reading actor may approve this record; set on the review queue only.
+    actor_may_approve: bool | None = Field(
+        default=None,
+        description=(
+            "Whether the signed-in reader may approve this record: false when "
+            "the self-approval rule would refuse them (record_self_approval). "
+            "Present on the review queue only; null on an approved or "
+            "rejected row and on every other route."
+        ),
+    )
     submission_id: int | None = None
     reviewed_by: int | None = None
     reviewed_at: datetime | None = None
@@ -154,6 +165,14 @@ class ReviewQueueSubjectChemistry(SchemaBase):
     electronic_state_label: str | None = None
     term_symbol: str | None = None
     stereo_label: str | None = None
+    stereo_descriptor: str | None = Field(
+        default=None,
+        description=(
+            "The species entry's stereo key (DR-0038), null only for an achiral species. `stereo_label` is "
+            "its display text and is null while nothing is resolved, which must not be read as achiral."
+        ),
+    )
+    stereo_resolution: StereoResolution | None = None
     isotope_key: str | None = None
     unmapped_smiles: str | None = Field(
         default=None,

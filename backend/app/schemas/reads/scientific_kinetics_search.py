@@ -13,9 +13,15 @@ from typing import Self
 from pydantic import BaseModel, Field, field_validator, model_validator
 from tckdb_schemas.coded_error import CodedValidationError
 
-from app.db.models.common import KineticsModelKind, RecordReviewStatus
+from app.db.models.common import KineticsModelKind, RecordReviewStatus, ScientificOriginKind
+from app.schemas.reads._field_bounds import (
+    MAX_BASIS_LENGTH as _MAX_BASIS_LENGTH,
+)
 from app.schemas.reads._field_bounds import (
     MAX_FAMILY_LENGTH as _MAX_FAMILY_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
+    MAX_METHOD_LENGTH as _MAX_METHOD_LENGTH,
 )
 from app.schemas.reads._field_bounds import (
     MAX_PARTICIPANTS_PER_REACTION as _MAX_PARTICIPANTS_PER_REACTION,
@@ -29,12 +35,21 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
 )
+from app.schemas.reads._field_bounds import (
+    MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
+)
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
+from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
+from app.schemas.reads.scientific_assessment import refuse_check_inputs_in_body
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
+    CursorToken,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
+    WatermarkEcho,
 )
 from app.schemas.reads.scientific_kinetics import KineticsRecord
 from app.schemas.reads.scientific_reactions import (
@@ -56,7 +71,20 @@ class KineticsSearchRequest(BaseModel):
     exactly what they mean there — ``match`` defaults to ``contains`` (set
     containment per role), and ``match=exact`` asks for one whole equation.
     ``direction=exact`` is **not** supported in v0.
+
+    Every matching record is returned in display order; ``collapse`` is refused (422).
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_check_inputs(cls, data):
+        return refuse_check_inputs_in_body(data)
+
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_parameters(cls, data):
+        return _REMOVED_PARAMETERS.guard_body(data)
 
     # Reaction identity filters
     reactants: list[str] = Field(
@@ -75,9 +103,12 @@ class KineticsSearchRequest(BaseModel):
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH
     )
 
-    # Kinetics filters
-    temperature_min: float | None = None
-    temperature_max: float | None = None
+    # The window ``temperature_coverage`` is computed against. Not a filter: records outside it are still returned.
+    coverage_temperature_min_k: float | None = None
+    coverage_temperature_max_k: float | None = None
+
+    # Kinetics filters. ``pressure_bar`` drops records that do not apply at that pressure. ``level_of_theory_*`` and
+    # ``software`` match when ANY linked source calculation matches.
     pressure_bar: float | None = Field(
         default=None,
         gt=0,
@@ -98,6 +129,20 @@ class KineticsSearchRequest(BaseModel):
     )
     software: str | None = Field(default=None, max_length=_MAX_SOFTWARE_NAME_LENGTH)
 
+    # Further provenance filters. ONE source calculation has to match every supplied provenance field at once
+    # (``level_of_theory_*``, ``software``, and these). ``method_family`` and ``dft_rung_*`` are a classification of the
+    # calculation's method, not a measure of accuracy (``app/schemas/reads/_method_family.py``).
+    method: str | None = Field(default=None, max_length=_MAX_METHOD_LENGTH)
+    basis: str | None = Field(default=None, max_length=_MAX_BASIS_LENGTH)
+    software_version: str | None = Field(default=None, max_length=128)
+    workflow_tool: str | None = Field(default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH)
+    workflow_tool_version: str | None = Field(default=None, max_length=128)
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
+    #: computed, experimental or estimated: the record's own ``scientific_origin``.
+    scientific_origin: ScientificOriginKind | None = None
+
     # Trust filters
     min_review_status: RecordReviewStatus | None = None
     include_rejected: bool = False
@@ -106,9 +151,9 @@ class KineticsSearchRequest(BaseModel):
     # v0 forbids client-supplied sort.
     sort: str | None = None
 
-    collapse: CollapseMode = CollapseMode.all
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
     @field_validator("reactants", "products")
@@ -182,15 +227,18 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query."""
 
     filter: dict[str, object]
-    sort: str
-    collapse: CollapseMode
+    sort: OrderEcho
     include: list[str]
 
 
-class ScientificKineticsSearchResponse(BaseModel):
+class ScientificKineticsSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/kinetics/search."""
 
     request: RequestEcho
     review_summary: ReviewStatusSummary
     records: list[KineticsSearchRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None

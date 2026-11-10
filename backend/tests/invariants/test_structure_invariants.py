@@ -507,10 +507,11 @@ def test_species_identity_key_excludes_molecule_kind() -> None:
     from app.db.models.species import Species
     from app.services.public_refs import _canonical_species
 
+    # Since DR-0038 the key is a partial unique index over the live rows (a merged-away row is kept beside its survivor).
     identity = {
-        constraint.name: [column.name for column in constraint.columns]
-        for constraint in Species.__table__.constraints
-        if getattr(constraint, "name", None) == "uq_species_identity"
+        index.name: [column.name for column in index.columns]
+        for index in Species.__table__.indexes
+        if index.name == "uq_species_identity"
     }
     assert identity["uq_species_identity"] == ["smiles", "charge", "multiplicity"]
 

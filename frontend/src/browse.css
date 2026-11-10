@@ -345,8 +345,7 @@
    rule's `color`/`font` are effectively redundant with that one today and
    only matter if the `<p>` is ever read without the `<Link>` inside it.
    Kept as its own class (rather than folded away) because two descendant
-   rules below (`.reaction-browse-row-title .reaction-equation-chip`/
-   `code.data`) still key off it. */
+   rule below (`code.data`) still keys off it. */
 .reaction-browse-row-title {
     margin: 0;
     color: var(--ink);
@@ -372,11 +371,6 @@
    row's 20px heading-2, and importing it unchanged would still leave the
    chip closer to the formula's size than this row's own convention for a
    secondary fact already sets. */
-.reaction-browse-row-title .reaction-equation-chip {
-    font: var(--type-note-font);
-    letter-spacing: var(--type-note-tracking);
-    color: var(--muted);
-}
 
 /* Companion to the chip fix above, same missing rule as
    `reaction-entry.css`'s `.record-identity-title code.data`: `code.data`
@@ -388,6 +382,12 @@
    reaction-browse participant measured so far carries a `formula`), same
    as the entry-page rule this mirrors -- added now so the row does not
    silently regress the instant one does. */
+.reaction-browse-row-title .reaction-equation-chip {
+    font: var(--type-note-font);
+    letter-spacing: var(--type-note-tracking);
+    color: var(--muted);
+}
+
 .reaction-browse-row-title code.data {
     font-size: inherit;
 }
@@ -604,5 +604,18 @@ span.browse-row-title {
 @media (max-width: 640px) {
     .browse-filter-grid {
         grid-template-columns: 1fr 1fr;
+    }
+
+    /* Positional assumption: this grid is `1fr 1fr` here, so every even
+       child sits in the right-hand column. (A per-field modifier class was
+       considered, but the fields are emitted conditionally from several
+       components, so a hand-set class would drift from where the grid
+       actually places them.)
+       Right-hand column: grow the note leftwards. Left-anchored it ran off
+       the viewport (the closed note is still in layout) and made the whole
+       page scroll sideways at 320px. */
+    .browse-filter-field:nth-child(even) .inline-explain-note {
+        left: auto;
+        right: 0;
     }
 }

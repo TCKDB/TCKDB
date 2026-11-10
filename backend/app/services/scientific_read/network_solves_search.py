@@ -34,6 +34,7 @@ from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     RecordReviewBadge,
+    browse_order,
 )
 from app.schemas.reads.scientific_network import (
     ScientificNetworkSolveRecord,
@@ -46,8 +47,8 @@ from app.schemas.reads.scientific_network_solve_search import (
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     reject_client_sort,
-    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
@@ -55,9 +56,14 @@ from app.services.scientific_read.common import (
     where_visible,
 )
 from app.services.scientific_read.handles import resolve_filter_ref
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.scientific_read.networks import (
     _SOLVE_INTERNAL_INCLUDE_TOKENS,
@@ -89,7 +95,7 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "workflow_tool_version",
 )
 
-_DEFAULT_SORT_ECHO = "review_rank,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def search_network_solves(
@@ -102,6 +108,7 @@ def search_network_solves(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/network-solves/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _SOLVE_LEGAL_INCLUDE_TOKENS,
@@ -150,20 +157,30 @@ def search_network_solves(
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[cid].status for cid in candidate_ids),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
+    )
     visible_ids = [cid for cid in candidate_ids if badges[cid].status in visible]
     if not visible_ids:
         return _empty_response(request, includes, offset, limit)
 
+    visible_ids = paging.snapshot(visible_ids, id_of=lambda cid: cid)
     summary = review_summary(badges[cid] for cid in visible_ids)
-    visible_ids.sort(
-        key=lambda cid: (
+    page = paging.window(
+        visible_ids,
+        key_of=lambda cid: (
             REVIEW_RANK[badges[cid].status],
             -created_at_by_id[cid].timestamp(),
             -cid,
-        )
+        ),
     )
-    total = len(visible_ids)
-    page_ids = visible_ids[offset : offset + limit]
+    total = page.total
+    page_ids = page.items
     records = _materialize_records(session, page_ids, badges, includes)
 
     return ScientificNetworkSolveSearchResponse(
@@ -175,8 +192,9 @@ def search_network_solves(
         review_summary=summary,
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset, limit=limit, returned=len(records), total=total, page=page
         ),
+        **page.envelope(),
     )
 
 
@@ -291,7 +309,7 @@ def _apply_evidence_filters(stmt, request: NetworkSolveSearchRequest):
     if request.has_source_calculations is not None:
         ex = where_visible(
             exists().where(NetworkSolveSourceCalculation.solve_id == NetworkSolve.id),
-            review_floor_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
+            linked_evidence_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
         )
         stmt = stmt.where(ex if request.has_source_calculations else ~ex)
     if request.has_kinetics is not None:
@@ -338,7 +356,7 @@ def _apply_method_basis_software_filters(
         )
         .where(NetworkSolveSourceCalculation.solve_id == NetworkSolve.id)
     )
-    sub = where_visible(sub, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
+    sub = where_visible(sub, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
     if method_or_basis:
         sub = sub.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
         if request.method is not None:

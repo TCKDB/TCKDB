@@ -152,6 +152,7 @@ class MemberFacts:
     conformer_group_ref: str | None
     counting_multiplicity: int | None
     relative_energy_kj_mol: float | None
+    relative_energy_convention: str | None
     region_key: str | None
     review_status: RecordReviewStatus | None
 

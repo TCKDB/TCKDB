@@ -26,7 +26,8 @@ def test_builder_treats_point_gibbs_as_enthalpy_content():
     the declaration a point H needs -- and satisfies it."""
     points = [{"temperature_k": 300.0, "s_j_mol_k": 188.9, "g_kj_mol": -298.5}]
     with pytest.raises(TCKDBBuilderValidationError, match="^enthalpy_declaration_absent: "):
-        Thermo.points(points)
+        Thermo.points(points, enthalpy_reference_kind=None)
+    assert Thermo.points(points).enthalpy_reference_kind == REFERENCE
     builder = Thermo.points(points, enthalpy_reference_kind=REFERENCE)
     assert builder.enthalpy_reference_kind == REFERENCE
     assert builder.to_payload()["points"] == [

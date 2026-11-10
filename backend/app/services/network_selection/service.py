@@ -34,7 +34,6 @@ from app.services.network_selection.bounds import check_snapshot_size
 from app.services.network_selection.loader import (
     excluded_listing,
     load_population,
-    resolve_reference_model,
     scan_population,
 )
 from app.services.network_selection.models import (
@@ -49,6 +48,7 @@ from app.services.network_selection.models import (
 from app.services.read_snapshot import begin_read_snapshot
 from app.services.scientific_read.ref_guard import withhold_selection_facts
 from app.services.selection_kernel import Applicability
+from app.services.selection_kernel.requested import funnel, judge
 
 #: What a result is scoped to, said once and uniformly: a preference is within the eligible population only.
 SCOPE_NOTE = (
@@ -113,14 +113,13 @@ def assess_network(
         population and everything loaded for it are one consistent state (``SnapshotNotConsistentError``
         otherwise). A route opens a session for the purpose; only a caller that cannot (a test inside one
         outer transaction) passes ``False``, and the isolation level actually in force is reported either way.
-    :raises NotFoundError: unknown network, or an unknown or hidden reference model.
+    :raises NotFoundError: unknown network.
     :raises CodedValueError: ``network_selection_population_too_large`` or ``..._snapshot_too_large`` (nothing
         is assessed), or ``network_declaration_invalid`` for a request that names states or channels the
         network does not have.
     """
     isolation = begin_read_snapshot(session, require=require_snapshot)
     scan = scan_population(session, request=request)
-    resolve_reference_model(session, request)
     network, solves = load_population(session, scan, request)
     # The loader to engine seam (guard PR-3): a hidden ref in the captured facts (a validation entry's reference solve)
     # becomes a placeholder token BEFORE the solves are assessed, decided or sealed into the manifest.
@@ -166,4 +165,20 @@ def assess_network(
         unresolved_refs=unresolved,
         unsupported_refs=unsupported,
         notes=tuple(notes),
+        funnel=funnel(
+            considered=scan.considered,
+            removed_by_filters=scan.removed_by_filters,
+            removed_by_floor=scan.removed_by_floor,
+            terminal_excluded=scan.terminal_excluded,
+            unit="solves",
+            verdicts=[
+                judge(
+                    applicable=True,
+                    review_status=scan.review_status[i],
+                    blocking=(),
+                    eligibility=request.eligibility,
+                )
+                for i in scan.solve_ids
+            ],
+        ),
     )

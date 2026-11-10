@@ -215,3 +215,41 @@ def test_the_reaction_coordinate_mode_is_named_only_when_the_coordinate_is_exclu
     for bad in ({"reaction_coordinate_mode_index": 1}, {"reaction_coordinate_excluded": False, "reaction_coordinate_mode_index": 1}):
         with pytest.raises(ValidationError):
             ModelRecipe.model_validate(bad)
+
+
+def test_a_member_energy_states_its_convention_and_other_is_not_accepted():
+    def member(**fields):
+        return StatmechModelDeclaration.model_validate(
+            _declaration(
+                scope_kind="explicit_equilibrium_ensemble", members=[{"member_key": "a", "statmech_ref": SM_A, **fields}]
+            )
+        ).members[0]
+
+    stated = member(relative_energy_kj_mol=1.0, relative_energy_convention="electronic_plus_zpe")
+    assert stated.relative_energy_convention.value == "electronic_plus_zpe"
+    assert member().relative_energy_convention is None  # neither stated: not stated, never assumed
+    _refused("stated together", scope_kind="explicit_equilibrium_ensemble", members=[{"member_key": "a", "statmech_ref": SM_A, "relative_energy_kj_mol": 1.0}])
+    _refused("stated together", scope_kind="explicit_equilibrium_ensemble", members=[{"member_key": "a", "statmech_ref": SM_A, "relative_energy_convention": "electronic_only"}])
+    _refused("not accepted", scope_kind="explicit_equilibrium_ensemble", members=[{"member_key": "a", "statmech_ref": SM_A, "relative_energy_kj_mol": 1.0, "relative_energy_convention": "other"}])
+
+
+def test_member_conventions_are_one_per_ensemble_and_agree_with_energy_zero():
+    zpe = {"relative_energy_kj_mol": 1.0, "relative_energy_convention": "electronic_plus_zpe"}
+    elec = {"relative_energy_kj_mol": 2.0, "relative_energy_convention": "electronic_only"}
+
+    def members(first, second):
+        return [{"member_key": "a", "statmech_ref": SM_A, **first}, {"member_key": "b", "statmech_ref": SM_B, **second}]
+
+    ensemble = {"scope_kind": "explicit_equilibrium_ensemble"}
+    _refused("one relative_energy_convention", **ensemble, members=members(zpe, elec))
+    _refused("contradicts", **ensemble, members=members(zpe, {}), recipe={"energy_zero": "electronic"})
+    _refused("contradicts", **ensemble, members=members(elec, {}), recipe={"energy_zero": "e0"})
+    _refused(
+        "contradicts",
+        **ensemble,
+        members=members({**zpe, "relative_energy_convention": "thermal_enthalpy_298k"}, {}),
+        recipe={"energy_zero": "e0"},
+    )
+    for fields, zero in ((zpe, "e0"), (elec, "electronic"), (zpe, None)):
+        recipe = {"energy_zero": zero} if zero else {}
+        assert StatmechModelDeclaration.model_validate(_declaration(**ensemble, members=members(fields, {}), recipe=recipe))

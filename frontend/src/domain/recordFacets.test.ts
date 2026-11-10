@@ -18,16 +18,16 @@ describe("facetChips", () => {
     })
 
     it("omits a chip for every unset axis -- no placeholder, no 'none' pill", () => {
-        // One axis set (term symbol, folded into the state chip), one axis
+        // One axis set (term symbol, its own chip), one axis
         // left unset (stereochemistry) -- the stereo axis must contribute
         // nothing, not a chip that says "none" or "achiral".
         const chips = facetChips({
             species_entry_kind: "minimum",
             electronic_state_kind: "excited",
-            term_symbol: "T1",
+            term_symbol: "3Σg-",
             stereo_label: null,
         })
-        expect(chips).toEqual(["minimum", "excited state · T1"])
+        expect(chips).toEqual(["minimum", "excited state", "3Σg-"])
         expect(chips.some((chip) => /stereo/i.test(chip))).toBe(false)
         expect(chips.some((chip) => chip === "R enantiomer" || chip === "S enantiomer")).toBe(false)
     })
@@ -39,13 +39,38 @@ describe("facetChips", () => {
             .toContain("Z isomer")
     })
 
-    it("folds electronic_state_label and term_symbol into the state chip when set", () => {
+    it("shows a grammar-valid state label and term symbol as their own chips, and hides what the grammar refuses", () => {
         const chips = facetChips({
             species_entry_kind: "minimum",
             electronic_state_kind: "excited",
-            electronic_state_label: "T1",
+            electronic_state_label: "DEPOSITOR_SENTINEL_state",
+            term_symbol: "DEPOSITOR_SENTINEL_term",
         })
-        expect(chips).toContain("excited state · T1")
+        expect(chips).toEqual(["minimum", "excited state"])
+        expect(facetChips({ species_entry_kind: "minimum", electronic_state_kind: "excited", term_symbol: "3Σg-" })).toEqual(["minimum", "excited state", "3Σg-"])
+    })
+
+    it("tells S1 and T1 apart, and X ²Π from A ²Σ⁺", () => {
+        const base = { species_entry_kind: "minimum", electronic_state_kind: "excited" }
+        expect(facetChips({ ...base, electronic_state_label: "S1" })).toEqual(["minimum", "excited state", "state S1"])
+        expect(facetChips({ ...base, electronic_state_label: "T1", term_symbol: "³B₁" })).toEqual(["minimum", "excited state", "state T1", "³B₁"])
+        expect(facetChips({ ...base, term_symbol: "X ²Π" })).toContain("X ²Π")
+        expect(facetChips({ ...base, term_symbol: "A ²Σ⁺" })).toContain("A ²Σ⁺")
+    })
+
+    it("never lets a state label read as a stereo descriptor: a state E is 'state E', an R is hidden", () => {
+        const base = { species_entry_kind: "minimum", electronic_state_kind: "excited" }
+        const chips = facetChips({ ...base, electronic_state_label: "E" })
+        expect(chips).toContain("state E")
+        expect(chips.some((chip) => /isomer|enantiomer/.test(chip))).toBe(false)
+        expect(facetChips({ ...base, electronic_state_label: "R" })).toEqual(["minimum", "excited state"])
+    })
+
+    it("hides sentinel and adversarial state text (the hide-invalid path)", () => {
+        const base = { species_entry_kind: "minimum", electronic_state_kind: "excited" }
+        for (const typed of ["DEPOSITOR_SENTINEL_state", "excited R,S,R,S,E,Z", "[2H]POOP", "S100", "ground", "<b>x</b>"]) {
+            expect(facetChips({ ...base, electronic_state_label: typed, term_symbol: typed })).toEqual(["minimum", "excited state"])
+        }
     })
 
     it("adds an isotopologue chip only when isotope_key is set", () => {
@@ -81,12 +106,12 @@ describe("facetChips: includeState (grouped-card redundancy)", () => {
         expect(chips.some((chip) => /ground/i.test(chip))).toBe(false)
     })
 
-    it("still surfaces electronic_state_label/term_symbol when includeState is false -- those are not established by a group heading that only names the bare state", () => {
+    it("still surfaces the term symbol when includeState is false -- those are not established by a group heading that only names the bare state", () => {
         const chips = facetChips(
-            { species_entry_kind: "minimum", electronic_state_kind: "excited", term_symbol: "T1" },
+            { species_entry_kind: "minimum", electronic_state_kind: "excited", term_symbol: "3Σg-", electronic_state_label: "a" },
             { includeState: false },
         )
-        expect(chips).toEqual(["minimum", "T1"])
+        expect(chips).toEqual(["minimum", "state a", "3Σg-"])
     })
 
     it("still surfaces stereochemistry and isotopologue when includeState is false", () => {
@@ -97,8 +122,57 @@ describe("facetChips: includeState (grouped-card redundancy)", () => {
         expect(chips).toEqual(["minimum", "R enantiomer", "isotopologue 13C1"])
     })
 
+    it("says an unresolved or partial entry is so, though its display stereo_label is NULL", () => {
+        const base = { species_entry_kind: "minimum", electronic_state_kind: "ground", stereo_label: null }
+        expect(facetChips({ ...base, stereo_descriptor: "?", stereo_resolution: "unresolved" }))
+            .toContain("Unresolved (?)")
+        expect(facetChips({ ...base, stereo_label: "E,?", stereo_descriptor: "E,?", stereo_resolution: "partial" }))
+            .toContain("Partly resolved (E,?)")
+        expect(facetChips({
+            ...base, stereo_descriptor: "?", stereo_resolution: "unresolved", stereo_not_represented: ["axial_small_ring"],
+        })).toContain("Unresolved (?) · cyclic allene (ring of 5 or fewer) stereo not represented")
+    })
+
+    it("names an allene axis token and a cumulene's E/Z", () => {
+        const base = { species_entry_kind: "minimum", electronic_state_kind: "ground", stereo_smiles: null }
+        expect(facetChips({ ...base, stereo_label: "Ra", stereo_descriptor: "Ra", stereo_resolution: "resolved" }))
+            .toContain("Ra allene")
+        expect(facetChips({ ...base, stereo_label: "R,Sa", stereo_descriptor: "R,Sa", stereo_resolution: "resolved" }))
+            .toContain("R,Sa")
+        expect(facetChips({ ...base, stereo_label: "E", stereo_descriptor: "E", stereo_resolution: "resolved" }))
+            .toContain("E isomer")
+    })
+
+    it("gives an achiral entry (NULL descriptor) no chip", () => {
+        expect(facetChips({
+            species_entry_kind: "minimum", electronic_state_kind: "ground",
+            stereo_label: null, stereo_descriptor: null, stereo_resolution: null,
+        })).toEqual(["minimum", "ground state"])
+    })
+
     it("defaults to includeState: true when the option is omitted entirely", () => {
         expect(facetChips({ species_entry_kind: "minimum", electronic_state_kind: "ground" }))
             .toEqual(["minimum", "ground state"])
+    })
+})
+
+describe("facetChips: a term symbol that leads with the label letter is one chip", () => {
+    const base = { species_entry_kind: "minimum", electronic_state_kind: "ground" }
+
+    it("says `state X \u00b3\u03a3g\u207b` once, not `state X` beside `X \u00b3\u03a3g\u207b`", () => {
+        expect(facetChips({ ...base, electronic_state_label: "X", term_symbol: "X \u00b3\u03a3g\u207b" }))
+            .toEqual(["minimum", "ground state", "state X \u00b3\u03a3g\u207b"])
+        expect(facetChips({ ...base, electronic_state_label: "X\u0303", term_symbol: "X\u0303 \u00b9A\u2081" }))
+            .toContain("state X\u0303 \u00b9A\u2081")
+    })
+
+    it("keeps two chips when the term symbol does not lead with the label, and for an ordinal label", () => {
+        expect(facetChips({ ...base, electronic_state_label: "A", term_symbol: "X \u00b2\u03a0" }))
+            .toEqual(["minimum", "ground state", "state A", "X \u00b2\u03a0"])
+        expect(facetChips({ ...base, electronic_state_label: "T1", term_symbol: "\u00b3B\u2081" }))
+            .toEqual(["minimum", "ground state", "state T1", "\u00b3B\u2081"])
+        // A label that is only the start of another label's letters is not "the same letter".
+        expect(facetChips({ ...base, electronic_state_label: "X", term_symbol: "\u00b2\u03a0" }))
+            .toEqual(["minimum", "ground state", "state X", "\u00b2\u03a0"])
     })
 })

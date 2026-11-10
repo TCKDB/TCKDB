@@ -63,7 +63,6 @@ REASONS: dict[str, ReasonSpec] = {
     "witness_ambiguous": ReasonSpec(_U, _C.unresolved_applicability),
     "rotor_replacement_unstated": ReasonSpec(_U, _C.unresolved_applicability),
     "ambiguous_fact": ReasonSpec(_U, _C.unresolved_applicability),
-    "dependency_cycle": ReasonSpec(_U, _C.unresolved_applicability),
     "curvature_witnesses_disagree": ReasonSpec(_U, _C.evidence_conflict),
     "finding_unresolved": ReasonSpec(_U, _C.evidence_conflict),
     # --- known failures ---------------------------------------------------------------------------------------
@@ -115,6 +114,9 @@ ADVISORY_PREFIXES: tuple[str, ...] = (
     "source_literature_unidentified",
     "superseded_record",
     "source_not_linked_to_geometry_optimization",
+    # A confirmed finding that would have excluded the candidate, kept off the competition because the request lifted
+    # the ``confirmed_blocking_findings`` default. The finding is disclosed here, never hidden.
+    "finding_overridden",
 )
 
 

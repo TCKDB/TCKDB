@@ -1,7 +1,7 @@
 """The ref guard's planner, on synthetic response models (no database).
 
-Every row of the design's action table has a test, and each test names the mutation it kills. ``hidden_refs`` is
-replaced with a fixed set, so what is under test is only where a hidden ref sits and what the guard does about it.
+Every row of the design's action table has a test, and each test names the mutation it kills. ``withheld_evidence_refs`` (the
+evidence set) is replaced with a fixed set, so what is under test is only where a hidden ref sits and what the guard does about it.
 """
 
 from __future__ import annotations
@@ -108,8 +108,20 @@ def _register_synthetic_pointers(monkeypatch):
     ref_guard._FIELD_CACHE.clear()
 
 
+_BELOW_FLOOR: set[str] = set()
+
+
 def hide(monkeypatch, *refs: str):
-    monkeypatch.setattr(ref_guard, "hidden_refs", lambda session, found, *, profile: set(refs) & set(found))
+    """Fix the answer of the one lookup: ``refs`` are the evidence set, and ``below_floor`` names the subject refs below the
+    record floor (none unless a test says)."""
+    _BELOW_FLOOR.clear()
+    monkeypatch.setattr(
+        ref_guard,
+        "classify_refs",
+        lambda session, found, *, profile, subject_refs=(), unknown_is_hidden=False: ref_guard.RefSets(
+            set(refs) & set(found), _BELOW_FLOOR & set(subject_refs)
+        ),
+    )
 
 
 def run(payload, *, apply: bool = True):
@@ -319,25 +331,141 @@ def test_a_required_field_with_no_pointer_is_unplaceable_and_says_where(monkeypa
     assert payload.block.owner_ref == HIDDEN_TSE  # nothing was changed on the way to failing
 
 
-def test_the_subject_of_a_response_is_never_deleted_as_a_pointer(monkeypatch):
-    """Kills: treating ``record`` / ``records[*]`` as removable. A hidden subject ref means a service forgot its filter."""
-    hide(monkeypatch, HIDDEN_CALC)
-    monkeypatch.setattr(ref_guard, "POINTER_MODELS", frozenset({RequiredHolder}))
+class SubjectRow(BaseModel):
+    """A response subject: its own identity ref is named ``<kind>_ref``."""
 
-    as_record = RequiredEnvelope(record=RequiredHolder(owner_ref=HIDDEN_CALC))
-    with pytest.raises(ref_guard.RefGuardUnplaceable):
+    calculation_ref: str
+    scan_ref: str | None = None
+
+
+class SubjectEnvelope(BaseModel):
+    record: SubjectRow | None = None
+    records: list[SubjectRow] = []
+    block: SubjectRow | None = None
+
+
+def below_floor(monkeypatch, *refs: str):
+    _BELOW_FLOOR.update(refs)
+
+
+def test_the_subject_of_a_response_is_never_deleted_as_a_pointer(monkeypatch):
+    """Kills: treating ``record`` / ``records[*]`` as removable.
+
+    A row of ``records`` below the record floor means a service forgot its population filter, and the guard fails loud
+    whether or not the evidence rule would withhold the ref. The ``record`` of a detail read is judged by the withheld set
+    instead (ADR 0023 step 7): a withheld one fails loud, one that is merely below the floor is the served answer.
+    """
+    monkeypatch.setattr(ref_guard, "POINTER_MODELS", frozenset({SubjectRow}))
+    monkeypatch.setattr(ref_guard, "SUBJECT_IDENTITY", {"SubjectRow": ("calculation_ref",)})
+    for evidence in (True, False):
+        # Below the floor, and withheld as evidence or merely not reviewed: a list row fails loud either way.
+        hide(monkeypatch, *([HIDDEN_CALC] if evidence else []))
+        below_floor(monkeypatch, HIDDEN_CALC)
+        as_records = SubjectEnvelope(records=[SubjectRow(calculation_ref=HIDDEN_CALC)])
+        with pytest.raises(ref_guard.SubjectNotShown) as caught:
+            run(as_records)
+        # The message names the real defect (a missing population filter), not a registry or optionality remedy.
+        assert "the read profile does not show was returned as a result" in str(caught.value)
+        assert "population filter is missing" in str(caught.value)
+        assert "POINTER_MODELS" not in str(caught.value) and "optional" not in str(caught.value)
+        assert len(as_records.records) == 1
+
+    # A detail ``record`` in the withheld set fails loud and is never deleted.
+    hide(monkeypatch, HIDDEN_CALC)
+    below_floor(monkeypatch, HIDDEN_CALC)
+    as_record = SubjectEnvelope(record=SubjectRow(calculation_ref=HIDDEN_CALC))
+    with pytest.raises(ref_guard.SubjectNotShown):
         run(as_record)
     assert as_record.record is not None
 
-    as_records = RequiredEnvelope(records=[RequiredHolder(owner_ref=HIDDEN_CALC)])
-    with pytest.raises(ref_guard.RefGuardUnplaceable):
-        run(as_records)
-    assert len(as_records.records) == 1
+    # A detail ``record`` that is only below the floor (not withheld) is the served answer, and stays.
+    hide(monkeypatch)
+    below_floor(monkeypatch, HIDDEN_CALC)
+    served = SubjectEnvelope(record=SubjectRow(calculation_ref=HIDDEN_CALC))
+    run(served)
+    assert served.record is not None
 
-    # The same class is a pointer anywhere else.
-    as_block = RequiredEnvelope(block=RequiredHolder(owner_ref=HIDDEN_CALC))
+    # The same class is a pointer anywhere else: withheld evidence goes, a merely-unlisted one stays.
+    hide(monkeypatch, HIDDEN_CALC)
+    as_block = SubjectEnvelope(block=SubjectRow(calculation_ref=HIDDEN_CALC))
     run(as_block)
     assert as_block.block is None
+    hide(monkeypatch)
+    kept = SubjectEnvelope(block=SubjectRow(calculation_ref=HIDDEN_CALC))
+    run(kept)
+    assert kept.block is not None
+
+
+class CalcBlock(BaseModel):
+    calculation_ref: str
+
+
+class TsBlock(BaseModel):
+    transition_state_entry_ref: str
+
+
+class DeepSubject(BaseModel):
+    """A subject whose identity sits one level down, with a parent beside it that is context."""
+
+    calculation: CalcBlock
+    parent: TsBlock | None = None
+
+
+class DeepEnvelope(BaseModel):
+    record: DeepSubject | None = None
+    records: list[DeepSubject] = []
+
+
+def test_a_subject_whose_identity_is_one_level_down_is_checked_there_and_only_there(monkeypatch):
+    """Kills: a net that checks only direct fields (the earlier rule missed every ``record.calculation.calculation_ref``
+    model), and one that infers identity from a child named after the kind (a parent beside the identity is context)."""
+    monkeypatch.setattr(ref_guard, "POINTER_MODELS", frozenset())
+    monkeypatch.setattr(ref_guard, "SUBJECT_IDENTITY", {"DeepSubject": ("calculation", "calculation_ref")})
+    hide(monkeypatch)
+    below_floor(monkeypatch, HIDDEN_CALC, HIDDEN_TSE)
+
+    # A listed row below the floor is refused; a detail ``record`` below the floor is the served answer (step 7).
+    with pytest.raises(ref_guard.RefGuardUnplaceable):
+        run(DeepEnvelope(records=[DeepSubject(calculation=CalcBlock(calculation_ref=HIDDEN_CALC))]))
+    run(DeepEnvelope(record=DeepSubject(calculation=CalcBlock(calculation_ref=HIDDEN_CALC))))
+    hide(monkeypatch, HIDDEN_CALC)  # ... and withheld, the detail ``record`` is refused too
+    below_floor(monkeypatch, HIDDEN_CALC, HIDDEN_TSE)
+    with pytest.raises(ref_guard.RefGuardUnplaceable):
+        run(DeepEnvelope(record=DeepSubject(calculation=CalcBlock(calculation_ref=HIDDEN_CALC))))
+    hide(monkeypatch)
+    below_floor(monkeypatch, HIDDEN_CALC, HIDDEN_TSE)
+
+    # The parent below the floor is context beside a visible identity: shown, not refused.
+    context = DeepEnvelope(
+        record=DeepSubject(
+            calculation=CalcBlock(calculation_ref=VISIBLE_CALC), parent=TsBlock(transition_state_entry_ref=HIDDEN_TSE)
+        )
+    )
+    run(context)
+    assert context.record.parent.transition_state_entry_ref == HIDDEN_TSE
+
+    # A model with no registered identity is not guessed at.
+    monkeypatch.setattr(ref_guard, "SUBJECT_IDENTITY", {})
+    run(DeepEnvelope(record=DeepSubject(calculation=CalcBlock(calculation_ref=HIDDEN_CALC))))
+
+
+def test_a_nested_ref_below_the_floor_but_not_withheld_is_kept_with_its_subject(monkeypatch):
+    """Kills: the old rule, where a nested pointer to an unlisted (not-reviewed / under-review) record was blanked. It is
+    linked evidence now (ADR 0023) and only a rejected or deprecated record goes."""
+    monkeypatch.setattr(ref_guard, "POINTER_MODELS", frozenset({Ptr}))
+    hide(monkeypatch, OTHER_HIDDEN_CALC)  # the evidence set: rejected / deprecated only
+    below_floor(monkeypatch, HIDDEN_CALC, OTHER_HIDDEN_CALC)
+    payload = Envelope(
+        extra=Facts(
+            pointers=[Ptr(calculation_ref=HIDDEN_CALC), Ptr(calculation_ref=OTHER_HIDDEN_CALC)],
+            calc_refs=[HIDDEN_CALC, OTHER_HIDDEN_CALC],
+            calc_ids=[1, 2],
+        )
+    )
+    run(payload)
+    assert [p.calculation_ref for p in payload.extra.pointers] == [HIDDEN_CALC]
+    assert payload.extra.calc_refs == [HIDDEN_CALC]
+    assert payload.extra.calc_ids == [1]
 
 
 def test_the_request_echo_is_left_alone(monkeypatch):
@@ -350,7 +478,7 @@ def test_the_request_echo_is_left_alone(monkeypatch):
 
 
 def test_visible_refs_ungated_prefixes_and_lookalikes_are_untouched(monkeypatch):
-    """Kills: a regex that matches too much (a ``lot_`` ref is a fact), or hidden_refs answering for refs it was not asked about."""
+    """Kills: a regex that matches too much (a ``lot_`` ref is a fact), or withheld_evidence_refs answering for refs it was not asked about."""
     hide(monkeypatch, HIDDEN_CALC)
     lookalikes = [ref("lot", 1), ref("geom", 2), "calc_" + "A" * 26, "calc_short", "xcalc_" + "0" * 26, VISIBLE_CALC]
     payload = Envelope(extra=Facts(calc_refs=lookalikes, calc_ids=list(range(len(lookalikes)))))
@@ -373,7 +501,7 @@ def test_a_dry_run_reports_and_changes_nothing(monkeypatch):
 def test_nothing_is_looked_up_without_a_review_floor(monkeypatch):
     """Kills: running the lookup (a statement) under the exploratory profile."""
     called = []
-    monkeypatch.setattr(ref_guard, "hidden_refs", lambda *a, **k: called.append(1) or set())
+    monkeypatch.setattr(ref_guard, "classify_refs", lambda *a, **k: called.append(1) or ref_guard.RefSets(set(), set()))
     payload = Envelope(extra=Facts(pointers=[Ptr(calculation_ref=HIDDEN_CALC)]))
     report = ref_guard.withhold_in_model(None, payload, profile=EXPLORATORY)
     assert not called and report.sites == [] and len(payload.extra.pointers) == 1
@@ -382,7 +510,7 @@ def test_nothing_is_looked_up_without_a_review_floor(monkeypatch):
 def test_no_lookup_when_the_response_names_no_gated_ref(monkeypatch):
     """Kills: querying with an empty set (a wasted statement on every curated response)."""
     called = []
-    monkeypatch.setattr(ref_guard, "hidden_refs", lambda *a, **k: called.append(1) or set())
+    monkeypatch.setattr(ref_guard, "classify_refs", lambda *a, **k: called.append(1) or ref_guard.RefSets(set(), set()))
     run(Envelope(extra=Facts(label="no refs here", scan_ref=ref("lot", 1))))
     assert not called
 
@@ -512,6 +640,7 @@ def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
         "TransitionStateStatmechSummary",
         "TransitionStateStatmechSourceCalculation",
         "CalculationEvidenceSummary",
+        "RoleCalculationSettings",
         # PR-2a
         "CalculationCompositeInputSummary",
         "CalculationConformerSummary",
@@ -569,6 +698,8 @@ def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
         "NetworkSolveStateEnergySourceSummary",
         "NetworkKineticsBatchFitEvaluation",
         "FrequencyScaleFactorUsageSummary",
+        # Deposit-time warnings: the entry for a record the response names goes with that record when it is hidden.
+        "RecordWarnings",
     }
 
 

@@ -34,6 +34,7 @@ from app.api.deps import (
     get_write_db,
     require_curator_or_admin,
 )
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser, AppUserRole
 from app.db.models.common import SubmissionStatus
 from app.db.models.submission import Submission
@@ -73,7 +74,7 @@ from app.services.submission import (
     supersede_submission,
 )
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})

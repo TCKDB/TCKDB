@@ -329,7 +329,7 @@ def test_every_review_stored_before_the_version_reset_reads_stale_by_a_prompt_or
     digest, active_prompt, rubrics = _active_recipe()
     assert rubrics
     for rubric in rubrics:
-        for stored_rubric_version, expect_rubric_mismatch in ((1, False), (0, True)):
+        for stored_rubric_version, expect_rubric_mismatch in ((rubric.version, False), (0, True)):
             stored = _stored(
                 digest,
                 StoredVersionRef(name=active_prompt.name, version=0),

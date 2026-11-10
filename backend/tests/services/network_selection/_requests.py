@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tckdb_schemas.network_declarations import NetworkComparisonObjective, NetworkObservable
+from tckdb_schemas.network_declarations import NetworkObservable
 
 from app.services.network_selection import (
     BathRequest,
@@ -31,7 +31,6 @@ def channel_request(world, **changes: Any) -> NetworkRequest:
         "pressure_max_bar": 5.0,
         "bath": BathRequest((world.ar.public_ref,)),
         "partition": PartitionRequest(retained=tuple(sorted(world.hashes.values()))),
-        "objective": NetworkComparisonObjective.physical_accuracy,
     }
     base.update(changes)
     return NetworkRequest(**base)

@@ -1,6 +1,6 @@
 """The structure selection routes: the HTTP contract.
 
-The assessor, decision, rules and manifest are tested under ``tests/services/structure_selection``. These tests hold
+The assessor, decision and manifest are tested under ``tests/services/structure_selection``. These tests hold
 what only the routes can break: a strict request (nothing a caller can set that is not theirs to set), public refs
 only, an outcome for every question the route is for, visibility under the read profile, a manifest that downloads and
 replays, and no database id anywhere in either document.
@@ -119,7 +119,7 @@ def test_the_transition_state_route_takes_an_entry_and_qualifies_a_saddle_withou
     assert lowest["request"]["validation_claim"] == "first_order_saddle"
 
 
-def test_a_protocol_request_with_the_shipped_registry_ranks_nothing_and_lists_the_inactive_rules(client, db_session):
+def test_a_protocol_request_ranks_nothing_and_lists_the_complete_protocols(client, db_session):
     world = make_world(db_session)
     from tests.services.scientific_read._factories import make_lot
     from tests.services.structure_selection.test_manifest import DECL_B
@@ -131,13 +131,20 @@ def test_a_protocol_request_with_the_shipped_registry_ranks_nothing_and_lists_th
     build_basin(world, energy=-76.50, geometry=first, lot=other, declared=DECL_B)
     build_basin(world, energy=-76.51, geometry=second, lot=other, declared=DECL_B)
     world.settle()
-    response = client.post(conformer_url(world.entry), json={"intent": "protocol_preferred", "objective": "expected_accuracy"})
+    response = client.post(conformer_url(world.entry), json={"intent": "protocol_coverage"})
     assert response.status_code == 200, response.text
     out = response.json()
     assert out["outcome"] == "incomparable_alternatives" and out["selected_refs"] == []
-    matches = out["protocol"]["rule_matches"]
-    assert {m["why"] for m in matches} == {"rule_status_inactive"} and len(matches) == 3
-    assert response.json()["protocol"]["edges"] == []
+    assert set(out["protocol"]) == {"fronts", "administrative_order", "uncovered"}
+    assert len(out["protocol"]["fronts"]) == 1 and len(out["cohorts"]) == 2
+    assert "objective" not in out["request"] and "apply_rules" not in out["request"]
+
+
+def test_the_retired_intent_name_is_refused_not_accepted_as_an_alias(client, db_session):
+    """Kills: keeping ``protocol_preferred`` as a second spelling, so the old name still reads as a preference."""
+    world = make_world(db_session)
+    response = client.post(conformer_url(world.entry), json={"intent": "protocol_preferred"})
+    assert response.status_code == 422, response.text
 
 
 # ---------------------------------------------------------------------------
@@ -196,9 +203,9 @@ def test_an_intent_the_route_does_not_serve_is_refused(client, calc_world, basin
 @pytest.mark.parametrize(
     "body",
     [
-        {"intent": "protocol_preferred"},  # no objective
-        {"objective": "expected_accuracy"},  # an objective with no protocol preference
-        {"intent": "protocol_preferred", "objective": "model_fidelity"},  # no reference model
+        {"objective": "expected_accuracy"},  # retired
+        {"apply_rules": False},  # retired
+        {"reference_model": "ref@1"},  # retired
         {"member_refs": []},
         {"member_refs": ["calc_a", "calc_a"]},
         {"quantity": "kinetic_energy"},
@@ -284,22 +291,22 @@ def test_under_the_curated_profile_nothing_below_the_floor_is_listed_or_counted_
     assert replay_matches(manifest)  # the redaction was made before the checksum, so the download still verifies
 
 
-def test_an_entry_the_profile_hides_is_a_404_exactly_like_one_that_does_not_exist(client, db_session):
-    world = make_world(db_session, entry_status=None)
+def test_a_transition_state_entry_the_profile_hides_is_a_404_exactly_like_one_that_does_not_exist(client, db_session):
+    """A TS entry is a gated kind. (A species entry is a scoping parent: it never hides what is under it.)"""
+    world = make_ts_world(db_session, entry_status=None)
     world.sp("a", -76.4, declared=declaration())
     world.settle()
-    assert client.post(calc_url(world.entry), json={}).status_code == 200
-    ghost = f"spe_{'0' * 26}"
+    assert client.post(evidence_url(world.entry), json={}).status_code == 200
+    ghost = f"tse_{'0' * 26}"
     for suffix in ("", "/manifest"):
-        hidden = client.post(calc_url(world.entry, manifest=bool(suffix)), json={}, params={"profile": "curated"})
-        missing = client.post(f"{API}/species-entries/{ghost}/calculations/select{suffix}", json={}, params={"profile": "curated"})
+        hidden = client.post(evidence_url(world.entry, manifest=bool(suffix)), json={}, params={"profile": "curated"})
+        missing = client.post(
+            f"{API}/transition-state-entries/{ghost}/evidence/select{suffix}", json={}, params={"profile": "curated"}
+        )
         assert hidden.status_code == missing.status_code == 404
         # the whole body, not only the status: the caller's own ref is the one thing that may differ
         assert json.loads(hidden.text.replace(world.entry.public_ref, "<ref>")) == json.loads(missing.text.replace(ghost, "<ref>"))
         assert hidden.json()["code"] == "handle_not_found"
-    for url in (conformer_url(world.entry), conformer_url(world.entry, manifest=True)):
-        hidden = client.post(url, json={}, params={"profile": "curated"})
-        assert hidden.status_code == 404 and hidden.json()["code"] == "handle_not_found" and world.entry.public_ref in hidden.text
 
 
 # ---------------------------------------------------------------------------

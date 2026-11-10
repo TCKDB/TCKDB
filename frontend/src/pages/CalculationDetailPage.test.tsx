@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { AuthProvider } from "../components/AuthProvider"
 import CalculationDetailPage from "./CalculationDetailPage"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 import { resetAllRequestCaches } from "../api/requestCache"
 import { bySummaryText } from "../test/disclosureQueries"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
@@ -396,7 +397,7 @@ describe("CalculationDetailPage", () => {
         // comment).
         const identityHeader = document.querySelector(".record-identity-header") as HTMLElement
         const speciesEntryLink = identityHeader.querySelector('a[href="/species-entries/spe_demo"]')!
-        expect(speciesEntryLink.textContent).toBe("[CH3] (CH3) · ground state")
+        expect(speciesEntryLink.textContent).toBe("[CH3] (CH3)")
 
         // The calculation's own ref is visible at rest, first in the
         // identity block -- never behind the collapsed References
@@ -554,6 +555,29 @@ describe("CalculationDetailPage", () => {
         // Software and workflow tool are NEVER hidden.
         expect(screen.getByText("Software", { selector: "dt" })).toBeVisible()
         expect(screen.getByText("Workflow tool", { selector: "dt" })).toBeVisible()
+    })
+
+    it("withholds a depositor-typed literature title and DOI, and prints the public ref instead (guard)", async () => {
+        const typed = "DEPOSITOR_SENTINEL_literature_title"
+        const doi = "10.1/ DEPOSITOR_SENTINEL_literature_doi spam.example"
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ literature: { literature_ref: "lit_1", title: typed, title_source: "depositor_supplied", year: 2019, doi } }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.getByText("Literature", { selector: "dt" })).toBeVisible() // the fixture reached the page
+        expect(screen.getByText(/Title not verified/)).toBeVisible()
+        expect(document.body.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
+        expect(document.title).not.toContain("DEPOSITOR_SENTINEL")
+    })
+
+    it("shows a registry-resolved literature title (the positive control for the guard above)", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ literature: { literature_ref: "lit_1", title: "RESOLVED_TITLE", title_source: "resolved_metadata", year: 2019 } }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.getByText("RESOLVED_TITLE (2019)")).toBeVisible()
     })
 
     it("does not stutter the software/workflow-tool name when the version already opens with it", async () => {
@@ -1015,6 +1039,51 @@ describe("CalculationDetailPage", () => {
         ])
     })
 
+    it("labels each parsed parameter requested or reported with its source, and summarises grid and SCF with their evidence state", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            if (!includes.includes("parameters")) return HttpResponse.json({ record: mockRecord() })
+            return HttpResponse.json({
+                record: mockRecord({
+                    parameters: [
+                        { raw_key: "AngularGrid", raw_value: "4", canonical_key: "grid.angular_max", canonical_value: "302", source: "parser", artifact_kind: "output_log", statement_kind: "reported" },
+                        { raw_key: "!", raw_value: "TightSCF", canonical_key: "scf.convergence", canonical_value: "tight", source: "parser", artifact_kind: "input", statement_kind: "requested" },
+                        { raw_key: "typed", raw_value: "x", canonical_key: "grid.quality", canonical_value: "ultrafine", source: "upload", artifact_kind: null, statement_kind: null },
+                        { raw_key: "typed2", raw_value: "x", canonical_key: "scf.convergence", canonical_value: "DEPOSITOR_SENTINEL_value", source: "upload", artifact_kind: null, statement_kind: null },
+                    ],
+                    effective_settings: [
+                        { setting: "grid", state: "reported", requested_value: null, requested_from: null, reported: [{ key: "grid.angular_max", value: "302" }], assumed_value: null, conflicting: false },
+                        { setting: "scf_convergence", state: "assumed_default_no_output_log", requested_value: null, requested_from: null, reported: [], assumed_value: "tight", conflicting: false },
+                    ],
+                }),
+            })
+        }))
+        page()
+        await findLoaded("Frequency")
+        const summary = screen.getByText("Parsed parameters")
+        const section = summary.closest("details") as HTMLElement
+        fireEvent.click(summary)
+
+        const table = await within(section).findByRole("table", { name: "Parsed execution parameters" })
+        const statements = within(table).getAllByText(/^(Reported|Requested)/).map((cell) => cell.textContent)
+        expect(statements).toEqual(["Reported · output log", "Requested · input file", "Requested · depositor", "Requested · depositor"])
+        // A closed-set grid token prints; a typed value outside the set reads "recorded", never the typed string.
+        expect(within(table).getByText("ultrafine")).toBeInTheDocument()
+        expect(document.body.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
+        // "loaded." is announced to screen readers but not drawn.
+        expect(within(section).getByText("Parsed parameters loaded.")).toHaveClass("section-status-quiet")
+        expect(within(table).getByText("Reported · output log")).toHaveAttribute("data-parameter-statement", "reported")
+
+        const effective = within(section).getByRole("table", { name: "Effective settings" })
+        const gridRow = within(effective).getByRole("row", { name: /DFT grid/ })
+        expect(within(gridRow).getByText("Reported")).toBeVisible()
+        expect(within(gridRow).getByText((_c, el) => el?.classList.contains("settings-reported-item") === true && el.textContent?.replaceAll("\u00a0", " ") === "largest angular grid 302")).toBeVisible()
+        const scfRow = within(effective).getByRole("row", { name: /SCF convergence/ })
+        const assumed = within(scfRow).getByText("Assumed default (no log)")
+        expect(assumed).toHaveAttribute("data-settings-state", "assumed")
+        expect(within(scfRow).getByText("tight")).toHaveClass("settings-value--assumed")
+    })
+
     it("gives a failed section fetch its own status message, distinct from every empty state", async () => {
         server.use(http.get(ENDPOINT, ({ request }) => {
             const includes = new URL(request.url).searchParams.getAll("include")
@@ -1198,8 +1267,10 @@ describe("CalculationDetailPage", () => {
 
             fireEvent.click(screen.getByText("Artifacts"))
             const artifactSection = screen.getByText("Artifacts").closest("details") as HTMLElement
-            const row = (await within(artifactSection).findByText("input.log")).closest("tr") as HTMLElement
+            const row = (await within(artifactSection).findByText("no ref")).closest("tr") as HTMLElement
             expect(within(row).getByText("no ref")).toBeVisible()
+            // The recorded filename is producer-typed text: it is not printed.
+            expect(row.innerHTML).not.toContain("input.log")
             expect(within(row).queryByRole("button", { name: /Copy/ })).not.toBeInTheDocument()
         })
     })
@@ -1883,5 +1954,35 @@ describe("CalculationDetailPage", () => {
             const projTable = await within(section).findByRole("table", { name: "Imaginary mode projections" })
             expect(getComputedStyle(within(projTable).getByRole("columnheader", { name: "Frequency (cm-1)" })).textTransform).toBe("none")
         })
+    })
+})
+
+describe("CalculationDetailPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the fields a depositor typed, in text or in any attribute, once every section is open", async () => {
+        const planted = plantSentinels(mockRecord({
+            conformer: {
+                conformer_observation_ref: "co_demo", conformer_group_ref: "cg_demo", conformer_group_label: null,
+            },
+        }), [
+            "note", "filename", "raw_key", "raw_value", "section", "unit",
+            "energy_correction_scheme_name", "conformer_group_label", "canonical_value",
+        ])
+        expectPlanted(planted)
+        const { value } = planted
+        // The owner's joined species label carries a typed state label that reads like a stereo mark.
+        ;(value.owner as { species_entry: { species_entry_label: string } }).species_entry.species_entry_label = ADVERSARIAL.joinedLabel
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: value })))
+        const { container } = page()
+        await findLoaded("Frequency")
+        for (const summary of Array.from(container.querySelectorAll("summary"))) fireEvent.click(summary)
+        // The fixture reached the page: lazily loaded rows with their controlled/ref columns are on screen.
+        expect(await screen.findByText("scf_convergence")).toBeVisible()
+        expect(await screen.findByText("no ref")).toBeVisible()
+        expect(screen.getAllByText("calc_freq_one").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
+        // A recognised key's free-text value reads "recorded", never the string itself.
+        expect(screen.getAllByText("recorded").length).toBeGreaterThan(0)
     })
 })

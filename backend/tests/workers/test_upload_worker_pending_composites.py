@@ -73,7 +73,7 @@ def test_the_failed_attempt_is_recorded_after_a_rollback_with_a_pending_composit
         persisted = verify.get(UploadJob, job_id)
         assert persisted.status == expected, "the job was left in a state the failure never recorded"
         assert persisted.status is not UploadJobStatus.processing
-        assert persisted.error is not None and "an input check refused" in persisted.error
+        assert persisted.error is not None and "an input check refused" not in persisted.error
         assert persisted.attempts == 1
 
 

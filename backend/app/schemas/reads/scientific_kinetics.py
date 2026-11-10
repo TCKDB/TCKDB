@@ -1,6 +1,6 @@
 """Read schemas for /api/v1/scientific/reaction-entries/{id}/kinetics.
 
-See docs/specs/read_api_mvp.md §Endpoint 3.
+See docs/specs/browse_order.md.
 
 Provenance keys are always present (Phase 2.2). TS-chain fields are populated
 for TS-backed computational kinetics and ``null`` for non-TS-backed records
@@ -9,6 +9,7 @@ for TS-backed computational kinetics and ``null`` for non-TS-backed records
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
@@ -34,12 +35,15 @@ from app.db.models.common import (
     RecordReviewStatus,
     ScientificOriginKind,
 )
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
+from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
+    CursorToken,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
     LiteratureSummary,
+    OrderEcho,
     Pagination,
     PathSearchSummary,
     ProfiledRequestEcho,
@@ -47,12 +51,15 @@ from app.schemas.reads.scientific_common import (
     ReviewStatusSummary,
     SCFStabilitySummary,
     ScientificLevelsSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     SupersessionNotice,
     TemperatureCoverage,
     ValidationSummary,
+    WatermarkEcho,
     WorkflowToolReleaseSummary,
 )
+from app.schemas.reads.scientific_deposit_warnings import RecordWarnings, SubmissionWarnings
 from app.services.trust.models import TrustFragment
 
 # ---------------------------------------------------------------------------
@@ -65,10 +72,21 @@ class KineticsReadRequest(BaseModel):
 
     The path-parameter reaction_entry_id is supplied separately to the
     service function (so this model stays useful for both GET and POST shapes).
+
+    A kinetics read lists every matching record in display order; it never picks one (``collapse`` is refused, see
+    :mod:`app.schemas.reads.removed_parameters`). ``pressure_bar`` is a real filter (a record that does not apply at
+    that pressure is dropped); the coverage temperature window below is not, it only sets what each record's
+    ``temperature_coverage`` is computed against.
     """
 
-    temperature_min: float | None = None
-    temperature_max: float | None = None
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_parameters(cls, data):
+        return _REMOVED_PARAMETERS.guard_body(data)
+
+    #: The window ``temperature_coverage`` is computed against. Not a filter: records outside it are still returned.
+    coverage_temperature_min_k: float | None = None
+    coverage_temperature_max_k: float | None = None
     pressure_bar: float | None = Field(
         default=None,
         gt=0,
@@ -88,15 +106,31 @@ class KineticsReadRequest(BaseModel):
     level_of_theory_ref: str | None = None
     software: str | None = None
 
+    # Further provenance filters. ONE source calculation has to match every supplied provenance field at once
+    # (``level_of_theory_*``, ``software``, and these). ``method_family`` and ``dft_rung_*`` are a classification of the
+    # calculation's method, not a measure of accuracy (``app/schemas/reads/_method_family.py``).
+    method: str | None = None
+    basis: str | None = None
+    software_version: str | None = None
+    workflow_tool: str | None = None
+    workflow_tool_version: str | None = None
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
+    #: computed, experimental or estimated: the record's own ``scientific_origin``.
+    scientific_origin: ScientificOriginKind | None = None
+
     min_review_status: RecordReviewStatus | None = None
     include_rejected: bool = False
     include_deprecated: bool = False
 
     sort: str | None = None  # rejected non-None per v0 sort policy.
-    collapse: CollapseMode = CollapseMode.all
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
+    #: Whether ``include=assessments`` compares each stored assessment's inputs with today's (opt-in; at most 10 records).
+    check_inputs: bool = False
 
     @model_validator(mode="after")
     def _resolve_pressure_alias(self) -> Self:
@@ -236,6 +270,18 @@ class ThirdBodyEfficiencyBlock(BaseModel):
 
     collider_ref: str
     efficiency: float
+
+
+class KineticsBathGasBlock(BaseModel):
+    """One component of the bath gas a rate was obtained for.
+
+    ``null`` on the record means the depositor stated none; it is never inferred, and is
+    unrelated to a falloff's third-body efficiencies. The component is exposed as its species
+    entry's public ref, never the raw row id.
+    """
+
+    species_entry_ref: str
+    mole_fraction: float
 
 
 class PressureCoverage(BaseModel):
@@ -413,6 +459,9 @@ class KineticsRecord(BaseModel):
 
     kinetics_id: int
     kinetics_ref: str
+    #: Deposition time: when this row was created in TCKDB. The second key of the display order
+    #: (``docs/specs/browse_order.md``), shown so a client can check the order it was served.
+    created_at: datetime
     scientific_origin: ScientificOriginKind
     model_kind: KineticsModelKind
     direction: KineticsDirection | None = None
@@ -459,6 +508,8 @@ class KineticsRecord(BaseModel):
     chebyshev: ChebyshevBlock | None = None
     falloff: FalloffBlock | None = None
     third_body_efficiencies: list[ThirdBodyEfficiencyBlock] | None = None
+    #: The bath gas this rate was obtained for, where the depositor stated it; ``null`` otherwise.
+    bath_gas: list[KineticsBathGasBlock] | None = None
     uncertainty: KineticsUncertainty
     temperature_coverage: TemperatureCoverage | None = None
     evidence_completeness: EvidenceCompletenessBreakdown
@@ -512,21 +563,32 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query."""
 
     filter: dict[str, object]
-    sort: str
-    collapse: CollapseMode
+    sort: OrderEcho
     include: list[str]
+    #: Whether this read compared each stored assessment's inputs with today's (``check_inputs=true``).
+    check_inputs: bool = False
 
 
-class ScientificReactionKineticsResponse(BaseModel):
+class ScientificReactionKineticsResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/reaction-entries/{id}/kinetics.
 
     Phase B: ``reaction_entry_ref`` mirrors ``reaction_entry_id`` as the
     public stable handle for the response's path-parameter resource.
     """
 
+    #: The deposit-time warnings of each record this response names, with its public ref (see
+    #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    record_warnings: list[RecordWarnings] = Field(default_factory=list)
+    #: Warnings about the deposit that no one record could take, once per submission a named record belongs to
+    #: (see ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    deposit_warnings: list[SubmissionWarnings] = Field(default_factory=list)
     request: RequestEcho
     reaction_entry_id: int
     reaction_entry_ref: str
     review_summary: ReviewStatusSummary
     records: list[KineticsRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None

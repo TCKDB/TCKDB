@@ -22,7 +22,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import (
     CalculationType,
     KineticsDirection,
@@ -37,7 +38,6 @@ from app.db.models.common import (
     TunnelingModel,
 )
 from app.schemas.reads.scientific_analytics import (
-    MAX_CURSOR_LENGTH,
     CalculationAnalyticsRequest,
     CalculationAnalyticsResponse,
     KineticsAnalyticsRequest,
@@ -57,17 +57,7 @@ from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
 
-router = APIRouter(prefix="/analytics", tags=["scientific-analytics"])
-
-_CURSOR_DESCRIPTION = (
-    "Opt-in keyset traversal. Pass the previous response's next_cursor to get "
-    "the following page; the cursor pins the traversal to a snapshot of the "
-    "records that existed when it began. Cannot be combined with a non-zero "
-    "offset. The snapshot bounds insertions, not curation — a record whose "
-    "review status changes mid-traversal can still enter or leave the visible "
-    "set. For an immutable, citable set use a published dataset release."
-)
-
+router = APIRouter(route_class=ServerFaultRoute, prefix="/analytics", tags=["scientific-analytics"])
 
 @router.get("/kinetics", response_model=KineticsAnalyticsResponse)
 def kinetics_analytics(
@@ -115,16 +105,15 @@ def kinetics_analytics(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
     limit: int = Query(50, ge=1, le=200),
-    cursor: str | None = Query(
-        None, max_length=MAX_CURSOR_LENGTH, description=_CURSOR_DESCRIPTION
-    ),
+    cursor: CursorQuery = None,
 ):
     """Quantitative kinetics search for dataset construction."""
     payload = search_kinetics_analytics(
         session,
-        KineticsAnalyticsRequest(
+        caller_input(
+            KineticsAnalyticsRequest,
             scientific_origin=scientific_origin,
             direction=direction,
             model_kind=model_kind,
@@ -187,16 +176,15 @@ def thermo_analytics(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
     limit: int = Query(50, ge=1, le=200),
-    cursor: str | None = Query(
-        None, max_length=MAX_CURSOR_LENGTH, description=_CURSOR_DESCRIPTION
-    ),
+    cursor: CursorQuery = None,
 ):
     """Quantitative thermochemistry search for dataset construction."""
     payload = search_thermo_analytics(
         session,
-        ThermoAnalyticsRequest(
+        caller_input(
+            ThermoAnalyticsRequest,
             scientific_origin=scientific_origin,
             phase=phase,
             model_kind=model_kind,
@@ -253,16 +241,15 @@ def statmech_analytics(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
     limit: int = Query(50, ge=1, le=200),
-    cursor: str | None = Query(
-        None, max_length=MAX_CURSOR_LENGTH, description=_CURSOR_DESCRIPTION
-    ),
+    cursor: CursorQuery = None,
 ):
     """Quantitative statistical-mechanics search for dataset construction."""
     payload = search_statmech_analytics(
         session,
-        StatmechAnalyticsRequest(
+        caller_input(
+            StatmechAnalyticsRequest,
             scientific_origin=scientific_origin,
             external_symmetry=external_symmetry,
             is_linear=is_linear,
@@ -319,16 +306,15 @@ def calculation_analytics(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
     limit: int = Query(50, ge=1, le=200),
-    cursor: str | None = Query(
-        None, max_length=MAX_CURSOR_LENGTH, description=_CURSOR_DESCRIPTION
-    ),
+    cursor: CursorQuery = None,
 ):
     """Quantitative calculation search for dataset construction."""
     payload = search_calculation_analytics(
         session,
-        CalculationAnalyticsRequest(
+        caller_input(
+            CalculationAnalyticsRequest,
             calculation_type=calculation_type,
             electronic_energy_min_hartree=electronic_energy_min_hartree,
             electronic_energy_max_hartree=electronic_energy_max_hartree,

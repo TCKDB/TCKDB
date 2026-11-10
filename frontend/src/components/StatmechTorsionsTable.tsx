@@ -29,7 +29,6 @@ export function TorsionsTable({ rows }: { rows: StatmechRecord["torsions"] }) {
                     <tr>
                         <th scope="col">Index</th>
                         <th scope="col">Treatment</th>
-                        <th scope="col">Top</th>
                         <th scope="col">Dimension</th>
                         <th scope="col">Symmetry number</th>
                         <th scope="col">Source scan</th>
@@ -41,7 +40,6 @@ export function TorsionsTable({ rows }: { rows: StatmechRecord["torsions"] }) {
                         <tr key={`torsion-${row.torsion_index}`}>
                             <td className="num" data-label="Index">{row.torsion_index}</td>
                             <td data-label="Treatment">{row.treatment_kind ? statusLabel(row.treatment_kind) : "not recorded"}</td>
-                            <td data-label="Top">{row.top_description ?? "not recorded"}</td>
                             <td className="num" data-label="Dimension">{row.dimension}</td>
                             <td className="num" data-label="Symmetry number">{row.symmetry_number ?? "not recorded"}</td>
                             <td data-label="Source scan">
@@ -49,7 +47,7 @@ export function TorsionsTable({ rows }: { rows: StatmechRecord["torsions"] }) {
                                     ? <Link className="data" to={`/calculations/${row.source_scan_calculation_ref}`}>{row.source_scan_calculation_ref}</Link>
                                     : "not recorded"}
                             </td>
-                            <td data-label="Invalidated">{row.invalidated_reason ?? "not invalidated"}</td>
+                            <td data-label="Invalidated">{row.invalidated_reason ? "invalidated" : "not invalidated"}</td>
                         </tr>
                     ))}
                 </tbody>

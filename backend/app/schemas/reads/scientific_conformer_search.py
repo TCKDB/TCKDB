@@ -14,7 +14,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.models.common import (
     ConformerSelectionKind,
@@ -37,9 +37,13 @@ from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
 from app.schemas.reads.scientific_common import (
+    CursorToken,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
+    WatermarkEcho,
 )
 from app.schemas.reads.scientific_conformer import (
     ScientificConformerGroupRecord,
@@ -89,7 +93,12 @@ class ConformersSearchRequest(BaseModel):
     Filters AND-combine. At least one meaningful filter is required —
     requests with only pagination / include / review knobs are rejected
     with 422 ``missing_filter`` to avoid accidental public table scans.
+
+    A key the model does not declare is a 422 (``extra_forbidden``), never ignored: a misspelled filter would otherwise
+    quietly widen the result.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     # --- identity filters ------------------------------------------------
     species_ref: str | None = Field(
@@ -111,6 +120,14 @@ class ConformersSearchRequest(BaseModel):
     assignment_scheme_ref: str | None = Field(
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH
     )
+
+    # --- basin-shape filters ---------------------------------------------
+    #: ``true``: groups whose optimised members are linked end to end but are not all within tolerance of each other
+    #: (a wide basin, ``basin_is_clique = false``). ``false``: groups whose optimised members all are. A group with no
+    #: optimised member has no such fact and matches neither.
+    wide_basin: bool | None = None
+    #: Groups whose largest torsion difference between two optimised members is at least this many degrees.
+    min_span_deg: float | None = Field(default=None, ge=0.0, le=360.0)
 
     # --- evidence filters ------------------------------------------------
     has_observations: bool | None = None
@@ -147,6 +164,7 @@ class ConformersSearchRequest(BaseModel):
     sort: str | None = None  # rejected non-None per v0 sort policy
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
 
@@ -154,11 +172,11 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope."""
 
     filter: dict[str, Any]
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificConformersSearchResponse(BaseModel):
+class ScientificConformersSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/conformers/search.
 
     Records are at the conformer-group grain — one record per
@@ -169,6 +187,10 @@ class ScientificConformersSearchResponse(BaseModel):
     review_summary: ReviewStatusSummary
     records: list[ScientificConformerGroupRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [

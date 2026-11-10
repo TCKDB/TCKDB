@@ -439,24 +439,26 @@ def test_get_geometry_validation_endpoint_returns_persisted_row(
 
 
 def _reaction_payload_h2o_self() -> dict:
-    """A trivial degenerate water-water "reaction" payload — only used
+    """A minimal real reaction (ethanol -> dimethyl ether) -- only used
     here to drive the workflow far enough that species-side opt calcs
     are persisted and validated. The reaction graph itself is
-    immaterial to this test."""
+    immaterial to this test, but its two sides must differ."""
+    from tests.services.test_stereo_descriptor import embed_xyz
+
     return {
         "analysis_software_release": {"name": "Arkane", "version": "3.0"},
         "species": [
             {
                 "key": "wA",
                 "species_entry": {
-                    "smiles": "O",
+                    "smiles": "CCO",
                     "charge": 0,
                     "multiplicity": 1,
                 },
                 "conformers": [
                     {
                         "key": "wA-conf",
-                        "geometry": {"key": "wA-geom", "xyz_text": _XYZ_WATER},
+                        "geometry": {"key": "wA-geom", "xyz_text": _XYZ_ETHANOL},
                         "calculation": {
                             "key": "wA-opt",
                             "type": "opt",
@@ -471,14 +473,14 @@ def _reaction_payload_h2o_self() -> dict:
             {
                 "key": "wB",
                 "species_entry": {
-                    "smiles": "O",
+                    "smiles": "COC",
                     "charge": 0,
                     "multiplicity": 1,
                 },
                 "conformers": [
                     {
                         "key": "wB-conf",
-                        "geometry": {"key": "wB-geom", "xyz_text": _XYZ_WATER},
+                        "geometry": {"key": "wB-geom", "xyz_text": embed_xyz("COC")},
                         "calculation": {
                             "key": "wB-opt",
                             "type": "opt",

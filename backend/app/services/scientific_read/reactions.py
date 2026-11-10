@@ -1,11 +1,12 @@
 """Service implementation for /api/v1/scientific/reactions/search.
 
-See docs/specs/read_api_mvp.md §Endpoint 2.
+See docs/specs/browse_order.md.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from app.db.models.calculation import Calculation
 from app.db.models.common import (
     CalculationType,
     ReactionRole,
+    RecordReviewStatus,
     SubmissionRecordType,
 )
 from app.db.models.kinetics import Kinetics
@@ -22,15 +24,14 @@ from app.db.models.reaction import (
     ReactionEntry,
     ReactionEntryStructureParticipant,
     ReactionFamily,
-    ReactionParticipant,
 )
 from app.db.models.reaction_atom_map import ReactionAtomMap
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transition_state import TransitionState
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
-    CollapseMode,
     RecordReviewBadge,
+    browse_order,
 )
 from app.schemas.reads.scientific_reactions import (
     ReactionAvailability,
@@ -46,11 +47,11 @@ from app.schemas.reads.scientific_reactions import (
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     molecular_formula_expr,
     reject_client_sort,
     review_floor_predicate,
     review_summary,
-    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -61,12 +62,22 @@ from app.services.scientific_read.handles import (
     reconcile_reaction_entry_pair,
     reconcile_reaction_pair,
 )
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
+from app.services.scientific_read.reaction_participants import collapse_occurrences, format_reaction_equation
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
+    STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
+from app.services.scientific_read.structure_query import constitution_smiles
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "kinetics",
@@ -78,11 +89,11 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
-_DEFAULT_SORT_ECHO = "review_rank,has_kinetics,has_transition_state,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def search_reactions(
-    session: Session, request: ReactionSearchRequest
+    session: Session, request: ReactionSearchRequest, *, scope_entries: bool = False
 ) -> ScientificReactionSearchResponse:
     """Discover reaction entries by reactants/products with availability + trust.
 
@@ -102,9 +113,10 @@ def search_reactions(
     Containment is set-based, not multiset; see
     :class:`~app.schemas.reads.scientific_reactions.ReactionMatchMode`.
 
-    Default sort (per L3): ``review_rank ASC, has_kinetics DESC,
-    has_transition_state DESC, created_at DESC, id DESC``. Client-supplied
-    ``sort=`` is rejected.
+    Display order (``docs/specs/browse_order.md``): ``review_rank ASC,
+    created_at DESC, id DESC``. Whether an entry has kinetics or a transition
+    state is a filter (``has_kinetics``, ``has_transition_state``), never a
+    ranking key. Client-supplied ``sort=`` is rejected.
 
     :param session: SQLAlchemy session.
     :param request: Parsed request model.
@@ -113,6 +125,7 @@ def search_reactions(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/reactions/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -221,6 +234,10 @@ def search_reactions(
             )
         ).all()
     }
+    # An entry that stayed on a merged-away reaction is not a live record.
+    entries = [e for e in entries if chem_reactions[e.reaction_id].merged_into_chem_reaction_id is None]
+    if not entries:
+        return _empty_response(request, includes, offset, limit)
 
     # Filter by family if requested.
     if request.family is not None:
@@ -246,7 +263,20 @@ def search_reactions(
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
+    if scope_entries:
+        # The caller searches RECORDS on these entries: an entry is a scoping parent and never withholds one.
+        visible = set(RecordReviewStatus)
+    if not scope_entries:
+        record_hidden_by_default(
+            hidden_by_default_from_statuses(
+                (badges[e.id].status for e in entries),
+                include_rejected=request.include_rejected,
+                include_deprecated=request.include_deprecated,
+                min_review_status=request.min_review_status,
+            )
+        )
     entries = [e for e in entries if badges[e.id].status in visible]
+    entries = paging.snapshot(entries, id_of=lambda e: e.id)
 
     if not entries:
         return _empty_response(request, includes, offset, limit)
@@ -273,9 +303,6 @@ def search_reactions(
     )
     species_id_by_entry_species = _resolve_participant_species_ids(
         session, all_participant_species_entry_ids
-    )
-    stoichiometry_by_key = _resolve_reaction_participant_stoichiometry(
-        session, {chem_reactions[e.reaction_id].id for e in entries}
     )
     availability_by_entry = _compute_availability(session, [e.id for e in entries])
 
@@ -313,7 +340,6 @@ def search_reactions(
         smiles_by_entry_species=smiles_by_entry_species,
         formulas_by_entry_species=formulas_by_entry_species,
         species_id_by_entry_species=species_id_by_entry_species,
-        stoichiometry_by_key=stoichiometry_by_key,
         badges=badges,
         availability_by_entry=availability_by_entry,
         matched_direction_by_entry=matched_direction_by_entry,
@@ -322,20 +348,13 @@ def search_reactions(
 
     summary = review_summary(badges[e.id] for e in entries)
 
-    pre_collapse_total = len(records)
-    collapse_first = request.collapse.value == "first"
-    returned_records = slice_for_pagination(
-        records,
-        offset=offset,
-        limit=limit,
-        collapse_first=collapse_first,
-    )
+    page = paging.window(records, key_of=_reaction_key({e.id: e.created_at for e in entries}))
+    returned_records = page.items
 
     return ScientificReactionSearchResponse(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=summary,
@@ -344,9 +363,10 @@ def search_reactions(
             offset=offset,
             limit=limit,
             returned=len(returned_records),
-            total=pre_collapse_total,
-            collapse_first=collapse_first,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 
@@ -425,6 +445,7 @@ def browse_reactions(
     :raises ValueError: 422 for pagination validation failures.
     """
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/reactions/browse", request, offset=offset, limit=limit)
 
     reactant_species_ids = _resolve_smiles_to_species_ids(
         session, request.reactant_smiles
@@ -482,6 +503,9 @@ def browse_reactions(
             )
         ).all()
     }
+    entries = [e for e in entries if chem_reactions[e.reaction_id].merged_into_chem_reaction_id is None]
+    if not entries:
+        return _empty_browse_response(request, offset, limit)
 
     if request.family is not None:
         family = session.scalar(
@@ -507,7 +531,16 @@ def browse_reactions(
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[e.id].status for e in entries),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
+    )
     entries = [e for e in entries if badges[e.id].status in visible]
+    entries = paging.snapshot(entries, id_of=lambda e: e.id)
     if not entries:
         return _empty_browse_response(request, offset, limit)
 
@@ -550,9 +583,6 @@ def browse_reactions(
     species_id_by_entry_species = _resolve_participant_species_ids(
         session, all_participant_species_entry_ids
     )
-    stoichiometry_by_key = _resolve_reaction_participant_stoichiometry(
-        session, {chem_reactions[e.reaction_id].id for e in entries}
-    )
 
     matched_direction_by_entry: dict[int, ReactionDirectionQuery] = {}
     for e in entries:
@@ -587,7 +617,6 @@ def browse_reactions(
         smiles_by_entry_species=smiles_by_entry_species,
         formulas_by_entry_species=formulas_by_entry_species,
         species_id_by_entry_species=species_id_by_entry_species,
-        stoichiometry_by_key=stoichiometry_by_key,
         badges=badges,
         availability_by_entry=availability_by_entry,
         matched_direction_by_entry=matched_direction_by_entry,
@@ -596,16 +625,13 @@ def browse_reactions(
 
     summary = review_summary(badges[e.id] for e in entries)
 
-    total = len(records)
-    page_records = slice_for_pagination(
-        records, offset=offset, limit=limit, collapse_first=False
-    )
+    page = paging.window(records, key_of=_reaction_key({e.id: e.created_at for e in entries}))
+    page_records = page.items
 
     return ScientificReactionSearchResponse(
         request=RequestEcho(
             filter=_browse_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=CollapseMode.all,
             include=[],
         ),
         review_summary=summary,
@@ -614,8 +640,10 @@ def browse_reactions(
             offset=offset,
             limit=limit,
             returned=len(page_records),
-            total=total,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 
@@ -629,11 +657,16 @@ def _resolve_smiles_to_species_ids(
 ) -> list[int]:
     if not smiles_list:
         return []
+    # The species key is the constitution (DR-0038): ``C/C=C/C`` and ``CC=CC`` name one species, and a species merged
+    # into another is kept but is not what a query resolves to.
+    flat = {s: constitution_smiles(s) for s in smiles_list}
     rows = session.execute(
-        select(Species.smiles, Species.id).where(Species.smiles.in_(smiles_list))
+        select(Species.smiles, Species.id).where(
+            Species.smiles.in_(set(flat.values())), Species.merged_into_species_id.is_(None)
+        )
     ).all()
     by_smiles: dict[str, int] = {row.smiles: row.id for row in rows}
-    return [by_smiles[s] for s in smiles_list if s in by_smiles]
+    return [by_smiles[flat[s]] for s in smiles_list if flat[s] in by_smiles]
 
 
 def _side_matches(
@@ -831,31 +864,6 @@ def _resolve_participant_species_ids(
     return dict(rows)
 
 
-def _resolve_reaction_participant_stoichiometry(
-    session: Session, reaction_ids: set[int]
-) -> dict[tuple[int, int, ReactionRole], int]:
-    """Map (reaction_id, species_id, role) -> graph-identity stoichiometry.
-
-    This is the reaction-level coefficient ("this equation consumes two
-    of this species"), not a property of any one deposit's structure-
-    participant row -- see ``ReactionParticipantSummary``'s docstring.
-    """
-    if not reaction_ids:
-        return {}
-    rows = session.execute(
-        select(
-            ReactionParticipant.reaction_id,
-            ReactionParticipant.species_id,
-            ReactionParticipant.role,
-            ReactionParticipant.stoichiometry,
-        ).where(ReactionParticipant.reaction_id.in_(reaction_ids))
-    ).all()
-    return {
-        (reaction_id, species_id, role): stoichiometry
-        for reaction_id, species_id, role, stoichiometry in rows
-    }
-
-
 def _resolve_participant_refs(
     session: Session, species_entry_ids: set[int]
 ) -> dict[int, str]:
@@ -872,8 +880,11 @@ def _resolve_participant_refs(
 
 def _resolve_participant_labels(
     session: Session, species_entry_ids: set[int]
-) -> dict[int, str | None]:
-    """Map species_entry_id → the entry discriminator, or ``None``.
+) -> dict[int, tuple[str | None, dict]]:
+    """Map species_entry_id → (the entry discriminator or ``None``, the computed facets).
+
+    One batched query for every participant of a page of reactions, so serving the facets adds no per-participant
+    query.
 
     A participant's ``smiles`` is the parent *species*' and is shared by
     every entry under it, so two participants that are different
@@ -884,14 +895,15 @@ def _resolve_participant_labels(
     rows = session.execute(
         select(
             SpeciesEntry.id,
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         ).where(SpeciesEntry.id.in_(species_entry_ids))
     ).all()
-    return {row.id: species_entry_label_for(row) for row in rows}
+    return {row.id: (species_entry_label_for(row), entry_facets_of(row)) for row in rows}
 
 
 def _compute_availability(
@@ -941,9 +953,10 @@ def _compute_availability(
         for id_column, record_type in (
             (TransitionState.id, SubmissionRecordType.transition_state),
             (TransitionStateEntry.id, SubmissionRecordType.transition_state_entry),
-            (Calculation.id, SubmissionRecordType.calculation),
         ):
             path_search = where_visible(path_search, review_floor_predicate(id_column, record_type))
+        # The path search itself is evidence of the entry (ADR 0023): withheld only when rejected or deprecated.
+        path_search = where_visible(path_search, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
         rows = session.execute(path_search.distinct()).all()
         has_path_search_set = {row[0] for row in rows}
 
@@ -1038,15 +1051,34 @@ def _entry_species_ids(
     return grouped
 
 
-def _format_equation(
-    reactants: list[ReactionParticipantSummary],
-    products: list[ReactionParticipantSummary],
-    reversible: bool,
-) -> str:
-    arrow = "<=>" if reversible else "->"
-    left = " + ".join(p.smiles for p in reactants)
-    right = " + ".join(p.smiles for p in products)
-    return f"{left} {arrow} {right}"
+def _collapsed_participants(
+    participants: list[tuple[int, ReactionRole, int]],
+    role: ReactionRole,
+    refs_by_entry_species: dict[int, str],
+    labels_by_entry_species: dict[int, tuple[str | None, dict]],
+    smiles_by_entry_species: dict[int, str],
+    formulas_by_entry_species: dict[int, str | None],
+) -> list[ReactionParticipantSummary]:
+    """One row per DISTINCT species entry on one side, carrying how many times it occurs.
+
+    The deposit stores one structure-participant row per occurrence (``H + H -> H2`` has two rows for the one H
+    entry). Serving a row per occurrence while each also carried the species-level coefficient made a consumer that
+    rebuilds the equation from the rows read ``2 H + 2 H`` (4 H). ``stoichiometry`` is now this entry's own count on
+    this side, ``participant_index`` the first position it was written at.
+    """
+    return [
+        ReactionParticipantSummary(
+            species_entry_id=se,
+            species_entry_ref=refs_by_entry_species.get(se, ""),
+            species_entry_label=labels_by_entry_species.get(se, (None, {}))[0],
+            **labels_by_entry_species.get(se, (None, {}))[1],
+            smiles=smiles_by_entry_species.get(se, ""),
+            formula=formulas_by_entry_species.get(se),
+            stoichiometry=count,
+            participant_index=first_index,
+        )
+        for se, count, first_index in collapse_occurrences(participants, role)
+    ]
 
 
 def _materialize_and_sort_reaction_records(
@@ -1055,11 +1087,10 @@ def _materialize_and_sort_reaction_records(
     chem_reactions: dict[int, ChemReaction],
     participants_by_entry: dict[int, list[tuple[int, ReactionRole, int]]],
     refs_by_entry_species: dict[int, str],
-    labels_by_entry_species: dict[int, str | None],
+    labels_by_entry_species: dict[int, tuple[str | None, dict]],
     smiles_by_entry_species: dict[int, str],
     formulas_by_entry_species: dict[int, str | None],
     species_id_by_entry_species: dict[int, int],
-    stoichiometry_by_key: dict[tuple[int, int, ReactionRole], int],
     badges: dict[int, RecordReviewBadge],
     availability_by_entry: dict[int, ReactionAvailability],
     matched_direction_by_entry: dict[int, ReactionDirectionQuery],
@@ -1071,45 +1102,34 @@ def _materialize_and_sort_reaction_records(
     search row and a browse row are byte-identical in shape -- only the
     candidate-set construction differs between the two callers; everything
     from "which entries survived the review filter" onward is this one
-    function. Sort order is the D-series default: ``review_rank`` ASC,
-    ``has_kinetics`` DESC, ``has_transition_state`` DESC, ``created_at``
-    DESC, ``id`` DESC.
+    function. Sort order is the display order: ``review_rank`` ASC,
+    ``created_at`` DESC, ``id`` DESC. Evidence availability orders nothing.
     """
     records: list[ReactionScientificRecord] = []
     for e in entries:
         chem = chem_reactions[e.reaction_id]
         participants = participants_by_entry[e.id]
-        reactants = [
-            ReactionParticipantSummary(
-                species_entry_id=se,
-                species_entry_ref=refs_by_entry_species.get(se, ""),
-                species_entry_label=labels_by_entry_species.get(se),
-                smiles=smiles_by_entry_species.get(se, ""),
-                formula=formulas_by_entry_species.get(se),
-                stoichiometry=stoichiometry_by_key.get(
-                    (chem.id, species_id_by_entry_species.get(se), role), 1
-                ),
-                participant_index=idx,
-            )
-            for se, role, idx in sorted(participants, key=lambda p: (p[1].value, p[2]))
-            if role == ReactionRole.reactant
-        ]
-        products = [
-            ReactionParticipantSummary(
-                species_entry_id=se,
-                species_entry_ref=refs_by_entry_species.get(se, ""),
-                species_entry_label=labels_by_entry_species.get(se),
-                smiles=smiles_by_entry_species.get(se, ""),
-                formula=formulas_by_entry_species.get(se),
-                stoichiometry=stoichiometry_by_key.get(
-                    (chem.id, species_id_by_entry_species.get(se), role), 1
-                ),
-                participant_index=idx,
-            )
-            for se, role, idx in sorted(participants, key=lambda p: (p[1].value, p[2]))
-            if role == ReactionRole.product
-        ]
-        equation = _format_equation(reactants, products, chem.reversible)
+        reactants = _collapsed_participants(
+            participants,
+            ReactionRole.reactant,
+            refs_by_entry_species,
+            labels_by_entry_species,
+            smiles_by_entry_species,
+            formulas_by_entry_species,
+        )
+        products = _collapsed_participants(
+            participants,
+            ReactionRole.product,
+            refs_by_entry_species,
+            labels_by_entry_species,
+            smiles_by_entry_species,
+            formulas_by_entry_species,
+        )
+        equation = format_reaction_equation(
+            [(idx, smiles_by_entry_species.get(se, "")) for se, role, idx in participants if role == ReactionRole.reactant],
+            [(idx, smiles_by_entry_species.get(se, "")) for se, role, idx in participants if role == ReactionRole.product],
+            chem.reversible,
+        )
         records.append(
             ReactionScientificRecord(
                 reaction_id=chem.id,
@@ -1136,14 +1156,25 @@ def _materialize_and_sort_reaction_records(
     def sort_key(rec: ReactionScientificRecord) -> tuple:
         return (
             REVIEW_RANK[rec.review.status],
-            -int(rec.availability.has_kinetics),
-            -int(rec.availability.has_transition_state),
             -entry_created_at[rec.reaction_entry_id].timestamp(),
             -rec.reaction_entry_id,
         )
 
     records.sort(key=sort_key)
     return records
+
+
+def _reaction_key(entry_created_at: dict[int, datetime]):
+    """The display-order key of a reaction record: review rank, newest deposit, newest id."""
+
+    def key(rec: ReactionScientificRecord) -> tuple:
+        return (
+            REVIEW_RANK[rec.review.status],
+            -entry_created_at[rec.reaction_entry_id].timestamp(),
+            -rec.reaction_entry_id,
+        )
+
+    return key
 
 
 def _filter_echo(request: ReactionSearchRequest) -> dict[str, object]:
@@ -1179,7 +1210,6 @@ def _empty_response(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=review_summary([]),
@@ -1221,7 +1251,6 @@ def _empty_browse_response(
         request=RequestEcho(
             filter=_browse_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=CollapseMode.all,
             include=[],
         ),
         review_summary=review_summary([]),

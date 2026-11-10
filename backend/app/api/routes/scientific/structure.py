@@ -22,8 +22,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_structure_search import (
     ScientificSpeciesStructureSearchRequest,
@@ -37,7 +38,7 @@ from app.services.scientific_read.structure_search import (
     search_species_by_structure,
 )
 
-router = APIRouter(prefix="/species")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species")
 
 
 # POST bodies own every filter/include/pagination knob. Mirrors the
@@ -62,12 +63,21 @@ def species_structure_search_get(
     query_inchi_key: str | None = Query(None),
     mode: StructureSearchMode = Query(StructureSearchMode.substructure),
     similarity_threshold: float | None = Query(None, ge=0.0, le=1.0),
+    isomeric: bool = Query(
+        False,
+        description=(
+            "Exact mode with query_smiles: return only entries whose stereo "
+            "descriptor matches the stereo marks of the query (C/C=C/C finds "
+            "the E entries). Species identity itself is stereo-blind."
+        ),
+    ),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ) -> ScientificSpeciesStructureSearchResponse:
     """RDKit-backed structure search at species-entry grain (GET form).
@@ -77,19 +87,22 @@ def species_structure_search_get(
     rejected with 422 ``client_sort_not_supported``; the per-mode default
     deterministic sort always applies.
     """
-    request = ScientificSpeciesStructureSearchRequest(
+    request = caller_input(
+        ScientificSpeciesStructureSearchRequest,
         query_smiles=query_smiles,
         query_smarts=query_smarts,
         query_inchi=query_inchi,
         query_inchi_key=query_inchi_key,
         mode=mode,
         similarity_threshold=similarity_threshold,
+        isomeric=isomeric,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     return apply_internal_ids_visibility(

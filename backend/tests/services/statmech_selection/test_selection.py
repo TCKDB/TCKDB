@@ -23,7 +23,7 @@ from tests.services.structure_selection._support import curated
 
 
 def preferred(scene, **changes):
-    return scene.request(intent="protocol_preferred", comparison_objective="expected_accuracy", **changes)
+    return scene.request(intent="protocol_coverage", **changes)
 
 
 def select(scene, request=None, **kw):
@@ -44,9 +44,9 @@ def test_a_selection_records_a_manifest_that_replays_from_itself(db_session):
 def test_a_qualify_selection_selects_nothing_and_still_records_its_manifest(db_session):
     scene = build(db_session)
     result = select(scene, scene.request())
-    assert result.outcome is Outcome.qualified_models and result.decision.selection.scientific_ref is None
+    assert result.outcome is Outcome.qualified_models and result.decision.selection.sole_eligible_ref is None
     assert result.manifest["decision"]["selection"] == {
-        "scientific_ref": None, "sole_eligible_ref": None, "administrative_ref": None, "basis": None, "limitation": None,
+        "sole_eligible_ref": None, "administrative_ref": None, "basis": None, "limitation": None,
     }
     assert replay_matches(result.manifest)
 
@@ -91,7 +91,7 @@ def test_under_the_curated_profile_the_manifest_redacts_what_the_floor_hides_and
     finally:
         reset_current_read_profile(token)
     manifest = result.manifest
-    assert manifest["read_profile"] == {"profile": "curated", "review_floor": "approved"}
+    assert manifest["read_profile"] == {"profile": "curated", "review_floor": "approved", "linked_evidence_withheld": ["deprecated", "rejected"]}
     assert manifest["population"]["excluded_by_review"] == [] and manifest["population"]["total_candidates"] == 1
     assert hidden.public_ref not in canonical(manifest)
     assert replay_matches(manifest)

@@ -69,13 +69,14 @@ def test_p1_a_sole_record_whose_only_flaw_is_an_automated_geometry_fail_is_now_s
 
 
 def test_p2_a_geometry_fail_no_longer_lets_a_competitor_win_by_exclusion(db_session, methane):
-    """Main: the G4 with the geometry fail was excluded, so the G3 was the sole eligible record. Now: E1 prefers the G4."""
+    """Main: the G4 with the geometry fail was excluded, so the G3 was the sole eligible record. Now: both compete."""
     g4 = make_thermo(db_session, methane, proto=protocol("g4"), age_days=400)
     g3 = make_thermo(db_session, methane, proto=protocol("g3"), age_days=1)
     _source(db_session, methane, g4, geometry=ValidationStatus.fail)
     result = _run(db_session, methane)
-    assert result.outcome is Outcome.policy_preferred and result.selected_ref == g4.public_ref
-    assert _blocking(result, g3) == ()
+    assert result.outcome is Outcome.incomparable_alternatives
+    assert set(result.decision.fronts[0]) == {g4.public_ref, g3.public_ref}
+    assert _blocking(result, g4) == () and _blocking(result, g3) == ()
 
 
 def test_p3_a_rejected_quality_source_still_blocks_even_with_a_geometry_fail(db_session, methane):

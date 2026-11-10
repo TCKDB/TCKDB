@@ -32,7 +32,6 @@ def _stub_response(records: list[dict[str, Any]] | None = None) -> dict[str, Any
         "request": {
             "offset": 0,
             "limit": 25,
-            "collapse": "all",
             "include": ["provenance"],
         },
         "pagination": {"offset": 0, "limit": 25, "returned": 0, "total": 0},
@@ -407,30 +406,6 @@ def test_offset_zero_accepted() -> None:
     client.close()
 
 
-@pytest.mark.parametrize("collapse", ["all", "first"])
-def test_legal_collapse_values_forwarded(collapse: str) -> None:
-    captured: list[dict[str, Any]] = []
-    client = _make_client(_ok_handler(captured))
-    st_tool.run(
-        client,
-        _cfg(),
-        {"species_entry_ref": VALID_REF, "collapse": collapse},
-    )
-    assert captured[0]["params"]["collapse"] == collapse
-    client.close()
-
-
-def test_rejects_unknown_collapse_value() -> None:
-    client = _make_client(_ok_handler([]))
-    with pytest.raises(MCPToolError):
-        st_tool.run(
-            client,
-            _cfg(),
-            {"species_entry_ref": VALID_REF, "collapse": "every"},
-        )
-    client.close()
-
-
 def test_rejects_unknown_field() -> None:
     client = _make_client(_ok_handler([]))
     with pytest.raises(MCPToolError) as excinfo:
@@ -464,13 +439,13 @@ def test_temperature_filters_forwarded() -> None:
         _cfg(),
         {
             "species_entry_ref": VALID_REF,
-            "temperature_min": 298.15,
-            "temperature_max": 1500.0,
+            "coverage_temperature_min_k": 298.15,
+            "coverage_temperature_max_k": 1500.0,
         },
     )
     p = captured[0]["params"]
-    assert p["temperature_min"] == "298.15"
-    assert p["temperature_max"] == "1500.0"
+    assert p["coverage_temperature_min_k"] == "298.15"
+    assert p["coverage_temperature_max_k"] == "1500.0"
     client.close()
 
 
@@ -480,7 +455,7 @@ def test_rejects_non_numeric_temperature() -> None:
         st_tool.run(
             client,
             _cfg(),
-            {"species_entry_ref": VALID_REF, "temperature_min": "hot"},
+            {"species_entry_ref": VALID_REF, "coverage_temperature_min_k": "hot"},
         )
     client.close()
 
@@ -491,7 +466,7 @@ def test_rejects_bool_temperature() -> None:
         st_tool.run(
             client,
             _cfg(),
-            {"species_entry_ref": VALID_REF, "temperature_min": True},
+            {"species_entry_ref": VALID_REF, "coverage_temperature_min_k": True},
         )
     client.close()
 

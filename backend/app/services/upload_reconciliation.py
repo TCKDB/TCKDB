@@ -10,6 +10,10 @@ No database dependencies — pure functions only.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
+from tckdb_schemas.deposit_warning_messages import EXCITED_STATE_METHODS
+from tckdb_schemas.electronic_state import canonical_term_symbol, is_valid_term_symbol
 from tckdb_schemas.stationary_point import (
     TS_IMAGINARY_FREQUENCY_MIN_CM1,
     W_N_IMAG_CONTRADICTS_MINIMUM,
@@ -24,6 +28,7 @@ from tckdb_schemas.stationary_point import (
     warning_findings,
 )
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.atomic_ground_terms import (
     declared_term_multiplicity,
     ground_term_for,
@@ -34,6 +39,7 @@ from app.schemas.fragments.calculation import (
     CalculationWithResultsPayload,
     FreqResultPayload,
 )
+from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
@@ -63,8 +69,10 @@ from app.services.monatomic import single_atom_element
 # Which of these can actually reach *this* module depends on the declared
 # kind, because the four rules split by kind:
 #
-# * ``minimum`` with any imaginary mode is refused at the schema tier, so
-#   ``W_N_IMAG_CONTRADICTS_MINIMUM`` never arrives here for a minimum.
+# * ``minimum`` with an imaginary mode at or above tau is refused at the
+#   schema tier, so ``W_N_IMAG_CONTRADICTS_MINIMUM`` never arrives here
+#   for a minimum; one whose modes are all below tau is accepted and
+#   arrives as ``W_MINIMUM_IMAGINARY_MODES_BELOW_TAU``.
 # * ``vdw_complex`` is formally a minimum too, but its intermolecular
 #   modes sit low enough that a small imaginary mode is usually Hessian
 #   grid noise rather than evidence. Refusing it would force an expensive
@@ -234,16 +242,16 @@ def build_ess_result_from_upload(
 # Deduction → payload field mapping
 # ---------------------------------------------------------------------------
 
-# Maps Deduction.field → (payload attribute name, value accessor)
+# Maps Deduction.field → (payload attribute name, value accessor).
+# ``stationary_point_kind`` is deliberately absent: Layer 1's n_imag warnings own that fact (see the
+# skip in ``reconcile_species_entry_full``), so a deduction of it is never compared here.
 _DEDUCTION_FIELD_MAP: dict[str, tuple[str, str]] = {
-    "stationary_point_kind": ("species_entry_kind", "value"),
     "electronic_state_kind": ("electronic_state_kind", "value"),
     "term_symbol": ("term_symbol", None),
 }
 
 # Maps Deduction.field → warning code for contradictions
 _DEDUCTION_WARNING_CODES: dict[str, str] = {
-    "stationary_point_kind": W_N_IMAG_CONTRADICTS_MINIMUM,
     "electronic_state_kind": W_ELECTRONIC_STATE_CONTRADICTS_METHOD,
     "term_symbol": W_TERM_SYMBOL_MISMATCH,
 }
@@ -302,17 +310,10 @@ def check_freq_parser_fidelity(
         if calc.freq_result.modes:
             continue
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=f"calculations[{index}].freq_result.modes",
                 code=W_FREQ_PARSED_NO_MODES,
-                message=(
-                    "freq_result was emitted by an ESS parser "
-                    f"(parameters_parser={calc.parameters_parser!r}) "
-                    "but carries no per-mode frequencies. Per-mode rows "
-                    "are required for downstream statmech recomputation; "
-                    "re-run the parser or attach the mode list before "
-                    "promoting the record."
-                ),
+                context={"depositor_supplied": {"parameters_parser": f"{calc.parameters_parser.name} {calc.parameters_parser.version}"}},
             )
         )
     return warnings
@@ -331,7 +332,7 @@ def stationary_point_warnings(
     is a bug in the seam wiring, not something to annotate.
     """
     return [
-        UploadWarning(field=f.location, code=f.code, message=f.message)
+        UploadWarning.from_code(field=f.location, code=f.code, context=f.context)
         for f in warning_findings(findings)
     ]
 
@@ -346,8 +347,10 @@ def _check_n_imag(
     Delegates the physics and the tier split to
     :mod:`tckdb_schemas.stationary_point` so this path and the schema
     tier cannot disagree about the same record. In practice that means
-    only ``vdw_complex`` produces anything here: a declared ``minimum``
-    with an imaginary mode was already refused.
+    only ``vdw_complex`` produces anything here with a bare ``n_imag``:
+    a declared ``minimum`` with an imaginary mode at or above tau was
+    already refused, and one below tau needs the calculation's recorded
+    protocol, which :func:`reconcile_species_entry_full` supplies.
 
     ``field`` stays ``species_entry_kind`` because this entry point is
     reached from routes that hand over a bare identity payload with no
@@ -362,6 +365,25 @@ def _check_n_imag(
 # ---------------------------------------------------------------------------
 # Layer 2: deduction-based reconciliation
 # ---------------------------------------------------------------------------
+
+
+def _evidence_category(source: str) -> str:
+    """The kind of evidence a deduction rests on, as a TCKDB token (the raw source can name a method or a symmetry)."""
+    if source.startswith("freq.n_imag"):
+        return "frequency_analysis"
+    if source == "job_type.td":
+        return "excited_state_job_type"
+    if source == "method.default":
+        return "method_default"
+    if source.startswith("method."):
+        return "excited_state_method"
+    return "multiplicity"
+
+
+def _evidence_method(source: str) -> dict[str, str]:
+    """The exact excited-state method a deduction names, when it is one of the methods the deduction table knows."""
+    method = source.removeprefix("method.") if source.startswith("method.") else None
+    return {"evidence_method": method} if method in EXCITED_STATE_METHODS else {}
 
 
 def _reconcile_deduction(
@@ -379,20 +401,27 @@ def _reconcile_deduction(
     if payload_value is None:
         return None
 
-    # Compare
-    if str(payload_value) == str(deduction.value):
+    # Compare. A term symbol is stored in its canonical spelling (tckdb_schemas.electronic_state),
+    # while the deduction is spelled the way ``derive_term_symbol`` writes it (``1A1``).
+    deduced_value = str(deduction.value)
+    if deduction.field == "term_symbol" and is_valid_term_symbol(deduced_value):
+        deduced_value = canonical_term_symbol(deduced_value)
+    if str(payload_value) == deduced_value:
         return None
 
-    code = _DEDUCTION_WARNING_CODES.get(deduction.field, "deduction_mismatch")
+    code = _DEDUCTION_WARNING_CODES[deduction.field]
     attr_name = _DEDUCTION_FIELD_MAP[deduction.field][0]
 
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=attr_name,
         code=code,
-        message=(
-            f"Provided {attr_name}='{payload_value}' but "
-            f"{deduction.source} indicates '{deduction.value}'."
-        ),
+        context={
+            "deduced": str(deduction.value),
+            "evidence": _evidence_category(deduction.source),
+            **_evidence_method(deduction.source),
+            "confidence": deduction.confidence,
+            "depositor_supplied": {attr_name: str(payload_value)},
+        },
     )
 
 
@@ -425,13 +454,10 @@ def term_symbol_warnings(payload: SpeciesEntryIdentityPayload) -> list[UploadWar
     stated = declared_term_multiplicity(term)
     if stated is not None and stated != payload.multiplicity:
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field="species_entry.term_symbol",
                 code=W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY,
-                message=(
-                    f"Term symbol '{term}' states spin multiplicity {stated}, but "
-                    f"this species entry declares multiplicity {payload.multiplicity}."
-                ),
+                context={"term_multiplicity": stated, "declared_multiplicity": payload.multiplicity},
             )
         )
         return warnings
@@ -450,14 +476,14 @@ def term_symbol_warnings(payload: SpeciesEntryIdentityPayload) -> list[UploadWar
             or (atomic.two_j is not None and atomic.two_j != ground.levels[0][0])
         ):
             warnings.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field="species_entry.term_symbol",
                     code=W_TERM_SYMBOL_CONTRADICTS_GROUND_TERM,
-                    message=(
-                        f"Term symbol '{term}' is not the NIST ground level of "
-                        f"neutral {element} ({ground.term_symbol}, ground "
-                        f"J={ground.levels[0][0] / 2:g}) for a ground-state entry."
-                    ),
+                    context={
+                        "element": element,
+                        "ground_term": ground.term_symbol,
+                        "ground_j": ground.levels[0][0] / 2,
+                    },
                 )
             )
     return warnings
@@ -468,11 +494,32 @@ def term_symbol_warnings(payload: SpeciesEntryIdentityPayload) -> list[UploadWar
 # ---------------------------------------------------------------------------
 
 
+def stereo_unresolved_warnings(
+    payload: SpeciesEntryIdentityPayload,
+    geometries: Sequence[GeometryPayload] = (),
+) -> list[UploadWarning]:
+    """``species_entry_stereo_unresolved`` for the entry this request would store, if any element stays unknown.
+
+    Derived from the request alone and by the same resolution submit runs
+    (:func:`app.services.species_resolution.resolve_entry_stereo`), so the warning predicts exactly what is stored.
+    A request submit would refuse earns no warning here; the refusal says why.
+    """
+    from app.services.species_resolution import resolve_entry_stereo, stereo_unresolved_warning
+
+    try:
+        resolved = resolve_entry_stereo(payload, geometries)
+    except (CodedValueError, ValueError):
+        return []
+    warning = stereo_unresolved_warning(resolved)
+    return [] if warning is None else [warning]
+
+
 def reconcile_species_entry(
     payload: SpeciesEntryIdentityPayload,
     *,
     freq_n_imag: int | None = None,
     freq_imag_freq_cm1: float | None = None,
+    geometries: Sequence[GeometryPayload] = (),
 ) -> list[UploadWarning]:
     """Layer 1: reconcile using only freq n_imag (no calculation context).
 
@@ -480,11 +527,13 @@ def reconcile_species_entry(
     statmech data are available for richer deduction-based checks.
 
     :param freq_imag_freq_cm1: Magnitude of the imaginary mode in cm⁻¹,
-        when the evidence reports one. Only consulted for
-        ``vdw_complex``, to tell a soft intermolecular artifact from a
-        mode too stiff to be anything but a reaction coordinate.
+        when the evidence reports one. For ``vdw_complex``, it tells a
+        soft intermolecular artifact from a mode too stiff to be anything
+        but a reaction coordinate; for ``minimum`` it is judged against
+        tau, with no recorded protocol on this path.
     """
     warnings: list[UploadWarning] = list(term_symbol_warnings(payload))
+    warnings.extend(stereo_unresolved_warnings(payload, geometries))
     if freq_n_imag is not None:
         warnings.extend(
             _check_n_imag(
@@ -521,20 +570,33 @@ def reconcile_species_entry_full(
     :returns: List of warnings (may be empty).
     """
     warnings: list[UploadWarning] = list(term_symbol_warnings(payload))
+    warnings.extend(
+        stereo_unresolved_warnings(
+            payload, [GeometryPayload(xyz_text=reference_xyz_text)] if reference_xyz_text else ()
+        )
+    )
     additional = additional_calcs or []
 
     # Layer 1: structural n_imag checks
-    freq_result = None
+    # The calculation that owns the evidence is needed, not just its
+    # result block: tau is resolved from that calculation's own recorded
+    # parameters, so a declared minimum is judged against the protocol
+    # that produced it.
+    #
+    # Every frequency calculation is judged, each under its own location:
+    # a soft mode on a second frequency job must not be accepted unseen
+    # because an earlier one reported none.
     if primary_calc is not None:
-        freq_result = extract_freq_result(primary_calc, additional)
-    if freq_result is not None and freq_result.n_imag is not None:
-        warnings.extend(
-            _check_n_imag(
-                payload.species_entry_kind,
-                freq_result.n_imag,
-                freq_result.imag_freq_cm1,
-            )
-        )
+        for index, calc in enumerate((primary_calc, *additional)):
+            if calc.freq_result is not None and calc.freq_result.n_imag is not None:
+                warnings.extend(
+                    stationary_point_warnings(
+                        calc.species_entry_frequency_findings(
+                            payload.species_entry_kind,
+                            location=f"calculations[{index}].freq_result",
+                        )
+                    )
+                )
 
     # Layer 1b: parser-fidelity check across all freq-bearing calcs.
     if primary_calc is not None:
@@ -625,5 +687,6 @@ __all__ = [
     "reconcile_species_entry",
     "reconcile_species_entry_full",
     "stationary_point_warnings",
+    "stereo_unresolved_warnings",
     "term_symbol_warnings",
 ]

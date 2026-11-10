@@ -28,8 +28,13 @@ REVIEW_POLICY = "record_review"
 
 #: ``(name, version)`` -> the :class:`VersionRef` itself, for every format this release can read.
 FORMATS: VersionRegistry[VersionRef] = VersionRegistry("document_formats", startup_checked=True)
-for _name in (DATASET_RELEASE, ARCHIVE, EXPORT, ML_EXPORT, DEPOSIT, REVIEW_POLICY):
+for _name in (DATASET_RELEASE, ARCHIVE, DEPOSIT, REVIEW_POLICY):
     FORMATS.register(_name, 1, VersionRef(name=_name, version=1), current=True)
+# Version 2 of the export and the ML export: no export picks a record any more. The native export lists every
+# qualifying record (its manifest says ``records``, not ``collapse`` / ``selection_policy``), and the ML species export
+# carries ``thermos``, a list, where version 1 carried the one thermo it had picked. Pre-release, so version 1 is not kept.
+for _name in (EXPORT, ML_EXPORT):
+    FORMATS.register(_name, 2, VersionRef(name=_name, version=2), current=True)
 del _name
 FORMATS.validate()
 

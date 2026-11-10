@@ -52,7 +52,7 @@ def test_returns_200_for_valid_species_entry_id(client, db_session):
     assert body["records"][0]["model_kind"] == "scalar"
 
 
-def test_collapse_first_offset_one_returns_empty(client, db_session):
+def test_collapse_is_refused_and_names_the_thermo_select_endpoint(client, db_session):
     entry = _entry(db_session)
     make_thermo_scalar(db_session, species_entry=entry)
 
@@ -61,9 +61,11 @@ def test_collapse_first_offset_one_returns_empty(client, db_session):
         params={"collapse": "first", "offset": 1},
     )
 
-    assert response.status_code == 200
-    assert response.json()["records"] == []
-    assert response.json()["pagination"]["total"] == 1
+    assert response.status_code == 422
+    body = response.json()
+    assert body["code"] == "browse_parameter_removed"
+    assert body["context"]["parameter"] == "collapse"
+    assert "thermo/select" in body["context"]["select_endpoint"]
 
 
 def test_returns_404_for_missing_species_entry_id(client, db_session):
@@ -135,7 +137,7 @@ def test_temperature_min_greater_than_max_rejected(client, db_session):
     entry = _entry(db_session)
     resp = client.get(
         f"/api/v1/scientific/species-entries/{entry.id}/thermo"
-        "?temperature_min=3000&temperature_max=300"
+        "?coverage_temperature_min_k=3000&coverage_temperature_max_k=300"
     )
     assert resp.status_code == 422
     assert "invalid_temperature_range" in resp.text
@@ -170,6 +172,15 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         "rubric_version": None,
         "grade": None,
         "assessed_at": None,
+        "made_under": {
+            "rubric": None,
+            "assessed_version": None,
+            "current_rubric": None,
+            "current_version": None,
+            "state": "unassessed",
+            "stale_reason": None,
+            "inputs_checked": None,
+        },
     }
 
     current_row = evaluate_and_append_reproducibility(
@@ -180,7 +191,15 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
     current = client.get(f"{url}?include=assessments").json()["records"][0][
         "assessments"
     ]["reproducibility"]
+    # The list route does not compare inputs: the rubric is the one in force, nothing more is claimed.
+    assert current["state"] == current["made_under"]["state"] == "inputs_unchecked"
+    assert current["made_under"]["inputs_checked"] is False
+    checked = client.get(f"{url}?include=assessments&check_inputs=true&limit=10")
+    assert checked.status_code == 200, checked.text
+    assert checked.json()["request"]["check_inputs"] is True
+    current = checked.json()["records"][0]["assessments"]["reproducibility"]
     assert current["state"] == "current"
+    assert current["made_under"]["inputs_checked"] is True
     assert current["assessment_ref"] == current_row.public_ref
     assert current["rubric"] == "tckdb_reproducibility"
     assert current["rubric_version"] == 1
@@ -196,7 +215,7 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         context_json={"outdated": True},
         assessor_kind=ReproducibilityAssessorKind.system,
     )
-    stale = client.get(f"{url}?include=assessments").json()["records"][0][
+    stale = client.get(f"{url}?include=assessments&check_inputs=true&limit=10").json()["records"][0][
         "assessments"
     ]["reproducibility"]
     assert stale["state"] == "stale"

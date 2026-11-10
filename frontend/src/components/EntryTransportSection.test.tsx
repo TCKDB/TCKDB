@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { EntryTransportSection } from "./EntryTransportSection"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
 // -- see `ReactionEntryPage.test.tsx`'s identical import for why a
 // component test rendered in isolation needs it directly to exercise
@@ -65,7 +66,7 @@ function mockResponse(records: unknown[] = [mockRecord()]) {
     return {
         review_summary: { approved: 0, under_review: 0, not_reviewed: records.length, deprecated: 0, rejected: 0, total: records.length },
         records,
-        pagination: { offset: 0, limit: 50, returned: records.length, total: records.length, post_collapse_total: records.length },
+        pagination: { offset: 0, limit: 50, returned: records.length, total: records.length },
     }
 }
 
@@ -296,5 +297,57 @@ describe("EntryTransportSection: design-system adoption (design/species-entry)",
             expect(table.className.split(" ")).not.toContain("stage-table")
             expect(table.closest(".table-scroll")).not.toBeNull()
         }
+    })
+})
+
+describe("EntryTransportSection: paging", () => {
+    it("pages a list longer than one window and asks for the following offset", async () => {
+        const seen: string[] = []
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const params = new URL(request.url).searchParams
+            const offset = Number(params.get("offset") ?? 0)
+            const limit = Number(params.get("limit") ?? 1)
+            seen.push(`${offset}:${limit}`)
+            const all = [mockRecord(), mockRecord({ transport: { ...mockRecord().transport, transport_ref: "trn_two" } })]
+            const records = all.slice(offset, offset + limit)
+            return HttpResponse.json({
+                ...mockResponse(records),
+                pagination: { offset, limit, returned: records.length, total: all.length },
+            })
+        }))
+        page()
+        expect(await screen.findByText("Showing 1–1 of 2 transport records.")).toBeVisible()
+        expect(screen.getByText("trn_one")).toBeVisible()
+        fireEvent.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText("Showing 2–2 of 2 transport records.")).toBeVisible()
+        expect(seen).toContain("1:1")
+        expect(screen.getByText("trn_two")).toBeVisible()
+        expect(screen.queryByText("trn_one")).not.toBeInTheDocument()
+    })
+
+    it("a list that fits one window shows no paging buttons", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("trn_one")
+        expect(screen.queryByRole("button", { name: "Next" })).not.toBeInTheDocument()
+    })
+})
+
+describe("EntryTransportSection -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the typed fields, and never wording built from the joined species label", async () => {
+        const planted = plantSentinels(mockResponse(), ["note"])
+        expectPlanted(planted)
+        const { value } = planted
+        for (const record of value.records as { species: { species_entry_label: string | null } }[]) {
+            record.species.species_entry_label = ADVERSARIAL.joinedLabel
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(value)))
+        page()
+        // The fixture reached the page: the record's own ref and its Lennard-Jones sigma rendered.
+        await screen.findByText("trn_one")
+        expect(screen.getAllByText("trn_one").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })

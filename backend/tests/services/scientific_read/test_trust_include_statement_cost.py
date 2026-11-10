@@ -525,3 +525,127 @@ def test_ts_search_entries_resolves_one_sibling_list_per_parent(
     _assert_slope_is_flat(
         "/transition-states/search", small, large, token="entries"
     )
+
+
+# ---------------------------------------------------------------------------
+# ``include=calculation_settings``: resolved for the returned page, in a fixed number of statements
+# ---------------------------------------------------------------------------
+
+
+def _linked_calculations(db_session, entry):
+    """An optimisation, a frequency and a single point, each with a level of theory, a program and a reported grid."""
+    from app.db.models.calculation import CalculationParameter, CalculationParameterVocab
+    from app.db.models.common import ArtifactKind, ParameterSource, ParameterStatementKind
+    from tests.services.scientific_read._factories import make_lot, make_software_release
+
+    lot = make_lot(db_session, method="b3lyp", basis="def2tzvp")
+    release = make_software_release(db_session, name="orca", version="6.0.0")
+    calcs = [
+        make_calculation(db_session, type=ctype, species_entry_id=entry.id, lot_id=lot.id, software_release_id=release.id)
+        for ctype in (CalculationType.opt, CalculationType.freq, CalculationType.sp)
+    ]
+    if db_session.get(CalculationParameterVocab, "grid.angular_max") is None:
+        db_session.add(CalculationParameterVocab(canonical_key="grid.angular_max"))
+        db_session.flush()
+    db_session.add(
+        CalculationParameter(
+            calculation_id=calcs[0].id,
+            raw_key="AngularGrid",
+            raw_value="302",
+            canonical_key="grid.angular_max",
+            canonical_value="302",
+            source=ParameterSource.parser,
+            artifact_kind=ArtifactKind.output_log,
+            statement_kind=ParameterStatementKind.reported,
+        )
+    )
+    db_session.flush()
+    return calcs
+
+
+@pytest.fixture
+def thermo_settings_page(db_session):
+    from app.db.models.common import ThermoCalculationRole
+    from app.db.models.thermo import ThermoSourceCalculation
+
+    entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("CSTS")))
+    for _ in range(_LARGE_PAGE):
+        thermo = make_thermo_scalar(db_session, species_entry=entry)
+        for calc, role in zip(
+            _linked_calculations(db_session, entry),
+            (ThermoCalculationRole.opt, ThermoCalculationRole.freq, ThermoCalculationRole.sp),
+            strict=True,
+        ):
+            db_session.add(ThermoSourceCalculation(thermo_id=thermo.id, calculation_id=calc.id, role=role))
+    db_session.flush()
+    return entry
+
+
+@pytest.fixture
+def statmech_settings_page(db_session):
+    entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("CSSS")))
+    for _ in range(_LARGE_PAGE):
+        sm = make_statmech(db_session, species_entry=entry)
+        for calc, role in zip(
+            _linked_calculations(db_session, entry),
+            (StatmechCalculationRole.opt, StatmechCalculationRole.freq, StatmechCalculationRole.sp),
+            strict=True,
+        ):
+            attach_statmech_source_calculation(db_session, statmech=sm, calculation=calc, role=role)
+    return entry
+
+
+def test_thermo_search_calculation_settings_does_not_scale_with_page_size(db_session, thermo_settings_page):
+    """Built for the returned page only. Kills: forwarding the token into ``get_species_thermo`` (a block per candidate)
+    and building one block per record (statements per record)."""
+
+    def request_for(limit: int, include: list[str]) -> ThermoSearchRequest:
+        return ThermoSearchRequest(species_entry_ref=thermo_settings_page.public_ref, include=include, limit=limit)
+
+    small = _marginal_cost(
+        db_session, search=search_thermo, request_for=request_for, limit=_SMALL_PAGE, token="calculation_settings"
+    )
+    large = _marginal_cost(
+        db_session, search=search_thermo, request_for=request_for, limit=_LARGE_PAGE, token="calculation_settings"
+    )
+    # A fixed handful of statements (calculations, parameters, logs, warnings, plus their eager loads). Forwarding the
+    # token into ``get_species_thermo`` would build a block for every one of the 20 candidates whatever ``limit`` is,
+    # which the slope above cannot see; this bound can.
+    assert small <= 12, f"/thermo/search include=calculation_settings costs {small} extra statements for {_SMALL_PAGE} records"
+    _assert_slope_is_flat("/thermo/search", small, large, token="calculation_settings")
+
+
+def test_species_thermo_calculation_settings_does_not_scale_with_page_size(db_session, thermo_settings_page):
+    from app.schemas.reads.scientific_thermo import ThermoReadRequest
+    from app.services.scientific_read.thermo import get_species_thermo
+
+    def read(session, request):
+        limit, include = request
+        return get_species_thermo(
+            session,
+            species_entry_id=thermo_settings_page.id,
+            request=ThermoReadRequest(include=include, limit=limit),
+        )
+
+    def request_for(limit: int, include: list[str]):
+        return (limit, include)
+
+    small = _marginal_cost(db_session, search=read, request_for=request_for, limit=_SMALL_PAGE, token="calculation_settings")
+    large = _marginal_cost(db_session, search=read, request_for=request_for, limit=_LARGE_PAGE, token="calculation_settings")
+    _assert_slope_is_flat("/species-entries/{id}/thermo", small, large, token="calculation_settings")
+    # Attached inside the per-candidate loop, every candidate (20 here) pays whatever ``limit`` is, so the slope is flat
+    # and only an absolute bound sees it.
+    assert small <= 12, f"/species-entries/{{id}}/thermo include=calculation_settings costs {small} extra statements for {_SMALL_PAGE} records"
+
+
+def test_statmech_search_calculation_settings_does_not_scale_with_page_size(db_session, statmech_settings_page):
+    def request_for(limit: int, include: list[str]) -> StatmechSearchRequest:
+        return StatmechSearchRequest(species_entry_ref=statmech_settings_page.public_ref, include=include, limit=limit)
+
+    small = _marginal_cost(
+        db_session, search=search_statmech, request_for=request_for, limit=_SMALL_PAGE, token="calculation_settings"
+    )
+    large = _marginal_cost(
+        db_session, search=search_statmech, request_for=request_for, limit=_LARGE_PAGE, token="calculation_settings"
+    )
+    _assert_slope_is_flat("/statmech/search", small, large, token="calculation_settings")

@@ -1,12 +1,13 @@
 """Read schemas for ``POST /scientific/reaction-entries/{ref}/kinetics/select``.
 
-Method-aware selection among the stored rate coefficients of one reaction entry, for one stated gas-phase
-kinetic question (direction, target, coefficient basis, temperature window, pressure, collider). A read:
+Selection among the stored rate coefficients of one reaction entry, for one stated gas-phase
+kinetic question (direction, target, coefficient basis, temperature window, pressure, collider): which
+determinations are eligible for the question and, among those, the display order of
+``docs/specs/browse_order.md``. TCKDB ranks no method above another. A read:
 nothing is stored, no curator endorsement is created or changed, and the ordinary kinetics browse order
 (review, then creation time, then id) is untouched. See ``docs/guides/selecting_kinetics.md``.
 
-This request is deliberately separate from the shared read requests and does not extend the cross-product
-``SelectionPolicy`` enum: ``method_preferred`` is a policy of this one quantity, not of every product.
+This request is deliberately separate from the shared read requests.
 
 No field here carries a database id. References are public refs (``rxe_``, ``tse_``, ``net_``, ``spc_``), and
 every violation of the request's own rules is an ordinary 422 naming the field.
@@ -25,10 +26,17 @@ from tckdb_schemas.kinetics_declarations import MOLE_FRACTION_SUM_TOLERANCE, Kin
 
 from app.db.models.common import (
     KineticsDeterminationTargetKind,
+    KineticsModelKind,
     PhaseKind,
     RecordReviewStatus,
 )
 from app.schemas.reads.scientific_common import ProfiledRequestEcho
+from app.schemas.reads.scientific_selection_common import (
+    CandidateEligibility,
+    SelectionEligibilityIn,
+    SelectionStepsAnswer,
+    SourceCalculationFilters,
+)
 
 #: The one quantity this endpoint answers.
 QUANTITY_RATE_COEFFICIENT: Final = "rate_coefficient"
@@ -42,16 +50,15 @@ class KineticsSelectionDirection(str, Enum):
 
 
 class KineticsSelectionPolicy(str, Enum):
-    """Which ordering the request asks for.
+    """Which administrative order the request asks for.
 
-    ``method_preferred``  apply the registered, audited kinetics rules; the review/recency order only sorts
-                          within a preference front. Every rule shipped in this release is inactive, so the
-                          answer is the administrative order among eligible determinations, labelled as such.
-    ``default``, ``most_reviewed``, ``latest``
-                          administrative order only (no rules), exactly as on the browse endpoints.
+    Every policy is administrative: an order over review status and deposition time, exactly as on the browse
+    endpoints. None is a claim about which method is better.
+    ``default``        review rank, then newest deposited.
+    ``most_reviewed``  review rank, then newest deposited.
+    ``latest``         newest deposited first.
     """
 
-    method_preferred = "method_preferred"
     default = "default"
     most_reviewed = "most_reviewed"
     latest = "latest"
@@ -68,11 +75,9 @@ class KineticsSelectionOutcome(str, Enum):
     """The selection basis (the service ``Outcome`` outside the bounded-search refusal, which the endpoint reports
     as the 422 ``kinetics_selection_population_too_large`` instead)."""
 
-    policy_preferred = "policy_preferred"
     incomparable_alternatives = "incomparable_alternatives"
     sole_eligible_candidate = "sole_eligible_candidate"
     no_applicable_candidate = "no_applicable_candidate"
-    policy_conflict = "policy_conflict"
 
 
 class KineticsSelectionPressureKind(str, Enum):
@@ -168,6 +173,15 @@ class KineticsSelectionColliderIn(BaseModel):
         return self
 
 
+class KineticsSelectionFilters(SourceCalculationFilters):
+    """The filters the kinetics browse and search offer, with their meaning: rate-law form, origin and the provenance set.
+
+    Applied before eligibility. A filter excludes on a fact and ranks nothing.
+    """
+
+    model_kind: KineticsModelKind | None = None
+
+
 class KineticsSelectionRequest(BaseModel):
     """Request body. ``quantity`` and ``phase`` may be omitted; if given they must agree with the endpoint."""
 
@@ -185,11 +199,19 @@ class KineticsSelectionRequest(BaseModel):
         default=None,
         description="Required for a finite pressure and for a composition-effective coefficient; optional otherwise.",
     )
-    policy: KineticsSelectionPolicy = KineticsSelectionPolicy.method_preferred
+    policy: KineticsSelectionPolicy = KineticsSelectionPolicy.default
     mode: KineticsSelectionMode = KineticsSelectionMode.all
     min_review_status: RecordReviewStatus | None = Field(
         default=None,
         description="Optional floor, applied on top of the read profile's floor (the stricter wins).",
+    )
+    filters: KineticsSelectionFilters = Field(
+        default_factory=KineticsSelectionFilters,
+        description="Narrow the candidates by facts before eligibility, with the kinetics search's own filters.",
+    )
+    eligibility: SelectionEligibilityIn = Field(
+        default_factory=SelectionEligibilityIn,
+        description="Lift named eligibility defaults. Every default is applied unless lifted here; the answer lists each.",
     )
 
     @model_validator(mode="after")
@@ -247,6 +269,8 @@ class KineticsSelectionRequestEcho(ProfiledRequestEcho):
     policy: KineticsSelectionPolicy
     mode: KineticsSelectionMode
     min_review_status: RecordReviewStatus | None = None
+    filters: dict[str, Any] = Field(default_factory=dict, description="The filters as supplied, normalised.")
+    eligibility: SelectionEligibilityIn = Field(default_factory=SelectionEligibilityIn)
 
 
 class KineticsSelectionReview(BaseModel):
@@ -259,18 +283,10 @@ class KineticsSelectionReview(BaseModel):
 
 
 class KineticsSelectionPolicyInfo(BaseModel):
-    """The selection semantics and the rule versions that were consulted."""
+    """The selection procedure (name and version) the decision was made under."""
 
     name: str
     version: int
-    rules_applied: bool = Field(
-        description="False under an administrative policy: no rule was consulted, only the administrative order."
-    )
-    rules: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Registry entries consulted: rule id, version, status (every rule shipped is inactive), "
-        "objective, evidence type and limits, and why an inactive rule is inactive.",
-    )
 
 
 class KineticsSelectionPick(BaseModel):
@@ -281,10 +297,10 @@ class KineticsSelectionPick(BaseModel):
         description="Every eligible fitted representation of the determination, in administrative order. Alternate "
         "fits of one determination are not independent confirmation, and the first is not scientifically superior."
     )
-    basis: Literal["policy_preferred", "sole_eligible_candidate", "administrative_first"]
+    basis: Literal["sole_eligible_candidate", "administrative_first"]
     administrative: bool = Field(
-        description="True when the determination was chosen by review/recency order among unranked alternatives. "
-        "That is not a claim that it is method-superior."
+        description="True when the determination is first in display order among several eligible alternatives. "
+        "That is not a claim that it is better, preferred or method-superior."
     )
     explanation: str
 
@@ -294,7 +310,7 @@ class KineticsSelectionReason(BaseModel):
     applicability: str
 
 
-class KineticsSelectionCandidate(BaseModel):
+class KineticsSelectionCandidate(CandidateEligibility):
     """One assessed record: its stored claims, its applicability to the question, and whether it competed."""
 
     kinetics_ref: str
@@ -313,7 +329,9 @@ class KineticsSelectionCandidate(BaseModel):
     reasons: list[KineticsSelectionReason] = Field(default_factory=list)
     blocking: list[str] = Field(default_factory=list)
     advisory: list[str] = Field(default_factory=list)
-    eligible: bool = Field(description="Applicable, with no blocking finding: it competes in the ordering.")
+    eligible: bool = Field(
+        description="Applicable, and no applied eligibility default excludes it: it competes in the ordering."
+    )
 
 
 class KineticsSelectionDetermination(BaseModel):
@@ -321,27 +339,6 @@ class KineticsSelectionDetermination(BaseModel):
     representation_refs: list[str]
     representative_ref: str
     representation_count: int
-
-
-class KineticsSelectionEdge(BaseModel):
-    preferred: str
-    dispreferred: str
-    rule_id: str = Field(description="The registry key of the rule. Not a database id.")
-    rule_version: int
-    label: str = Field(description="Always 'expected-performance inference': a benchmark, not a measurement.")
-    objective_key: str
-
-
-class KineticsSelectionRelations(BaseModel):
-    """Preference relations between eligible determinations, and any contradiction among them."""
-
-    edges: list[KineticsSelectionEdge] = Field(default_factory=list)
-    overridden_edges: list[dict[str, Any]] = Field(default_factory=list)
-    opposing_pairs: list[dict[str, Any]] = Field(default_factory=list)
-    cycles: list[list[str]] = Field(default_factory=list)
-    unused_edges: list[dict[str, Any]] = Field(
-        default_factory=list, description="Edges under more than one objective are not composed; they are listed here."
-    )
 
 
 class KineticsSelectionExcluded(BaseModel):
@@ -366,7 +363,7 @@ class KineticsSelectionDisclosures(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
-class KineticsSelectionResponse(BaseModel):
+class KineticsSelectionResponse(SelectionStepsAnswer):
     """The decision, its basis, and everything it rests on, as public refs only."""
 
     request: KineticsSelectionRequestEcho
@@ -376,14 +373,13 @@ class KineticsSelectionResponse(BaseModel):
     basis: str = Field(description="One sentence saying why this outcome, in plain terms.")
     selection: KineticsSelectionPick | None = None
     fronts: list[list[str]] = Field(
-        default_factory=list, description="Preference fronts of determinations, best first; within a front unranked."
+        default_factory=list,
+        description="The eligible determinations that tie, in display order. With no ranking between methods there "
+        "is exactly one front (none when nothing is eligible); its order is not a preference.",
     )
     administrative_order: list[str] = Field(default_factory=list)
     determinations: list[KineticsSelectionDetermination] = Field(default_factory=list)
     candidates: list[KineticsSelectionCandidate] = Field(default_factory=list)
-    relations: KineticsSelectionRelations = Field(default_factory=KineticsSelectionRelations)
-    rule_matches: list[dict[str, Any]] = Field(default_factory=list)
-    pair_checks: list[dict[str, Any]] = Field(default_factory=list)
     disclosures: KineticsSelectionDisclosures
 
 
@@ -412,8 +408,7 @@ class KineticsSelectionManifest(BaseModel):
 
     Public refs only. Holds the normalised request, the snapshot isolation it was read under, every assessed
     candidate with its normalised inputs (``id_rank`` is an ordinal over the visible records, not an id), the
-    determinations the eligible ones form, the rules consulted with each rule's verdict per determination, the
-    pair checks, the preference edges, the fronts and the administrative order: enough to recompute the decision
+    determinations the eligible ones form, the fronts and the administrative order: enough to recompute the decision
     with no database.
     """
 
@@ -423,6 +418,10 @@ class KineticsSelectionManifest(BaseModel):
     """How each candidate's eligibility was assessed: ``version``, the evidence rubric (its ``name`` and ``version``) and the source-finding
     gate. A manifest without a well-formed block is refused on replay. ``policy`` is the decision
     procedure replay re-runs; this is the assessment that produced the recorded ``eligible`` flags, which replay does not rerun."""
+    read_profile: dict[str, Any]
+    """The read profile the manifest was made under: ``profile``, its ``review_floor`` and ``linked_evidence_withheld``, the
+    review statuses whose linked evidence that profile withheld (ADR 0023; format 4). A manifest without a block whose
+    evidence rule matches its profile is refused on replay."""
     request: KineticsSelectionManifestRequest
     snapshot_isolation: str
     subject: dict[str, Any]

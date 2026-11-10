@@ -1,6 +1,6 @@
 """Plain values for structure selection: the normalised request, one unit's normalised facts, its assessment.
 
-Everything here is data. The assessor (and, later, a decision engine and a replay) may look at nothing but these
+Everything here is data. The assessor (and the decision engine and a replay) may look at nothing but these
 values: public refs, review state, timestamps, stored columns and declared claims, never a database id or an ORM
 row. That is what lets a decision manifest be replayed without a database. ``id_rank`` is a unit's position when the
 population is ordered by database id: it stands in for the id as the last tie-break and is not an id.
@@ -28,8 +28,14 @@ from typing import Any
 
 from app.db.models.common import CalculationQuality, RecordReviewStatus
 from app.services.selection_kernel import Applicability
+from app.services.selection_kernel.requested import OFFER_FINDINGS, Eligibility
 
-#: Version of the eligibility semantics.
+#: Version of the eligibility semantics. It is deliberately unchanged by the named eligibility defaults
+#: (``selection_kernel.requested``): under the default settings every unit is assessed exactly as before, and a lifted
+#: default only moves a confirmed finding from ``blocking`` to an advisory, which the request records. What a stored
+#: decision now means is carried by the manifest format (version 3) and its ``verdicts``, not by this number; this one also
+#: keys the transition-state evidence rubric, which this change does not touch. Bumping it would force a rubric bump for
+#: an assessment that returns the same verdicts under every default setting.
 ASSESSMENT_VERSION = 1
 #: Version of the recipe normaliser (which facts a cohort needs established).
 NORMALIZER_VERSION = 1
@@ -86,7 +92,7 @@ class Intent(str, Enum):
     validated_minimum = "validated_minimum"
     validated_saddle = "validated_saddle"
     qualify_evidence = "qualify_evidence"
-    protocol_preferred = "protocol_preferred"
+    protocol_coverage = "protocol_coverage"
 
 
 class Quantity(str, Enum):
@@ -132,14 +138,6 @@ class AdminPolicy(str, Enum):
     earliest = "earliest"
 
 
-class Objective(str, Enum):
-    """What a protocol preference optimises. ``model_fidelity`` is relative to a *pinned* reference model."""
-
-    physical_accuracy = "physical_accuracy"
-    expected_accuracy = "expected_accuracy"
-    model_fidelity = "model_fidelity"
-
-
 class StructureOutcome(str, Enum):
     """What a decision found. A negative scientific outcome is a valid answer, not an error."""
 
@@ -152,10 +150,8 @@ class StructureOutcome(str, Enum):
     representative_minimum = "representative_minimum"
     qualified_evidence = "qualified_evidence"
     validated_corpus_minimum = "validated_corpus_minimum"
-    policy_preferred = "policy_preferred"
     sole_eligible_candidate = "sole_eligible_candidate"
     incomparable_alternatives = "incomparable_alternatives"
-    policy_conflict = "policy_conflict"
     evidence_conflict = "evidence_conflict"
 
 
@@ -174,9 +170,9 @@ class RepeatPolicy(str, Enum):
 
 #: Which intents each grain accepts.
 INTENTS_BY_GRAIN: dict[Grain, frozenset[Intent]] = {
-    Grain.calculation: frozenset({Intent.recorded_minimum, Intent.protocol_preferred}),
-    Grain.conformer: frozenset({Intent.validated_minimum, Intent.qualify_evidence, Intent.protocol_preferred}),
-    Grain.transition_state: frozenset({Intent.validated_saddle, Intent.qualify_evidence, Intent.protocol_preferred}),
+    Grain.calculation: frozenset({Intent.recorded_minimum, Intent.protocol_coverage}),
+    Grain.conformer: frozenset({Intent.validated_minimum, Intent.qualify_evidence, Intent.protocol_coverage}),
+    Grain.transition_state: frozenset({Intent.validated_saddle, Intent.qualify_evidence, Intent.protocol_coverage}),
 }
 
 #: The claim each structure-consuming intent implies at each grain when the caller names none (plan section 6: for
@@ -185,19 +181,19 @@ DEFAULT_CLAIM: dict[tuple[Intent, Grain], ValidationClaim] = {
     (Intent.validated_minimum, Grain.conformer): ValidationClaim.local_minimum,
     (Intent.validated_saddle, Grain.transition_state): ValidationClaim.first_order_saddle,
     # Every intent that consumes a structure states the conventional characterization when the caller names none: a
-    # preferred protocol is preferred *for a minimum* (or *for a first-order saddle*), never for any stationary point
-    # that happens to carry an energy.
-    (Intent.protocol_preferred, Grain.conformer): ValidationClaim.local_minimum,
-    (Intent.protocol_preferred, Grain.transition_state): ValidationClaim.first_order_saddle,
+    # protocol-coverage request is asked *for a minimum* (or *for a first-order saddle*), never for any stationary
+    # point that happens to carry an energy.
+    (Intent.protocol_coverage, Grain.conformer): ValidationClaim.local_minimum,
+    (Intent.protocol_coverage, Grain.transition_state): ValidationClaim.first_order_saddle,
 }
 
-#: The claims each intent can state (a recorded minimum states none; protocol preference may name any the grain has).
+#: The claims each intent can state (a recorded minimum states none; protocol coverage may name any the grain has).
 INTENT_CLAIMS: dict[Intent, frozenset[ValidationClaim]] = {
     Intent.recorded_minimum: frozenset(),
     Intent.validated_minimum: frozenset({ValidationClaim.local_minimum}),
     Intent.validated_saddle: frozenset({ValidationClaim.first_order_saddle, ValidationClaim.higher_order_saddle}),
     Intent.qualify_evidence: frozenset(ValidationClaim),
-    Intent.protocol_preferred: frozenset(ValidationClaim),
+    Intent.protocol_coverage: frozenset(ValidationClaim),
 }
 
 #: The claims each grain can be asked to support.
@@ -218,6 +214,34 @@ DEFAULT_PERMITTED_QUALITY = frozenset({CalculationQuality.raw, CalculationQualit
 
 
 @dataclass(frozen=True)
+class StructureFilters:
+    """The caller's filters, with the calculation, conformer and transition-state searches' vocabulary and meaning.
+
+    The method, basis, software and workflow-tool filters keep a unit when at least one of the calculations it rests on
+    that the read profile shows matches every one supplied: the calculation itself at the calculation grain, the
+    calculations a determination pins as its sources at the conformer and transition-state grains.
+    """
+
+    method: str | None = None
+    basis: str | None = None
+    software: str | None = None
+    software_version: str | None = None
+    workflow_tool: str | None = None
+    workflow_tool_version: str | None = None
+
+    def to_record(self) -> dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items() if v is not None}
+
+    @classmethod
+    def from_record(cls, raw: dict[str, Any]) -> StructureFilters:
+        return cls(**raw)
+
+    @property
+    def active(self) -> bool:
+        return any(v is not None for v in self.__dict__.values())
+
+
+@dataclass(frozen=True)
 class StructureRequest:
     """The normalised request.
 
@@ -235,11 +259,8 @@ class StructureRequest:
         facts must establish it; a request never manufactures a missing fact.
     :param require_stable_reference: Require SCF stability evidence on the energy source.
     :param require_connectivity: Also require reactive-connectivity evidence (transition-state grain).
-    :param admin_policy: Administrative order within a front. Never reorders fronts.
+    :param admin_policy: Administrative order of tied units and cohorts. Display order, never a method preference.
     :param result_mode: ``all``, or ``first`` (a labelled administrative presentation, never past a conflict).
-    :param apply_rules: Whether the rule registry takes part (the decision stage; ignored by assessment).
-    :param objective: What a protocol preference optimises (``protocol_preferred`` only, and then required).
-    :param reference_model: The pinned reference model a ``model_fidelity`` objective is measured against.
     :param repeat_policy: How repeated determinations of one target are treated.
     :param bounds: The engineering limits; the endpoint contract is the default.
     """
@@ -258,11 +279,10 @@ class StructureRequest:
     require_connectivity: bool = False
     admin_policy: AdminPolicy = AdminPolicy.default
     result_mode: ResultMode = ResultMode.all
-    apply_rules: bool = True
-    objective: Objective | None = None
-    reference_model: str | None = None
     repeat_policy: RepeatPolicy = RepeatPolicy.retain_alternates
     bounds: SelectionBounds = field(default_factory=SelectionBounds)
+    filters: StructureFilters = field(default_factory=StructureFilters)
+    eligibility: Eligibility = field(default_factory=lambda: Eligibility(offered=OFFER_FINDINGS))
 
     def __post_init__(self) -> None:
         if self.intent not in INTENTS_BY_GRAIN[self.grain]:
@@ -284,17 +304,9 @@ class StructureRequest:
                 )
         if self.require_connectivity and self.grain is not Grain.transition_state:
             raise ValueError("require_connectivity belongs to the transition_state grain")
-        if self.intent is Intent.protocol_preferred:
-            if self.objective is None:
-                raise ValueError("protocol preference states its comparison objective")
-            if self.objective is Objective.model_fidelity and not self.reference_model:
-                raise ValueError("a model_fidelity objective names the pinned reference_model it is measured against")
+        if self.intent is Intent.protocol_coverage:
             if self.grain is Grain.calculation and self.geometry_ref is None:
-                raise ValueError("protocol preference between calculations compares at one fixed geometry: state geometry_ref")
-        elif self.objective is not None or self.reference_model is not None:
-            raise ValueError("objective and reference_model belong to protocol preference only")
-        if self.reference_model is not None and self.objective is not Objective.model_fidelity:
-            raise ValueError("reference_model belongs to a model_fidelity objective")
+                raise ValueError("protocol listing between calculations compares at one fixed geometry: state geometry_ref")
         if self.member_refs is not None and not self.member_refs:
             raise ValueError("member_refs names no member; omit it to ask for the complete authorized corpus")
         if self.member_refs is not None and len(set(self.member_refs)) != len(self.member_refs):
@@ -328,11 +340,10 @@ class StructureRequest:
             "require_connectivity": self.require_connectivity,
             "administrative_policy": self.admin_policy.value,
             "result_mode": self.result_mode.value,
-            "apply_rules": self.apply_rules,
-            "objective": self.objective.value if self.objective is not None else None,
-            "reference_model": self.reference_model,
             "repeat_policy": self.repeat_policy.value,
             "bounds": self.bounds.to_dict(),
+            "filters": self.filters.to_record(),
+            "eligibility": self.eligibility.to_record(),
         }
 
     @classmethod
@@ -353,11 +364,10 @@ class StructureRequest:
             require_connectivity=raw["require_connectivity"],
             admin_policy=AdminPolicy(raw["administrative_policy"]),
             result_mode=ResultMode(raw["result_mode"]),
-            apply_rules=raw["apply_rules"],
-            objective=Objective(raw["objective"]) if raw["objective"] is not None else None,
-            reference_model=raw["reference_model"],
             repeat_policy=RepeatPolicy(raw["repeat_policy"]),
             bounds=SelectionBounds.from_dict(raw["bounds"]),
+            filters=StructureFilters.from_record(raw["filters"]),
+            eligibility=Eligibility.from_record(raw["eligibility"], offered=OFFER_FINDINGS),
         )
 
 
@@ -519,8 +529,6 @@ class NormalizedCalculation:
     lineage: tuple[LineageEdge, ...] = ()
     #: True when the traversal stopped at the depth bound with parents unexplored.
     lineage_truncated: bool = False
-    #: True when the walk met a calculation it had already passed through (a dependency cycle).
-    lineage_cyclic: bool = False
     findings: tuple[FindingFacts, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -547,7 +555,6 @@ class NormalizedCalculation:
             "conformer_observation_ref": self.conformer_observation_ref,
             "lineage": [e.to_dict() for e in self.lineage],
             "lineage_truncated": self.lineage_truncated,
-            "lineage_cyclic": self.lineage_cyclic,
             "findings": [f.to_dict() for f in self.findings],
         }
 
@@ -606,7 +613,15 @@ class NormalizedDetermination:
     conformer_observation_ref: str | None
     conformer_group_ref: str | None
     evaluated_geometry_ref: str
-    review_status: RecordReviewStatus
+    #: The determination's review standing: the weakest of its conformer observation's and that observation's group's, or
+    #: of its transition-state entry's. ``None`` for a determination with none of those: it has no review of its own, and
+    #: its species entry is a scoping parent whose status is never copied onto it.
+    review_status: RecordReviewStatus | None
+    #: The two statuses ``review_status`` combines for a conformer basin, recorded apart (manifest format 5, ADR 0023): the
+    #: conformer GROUP is the record that gates the basin and keeps the record floor; the conformer OBSERVATION inside it is
+    #: linked evidence and follows the evidence rule. ``None`` when the determination has no observation (and so no group).
+    observation_review_status: RecordReviewStatus | None
+    group_review_status: RecordReviewStatus | None
     created_at: datetime
     id_rank: int
     entry_kind: str | None
@@ -629,7 +644,11 @@ class NormalizedDetermination:
             "conformer_observation_ref": self.conformer_observation_ref,
             "conformer_group_ref": self.conformer_group_ref,
             "evaluated_geometry_ref": self.evaluated_geometry_ref,
-            "review_status": self.review_status.value,
+            "review_status": self.review_status.value if self.review_status is not None else None,
+            "observation_review_status": (
+                self.observation_review_status.value if self.observation_review_status is not None else None
+            ),
+            "group_review_status": self.group_review_status.value if self.group_review_status is not None else None,
             "created_at": self.created_at.isoformat(),
             "id_rank": self.id_rank,
             "entry_kind": self.entry_kind,
@@ -643,7 +662,15 @@ class NormalizedDetermination:
         return cls(
             **{
                 **raw,
-                "review_status": RecordReviewStatus(raw["review_status"]),
+                "review_status": RecordReviewStatus(raw["review_status"]) if raw["review_status"] is not None else None,
+                "observation_review_status": (
+                    RecordReviewStatus(raw["observation_review_status"])
+                    if raw["observation_review_status"] is not None
+                    else None
+                ),
+                "group_review_status": (
+                    RecordReviewStatus(raw["group_review_status"]) if raw["group_review_status"] is not None else None
+                ),
                 "created_at": datetime.fromisoformat(raw["created_at"]),
                 "sources": tuple(NormalizedSource.from_dict(s) for s in raw["sources"]),
                 "findings": tuple(FindingFacts.from_dict(f) for f in raw["findings"]),
@@ -839,6 +866,12 @@ class StructureAssessmentResult:
     unresolved_refs: tuple[str, ...] = ()
     unsupported_refs: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
+    #: What a unit's own review status may be: the effective statuses plus the terminal ones the request lifted.
+    candidate_statuses: tuple[RecordReviewStatus, ...] = ()
+    #: Each unit's verdict record under the request's eligibility settings, by unit ref (JSON-ready).
+    verdicts: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: The recorded funnel (``selection_kernel.requested.funnel``).
+    funnel: dict[str, Any] = field(default_factory=dict)
 
 
 def finite(value: float | None) -> bool:

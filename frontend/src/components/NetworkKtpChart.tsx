@@ -35,6 +35,7 @@ import {
     type KtpRequestGrid,
 } from "../domain/networkKtpChartLayout"
 import { niceTicks } from "../domain/thermoCpChartLayout"
+import { channelHandle } from "../domain/publicText"
 import { Disclosure } from "./Disclosure"
 
 /**
@@ -254,7 +255,7 @@ function NetworkKtpChartReady({ fits, channels, states, grid }: {
                 <legend>{`Channels (${selectedGroups.length} of ${groups.length} shown)`}</legend>
                 <div className="network-ktp-channel-options">
                     {groups.map((group) => (
-                        <label className="network-ktp-channel-option" key={group.channelKey} data-channel-key={group.channelKey}>
+                        <label className="network-ktp-channel-option" key={group.channelKey} data-channel-key={channelHandle(group.channelKey)}>
                             <input
                                 type="checkbox"
                                 checked={selectedChannelKeys.includes(group.channelKey)}
@@ -368,7 +369,7 @@ function KtpFamilyPanelChart({ panel, pressureBar, xDomain, xAxisMode, colorInde
 
             <ul className="arrhenius-chart-legend" aria-label="Channels plotted in this panel">
                 {panel.groups.map((entry) => (
-                    <li className="arrhenius-chart-legend-item" key={entry.channelKey} data-channel-key={entry.channelKey}>
+                    <li className="arrhenius-chart-legend-item" key={entry.channelKey} data-channel-key={channelHandle(entry.channelKey)}>
                         <span
                             className="arrhenius-chart-swatch"
                             style={{ background: channelSeriesColor(colorIndexByChannelKey.get(entry.channelKey) ?? 0) }}
@@ -446,7 +447,7 @@ function KtpFamilyPanelChart({ panel, pressureBar, xDomain, xAxisMode, colorInde
                                         key={fit.network_kinetics_ref}
                                         data-testid={`ktp-line-${fit.network_kinetics_ref}`}
                                         data-model-kind={fit.model_kind}
-                                        data-channel-key={group.channelKey}
+                                        data-channel-key={channelHandle(group.channelKey)}
                                     >
                                         {ktpLineSegments(points).map((segment, segmentIndex) => (
                                             <polyline

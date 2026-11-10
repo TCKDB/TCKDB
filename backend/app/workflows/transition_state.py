@@ -23,6 +23,7 @@ from app.schemas.workflows.transition_state_upload import (
 from app.services.calculation_resolution import collect_converged_opt_energy_warnings
 from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
+from app.services.deposit_warnings import note_anchor
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -40,6 +41,7 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scan_coordinate_conformance import collect_scan_coordinate_warnings
 from app.services.species_resolution import (
     assert_geometry_composition_matches_identity,
     assert_geometry_isotopes_match_identity,
@@ -52,6 +54,7 @@ from app.services.transition_state_resolution import (
 from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 from app.workflows.reaction import persist_reaction_upload
 
 #: Closing sentence of the atom-map absence warning on this path.
@@ -63,12 +66,7 @@ from app.workflows.reaction import persist_reaction_upload
 #: send. The remedy therefore names every field the map needs, because
 #: 'atom_map' alone would send a depositor to write a map with nothing to count
 #: its indices into.
-_STANDALONE_TS_ABSENCE_REMEDY = (
-    "To record one for this micro reaction, supply 'atom_map' together with "
-    "'geometry_key' (naming the saddle-point geometry) and a 'key' and "
-    "'geometry' on each reaction participant it maps (ADR 0011); the "
-    "computed-reaction upload accepts the same map."
-)
+_STANDALONE_TS_ABSENCE_DEPOSIT_PATH = "standalone_transition_state"
 
 
 def persist_transition_state_upload(
@@ -129,6 +127,7 @@ def persist_transition_state_upload(
         created_by=created_by,
         review_policy=review_policy,
         warnings=warnings,
+        has_transition_state=True,  # this upload IS the saddle point of the reaction
     )
 
     # 2. Create TS concept + candidate entry
@@ -232,6 +231,7 @@ def persist_transition_state_upload(
             source_conformer_observation_id=None,
             source_calculation_id=None,
             created_by=created_by,
+            field=f"applied_energy_corrections[{index}]",
             warnings_out=warnings,
         )
 
@@ -282,7 +282,7 @@ def persist_transition_state_upload(
         ],
         geometry_id_by_key=geometry_id_by_key,
         field_path="atom_map",
-        absence_remedy=_STANDALONE_TS_ABSENCE_REMEDY,
+        deposit_path=_STANDALONE_TS_ABSENCE_DEPOSIT_PATH,
         subject_label=request.label or "transition state",
         created_by=created_by,
         warnings=warnings,
@@ -308,6 +308,10 @@ def persist_transition_state_upload(
     targets.extend(
         RecordRef(SubmissionRecordType.calculation, c.id) for c in additional_calcs
     )
+    note_anchor(session, "", SubmissionRecordType.transition_state_entry, ts_entry.id)
+    note_anchor(session, "primary_opt", SubmissionRecordType.calculation, primary_calc.id)
+    for position, child in enumerate(additional_calcs):
+        note_anchor(session, f"additional_calculations[{position}]", SubmissionRecordType.calculation, child.id)
     apply_review_policy(
         session, targets=targets, policy=review_policy, created_by=created_by
     )
@@ -325,6 +329,18 @@ def persist_transition_state_upload(
         )
         warnings.extend(
             collect_named_composite_deposit_warnings(
+                session,
+                [primary_calc.id, *(c.id for c in additional_calcs)],
+            )
+        )
+        warnings.extend(
+            collect_scan_coordinate_warnings(
+                session,
+                [primary_calc.id, *(c.id for c in additional_calcs)],
+            )
+        )
+        warnings.extend(
+            collect_wavefunction_reliability_warnings(
                 session,
                 [primary_calc.id, *(c.id for c in additional_calcs)],
             )

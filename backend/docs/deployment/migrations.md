@@ -483,7 +483,7 @@ that this is a real database. The script:
 - Resolves tau exactly as the upload path would: recorded
   `calculation_parameter` rows first, then -- only when that resolves to
   the conservative `protocol_not_recorded` row -- the assumption table in
-  `app/services/hessian_method_inference.py`, keyed on the calculation's
+  `tckdb_schemas.hessian_method_assumption` (re-exported by `app/services/hessian_method_inference.py`), keyed on the calculation's
   software and level-of-theory method.
 - Writes only `imaginary_mode_tau_cm1` and `imaginary_mode_tau_basis`.
   **`imaginary_mode_structural_flag` is never touched** -- it is judged
@@ -619,7 +619,7 @@ same `public_ref`-untouched rules as `c8424fe82997`.
   `wb97x-d` is keyed as `wb97xd`, `m06-2x` as `m062x`, a trailing `-d3(bj)` or
   `-gd3bj` as `-d3bj`. Gaussian `wB97XD` and ORCA `wB97X-D3` stay two levels.
 - **Dispersion, solvent and solvent-model case**: keyed by strip and
-  lower-case. `keywords` stays verbatim.
+  lower-case. (`keywords` stayed verbatim until revision `d5f2b8c1a704` removed it; see "Level-of-theory keywords removed" below.)
 
 **What the upgrade prints.** One summary line
 (`level_of_theory alias/component re-key: N row(s) re-hashed, M duplicate
@@ -862,6 +862,123 @@ The same reset makes selection manifests recorded under any other format refused
 on replay (not reinterpreted), and the SHA-256 pins of the rule manifests move; a
 pin is the owner's approval of reviewed bytes, so pin changes need the owner's
 approval.
+
+## Conformer basins reassigned (revision `d3f8a1c6e92b`)
+
+Adds `conformer_assignment_scheme` `torsion_basin` version 2 (a data row; no schema change), makes it the default, and
+**reassigns every conformer observation under it inside the migration's own transaction**. A normal `alembic upgrade head`
+does all of it; there is no separate step.
+
+- **Runs as the table owner.** Observations and thermo targets that were ever approved are changed only through the declared-repair
+  path (`accepted_science_repair`, see "Repairing an accepted record"), which only a role that owns the table may use. The migration
+  role does. The trigger is never disabled.
+- **Take the backup first** (step 2 of the upgrade flow). The step moves observations between groups, empties (but keeps) groups a merge leaves bare,
+  and re-points thermo targets and conformer selections. The downgrade makes version 1 the default again but does **not** undo the
+  grouping: version 1 is no longer implemented and a merge destroys which observation was in which group.
+- **Read the output.** The migration prints one line, `conformer reassignment: ...`, with counts (observations moved, groups created and
+  emptied, thermo targets and statmech basins moved, reviews reset, symmetry-cap hits, which tables a repair was declared for).
+- **Statmech basins move too, through the same repair path.** `statmech_model_declaration` and `statmech_model_member` refuse every
+  UPDATE (`tckdb_statmech_model_immutable`) except `conformer_group_id` (and a declaration's `content_hash`, only when a basin moved in
+  the same transaction) under a declared repair, added by revision `a5d9c3e7b1f2`. The trigger is not disabled; every other column,
+  an undeclared edit, a NULL basin, and a group of another species entry still refuse. The checksum covers the declaration's basin and
+  each member's basin, so it is recomputed in the same repair, including when only a member moved; the ledger holds the old and new
+  value of each. The reassignment (`app.services.conformer_reassignment.reassign_conformer_groups`) is idempotent and takes a list of
+  species entries, but no operator script is shipped for it, and it needs an owner role.
+- **Emptied groups are kept**, with their review reset to `not_reviewed` and their representative cleared. Nothing is deleted, so no
+  review history or public ref is orphaned. A conformer selection that would collide with one already on the target stays where it
+  is (there is no supersede mechanism for a selection and none may be deleted).
+- **Stored reproducibility assessments of a moved thermo record will read stale**: the snapshot includes `target_conformer_group_id`
+  (`app/services/snapshot_defaults.py`), so re-run the assessment for thermo records whose target moved.
+- **Reviews are reset on purpose.** A group whose membership changed returns to `not_reviewed`, which downgrades or hides
+  previously approved observations under curated reads (`structure_selection/loader.py`), as intended.
+- **Cap determinism.** The symmetry search is capped (4096 mappings by default). Below the cap nothing depends on atom order in a
+  deposited file; above it the result can, and `symmetry_cap_hit` on the observation's fingerprint says so.
+- **Every future scheme version ships its own data step.** This one runs only while the default scheme is exactly
+  (`torsion_basin`, 2); on any other default it declines and reports why.
+- **Locks.** One transaction-scoped advisory lock per species entry is held until the migration commits (the same lock live uploads
+  take), so the Postgres lock table needs room for one lock per entry that has a conformer group.
+
+## Conformer basins as connected components (revision `b7e4c9a2d518`)
+
+Adds `conformer_assignment_scheme` `torsion_basin` version 3 and **reassigns every conformer observation under it inside the migration's
+own transaction**, through the same declared-repair machinery as `d3f8a1c6e92b`. A normal `alembic upgrade head` does all of it.
+
+- **Schema.** Nullable columns only: `conformer_group.representative_observation_id`, `merged_into_conformer_group_id`, `basin_is_clique`,
+  `basin_span_deg`; `conformer_observation.mapped_coords_json`; and the table `conformer_group_merge_pending`. Existing rows stay valid.
+- **Mostly merges.** A basin is now a connected component of the optimised structures, so basins that version 2 split by order of deposition
+  merge onto the older group. A version 2 group held together only by a structure that is not a converged optimisation can split. Both go
+  through the declared-repair path; dependents (thermo targets, statmech basin declarations and ensemble members with `content_hash`
+  recomputed, conformer selections) follow the observation their own calculations came from; reviews of every group whose membership
+  changed reset to `not_reviewed`; no group is deleted (an emptied group keeps its row and names the group that took its members).
+- **Take the backup first.** The downgrade makes version 2 the default again and drops what the revision added; it does **not** un-merge.
+- **Read the output.** One line, `conformer reassignment: ...`, with the counts (`mapped_coords_filled`, `wide_basins`, `merges_pending_completed`
+  are new). A `wide_basins` count above zero means basins whose members form a chain longer than the tolerance: they are stored
+  (`basin_is_clique = false`) and logged, never split. Review them.
+- **Pending merges.** A live upload cannot merge two groups when approved records point at the younger one (the API role cannot declare a
+  repair). It files the observation under the older group and writes a `conformer_group_merge_pending` row. Complete them as the owner role:
+  `reassign_conformer_groups(session, repair_revision=..., species_entry_ids=entries_with_pending_merges(session))`
+  (`app.services.conformer_reassignment`, `app.services.conformer_basin_store`). No operator script is shipped yet.
+- **Declaring a repair first.** The database allows one repair declaration per table per transaction. A migration that declares a repair
+  to `conformer_observation`, `thermo`, `statmech_model_declaration` or `statmech_model_member` and then calls
+  `reassign_conformer_groups` in the same transaction must declare the union of its own columns and
+  `app.services.conformer_basin_moves.REASSIGNMENT_REPAIR_COLUMNS`; a narrower declaration already in force is refused by column name.
+- **Seeing what is owed and what is wide.** The conformer-group read shows `merge_pending` (target group and reason) while a merge is owed
+  and `wide_basin` / `basin_span_deg` for a chain; `scripts/run_consistency_check.py --check wide-basin --target-ref cg_...` records the
+  advisory (rubric `wide_basin_consistency`).
+- **Composition with other data steps.** The step recomputes whatever entries it is given from the database as it finds it, so it composes with a
+  revision that merges species entries or changes stereo identity before it. It declines unless the default scheme is exactly
+  (`torsion_basin`, 3); `d3f8a1c6e92b`'s step now declines on any database that is not at version 2.
+
+## Literature titles: re-check against the registry (revision `b4d8e1a7c953`)
+
+The migration only adds the nullable `literature.title_source` column; existing rows stay NULL ("not recorded"). To classify them, or to upgrade a depositor-typed title whose registry lookup failed at deposit time, run the explicit step `backend/scripts/ops/reresolve_literature_titles.py`. It re-fetches DOI/ISBN metadata through the resolver's own fetch functions and sets `title` and `title_source=resolved_metadata` where a title comes back; a failed or empty lookup leaves the row unchanged. It never touches DOI, ISBN or the public ref. Dry run is the default:
+
+Run it from the API image, the way `tckdb_deploy.sh` runs `alembic upgrade head` (the container's workdir is `/app/backend`, and `python` is only on `PATH` through the image's entrypoint, which `docker exec` skips). Use the same `DB_NETWORK`, `ENV_FILE` and `IMAGE` values the deploy used (`TCKDB_DB_NETWORK`, `TCKDB_ENV_FILE`, `<TCKDB_IMAGE_REPO>:<tag>`):
+
+```bash
+# (a) a throwaway container, dry run first (the default)
+docker run --rm --network "$DB_NETWORK" --env-file "$ENV_FILE" -e DB_HOST=db -e DB_PORT=5432 \
+    "$IMAGE" python scripts/ops/reresolve_literature_titles.py
+# then write
+docker run --rm --network "$DB_NETWORK" --env-file "$ENV_FILE" -e DB_HOST=db -e DB_PORT=5432 \
+    "$IMAGE" python scripts/ops/reresolve_literature_titles.py --apply --i-know-this-is-deployed
+
+# (b) alternatively, inside the running API container
+docker exec <api> micromamba run -n base python scripts/ops/reresolve_literature_titles.py
+```
+
+Narrow with `--ref lit_...`, `--limit N`, `--since YYYY-MM-DD`. Notes:
+
+- Use an image built after the PR that added this script; an older image does not contain it.
+- The container's network needs outbound internet. Without it every lookup fails and every row is counted `lookup_error`: dry-run first and check the tally before `--apply`.
+- It commits every 50 rows; an interrupted run keeps its progress and a re-run only picks up what is still unverified.
+- The summary counts upgrades whose registry title does not match the stored title (normalised as the deposit-time warning does). Check those refs: the deposited DOI/ISBN may be the wrong one, and the row would now read as verified.
+- For an ISBN, "resolved" means a third-party catalogue (OpenLibrary, which is user-editable) said so: the same trust as at deposit time.
+
+## Level-of-theory keywords removed (revision `d5f2b8c1a704`)
+
+The revision drops `level_of_theory.keywords` and adds the typed method qualifiers (`relativistic_hamiltonian`,
+`pno_truncation`, `ri_approximation`, and `core_treatment = window`). The hash formula lost its `keywords` key, so
+**every stored `lot_hash` is stale** under it. The revision does not re-key or merge: it **refuses to upgrade (and to
+downgrade) while `level_of_theory` holds any row**, with a message that names the reseed.
+
+An instance that already holds data is reseeded:
+
+1. **Back up** the whole database (`pg_dump -Fc`). Keep it: the refusal is the only thing standing between a stale
+   hash and a silent wrong match.
+2. **Save the users and API keys** so people keep their access:
+   `pg_dump --data-only -t app_user -t api_key <database> > users_and_keys.sql`. A data-only dump of those tables
+   carries the sequence `setval` calls, so new ids continue after the restored ones.
+3. **Recreate the database** (drop and create it empty, with the same owner and runtime-role grants as before, and the
+   RDKit extension available).
+4. **Apply the migrations** to the empty database: `alembic upgrade head`.
+5. **Restore the users and keys**: `psql <database> < users_and_keys.sql`.
+6. **Deposit the data again** from its sources. Stored reviews, assessments and public refs of the old data are gone
+   with it; nothing is carried across.
+
+A database with no `level_of_theory` rows (a fresh install) upgrades normally. Downgrading the revision is refused for
+the same reason in reverse, and the value `window` stays in the `core_treatment` type afterwards (an enum value
+cannot be dropped).
 
 ## Self-hosted / Raspberry Pi note
 

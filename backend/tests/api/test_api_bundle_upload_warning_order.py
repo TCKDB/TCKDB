@@ -41,7 +41,7 @@ def _golden_kinetics_record() -> dict:
 
 
 def _codes_and_fields(client, url: str, record: dict) -> list[tuple[str, str]]:
-    return [(code, field) for code, _message, field in _direct_warnings(client, url, record)]
+    return [(code, field) for code, _message, field, _context in _direct_warnings(client, url, record)]
 
 
 def test_the_direct_thermo_route_orders_its_warnings_reconciliation_provenance_refs_workflow(client) -> None:
@@ -52,7 +52,7 @@ def test_the_direct_thermo_route_orders_its_warnings_reconciliation_provenance_r
         ("named_composite_deposited_as_sp", "level_of_theory"),
         ("missing_literature_provenance", "scheme.source_literature"),
         ("missing_energy_correction_scheme_software", "scheme.software"),
-        ("composite_delta_prefer_scheme_terms", "application_role"),
+        ("composite_delta_prefer_scheme_terms", "applied_energy_corrections[0].application_role"),
     ]
 
 

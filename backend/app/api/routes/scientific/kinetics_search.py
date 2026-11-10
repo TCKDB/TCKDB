@@ -6,15 +6,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     ANYWHERE_SCOPE,
     omit_trust_unless_requested,
     prepare_assessment_response,
+    refuse_check_inputs,
 )
-from app.db.models.common import KineticsModelKind, RecordReviewStatus
-from app.schemas.reads.scientific_common import CollapseMode
+from app.api.server_faults import ServerFaultRoute, caller_input
+from app.chemistry.method_families import MethodFamily
+from app.db.models.common import KineticsModelKind, RecordReviewStatus, ScientificOriginKind
+from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_kinetics_search import (
     KineticsSearchRequest,
     ScientificKineticsSearchResponse,
@@ -28,7 +32,7 @@ from app.services.scientific_read.public_assessments import (
     attach_kinetics_assessments,
 )
 
-router = APIRouter(prefix="/kinetics")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/kinetics")
 
 # The router-level ``?profile=`` dependency puts these two keys on every
 # scientific operation, POSTs included, so they must be allowed through the
@@ -37,8 +41,9 @@ router = APIRouter(prefix="/kinetics")
 _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 
-@router.get("/search", response_model=ScientificKineticsSearchResponse)
+@router.get("/search", response_model=ScientificKineticsSearchResponse, dependencies=[Depends(refuse_check_inputs)])
 def kinetics_search_get(
+    http_request: Request,
     session: Session = Depends(get_db),
     reactants: list[str] | None = Query(None),
     products: list[str] | None = Query(None),
@@ -47,8 +52,8 @@ def kinetics_search_get(
     family: str | None = Query(None),
     reaction_ref: str | None = Query(None),
     reaction_entry_ref: str | None = Query(None),
-    temperature_min: float | None = Query(None),
-    temperature_max: float | None = Query(None),
+    coverage_temperature_min_k: float | None = Query(None),
+    coverage_temperature_max_k: float | None = Query(None),
     pressure_bar: float | None = Query(
         None,
         gt=0,
@@ -66,13 +71,22 @@ def kinetics_search_get(
     level_of_theory_id: int | None = Query(None),
     level_of_theory_ref: str | None = Query(None),
     software: str | None = Query(None),
+    method: str | None = Query(None),
+    basis: str | None = Query(None),
+    software_version: str | None = Query(None),
+    workflow_tool: str | None = Query(None),
+    workflow_tool_version: str | None = Query(None),
+    method_family: list[MethodFamily] | None = Query(None),
+    dft_rung_min: int | None = Query(None, ge=1, le=5),
+    dft_rung_max: int | None = Query(None, ge=1, le=5),
+    scientific_origin: ScientificOriginKind | None = Query(None),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ) -> ScientificKineticsSearchResponse:
     """Chemistry-first kinetics search by reactants/products.
@@ -83,9 +97,14 @@ def kinetics_search_get(
     demands the whole equation. For complex reactant/product lists
     (especially with bracket-heavy SMILES), prefer the POST form. Returns
     kinetics records with the resolved reaction/reaction_entry identity
-    attached.
+    attached. Every matching record is returned, ordered by the record's own
+    review status, then newest deposition, then id. ``collapse`` is refused
+    (422); ``POST /reaction-entries/{ref}/kinetics/select`` answers
+    "give me one".
     """
-    request = KineticsSearchRequest(
+    reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
+    request = caller_input(
+        KineticsSearchRequest,
         reactants=reactants or [],
         products=products or [],
         direction=direction,
@@ -93,21 +112,30 @@ def kinetics_search_get(
         family=family,
         reaction_ref=reaction_ref,
         reaction_entry_ref=reaction_entry_ref,
-        temperature_min=temperature_min,
-        temperature_max=temperature_max,
+        coverage_temperature_min_k=coverage_temperature_min_k,
+        coverage_temperature_max_k=coverage_temperature_max_k,
         pressure_bar=pressure_bar,
         pressure=pressure,
         model_kind=model_kind,
         level_of_theory_id=level_of_theory_id,
         level_of_theory_ref=level_of_theory_ref,
         software=software,
+        method=method,
+        basis=basis,
+        software_version=software_version,
+        workflow_tool=workflow_tool,
+        workflow_tool_version=workflow_tool_version,
+        method_family=method_family,
+        dft_rung_min=dft_rung_min,
+        dft_rung_max=dft_rung_max,
+        scientific_origin=scientific_origin,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
-        collapse=collapse,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = search_kinetics(session, request)
@@ -122,7 +150,7 @@ def kinetics_search_get(
     return omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
 
 
-@router.post("/search", response_model=ScientificKineticsSearchResponse)
+@router.post("/search", response_model=ScientificKineticsSearchResponse, dependencies=[Depends(refuse_check_inputs)])
 def kinetics_search_post(
     request: Request,
     body: KineticsSearchRequest,
@@ -130,7 +158,7 @@ def kinetics_search_post(
 ) -> ScientificKineticsSearchResponse:
     """JSON-body variant for structured reactant/product queries.
 
-    All search fields, filters, includes, collapse, offset, and limit live
+    All search fields, filters, includes, offset, and limit live
     in the body. Query-string parameters are rejected. Body field ``sort``
     is rejected by the service layer (v0 sort policy).
     """

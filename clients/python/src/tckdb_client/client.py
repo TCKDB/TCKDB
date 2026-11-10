@@ -35,7 +35,7 @@ from tckdb_client.errors import (
     TCKDBValidationError,
 )
 from tckdb_client.idempotency import validate_idempotency_key
-from tckdb_client.pagination import iter_keyset_records, iter_paginated_records
+from tckdb_client.pagination import iter_keyset_records
 from tckdb_client.retry import RetryPolicy
 from tckdb_client.scientific_types import (
     ArtifactRecord,
@@ -169,12 +169,16 @@ def _selection_body(
     min_review_status: str | None,
     temperature_k: float | None,
     phase: str | None,
+    filters: Mapping[str, Any] | None = None,
+    eligibility: Mapping[str, Any] | None = None,
 ) -> ThermoSelectionRequest:
     """The request body: ``target`` plus whichever optional fields were supplied (never defaults of ours)."""
     body: dict[str, Any] = {"target": dict(target)}
     for key, value in (
         ("policy", policy), ("result_mode", result_mode), ("min_review_status", min_review_status),
         ("temperature_k", temperature_k), ("phase", phase),
+        ("filters", dict(filters) if filters is not None else None),
+        ("eligibility", dict(eligibility) if eligibility is not None else None),
     ):
         if value is not None:
             body[key] = value
@@ -229,6 +233,8 @@ def _network_selection_body(
             value = dict(value)
         elif key in ("outputs", "boundaries"):
             value = [dict(item) for item in value]
+        elif key in ("filters", "eligibility"):
+            value = dict(value)
         body[key] = value
     return body  # type: ignore[return-value]
 
@@ -256,6 +262,8 @@ def _kinetics_selection_body(
     mode: str | None,
     min_review_status: str | None,
     phase: str | None,
+    filters: Mapping[str, Any] | None = None,
+    eligibility: Mapping[str, Any] | None = None,
 ) -> KineticsSelectionRequest:
     """The request body: the question as stated plus whichever optional fields were supplied (no defaults of ours)."""
     body: dict[str, Any] = {
@@ -269,6 +277,8 @@ def _kinetics_selection_body(
     for key, value in (
         ("collider", dict(collider) if collider is not None else None),
         ("policy", policy), ("mode", mode), ("min_review_status", min_review_status), ("phase", phase),
+        ("filters", dict(filters) if filters is not None else None),
+        ("eligibility", dict(eligibility) if eligibility is not None else None),
     ):
         if value is not None:
             body[key] = value
@@ -310,7 +320,7 @@ def _structure_selection_path(family: str, ref: str, operation: str) -> str:
 
 
 _STRUCTURE_SELECTION_REFUSED = frozenset(
-    {"bounds", "limit", "offset", "page", "page_size", "cursor", "max_candidates", "manifest_bytes", "sort", "rules"}
+    {"bounds", "limit", "offset", "page", "page_size", "cursor", "max_candidates", "manifest_bytes", "sort", "rules", "apply_rules", "objective", "reference_model"}
 )
 
 
@@ -332,7 +342,7 @@ def _structure_selection_body(fields: Mapping[str, Any]) -> dict[str, Any]:
             continue
         if value is None and key != "quantity":
             continue
-        if key == "recipe" and value is not None:
+        if key in ("recipe", "filters", "eligibility") and value is not None:
             value = dict(value)
         elif key in ("member_refs", "permitted_quality") and value is not None:
             value = list(value)
@@ -567,6 +577,18 @@ class TCKDBResponse:
             if name.lower() == target:
                 return value if isinstance(value, str) and value else None
         return None
+
+
+#: A 413 that carries no TCKDB code did not come from the API: an edge or proxy
+#: page (HTML) or an empty body. The API's own 413s (``request_body_too_large``,
+#: ``anonymous_body_too_large``, ``bundle_too_large``) carry a code and keep
+#: their own message. Nothing from the response body is put in the message.
+_UNCODED_413_MESSAGE = (
+    "HTTP 413: the request body was too large for the server or a proxy in front of it, and the refusal "
+    "did not state its limit. Behind Cloudflare Free/Pro the limit is 100,000,000 bytes, which is about "
+    "71.5 MiB of files once they are base64-encoded into the JSON body. Send the files separately "
+    "(TCKDBClient.upload_artifacts) or split the deposit into smaller requests."
+)
 
 
 class TCKDBClient:
@@ -912,6 +934,8 @@ class TCKDBClient:
             detail if isinstance(detail, str) and detail
             else f"HTTP {status_code}"
         )
+        if status_code == 413 and code is None:
+            message = _UNCODED_413_MESSAGE
 
         kwargs = dict(
             status_code=status_code,
@@ -995,17 +1019,22 @@ class TCKDBClient:
             authenticated=False,
         ).data
 
-    def get_calculation_hessian(self, calculation_id: int) -> Any:
+    def get_calculation_hessian(self, calculation_id: int, *, profile: str | None = None) -> Any:
         """``GET /calculations/{calculation_id}/hessian`` — the stored Cartesian Hessian.
 
         Returns the packed lower triangle exactly as TCKDB stored it — no
         re-derivation, no unit conversion (native hartree/bohr²). Raises
         the appropriate :class:`~tckdb_client.errors.TCKDBHTTPError`
         (404, ``hessian_not_found``) when the calculation carries no
-        stored Hessian.
+        stored Hessian. Under ``profile="curated"`` a rejected or deprecated
+        calculation answers 404 as an unknown id does; one that is merely
+        unreviewed is served.
         """
         return self.request_json(
-            "GET", f"/calculations/{calculation_id}/hessian", authenticated=False
+            "GET",
+            f"/calculations/{calculation_id}/hessian",
+            params={"profile": profile},
+            authenticated=False,
         ).data
 
     def search_calculations(
@@ -1365,9 +1394,13 @@ class TCKDBClient:
           whole batch with 422 and no DB rows or S3 writes survive,
           and a pass-2 storage failure compensates earlier S3 writes
           before returning 503. Returns a list of
-          :class:`ArtifactUploadBatchResult` records, one per
-          ``calculation_id`` group, preserving caller-supplied group
-          order and intra-group item order.
+          :class:`ArtifactUploadBatchResult` records, one per request,
+          preserving caller-supplied group order and intra-group item order.
+          A calculation's files are split into several requests when
+          together they exceed 64 MiB (the builders' inline budget), so one
+          request stays under the proxy body limit; the first request keeps
+          the key below, later ones end in ``artifact-batch-2``, ``-3``, ….
+          Atomicity is then per request, not per calculation.
 
         **Pre-dispatch validation** (both modes): every plan item
         must be a ``PlannedArtifactUpload``-like object with a
@@ -1459,8 +1492,26 @@ class TCKDBClient:
             cid: grp[0].calculation_ref for cid, grp in groups.items()
         }
 
-        results: list[ArtifactUploadBatchResult] = []
+        # One request must stay under the inline budget (the proxy body limit),
+        # so a calculation's files are split into several requests by size.
+        from tckdb_client.builders.artifact import INLINE_TOTAL_BUDGET_BYTES
+
+        chunks: list[tuple[int, int, list[Any]]] = []
         for calc_id, group_items in groups.items():
+            current: list[Any] = []
+            used = 0
+            n = 0
+            for item in group_items:
+                size = pathlib.Path(item.path).stat().st_size
+                if current and used + size > INLINE_TOTAL_BUDGET_BYTES:
+                    chunks.append((calc_id, n, current))
+                    current, used, n = [], 0, n + 1
+                current.append(item)
+                used += size
+            chunks.append((calc_id, n, current))
+
+        results: list[ArtifactUploadBatchResult] = []
+        for calc_id, chunk_no, group_items in chunks:
             artifact_payloads: list[dict[str, Any]] = []
             calc_keys: list[str] = []
             for item in group_items:
@@ -1487,8 +1538,12 @@ class TCKDBClient:
             idem: str | None = None
             if idempotency_key_prefix is not None:
                 first_key = calc_keys[0] if calc_keys else str(calc_id)
+                # The first request of a calculation keeps the long-standing
+                # key; later ones (only when the files exceed the budget) are
+                # numbered so each distinct body has its own key.
+                suffix = "artifact-batch" if chunk_no == 0 else f"artifact-batch-{chunk_no + 1}"
                 idem = validate_idempotency_key(
-                    f"{idempotency_key_prefix}:{first_key}:artifact-batch"
+                    f"{idempotency_key_prefix}:{first_key}:{suffix}"
                 )
 
             http = self.request_json(
@@ -1574,7 +1629,7 @@ class TCKDBClient:
     # Thin wrappers over the backend scientific read API. They serialize
     # parameters and return parsed JSON; they do NOT rank, select, or
     # interpret responses, and they hold no ARC/RMG-specific logic. See
-    # docs/specs/read_api_mvp.md for the response contract.
+    # docs/specs/browse_order.md for the response contract.
 
     def search_species(
         self,
@@ -1593,8 +1648,8 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> SpeciesSearchResponse:
@@ -1620,8 +1675,8 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -1648,8 +1703,8 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> SpeciesBrowseResponse:
@@ -1704,8 +1759,8 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -1730,17 +1785,17 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
-        method: str = "POST",
+        method_http: str = "POST",
     ) -> ReactionSearchResponse:
         """``GET|POST /scientific/reactions/search`` — discover reaction entries.
 
         Defaults to ``POST`` because reactant/product SMILES often contain
         characters (``[`` ``]`` ``+``) that round-trip awkwardly through
-        query strings. Pass ``method="GET"`` to force the GET form. Returns
+        query strings. Pass ``method_http='GET'`` to force the GET form. Returns
         the parsed ``ScientificReactionSearchResponse`` JSON envelope.
 
         Phase C: ``reaction_ref`` / ``reaction_entry_ref`` may be supplied
@@ -1767,11 +1822,11 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
-        if method.upper() == "GET":
+        if method_http.upper() == "GET":
             return self.request_json(
                 "GET",
                 "/scientific/reactions/search",
@@ -1800,6 +1855,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> ReactionSearchResponse:
@@ -1863,6 +1919,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -1877,24 +1934,37 @@ class TCKDBClient:
         self,
         reaction_entry_id: int | str,
         *,
-        temperature_min: float | None = None,
-        temperature_max: float | None = None,
+        coverage_temperature_min_k: float | None = None,
+        coverage_temperature_max_k: float | None = None,
         pressure_bar: float | None = None,
         pressure: float | None = None,
         model_kind: str | None = None,
         level_of_theory_id: int | None = None,
         level_of_theory_ref: str | None = None,
         software: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
+        scientific_origin: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
+        check_inputs: bool | None = None,
         profile: str | None = None,
     ) -> ReactionKineticsResponse:
         """``GET /scientific/reaction-entries/{reaction_entry_id}/kinetics``.
+
+        ``check_inputs=True`` (with ``include=['assessments']`` and ``limit`` of at most 10) compares each stored
+        assessment's inputs with today's; without it a list reports ``inputs_unchecked``, never ``current``.
 
         Phase C: ``reaction_entry_id`` accepts the integer
         ``reaction_entry.id`` or a public ref of the form ``rxe_...``.
@@ -1906,21 +1976,31 @@ class TCKDBClient:
         """
         path = f"/scientific/reaction-entries/{reaction_entry_id}/kinetics"
         params = {
-            "temperature_min": temperature_min,
-            "temperature_max": temperature_max,
+            "coverage_temperature_min_k": coverage_temperature_min_k,
+            "coverage_temperature_max_k": coverage_temperature_max_k,
             "pressure_bar": pressure_bar,
             "pressure": pressure,
             "model_kind": model_kind,
             "level_of_theory_id": level_of_theory_id,
             "level_of_theory_ref": level_of_theory_ref,
             "software": software,
+            "method": method,
+            "basis": basis,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
+            "scientific_origin": scientific_origin,
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
+            "check_inputs": check_inputs,
             "profile": profile,
         }
         return self.request_json(
@@ -1931,22 +2011,35 @@ class TCKDBClient:
         self,
         species_entry_id: int | str,
         *,
-        temperature_min: float | None = None,
-        temperature_max: float | None = None,
+        coverage_temperature_min_k: float | None = None,
+        coverage_temperature_max_k: float | None = None,
         model_kind: str | None = None,
         level_of_theory_id: int | None = None,
         level_of_theory_ref: str | None = None,
         software: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
+        scientific_origin: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
+        check_inputs: bool | None = None,
         profile: str | None = None,
     ) -> SpeciesThermoResponse:
         """``GET /scientific/species-entries/{species_entry_id}/thermo``.
+
+        ``check_inputs=True`` (with ``include=['assessments']`` and ``limit`` of at most 10) compares each stored
+        assessment's inputs with today's; without it a list reports ``inputs_unchecked``, never ``current``.
 
         Phase C: ``species_entry_id`` accepts the integer
         ``species_entry.id`` or a public ref of the form ``spe_...``.
@@ -1956,19 +2049,29 @@ class TCKDBClient:
         """
         path = f"/scientific/species-entries/{species_entry_id}/thermo"
         params = {
-            "temperature_min": temperature_min,
-            "temperature_max": temperature_max,
+            "coverage_temperature_min_k": coverage_temperature_min_k,
+            "coverage_temperature_max_k": coverage_temperature_max_k,
             "model_kind": model_kind,
             "level_of_theory_id": level_of_theory_id,
             "level_of_theory_ref": level_of_theory_ref,
             "software": software,
+            "method": method,
+            "basis": basis,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
+            "scientific_origin": scientific_origin,
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
+            "check_inputs": check_inputs,
             "profile": profile,
         }
         return self.request_json(
@@ -1985,19 +2088,22 @@ class TCKDBClient:
         min_review_status: str | None = None,
         temperature_k: float | None = None,
         phase: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> ThermoSelectionResponse:
         """``POST /scientific/species-entries/{ref}/thermo/select``.
 
-        Method-aware selection of one species entry's thermo record for the
-        gas-phase formation enthalpy at 298.15 K. Read-only; the ordinary
+        Selection of one species entry's thermo record for the
+        gas-phase formation enthalpy at 298.15 K: which records are eligible and their display order. TCKDB
+        ranks no method above another. Read-only; the ordinary
         :meth:`get_species_thermo` browse order is unchanged.
 
         ``species_entry_ref`` must be a public ``spe_...`` ref; an integer id is
         refused here and by the server. ``target`` is required:
         ``{"kind": "equilibrium_ensemble"}`` or ``{"kind": "single_conformer",
-        "conformer_group_ref": "cg_..."}``. ``policy`` is ``method_preferred``
-        (the server default), ``default``, ``most_reviewed`` or ``latest``;
+        "conformer_group_ref": "cg_..."}``. ``policy`` is an administrative order: ``default`` (the server
+        default), ``most_reviewed`` or ``latest``;
         ``result_mode`` is ``all`` (default) or ``first``. ``temperature_k`` and
         ``phase`` exist only so a conflicting value is refused by the server
         (422 ``thermo_selection_condition_conflict``), never silently changed.
@@ -2005,11 +2111,18 @@ class TCKDBClient:
         The result's ``outcome`` and ``basis`` are the server's explanation:
         report them verbatim. ``selection`` names a record only when the outcome
         supports one, and says so when the choice was administrative.
+
+        ``filters`` narrows the candidates by facts first, with the thermo search's own vocabulary
+        (``model_kind``, ``level_of_theory_ref``, ``software``); ``eligibility`` lifts named defaults
+        (``include_rejected``, ``include_deprecated``, ``include_hard_failed_evidence``,
+        ``include_confirmed_findings``). Both are sent only when given. The answer's ``filters``,
+        ``eligibility`` and ``funnel`` say what each step did; ``curated`` cannot be overridden.
         """
         path = _selection_path(species_entry_ref)
         body: ThermoSelectionRequest = _selection_body(
             target=target, policy=policy, result_mode=result_mode,
             min_review_status=min_review_status, temperature_k=temperature_k, phase=phase,
+            filters=filters, eligibility=eligibility,
         )
         return self.request_json(
             "POST", path, json=body, params={"profile": profile}, authenticated=False
@@ -2023,6 +2136,8 @@ class TCKDBClient:
         policy: str | None = None,
         result_mode: str | None = None,
         min_review_status: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> JSONDict:
         """``POST /scientific/species-entries/{ref}/thermo/select/manifest``.
@@ -2034,6 +2149,7 @@ class TCKDBClient:
         body = _selection_body(
             target=target, policy=policy, result_mode=result_mode,
             min_review_status=min_review_status, temperature_k=None, phase=None,
+            filters=filters, eligibility=eligibility,
         )
         return self.request_json(
             "POST", _selection_path(species_entry_ref) + "/manifest", json=body,
@@ -2055,12 +2171,15 @@ class TCKDBClient:
         mode: str | None = None,
         min_review_status: str | None = None,
         phase: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> KineticsSelectionResponse:
         """``POST /scientific/reaction-entries/{ref}/kinetics/select``.
 
-        Method-aware selection among one reaction entry's stored rate coefficients, for one stated gas-phase
-        question. Read-only; the ordinary :meth:`get_reaction_kinetics` browse order is unchanged.
+        Selection among one reaction entry's stored rate coefficients, for one stated gas-phase
+        question: which determinations are eligible and their display order. TCKDB ranks no method above another.
+        Read-only; the ordinary :meth:`get_reaction_kinetics` browse order is unchanged.
 
         ``reaction_entry_ref`` must be a public ``rxe_...`` ref; an integer id is refused here and by the server.
         The question is required and is never defaulted: ``direction`` (``forward`` or ``reverse``, relative to the
@@ -2070,8 +2189,8 @@ class TCKDBClient:
         temperature window and ``pressure`` (``{"kind": "independent"}``, ``{"kind": "high_pressure_limit"}`` or
         ``{"kind": "finite", "min_bar": ..., "max_bar": ...}``). A ``collider``
         (``{"components": [{"species_ref": "spc_..."}]}``, with ``mole_fraction`` on each of two or more for a
-        mixture) is required for a finite pressure and for a composition-effective coefficient. ``policy`` is
-        ``method_preferred`` (the server default), ``default``, ``most_reviewed`` or ``latest``; ``mode`` is ``all``
+        mixture) is required for a finite pressure and for a composition-effective coefficient. ``policy`` is an
+        administrative order: ``default`` (the server default), ``most_reviewed`` or ``latest``; ``mode`` is ``all``
         (default) or ``first``. ``phase`` exists only so a conflicting value is refused by the server.
 
         The result's ``outcome`` and ``basis`` are the server's explanation: report them verbatim. ``selection``
@@ -2084,6 +2203,7 @@ class TCKDBClient:
             direction=direction, target=target, coefficient_basis=coefficient_basis,
             temperature_min_k=temperature_min_k, temperature_max_k=temperature_max_k, pressure=pressure,
             collider=collider, policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
+            filters=filters, eligibility=eligibility,
         )
         return self.request_json(
             "POST", path, json=body, params={"profile": profile}, authenticated=False
@@ -2104,6 +2224,8 @@ class TCKDBClient:
         mode: str | None = None,
         min_review_status: str | None = None,
         phase: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> JSONDict:
         """``POST /scientific/reaction-entries/{ref}/kinetics/select/manifest``.
@@ -2116,6 +2238,7 @@ class TCKDBClient:
             direction=direction, target=target, coefficient_basis=coefficient_basis,
             temperature_min_k=temperature_min_k, temperature_max_k=temperature_max_k, pressure=pressure,
             collider=collider, policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
+            filters=filters, eligibility=eligibility,
         )
         return self.request_json(
             "POST", _kinetics_selection_path(reaction_entry_ref) + "/manifest", json=body,
@@ -2138,21 +2261,21 @@ class TCKDBClient:
         require_stable_reference: bool | None = None,
         administrative_policy: str | None = None,
         result_mode: str | None = None,
-        apply_rules: bool | None = None,
-        objective: str | None = None,
-        reference_model: str | None = None,
         repeat_policy: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> StructureSelectionResponse:
         """``POST /scientific/species-entries/{ref}/calculations/select``.
 
-        The lowest comparable recorded energy among one species entry's calculations, or an audited-rule protocol
-        preference. Read-only; browse orders are unchanged. ``intent`` is ``recorded_minimum`` (the server default) or
-        ``protocol_preferred`` (which needs ``objective`` and a fixed ``geometry_ref``).
+        The lowest comparable recorded energy among one species entry's calculations, or (``protocol_coverage``) the
+        protocols that cover every requested member, listed in display order. Read-only; browse orders are unchanged.
+        ``intent`` is ``recorded_minimum`` (the server default) or ``protocol_coverage`` (which needs a fixed
+        ``geometry_ref``).
 
         Values are ordered only inside one cohort (the same established recipe, quantity and energy convention);
         several cohorts end as ``incomparable_alternatives``. The answer is conditional on the authorized population
-        the caller can see. A population over the server's bounds is a coded 422, never a prefix winner; this client
+        the caller can see. A population over the server's bounds is a coded 422, never an answer from a prefix; this client
         never caps or pages it. Report ``outcome`` and ``basis`` verbatim. The client invents no default of the
         question: only the fields you pass are sent.
         """
@@ -2164,8 +2287,7 @@ class TCKDBClient:
                 "permitted_quality": permitted_quality, "geometry_ref": geometry_ref, "member_refs": member_refs,
                 "recipe": recipe, "require_stable_reference": require_stable_reference,
                 "administrative_policy": administrative_policy, "result_mode": result_mode,
-                "apply_rules": apply_rules, "objective": objective, "reference_model": reference_model,
-                "repeat_policy": repeat_policy,
+                "repeat_policy": repeat_policy, "filters": filters, "eligibility": eligibility,
             }
         )
         return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
@@ -2200,17 +2322,16 @@ class TCKDBClient:
         require_stable_reference: bool | None = None,
         administrative_policy: str | None = None,
         result_mode: str | None = None,
-        apply_rules: bool | None = None,
-        objective: str | None = None,
-        reference_model: str | None = None,
         repeat_policy: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> StructureSelectionResponse:
         """``POST /scientific/species-entries/{ref}/conformers/select``.
 
-        The lowest validated conformer basin of one cohort, the basins that support a claim, or a protocol
-        preference. ``intent`` is ``validated_minimum`` (the server default), ``qualify_evidence`` (pass
-        ``quantity=None`` and a ``validation_claim``) or ``protocol_preferred``. A basin needs curvature evidence on
+        The lowest validated conformer basin of one cohort, the basins that support a claim, or the protocols
+        that cover every requested member. ``intent`` is ``validated_minimum`` (the server default), ``qualify_evidence`` (pass
+        ``quantity=None`` and a ``validation_claim``) or ``protocol_coverage``. A basin needs curvature evidence on
         its own geometry, judged by magnitude against the stored tau (never by counting imaginary modes). Repeated
         determinations of one basin are alternates, not independent confirmation. Report ``outcome`` and ``basis``
         verbatim.
@@ -2223,8 +2344,7 @@ class TCKDBClient:
                 "permitted_quality": permitted_quality, "geometry_ref": geometry_ref, "member_refs": member_refs,
                 "recipe": recipe, "require_stable_reference": require_stable_reference,
                 "administrative_policy": administrative_policy, "result_mode": result_mode,
-                "apply_rules": apply_rules, "objective": objective, "reference_model": reference_model,
-                "repeat_policy": repeat_policy,
+                "repeat_policy": repeat_policy, "filters": filters, "eligibility": eligibility,
             }
         )
         return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
@@ -2258,17 +2378,16 @@ class TCKDBClient:
         require_connectivity: bool | None = None,
         administrative_policy: str | None = None,
         result_mode: str | None = None,
-        apply_rules: bool | None = None,
-        objective: str | None = None,
-        reference_model: str | None = None,
         repeat_policy: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> StructureSelectionResponse:
         """``POST /scientific/transition-state-entries/{ref}/evidence/select``.
 
         Which saddle determinations of one transition state *entry* support a claim (by default a conventional
         first-order saddle), or are lowest. ``intent`` is ``validated_saddle`` (the server default),
-        ``qualify_evidence`` (``quantity=None`` plus a ``validation_claim``) or ``protocol_preferred``. A higher-order
+        ``qualify_evidence`` (``quantity=None`` plus a ``validation_claim``) or ``protocol_coverage``. A higher-order
         characterization never implies first-order TST suitability; reactive connectivity is an additional claim
         (``require_connectivity``). Report ``outcome`` and ``basis`` verbatim.
         """
@@ -2280,8 +2399,8 @@ class TCKDBClient:
                 "permitted_quality": permitted_quality, "geometry_ref": geometry_ref, "member_refs": member_refs,
                 "recipe": recipe, "require_stable_reference": require_stable_reference,
                 "require_connectivity": require_connectivity, "administrative_policy": administrative_policy,
-                "result_mode": result_mode, "apply_rules": apply_rules, "objective": objective,
-                "reference_model": reference_model, "repeat_policy": repeat_policy,
+                "result_mode": result_mode, "repeat_policy": repeat_policy,
+                "filters": filters, "eligibility": eligibility,
             }
         )
         return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
@@ -2451,14 +2570,17 @@ class TCKDBClient:
         """``POST /scientific/statmech/select``.
 
         Which supplied statistical models of one species or transition-state entry support a stated use
-        (``intent="qualify"``), and, with ``intent="protocol_preferred"``, which whole applicable model audited rules prefer.
+        (``intent="qualify"``), and, with ``intent="protocol_coverage"``, the qualified whole models listed in display order.
         ``request`` is the full body (see :class:`~tckdb_client.StatmechSelectionRequest`); the client sends it as given.
+        It may carry ``filters`` (``model_kind``, ``method``, ``basis``, ``software``, ``software_version``,
+        ``workflow_tool``, ``workflow_tool_version``) and ``eligibility`` (``include_rejected``, ``include_deprecated``,
+        ``include_confirmed_findings``); the answer lists every default, whether it was applied and by whose choice.
         Read-only; browse orders are unchanged and no computed thermodynamic value is returned.
 
-        This server ships no active preference rule, so the answer is the qualified models, a sole eligible model or
-        incomparable alternatives (unranked, not equally accurate), never an invented ranking. A valid negative outcome is a
-        200; a population over the server's bounds is a coded 422 (``statmech_selection_bound_exceeded``), never a prefix
-        winner, and this client never caps or pages it. Report ``outcome``, ``basis`` and ``notices`` verbatim, and read
+        TCKDB ranks no model above another, so the answer is the qualified models, a sole eligible model or
+        incomparable alternatives (listed in display order, none preferred), never an invented ranking. A valid negative outcome is a
+        200; a population over the server's bounds is a coded 422 (``statmech_selection_bound_exceeded``), never an answer
+        from a prefix, and this client never caps or pages it. Report ``outcome``, ``basis`` and ``notices`` verbatim, and read
         each candidate's ``advisory``: an imported source whose own stationary-point statement was not re-judged, or a
         literature citation with no DOI or ISBN, is disclosed there.
         """
@@ -2500,19 +2622,19 @@ class TCKDBClient:
         regime: Mapping[str, Any] | None = None,
         source_composition_hash: str | None = None,
         sink_composition_hash: str | None = None,
-        objective: str | None = None,
-        reference_model_ref: str | None = None,
-        reference_outputs: str | None = None,
         policy: str | None = None,
         mode: str | None = None,
         min_review_status: str | None = None,
         phase: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> NetworkSelectionResponse:
         """``POST /scientific/networks/{ref}/kinetics/select``.
 
-        Method-aware selection among one network's stored pressure-dependent solves, for one stated gas-phase
-        rate-coefficient question. Read-only; the ordinary network reads are unchanged.
+        Selection among one network's stored pressure-dependent solves, for one stated gas-phase
+        rate-coefficient question: which solves are eligible and their display order. TCKDB ranks no method above
+        another. Read-only; the ordinary network reads are unchanged.
 
         ``network_ref`` must be a public ``net_...`` ref; an integer id is refused here and by the server, and
         ``channel_key`` is a body field, never part of the path. The question is required and never defaulted:
@@ -2521,10 +2643,8 @@ class TCKDBClient:
         for a mixture) and ``partition`` (``{"retained": [<composition hash>, ...], "eliminated": [...],
         "lumps": [[...]]}``). A single-channel question (``scope`` omitted or ``single_channel``) names
         ``channel_key`` and ``observable``; ``projected_bundle`` and ``full_network`` list ``outputs``
-        (``[{"channel_key": ..., "observable": ...}]``) instead. ``objective`` defaults to
-        ``physical_accuracy``; ``model_fidelity`` needs ``reference_model_ref`` (``nsolve_...``) and
-        ``representation_fidelity`` needs ``reference_outputs``. ``policy`` is ``method_preferred`` (the server
-        default), ``default``, ``most_reviewed`` or ``latest``; ``mode`` is ``all`` (default) or ``first``.
+        (``[{"channel_key": ..., "observable": ...}]``) instead. ``policy`` is an administrative order:
+        ``default`` (the server default), ``most_reviewed`` or ``latest``; ``mode`` is ``all`` (default) or ``first``.
         ``phase`` exists only so a conflicting value is refused by the server.
 
         The result's ``outcome`` and ``basis`` are the server's explanation: report them verbatim. ``selection``
@@ -2539,8 +2659,8 @@ class TCKDBClient:
             bath=bath, partition=partition, scope=scope, channel_key=channel_key, observable=observable,
             outputs=outputs, degeneracy_applied=degeneracy_applied, boundaries=boundaries, regime=regime,
             source_composition_hash=source_composition_hash, sink_composition_hash=sink_composition_hash,
-            objective=objective, reference_model_ref=reference_model_ref, reference_outputs=reference_outputs,
             policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
+            filters=filters, eligibility=eligibility,
         )
         return self.request_json(
             "POST", path, json=body, params={"profile": profile}, authenticated=False
@@ -2566,13 +2686,12 @@ class TCKDBClient:
         regime: Mapping[str, Any] | None = None,
         source_composition_hash: str | None = None,
         sink_composition_hash: str | None = None,
-        objective: str | None = None,
-        reference_model_ref: str | None = None,
-        reference_outputs: str | None = None,
         policy: str | None = None,
         mode: str | None = None,
         min_review_status: str | None = None,
         phase: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> JSONDict:
         """``POST /scientific/networks/{ref}/kinetics/select/manifest``.
@@ -2587,8 +2706,8 @@ class TCKDBClient:
             bath=bath, partition=partition, scope=scope, channel_key=channel_key, observable=observable,
             outputs=outputs, degeneracy_applied=degeneracy_applied, boundaries=boundaries, regime=regime,
             source_composition_hash=source_composition_hash, sink_composition_hash=sink_composition_hash,
-            objective=objective, reference_model_ref=reference_model_ref, reference_outputs=reference_outputs,
             policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
+            filters=filters, eligibility=eligibility,
         )
         return self.request_json(
             "POST", _network_selection_path(network_ref) + "/manifest", json=body,
@@ -2648,6 +2767,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> SpeciesObservationsResponse:
@@ -2678,6 +2798,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -2698,30 +2819,44 @@ class TCKDBClient:
         species_entry_kind: str | None = None,
         species_ref: str | None = None,
         species_entry_ref: str | None = None,
-        temperature_min: float | None = None,
-        temperature_max: float | None = None,
+        coverage_temperature_min_k: float | None = None,
+        coverage_temperature_max_k: float | None = None,
         model_kind: str | None = None,
         level_of_theory_id: int | None = None,
         level_of_theory_ref: str | None = None,
         software: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
+        scientific_origin: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
-        method: str = "POST",
+        method_http: str = "POST",
     ) -> ThermoSearchResponse:
         """``GET|POST /scientific/thermo/search`` — chemistry-first thermo search.
 
         Returns thermo records along with the resolved species/species_entry
         identity context, so callers don't have to chain
         ``search_species`` → ``get_species_thermo`` themselves. Defaults to
-        POST (mirrors ``search_reactions``); pass ``method="GET"`` for the
+        POST (mirrors ``search_reactions``); pass ``method_http='GET'`` for the
         query-string form. Phase C: ``species_ref``, ``species_entry_ref``,
         and ``level_of_theory_ref`` may be supplied as filter handles.
+
+
+        The provenance filters (``method``, ``basis``, ``software``, ``software_version``, ``workflow_tool``,
+        ``workflow_tool_version``, ``method_family``, ``dft_rung_min``, ``dft_rung_max``) are matched through ONE source
+        calculation.
         """
         body = {
             "smiles": smiles,
@@ -2734,21 +2869,30 @@ class TCKDBClient:
             "species_entry_kind": species_entry_kind,
             "species_ref": species_ref,
             "species_entry_ref": species_entry_ref,
-            "temperature_min": temperature_min,
-            "temperature_max": temperature_max,
+            "coverage_temperature_min_k": coverage_temperature_min_k,
+            "coverage_temperature_max_k": coverage_temperature_max_k,
             "model_kind": model_kind,
             "level_of_theory_id": level_of_theory_id,
             "level_of_theory_ref": level_of_theory_ref,
             "software": software,
+            "method": method,
+            "basis": basis,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
+            "scientific_origin": scientific_origin,
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
-        if method.upper() == "GET":
+        if method_http.upper() == "GET":
             return self.request_json(
                 "GET",
                 "/scientific/thermo/search",
@@ -2773,35 +2917,48 @@ class TCKDBClient:
         family: str | None = None,
         reaction_ref: str | None = None,
         reaction_entry_ref: str | None = None,
-        temperature_min: float | None = None,
-        temperature_max: float | None = None,
+        coverage_temperature_min_k: float | None = None,
+        coverage_temperature_max_k: float | None = None,
         pressure_bar: float | None = None,
         pressure: float | None = None,
         model_kind: str | None = None,
         level_of_theory_id: int | None = None,
         level_of_theory_ref: str | None = None,
         software: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
+        scientific_origin: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
-        method: str = "POST",
+        method_http: str = "POST",
     ) -> KineticsSearchResponse:
         """``GET|POST /scientific/kinetics/search`` — chemistry-first kinetics search.
 
         Returns kinetics records along with the resolved reaction/reaction_entry
         identity context. Defaults to POST because reactant/product SMILES
-        encode awkwardly in URL query strings; pass ``method="GET"`` for the
+        encode awkwardly in URL query strings; pass ``method_http='GET'`` for the
         repeated-query-param form. Non-TS-backed kinetics surface with null
         TS-chain provenance fields, exactly like the entry-id detail endpoint.
         ``pressure_bar`` is canonical; ``pressure`` is a deprecated alias.
         ``match`` means what it means on :meth:`search_reactions` — reaction
         identity here is resolved by that same service — and defaults
         server-side to ``"contains"``.
+
+        The provenance filters (``method``, ``basis``, ``software``, ``software_version``, ``workflow_tool``,
+        ``workflow_tool_version``, ``method_family``, ``dft_rung_min``, ``dft_rung_max``) are matched through ONE source
+        calculation.
         """
         body = {
             "reactants": reactants,
@@ -2811,23 +2968,32 @@ class TCKDBClient:
             "family": family,
             "reaction_ref": reaction_ref,
             "reaction_entry_ref": reaction_entry_ref,
-            "temperature_min": temperature_min,
-            "temperature_max": temperature_max,
+            "coverage_temperature_min_k": coverage_temperature_min_k,
+            "coverage_temperature_max_k": coverage_temperature_max_k,
             "pressure_bar": pressure_bar,
             "pressure": pressure,
             "model_kind": model_kind,
             "level_of_theory_id": level_of_theory_id,
             "level_of_theory_ref": level_of_theory_ref,
             "software": software,
+            "method": method,
+            "basis": basis,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
+            "scientific_origin": scientific_origin,
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
-        if method.upper() == "GET":
+        if method_http.upper() == "GET":
             return self.request_json(
                 "GET",
                 "/scientific/kinetics/search",
@@ -2864,6 +3030,9 @@ class TCKDBClient:
         basis: str | None = None,
         software: str | None = None,
         workflow_tool: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
         scientific_origin: str | None = None,
         calculation_quality: str | None = None,
         min_review_status: str | None = None,
@@ -2872,8 +3041,8 @@ class TCKDBClient:
         include_rejected_quality: bool | None = None,
         ranking: str | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: str = "POST",
@@ -2913,6 +3082,9 @@ class TCKDBClient:
             "basis": basis,
             "software": software,
             "workflow_tool": workflow_tool,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
             "scientific_origin": scientific_origin,
             "calculation_quality": calculation_quality,
             "min_review_status": min_review_status,
@@ -2921,8 +3093,8 @@ class TCKDBClient:
             "include_rejected_quality": include_rejected_quality,
             "ranking": ranking,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         if method_http.upper() == "GET":
@@ -3012,6 +3184,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3048,6 +3221,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3090,6 +3264,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> NetworkSearchResponse:
@@ -3144,6 +3319,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -3184,6 +3360,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3218,6 +3395,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3280,8 +3458,9 @@ class TCKDBClient:
         :param network_kinetics_ref_or_id: Integer id or ``nkin_…`` ref.
         :param temperature_k: One or more temperatures, K.
         :param pressure_bar: One or more pressures, bar.
-        :param profile: Read profile selecting which curated view of the
-            archive this read is answered from (see
+        :param profile: Read profile this read is answered under
+            (``curated`` applies the approved floor to the records a list,
+            search, browse, select or export returns and shows linked evidence badged; see
             ``backend/docs/specs/dataset_release_and_profiles.md``).
             Forwarded like every other typed scientific read method;
             omitted, the server default applies.
@@ -3347,8 +3526,9 @@ class TCKDBClient:
         :param network_ref_or_id: Integer id or ``net_…`` ref.
         :param temperature_k: One or more temperatures, K. Required.
         :param pressure_bar: One or more pressures, bar. Required.
-        :param profile: Read profile selecting which curated view of the
-            archive this read is answered from (see
+        :param profile: Read profile this read is answered under
+            (``curated`` applies the approved floor to the records a list,
+            search, browse, select or export returns and shows linked evidence badged; see
             ``backend/docs/specs/dataset_release_and_profiles.md``).
             Forwarded like every other typed scientific read method;
             omitted, the server default applies. Rides the query string,
@@ -3392,6 +3572,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3431,6 +3612,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3451,6 +3633,7 @@ class TCKDBClient:
         transition_state_entry_ref: str | None = None,
         declared_conformer_group_ref: str | None = None,
         model_kind: str | None = None,
+        scientific_origin: str | None = None,
         has_source_calculations: bool | None = None,
         has_freq_calculation: bool | None = None,
         has_rotor_scans: bool | None = None,
@@ -3466,6 +3649,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3487,6 +3671,7 @@ class TCKDBClient:
             "transition_state_entry_ref": transition_state_entry_ref,
             "declared_conformer_group_ref": declared_conformer_group_ref,
             "model_kind": model_kind,
+            "scientific_origin": scientific_origin,
             "has_source_calculations": has_source_calculations,
             "has_freq_calculation": has_freq_calculation,
             "has_rotor_scans": has_rotor_scans,
@@ -3502,6 +3687,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3534,6 +3720,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3561,6 +3748,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3600,6 +3788,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3634,6 +3823,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3652,12 +3842,14 @@ class TCKDBClient:
         query_inchi_key: str | None = None,
         mode: str | None = None,
         similarity_threshold: float | None = None,
+        isomeric: bool | None = None,
         min_review_status: str | None = None,
         include_rejected: bool | None = None,
         include_deprecated: bool | None = None,
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3670,6 +3862,11 @@ class TCKDBClient:
         rather than requiring the caller to already know what it wants.
         Defaults to POST because SMARTS is full of characters that
         round-trip badly through a query string.
+
+        A species is a constitution, so ``C/C=C/C`` and ``CC=CC`` find the
+        same species. ``isomeric=True`` (exact mode, ``query_smiles``) keeps
+        only the entries whose stereo descriptor is the one the query's
+        stereo marks name -- the E entries of 2-butene for ``C/C=C/C``.
         """
 
         body = {
@@ -3679,12 +3876,14 @@ class TCKDBClient:
             "query_inchi_key": query_inchi_key,
             "mode": mode,
             "similarity_threshold": similarity_threshold,
+            "isomeric": isomeric,
             "min_review_status": min_review_status,
             "include_rejected": include_rejected,
             "include_deprecated": include_deprecated,
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3704,6 +3903,8 @@ class TCKDBClient:
         selection_kind: str | None = None,
         has_selection: bool | None = None,
         assignment_scheme_ref: str | None = None,
+        wide_basin: bool | None = None,
+        min_span_deg: float | None = None,
         has_observations: bool | None = None,
         has_calculations: bool | None = None,
         has_geometries: bool | None = None,
@@ -3726,6 +3927,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3740,6 +3942,11 @@ class TCKDBClient:
         ``has_x=False`` matches groups whose coverage is incomplete. A
         group with no observations matches neither under
         ``"all_observations"``. Leave it ``None`` to keep the default.
+
+        ``wide_basin=True`` lists the groups whose optimised members are linked end to end but are not all within
+        tolerance of each other (reported for curation, never split); ``False`` lists those whose members all are. A
+        group with no optimised member matches neither. ``min_span_deg`` keeps groups whose largest torsion
+        difference between two optimised members is at least that many degrees. Neither orders the result.
         """
 
         body = {
@@ -3750,6 +3957,8 @@ class TCKDBClient:
             "selection_kind": selection_kind,
             "has_selection": has_selection,
             "assignment_scheme_ref": assignment_scheme_ref,
+            "wide_basin": wide_basin,
+            "min_span_deg": min_span_deg,
             "has_observations": has_observations,
             "has_calculations": has_calculations,
             "has_geometries": has_geometries,
@@ -3772,6 +3981,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3805,12 +4015,16 @@ class TCKDBClient:
         software_version: str | None = None,
         workflow_tool: str | None = None,
         workflow_tool_version: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
         min_review_status: str | None = None,
         include_rejected: bool | None = None,
         include_deprecated: bool | None = None,
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3844,12 +4058,16 @@ class TCKDBClient:
             "software_version": software_version,
             "workflow_tool": workflow_tool,
             "workflow_tool_version": workflow_tool_version,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
             "min_review_status": min_review_status,
             "include_rejected": include_rejected,
             "include_deprecated": include_deprecated,
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3880,6 +4098,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3905,6 +4124,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3935,6 +4155,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3960,6 +4181,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3978,6 +4200,9 @@ class TCKDBClient:
         basis: str | None = None,
         dispersion: str | None = None,
         solvent: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
         spin_treatment: str | None = None,
         has_correction_schemes: bool | None = None,
         has_frequency_scale_factors: bool | None = None,
@@ -3987,6 +4212,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -4006,6 +4232,9 @@ class TCKDBClient:
             "basis": basis,
             "dispersion": dispersion,
             "solvent": solvent,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
             "spin_treatment": spin_treatment,
             "has_correction_schemes": has_correction_schemes,
             "has_frequency_scale_factors": has_frequency_scale_factors,
@@ -4015,6 +4244,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -4033,6 +4263,9 @@ class TCKDBClient:
         basis: str | None = None,
         dispersion: str | None = None,
         solvent: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
         spin_treatment: str | None = None,
         has_correction_schemes: bool | None = None,
         has_frequency_scale_factors: bool | None = None,
@@ -4042,6 +4275,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> LevelOfTheorySearchResponse:
@@ -4072,6 +4306,9 @@ class TCKDBClient:
             "basis": basis,
             "dispersion": dispersion,
             "solvent": solvent,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
             "spin_treatment": spin_treatment,
             "has_correction_schemes": has_correction_schemes,
             "has_frequency_scale_factors": has_frequency_scale_factors,
@@ -4081,6 +4318,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -4408,7 +4646,7 @@ class TCKDBClient:
     def iter_species(self, **parameters: Any) -> Iterator[SpeciesRecord]:
         """Lazily yield every species record matching ``search_species``."""
 
-        return iter_paginated_records(self.search_species, parameters)
+        return iter_keyset_records(self.search_species, parameters)
 
     def iter_species_browse(self, **parameters: Any) -> Iterator[SpeciesRecord]:
         """Lazily yield every species record matching ``browse_species``.
@@ -4418,89 +4656,89 @@ class TCKDBClient:
         though the two yield the identical ``SpeciesRecord`` shape.
         """
 
-        return iter_paginated_records(self.browse_species, parameters)
+        return iter_keyset_records(self.browse_species, parameters)
 
     def iter_reactions(self, **parameters: Any) -> Iterator[ReactionRecord]:
         """Lazily yield every reaction record matching ``search_reactions``."""
 
-        return iter_paginated_records(self.search_reactions, parameters)
+        return iter_keyset_records(self.search_reactions, parameters)
 
     def iter_thermo(self, **parameters: Any) -> Iterator[ThermoRecord]:
         """Lazily yield every thermo record matching ``search_thermo``."""
 
-        return iter_paginated_records(self.search_thermo, parameters)
+        return iter_keyset_records(self.search_thermo, parameters)
 
     def iter_kinetics(self, **parameters: Any) -> Iterator[KineticsRecord]:
         """Lazily yield every kinetics record matching ``search_kinetics``."""
 
-        return iter_paginated_records(self.search_kinetics, parameters)
+        return iter_keyset_records(self.search_kinetics, parameters)
 
     def iter_species_calculations(
         self, **parameters: Any
     ) -> Iterator[SpeciesCalculationRecord]:
         """Lazily yield matching species-calculation records."""
 
-        return iter_paginated_records(self.search_species_calculations, parameters)
+        return iter_keyset_records(self.search_species_calculations, parameters)
 
     def iter_networks(self, **parameters: Any) -> Iterator[NetworkRecord]:
         """Lazily yield every network matching ``search_networks``."""
 
-        return iter_paginated_records(self.search_networks, parameters)
+        return iter_keyset_records(self.search_networks, parameters)
 
     def iter_network_solves(
         self, **parameters: Any
     ) -> Iterator[NetworkSolveRecord]:
         """Lazily yield network-solve records matching the supplied filters."""
 
-        return iter_paginated_records(self.search_network_solves, parameters)
+        return iter_keyset_records(self.search_network_solves, parameters)
 
     def iter_network_kinetics(
         self, **parameters: Any
     ) -> Iterator[NetworkKineticsRecord]:
         """Lazily yield PDep kinetics records matching the supplied filters."""
 
-        return iter_paginated_records(self.search_network_kinetics, parameters)
+        return iter_keyset_records(self.search_network_kinetics, parameters)
 
     def iter_statmech(self, **parameters: Any) -> Iterator[StatmechRecord]:
         """Lazily yield statmech records matching the supplied filters."""
 
-        return iter_paginated_records(self.search_statmech, parameters)
+        return iter_keyset_records(self.search_statmech, parameters)
 
     def iter_transport(self, **parameters: Any) -> Iterator[TransportRecord]:
         """Lazily yield transport records matching the supplied filters."""
 
-        return iter_paginated_records(self.search_transport, parameters)
+        return iter_keyset_records(self.search_transport, parameters)
 
     def iter_artifacts(self, **parameters: Any) -> Iterator[ArtifactRecord]:
         """Lazily yield artifact metadata records matching the filters."""
 
-        return iter_paginated_records(self.search_artifacts, parameters)
+        return iter_keyset_records(self.search_artifacts, parameters)
 
     def iter_species_structures(
         self, **parameters: Any
     ) -> Iterator[SpeciesStructureRecord]:
         """Lazily yield every structure-search hit matching the filters."""
 
-        return iter_paginated_records(self.search_species_structures, parameters)
+        return iter_keyset_records(self.search_species_structures, parameters)
 
     def iter_conformers(self, **parameters: Any) -> Iterator[ConformerRecord]:
         """Lazily yield conformer groups matching the supplied filters."""
 
-        return iter_paginated_records(self.search_conformers, parameters)
+        return iter_keyset_records(self.search_conformers, parameters)
 
     def iter_transition_states(
         self, **parameters: Any
     ) -> Iterator[TransitionStateEntryRecord]:
         """Lazily yield transition-state entries matching the filters."""
 
-        return iter_paginated_records(self.search_transition_states, parameters)
+        return iter_keyset_records(self.search_transition_states, parameters)
 
     def iter_energy_correction_schemes(
         self, **parameters: Any
     ) -> Iterator[EnergyCorrectionSchemeRecord]:
         """Lazily yield energy-correction schemes matching the filters."""
 
-        return iter_paginated_records(
+        return iter_keyset_records(
             self.search_energy_correction_schemes, parameters
         )
 
@@ -4509,7 +4747,7 @@ class TCKDBClient:
     ) -> Iterator[FrequencyScaleFactorRecord]:
         """Lazily yield frequency scale factors matching the filters."""
 
-        return iter_paginated_records(
+        return iter_keyset_records(
             self.search_frequency_scale_factors, parameters
         )
 
@@ -4518,7 +4756,7 @@ class TCKDBClient:
     ) -> Iterator[LevelOfTheoryRecord]:
         """Lazily yield levels of theory matching the filters."""
 
-        return iter_paginated_records(self.search_levels_of_theory, parameters)
+        return iter_keyset_records(self.search_levels_of_theory, parameters)
 
     def iter_literature_records(
         self, literature_ref_or_id: int | str, **parameters: Any
@@ -4534,7 +4772,7 @@ class TCKDBClient:
                 literature_ref_or_id, **page_parameters
             )
 
-        return iter_paginated_records(fetch_page, parameters)
+        return iter_keyset_records(fetch_page, parameters)
 
     # Keyset iterators. These follow ``next_cursor`` rather than counting
     # offsets, so a dataset build over a corpus that is still being written
@@ -4837,6 +5075,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> LiteratureRecordsResponse:
@@ -4853,6 +5092,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -4872,6 +5112,7 @@ class TCKDBClient:
         include: list[str] | None,
         sort: str | None,
         offset: int | None,
+        cursor: str | None,
         limit: int | None,
         profile: str | None,
     ) -> Any:
@@ -4882,6 +5123,7 @@ class TCKDBClient:
             "include": include,
             "sort": sort,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -4900,6 +5142,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         sort: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> Any:
@@ -4916,6 +5159,7 @@ class TCKDBClient:
             include=include,
             sort=sort,
             offset=offset,
+            cursor=cursor,
             limit=limit,
             profile=profile,
         )
@@ -4928,6 +5172,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         sort: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> Any:
@@ -4940,6 +5185,7 @@ class TCKDBClient:
             include=include,
             sort=sort,
             offset=offset,
+            cursor=cursor,
             limit=limit,
             profile=profile,
         )
@@ -4952,6 +5198,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         sort: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> Any:
@@ -4964,6 +5211,7 @@ class TCKDBClient:
             include=include,
             sort=sort,
             offset=offset,
+            cursor=cursor,
             limit=limit,
             profile=profile,
         )
@@ -5126,15 +5374,14 @@ class TCKDBClient:
         reaction_family: str | None = None,
         all: bool | None = None,
         min_review_status: str | None = None,
-        collapse: str | None = None,
-        selection_policy: str | None = None,
         profile: str | None = None,
     ) -> Iterator[JSONDict]:
         """``GET /scientific/export/ndjson`` — one JSON object per line.
 
-        Streams the composed scientific document for each seed record.
-        Returns an iterator so a large export does not have to be held in
-        memory all at once.
+        Streams the composed scientific document for each seed record: every qualifying thermo, transport and
+        kinetics record of each species and reaction, in display order. Nothing is picked (there is no
+        ``selection_policy``; the server refuses it). Returns an iterator so a large export does not have to be
+        held in memory all at once.
         """
 
         params = {
@@ -5143,8 +5390,6 @@ class TCKDBClient:
             "reaction_family": reaction_family,
             "all": all,
             "min_review_status": min_review_status,
-            "collapse": collapse,
-            "selection_policy": selection_policy,
             "profile": profile,
         }
         return self._export_ndjson("/scientific/export/ndjson", params)
@@ -5214,7 +5459,9 @@ class TCKDBClient:
         seed: Mapping[str, Any],
         *,
         min_review_status: str | None = None,
-        selection_policy: str | None = None,
+        thermo_refs: Sequence[str] | None = None,
+        transport_refs: Sequence[str] | None = None,
+        kinetics_refs: Sequence[str] | None = None,
         energy_units: str | None = None,
         include_transport: bool | None = None,
         naming_policy: str | None = None,
@@ -5225,6 +5472,11 @@ class TCKDBClient:
         ``seed`` selects what goes in the mechanism (explicit refs, a
         family, or everything); the remaining arguments control how it is
         rendered. Returns the archive bytes.
+
+        Chemkin holds exactly one thermo, transport and kinetics record per species or reaction, and the server never
+        picks one. Where a species or reaction has several candidates, name the record in ``thermo_refs`` /
+        ``transport_refs`` / ``kinetics_refs`` (typically taken from the ``select_*`` methods); otherwise the server
+        refuses with 422 ``export_selection_ambiguous``, naming every ambiguous subject and its candidate refs.
         """
 
         if not isinstance(seed, Mapping):
@@ -5235,7 +5487,9 @@ class TCKDBClient:
         body = {
             "seed": dict(seed),
             "min_review_status": min_review_status,
-            "selection_policy": selection_policy,
+            "thermo_refs": list(thermo_refs) if thermo_refs is not None else None,
+            "transport_refs": list(transport_refs) if transport_refs is not None else None,
+            "kinetics_refs": list(kinetics_refs) if kinetics_refs is not None else None,
             "energy_units": energy_units,
             "include_transport": include_transport,
             "naming_policy": naming_policy,

@@ -21,6 +21,7 @@ from tckdb_schemas.fragments.version import VersionRef
 from app.api.deps import get_db, get_write_db, require_admin, require_curator_or_admin
 from app.api.errors import not_found
 from app.api.routes._pagination import PaginatedResponse
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     AppUserRole,
@@ -34,6 +35,7 @@ from app.db.models.energy_correction import EnergyCorrectionScheme
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 from app.db.models.submission import Submission
 from app.schemas.fragments.refs import SoftwareReleaseRef, WorkflowToolReleaseRef
+from app.schemas.reads.scientific_assessment import MadeUnder
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.services.artifact_storage_capacity import (
@@ -57,6 +59,7 @@ from app.services.machine_review import (
     run_admin_fake_machine_review,
     start_curator_task_review,
 )
+from app.services.machine_review.made_under import machine_review_made_under
 from app.services.machine_review.run import run_machine_review_for_submission
 from app.services.observation_identity_attach import attach_observation_identity
 from app.services.record_containers import (
@@ -74,7 +77,7 @@ from app.services.scientific_read.handles import (
 )
 from app.services.software_resolution import resolve_software_release_ref
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 
 class RoleChangeRequest(BaseModel):
@@ -574,6 +577,9 @@ class AdminCuratorTaskResponse(BaseModel):
     resolved_at: datetime | None = None
     resolved_by: int | None = None
     resolution_note: str | None = None
+    #: The prompt and rubric the stored machine review this task came from was made under, read against the registry by
+    #: the currency rule. ``null`` when that review is not stored. Stamps only: ``inputs_checked`` is false.
+    made_under: MadeUnder | None = None
 
 
 class AdminCuratorTaskBuildResponse(BaseModel):
@@ -628,6 +634,7 @@ def _to_curator_task_response(
     task: MachineReviewCuratorTask,
     record_public_ref: str | None,
     container: RecordContainer | None,
+    made_under: MadeUnder | None = None,
 ) -> AdminCuratorTaskResponse:
     """Pure mapper: the ref and the container are supplied, never looked up here.
 
@@ -656,6 +663,7 @@ def _to_curator_task_response(
         resolved_at=task.resolved_at,
         resolved_by=task.resolved_by,
         resolution_note=task.resolution_note,
+        made_under=made_under,
     )
 
 
@@ -672,6 +680,7 @@ def _curator_task_response(
         resolve_record_container(
             session, record_type=task.record_type, record_id=task.record_id
         ),
+        machine_review_made_under(session, [task]).get(task.id),
     )
 
 
@@ -745,12 +754,14 @@ def list_curator_tasks(
     keys = [(t.record_type, t.record_id) for t in tasks]
     public_refs = resolve_record_public_refs(session, keys)
     containers = resolve_record_containers(session, keys)
+    made_under = machine_review_made_under(session, tasks)
     return PaginatedResponse(
         items=[
             _to_curator_task_response(
                 t,
                 public_refs.get((t.record_type, t.record_id)),
                 containers.get((t.record_type, t.record_id)),
+                made_under.get(t.id),
             )
             for t in tasks
         ],

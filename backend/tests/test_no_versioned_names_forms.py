@@ -3,8 +3,7 @@
 ``tests/test_no_versioned_names.py`` holds the guard and its self-tests. This
 file holds the three things a review found it had wrong or thin:
 
-* a rule id such as ``K-XYG3-B3LYP-BARRIER`` is a stable scientific identifier
-  and a perfectly good ``VersionRef`` name; the name grammar must take it;
+* a scientific identifier such as ``K-XYG3-B3LYP-BARRIER`` is not a version, so the detector must leave it alone;
 * chemistry must never be read as a version -- ``cc-pV5Z`` is a Dunning basis,
   not version 5 of ``cc-p``;
 * a version can be fused into a name by an f-string, ``str.format``, ``%`` or
@@ -25,57 +24,19 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml  # type: ignore[import-untyped]
-from tckdb_schemas.fragments.version import CAMEL_VERSION, VersionRef, embeds_version
+from tckdb_schemas.fragments.version import CAMEL_VERSION, embeds_version
 
 from app.chemistry.dispersion_names import DISPERSION_ALIASES
 from app.chemistry.method_names import NAME_ALIASES, SUFFIX_ALIASES
-from app.versioning import VersionRegistry
 from tests.versioned_names_scan import (
     REPO_ROOT,
     is_versioned_identifier,
     is_versioned_string,
     scan_frontend,
     scan_source,
-    scan_yaml,
 )
 
 CHEMISTRY_ROOT = REPO_ROOT / "backend" / "app" / "chemistry"
-
-
-def _rule_ids_in_manifests() -> set[str]:
-    """Every ``rule_id`` in the rule-manifest YAMLs, read from the files."""
-    found: set[str] = set()
-
-    def walk(node: object) -> None:
-        if isinstance(node, dict):
-            for key, value in node.items():
-                if key == "rule_id" and isinstance(value, str):
-                    found.add(value)
-                else:
-                    walk(value)
-        elif isinstance(node, list):
-            for item in node:
-                walk(item)
-
-    for file in sorted(CHEMISTRY_ROOT.rglob("*.yaml")):
-        for document in yaml.safe_load_all(file.read_text(encoding="utf-8")):
-            walk(document)
-    return found
-
-
-def test_every_real_rule_id_is_a_valid_version_name_and_registers() -> None:
-    ids = _rule_ids_in_manifests()
-    assert {"E1", "K-XYG3-B3LYP-BARRIER", "N-JM-CH4-RATE", "S-ACONFL-DLPNO-F12-VERYTIGHT"} <= ids
-    assert len(ids) >= 10, f"only {len(ids)} rule ids read; the manifests were not reached"
-    registry: VersionRegistry[str] = VersionRegistry("rules")
-    for rule_id in sorted(ids):
-        assert not embeds_version(rule_id), rule_id
-        assert not is_versioned_string(rule_id) and not is_versioned_identifier(rule_id), rule_id
-        assert VersionRef(name=rule_id, version=1).name == rule_id
-        registry.register(rule_id, 1, rule_id, current=True)
-    registry.validate()
-    assert {ref.name for ref in registry.refs()} == ids
 
 
 #: Chemistry spellings the detector must never read as a version.
@@ -150,7 +111,7 @@ def test_the_lowercase_glued_pattern_is_not_greedy_about_vv10() -> None:
     assert LOWER_GLUED_VERSION.search("rev2") is None
 
 
-@pytest.mark.parametrize("scanner", ["scan_code", "scan_names", "scan_openapi", "scan_yaml", "scan_frontend"])
+@pytest.mark.parametrize("scanner", ["scan_code", "scan_names", "scan_openapi", "scan_frontend"])
 def test_scan_all_includes_every_scanner(scanner: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """A scanner with no findings today must still be wired in: it is the one that catches tomorrow's."""
     from tests import versioned_names_scan as module
@@ -211,19 +172,6 @@ def test_the_detector_catches_the_other_building_forms(source: str, kind: str) -
 )
 def test_the_new_forms_leave_ordinary_code_alone(source: str) -> None:
     assert _kinds(source) == []
-
-
-def test_the_detector_catches_a_versioned_yaml_value(tmp_path: Path) -> None:
-    (tmp_path / "rules.yaml").write_text(
-        "rule_id: thing_v2\n"
-        "nested:\n"
-        "  - manifest: tool/0.1.0\n"
-        "  - basis: cc-pV5Z\n"
-        "  - id: E1\n"
-        "  - label: K-XYG3-B3LYP-BARRIER\n"
-    )
-    found = sorted(f.token for f in scan_yaml(roots=(tmp_path,), repo_root=tmp_path))
-    assert found == ["thing_v2", "tool/0.1.0"]
 
 
 def test_the_detector_catches_a_versioned_frontend_literal_and_identifier(tmp_path: Path) -> None:
