@@ -71,3 +71,18 @@ export default defineConfig([
   },
 ])
 ```
+
+## Settings
+
+- `VITE_API_BASE_URL` (build time): base URL of the API when it is not on the same origin.
+- `/site-config.json` (run time, optional): an operator-supplied file, not part of the image. It names the example record on the home page:
+
+  ```json
+  {"homeExampleRef": "spe_..."}
+  ```
+
+  The value is a molecule entry (`spe_...`) or reaction entry (`rxe_...`) ref. The site editors choose it; it is not a recommendation. When the file is missing, is not JSON, does not match this shape, or names a record the archive does not return under the current profile, the home page shows a "Browse molecules" link instead.
+  - Development: create `frontend/public/site-config.json` (gitignored; never copied into the image).
+  - Deployment: `scripts/ops/tckdb_frontend_deploy.sh` bind-mounts the file read-only at `/usr/share/nginx/html/site-config.json`. The path is `TCKDB_FRONTEND_SITE_CONFIG`, else `.site-config.json` in the repo checkout (gitignored), when that file exists, so a routine redeploy keeps the example. With neither, nothing is mounted and the server answers 404 for that path.
+  - The file must be a regular file (no symlink, no `,` or `:` in its path) and readable by others (`chmod o+r`; nginx runs as uid 101). The script validates it on the host and again as served after the health check, and never prints it.
+  - After editing the file, redeploy or run `docker restart tckdb-frontend`: a single-file bind mount keeps the old file until the container restarts.

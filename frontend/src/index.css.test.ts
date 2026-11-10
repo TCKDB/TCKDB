@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest"
 // under `src/` (no `"node"` entry in `tsconfig.app.json`'s `types`).
 import css from "./index.css?raw"
 import shellCss from "./app-shell.css?raw"
+import homeCss from "./home.css?raw"
 
 /**
  * `.archive-shell` (the top-level wrapper in `AppShell.tsx`, around
@@ -82,11 +83,22 @@ describe(".archive-shell > main (the flexible child that absorbs slack)", () => 
 // removed -- every rule below pins one piece of that so a later edit that
 // quietly reintroduces a literal size (or the duplicate override) fails
 // here instead of shipping unnoticed.
-describe(".archive-hero h1 -- display-1, the site's one true display headline", () => {
+describe(".home-hero h1 -- display-1, the site's one true display headline", () => {
     it("uses var(--type-display-1-font), not a literal clamp", () => {
-        const rule = extractRule(css, ".archive-hero h1")
+        const rule = extractRule(homeCss, ".home-hero h1")
         expect(rule).toMatch(/font:\s*var\(--type-display-1-font\)/)
         expect(rule).not.toMatch(/font-size:\s*clamp/)
+    })
+})
+
+describe(".home-hero h1 at every width", () => {
+    it("takes its size from a named display step in each rule, never a literal size", () => {
+        const rules = [...stripComments(homeCss).matchAll(/\.home-hero h1\s*\{([^}]*)\}/g)].map((match) => match[1])
+        expect(rules.length).toBeGreaterThanOrEqual(2)
+        for (const rule of rules) {
+            expect(rule).not.toMatch(/font-size:/)
+            if (/font:/.test(rule)) expect(rule).toMatch(/font:\s*var\(--type-display-[12]-font\)/)
+        }
     })
 })
 
@@ -108,18 +120,18 @@ describe(".record-placeholder h1 -- display-2, one step down from the hero", () 
 // override -- one of three near-identical bespoke "serif prose lede"
 // declarations across the site (with `.browse-intro`/`.evidence-linkage-
 // story`). Now the named `--type-lede` step (design-system.css).
-describe(".tagline -- the one editorial intro, the named --type-lede step", () => {
+describe(".home-lede -- the one editorial intro, the named --type-lede step", () => {
     it("uses var(--type-lede-font) capped at --measure-prose, with no local font-family override", () => {
-        const rule = extractRule(css, ".tagline")
+        const rule = extractRule(homeCss, ".home-lede")
         expect(rule).toMatch(/font:\s*var\(--type-lede-font\)/)
         expect(rule).toMatch(/max-width:\s*var\(--measure-prose\)/)
         expect(rule).not.toMatch(/font-family:\s*var\(--serif\)/)
     })
 })
 
-describe(".accession-rail -- the mono rail, --type-label", () => {
-    it("uses var(--type-label-font), not its own one-off .66rem/.1em pair", () => {
-        const rule = extractRule(css, ".accession-rail")
+describe(".home-counts dt -- the count label, --type-label", () => {
+    it("uses var(--type-label-font), not its own one-off size and tracking", () => {
+        const rule = extractRule(homeCss, ".home-counts dt")
         expect(rule).toMatch(/font:\s*var\(--type-label-font\)/)
         expect(rule).toMatch(/letter-spacing:\s*var\(--type-label-tracking\)/)
     })
@@ -134,9 +146,9 @@ describe(".search-row input/button -- --type-ui", () => {
     })
 })
 
-describe(".destination -- box styling comes from the shared .card primitive", () => {
-    it("no longer declares its own border/border-radius/background (only the flex layout .card doesn't supply)", () => {
-        const rule = extractRule(css, ".destination")
+describe(".home-card -- box styling comes from the shared .card primitive", () => {
+    it("declares no border/border-radius/background of its own (only the flex layout .card doesn't supply)", () => {
+        const rule = extractRule(homeCss, ".card.home-card")
         expect(rule).not.toMatch(/border:/)
         expect(rule).not.toMatch(/border-radius:/)
         expect(rule).not.toMatch(/background:/)
@@ -144,14 +156,14 @@ describe(".destination -- box styling comes from the shared .card primitive", ()
     })
 })
 
-describe(".destination h2/p -- heading-2 serif title, --type-body copy", () => {
+describe(".home-card h3/p -- heading-2 title, --type-body copy", () => {
     it("the title uses var(--type-heading-2-font)", () => {
-        const rule = extractRule(css, ".destination h2")
+        const rule = extractRule(homeCss, ".home-card h3")
         expect(rule).toMatch(/font:\s*var\(--type-heading-2-font\)/)
     })
 
     it("the copy uses var(--type-body-font)", () => {
-        const rule = extractRule(css, ".destination p")
+        const rule = extractRule(homeCss, ".home-card p")
         expect(rule).toMatch(/font:\s*var\(--type-body-font\)/)
     })
 })
@@ -179,7 +191,7 @@ describe(".record-placeholder p:last-child -- body copy under the shared prose m
 // breadcrumbs) carried five more off-scale sizes -- 13.12px/12.16px/13.6px/
 // 11px/11.52px -- none matching a named type-scale step. Each maps onto a
 // named step now; this locks the mapping so a future one-off size cannot
-// silently creep back in. `.destination`/`.archive-footer`/`.search-help`
+// silently creep back in. `.home-card`/`.archive-footer`/`.search-help`
 // were ALSO independently flagged by an earlier "record-page residuals"
 // re-review pass and fixed on `main` before this branch rebased onto it --
 // those three are re-asserted here (matching the values `main` landed,
@@ -222,9 +234,9 @@ describe("site chrome maps onto the named type scale, not bespoke sizes (item 10
     // original's own unweighted `.7rem` rule) before this branch rebased
     // -- kept as `main` left it rather than re-bolding to
     // --type-label-strong.
-    it(".destination > span:last-child uses --type-label, not a bare .7rem", () => {
-        const rule = extractRule(css, ".destination > span:last-child")
-        expect(rule).toMatch(/font:\s*var\(--type-label-font\)/)
+    it(".home-card .home-card-count uses --type-data, not a bare size", () => {
+        const rule = extractRule(homeCss, ".home-card .home-card-count")
+        expect(rule).toMatch(/font:\s*var\(--type-data-font\)/)
         expect(rule).not.toMatch(/font:\s*\.7rem/)
     })
 })
@@ -255,8 +267,8 @@ describe("home page own sizes map onto the named type scale (item 13)", () => {
         expect(rule).not.toMatch(/\.75rem/)
     })
 
-    it(".destination h2 stays at --type-heading-2 (a card title among siblings, not a page section heading)", () => {
-        const rule = extractRule(css, ".destination h2")
+    it(".home-card h3 stays at --type-heading-2 (a card title among siblings, not a page section heading)", () => {
+        const rule = extractRule(homeCss, ".home-card h3")
         expect(rule).toMatch(/font:\s*var\(--type-heading-2-font\)/)
     })
 })

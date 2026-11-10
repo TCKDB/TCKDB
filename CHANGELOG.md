@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Home page with counts, browse cards and an example record (2026-11-11)
+
+- **Behaviour:** the home page has a headline and one-line description, the exact-identifier search with "Try" links that run it, a "See an example" link, a strip of counts read from the archive (molecules, reaction entries, levels of theory; a count whose read fails is left out), three browse cards, a "How to read a value" box, and an example record. The example is the record named by the operator's `/site-config.json` (`{"homeExampleRef": "spe_..."}`, a molecule or reaction entry ref), read at run time; a molecule shows a compact numbers table. When the file is missing, malformed, or names a record the archive does not return under the current profile, a "Browse molecules" link is shown instead.
+- **Operator file:** `site-config.json` is an optional file the operator mounts, not a build variable; `tckdb_frontend_deploy.sh` mounts it read-only from `TCKDB_FRONTEND_SITE_CONFIG`, else a gitignored `.site-config.json` in the checkout when present; edits need a redeploy or `docker restart`. The image never contains it, and the server answers 404 when it is absent.
+- **Schema and migration:** none.
+
 ## Molecule page: versions and all values (Unreleased)
 
 - **Behaviour:** the molecule page (`/species/:ref`) opens with breadcrumbs, a lede built from codes and a map of its versions. "Versions of this molecule" lists every version with what it holds and its review status. "All values for this molecule" lists every thermochemistry and statistical mechanics record across all versions, each naming its version, with its values, levels of theory, programs and review status, in the order the archive served the lists (stated on the page). Links and buttons on the numbers tables are at least 44px high on phones.

@@ -12,6 +12,16 @@
 #   tckdb_frontend_deploy.sh sha-<40-char-commit>
 #   tckdb_frontend_deploy.sh --check
 #
+# Optional site config: a JSON file such as {"homeExampleRef": "spe_..."}, bind
+# mounted read-only as /usr/share/nginx/html/site-config.json. The path is
+# TCKDB_FRONTEND_SITE_CONFIG, else <repo checkout>/.site-config.json (gitignored)
+# when that file exists, so a routine redeploy keeps the example. With neither,
+# the site serves no such file and the home page shows no example record.
+# The file must be a regular file readable by others (nginx runs as uid 101) and
+# its homeExampleRef must be a spe_ or rxe_ ref. It is validated on the host
+# before deploying and again as served after the health check; its contents are
+# never printed. Edits to the file need a redeploy or `docker restart`.
+#
 # Only sha tags are accepted because they identify the exact frontend source
 # revision. This avoids a UI deployment that cannot answer which bundle it
 # serves. The script never reads or modifies .env.pi.
@@ -25,6 +35,11 @@ PORT="${TCKDB_FRONTEND_PORT:-8011}"
 LOCK_FILE="${TCKDB_FRONTEND_LOCK_FILE:-/tmp/tckdb-frontend-deploy.lock}"
 # Health wait: probe about once a second for ~30 s while the container starts.
 HEALTH_ATTEMPTS="${TCKDB_FRONTEND_HEALTH_ATTEMPTS:-30}"
+REPO_ROOT="$(CDPATH= cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../../.." && pwd -P)"
+SITE_CONFIG="${TCKDB_FRONTEND_SITE_CONFIG:-}"
+if [[ -z "$SITE_CONFIG" && -f "$REPO_ROOT/.site-config.json" ]]; then
+    SITE_CONFIG="$REPO_ROOT/.site-config.json"
+fi
 HAS_PREVIOUS=false
 PREVIOUS_CONTAINER=""
 INCUMBENT_ID=""
@@ -35,6 +50,37 @@ die() { echo "error: $*" >&2; exit 1; }
 # Validate before anything mutates: a typo here must not cost a live outage.
 [[ "$HEALTH_ATTEMPTS" =~ ^[1-9][0-9]{0,2}$ ]] \
     || die "TCKDB_FRONTEND_HEALTH_ATTEMPTS must be an integer 1-999"
+
+# Reads a site config on stdin; succeeds only for an object whose homeExampleRef is a spe_ or rxe_ ref.
+# Prints nothing.
+valid_site_config() {
+    if command -v jq >/dev/null 2>&1; then
+        jq -e '(.homeExampleRef | type == "string") and (.homeExampleRef | test("^(spe|rxe)_[a-z2-7]{26}$"))' >/dev/null 2>&1
+    else
+        python3 -c 'import json,re,sys
+d=json.load(sys.stdin)
+sys.exit(0 if isinstance(d,dict) and isinstance(d.get("homeExampleRef"),str) and re.fullmatch(r"(spe|rxe)_[a-z2-7]{26}",d["homeExampleRef"]) else 1)' >/dev/null 2>&1
+    fi
+}
+
+# With a config file in play a JSON validator is required; without one the deploy needs neither.
+if [[ -n "$SITE_CONFIG" ]] && ! command -v jq >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
+    die "a site config is set but no JSON validator is installed; install jq or python3"
+fi
+
+# A path must be a regular file (not a directory, which Docker would create and mount as a
+# directory, and not a symlink), absolute, free of characters that split a mount option,
+# readable by others, and valid. Checked before anything mutates.
+if [[ -n "$SITE_CONFIG" ]]; then
+    [[ "$SITE_CONFIG" = /* ]] || die "the site config path must be absolute"
+    [[ "$SITE_CONFIG" != *[,:]* ]] || die "the site config path must not contain ',' or ':'"
+    [[ -f "$SITE_CONFIG" && ! -L "$SITE_CONFIG" ]] || die "the site config must be a regular file that exists"
+    mode="$(stat -c '%a' "$SITE_CONFIG")"
+    (( (8#$mode & 8#004) != 0 )) \
+        || die "the site config is not readable by others (mode $mode); nginx runs as uid 101. Run: chmod o+r <file>"
+    valid_site_config < "$SITE_CONFIG" \
+        || die 'the site config must be JSON with a "homeExampleRef" that is a spe_ or rxe_ ref'
+fi
 
 running_image() {
     docker inspect "$CONTAINER" --format '{{.Config.Image}}' 2>/dev/null || echo "(not running as a container)"
@@ -111,7 +157,9 @@ rollback_after_interruption() {
 # kept in LAST_FAILURE and reported only if the whole wait window is exhausted.
 verify_frontend() {
     local body rc path
-    for path in / /species/CH3 /api/v1/status; do
+    local paths=(/ /species/CH3 /api/v1/status)
+    [[ -n "$SITE_CONFIG" ]] && paths+=(/site-config.json)
+    for path in "${paths[@]}"; do
         # Bounded: a container that accepts the connection but never answers
         # must not hang the loop, or the ~30 s window is not a real bound.
         rc=0
@@ -124,6 +172,10 @@ verify_frontend() {
             /api/v1/status)
                 jq -e '.status == "ok" and (.degraded | type == "array") and .degraded == []' <<<"$body" >/dev/null \
                     || { LAST_FAILURE="GET ${path} answered but was not status=ok with nothing degraded"; return 1; }
+                ;;
+            /site-config.json)
+                printf '%s' "$body" | valid_site_config \
+                    || { LAST_FAILURE="GET ${path} did not serve a valid site config"; return 1; }
                 ;;
             *)
                 grep -q '<div id="root">' <<<"$body" \
@@ -199,11 +251,13 @@ fi
 
 DEPLOY_PHASE="candidate_starting"
 
-if ! docker run -d --name "$CONTAINER" \
-    --network "$NETWORK" \
-    -p "127.0.0.1:${PORT}:8080" \
-    --restart unless-stopped \
-    "$IMAGE" >/dev/null; then
+RUN_ARGS=(--network "$NETWORK" -p "127.0.0.1:${PORT}:8080" --restart unless-stopped)
+if [[ -n "$SITE_CONFIG" ]]; then
+    RUN_ARGS+=(--mount "type=bind,source=${SITE_CONFIG},target=/usr/share/nginx/html/site-config.json,readonly")
+    echo "    site config: mounted read-only"
+fi
+
+if ! docker run -d --name "$CONTAINER" "${RUN_ARGS[@]}" "$IMAGE" >/dev/null; then
     if "$HAS_PREVIOUS"; then
         restore_previous "could not start candidate $IMAGE" || true
     else
@@ -234,7 +288,11 @@ done
 echo "error: frontend not healthy after ${HEALTH_ATTEMPTS} attempts (~${HEALTH_ATTEMPTS}s): $LAST_FAILURE" >&2
 docker logs "$CONTAINER" 2>&1 | tail -50 >&2 || true
 if "$HAS_PREVIOUS"; then
-    restore_previous "candidate $IMAGE failed SPA/API health verification" || true
+    if [[ "$LAST_FAILURE" == *site-config.json* ]]; then
+        restore_previous "candidate $IMAGE served an invalid or missing /site-config.json" || true
+    else
+        restore_previous "candidate $IMAGE failed SPA/API health verification" || true
+    fi
 else
     docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
     echo "error: first-install candidate $IMAGE failed health verification; NPM remains on the API upstream" >&2

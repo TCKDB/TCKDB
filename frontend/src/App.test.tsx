@@ -17,7 +17,14 @@ const entryRef = "spe_cdefg234567cdefg234567abcd"
 // default keeps every test in this file signed-out (the ordinary case
 // for these public-archive tests) without each one having to know that
 // probe exists.
-const server = setupServer(http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })))
+// The home page reads one row of each index for its counts.
+const homeCountHandlers = ["species/browse", "reactions/browse", "level-of-theories/browse"].map((path) =>
+    http.get(`/api/v1/scientific/${path}`, () => HttpResponse.json({ records: [], pagination: { offset: 0, limit: 1, returned: 0, total: 0 } })))
+const server = setupServer(
+    http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })),
+    http.get("/site-config.json", () => new HttpResponse(null, { status: 404 })),
+    ...homeCountHandlers,
+)
 
 const emptyValueSearches = [
     http.get("/api/v1/scientific/thermo/search", () => HttpResponse.json({ records: [], pagination: { offset: 0, limit: 50, returned: 0, total: 0 } })),
@@ -70,10 +77,10 @@ function emptyBrowseEnvelope() {
 describe("public archive shell", () => {
     it("renders visible keyboard navigation and excludes the admin diagnostic route", async () => {
         const user = userEvent.setup(); render(<App />)
-        expect(await screen.findByRole("heading", { name: "TCKDB" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Thermochemistry and kinetics" })).toBeVisible()
         await user.tab(); expect(screen.getByText("Skip to content")).toHaveFocus()
         await user.tab(); expect(screen.getByRole("link", { name: "TCKDB home" })).toHaveFocus()
-        await user.tab(); expect(screen.getByRole("link", { name: "Molecules" })).toHaveFocus()
+        await user.tab(); expect(screen.getAllByRole("link", { name: "Molecules" })[0]).toHaveFocus()
         expect(screen.queryByText(/Machine-Review Inspection/)).not.toBeInTheDocument()
     })
 
@@ -82,7 +89,7 @@ describe("public archive shell", () => {
             records: [{ species_ref: speciesRef, formula: "Cl", canonical_smiles: "[Cl]", charge: 0, multiplicity: 2, entries: [] }],
         })))
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species identifier"), "Cl")
+        await user.type(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), "Cl")
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("group", { name: /Search “Cl” as/ })).toBeVisible()
         await user.click(screen.getByRole("button", { name: "Formula" }))
@@ -100,7 +107,7 @@ describe("public archive shell", () => {
             records: [{ species_ref: speciesRef, formula: "H2O", canonical_smiles: "O", charge: 0, multiplicity: 1, entries: [] }],
         })))
         const user = userEvent.setup(); render(<StrictMode><App /></StrictMode>)
-        await user.type(await screen.findByLabelText("Exact species identifier"), "H2O")
+        await user.type(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), "H2O")
         const button = screen.getByRole("button", { name: "Search" })
         await user.click(button)
         expect(await screen.findByRole("link", { name: /^O \(H2O\)/})).toBeVisible()
@@ -113,7 +120,7 @@ describe("public archive shell", () => {
             HttpResponse.json({ records: [overviewSpecies()] })
         )), ...emptyValueSearches)
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species identifier"), speciesRef)
+        await user.type(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), speciesRef)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
         expect(screen.getByText(speciesRef)).toBeVisible()
@@ -149,7 +156,7 @@ describe("public archive shell", () => {
             http.get("/api/v1/scientific/conformers/search", () => HttpResponse.json({ records: [] })),
         )
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species identifier"), entryRef)
+        await user.type(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), entryRef)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "O" })).toBeVisible()
         // The entry's OWN ref is visible at rest, first in the identity
@@ -179,7 +186,7 @@ describe("public archive shell", () => {
             ] })
         }))
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species identifier"), "H2O")
+        await user.type(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), "H2O")
         await user.click(screen.getByRole("button", { name: "Search" }))
         // Each row reads by its own chemistry, not by an interchangeable ref:
         // the two matches share the same formula prefix but diverge past it,
@@ -210,7 +217,7 @@ describe("public archive shell", () => {
             // this test for that reason alone.
         )
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species identifier"), "smiles:CCO")
+        await user.type(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), "smiles:CCO")
         await user.click(screen.getByRole("button", { name: "Search" }))
         // The structure-search endpoint never returns a formula (#251): the
         // row leads with SMILES instead and says so honestly, rather than
@@ -232,7 +239,7 @@ describe("public archive shell", () => {
             return HttpResponse.json({ records: [{ species_ref: ref, ...chemistry, charge: 0, multiplicity: 1, entries: [] }] })
         }))
         const user = userEvent.setup(); render(<App />)
-        const input = await screen.findByLabelText("Exact species identifier")
+        const input = await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")
         await user.type(input, "H2O"); await user.click(screen.getByRole("button", { name: "Search" }))
         await user.clear(input); await user.type(input, "H2"); await user.click(screen.getByRole("button", { name: "Search" }))
         // The stale, slower "H2O" response must never overwrite the "H2" result.
@@ -249,7 +256,7 @@ describe("public archive shell", () => {
             return HttpResponse.json({ detail: "archive unavailable" }, { status: 503 })
         }))
         const user = userEvent.setup(); render(<App />)
-        const input = await screen.findByLabelText("Exact species identifier")
+        const input = await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")
         const button = screen.getByRole("button", { name: "Search" })
         await user.type(input, "H2O"); await user.click(button)
         expect(await screen.findByRole("status")).toHaveTextContent("No exact formula record")
@@ -268,7 +275,7 @@ describe("public archive shell", () => {
             return HttpResponse.json({ records: [{ species_ref: speciesRef, entries: [] }] })
         }))
         const user = userEvent.setup(); render(<App />)
-        const input = await screen.findByLabelText("Exact species identifier")
+        const input = await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")
         const button = screen.getByRole("button", { name: "Search" })
         await user.type(input, "H2O"); await user.click(button)
         await user.clear(input); await user.type(input, "spc_BAD"); await user.click(button)
@@ -293,7 +300,7 @@ describe("public archive shell", () => {
             })
         }))
         const user = userEvent.setup(); render(<App />)
-        const input = await screen.findByLabelText("Exact species identifier")
+        const input = await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")
         await user.type(input, "Cl"); await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("button", { name: "Formula" })).toBeVisible()
         await user.clear(input); await user.type(input, "Br")
@@ -580,7 +587,7 @@ describe("page title and focus on navigation", () => {
 
     it("sets the default title on the home page", async () => {
         render(<App />)
-        expect(await screen.findByRole("heading", { name: "TCKDB" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Thermochemistry and kinetics" })).toBeVisible()
         await waitFor(() => expect(document.title).toBe("Home · TCKDB"))
     })
 
@@ -602,7 +609,7 @@ describe("page title and focus on navigation", () => {
     it("keeps the skip link, pointing at a main element that can take focus", async () => {
         const user = userEvent.setup()
         render(<App />)
-        await screen.findByRole("heading", { name: "TCKDB" })
+        await screen.findByRole("heading", { name: "Thermochemistry and kinetics" })
         await user.tab()
         const skip = screen.getByText("Skip to content")
         expect(skip).toHaveFocus()
@@ -856,7 +863,7 @@ describe("the home-page identifier search recognizes and routes public reference
             pagination: { offset: 0, limit: 50, returned: 1, total: 1 },
         })))
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species identifier"), `rxn_${REF_BODY}`)
+        await user.type(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), `rxn_${REF_BODY}`)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByText(`rxn_${REF_BODY}`)).toBeVisible()
         expect(window.location.pathname).toBe(`/reactions/rxn_${REF_BODY}`)
@@ -878,7 +885,7 @@ describe("the home-page identifier search recognizes and routes public reference
             kinetics: [], transition_states: [], calculations: [], networks: [],
         })))
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species identifier"), `rxe_${REF_BODY}`)
+        await user.type(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), `rxe_${REF_BODY}`)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByText(`rxe_${REF_BODY}`)).toBeVisible()
         expect(window.location.pathname).toBe(`/reaction-entries/rxe_${REF_BODY}`)
@@ -917,7 +924,7 @@ describe("the home-page identifier search recognizes and routes public reference
             })),
         )
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species identifier"), `tse_${REF_BODY}`)
+        await user.type(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), `tse_${REF_BODY}`)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "A <=> B" })).toBeVisible()
         expect(window.location.pathname).toBe(`/transition-state-entries/tse_${REF_BODY}`)
@@ -931,7 +938,7 @@ describe("unmatched routes (finding #12)", () => {
         expect(await screen.findByRole("heading", { name: "No page at this address" })).toBeVisible()
         expect(screen.getByText("/this-route-does-not-exist")).toBeVisible()
         // Not the home page, which this route used to silently redirect to.
-        expect(screen.queryByLabelText("Exact species identifier")).not.toBeInTheDocument()
+        expect(screen.queryByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")).not.toBeInTheDocument()
     })
 
     it("shows the not-found page for a plausible-looking but wrong tab segment, not the first tab", async () => {
@@ -1066,8 +1073,9 @@ describe("site bar search hands its text to the home page search", () => {
                 calls.species += 1
                 return HttpResponse.json({ records: [] })
             }),
-            http.get("/api/v1/scientific/reactions/browse", () => {
-                calls.reactions += 1
+            http.get("/api/v1/scientific/reactions/browse", ({ request }) => {
+                // One row is the home page's own count read.
+                if (new URL(request.url).searchParams.get("limit") !== "1") calls.reactions += 1
                 return HttpResponse.json(emptyBrowseEnvelope())
             }),
             http.get("/api/v1/scientific/reactions/search", () => {
@@ -1118,14 +1126,14 @@ describe("site bar search hands its text to the home page search", () => {
         await user.clear(await barInput())
         await user.type(await barInput(), "H2O{Enter}")
         await waitFor(() => expect(calls.species).toBe(1))
-        expect(screen.getByRole("radio", { name: "Species" })).toHaveAttribute("aria-checked", "true")
+        expect(screen.getByRole("radio", { name: "Molecules" })).toHaveAttribute("aria-checked", "true")
     })
 
     it("ignores a ?q= longer than 1024 characters: empty field, no request", async () => {
         const calls = searchHandlers()
         window.history.replaceState({}, "", `/?q=${"C".repeat(1025)}`)
         render(<App />)
-        await screen.findByLabelText("Exact species identifier")
+        await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")
         await settle()
         expect(document.getElementById("identifier")).toHaveValue("")
         expect(window.location.search).toBe("")

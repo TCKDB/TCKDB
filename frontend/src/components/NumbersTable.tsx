@@ -50,21 +50,23 @@ export function WalkStatus({ state, loading, failed }: {
  * Rows with their values, levels, programs and review status, optionally grouped by level of theory. `hrefs` says
  * where each row's values and `describes` link go; `version` adds a line naming the version a row belongs to.
  */
-export function NumbersTable<R extends NumberRow>({ rows, caption, label, groupLabels, hrefs, version }: {
+export function NumbersTable<R extends NumberRow>({ rows, caption, label, groupLabels, hrefs, version, compact = false }: {
     rows: readonly R[]
     caption: string
     label: string
     groupLabels: Map<string, string>
     hrefs: (row: R) => { to: string | null; entryPath: string | null }
     version?: (row: R) => ReactNode
+    /** The short form: no level count and no grouping control. */
+    compact?: boolean
 }) {
     const [grouped, setGrouped] = useState(false)
     const groups = useMemo(() => (grouped ? groupByLevel(rows) : [{ key: null, rows: [...rows] }]), [grouped, rows])
     const levelCount = new Set(rows.flatMap((row) => row.levels.map((level) => level.label))).size
     return (
         <>
-            {levelCount > 0 && <p className="entry-numbers-levels">These values were computed at {levelCount} {levelCount === 1 ? "level" : "levels"} of theory.</p>}
-            {distinctLevelCount(rows) >= 2 && (
+            {!compact && levelCount > 0 && <p className="entry-numbers-levels">These values were computed at {levelCount} {levelCount === 1 ? "level" : "levels"} of theory.</p>}
+            {!compact && distinctLevelCount(rows) >= 2 && (
                 <div className="entry-numbers-controls">
                     <button type="button" className="entry-numbers-toggle" aria-pressed={grouped} onClick={() => setGrouped(!grouped)}>
                         Group by level of theory
