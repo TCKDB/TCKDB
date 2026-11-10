@@ -7,7 +7,7 @@ import { loadRelativeEnergies, relativeEnergyKey, type RelativeEnergies } from "
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel, sortConformersForDisplay } from "../domain/conformerEvidence"
 import {
-    cardEnergy, depositorWrittenLabel, formatHartree, formatRelativeKj, levelChoices, outcomeNote, pictureGeometryRef,
+    cardEnergy, depositorWrittenLabel, shapeOrderSentence, formatHartree, formatRelativeKj, levelChoices, outcomeNote, pictureGeometryRef,
     programIndex, referenceProgram, shapeCountsSentence,
     type CardEnergy, type LevelChoice, type ProgramIndex,
 } from "../domain/conformerGallery"
@@ -23,9 +23,6 @@ import { SectionHeading } from "./PageSections"
 import { RefsDisclosure } from "./RefsDisclosure"
 import { ShapeCardHead } from "./ShapePicture"
 import { ValueLink } from "./ValueLink"
-
-const SHAPE_ORDER =
-    "Pages follow the archive's display order; the cards within a page are listed by conformer number, then label, then reference."
 
 /** Pictures load by themselves for this many cards; later cards wait to be asked. */
 const AUTO_PICTURES = 12
@@ -219,11 +216,11 @@ export function ConformerGallery({
                 <>
                     <p className="conformer-picker-note">
                         {total === 1
-                            ? "This entry has one deposited conformer basin. Its evidence is shown below."
-                            : `This entry has ${total} deposited conformer basins. Each card is one shape of the molecule; choose one to see its picture, `
+                            ? "This entry has one deposited shape. Its evidence is shown below."
+                            : `This entry has ${total} deposited shapes. Each card is one shape of the molecule; choose one to see its picture, `
                                 + "the calculations behind it and its evidence."}
                     </p>
-                    <ListPager meta={meta} noun="conformer basin" onPage={onPage} busy={pagingBusy} label="Conformer basins paging" />
+                    <ListPager meta={meta} noun="shape" onPage={onPage} busy={pagingBusy} label="Shapes paging" hideOrder />
                     {pagingFailed && (
                         <p className="empty-projection" role="alert">That page of conformers could not be loaded; the previous page is still shown.</p>
                     )}
@@ -236,7 +233,7 @@ export function ConformerGallery({
                             recommendation; choose a shape to see its evidence instead.
                         </p>
                     )}
-                    <OrderNote order={SHAPE_ORDER} />
+                    <OrderNote order={shapeOrderSentence(meta.sort)} />
 
                     <fieldset className="shape-energy-controls">
                         <legend>Energy relative to a reference shape</legend>

@@ -1,5 +1,5 @@
 import { loadEntryTransportWithSources } from "../api/transportApi"
-import { usePagedList } from "./usePagedList"
+import { usePagedRecordList } from "./usePagedRecordList"
 
 /**
  * Loads one page of the transport records deposited for one species entry (the first, until `goTo` moves; the list is
@@ -8,5 +8,5 @@ import { usePagedList } from "./usePagedList"
  * `components/EntryTransportSection.tsx`.
  */
 export function useEntryTransport(entryRef: string) {
-    return usePagedList(entryRef, loadEntryTransportWithSources)
+    return usePagedRecordList(entryRef, "transport", loadEntryTransportWithSources, (record) => record.transport.transport_ref)
 }

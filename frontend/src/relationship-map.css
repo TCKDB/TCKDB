@@ -56,12 +56,12 @@ a.rel-map-node:focus-visible {
     font-weight: 600;
 }
 
-.rel-map-note {
+.rel-map-figure .rel-map-note {
     fill: var(--muted);
-    font-family: var(--sans);
-    font-size: 12px;
-    font-weight: 400;
+    font: 400 12px var(--sans);
 }
+
+.rel-map-figure .rel-map-ref { font-family: var(--mono); }
 
 .rel-map-list {
     margin: .75rem 0 0;

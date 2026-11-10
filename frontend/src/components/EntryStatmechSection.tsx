@@ -99,7 +99,7 @@ export function EntryStatmechSection({ entryRef, conformer, conformers }: {
     conformer?: ConformerProjection | null
     conformers?: ConformerProjection[]
 }) {
-    const { state, listKey, meta, goTo } = useEntryStatmech(entryRef)
+    const { state, listKey, meta, goTo, linkedNote } = useEntryStatmech(entryRef)
     if (state.status === "ready") {
         return (
             <SectionErrorBoundary
@@ -112,7 +112,7 @@ export function EntryStatmechSection({ entryRef, conformer, conformers }: {
                     </section>
                 )}
             >
-                <StatmechList listKey={listKey} meta={meta} onPage={goTo} response={state.record} conformer={conformer} conformers={conformers ?? []} />
+                <StatmechList listKey={listKey} meta={meta} onPage={goTo} linkedNote={linkedNote} response={state.record} conformer={conformer} conformers={conformers ?? []} />
             </SectionErrorBoundary>
         )
     }
@@ -140,7 +140,8 @@ function useStatmechSection<T>(entryRef: string, token: StatmechSectionToken) {
     )
 }
 
-function StatmechList({ listKey, meta, onPage, response, conformer, conformers }: {
+function StatmechList({ listKey, meta, onPage, linkedNote, response, conformer, conformers }: {
+    linkedNote: string | null
     /** Names the page on screen: the on-demand section hooks below key on it, so their data is never read across pages. */
     listKey: string
     meta: ListMeta | null
@@ -212,7 +213,7 @@ function StatmechList({ listKey, meta, onPage, response, conformer, conformers }
                     {pagination.total} record{pagination.total === 1 ? "" : "s"}
                     {" · review: "}{reviewSummaryText(reviewSummary)}
                 </p>
-                {meta && <ListPager meta={meta} noun="statistical-mechanics record" onPage={onPage} label="Statistical-mechanics records paging" />}
+                {meta && <ListPager meta={meta} noun="statistical-mechanics record" onPage={onPage} note={linkedNote} label="Statistical-mechanics records paging" />}
                 {records.length === 0 ? (
                     <p className="empty-projection">No statistical-mechanics records are deposited for this entry.</p>
                 ) : conformer ? (

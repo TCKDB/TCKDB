@@ -1,11 +1,12 @@
 import { loadEntryThermo } from "../api/thermoApi"
-import { usePagedList } from "./usePagedList"
+import { usePagedRecordList } from "./usePagedRecordList"
 
 /**
- * Loads one page of the thermo records deposited for one species entry (the first, until `goTo` moves; the list is paged, never silently cut). No include
+ * Loads one page of the thermo records deposited for one species entry (the first, until `goTo` moves or a fragment names
+ * a record on a later page; the list is paged, never silently cut). No include
  * tokens: see the module docstring on `api/thermoApi.ts` — nothing on this
  * surface is include-gated.
  */
 export function useEntryThermo(entryRef: string) {
-    return usePagedList(entryRef, loadEntryThermo)
+    return usePagedRecordList(entryRef, "thermo", loadEntryThermo, (record) => record.thermo_ref)
 }

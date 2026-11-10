@@ -3,7 +3,9 @@ import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom"
 import { RelationshipMap } from "./RelationshipMap"
+import { shortRefs } from "../domain/shortRefs"
 import type { NeighbourNode } from "../domain/neighbourNodes"
+import { LINE_CHARS } from "../domain/wrapLabel"
 import mapCss from "../relationship-map.css?raw"
 
 afterEach(cleanup)
@@ -30,6 +32,32 @@ function renderMap(nodes: NeighbourNode[] = NODES, status: "ready" | "loading" =
 }
 
 describe("RelationshipMap", () => {
+    it("draws a long reference shortened, unique and with a visible ellipsis, and keeps it whole in every text form", () => {
+        const first = `spe_${"x".repeat(25)}`
+        const second = `spe_${"x".repeat(14)}${"y".repeat(11)}`
+        expect(first).toHaveLength(29)
+        const make = (ref: string): NeighbourNode => ({
+            id: ref, kind: "species-entry", label: "CC(C)(C)OC(=O)N1CCC(CC1)C(=O)O, singlet", relation: "A version of this molecule", ref,
+            to: `/species-entries/${ref}`, found: null,
+        })
+        const { container } = renderMap([make(first), make(second), make("spe_zzzzzzzzzzzzzzzzzzzzzzzzzz")])
+        const lines = [...container.querySelectorAll("svg.rel-map-figure tspan")].map((el) => el.textContent ?? "")
+        for (const line of lines) expect(line.length).toBeLessThanOrEqual(LINE_CHARS)
+        const drawn = [...container.querySelectorAll("svg.rel-map-figure .rel-map-ref")].map((el) => el.textContent ?? "")
+        expect(drawn).toHaveLength(3)
+        for (const text of drawn) {
+            expect(text.endsWith("\u2026")).toBe(true)
+            expect(text.length - 1).toBeGreaterThanOrEqual(13)
+        }
+        expect(new Set(drawn).size).toBe(3)
+        expect(drawn[0]).not.toBe(drawn[1])
+        expect(lines.join(" ")).not.toContain("A version of this molecule")
+        expect(shortRefs([first, second])[0].length - 1).toBeGreaterThan(18)
+        expect(screen.getByRole("link", { name: new RegExp(first) })).toHaveAttribute("href", `/species-entries/${first}`)
+        expect(container.querySelector("svg.rel-map-figure title")?.textContent).toContain(first)
+        expect(container.querySelector(".rel-map-item-note")?.textContent).toContain(first)
+    })
+
     it("draws a group of links under a heading, never one image around the links", () => {
         const { container } = renderMap()
         const svg = container.querySelector("svg.rel-map-figure")!
@@ -110,8 +138,14 @@ describe("RelationshipMap", () => {
 
     it("hides the drawing and keeps the list below 560px, and keeps its labels at least 12px", () => {
         expect(mapCss).toMatch(/@media \(max-width: 560px\) \{\s*\.rel-map-figure \{\s*display: none;/)
-        const sizes = [...mapCss.matchAll(/font-size:\s*(\d+)px/g)].map((m) => Number(m[1]))
-        expect(sizes.length).toBeGreaterThan(0)
+        const sizes = [...mapCss.matchAll(/font(?:-size)?:\s*(?:\d+\s+)?(\d+)px/g)].map((m) => Number(m[1]))
+        expect(sizes.length).toBeGreaterThan(1)
         expect(Math.min(...sizes)).toBeGreaterThanOrEqual(12)
+    })
+
+    it("scopes the drawn note and ref rules to the figure, so the list's note rule cannot override the ref's code font", () => {
+        expect(mapCss).toMatch(/\.rel-map-figure \.rel-map-note \{[^}]*font: 400 12px var\(--sans\)/)
+        expect(mapCss).toMatch(/\.rel-map-figure \.rel-map-ref \{ font-family: var\(--mono\); \}/)
+        expect(mapCss).not.toMatch(/(^|\n)\.rel-map-ref/)
     })
 })

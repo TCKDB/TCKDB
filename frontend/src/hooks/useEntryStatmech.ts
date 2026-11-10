@@ -1,5 +1,5 @@
 import { loadEntryStatmech } from "../api/statmechApi"
-import { usePagedList } from "./usePagedList"
+import { usePagedRecordList } from "./usePagedRecordList"
 
 /**
  * Loads one page of the statmech records deposited for one species entry (the first, until `goTo` moves; the list is paged, never silently cut), with the
@@ -8,5 +8,5 @@ import { usePagedList } from "./usePagedList"
  * `components/EntryStatmechSection.tsx`.
  */
 export function useEntryStatmech(entryRef: string) {
-    return usePagedList(entryRef, loadEntryStatmech)
+    return usePagedRecordList(entryRef, "statmech", loadEntryStatmech, (record) => record.statmech.statmech_ref)
 }

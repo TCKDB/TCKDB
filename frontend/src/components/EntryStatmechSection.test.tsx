@@ -603,6 +603,22 @@ describe("EntryStatmechSection", () => {
     })
 })
 
+describe("EntryStatmechSection: linked record on a later page", () => {
+    it("opens on the page holding the record a fragment names", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const params = new URL(request.url).searchParams
+            const offset = Number(params.get("offset") ?? 0)
+            const limit = Number(params.get("limit") ?? 1)
+            const all = mockRecords()
+            const records = all.slice(offset, offset + limit)
+            return HttpResponse.json({ ...mockResponse(records), pagination: { offset, limit, returned: records.length, total: all.length } })
+        }))
+        render(<MemoryRouter initialEntries={["/#statmech-heading-sm_two"]}><EntryStatmechSection entryRef={entryRef} /></MemoryRouter>)
+        expect(await screen.findByText("Showing 2\u20132 of 2 statistical-mechanics records.")).toBeVisible()
+        expect(document.getElementById("statmech-heading-sm_two")).not.toBeNull()
+    })
+})
+
 describe("EntryStatmechSection conformer-scoped attribution", () => {
     // The owner's report, reproduced: "Same for Statistical Mechanics [as
     // Thermochemistry]... it always shows From Conformer Group 1 even if I

@@ -108,9 +108,9 @@ export function AppShell() {
                 {WIDE_LINKS.map((item) => <NavItemLink key={item.to} item={item} />)}
             </nav>}
             <div className="site-bar-end">
-                <SiteSearch />
                 {!phone && <ThemeToggle />}
                 <AuthStatus />
+                <SiteSearch />
             </div>
         </header>
         <RouteFocus />

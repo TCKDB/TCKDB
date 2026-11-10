@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Site polish: map labels, shapes note, search order, linked records (Unreleased)
+
+- **Behaviour:** every line of a relationship map label wraps inside its box; a version's reference is drawn shortened (at least 13 characters, unique among the drawn nodes, ending in an ellipsis) and is whole in the link name, the node title and the "Connected records" list. The molecule page's "Its 3D shapes" section states its order once (the archive's order across pages and the card order within a page) and says "shape" where it said "conformer basin". The site search comes after the theme control and Sign in, both in Tab order and as drawn. A link to a thermochemistry, statistical mechanics or transport record on a later page opens that tab on the page holding the record, or says the record is not in the list. The theme control is one Tab stop and moves with the arrow keys.
+- **Schema and migration:** none. No new environment variable.
+
 ## Home page with counts, browse cards and an example record (2026-11-11)
 
 - **Behaviour:** the home page has a headline and one-line description, the exact-identifier search with "Try" links that run it, a "See an example" link, a strip of counts read from the archive (molecules, reaction entries, levels of theory; a count whose read fails is left out), three browse cards, a "How to read a value" box, and an example record. The example is the record named by the operator's `/site-config.json` (`{"homeExampleRef": "spe_..."}`, a molecule or reaction entry ref), read at run time; a molecule shows a compact numbers table. When the file is missing, malformed, or names a record the archive does not return under the current profile, a "Browse molecules" link is shown instead.

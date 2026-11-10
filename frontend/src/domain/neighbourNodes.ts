@@ -9,6 +9,8 @@ export type NeighbourNode = {
     label: string
     /** How it relates to this entry. */
     relation: string
+    /** The node's own reference, kept whole here; the drawing shortens it and every text form shows it in full. */
+    ref?: string
     /** The page it opens; `null` when it stands for several records and no single page is the right target. */
     to: string | null
     /** What the read returned, in words ("2 found"); never a guess. */
