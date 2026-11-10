@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Record page building blocks (2026-11-10)
+
+- **Behaviour:** record page headers (species entry, transition state entry, calculation) show the record kind's glyph and the review status as a word beside a filled mark (approved) or an outline mark (every other status), with a "What review status means" explanation. Pages that never have a contents list (the Molecules and Reactions lists, the species overview, the frequency scale factor page) use the full width instead of leaving an empty left column; record pages keep their column. The "Also see" link on the list pages is blue and underlined like other links. Glossary popovers that are closed no longer widen the page on phones. A link to `/guide#order` lands on the ordering note instead of the top of the page.
+- **Schema and migration:** none. No new environment variable.
+
 ## Site bar, numbered contents list and a guide page (2026-11-10)
 
 - **Behaviour:** the site bar links Molecules, Reactions, Methods and Guide, with a search box (it runs the home page's exact-identifier search), the theme control and sign in. Van der Waals complexes and Transition states leave the bar; each list page has an "Also see" link to its paired listing (Molecules and Van der Waals complexes, Reactions and Transition states). The Species list is now titled Molecules. Below 680px the links move to a bottom tab bar, and the theme control and Guide sit under a "More" button (Enter opens, Esc closes and returns focus). The active link carries `aria-current="page"`. Record pages show a left "On this page" list with numbered entries (3.1 for subsections) and the current section marked; on phones it is a "Contents" disclosure above the page. A new `/guide` page explains the eight kinds of record in plain words and notes that a list's order is never a recommendation.

@@ -410,6 +410,14 @@ describe("focus, control, kind and text tokens clear their contrast floors in ev
             const { ratio } = worst(block, "status-ok-ink", ["status-ok-bg"])
             expect(ratio).toBeGreaterThanOrEqual(4.5)
         })
+
+        // The review chip's three ink and tint pairs (record-blocks.css).
+        for (const [ink, tint] of [["status-ok-ink", "status-ok-bg"], ["notice-text", "notice-bg"], ["ink-2", "surface-sunken"]] as const) {
+            it(`${blockName}: review chip ink --${ink} is at least 5.5:1 on --${tint}`, () => {
+                const { ratio } = worst(block, ink, [tint])
+                expect(ratio).toBeGreaterThanOrEqual(5.5)
+            })
+        }
     }
 })
 

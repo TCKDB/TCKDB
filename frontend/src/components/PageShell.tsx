@@ -6,8 +6,11 @@ import { NARROW_QUERY, useMediaQuery } from "../hooks/useMediaQuery"
 
 /**
  * The shared shell every record page renders its content through: an "On this page" column
- * (`TableOfContents`) whose column is always reserved and whose list appears once two or more
- * sections are mounted (`PageSections.tsx`). Page width stays in each page's own stylesheet.
+ * (`TableOfContents`) whose list appears once two or more sections are mounted (`PageSections.tsx`).
+ * `contents="list"` (default) always reserves the column, so nothing shifts when sections register or
+ * a tab changes; `contents="none"` is for a page whose section count is fixed below
+ * `MIN_SECTIONS_FOR_LIST` and renders no column at all.
+ * Page width stays in each page's own stylesheet.
  *
  * `identity` is the page's header block (formula, SMILES, reference). It renders first inside
  * `.page-shell-content`.
@@ -16,17 +19,21 @@ import { NARROW_QUERY, useMediaQuery } from "../hooks/useMediaQuery"
  * with CSS `order`, so the skip link lands on the content, not on a dozen contents links.
  * Narrow screens: the single "Contents" disclosure comes first.
  */
-export function PageShell({ identity, children }: { identity?: ReactNode; children: ReactNode }) {
+export function PageShell({ identity, children, contents = "list" }: {
+    identity?: ReactNode
+    children: ReactNode
+    contents?: "list" | "none"
+}) {
     const narrow = useMediaQuery(NARROW_QUERY)
     return (
         <PageSectionsProvider>
             <div className="page-shell-layout">
-                {narrow && <TableOfContents />}
+                {narrow && contents === "list" && <TableOfContents />}
                 <div className="page-shell-content">
                     {identity !== undefined && <div className="page-shell-identity">{identity}</div>}
                     {children}
                 </div>
-                {!narrow && <TableOfContents />}
+                {!narrow && contents === "list" && <TableOfContents />}
             </div>
         </PageSectionsProvider>
     )

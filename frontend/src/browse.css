@@ -33,6 +33,18 @@
     font: var(--type-note-font);
 }
 
+.browse-related a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .15em;
+}
+
+.browse-related a:hover {
+    color: var(--accent-700);
+    text-decoration-color: currentColor;
+}
+
 .browse-related a:focus-visible {
     outline: 3px solid var(--focus-ring);
     outline-offset: 3px;

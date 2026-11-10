@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import type { ReactNode } from "react"
+import { act, cleanup, render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { PageShell } from "./PageShell"
 import { SectionHeading } from "./PageSections"
+import pageShellCss from "../page-shell.css?raw"
 
 afterEach(cleanup)
 
@@ -80,5 +82,44 @@ describe("PageShell: the identity slot renders inside the content column", () =>
         // i.e. identity is NOT a sibling rendered above the flex row.
         expect(container.firstElementChild).toBe(layout)
         expect(layout.contains(identity)).toBe(true)
+    })
+})
+
+describe("PageShell: the contents column", () => {
+    afterEach(() => { vi.useRealTimers() })
+
+    const column = (container: HTMLElement) => container.querySelector(".page-toc")
+    const tree = (children: ReactNode) => <MemoryRouter><PageShell>{children}</PageShell></MemoryRouter>
+
+    it('contents="none" renders no column at all', () => {
+        const { container } = render(<MemoryRouter><PageShell contents="none"><p>List</p></PageShell></MemoryRouter>)
+        expect(column(container)).toBeNull()
+    })
+
+    it('contents="list" (the default) always has the column, with no timer that removes it later', () => {
+        vi.useFakeTimers()
+        const { container, rerender } = render(tree(<SectionHeading id="only">Only</SectionHeading>))
+        expect(column(container)).not.toBeNull()
+        act(() => { vi.advanceTimersByTime(10_000) })
+        expect(column(container)).not.toBeNull()
+        rerender(tree(<><SectionHeading id="one">One</SectionHeading><SectionHeading id="two">Two</SectionHeading></>))
+        expect(column(container)?.querySelector("nav")).not.toBeNull()
+        expect(column(container)?.hasAttribute("data-hidden")).toBe(false)
+    })
+
+    it("has the column on a wide and on a narrow screen alike, so crossing the breakpoint adds none", () => {
+        const wide = render(tree(<p>Content</p>))
+        expect(wide.container.querySelectorAll(".page-toc")).toHaveLength(1)
+        cleanup()
+        window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+            matches: query.includes("62rem"), media: query, addEventListener: () => {}, removeEventListener: () => {},
+        })) as unknown as typeof window.matchMedia
+        const narrow = render(tree(<p>Content</p>))
+        expect(narrow.container.querySelectorAll(".page-toc")).toHaveLength(1)
+        delete (window as { matchMedia?: unknown }).matchMedia
+    })
+
+    it("hides the empty column on a narrow screen without a gap", () => {
+        expect(pageShellCss).toMatch(/\.page-toc:empty\s*\{\s*display:\s*none/)
     })
 })

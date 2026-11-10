@@ -1,5 +1,7 @@
 import { describe, expect, it, afterEach, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
+import { ledeText } from "../domain/ledeText"
 import { MemoryRouter } from "react-router-dom"
 import { RecordIdentityHeader } from "./RecordIdentityHeader"
 import type { RecordIdentity } from "../domain/recordIdentity"
@@ -398,5 +400,70 @@ describe("ownRef -- the record's own ref, shown first, always", () => {
         renderHeader({ identity: speciesIdentity, ownRef: { label: "Calculation ref", value: "calc_demo" } })
         fireEvent.click(screen.getByRole("button", { name: /copy calculation ref/i }))
         expect(writeText).toHaveBeenCalledWith("calc_demo")
+    })
+})
+
+describe("glyph, review chip and lede", () => {
+    it("shows the kind glyph, the review status as a word and the lede under the h1", () => {
+        const { container } = renderHeader({
+            identity: speciesIdentity,
+            glyph: "species-entry",
+            review: "approved",
+            lede: ledeText`A species entry with ${2} calculations.`,
+        })
+        const row = container.querySelector(".record-identity-kicker-row") as HTMLElement
+        expect(row.querySelector('svg[data-kind="species-entry"]')).not.toBeNull()
+        expect(row.querySelector(".review-chip")).toHaveTextContent("approved")
+        const h1 = container.querySelector("h1") as HTMLElement
+        expect(h1.nextElementSibling).toHaveTextContent("A species entry with 2 calculations.")
+    })
+
+    it("shows one sentence under the title: intro alone as before, lede alone, and only lede with a console error when both are given", () => {
+        const { container, unmount } = renderHeader({ identity: speciesIdentity, intro: "An intro." })
+        expect(container.querySelector("h1")?.nextElementSibling).toHaveTextContent("An intro.")
+        unmount()
+
+        const error = vi.spyOn(console, "error").mockImplementation(() => {})
+        const both = renderHeader({ identity: speciesIdentity, intro: "An intro.", lede: ledeText`A lede.` })
+        expect(both.container.querySelectorAll(".record-lede, .section-intro")).toHaveLength(1)
+        expect(both.container.querySelector("h1")?.nextElementSibling).toHaveTextContent("A lede.")
+        expect(both.container).not.toHaveTextContent("An intro.")
+        expect(error).toHaveBeenCalledWith(expect.stringContaining("either `lede` or `intro`"))
+        error.mockRestore()
+    })
+
+    it("keeps the ref out of the h1: it is a secondary code with a copy button", () => {
+        const { container } = renderHeader({
+            identity: speciesIdentity,
+            title: "Methyl radical",
+            ownRef: { label: "Species entry ref", value: "spe_demo" },
+        })
+        expect(container.querySelectorAll("h1")).toHaveLength(1)
+        expect(container.querySelector("h1")).toHaveTextContent("Methyl radical")
+        expect(container.querySelector("h1")).not.toHaveTextContent("spe_demo")
+        expect(screen.getByText("spe_demo").tagName).toBe("CODE")
+        expect(screen.getByRole("button", { name: /copy species entry ref/i })).toBeVisible()
+    })
+
+    it("renders no chip or glyph when none is given, and the pill slot still works", () => {
+        const { container } = renderHeader({ identity: speciesIdentity, pill: <span data-testid="p">x</span> })
+        expect(container.querySelector(".review-chip")).toBeNull()
+        expect(container.querySelector("svg")).toBeNull()
+        expect(screen.getByTestId("p")).toBeVisible()
+    })
+
+    it("Tab reaches the review term, then the copy button, and Esc closes the term", async () => {
+        const user = userEvent.setup()
+        renderHeader({ identity: speciesIdentity, review: "not_reviewed", ownRef: { label: "Calculation ref", value: "calc_demo" } })
+        await user.tab()
+        const term = screen.getByRole("button", { name: "What review status means" })
+        expect(term).toHaveFocus()
+        const popover = screen.getByRole("tooltip", { hidden: true })
+        expect(popover).toHaveAttribute("data-open", "true")
+        await user.keyboard("{Escape}")
+        expect(popover).toHaveAttribute("data-open", "false")
+        expect(term).toHaveFocus()
+        await user.tab()
+        expect(screen.getByRole("button", { name: /copy calculation ref/i })).toHaveFocus()
     })
 })

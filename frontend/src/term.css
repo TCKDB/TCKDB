@@ -39,9 +39,12 @@
     font: var(--type-note-font);
     letter-spacing: var(--type-note-tracking);
     text-align: left;
+    /* Out of layout while closed, so it cannot widen the page; it stays in the DOM for aria-describedby. */
+    display: none;
     visibility: hidden;
 }
 
 .term-popover[data-open="true"] {
+    display: block;
     visibility: visible;
 }

@@ -1424,7 +1424,7 @@ describe("CalculationDetailPage", () => {
         page()
         await findLoaded("Frequency")
         expect(screen.queryByText("Quality")).not.toBeInTheDocument()
-        expect(screen.getByText("not reviewed", { selector: ".value-pill" })).toBeVisible()
+        expect(screen.getByText("not reviewed", { selector: ".review-chip" })).toBeVisible()
     })
 
     // Item 6, design/foundations PR B: `.review-badge` is retired from this
@@ -1432,25 +1432,25 @@ describe("CalculationDetailPage", () => {
     // `.value-pill` pill primitive, muted for "not reviewed" (an absent
     // verdict), accent for anything else. Mutation check: swap
     // `reviewPillClass`'s branches and this test fails on the muted half.
-    it("uses the shared .value-pill primitive for the review-status pill, muted for 'not reviewed'", async () => {
+    it("shows the review status as a chip: outline for 'not reviewed'", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()
         await findLoaded("Frequency")
-        const pill = screen.getByText("not reviewed", { selector: ".value-pill" })
-        expect(pill).toHaveClass("value-pill")
-        expect(pill).toHaveClass("value-pill--muted")
+        const chip = screen.getByText("not reviewed", { selector: ".review-chip" })
+        expect(chip).toHaveClass("review-chip--plain")
+        expect(chip.querySelector("circle")).toHaveAttribute("fill", "none")
         expect(document.querySelector(".review-badge")).toBeNull()
     })
 
-    it("shows the reviewed pill in the accent (non-muted) register once a calculation has actually been reviewed", async () => {
+    it("shows the approved chip with a filled mark once a calculation has actually been reviewed", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({ calculation: { ...mockRecord().calculation, review: { status: "approved", reviewed_at: "2026-08-01T00:00:00", reviewer_kind: "human" } } }),
         })))
         page()
         await findLoaded("Frequency")
-        const pill = screen.getByText("approved", { selector: ".value-pill" })
-        expect(pill).toHaveClass("value-pill")
-        expect(pill).not.toHaveClass("value-pill--muted")
+        const chip = screen.getByText("approved", { selector: ".review-chip" })
+        expect(chip).toHaveClass("review-chip--approved")
+        expect(chip.querySelector("circle")).toHaveAttribute("fill", "currentColor")
     })
 
     it("nests the review-status pill inside the heading block that contains the h1, not outside it", async () => {
@@ -1459,8 +1459,8 @@ describe("CalculationDetailPage", () => {
         const h1 = await findLoaded("Frequency")
         const headingBlock = h1.closest(".record-header") as HTMLElement
         expect(headingBlock).not.toBeNull()
-        const pill = within(headingBlock).getByText("not reviewed", { selector: ".value-pill" })
-        expect(headingBlock.contains(pill)).toBe(true)
+        const chip = within(headingBlock).getByText("not reviewed", { selector: ".review-chip" })
+        expect(headingBlock.contains(chip)).toBe(true)
     })
 
     it("shows the Quality row for 'curated' and 'rejected'", async () => {
