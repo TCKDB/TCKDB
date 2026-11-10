@@ -32,9 +32,9 @@
     width: min(20rem, calc(100vw - 2rem));
     padding: .65rem .8rem;
     border: 1px solid var(--control-border);
-    border-radius: .5rem;
+    border-radius: var(--radius);
     background: var(--surface);
-    box-shadow: 0 8px 24px -12px var(--shadow-color);
+    box-shadow: 0 2px 8px var(--shadow-color);
     color: var(--ink);
     font: var(--type-note-font);
     letter-spacing: var(--type-note-tracking);

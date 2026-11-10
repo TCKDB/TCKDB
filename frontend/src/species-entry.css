@@ -44,9 +44,8 @@
  * one of the two. Every reference to it below is now var(--muted-2),
  * theme.css's name for this page's own value.
  *
- * Type: IBM Plex Serif for titles and scientific headline numbers; IBM
- * Plex Sans for UI chrome and prose; IBM Plex Mono for every reference,
- * unit and coefficient — unchanged, already the house pairing.
+ * Type: the display face for titles and headline numbers, the sans face for prose, the mono face for
+ * references, units and coefficients.
  *
  * Width, revised AGAIN ("the boxes need to be longer in width dammit. We
  *   have so much space on the screen"):
@@ -273,7 +272,7 @@
     display: flex;
     flex-direction: column;
     border: 1px solid var(--line);
-    border-radius: .5rem;
+    border-radius: var(--radius);
     background: var(--surface);
     overflow: hidden;
 }
@@ -410,7 +409,6 @@
 .conformer-basin-rotor dt {
     color: var(--muted);
     font: 600 .64rem var(--mono);
-    text-transform: uppercase;
     letter-spacing: .05em;
 }
 
@@ -808,7 +806,7 @@
     margin: .5rem 0 0;
     padding: .85rem 1rem;
     border: 1px solid var(--line);
-    border-radius: .4rem;
+    border-radius: var(--radius);
     background: var(--accent-50);
     color: var(--ink);
     font: var(--type-heading-3-font);

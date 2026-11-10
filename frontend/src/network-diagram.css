@@ -232,7 +232,7 @@
    plot rather than inside the legend that describes the encoding. */
 .net-pes-layout-fieldset {
     border: 1px solid var(--line);
-    border-radius: .5rem;
+    border-radius: var(--radius);
     background: var(--surface);
     padding: .5rem .9rem .7rem;
     margin: 0 0 1rem;
@@ -279,7 +279,7 @@
     margin: 0 0 1rem;
     padding: .5rem .9rem .7rem;
     border: 1px solid var(--line);
-    border-radius: .5rem;
+    border-radius: var(--radius);
     background: var(--surface);
 }
 
@@ -303,7 +303,7 @@
     gap: .4rem;
     padding: .3rem .6rem;
     border: 1px solid var(--control-border);
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: var(--surface-sunken);
     font: var(--type-data-font);
     color: var(--ink-2);

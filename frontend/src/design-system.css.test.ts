@@ -50,7 +50,7 @@ describe("type scale: every step declares the exact font/tracking/transform", ()
         // label-weight dt/th text -- see design-system.css's own
         // comment above --type-label-strong-font.
         "label-strong": { font: "600 .8125rem/1.3 var(--sans)", tracking: "0em", transform: "none" },
-        "body": { font: "400 1rem/1.6 var(--sans)", tracking: "0em", transform: "none" },
+        "body": { font: "400 1.0625rem/1.55 var(--sans)", tracking: "0em", transform: "none" },
         // Post-review addition (species-entry/browse/chrome residuals
         // re-review, item 14): a named step for a page LEDE -- serif,
         // one size up from --type-body and a touch tighter in line-height
@@ -502,5 +502,17 @@ describe("every font family in a rule resolves to a font token", () => {
         expect(familyLists(".a { font-family: Georgia, serif; }")).toEqual(["Georgia, serif"])
         expect(familyLists(".a { font: 600 .8rem var(--mono); font: var(--type-ui-font); }")).toEqual(["var(--mono)"])
         expect(familyLists(".a { font: .74rem var(--mono, ui-monospace, monospace); }").filter((v) => !TOKEN_FAMILY.test(v))).toEqual([])
+    })
+})
+
+describe("the self-hosted font families are exactly the reviewed set", () => {
+    const FAMILIES = [...indexCss.matchAll(/@font-face\s*\{\s*font-family:\s*"([^"]+)"/g)].map((m) => m[1])
+    it("declares Source Sans 3, Source Code Pro and the Noto Sans Math symbols face, once or twice each, nothing else", () => {
+        expect([...new Set(FAMILIES)].sort()).toEqual(["Noto Sans Math Symbols", "Source Code Pro", "Source Sans 3"])
+    })
+    it("points every face at a file under /fonts/", () => {
+        const urls = [...indexCss.matchAll(/@font-face[^}]*?url\("([^"]+)"\)/g)].map((m) => m[1])
+        expect(urls.length).toBe(FAMILIES.length)
+        for (const url of urls) expect(url.startsWith("/fonts/")).toBe(true)
     })
 })

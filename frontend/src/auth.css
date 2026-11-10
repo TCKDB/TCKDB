@@ -60,7 +60,7 @@
     gap: .45rem;
     max-width: 14rem;
     border: 1px solid var(--control-border);
-    border-radius: .4rem;
+    border-radius: var(--radius);
     padding: .3rem .6rem;
     background: var(--surface-sunken);
     color: var(--ink-2);
@@ -123,9 +123,9 @@
     max-width: min(17rem, calc(100vw - 2rem));
     padding: .25rem;
     border: 1px solid var(--line);
-    border-radius: .45rem;
+    border-radius: var(--radius);
     background: var(--surface);
-    box-shadow: 0 .5rem 1.25rem var(--shadow-color);
+    
 }
 
 /* A hairline between the archive's pages and the reader's own session,
@@ -206,7 +206,7 @@
     margin: 0 0 1.75rem;
     padding: .2rem;
     border: 1px solid var(--control-border);
-    border-radius: .5rem;
+    border-radius: var(--radius);
     background: var(--surface-sunken);
 }
 
@@ -226,7 +226,7 @@
 .auth-mode-option[data-active="true"] {
     background: var(--surface);
     color: var(--accent-700);
-    box-shadow: 0 1px 3px var(--shadow-color);
+    box-shadow: inset 0 0 0 1px var(--control-border);
 }
 
 .auth-mode-option:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
@@ -257,7 +257,7 @@
 .auth-field input {
     padding: .6rem .75rem;
     border: 1px solid var(--control-border);
-    border-radius: .4rem;
+    border-radius: var(--radius);
     background: var(--surface);
     color: var(--ink);
     font: var(--type-value-font);
@@ -278,7 +278,7 @@
 .auth-submit {
     align-self: flex-start;
     border: 0;
-    border-radius: .4rem;
+    border-radius: var(--radius);
     padding: .7rem 1.5rem;
     background: var(--accent);
     color: var(--surface);
@@ -298,7 +298,7 @@
     margin: 0;
     padding: .75rem 1rem;
     border: 1px solid var(--warning);
-    border-radius: .4rem;
+    border-radius: var(--radius);
     background: var(--surface-sunken);
     color: var(--warning);
     font: var(--type-note-font);
@@ -379,7 +379,7 @@
     margin: 0 0 1.5rem;
     padding: var(--s-4);
     border: 1px solid var(--accent-300);
-    border-radius: .5rem;
+    border-radius: var(--radius);
     background: var(--accent-50);
 }
 
@@ -396,7 +396,7 @@
     gap: .6rem;
     padding: .6rem .75rem;
     border: 1px solid var(--line);
-    border-radius: .4rem;
+    border-radius: var(--radius);
     background: var(--surface);
 }
 

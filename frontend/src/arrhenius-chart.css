@@ -76,7 +76,7 @@
     gap: .45rem;
     padding: .3rem .55rem .3rem .75rem;
     border: 1px solid var(--control-border);
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: var(--surface);
 }
 
@@ -164,7 +164,7 @@
     height: 1.1rem;
     padding: 0;
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: var(--surface-sunken);
     color: var(--muted);
     font: var(--type-label-font);
@@ -228,7 +228,7 @@
     gap: .4rem;
     padding: .3rem .6rem;
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: var(--surface);
     font: var(--type-data-font);
     color: var(--ink-2);

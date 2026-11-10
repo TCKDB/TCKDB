@@ -152,7 +152,7 @@ export function dependencyGraphAriaLabel(parentCount: number, childCount: number
 // Shared box-sizing estimate
 // ---------------------------------------------------------------------------
 
-// Node ref text: `--type-data-font` (.8125rem/13px IBM Plex Mono).
+// Node ref text: `--type-data-font` (.8125rem/13px mono).
 const CHAR_W = 7.5
 const NODE_MIN_W = 140
 const NODE_PAD_X = 24
@@ -165,21 +165,9 @@ const NODE_H = 40
 // border, once it's within `rx` of a corner.
 export const NODE_RX = 8
 
-// Edge labels AND the centre node's type pill: `--type-label-font` /
-// `--type-label-strong-font` (both .72rem/11.52px IBM Plex Mono,
-// uppercase, tracked). MEASURED (post-review): this app's real font at
-// this exact size/weight/tracking/transform combination -- not the
-// node-ref estimate above, which is a different size -- averages 7.6px
-// per character, not the 6.6 this module used before; "IRC started from
-// this geometry" (30 characters incl. spaces, the longest label this
-// table produced at the time) set at 228px, not 198px. `SMALL_PAD` is
-// 6px on each side (12px total), the minimum slack a text-vs-background-
-// box test checks for on the longest label. (2026-09 wording rewrite:
-// the longest label is now `irc_followup`'s "continued by the IRC
-// follow-up", 30 characters / 240px -- this module's own test file's
-// "longest label fits inside its own background box" describe block
-// derives which role is longest from the wording table itself rather
-// than naming one, so it stays correct as the wording keeps changing.)
+// Edge labels and the centre node's type pill use `--type-label-font` / `--type-label-strong-font`
+// (.8125rem sans). 7.6px per character is a conservative upper bound for that face, so the longest label
+// still fits; `SMALL_PAD` is 6px on each side, the slack the text-vs-background-box test checks for.
 const SMALL_CHAR_W = 7.6
 const SMALL_PAD = 6
 const LABEL_H = 18

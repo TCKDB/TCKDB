@@ -34,7 +34,7 @@
 .list-pager-buttons button {
     padding: .4rem .9rem;
     border: 1px solid var(--control-border);
-    border-radius: .4rem;
+    border-radius: var(--radius);
     background: var(--surface);
     color: var(--ink);
     font: var(--type-ui-font);

@@ -143,21 +143,8 @@ function extractTextTransformDeclarations(file: string, css: string): FlaggedRul
  * serves.
  */
 const ALLOWLISTED_UPPERCASE_SELECTORS: Record<string, string[]> = {
-    "conformer-group.css": [
-        // Retired/dead -- no live `.tsx` renders these classes any more
-        // (`design-system.css`'s own "to retire" list names them).
-        ".review-badge",
-        ".stage-table th",
-        ".stage-table td::before",
-    ],
-    "entry-science.css": [
-        ".supersession-notice strong", // "Superseded"
-    ],
-    "species-entry.css": [
-        // "bond {atomA}–{atomB}" -- a fixed lower-case "bond" prefix around
-        // digits and an en-dash; upper-casing changes no letter that
-        // carries scientific meaning the way s/S or k/K does.
-        ".conformer-basin-rotor dt",
+    "page-shell.css": [
+        ".page-toc nav::before", // "On this page" (generated content, not app text)
     ],
 }
 
@@ -184,7 +171,7 @@ describe("no CSS rule outside the reviewed allowlist resolves text-transform to 
     }
 
     it("finds at least the known uppercase-resolving selectors (a guard against the extraction regex itself silently matching nothing)", () => {
-        expect(flaggedAsUppercase.length).toBeGreaterThanOrEqual(5)
+        expect(flaggedAsUppercase.length).toBeGreaterThanOrEqual(1)
     })
 
     it("every uppercase-resolving (file, selector) pair is on the reviewed allowlist", () => {

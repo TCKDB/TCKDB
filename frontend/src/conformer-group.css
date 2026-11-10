@@ -55,7 +55,6 @@
     color: var(--accent-700);
     /* Accessibility-pass floor (11px / .6875rem) -- was .64rem (10.24px). */
     font: .6875rem var(--mono);
-    text-transform: uppercase;
 }
 
 /* `.basin-context`'s own grid/dt/dd rules are retired as a page-header
@@ -473,7 +472,6 @@
     color: var(--muted);
     /* Accessibility-pass floor (11px / .6875rem) -- was .6rem (9.6px). */
     font-size: .6875rem;
-    text-transform: uppercase;
     letter-spacing: .05em;
 }
 
@@ -643,7 +641,6 @@
         color: var(--muted);
         /* Accessibility-pass floor (11px / .6875rem) -- was .58rem (9.28px). */
         font-size: .6875rem;
-        text-transform: uppercase;
         content: attr(data-label);
     }
 }

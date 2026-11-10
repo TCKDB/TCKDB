@@ -40,32 +40,32 @@
     color-scheme: light;
 
     /* ---- Text ---- */
-    --ink: #0e2a33;         /* body text, headings */
-    --ink-2: #34505a;       /* secondary text: intros, descriptions */
-    --muted: #4f666e;       /* tertiary labels, captions */
-    --muted-2: #526a72;     /* secondary-label grey */
-    --faint: #526a72;       /* quiet tertiary text; same value as --muted-2 */
+    --ink: #1f2328;         /* body text, headings */
+    --ink-2: #3b434c;       /* secondary text: intros, descriptions */
+    --muted: #59636e;       /* tertiary labels, captions */
+    --muted-2: #59636e;     /* secondary-label grey */
+    --faint: #59636e;       /* quiet tertiary text; same value as --muted-2 */
 
     /* ---- Hairlines & borders ---- */
-    --line: #d3dddd;            /* card borders, dividers, table rules */
-    --line-2: #e4ebea;          /* quieter hairline: nested rows, disclosure bodies */
-    --control-border: #6b7f87;  /* a clickable control's outline; at least 3:1 on every surface */
-    --divider: #c9d6d6;
-    --divider-strong: #b3c6c7;
+    --line: #d8dde3;            /* card borders, dividers, table rules */
+    --line-2: #e6e9ed;          /* quieter hairline: nested rows, disclosure bodies */
+    --control-border: #818a95;  /* a clickable control's outline; at least 3:1 on every surface */
+    --divider: #cfd6dd;
+    --divider-strong: #bcc5ce;
 
     /* ---- Surfaces ---- */
     --surface: #fff;               /* cards, panels */
-    --surface-sunken: #f5f8f7;     /* recessed panels */
-    --page-bg: #eef2f1;            /* whole-page backdrop, set once on `body` */
+    --surface-sunken: #f6f8fa;     /* recessed panels */
+    --page-bg: #fff;            /* whole-page backdrop, set once on `body` */
 
     /* ---- Accent ---- */
-    --accent: #0a6a68;             /* links, active states */
-    --accent-700: #084f4d;         /* hover/pressed emphasis */
-    --accent-50: #dcf1ee;          /* selection tint, chip backgrounds */
-    --accent-300: #6fb3ae;         /* mid-strength accent for hover borders; never a focus ring */
-    --accent-underline: #9fcfca;   /* text-decoration-color under accent links */
-    --tint-text: #3d5a62;          /* desaturated teal-navy text */
-    --focus-ring: #0b5cd6;         /* focus outline; at least 3:1 on every surface */
+    --accent: #1d5a94;             /* links, active states */
+    --accent-700: #14436f;         /* hover/pressed emphasis */
+    --accent-50: #eaf1f8;          /* selection tint, chip backgrounds */
+    --accent-300: #8fb2d6;         /* mid-strength accent for hover borders; never a focus ring */
+    --accent-underline: #a9c4de;   /* text-decoration-color under accent links */
+    --tint-text: #3f566d;          /* desaturated teal-navy text */
+    --focus-ring: #1d5a94;         /* focus outline; at least 3:1 on every surface */
 
     /* ---- Record kinds: graphic tone, text tone, tint ---- */
     --kind-species: #0b7a75;
@@ -80,25 +80,26 @@
     --kind-network: #85398a;
     --kind-network-ink: #85398a;
     --kind-network-bg: #f3e1f4;
-    --status-ok-ink: #17683a;
-    --status-ok-bg: #dff3e6;
+    --status-ok-ink: #1a6b3c;
+    --status-ok-bg: #e8f3ec;
 
     /* ---- Molecule drawings ---- */
-    --atom-C: #53666c;
-    --atom-H: #f4f7f7;
-    --atom-O: #d1453b;
+    --atom-C: #3f454d;
+    --atom-H: #fff;
+    --atom-O: #c8322b;
     --atom-N: #3a5fcd;
     --atom-other: #7a5aa6;
-    --bond: #8aa0a6;
+    --bond: #59636e;
+    --atom-line: #1f2328;
 
     /* ---- Semantic states (two different ambers; do not merge) ---- */
     --warning: #a15c00;            /* failure register, e.g. clipboard denied */
-    --notice-border: #c9a227;      /* supersession/correction notice: calmer than a failure */
-    --notice-bg: #fdf6e3;
-    --notice-text: #6b5209;
+    --notice-border: #b08a1e;      /* supersession/correction notice: calmer than a failure */
+    --notice-bg: #fbf6e6;
+    --notice-text: #5a4508;
 
     /* ---- Shadow ---- */
-    --shadow-color: rgba(14, 42, 51, .2);
+    --shadow-color: rgba(31, 35, 40, .18);
 
     /* ---- Chart series (Cp-vs-T, ThermoCpChart.tsx) ----
        One categorical hue per overlaid record; colour alone carries series
@@ -120,29 +121,29 @@
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
         color-scheme: dark;
-        --ink: #e4eeee;
-        --ink-2: #b4c9cd;
-        --muted: #8aa5ab;
-        --muted-2: #8aa5ab;
-        --faint: #8aa5ab;
+        --ink: #e6edf3;
+        --ink-2: #c5ced8;
+        --muted: #9da7b3;
+        --muted-2: #9da7b3;
+        --faint: #9da7b3;
 
-        --line: #244048;
-        --line-2: #1a343b;
-        --control-border: #6a8a93;
-        --divider: #2c4850;
-        --divider-strong: #3b5a63;
+        --line: #30363d;
+        --line-2: #262c33;
+        --control-border: #6e7884;
+        --divider: #3a424b;
+        --divider-strong: #4a535d;
 
-        --surface: #10262c;
-        --surface-sunken: #0d2025;
-        --page-bg: #0a1a1f;
+        --surface: #12161c;
+        --surface-sunken: #181d24;
+        --page-bg: #12161c;
 
-        --accent: #4fd1c5;
-        --accent-700: #8fe3da;
-        --accent-50: #12373a;
-        --accent-300: #2f7f7a;
-        --accent-underline: #2a6a66;
-        --tint-text: #9fc3c8;
-        --focus-ring: #7db4ff;
+        --accent: #7fb1e8;
+        --accent-700: #a9cbf0;
+        --accent-50: #1a2533;
+        --accent-300: #3f6ea3;
+        --accent-underline: #3a6190;
+        --tint-text: #a9bdd0;
+        --focus-ring: #7fb1e8;
 
         --kind-species: #4fd1c5;
         --kind-species-ink: #4fd1c5;
@@ -156,20 +157,21 @@
         --kind-network: #d98fde;
         --kind-network-ink: #d98fde;
         --kind-network-bg: #35183a;
-        --status-ok-ink: #6fdc9a;
-        --status-ok-bg: #12351f;
+        --status-ok-ink: #7fd19b;
+        --status-ok-bg: #16291e;
 
-        --atom-C: #9db3b9;
-        --atom-H: #eaf2f2;
-        --atom-O: #ff7a6d;
+        --atom-C: #8b929c;
+        --atom-H: #e6edf3;
+        --atom-O: #f08378;
         --atom-N: #7f9dff;
         --atom-other: #c9a0e8;
-        --bond: #587780;
+        --bond: #9da7b3;
+        --atom-line: #0d1015;
 
         --warning: #e2a33e;
-        --notice-border: #b8922a;
-        --notice-bg: #2b2412;
-        --notice-text: #e8c468;
+        --notice-border: #9c7c22;
+        --notice-bg: #2a2414;
+        --notice-text: #e8c86e;
 
         --chart-series-1: #6fb1f0;
         --chart-series-2: #f2a65a;
@@ -187,29 +189,29 @@
 /* Must declare the same values as the `prefers-color-scheme` block above. */
 :root[data-theme="dark"] {
     color-scheme: dark;
-    --ink: #e4eeee;
-    --ink-2: #b4c9cd;
-    --muted: #8aa5ab;
-    --muted-2: #8aa5ab;
-    --faint: #8aa5ab;
+    --ink: #e6edf3;
+    --ink-2: #c5ced8;
+    --muted: #9da7b3;
+    --muted-2: #9da7b3;
+    --faint: #9da7b3;
 
-    --line: #244048;
-    --line-2: #1a343b;
-    --control-border: #6a8a93;
-    --divider: #2c4850;
-    --divider-strong: #3b5a63;
+    --line: #30363d;
+    --line-2: #262c33;
+    --control-border: #6e7884;
+    --divider: #3a424b;
+    --divider-strong: #4a535d;
 
-    --surface: #10262c;
-    --surface-sunken: #0d2025;
-    --page-bg: #0a1a1f;
+    --surface: #12161c;
+    --surface-sunken: #181d24;
+    --page-bg: #12161c;
 
-    --accent: #4fd1c5;
-    --accent-700: #8fe3da;
-    --accent-50: #12373a;
-    --accent-300: #2f7f7a;
-    --accent-underline: #2a6a66;
-    --tint-text: #9fc3c8;
-    --focus-ring: #7db4ff;
+    --accent: #7fb1e8;
+    --accent-700: #a9cbf0;
+    --accent-50: #1a2533;
+    --accent-300: #3f6ea3;
+    --accent-underline: #3a6190;
+    --tint-text: #a9bdd0;
+    --focus-ring: #7fb1e8;
 
     --kind-species: #4fd1c5;
     --kind-species-ink: #4fd1c5;
@@ -223,20 +225,21 @@
     --kind-network: #d98fde;
     --kind-network-ink: #d98fde;
     --kind-network-bg: #35183a;
-    --status-ok-ink: #6fdc9a;
-    --status-ok-bg: #12351f;
+    --status-ok-ink: #7fd19b;
+    --status-ok-bg: #16291e;
 
-    --atom-C: #9db3b9;
-    --atom-H: #eaf2f2;
-    --atom-O: #ff7a6d;
+    --atom-C: #8b929c;
+    --atom-H: #e6edf3;
+    --atom-O: #f08378;
     --atom-N: #7f9dff;
     --atom-other: #c9a0e8;
-    --bond: #587780;
+    --bond: #9da7b3;
+    --atom-line: #0d1015;
 
     --warning: #e2a33e;
-    --notice-border: #b8922a;
-    --notice-bg: #2b2412;
-    --notice-text: #e8c468;
+    --notice-border: #9c7c22;
+    --notice-bg: #2a2414;
+    --notice-text: #e8c86e;
 
     --chart-series-1: #6fb1f0;
     --chart-series-2: #f2a65a;
