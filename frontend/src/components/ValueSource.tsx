@@ -1,18 +1,9 @@
 import { Fragment, type ReactNode } from "react"
 import { Link } from "react-router-dom"
+import { calculationDid } from "../domain/calculationTypeFormat"
 import { resolveRecordLocation } from "../domain/recordRoute"
 import "../record-blocks.css"
 import { ReviewChip } from "./ReviewChip"
-
-/** TCKDB's wording for what a calculation did, by its type code. A code not listed here is not shown. */
-const DID_WORDING: Readonly<Record<string, string>> = {
-    opt: "geometry optimisation",
-    freq: "frequencies",
-    sp: "single-point energy",
-    scan: "scan",
-    irc: "reaction path",
-    path_search: "path search",
-}
 
 export type SourceLevel = { role: "geometry" | "frequency" | "energy"; label: string }
 
@@ -46,7 +37,7 @@ export function ValueSource({ source, did, levels, programs, review, compact = f
         return <span className="value-source value-source--compact"><span className="value-source-key">from</span> {link}</span>
     }
     const parts: ReactNode[] = []
-    const didWords = did && Object.hasOwn(DID_WORDING, did) ? DID_WORDING[did] : null
+    const didWords = did ? calculationDid(did) : null
     if (didWords) parts.push(didWords)
     for (const level of levels ?? []) {
         if (level.label) parts.push(<>{level.role} <span className="t-preserve-case">{level.label}</span></>)

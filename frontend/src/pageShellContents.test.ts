@@ -26,7 +26,7 @@ const DECLARED: Record<string, "list" | "none"> = {
 }
 
 const SOURCES = Object.fromEntries(
-    Object.entries(import.meta.glob("./{pages,components}/*.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>)
+    Object.entries(import.meta.glob("./{pages,components}/**/*.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>)
         .filter(([path]) => !path.endsWith(".test.tsx"))
         .map(([path, source]) => [path, source.replace(/\/\*[\s\S]*?\*\//g, "")]),
 )

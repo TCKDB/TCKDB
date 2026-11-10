@@ -72,7 +72,7 @@ describe("ValueSource", () => {
         />)
         const line = document.querySelector(".value-source") as HTMLElement
         expect(within(line).getByRole("link")).toHaveAttribute("href", "/calculations/calc_a")
-        for (const text of ["Source", "single-point energy", "geometry wB97X-D/def2-TZVP", "energy CCSD(T)-F12/cc-pVTZ-F12", "ORCA 5.0.3, Molpro 2024.1", "Review of this record: not reviewed"]) {
+        for (const text of ["Source", "single-point", "geometry wB97X-D/def2-TZVP", "energy CCSD(T)-F12/cc-pVTZ-F12", "ORCA 5.0.3, Molpro 2024.1", "Review of this record: not reviewed"]) {
             expect(line).toHaveTextContent(text)
         }
     })
@@ -101,6 +101,14 @@ describe("ValueSource", () => {
         inRouter(<ValueSource source={{ recordType: "something_new", ref: "xyz_a" }} />)
         expect(screen.queryByRole("link")).toBeNull()
         expect(document.querySelector(".value-source")?.textContent).toBe("Source xyz_a")
+    })
+
+    it.each([
+        ["opt", "optimisation"], ["freq", "frequency"], ["sp", "single-point"], ["irc", "IRC"],
+        ["scan", "scan"], ["path_search", "path search"], ["conf", "conformer"], ["composite", "composite"],
+    ])("shows the calculation type %s as %s", (code, words) => {
+        inRouter(<ValueSource source={source} did={code} />)
+        expect(document.querySelector(".value-source")?.textContent).toBe(`Source calc_a · ${words}`)
     })
 
     it("omits a calculation type code it has no wording for, and never shows the raw code", () => {

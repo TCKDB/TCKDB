@@ -71,7 +71,7 @@ export function RouteFocus() {
         window.addEventListener("pointerdown", stop, true)
         focusHeading(hashRef.current)
         return stop
-        // Runs on a page change only; a hash change on the same page must not stop the follow.
+        // Runs once per page navigation (when `key` changes).
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [key])
 
