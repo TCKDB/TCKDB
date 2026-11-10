@@ -259,8 +259,8 @@ describe("molecule overview: versions", () => {
         const rail = document.querySelector(".page-shell-rail") as HTMLElement
         expect(within(rail).getByText("This map shows the versions of this molecule. Reactions and networks are on each version's page.")).toBeVisible()
         const list = within(rail).getByRole("list", { name: "Connected records" })
-        expect(within(list).getByRole("link", { name: `minimum · ground state · ${entryRef}` })).toHaveAttribute("href", `/species-entries/${entryRef}`)
-        expect(within(list).getByRole("link", { name: `minimum · ground state · spe_secondgroundentryrecordabcdefgh` })).toBeVisible()
+        expect(within(rail).getByRole("link", { name: `minimum · ground state, A version of this molecule, ${entryRef}` })).toHaveAttribute("href", `/species-entries/${entryRef}`)
+        expect(within(list).getAllByRole("listitem")[1]).toHaveTextContent("A version of this molecule, spe_secondgroundentryrecordabcdefgh")
         expect(within(rail).getByRole("link", { name: "This molecule (you are here)" })).toBeVisible()
     })
 

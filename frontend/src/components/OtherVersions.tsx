@@ -1,8 +1,7 @@
 import { Link } from "react-router-dom"
 import "../entry-numbers.css"
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
-import { versionHolds, versionLabel } from "../domain/entryVersions"
-import { hiddenByDefaultNote } from "../domain/paging"
+import { hiddenVersionsNote, versionHolds, versionLabel } from "../domain/entryVersions"
 import { useSpeciesOverview } from "../hooks/useSpeciesOverview"
 import { SectionHeading } from "./PageSections"
 import { ReviewChip } from "./ReviewChip"
@@ -23,7 +22,7 @@ export function OtherVersions({ entry }: { entry: SpeciesEntryProjection }) {
     const species = state.status === "ready" && state.speciesRef === entry.speciesRef ? state.species : null
     const listed = species?.entries ?? []
     const versions = listed.some((candidate) => candidate.species_entry_ref === entry.species_entry_ref) ? listed : [entry, ...listed]
-    const hidden = species ? hiddenByDefaultNote(species.entriesHiddenByDefault, "versions") : null
+    const hidden = species ? hiddenVersionsNote(species.entriesHiddenByDefault) : null
     return (
         <section className="entry-versions" aria-labelledby="entry-versions">
             <SectionHeading id="entry-versions" intro="A molecule can have several versions, which differ in electronic state, stereochemistry or isotopes. Each version holds its own records, and each record carries its own levels of theory.">

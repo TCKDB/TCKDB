@@ -118,8 +118,8 @@ export function SpeciesRelationshipMap({ species }: { species: SpeciesOverview }
     const nodes: NeighbourNode[] = shown.map((version) => ({
         id: version.species_entry_ref,
         kind: "species-entry",
-        label: `${versionFacts(version)} · ${version.species_entry_ref}`,
-        relation: "A version of this molecule",
+        label: versionFacts(version),
+        relation: `A version of this molecule, ${version.species_entry_ref}`,
         to: `/species-entries/${version.species_entry_ref}`,
         found: null,
     }))
