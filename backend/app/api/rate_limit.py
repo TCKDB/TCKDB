@@ -13,7 +13,8 @@ bucket and chooses an identity:
 - ``/api/v1/auth/register`` → ``register`` bucket (per-hour, IP-keyed).
   Tight: account-spam target.
 - Public scientific reads (GET ``/api/v1/scientific/...``, POST
-  ``/api/v1/scientific/.../search``, GET ``/api/v1/workflow-tools``,
+  ``/api/v1/scientific/.../search``, POST the relative-energy and
+  relative-energy compare routes, GET ``/api/v1/workflow-tools``,
   GET ``/api/v1/workflow-tool-releases``) split by whether a
   credential is present:
   - With credential → ``auth_read`` (per-minute, credential-keyed).
@@ -45,6 +46,7 @@ Tests reset the store between test runs and can flip
 from __future__ import annotations
 
 import hashlib
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -222,11 +224,18 @@ _HEALTH_PATHS = frozenset({
 
 # Public read-classified GET prefixes. POST searches are handled
 # separately because POST is normally mutating; only the explicit
-# ``.../search`` suffix on the scientific surface is read-classified.
+# ``.../search`` suffix on the scientific surface and the relative-energy
+# routes are read-classified.
 _PUBLIC_READ_GET_PREFIXES: tuple[str, ...] = (
     "/api/v1/scientific/",
     "/api/v1/workflow-tools",
     "/api/v1/workflow-tool-releases",
+)
+
+# Read-only POSTs (snapshot session, no write); manifest downloads excluded.
+_READ_ONLY_POST_RE = re.compile(
+    r"/api/v1/scientific/species-entries/[A-Za-z0-9_]{1,64}"
+    r"/conformers/relative-energies(?:/compare)?"
 )
 
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -257,7 +266,7 @@ def _is_public_read_path(method: str, path: str) -> bool:
 
     GETs on the scientific and workflow-tool surfaces are reads. POSTs
     are reads only when they target a scientific search endpoint
-    (``/api/v1/scientific/.../search``); the ``/scientific/`` namespace
+    (``/api/v1/scientific/.../search``) or a relative-energy route; the ``/scientific/`` namespace
     is read-only by convention so this prefix+suffix test is safe.
     Mutating sub-routes added under ``/scientific/`` in the future
     would need to be excluded explicitly.
@@ -265,7 +274,9 @@ def _is_public_read_path(method: str, path: str) -> bool:
     if method == "GET":
         return any(path.startswith(p) for p in _PUBLIC_READ_GET_PREFIXES)
     if method == "POST":
-        return path.startswith("/api/v1/scientific/") and path.endswith("/search")
+        return (
+            path.startswith("/api/v1/scientific/") and path.endswith("/search")
+        ) or _READ_ONLY_POST_RE.fullmatch(path) is not None
     return False
 
 
@@ -273,7 +284,7 @@ def _is_mutating_method(method: str) -> bool:
     """True for HTTP verbs that normally change server state.
 
     Callers must first rule out routes that are reads despite using
-    POST (the scientific search endpoints).
+    POST (the scientific search and relative-energy endpoints).
     """
     return method in _MUTATING_METHODS
 
@@ -294,11 +305,11 @@ def _classify(request: Request) -> tuple[str, int, int, str]:
     Ordering matters: login/register are matched first because they
     are POSTs and would otherwise drop through to the mutating branch.
     Public-read classification is checked before the mutating-method
-    check so the scientific ``POST .../search`` endpoints are
-    correctly classified as reads.
+    check so the scientific ``POST .../search`` and relative-energy
+    endpoints are correctly classified as reads.
     """
     method = request.method.upper()
-    path = request.url.path
+    path = request.scope["path"]
     ip = _client_ip(request)
 
     if _is_login_path(method, path):
@@ -379,7 +390,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not settings.rate_limit_enabled:
             return await call_next(request)
         # Don't gate health checks — operators ping these on a loop.
-        if _is_health_path(request.url.path):
+        if _is_health_path(request.scope["path"]):
             return await call_next(request)
 
         bucket, limit, window, identity = _classify(request)

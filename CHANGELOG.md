@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Relative conformer energy POSTs count as public reads (2026-11-10)
+
+- **Behaviour:** anonymous `POST .../species-entries/{ref}/conformers/relative-energies` and `.../relative-energies/compare` use the `anon_read` rate-limit bucket instead of `anon_other`; with a credential they use `auth_read` instead of `auth_write`. The `/manifest` downloads are unchanged. Other POSTs under `/scientific/` are unchanged, and the anonymous body-size cap still applies.
+- **Schema and migration:** none. No new environment variable.
+
 ## Picture first on the geometry page (2026-11-10)
 
 - **Behaviour:** the geometry page shows a ball-and-stick picture drawn from the stored coordinates, with a "Show in 3D" button that opens the interactive viewer; the viewer's rotate and zoom buttons are always visible. Only one interactive viewer is open per page, and if the browser cannot start WebGL the picture stays with one sentence saying so.
