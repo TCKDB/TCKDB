@@ -20,5 +20,7 @@ describe("entry-numbers.css", () => {
         expect(phone).toContain("display: block")
         expect(phone).toMatch(/\.entry-numbers-values \{[^}]*grid-template-columns: 1fr/)
         expect(phone).toMatch(/\.entry-numbers-table \{[^}]*min-width: 0/)
+        // Long wording (a statmech treatment) must wrap on a phone instead of forcing a sideways scroll.
+        expect(phone).toMatch(/\.entry-numbers-values dd \{[^}]*white-space: normal/)
     })
 })

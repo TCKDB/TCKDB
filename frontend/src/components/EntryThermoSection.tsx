@@ -129,10 +129,10 @@ function thermoRecordFallback(record: ThermoRecord) {
  * registers a record when this is true.
  */
 function hasModelKindData(record: ThermoRecord): boolean {
-    if (record.model_kind === "nasa7") return record.nasa != null
+    if (record.model_kind === "nasa") return record.nasa != null
     if (record.model_kind === "nasa9") return (record.nasa9?.length ?? 0) > 0
     if (record.model_kind === "wilhoit") return record.wilhoit != null
-    if (record.model_kind === "tabulated") return (record.points?.length ?? 0) > 0
+    if (record.model_kind === "points") return (record.points?.length ?? 0) > 0
     // "scalar" and any other declared kind: no model block on this page to
     // jump to at all.
     return false
@@ -412,10 +412,10 @@ function ThermoRecordBody({ record, idSuffix = "", showProvenance = true }: {
  */
 function ModelBlock({ record, idSuffix = "" }: { record: ThermoRecord; idSuffix?: string }) {
     switch (record.model_kind) {
-        case "nasa7": return <NasaBlock nasa={record.nasa ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
+        case "nasa": return <NasaBlock nasa={record.nasa ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
         case "nasa9": return <Nasa9Block nasa9={record.nasa9 ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
         case "wilhoit": return <WilhoitBlock wilhoit={record.wilhoit ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
-        case "tabulated": return <PointsBlock points={record.points ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
+        case "points": return <PointsBlock points={record.points ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
         default: return null
     }
 }

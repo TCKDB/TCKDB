@@ -140,7 +140,7 @@ function LevelHeading({ levels }: { levels: NumberRow["levels"] }) {
 function ListNotes({ data }: { data: EntryNumbers }) {
     const notes: string[] = []
     for (const [name, label, list] of [["Thermochemistry", "thermochemistry", data.thermo], ["Statistical mechanics", "statistical mechanics", data.statmech], ["Transport", "transport", data.transport]] as const) {
-        if (list.capped) notes.push(`Showing the first ${list.records.length} of ${list.total} ${label} records. The ${name} tab below pages through all of them.`)
+        if (list.capped) notes.push(`Showing the first ${list.records.length.toLocaleString("en-US")} of ${list.total.toLocaleString("en-US")} ${label} records. The ${name} tab below pages through all of them.`)
         const hidden = hiddenByDefaultNote(list.hiddenByDefault, `${label} records`)
         if (hidden) notes.push(hidden)
     }

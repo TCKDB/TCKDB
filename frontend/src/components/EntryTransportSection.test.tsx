@@ -216,7 +216,8 @@ describe("EntryTransportSection", () => {
         const section = screen.getByText("Source calculations", { selector: "summary" }).closest("details") as HTMLDetailsElement
         fireEvent.click(screen.getByText("Source calculations", { selector: "summary" }))
         await within(section).findByText("Source calculations loaded.")
-        expect(requestedIncludeSets).toEqual([["source_calculations"], ["source_calculations"]])
+        // The list already carried the source calculations, so opening the disclosure asks for nothing more.
+        expect(requestedIncludeSets).toEqual([["source_calculations"]])
 
         // "Review history" was never opened, so it must never be requested.
         expect(requestedIncludeSets.flat()).not.toContain("review")

@@ -157,7 +157,7 @@ function thermoRecords() {
         {
             // Linked to the conformer that's selected by default (cg_one).
             thermo_ref: "thm_one",
-            scientific_origin: "computed", model_kind: "nasa7",
+            scientific_origin: "computed", model_kind: "nasa",
             review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
             supersession: null,
             h298_kj_mol: 143.9, s298_j_mol_k: 194.4, h298_uncertainty_kj_mol: null, s298_uncertainty_j_mol_k: null,
@@ -196,7 +196,7 @@ function thermoRecords() {
             // software, no conformer link -- the real archive shape
             // (thermo id 4, spe_dfcw4tvy6tkqxnyittmn6d3vdu), per PR #285.
             thermo_ref: "thm_two",
-            scientific_origin: "computed", model_kind: "nasa7",
+            scientific_origin: "computed", model_kind: "nasa",
             review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
             supersession: null,
             h298_kj_mol: 192.4, s298_j_mol_k: 380.3, h298_uncertainty_kj_mol: null, s298_uncertainty_j_mol_k: null,
@@ -222,7 +222,7 @@ function thermoRecords() {
             // default. Must render under "From conformer_2", never lumped
             // into "no conformer link".
             thermo_ref: "thm_three",
-            scientific_origin: "computed", model_kind: "nasa7",
+            scientific_origin: "computed", model_kind: "nasa",
             review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
             supersession: null,
             h298_kj_mol: 150.1, s298_j_mol_k: 200.2, h298_uncertainty_kj_mol: null, s298_uncertainty_j_mol_k: null,

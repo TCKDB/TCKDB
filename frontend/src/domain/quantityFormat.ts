@@ -118,7 +118,11 @@ export function significant(value: number | null | undefined, digits: number, un
 export function deposited(value: number | null | undefined, unit?: string | null): Quantity | null {
     if (value === null || value === undefined || !Number.isFinite(value)) return null
     const text = String(value)
-    return { value: /e/i.test(text) ? Number(value).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 20 }) : text, unit: unit ?? null }
+    if (!/e/i.test(text)) return { value: text, unit: unit ?? null }
+    // A very small or very large number would print as `1e-7`; plain digits are used while they stay readable and exact.
+    const plain = Number(value).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 20 })
+    const readable = Number(plain) === Number(value) && plain.replace(/[-.]/g, "").length <= 15
+    return { value: readable ? plain : text.replace("e-", "e−").replace("e+", "e"), unit: unit ?? null }
 }
 
 /**

@@ -52,7 +52,7 @@ async function walk<T>(entryRef: string, load: Loader<T>, control: WalkControl):
             const ownLimit = first?.pagination.limit
             if (request && ownLimit !== undefined && limit !== ownLimit && error instanceof ScientificApiError && error.status === 422) {
                 limit = ownLimit
-                request = { offset: request.offset, limit }
+                request = { offset: request.offset, limit: Math.min(limit, MAX_RECORDS - records.length) }
                 continue
             }
             throw error
@@ -61,7 +61,7 @@ async function walk<T>(entryRef: string, load: Loader<T>, control: WalkControl):
         records.push(...page.records)
         total = page.pagination.total
         const next = nextPageRequest(page.pagination)
-        request = next ? { offset: next.offset, limit } : null
+        request = next ? { offset: next.offset, limit: Math.min(limit, MAX_RECORDS - records.length) } : null
     } while (request && records.length < MAX_RECORDS)
     return {
         records,

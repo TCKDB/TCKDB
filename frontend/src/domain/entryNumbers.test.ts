@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { entryLede } from "./entryLede"
 import { numbersOrderSentence, pointGroupParts } from "./entryNumbers"
+import { THERMO_MODEL_KIND_WORDS } from "./thermoModelKind"
 import { orderWords } from "./paging"
 
 const sort = (...keys: [string, string, string][]) => ({ keys: keys.map(([key, direction, meaning]) => ({ key, direction, meaning })) })
@@ -46,5 +47,14 @@ describe("entryLede", () => {
         expect(entryLede(entry(9))).toContain("multiplicity 9")
         expect(entryLede(entry(9, "doubly_excited"))).toContain("doubly excited")
         expect(entryLede(entry(9))).not.toContain("not recorded")
+    })
+})
+
+describe("thermo model kinds", () => {
+    it("are keyed on the values the read API sends, not on the database enum", () => {
+        // `thermo.py` sends `nasa` for a NASA 7 record and `points` for a tabulated one; `EntryThermoSection` picks its model block by the same values.
+        expect(Object.keys(THERMO_MODEL_KIND_WORDS)).toEqual(["nasa", "nasa9", "wilhoit", "points", "scalar"])
+        expect(THERMO_MODEL_KIND_WORDS).not.toHaveProperty("nasa7")
+        expect(THERMO_MODEL_KIND_WORDS).not.toHaveProperty("tabulated")
     })
 })

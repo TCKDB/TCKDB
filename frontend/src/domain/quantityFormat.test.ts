@@ -188,7 +188,9 @@ describe("formatQuantity / QUANTITY_SPECS", () => {
         expect(formatQuantity("thermo_temperature_k", 298.15)).toEqual({ value: "298.15", unit: "K" })
         expect(formatQuantity("transport_polarizability_angstrom3", 2.6)).toEqual({ value: "2.6", unit: "Å³" })
         expect(formatQuantity("transport_rotational_relaxation", 1e-7)).toEqual({ value: "0.0000001", unit: null })
-        expect(formatQuantity("transport_rotational_relaxation", 1.5e21)).toEqual({ value: "1500000000000000000000", unit: null })
+        expect(formatQuantity("transport_rotational_relaxation", 1.5e21)).toEqual({ value: "1.5e21", unit: null })
+        // Plain digits only while they stay exact and short: this would round to 0, so it keeps its exponent.
+        expect(formatQuantity("transport_rotational_relaxation", 1e-25)).toEqual({ value: "1e−25", unit: null })
         expect(formatQuantity("transport_rotational_relaxation", null)).toBeNull()
     })
 })

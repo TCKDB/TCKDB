@@ -1,9 +1,9 @@
-/** TCKDB's wording for the backend `ThermoModelKind` codes. */
+/** TCKDB's wording for the thermo model kinds the read API sends (`nasa` is a 7-coefficient polynomial, `points` is tabulated). */
 export const THERMO_MODEL_KIND_WORDS: Readonly<Record<string, string>> = {
-    nasa7: "NASA 7-coefficient polynomial",
+    nasa: "NASA 7-coefficient polynomial",
     nasa9: "NASA 9-coefficient polynomial",
     wilhoit: "Wilhoit polynomial",
-    tabulated: "Tabulated values",
+    points: "Tabulated values",
     scalar: "Single values",
 }
 

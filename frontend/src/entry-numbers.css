@@ -215,5 +215,6 @@
 
     .entry-numbers-values dd {
         margin: 0 0 var(--s-2);
+        white-space: normal;
     }
 }

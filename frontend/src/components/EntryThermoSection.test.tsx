@@ -78,7 +78,7 @@ function mockRecords() {
         {
             thermo_ref: "thm_alpha",
             scientific_origin: "computed",
-            model_kind: "nasa7",
+            model_kind: "nasa",
             review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
             supersession: null,
             h298_kj_mol: 111.1,
@@ -356,7 +356,7 @@ describe("EntryThermoSection", () => {
         const records = mockRecords()
         const withPoints = {
             ...records[0],
-            model_kind: "tabulated",
+            model_kind: "points",
             points: [{ temperature_k: 298.15, cp_j_mol_k: 33.6, h_kj_mol: 0, s_j_mol_k: 240.1, g_kj_mol: -71.5 }],
         }
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [withPoints, records[1], records[2]] }))))
@@ -1049,7 +1049,7 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
 
     it("disambiguates two records of the same model kind rather than repeating one label", async () => {
         const [alpha, beta, gamma] = mockRecords()
-        const secondNasa = { ...gamma, thermo_ref: "thm_delta", model_kind: "nasa7", nasa: alpha.nasa, nasa9: null, wilhoit: null, points: null }
+        const secondNasa = { ...gamma, thermo_ref: "thm_delta", model_kind: "nasa", nasa: alpha.nasa, nasa9: null, wilhoit: null, points: null }
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [alpha, beta, gamma, secondNasa] }))))
         pageWithToc()
         await screen.findByText("thm_delta")
@@ -1425,7 +1425,7 @@ function levelsRecord(overrides: Record<string, unknown> = {}) {
     return {
         thermo_ref: "thm_alpha",
         scientific_origin: "computed",
-        model_kind: "nasa7",
+        model_kind: "nasa",
         review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
         supersession: null,
         h298_kj_mol: 111.1,

@@ -25,7 +25,7 @@ const sortEcho = {
     },
 }
 
-function thermo(ref: string, lot: typeof lotA | null, h298: number | null, target: unknown, review = "not_reviewed", group: string | null = null, kind = "nasa7") {
+function thermo(ref: string, lot: typeof lotA | null, h298: number | null, target: unknown, review = "not_reviewed", group: string | null = null, kind = "nasa") {
     return {
         thermo_ref: ref,
         scientific_origin: "computed", model_kind: kind,
@@ -372,8 +372,8 @@ describe("molecule page: numbers for this entry", () => {
     it("stops at the cap, asking for 200 at a time after the shared first page", async () => {
         const counts = { thermo: 0, statmech: 0, transport: 0, thermoLimits: [] as string[] }
         await open({ endless: true, counts })
-        expect(await screen.findByText(/Showing the first 1050 of 5000 thermochemistry records\. The Thermochemistry tab below pages through all of them\./)).toBeVisible()
-        expect(counts.thermoLimits).toEqual(["50", "200", "200", "200", "200", "200"])
+        expect(await screen.findByText(/Showing the first 1,000 of 5,000 thermochemistry records\. The Thermochemistry tab below pages through all of them\./)).toBeVisible()
+        expect(counts.thermoLimits).toEqual(["50", "200", "200", "200", "200", "150"])
     })
 
     it("does not fetch the lists again when a tab opens", async () => {
