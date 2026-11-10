@@ -34,8 +34,8 @@
 
 
 /*
- * `.page-toc` is the left column: `TableOfContents.tsx` holds its width while sections register
- * and fills it once two or more are mounted; it removes the column if none ever appear.
+ * `.page-toc` is the reserved left column: `TableOfContents.tsx` always renders it and
+ * only fills it once two or more sections are mounted, so a tab switch never shifts the content.
  * It follows the content in the markup and `order: -1` puts it on the left. Entries are numbered with CSS counters, so the link text stays the heading text.
  */
 .page-toc {
@@ -45,11 +45,6 @@
     flex: 0 0 14rem;
     max-height: calc(100vh - 3rem);
     overflow-y: auto;
-}
-
-/* A page that never registers a list of sections has no contents column, so its content uses the full width. */
-.page-toc[data-hidden="true"] {
-    display: none;
 }
 
 .page-toc nav::before {

@@ -24,7 +24,7 @@ dataset must never require a code release.
 
 ## Record page building blocks (2026-11-10)
 
-- **Behaviour:** record page headers (species entry, transition state entry, calculation) show the record kind's glyph and the review status as a word beside a filled mark (approved) or an outline mark (every other status), with a "What review status means" explanation. Pages with no sections (the Molecules and Reactions lists) use the full width instead of leaving an empty left column; record pages keep the column while their sections load and drop it if no contents list appears. The "Also see" link on the list pages is blue and underlined like other links. Glossary popovers that are closed no longer widen the page on phones. A link to `/guide#order` lands on the ordering note instead of the top of the page.
+- **Behaviour:** record page headers (species entry, transition state entry, calculation) show the record kind's glyph and the review status as a word beside a filled mark (approved) or an outline mark (every other status), with a "What review status means" explanation. Pages that never have a contents list (the Molecules and Reactions lists, the species overview, the frequency scale factor page) use the full width instead of leaving an empty left column; record pages keep their column. The "Also see" link on the list pages is blue and underlined like other links. Glossary popovers that are closed no longer widen the page on phones. A link to `/guide#order` lands on the ordering note instead of the top of the page.
 - **Schema and migration:** none. No new environment variable.
 
 ## Site bar, numbered contents list and a guide page (2026-11-10)

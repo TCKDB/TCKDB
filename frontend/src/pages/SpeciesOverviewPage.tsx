@@ -91,7 +91,7 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
                 <span aria-hidden="true">/</span>
                 <span aria-current="page">Species</span>
             </nav>
-            <PageShell>
+            <PageShell contents="none">
             <header className="species-header">
                 <p className="eyebrow">Species record · chemical identity</p>
                 {/* `formula` typeset with subscripts when the archive computed

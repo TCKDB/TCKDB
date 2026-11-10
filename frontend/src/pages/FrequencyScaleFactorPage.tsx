@@ -56,6 +56,7 @@ function FrequencyScaleFactorDetail({ record }: { record: FrequencyScaleFactorRe
             </nav>
 
             <PageShell
+                contents="none"
                 identity={(
                     <header className="basin-header">
                         <div className="record-identity-header">

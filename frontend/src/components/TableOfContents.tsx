@@ -7,14 +7,10 @@ import { NARROW_QUERY, useMediaQuery } from "../hooks/useMediaQuery"
 // Below this many REGISTERED sections there is nothing worth a jump list
 // -- a 1-section page (a single tab body registering one heading) does not
 // get one. The COLUMN itself, unlike the list, is not gated on this at
-// all: it is held while sections register (see the component doc below) so
-// a page crossing this threshold at runtime -- a tab switch, a lazy section
-// finishing its first fetch -- does not shift the content pane sideways.
+// all: it is always reserved (see the component doc below) so a page
+// crossing this threshold at runtime -- a tab switch, a lazy section
+// finishing its first fetch -- never shifts the content pane sideways.
 export const MIN_SECTIONS_FOR_LIST = 2
-
-// How long the column is held on a page that has not yet registered
-// MIN_SECTIONS_FOR_LIST sections before it is treated as having none.
-export const CONTENTS_SETTLE_MS = 1500
 
 // How close a heading's top edge must be to the viewport top before it
 // counts as "the current section" -- a fixed offset rather than something
@@ -77,12 +73,14 @@ function beginScrollSuppression(
  * (`usePageSections`). The COLUMN -- the space this component occupies in
  * `.page-shell-layout` -- is always rendered on a record page; only the
  * `<nav>`/`<ul>` *inside* it is conditional on
- * `sections.length >= MIN_SECTIONS_FOR_LIST`. While sections are still
- * registering the empty column holds its width, so content does not jump
- * when they arrive. If `CONTENTS_SETTLE_MS` passes without a list ever
- * appearing, the column is marked `data-hidden` and the stylesheet removes
- * it; once a list has appeared it stays for the life of the page, so a tab
- * switch from 4 sections to 1 does not shift the content.
+ * `sections.length >= MIN_SECTIONS_FOR_LIST`. A 1-section page reserves
+ * the same width as a 6-section one and renders an empty column, not a
+ * missing one -- see `page-shell.css`'s `.page-toc:empty` rule for how
+ * that empty column stays visually silent (no stray border/padding) while
+ * still holding its place. This is what item 2/3 of the design brief asks
+ * for directly: switching from the Geometry tab (1 section) to Statistical
+ * Mechanics (usually 4+) must never mount or unmount the column and must
+ * never shift the content pane sideways.
  *
  * Collapses out of the flow entirely on narrow viewports when it has
  * nothing to show (see `page-shell.css`'s `62rem` breakpoint); every entry
@@ -94,16 +92,6 @@ export function TableOfContents() {
     const location = useLocation()
     const [activeId, setActiveId] = useState<string | null>(null)
     const showList = sections.length >= MIN_SECTIONS_FOR_LIST
-    const [settled, setSettled] = useState(false)
-    const [everListed, setEverListed] = useState(false)
-    useEffect(() => {
-        const timer = window.setTimeout(() => setSettled(true), CONTENTS_SETTLE_MS)
-        return () => window.clearTimeout(timer)
-    }, [])
-    useEffect(() => {
-        if (showList) setEverListed(true)
-    }, [showList])
-    const hidden = settled && !everListed && !showList
     // Which hash this rail has already resolved -- so a mount-time hash
     // that arrives before its target section has registered (data still
     // loading) gets retried as `sections` grows, but a hash that WAS
@@ -280,7 +268,7 @@ export function TableOfContents() {
     )
 
     return (
-        <div className="page-toc" data-sections={sections.length} data-hidden={hidden ? "true" : undefined}>
+        <div className="page-toc">
             {showList && (narrow
                 ? <details className="page-toc-disclosure"><summary>Contents</summary>{list}</details>
                 : list)}

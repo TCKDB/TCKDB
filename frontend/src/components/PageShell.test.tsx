@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ReactNode } from "react"
 import { act, cleanup, render, screen } from "@testing-library/react"
-import { CONTENTS_SETTLE_MS } from "./TableOfContents"
 import { MemoryRouter } from "react-router-dom"
 import { PageShell } from "./PageShell"
 import { SectionHeading } from "./PageSections"
@@ -97,24 +96,30 @@ describe("PageShell: the contents column", () => {
         expect(column(container)).toBeNull()
     })
 
-    it("holds the column while sections register, then hides it when fewer than two ever appear", () => {
+    it('contents="list" (the default) always has the column, with no timer that removes it later', () => {
         vi.useFakeTimers()
-        const { container } = render(tree(<SectionHeading id="only">Only</SectionHeading>))
-        expect(column(container)).not.toHaveAttribute("data-hidden")
-        act(() => { vi.advanceTimersByTime(CONTENTS_SETTLE_MS + 10) })
-        expect(column(container)).toHaveAttribute("data-hidden", "true")
-    })
-
-    it("keeps the column once a list has appeared, even if the sections later drop below two", () => {
-        vi.useFakeTimers()
-        const { container, rerender } = render(tree(<><SectionHeading id="one">One</SectionHeading><SectionHeading id="two">Two</SectionHeading></>))
+        const { container, rerender } = render(tree(<SectionHeading id="only">Only</SectionHeading>))
+        expect(column(container)).not.toBeNull()
+        act(() => { vi.advanceTimersByTime(10_000) })
+        expect(column(container)).not.toBeNull()
+        rerender(tree(<><SectionHeading id="one">One</SectionHeading><SectionHeading id="two">Two</SectionHeading></>))
         expect(column(container)?.querySelector("nav")).not.toBeNull()
-        rerender(tree(<SectionHeading id="one">One</SectionHeading>))
-        act(() => { vi.advanceTimersByTime(CONTENTS_SETTLE_MS + 10) })
-        expect(column(container)).not.toHaveAttribute("data-hidden")
+        expect(column(container)?.hasAttribute("data-hidden")).toBe(false)
     })
 
-    it("removes a column marked data-hidden from the layout", () => {
-        expect(pageShellCss).toMatch(/\.page-toc\[data-hidden="true"\]\s*\{\s*display:\s*none/)
+    it("has the column on a wide and on a narrow screen alike, so crossing the breakpoint adds none", () => {
+        const wide = render(tree(<p>Content</p>))
+        expect(wide.container.querySelectorAll(".page-toc")).toHaveLength(1)
+        cleanup()
+        window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+            matches: query.includes("62rem"), media: query, addEventListener: () => {}, removeEventListener: () => {},
+        })) as unknown as typeof window.matchMedia
+        const narrow = render(tree(<p>Content</p>))
+        expect(narrow.container.querySelectorAll(".page-toc")).toHaveLength(1)
+        delete (window as { matchMedia?: unknown }).matchMedia
+    })
+
+    it("hides the empty column on a narrow screen without a gap", () => {
+        expect(pageShellCss).toMatch(/\.page-toc:empty\s*\{\s*display:\s*none/)
     })
 })

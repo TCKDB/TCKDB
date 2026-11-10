@@ -60,25 +60,55 @@ describe("ValueLink", () => {
 })
 
 describe("ValueSource", () => {
-    const source = { kind: "calculation", ref: "calc_a" } as const
+    const source = { recordType: "calculation", ref: "calc_a" }
 
-    it("shows the source link, each level with its role, the programs and the review of that record", () => {
+    it("shows the source link, what it did, each level with its role, the programs and the review of that record", () => {
         inRouter(<ValueSource
             source={source}
+            did="sp"
             levels={[{ role: "geometry", label: "wB97X-D/def2-TZVP" }, { role: "energy", label: "CCSD(T)-F12/cc-pVTZ-F12" }]}
             programs={["ORCA 5.0.3", "Molpro 2024.1"]}
             review="not_reviewed"
         />)
         const line = document.querySelector(".value-source") as HTMLElement
         expect(within(line).getByRole("link")).toHaveAttribute("href", "/calculations/calc_a")
-        for (const text of ["Source", "geometry wB97X-D/def2-TZVP", "energy CCSD(T)-F12/cc-pVTZ-F12", "ORCA 5.0.3, Molpro 2024.1", "Review of this record: not reviewed"]) {
+        for (const text of ["Source", "single-point energy", "geometry wB97X-D/def2-TZVP", "energy CCSD(T)-F12/cc-pVTZ-F12", "ORCA 5.0.3, Molpro 2024.1", "Review of this record: not reviewed"]) {
             expect(line).toHaveTextContent(text)
         }
     })
 
-    it("links the kind of record it is given", () => {
-        inRouter(<ValueSource source={{ kind: "species-entry", ref: "spe_a" }} />)
+    it("links a record type that has its own page", () => {
+        inRouter(<ValueSource source={{ recordType: "species_entry", ref: "spe_a" }} />)
         expect(screen.getByRole("link")).toHaveAttribute("href", "/species-entries/spe_a")
+    })
+
+    it("links a thermo record to the species entry that shows it", () => {
+        inRouter(<ValueSource source={{ recordType: "thermo", ref: "thm_a", container: { recordType: "species_entry", ref: "spe_a" } }} />)
+        expect(screen.getByRole("link")).toHaveAttribute("href", "/species-entries/spe_a")
+        expect(screen.getByRole("link")).toHaveTextContent("thm_a")
+    })
+
+    it("sends a transition state ref (ts_) nowhere it is not, and a transition state entry to its page", () => {
+        inRouter(<ValueSource source={{ recordType: "transition_state", ref: "ts_a" }} />)
+        expect(screen.queryByRole("link")).toBeNull()
+        expect(document.querySelector(".value-source code")).toHaveTextContent("ts_a")
+        cleanup()
+        inRouter(<ValueSource source={{ recordType: "transition_state_entry", ref: "tse_a" }} />)
+        expect(screen.getByRole("link")).toHaveAttribute("href", "/transition-state-entries/tse_a")
+    })
+
+    it("shows an unknown record type as a plain code, with no link", () => {
+        inRouter(<ValueSource source={{ recordType: "something_new", ref: "xyz_a" }} />)
+        expect(screen.queryByRole("link")).toBeNull()
+        expect(document.querySelector(".value-source")?.textContent).toBe("Source xyz_a")
+    })
+
+    it("omits a calculation type code it has no wording for, and never shows the raw code", () => {
+        inRouter(<ValueSource source={source} did="DEPOSITOR_SENTINEL_kind" />)
+        expect(document.querySelector(".value-source")?.textContent).toBe("Source calc_a")
+        cleanup()
+        inRouter(<ValueSource source={source} did="toString" />)
+        expect(document.querySelector(".value-source")?.textContent).toBe("Source calc_a")
     })
 
     it("shows nothing for a part the record lacks and never invents one", () => {

@@ -1,41 +1,53 @@
 import { Fragment, type ReactNode } from "react"
 import { Link } from "react-router-dom"
-import { recordRoute } from "../domain/recordRoute"
+import { resolveRecordLocation } from "../domain/recordRoute"
 import "../record-blocks.css"
-import type { RecordKind } from "./RecordGlyph"
 import { ReviewChip } from "./ReviewChip"
 
-const RECORD_TYPE: Readonly<Record<RecordKind, string>> = {
-    species: "species",
-    "species-entry": "species_entry",
-    "conformer-group": "conformer_group",
-    calculation: "calculation",
-    reaction: "reaction",
-    "transition-state": "transition_state_entry",
-    network: "network",
+/** TCKDB's wording for what a calculation did, by its type code. A code not listed here is not shown. */
+const DID_WORDING: Readonly<Record<string, string>> = {
+    opt: "geometry optimisation",
+    freq: "frequencies",
+    sp: "single-point energy",
+    scan: "scan",
+    irc: "reaction path",
+    path_search: "path search",
 }
 
-export type SourceLevel = { role: "geometry" | "frequency" | "energy" | (string & {}); label: string }
+export type SourceLevel = { role: "geometry" | "frequency" | "energy"; label: string }
+
+export type ValueSourceRecord = {
+    /** The API's record type, e.g. `calculation`, `thermo`, `statmech`. */
+    recordType: string
+    ref: string
+    /** The record that shows it, for a type with no page of its own. */
+    container?: { recordType: string; ref: string }
+}
 
 /**
  * The line under a value saying where it came from. Only the source record is required; a part the
- * record does not carry is left out, never filled from another record. `review` is the review of the
- * linked record. `compact` is the short form: "from <ref>".
+ * record does not carry is left out, never filled from another record. The link goes to the record's
+ * own page, else its container's, else the ref is plain text. `review` is the review of the linked
+ * record. `compact` is the short form: "from <ref>".
  */
-export function ValueSource({ source, levels, programs, review, compact = false }: {
-    source: { kind: RecordKind; ref: string }
+export function ValueSource({ source, did, levels, programs, review, compact = false }: {
+    source: ValueSourceRecord
+    /** A calculation type code (`opt`, `freq`, `sp`...); shown as TCKDB wording, omitted when unknown. */
+    did?: string | null
     levels?: readonly SourceLevel[]
     programs?: readonly string[]
     review?: string | null
     compact?: boolean
 }) {
-    const to = recordRoute(RECORD_TYPE[source.kind], source.ref)
+    const location = resolveRecordLocation(source.recordType, source.ref, source.container?.recordType ?? null, source.container?.ref ?? null)
     const ref = <code className="t-preserve-case">{source.ref}</code>
-    const link = to ? <Link to={to}>{ref}</Link> : ref
+    const link = location.kind === "record" || location.kind === "container" ? <Link to={location.href}>{ref}</Link> : ref
     if (compact) {
         return <span className="value-source value-source--compact"><span className="value-source-key">from</span> {link}</span>
     }
     const parts: ReactNode[] = []
+    const didWords = did && Object.hasOwn(DID_WORDING, did) ? DID_WORDING[did] : null
+    if (didWords) parts.push(didWords)
     for (const level of levels ?? []) {
         if (level.label) parts.push(<>{level.role} <span className="t-preserve-case">{level.label}</span></>)
     }

@@ -34,11 +34,10 @@ export function RouteFocus() {
     const { pathname, hash } = useLocation()
     const key = pageKey(pathname)
     const hashRef = useRef(hash)
-    // Declared before the navigation effect below so it has the new hash when that effect runs.
-    useEffect(() => { hashRef.current = hash }, [hash])
     const previousKey = useRef<string | null>(null)
 
     useEffect(() => {
+        hashRef.current = hash
         const previous = previousKey.current
         previousKey.current = key
         if (previous === null || previous === key) return
@@ -72,6 +71,8 @@ export function RouteFocus() {
         window.addEventListener("pointerdown", stop, true)
         focusHeading(hashRef.current)
         return stop
+        // Runs on a page change only; a hash change on the same page must not stop the follow.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [key])
 
     return null
