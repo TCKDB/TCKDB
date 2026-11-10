@@ -71,3 +71,8 @@ export default defineConfig([
   },
 ])
 ```
+
+## Build-time settings
+
+- `VITE_API_BASE_URL`: base URL of the API when it is not on the same origin.
+- `VITE_HOME_EXAMPLE_REF`: public ref (`spe_...` or `rxe_...`) of the example record on the home page. The site editors choose it; it is not a recommendation. When it is unset, malformed, not found or hidden under the curated profile, the home page shows a "Browse molecules" link instead. See `.env.example`.

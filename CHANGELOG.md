@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Home page with counts, browse cards and an example record
+
+- **Behaviour:** the home page has a headline and one-line description, the exact-identifier search with "Try" links that run it, a strip of counts read from the archive (molecules, reactions, levels of theory; a count whose read fails is left out), three browse cards, a "How to read a value" box, and an example record. The example is the record named by the build-time setting `VITE_HOME_EXAMPLE_REF` (a `spe_` or `rxe_` ref); a molecule shows a compact numbers table. When the setting is unset, malformed, not found or hidden under the curated profile, a "Browse molecules" link is shown instead.
+- **Schema and migration:** none. New build-time variable `VITE_HOME_EXAMPLE_REF` (optional); see `frontend/.env.example`.
+
 ## Molecule page lists every number and every version (2026-11-10)
 
 - **Behaviour:** the species entry page is titled "Molecule" and opens with breadcrumbs, a lede built from codes and the review status. A "Numbers for this entry" section lists every thermochemistry, statistical mechanics and transport record with all its single values, the levels of theory and programs behind them, and its review status, in the order the archive served each list (stated on the page). Thermochemistry rows say what they describe (all shapes together, one shape, not stated, or implied by the CHEMKIN format). A "Group by level of theory" toggle appears when the records span more than one level and keeps the order inside each group. "Other versions of this molecule" lists every version with its label, what it holds and its review status. A link from another page to a thermochemistry, statistical mechanics or transport record lands on that record's row in the numbers table.

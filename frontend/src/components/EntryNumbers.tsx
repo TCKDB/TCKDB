@@ -19,6 +19,8 @@ import { ReviewChip } from "./ReviewChip"
 import { ValueLink } from "./ValueLink"
 import { ValueSource } from "./ValueSource"
 
+const COMPACT_ROWS = 4
+
 const KIND_WORDS: Record<NumberKind, string> = {
     thermo: "Thermochemistry",
     statmech: "Statistical mechanics",
@@ -40,12 +42,14 @@ function ValueCell({ value, to }: { value: NumberValue; to: string }) {
 }
 
 /** Every thermo, statmech and transport record of this entry with its values, levels, programs and review status. */
-export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers }: {
+export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers, compact = false }: {
     entryRef: string
     entryPath: string
     /** `?conformer=...` of the shape on screen, kept on same-page links so a link does not change the selection. */
     conformerQuery: string
     conformers: ConformerProjection[]
+    /** The short form for another page: a smaller heading, no grouping control, the first records only. */
+    compact?: boolean
 }) {
     useScrollToHash()
     const state = useEntryNumbers(entryRef)
@@ -54,7 +58,8 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers }
     const rows = useMemo(() => (data
         ? [...data.thermo.records.map(thermoRow), ...data.statmech.records.map(statmechRow), ...data.transport.records.map(transportRow)]
         : []), [data])
-    const groups = useMemo(() => (grouped ? groupByLevel(rows) : [{ key: null, rows }]), [grouped, rows])
+    const shownRows = compact ? rows.slice(0, COMPACT_ROWS) : rows
+    const groups = useMemo(() => (grouped ? groupByLevel(shownRows) : [{ key: null, rows: shownRows }]), [grouped, shownRows])
     const groupLabels = useMemo(() => new Map(conformers.map((conformer) => [conformer.conformer_group.conformer_group_ref, conformerLabel(conformer)])), [conformers])
     const levelCount = new Set(rows.flatMap((row) => row.levels.map((level) => level.label))).size
     const tabPath = (kind: NumberKind) => `${entryPath.replace(/\/(geometry|sp|statmech|thermo|transport)$/, "")}/${kind}`
@@ -63,7 +68,8 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers }
         <section className="entry-numbers" aria-labelledby="entry-numbers">
             <SectionHeading
                 id="entry-numbers"
-                intro={<>
+                subsection={compact}
+                intro={compact ? undefined : <>
                     Every single value deposited for this one entry, each with the levels of theory and programs behind it. Values are never copied in from another entry.
                     Heat-capacity points, polynomial coefficients and frequencies are in the <Link to={tabLink("thermo")}>Thermochemistry</Link> and <Link to={tabLink("statmech")}>Statistical mechanics</Link> tabs below.
                 </>}
@@ -87,9 +93,12 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers }
                         .filter((kind) => data[kind].records.length > 0)
                         .map((kind) => ({ kind, sort: data[kind].sort })))}
                     />
-                    <ListNotes data={data} />
+                    {!compact && <ListNotes data={data} />}
                     {levelCount > 0 && <p className="entry-numbers-levels">These values were computed at {levelCount} {levelCount === 1 ? "level" : "levels"} of theory.</p>}
-                    {distinctLevelCount(rows) >= 2 && (
+                    {compact && rows.length > COMPACT_ROWS && (
+                        <p className="note">Showing the first {COMPACT_ROWS} of {rows.length} records. <Link to={entryPath}>All records on the molecule page</Link></p>
+                    )}
+                    {!compact && distinctLevelCount(rows) >= 2 && (
                         <div className="entry-numbers-controls">
                             <button type="button" className="entry-numbers-toggle" aria-pressed={grouped} onClick={() => setGrouped(!grouped)}>
                                 Group by level of theory

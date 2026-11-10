@@ -17,7 +17,10 @@ const entryRef = "spe_cdefg234567cdefg234567abcd"
 // default keeps every test in this file signed-out (the ordinary case
 // for these public-archive tests) without each one having to know that
 // probe exists.
-const server = setupServer(http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })))
+// The home page reads one row of each index for its counts.
+const homeCountHandlers = ["species/browse", "reactions/browse", "level-of-theories/browse"].map((path) =>
+    http.get(`/api/v1/scientific/${path}`, () => HttpResponse.json({ records: [], pagination: { offset: 0, limit: 1, returned: 0, total: 0 } })))
+const server = setupServer(http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })), ...homeCountHandlers)
 
 function overviewSpecies(ref = speciesRef) {
     return {
@@ -65,10 +68,10 @@ function emptyBrowseEnvelope() {
 describe("public archive shell", () => {
     it("renders visible keyboard navigation and excludes the admin diagnostic route", async () => {
         const user = userEvent.setup(); render(<App />)
-        expect(await screen.findByRole("heading", { name: "TCKDB" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Computed thermochemistry and kinetics" })).toBeVisible()
         await user.tab(); expect(screen.getByText("Skip to content")).toHaveFocus()
         await user.tab(); expect(screen.getByRole("link", { name: "TCKDB home" })).toHaveFocus()
-        await user.tab(); expect(screen.getByRole("link", { name: "Molecules" })).toHaveFocus()
+        await user.tab(); expect(screen.getAllByRole("link", { name: "Molecules" })[0]).toHaveFocus()
         expect(screen.queryByText(/Machine-Review Inspection/)).not.toBeInTheDocument()
     })
 
@@ -578,7 +581,7 @@ describe("page title and focus on navigation", () => {
 
     it("sets the default title on the home page", async () => {
         render(<App />)
-        expect(await screen.findByRole("heading", { name: "TCKDB" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Computed thermochemistry and kinetics" })).toBeVisible()
         await waitFor(() => expect(document.title).toBe("Home · TCKDB"))
     })
 
@@ -600,7 +603,7 @@ describe("page title and focus on navigation", () => {
     it("keeps the skip link, pointing at a main element that can take focus", async () => {
         const user = userEvent.setup()
         render(<App />)
-        await screen.findByRole("heading", { name: "TCKDB" })
+        await screen.findByRole("heading", { name: "Computed thermochemistry and kinetics" })
         await user.tab()
         const skip = screen.getByText("Skip to content")
         expect(skip).toHaveFocus()
@@ -1064,8 +1067,9 @@ describe("site bar search hands its text to the home page search", () => {
                 calls.species += 1
                 return HttpResponse.json({ records: [] })
             }),
-            http.get("/api/v1/scientific/reactions/browse", () => {
-                calls.reactions += 1
+            http.get("/api/v1/scientific/reactions/browse", ({ request }) => {
+                // One row is the home page's own count read.
+                if (new URL(request.url).searchParams.get("limit") !== "1") calls.reactions += 1
                 return HttpResponse.json(emptyBrowseEnvelope())
             }),
             http.get("/api/v1/scientific/reactions/search", () => {
