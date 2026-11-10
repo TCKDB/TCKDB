@@ -4,6 +4,8 @@ import { CopyButton } from "./RefsDisclosure"
 import { SpeciesEntryLink } from "./SpeciesEntryLink"
 import { RecordGlyph, type RecordKind } from "./RecordGlyph"
 import { ReviewChip } from "./ReviewChip"
+import { Lede } from "./Lede"
+import type { LedeText } from "../domain/ledeText"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { facetChips } from "../domain/recordFacets"
 import type { EntryFacetAxes } from "../domain/recordFacets"
@@ -95,8 +97,8 @@ export function RecordIdentityHeader({
     glyph?: RecordKind
     /** The record's review status, shown as a `ReviewChip` beside the kicker. */
     review?: string
-    /** One sentence under the title, normally a `Lede`. */
-    lede?: ReactNode
+    /** The one sentence under the title, built with `ledeText`. When both `lede` and `intro` are given only `lede` renders. */
+    lede?: LedeText
     /** A human label (a name, a formula or an equation), never the record's ref. */
     title: ReactNode
     titleVariant?: "display-1" | "display-2"
@@ -122,6 +124,9 @@ export function RecordIdentityHeader({
      *  one, so in practice every caller supplies it. */
     ownRef?: { label: string; value: string }
 }) {
+    if (import.meta.env.DEV && lede && intro) {
+        console.error("RecordIdentityHeader: pass either `lede` or `intro`, not both; only `lede` is shown.")
+    }
     return (
         <div className="record-identity-header">
             <div className="record-identity-kicker-row">
@@ -133,8 +138,7 @@ export function RecordIdentityHeader({
             <h1 className={titleVariant === "display-2" ? "t-display-2 record-identity-title" : "t-display-1 record-identity-title"}>
                 {title}
             </h1>
-            {lede}
-            {intro && <p className="t-body section-intro">{intro}</p>}
+            {lede ? <Lede>{lede}</Lede> : intro && <p className="t-body section-intro">{intro}</p>}
             <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} ownRef={ownRef} />
             {/* No pill boxes: a plain, readable phrase built from the same
                 raw axes a pill row used to read one-per-pill -- see

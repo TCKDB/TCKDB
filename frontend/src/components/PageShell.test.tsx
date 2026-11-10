@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import type { ReactNode } from "react"
+import { act, cleanup, render, screen } from "@testing-library/react"
+import { CONTENTS_SETTLE_MS } from "./TableOfContents"
 import { MemoryRouter } from "react-router-dom"
 import { PageShell } from "./PageShell"
 import { SectionHeading } from "./PageSections"
@@ -84,24 +86,35 @@ describe("PageShell: the identity slot renders inside the content column", () =>
     })
 })
 
-describe("PageShell: a page with no sections has no contents column", () => {
-    it("marks the empty column so the stylesheet removes it, and fills it again once sections mount", () => {
-        const { container, rerender } = render(
-            <MemoryRouter><PageShell><p>Plain list</p></PageShell></MemoryRouter>,
-        )
-        expect(container.querySelector(".page-toc")).toHaveAttribute("data-sections", "0")
-        rerender(
-            <MemoryRouter>
-                <PageShell>
-                    <SectionHeading id="one">One</SectionHeading>
-                    <SectionHeading id="two">Two</SectionHeading>
-                </PageShell>
-            </MemoryRouter>,
-        )
-        expect(container.querySelector(".page-toc")).toHaveAttribute("data-sections", "2")
+describe("PageShell: the contents column", () => {
+    afterEach(() => { vi.useRealTimers() })
+
+    const column = (container: HTMLElement) => container.querySelector(".page-toc")
+    const tree = (children: ReactNode) => <MemoryRouter><PageShell>{children}</PageShell></MemoryRouter>
+
+    it('contents="none" renders no column at all', () => {
+        const { container } = render(<MemoryRouter><PageShell contents="none"><p>List</p></PageShell></MemoryRouter>)
+        expect(column(container)).toBeNull()
     })
 
-    it("hides a column marked as having no sections", () => {
-        expect(pageShellCss).toMatch(/\.page-toc\[data-sections="0"\]\s*\{\s*display:\s*none/)
+    it("holds the column while sections register, then hides it when fewer than two ever appear", () => {
+        vi.useFakeTimers()
+        const { container } = render(tree(<SectionHeading id="only">Only</SectionHeading>))
+        expect(column(container)).not.toHaveAttribute("data-hidden")
+        act(() => { vi.advanceTimersByTime(CONTENTS_SETTLE_MS + 10) })
+        expect(column(container)).toHaveAttribute("data-hidden", "true")
+    })
+
+    it("keeps the column once a list has appeared, even if the sections later drop below two", () => {
+        vi.useFakeTimers()
+        const { container, rerender } = render(tree(<><SectionHeading id="one">One</SectionHeading><SectionHeading id="two">Two</SectionHeading></>))
+        expect(column(container)?.querySelector("nav")).not.toBeNull()
+        rerender(tree(<SectionHeading id="one">One</SectionHeading>))
+        act(() => { vi.advanceTimersByTime(CONTENTS_SETTLE_MS + 10) })
+        expect(column(container)).not.toHaveAttribute("data-hidden")
+    })
+
+    it("removes a column marked data-hidden from the layout", () => {
+        expect(pageShellCss).toMatch(/\.page-toc\[data-hidden="true"\]\s*\{\s*display:\s*none/)
     })
 })

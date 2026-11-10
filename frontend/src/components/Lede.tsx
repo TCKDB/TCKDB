@@ -1,7 +1,7 @@
-import type { ReactNode } from "react"
 import "../record-blocks.css"
+import type { LedeText } from "../domain/ledeText"
 
-/** One sentence under a record's title, built by the caller from codes and values, never from depositor text. */
-export function Lede({ children }: { children: ReactNode }) {
+/** One sentence under a record's title. Its text type admits only codes and numbers, never depositor text. */
+export function Lede({ children }: { children: LedeText }) {
     return <p className="record-lede">{children}</p>
 }

@@ -4,6 +4,7 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
 import { RouteFocus } from "./RouteFocus"
+import { OrderNote } from "./OrderNote"
 import { pageKey } from "../domain/pageKey"
 
 afterEach(cleanup)
@@ -98,6 +99,38 @@ describe("RouteFocus", () => {
         await user.tab()
         await waitFor(() => expect(screen.getByRole("heading", { name: "Slow page loaded" })).toBeInTheDocument())
         expect(screen.getByRole("heading", { name: "Slow page loaded" })).not.toHaveFocus()
+    })
+})
+
+describe("RouteFocus with a #fragment", () => {
+    function FragmentHarness() {
+        return (
+            <MemoryRouter initialEntries={["/list"]}>
+                <RouteFocus />
+                <main id="main-content" tabIndex={-1}>
+                    <Routes>
+                        <Route path="/list" element={<><h1>List</h1><OrderNote /></>} />
+                        <Route path="/guide" element={<><h1>Guide</h1><p id="order">A list's order is never a recommendation.</p></>} />
+                    </Routes>
+                </main>
+            </MemoryRouter>
+        )
+    }
+
+    it("focuses the element a link to #order names, not the h1", async () => {
+        const user = userEvent.setup()
+        render(<FragmentHarness />)
+        await user.click(screen.getByRole("link", { name: "How lists are ordered" }))
+        const target = await screen.findByText("A list's order is never a recommendation.")
+        await waitFor(() => expect(target).toHaveFocus())
+        expect(target).toHaveAttribute("tabindex", "-1")
+    })
+
+    it("falls back to the h1 when there is no fragment", async () => {
+        const user = userEvent.setup()
+        render(<Harness />)
+        await user.click(screen.getByRole("link", { name: "to b" }))
+        expect(await screen.findByRole("heading", { name: "Page B" })).toHaveFocus()
     })
 })
 

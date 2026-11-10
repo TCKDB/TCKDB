@@ -1,7 +1,7 @@
 import { describe, expect, it, afterEach, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { Lede } from "./Lede"
+import { ledeText } from "../domain/ledeText"
 import { MemoryRouter } from "react-router-dom"
 import { RecordIdentityHeader } from "./RecordIdentityHeader"
 import type { RecordIdentity } from "../domain/recordIdentity"
@@ -409,13 +409,27 @@ describe("glyph, review chip and lede", () => {
             identity: speciesIdentity,
             glyph: "species-entry",
             review: "approved",
-            lede: <Lede>A species entry with 2 calculations.</Lede>,
+            lede: ledeText`A species entry with ${2} calculations.`,
         })
         const row = container.querySelector(".record-identity-kicker-row") as HTMLElement
         expect(row.querySelector('svg[data-kind="species-entry"]')).not.toBeNull()
         expect(row.querySelector(".review-chip")).toHaveTextContent("approved")
         const h1 = container.querySelector("h1") as HTMLElement
         expect(h1.nextElementSibling).toHaveTextContent("A species entry with 2 calculations.")
+    })
+
+    it("shows one sentence under the title: intro alone as before, lede alone, and only lede with a console error when both are given", () => {
+        const { container, unmount } = renderHeader({ identity: speciesIdentity, intro: "An intro." })
+        expect(container.querySelector("h1")?.nextElementSibling).toHaveTextContent("An intro.")
+        unmount()
+
+        const error = vi.spyOn(console, "error").mockImplementation(() => {})
+        const both = renderHeader({ identity: speciesIdentity, intro: "An intro.", lede: ledeText`A lede.` })
+        expect(both.container.querySelectorAll(".record-lede, .section-intro")).toHaveLength(1)
+        expect(both.container.querySelector("h1")?.nextElementSibling).toHaveTextContent("A lede.")
+        expect(both.container).not.toHaveTextContent("An intro.")
+        expect(error).toHaveBeenCalledWith(expect.stringContaining("either `lede` or `intro`"))
+        error.mockRestore()
     })
 
     it("keeps the ref out of the h1: it is a secondary code with a copy button", () => {

@@ -7,16 +7,37 @@ import { ValueSource } from "./ValueSource"
 import { OrderNote } from "./OrderNote"
 import { DepositorNote } from "./DepositorNote"
 import { Breadcrumbs } from "./Breadcrumbs"
-import { DEPOSITOR_SENTINEL } from "../test/depositorSentinel"
+import { DEPOSITOR_SENTINEL, expectDepositorTextOnlyInNotes } from "../test/depositorSentinel"
+import { ledeText, ledeWord } from "../domain/ledeText"
+import blocksCss from "../record-blocks.css?raw"
+import termCss from "../term.css?raw"
 
 afterEach(cleanup)
 
 const inRouter = (node: React.ReactNode) => render(<MemoryRouter>{node}</MemoryRouter>)
 
+const OUTCOME = { converged: "converged", failed: "did not converge" } as const
+
 describe("Lede", () => {
-    it("renders the sentence it is given as one paragraph", () => {
-        inRouter(<Lede>A computed species entry with 3 calculations.</Lede>)
-        expect(screen.getByText("A computed species entry with 3 calculations.").tagName).toBe("P")
+    it("renders a sentence built from fixed text, numbers and TCKDB wording as one paragraph", () => {
+        const text = ledeText`A calculation that ${ledeWord("converged", OUTCOME)}, with ${3} frequencies.`
+        inRouter(<Lede>{text}</Lede>)
+        expect(screen.getByText("A calculation that converged, with 3 frequencies.").tagName).toBe("P")
+    })
+
+    it("never lets a code without TCKDB wording through as its own text", () => {
+        expect(ledeText`Outcome: ${ledeWord(`${DEPOSITOR_SENTINEL}_x`, OUTCOME)}.`).toBe("Outcome: not recorded.")
+        expect(ledeWord(null, OUTCOME)).toBe("not recorded")
+        expect(ledeWord("toString", OUTCOME)).toBe("not recorded")
+    })
+
+    it("rejects a free string at compile time", () => {
+        const fromDepositor: string = `${DEPOSITOR_SENTINEL}_note`
+        // @ts-expect-error a plain string is not a LedeWord
+        const sentence = ledeText`Note: ${fromDepositor}`
+        expect(sentence).toBeDefined()
+        // @ts-expect-error a plain string is not a LedeText
+        render(<Lede>{fromDepositor}</Lede>)
     })
 })
 
@@ -39,29 +60,41 @@ describe("ValueLink", () => {
 })
 
 describe("ValueSource", () => {
-    it("shows the calculation link, what it did, level, program and review status", () => {
-        inRouter(<ValueSource calculationRef="calc_a" did="single point" levelOfTheory="CCSD(T)-F12/cc-pVTZ-F12" program="Molpro 2024" reviewStatus="approved" />)
+    const source = { kind: "calculation", ref: "calc_a" } as const
+
+    it("shows the source link, each level with its role, the programs and the review of that record", () => {
+        inRouter(<ValueSource
+            source={source}
+            levels={[{ role: "geometry", label: "wB97X-D/def2-TZVP" }, { role: "energy", label: "CCSD(T)-F12/cc-pVTZ-F12" }]}
+            programs={["ORCA 5.0.3", "Molpro 2024.1"]}
+            review="not_reviewed"
+        />)
         const line = document.querySelector(".value-source") as HTMLElement
         expect(within(line).getByRole("link")).toHaveAttribute("href", "/calculations/calc_a")
-        for (const text of ["Source", "single point", "CCSD(T)-F12/cc-pVTZ-F12", "Molpro 2024", "approved"]) {
+        for (const text of ["Source", "geometry wB97X-D/def2-TZVP", "energy CCSD(T)-F12/cc-pVTZ-F12", "ORCA 5.0.3, Molpro 2024.1", "Review of this record: not reviewed"]) {
             expect(line).toHaveTextContent(text)
         }
     })
 
+    it("links the kind of record it is given", () => {
+        inRouter(<ValueSource source={{ kind: "species-entry", ref: "spe_a" }} />)
+        expect(screen.getByRole("link")).toHaveAttribute("href", "/species-entries/spe_a")
+    })
+
     it("shows nothing for a part the record lacks and never invents one", () => {
-        inRouter(<ValueSource calculationRef="calc_a" />)
+        inRouter(<ValueSource source={source} />)
         const line = document.querySelector(".value-source") as HTMLElement
         expect(line.textContent).toBe("Source calc_a")
         expect(line.querySelector(".review-chip")).toBeNull()
     })
 
-    it("treats empty strings as missing", () => {
-        inRouter(<ValueSource calculationRef="calc_a" did="" program="" levelOfTheory="" />)
+    it("treats empty levels, programs and review as missing", () => {
+        inRouter(<ValueSource source={source} levels={[{ role: "energy", label: "" }]} programs={["", ""]} review="" />)
         expect(document.querySelector(".value-source")?.textContent).toBe("Source calc_a")
     })
 
     it("has a short form that is only a link", () => {
-        inRouter(<ValueSource calculationRef="calc_a" did="opt" compact />)
+        inRouter(<ValueSource source={source} programs={["ORCA"]} compact />)
         const line = document.querySelector(".value-source") as HTMLElement
         expect(line).toHaveClass("value-source--compact")
         expect(line.textContent).toBe("from calc_a")
@@ -89,6 +122,20 @@ describe("DepositorNote", () => {
         const note = screen.getByLabelText("Note from the depositor")
         expect(within(note).getByText("Note from the depositor")).toBeVisible()
         expect(note.querySelector("blockquote")).toHaveTextContent(`${DEPOSITOR_SENTINEL}_note_1`)
+        expect(note).toHaveTextContent("Written by the person who deposited this record; TCKDB shows it as given and has not checked it.")
+    })
+
+    it("keeps the depositor's text inside the quote and nowhere else", () => {
+        inRouter(<><h2>Heading</h2><DepositorNote>{`${DEPOSITOR_SENTINEL}_note_2`}</DepositorNote></>)
+        expectDepositorTextOnlyInNotes()
+    })
+
+    it("the helper catches the text in an attribute, a heading or a label", () => {
+        inRouter(<><h2 title={`${DEPOSITOR_SENTINEL}_a`}>Heading</h2><DepositorNote>quote</DepositorNote></>)
+        expect(() => expectDepositorTextOnlyInNotes()).toThrow()
+        cleanup()
+        inRouter(<p>{`${DEPOSITOR_SENTINEL}_b`}</p>)
+        expect(() => expectDepositorTextOnlyInNotes()).toThrow()
     })
 
     it.each([null, undefined, ""])("renders nothing for %p", (value) => {
@@ -115,5 +162,39 @@ describe("Breadcrumbs", () => {
     it("renders nothing for an empty list", () => {
         inRouter(<Breadcrumbs crumbs={[]} />)
         expect(screen.queryByRole("navigation")).toBeNull()
+    })
+})
+
+function ruleFor(source: string, selector: string): string {
+    for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selectors = match[1].replace(/\/\*[\s\S]*?\*\//g, "").split(",").map((part) => part.trim())
+        if (selectors.includes(selector)) return match[2]
+    }
+    throw new Error(`no rule for ${selector}`)
+}
+
+describe("links in the blocks look like links", () => {
+    const LINKS = [".breadcrumbs a", ".order-note a", ".value-source a", ".value-link"]
+
+    it.each(LINKS)("%s is accent coloured and underlined", (selector) => {
+        const rule = ruleFor(blocksCss, selector)
+        expect(rule).toMatch(/color:\s*var\(--accent\)/)
+        expect(rule).toMatch(/text-decoration[^:]*:[^;]*underline/)
+        expect(rule).toMatch(/text-decoration-color:\s*var\(--accent-underline\)/)
+    })
+
+    it.each(LINKS)("%s keeps the 3px focus ring", (selector) => {
+        expect(ruleFor(blocksCss, `${selector}:focus-visible`)).toMatch(/outline:\s*3px solid var\(--focus-ring\)/)
+    })
+
+    it("the breadcrumb separator is hidden from screen readers", () => {
+        expect(ruleFor(blocksCss, ".breadcrumbs li + li::before")).toMatch(/content:\s*"\\203A"\s*\/\s*""/)
+    })
+})
+
+describe("a closed glossary popover is out of layout", () => {
+    it("is display none unless open", () => {
+        expect(ruleFor(termCss, ".term-popover")).toMatch(/display:\s*none/)
+        expect(ruleFor(termCss, '.term-popover[data-open="true"]')).toMatch(/display:\s*block/)
     })
 })

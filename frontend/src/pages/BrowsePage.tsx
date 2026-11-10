@@ -125,7 +125,7 @@ export default function BrowsePage() {
                 <span aria-hidden="true">/</span>
                 <span aria-current="page">{content.breadcrumbLabel}</span>
             </nav>
-            <PageShell>
+            <PageShell contents="none">
             {/* Each kind's own identity now (`BROWSE_KIND_CONTENT`,
                 `api/browseApi.ts`) -- was the SAME "Browse the archive" /
                 "Archive index" / "Choose what to browse, then narrow it

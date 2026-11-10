@@ -20,6 +20,30 @@
     text-decoration-color: currentColor;
 }
 
+.breadcrumbs a,
+.order-note a,
+.value-source a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .15em;
+}
+
+.breadcrumbs a:hover,
+.order-note a:hover,
+.value-source a:hover {
+    color: var(--accent-700);
+    text-decoration-color: currentColor;
+}
+
+.breadcrumbs a:focus-visible,
+.order-note a:focus-visible,
+.value-source a:focus-visible,
+.value-link:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
 .value-link--plain {
     color: var(--ink);
     text-decoration: none;
@@ -95,11 +119,6 @@
     color: var(--status-ok-ink);
 }
 
-/* A closed popover is out of layout, so it cannot widen the page; it stays in the DOM for aria-describedby. */
-.review-chip-wrap .term-popover[data-open="false"] {
-    display: none;
-}
-
 .review-chip-wrap .term {
     color: var(--ink-2);
     font: var(--type-note-font);
@@ -127,6 +146,12 @@
     font: var(--type-ui-font);
 }
 
+.depositor-note-origin {
+    margin: .5rem 0 0;
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
 .depositor-note blockquote {
     margin: 0;
     color: var(--ink);
@@ -147,7 +172,7 @@
 }
 
 .breadcrumbs li + li::before {
-    content: "\203A";
+    content: "\203A" / "";
     margin-right: .4rem;
     color: var(--muted);
 }

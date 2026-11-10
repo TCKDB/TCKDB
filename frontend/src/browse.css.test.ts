@@ -243,3 +243,12 @@ describe("reaction browse row -- title-link stretched-click overlay (the one rul
         expect(rule).toMatch(/position:\s*relative/)
     })
 })
+
+describe(".browse-related links look like links", () => {
+    it("uses the link colour and an underline in the link underline colour", () => {
+        const rule = extractRule(css, ".browse-related a")
+        expect(rule).toMatch(/color:\s*var\(--accent\)/)
+        expect(rule).toMatch(/text-decoration:\s*underline/)
+        expect(rule).toMatch(/text-decoration-color:\s*var\(--accent-underline\)/)
+    })
+})
