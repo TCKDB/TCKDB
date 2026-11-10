@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Conformer usage read (2026-11-10)
+
+- **Behaviour:** `GET /api/v1/scientific/species-entries/{species_entry_ref}/conformer-usage` lists, for each conformer group of a species entry that something uses, the thermo records whose declared target is that group and the kinetics records whose interpretation assignments select it (reaction entry, role, subject, selection kind, ensemble policy). Thermo records declared as the equilibrium ensemble are listed once, apart from the groups. Records with no declared target are not listed. Lists are ordered by ref. Records hidden by the review default or the read profile are not listed.
+- **Schema and migration:** none. No new environment variable.
+
 ## Picture first on the geometry page (2026-11-10)
 
 - **Behaviour:** the geometry page shows a ball-and-stick picture drawn from the stored coordinates, with a "Show in 3D" button that opens the interactive viewer; the viewer's rotate and zoom buttons are always visible. Only one interactive viewer is open per page, and if the browser cannot start WebGL the picture stays with one sentence saying so.

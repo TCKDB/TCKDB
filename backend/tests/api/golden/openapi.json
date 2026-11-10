@@ -15649,6 +15649,183 @@
         "title": "ConformerUploadStatmechPayload",
         "type": "object"
       },
+      "ConformerUsageGroup": {
+        "properties": {
+          "conformer_group_ref": {
+            "title": "Conformer Group Ref",
+            "type": "string"
+          },
+          "kinetics": {
+            "items": {
+              "$ref": "#/components/schemas/ConformerUsageKinetics"
+            },
+            "title": "Kinetics",
+            "type": "array"
+          },
+          "thermo": {
+            "items": {
+              "$ref": "#/components/schemas/ConformerUsageThermo"
+            },
+            "title": "Thermo",
+            "type": "array"
+          }
+        },
+        "required": [
+          "conformer_group_ref"
+        ],
+        "title": "ConformerUsageGroup",
+        "type": "object"
+      },
+      "ConformerUsageKinetics": {
+        "description": "A kinetics record whose interpretation assignment selects this conformer group.",
+        "properties": {
+          "conformer_selection_kind": {
+            "$ref": "#/components/schemas/ConformerSelectionKind"
+          },
+          "ensemble_policy": {
+            "$ref": "#/components/schemas/KineticsEnsemblePolicy"
+          },
+          "kinetics_ref": {
+            "title": "Kinetics Ref",
+            "type": "string"
+          },
+          "reaction_entry_ref": {
+            "title": "Reaction Entry Ref",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "subject_key": {
+            "title": "Subject Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kinetics_ref",
+          "reaction_entry_ref",
+          "role",
+          "subject_key",
+          "conformer_selection_kind",
+          "ensemble_policy"
+        ],
+        "title": "ConformerUsageKinetics",
+        "type": "object"
+      },
+      "ConformerUsageRequestEcho": {
+        "properties": {
+          "hidden_by_default": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HiddenByDefault"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "merged_refs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Merged Refs",
+            "type": "object"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "species_entry_ref": {
+            "title": "Species Entry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species_entry_ref"
+        ],
+        "title": "ConformerUsageRequestEcho",
+        "type": "object"
+      },
+      "ConformerUsageResponse": {
+        "description": "Usage by conformer group. Lists are ordered by ref, which is not a ranking.\n\n``groups`` holds only the groups something uses. ``ensemble_thermo_refs`` are the thermo records declared as the\nequilibrium ensemble: they describe all shapes together, so they are listed once and not under any group.",
+        "properties": {
+          "ensemble_thermo_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ensemble Thermo Refs",
+            "type": "array"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ConformerUsageGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ConformerUsageRequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
+          "species_entry_ref": {
+            "title": "Species Entry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request",
+          "species_entry_ref"
+        ],
+        "title": "ConformerUsageResponse",
+        "type": "object"
+      },
+      "ConformerUsageThermo": {
+        "description": "A thermo record whose declared target is this one conformer group.",
+        "properties": {
+          "declared_by": {
+            "$ref": "#/components/schemas/ThermoDeclarationSource"
+          },
+          "thermo_ref": {
+            "title": "Thermo Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "thermo_ref",
+          "declared_by"
+        ],
+        "title": "ConformerUsageThermo",
+        "type": "object"
+      },
       "ConformersSearchRequest": {
         "additionalProperties": false,
         "description": "Service-layer request for /scientific/conformers/search.\n\nFilters AND-combine. At least one meaningful filter is required —\nrequests with only pagination / include / review knobs are rejected\nwith 422 ``missing_filter`` to avoid accidental public table scans.\n\nA key the model does not declare is a 422 (``extra_forbidden``), never ignored: a misspelled filter would otherwise\nquietly widen the result.",
@@ -107637,6 +107814,80 @@
           }
         },
         "summary": "Download the replayable decision manifest for a calculation selection",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/species-entries/{species_entry_ref}/conformer-usage": {
+      "get": {
+        "description": "Thermo records declared on one conformer group, kinetics assignments that select one, and ensemble thermo.\n\nOnly declared links are listed; a record with no declared target appears nowhere. Groups nothing uses are omitted.\nLists are ordered by ref and carry no rank. Records hidden by the read profile or the default review visibility\nare not listed.",
+        "operationId": "species_entry_conformer_usage_api_v1_scientific_species_entries__species_entry_ref__conformer_usage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "species_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Species Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a legacy single-record read carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a legacy single-record read carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConformerUsageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Which thermo and kinetics records use each conformer group of a species entry",
         "tags": [
           "scientific"
         ]
