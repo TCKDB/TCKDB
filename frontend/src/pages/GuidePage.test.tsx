@@ -19,7 +19,7 @@ describe("GuidePage", () => {
 
     it("states the ordering note under #order", () => {
         render(<MemoryRouter><GuidePage /></MemoryRouter>)
-        expect(document.getElementById("order")).toHaveTextContent("A list's order is never a recommendation. Each list says how it is ordered.")
+        expect(document.getElementById("order")).toHaveTextContent("A list's order is never a recommendation.")
     })
 
     it("sets the page title", () => {

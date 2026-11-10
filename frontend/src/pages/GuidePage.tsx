@@ -21,7 +21,7 @@ function GuidePage() {
         <h1>Guide</h1>
         <p className="guide-lede">
             TCKDB stores the results of computer calculations on molecules and reactions, and keeps the calculation behind every number.
-            These are the eight kinds of record you will meet; each builds on the one before.
+            These are the eight kinds of record you will meet.
         </p>
         <ol className="guide-concepts">
             {CONCEPTS.map(({ key, glyph, heading }) => (
@@ -34,7 +34,7 @@ function GuidePage() {
                 </li>
             ))}
         </ol>
-        <p className="guide-order" id="order">A list's order is never a recommendation. Each list says how it is ordered.</p>
+        <p className="guide-order" id="order">A list's order is never a recommendation.</p>
     </article>
 }
 

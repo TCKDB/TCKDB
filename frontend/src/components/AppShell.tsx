@@ -77,7 +77,7 @@ function MoreMenu() {
     function onBlur(event: FocusEvent<HTMLElement>) {
         if (!open) return
         const next = event.relatedTarget as Node | null
-        if (next && !event.currentTarget.contains(next)) setOpen(false)
+        if (!next || !event.currentTarget.contains(next)) setOpen(false)
     }
 
     return <div className="more-menu" onKeyDown={onKeyDown} onBlur={onBlur}>

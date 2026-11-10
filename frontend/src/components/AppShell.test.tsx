@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { BROWSE_KINDS, BROWSE_KIND_PATHS, RELATED_BROWSE_KIND, type BrowseKind } from "../api/browseApi"
@@ -116,6 +116,17 @@ describe("phone More menu focus", () => {
         button.focus()
         await user.tab({ shift: true })
         expect(screen.getByRole("link", { name: "Methods" })).toHaveFocus()
+        expect(button).toHaveAttribute("aria-expanded", "false")
+    })
+
+    it("closes when focus leaves the document", async () => {
+        mockPhone(true)
+        const user = userEvent.setup()
+        renderShell()
+        const button = screen.getByRole("button", { name: "More" })
+        await user.click(button)
+        expect(button).toHaveAttribute("aria-expanded", "true")
+        fireEvent.focusOut(screen.getByRole("link", { name: "Guide" }), { relatedTarget: null })
         expect(button).toHaveAttribute("aria-expanded", "false")
     })
 })

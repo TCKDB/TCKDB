@@ -14,14 +14,15 @@ function focusRuleDeclarations(source: string, selector: string): string | null 
 }
 
 describe("shell links and controls keep the focus ring", () => {
-    it.each([
-        [shellCss, ".brand:focus-visible"],
-        [shellCss, ".site-nav a:focus-visible"],
-        [shellCss, ".tab-bar-item:focus-visible"],
-        [shellCss, ".more-menu-panel a:focus-visible"],
-        [shellCss, ".auth-status-link:focus-visible"],
-        [browseCss, ".browse-related a:focus-visible"],
-    ])("%#: %s", (source, selector) => {
+    const cases: [string, string][] = [
+        [".brand:focus-visible", shellCss],
+        [".site-nav a:focus-visible", shellCss],
+        [".tab-bar-item:focus-visible", shellCss],
+        [".more-menu-panel a:focus-visible", shellCss],
+        [".auth-status-link:focus-visible", shellCss],
+        [".browse-related a:focus-visible", browseCss],
+    ]
+    it.each(cases)("%s", (selector, source) => {
         expect(focusRuleDeclarations(source, selector)).toMatch(RING)
     })
 
