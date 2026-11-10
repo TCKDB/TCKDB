@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom"
 import "../entry-numbers.css"
 import type { ScientificSpeciesEntrySummary } from "../api/scientificSpeciesSchemas"
-import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
+import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
+import { chargeText, spinDisplay } from "../domain/chemistryFormat"
 import { hiddenByDefaultNote } from "../domain/paging"
 import { facetChips } from "../domain/recordFacets"
 import { useSpeciesOverview } from "../hooks/useSpeciesOverview"
@@ -20,15 +21,16 @@ function holds(entry: ScientificSpeciesEntrySummary): string {
     return kinds.length > 0 ? `${calculations}; ${kinds.join(", ")}` : `${calculations}; no deposited results`
 }
 
-/** Every entry of this entry's molecule, this one marked. Labels come from codes, never from depositor text. */
-export function OtherVersions({ speciesRef, entryRef }: { speciesRef: string; entryRef: string }) {
-    const state = useSpeciesOverview(speciesRef)
-    const species = state.status === "ready" && state.speciesRef === speciesRef ? state.species : null
-    const others = species ? species.entries.filter((entry) => entry.species_entry_ref !== entryRef).length : 0
-    const hidden = species ? hiddenByDefaultNote(species.entriesHiddenByDefault, "entries") : null
+/** Every version (entry) of this entry's molecule, this one marked even when the listing leaves it out. Labels come from codes. */
+export function OtherVersions({ entry }: { entry: SpeciesEntryProjection }) {
+    const state = useSpeciesOverview(entry.speciesRef)
+    const species = state.status === "ready" && state.speciesRef === entry.speciesRef ? state.species : null
+    const listed = species?.entries ?? []
+    const versions = listed.some((candidate) => candidate.species_entry_ref === entry.species_entry_ref) ? listed : [entry, ...listed]
+    const hidden = species ? hiddenByDefaultNote(species.entriesHiddenByDefault, "versions") : null
     return (
         <section className="entry-versions" aria-labelledby="entry-versions">
-            <SectionHeading id="entry-versions" intro="A molecule can have several entries. Each is one set of results; they differ in electronic state, stereochemistry, isotopes or the levels of theory behind their values.">
+            <SectionHeading id="entry-versions" intro="A molecule can have several versions, which differ in electronic state, stereochemistry or isotopes. Each version holds its own records, and each record carries its own levels of theory.">
                 Other versions of this molecule
             </SectionHeading>
             {state.status === "loading" && <p className="note" role="status" aria-busy="true">Loading the other versions…</p>}
@@ -36,23 +38,23 @@ export function OtherVersions({ speciesRef, entryRef }: { speciesRef: string; en
             {species && (
                 <>
                     <p className="note">
-                        {others === 0
-                            ? "This is the only entry listed for this molecule."
-                            : `This molecule has ${species.entries.length} entries; this page shows one of them.`}
+                        {versions.length === 1
+                            ? "This is the only version listed for this molecule."
+                            : `This molecule has ${versions.length} versions listed; this page shows one of them.`}
                         {" "}<Link to={`/species/${species.species_ref}`}>Open the molecule page</Link>
                     </p>
                     {hidden && <p className="note" role="note">{hidden}</p>}
                     <ul className="entry-versions-list">
-                        {species.entries.map((entry) => {
-                            const current = entry.species_entry_ref === entryRef
-                            const label = `${chargeDisplay(species.charge)} · ${spinDisplay(species.multiplicity)} · ${facetChips(entry).join(" · ")}`
+                        {versions.map((version) => {
+                            const current = version.species_entry_ref === entry.species_entry_ref
+                            const label = `charge ${chargeText(species.charge) ?? "not recorded"} · ${spinDisplay(species.multiplicity)} · ${facetChips(version).join(" · ")}`
                             return (
-                                <li key={entry.species_entry_ref} className="entry-versions-item" aria-current={current ? "true" : undefined}>
+                                <li key={version.species_entry_ref} className="entry-versions-item" aria-current={current ? "true" : undefined}>
                                     <p className="entry-versions-title">
-                                        {current ? <>{label} <span className="entry-versions-here">(this page)</span></> : <Link to={`/species-entries/${entry.species_entry_ref}`}>{label}</Link>}
+                                        {current ? <>{label} <span className="entry-versions-here">(this page)</span></> : <Link to={`/species-entries/${version.species_entry_ref}`}>{label}</Link>}
                                     </p>
-                                    <p className="entry-versions-meta">{holds(entry)}</p>
-                                    <p className="entry-versions-meta"><ReviewChip status={entry.review.status} explain={false} /> <code className="t-preserve-case">{entry.species_entry_ref}</code></p>
+                                    <p className="entry-versions-meta">{holds(version)}</p>
+                                    <p className="entry-versions-meta"><ReviewChip status={version.review.status} explain={false} /> <code className="t-preserve-case">{version.species_entry_ref}</code></p>
                                 </li>
                             )
                         })}

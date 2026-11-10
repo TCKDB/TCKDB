@@ -9,7 +9,7 @@ import { ReviewChip } from "./ReviewChip"
 /** Record types whose own row on their container's page carries an id. */
 const ANCHORED: ReadonlySet<string> = new Set(["thermo", "statmech", "transport"])
 
-export type SourceLevel = { role: "geometry" | "frequency" | "energy"; label: string }
+export type SourceLevel = { role: string; label: string }
 
 export type ValueSourceRecord = {
     /** The API's record type, e.g. `calculation`, `thermo`, `statmech`. */

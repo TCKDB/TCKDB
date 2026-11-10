@@ -314,15 +314,3 @@ export async function loadEntryThermo(
     const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(thermoListResponseSchema, payload, "thermo")
 }
-
-/** One page of the entry's thermo records with no include tokens: the numbers table reads only the always-present fields. */
-export async function loadEntryThermoPlain(
-    entryRef: string,
-    signal?: AbortSignal,
-    onRateLimited?: (retryAfterSeconds: number) => void,
-): Promise<ThermoListResponse> {
-    const { ref, request } = parsePagedRef(entryRef)
-    const query = request ? pageQuery(request) : new URLSearchParams()
-    const payload = await requestScientificJson(`/api/v1/scientific/species-entries/${encodeURIComponent(ref)}/thermo?${query}`, signal, onRateLimited)
-    return parseScientificResponse(thermoListResponseSchema, payload, "thermo")
-}

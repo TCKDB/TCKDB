@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { dedupedFetch } from "../api/requestCache"
 import { loadSpeciesOverview, type SpeciesOverview } from "../api/speciesOverviewApi"
 import { ScientificApiError, ScientificRateLimitError } from "../api/scientificTransport"
 
@@ -15,17 +16,18 @@ export function useSpeciesOverview(speciesRef: string): SpeciesOverviewState {
     const [state, setState] = useState<SpeciesOverviewState>({ speciesRef, status: "loading" })
 
     useEffect(() => {
-        const controller = new AbortController()
-        void loadSpeciesOverview(speciesRef, controller.signal)
+        let mounted = true
+        const subscription = dedupedFetch(loadSpeciesOverview, speciesRef, (signal) => loadSpeciesOverview(speciesRef, signal))
+        void subscription.promise
             .then((species) => {
-                if (!controller.signal.aborted) {
+                if (mounted) {
                     setState(species
                         ? { speciesRef, species, status: "ready" }
                         : { speciesRef, status: "missing" })
                 }
             })
             .catch((error: unknown) => {
-                if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+                if (!mounted || (error instanceof DOMException && error.name === "AbortError")) {
                     return
                 }
                 if (error instanceof ScientificRateLimitError) {
@@ -39,7 +41,10 @@ export function useSpeciesOverview(speciesRef: string): SpeciesOverviewState {
                         : "http-error",
                 })
             })
-        return () => controller.abort()
+        return () => {
+            mounted = false
+            subscription.unsubscribe()
+        }
     }, [speciesRef])
 
     return state

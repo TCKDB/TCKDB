@@ -5,7 +5,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event"
 import App from "../App"
 import { resetAllRequestCaches } from "../api/requestCache"
-import { DEPOSITOR_SENTINEL, expectDepositorTextOnlyInNotes, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { ADVERSARIAL, DEPOSITOR_SENTINEL, expectDepositorTextOnlyInNotes, expectNoAdversarialText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 
 const entryRef = "spe_numbers"
 const otherEntryRef = "spe_excited"
@@ -33,6 +33,8 @@ function thermo(ref: string, lot: typeof lotA | null, h298: number | null, targe
         h298_kj_mol: h298, s298_j_mol_k: h298 === null ? null : 200.5,
         enthalpy_reference_kind: "formation_298k",
         thermodynamic_target: target,
+        phase: "gas", reference_pressure_bar: 1,
+        temperature_coverage: { record_min_k: 300, record_max_k: 2000, covers_requested_range: true, extrapolation_distance_k: 0 },
         levels: lot ? { geometry: lot, frequency: lot, energy: lot, energy_source: "opt" } : null,
         provenance: {
             software_release: { software_release_ref: "srel", software: "Arkane", version: "1.1.0" },
@@ -42,21 +44,26 @@ function thermo(ref: string, lot: typeof lotA | null, h298: number | null, targe
     }
 }
 
+const ensemble = { kind: "equilibrium_ensemble", conformer_group_ref: null, declared_by: "depositor" }
+
 function records() {
     return [
-        thermo("thm_a1", lotA, 143.9, { kind: "equilibrium_ensemble", conformer_group_ref: null, declared_by: "depositor" }),
+        thermo("thm_a1", lotA, 143.9, ensemble),
         thermo("thm_b1", lotB, -12.34, { kind: "single_conformer", conformer_group_ref: "cg_1", declared_by: "depositor" }),
         thermo("thm_a2", lotA, null, null, "approved"),
     ]
 }
 
-function statmech(ref: string) {
+function statmech(ref: string, core: Record<string, unknown> = {}) {
     return {
         statmech: {
-            statmech_ref: ref, scientific_origin: "computed", statmech_treatment: "rrho", point_group: "D3h",
-            external_symmetry: 6, optical_isomers: 1, frequency_scale_factor_value: 0.9876,
+            statmech_ref: ref, scientific_origin: "computed", statmech_treatment: "rrho_1d", rigid_rotor_kind: "asymmetric_top",
+            point_group: "C2v", external_symmetry: 6, optical_isomers: 1, is_linear: false, uses_projected_frequencies: null,
+            rotational_constant_a_cm1: 9.5, rotational_constant_b_cm1: 0.00123,
+            frequency_scale_factor_value: 0.9876,
             note: "typed by the depositor", created_at: "2026-07-29T08:26:29",
             review: { status: "not_reviewed" },
+            ...core,
         },
         species: { species_ref: speciesRef, species_entry_ref: entryRef },
         software_release: { software_release_ref: "srel_g", software: "Gaussian", version: "16" },
@@ -66,13 +73,32 @@ function statmech(ref: string) {
     }
 }
 
+const transportRecord = {
+    transport: {
+        transport_ref: "trn_1", scientific_origin: "computed", sigma_angstrom: 3.8, epsilon_over_k_k: 144, dipole_debye: 0,
+        polarizability_angstrom3: 2.60, rotational_relaxation: 1.5, created_at: "2026-07-29T08:26:29", review: { status: "not_reviewed" },
+    },
+    species: { species_ref: speciesRef, species_entry_ref: entryRef },
+    evidence_summary: { source_calculation_count: 1, has_source_calculations: true, has_lj_parameters: true, has_dipole_moment: true, has_polarizability: true, has_rotational_relaxation: true, has_literature_source: false },
+    available_sections: { has_source_calculations: true, has_review: false },
+    source_calculations: [{
+        role: "dipole", calculation_ref: "calc_t1", calculation_type: "sp", quality: "ok", created_at: "2026-07-29T08:26:29",
+        review: { status: "not_reviewed" }, level_of_theory: lotB,
+    }],
+}
+
 type Options = {
     echo?: boolean
     entries?: unknown[]
+    /** What the by-molecule listing returns, when it differs from the entry lookup. */
+    listing?: unknown[]
     thermoPages?: boolean
     endless?: boolean
     thermoRecords?: unknown[]
+    statmechRecords?: unknown[]
+    transportRecords?: unknown[]
     species?: unknown
+    counts?: { thermo: number; statmech: number }
 }
 
 function entrySummary(ref: string, state: string, calculations: number) {
@@ -86,41 +112,56 @@ function entrySummary(ref: string, state: string, calculations: number) {
 
 function handlers(options: Options = {}) {
     const all = options.thermoRecords ?? records()
+    const stat = options.statmechRecords ?? [statmech("stm_1")]
+    const transport = options.transportRecords ?? []
+    const echo = options.echo === false ? {} : sortEcho
     return [
-        http.get("/api/v1/scientific/species/search", () => HttpResponse.json(options.species ?? { records: [{
-            species_ref: speciesRef, canonical_smiles: "[CH3]", inchi_key: "WCYWZMWISLQXQU-UHFFFAOYSA-N", formula: "CH3",
-            charge: 0, multiplicity: 2,
-            entries: options.entries ?? [entrySummary(entryRef, "ground", 10), entrySummary(otherEntryRef, "excited", 4)],
-        }] })),
+        http.get("/api/v1/scientific/species/search", ({ request }) => {
+            const byMolecule = new URL(request.url).searchParams.has("species_ref")
+            return HttpResponse.json(options.species ?? { records: [{
+                species_ref: speciesRef, canonical_smiles: "[CH3]", inchi_key: "WCYWZMWISLQXQU-UHFFFAOYSA-N", formula: "CH3",
+                charge: 0, multiplicity: 2,
+                entries: (byMolecule ? options.listing : undefined) ?? options.entries ?? [entrySummary(entryRef, "ground", 10), entrySummary(otherEntryRef, "excited", 4)],
+            }] })
+        }),
         http.get("/api/v1/scientific/conformers/search", () => HttpResponse.json({ records: [{
             conformer_group: { conformer_group_ref: "cg_1", label: "conformer_1" },
             observations_summary: { total: 1 },
             evidence_summary: { calculation_count: 1, optimization_chain_count: 1, geometry_count: 1, evidence_coverage: { opt: 1, freq: 0, sp: 0 }, levels_of_theory: {} },
         }] })),
         http.get(`/api/v1/scientific/species-entries/${entryRef}/thermo`, ({ request }) => {
-            const query = new URL(request.url).searchParams
-            const offset = Number(query.get("offset") ?? 0)
+            if (options.counts) options.counts.thermo += 1
+            const offset = Number(new URL(request.url).searchParams.get("offset") ?? 0)
             if (options.endless) {
-                return HttpResponse.json({ species_entry_ref: entryRef, review_summary: summary, records: [all[0]], pagination: { offset, limit: 1, returned: 1, total: 5000 } })
+                return HttpResponse.json({ species_entry_ref: entryRef, review_summary: summary, records: [thermo(`thm_${offset}`, lotA, offset, ensemble)], pagination: { offset, limit: 1, returned: 1, total: 5000 } })
             }
             const size = options.thermoPages ? 2 : 50
             const page = all.slice(offset, offset + size)
             return HttpResponse.json({
-                species_entry_ref: entryRef,
-                review_summary: summary,
-                records: page,
+                species_entry_ref: entryRef, review_summary: summary, records: page,
                 pagination: { offset, limit: size, returned: page.length, total: all.length },
-                request: options.echo === false ? {} : sortEcho,
+                request: echo,
             })
         }),
-        http.get(`/api/v1/scientific/species-entries/${entryRef}/statmech`, () => HttpResponse.json({
-            review_summary: summary, records: [statmech("stm_1")],
-            pagination: { offset: 0, limit: 50, returned: 1, total: 1 },
-            request: options.echo === false ? {} : sortEcho,
-        })),
-        http.get(`/api/v1/scientific/species-entries/${entryRef}/transport`, () => HttpResponse.json({
-            review_summary: summary, records: [], pagination: { offset: 0, limit: 50, returned: 0, total: 0 },
-        })),
+        http.get(`/api/v1/scientific/species-entries/${entryRef}/statmech`, ({ request }) => {
+            // Only the plain list counts: a record's on-demand sections are their own reads.
+            if (options.counts && !new URL(request.url).searchParams.has("include")) options.counts.statmech += 1
+            return HttpResponse.json({
+                review_summary: summary, records: stat,
+                pagination: { offset: 0, limit: 50, returned: stat.length, total: stat.length },
+                request: echo,
+            })
+        }),
+        http.get(`/api/v1/scientific/species-entries/${entryRef}/transport`, ({ request }) => {
+            // The numbers table asks for the source calculations so it can show the levels the record ran at.
+            const withSources = new URL(request.url).searchParams.getAll("include").includes("source_calculations")
+            return HttpResponse.json({
+                review_summary: summary,
+                records: transport.map((record) => ({ ...(record as object), ...(withSources ? {} : { source_calculations: null }) })),
+                pagination: { offset: 0, limit: 50, returned: transport.length, total: transport.length },
+                request: echo,
+            })
+        }),
         http.get("/api/v1/scientific/species-calculations/search", () => HttpResponse.json({ records: [] })),
     ]
 }
@@ -141,33 +182,40 @@ function rowRefs(region: HTMLElement): string[] {
     return Array.from(region.querySelectorAll("tbody tr[id]")).map((row) => row.id)
 }
 
-describe("molecule page: numbers for this entry", () => {
-    it("heads the page with real parents, a title that is not the ref, and a lede built from codes", async () => {
+describe("molecule page: header", () => {
+    it("heads the page with real parents in the identity slot, a title that is not the ref, and a lede built from codes", async () => {
         await open()
-        const crumbs = within(screen.getByRole("navigation", { name: "Breadcrumb" }))
+        const identity = document.querySelector(".page-shell-identity") as HTMLElement
+        const crumbs = within(within(identity).getByRole("navigation", { name: "Breadcrumb" }))
+        expect(identity.firstElementChild).toBe(screen.getByRole("navigation", { name: "Breadcrumb" }))
         expect(crumbs.getByRole("link", { name: "Molecules" })).toHaveAttribute("href", "/species")
         expect(crumbs.getByRole("link", { name: "CH3" })).toHaveAttribute("href", `/species/${speciesRef}`)
         expect(crumbs.getByText("minimum · ground state")).toHaveAttribute("aria-current", "page")
         expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("CH3")
+        expect(screen.getByText("One version of a molecule")).toBeVisible()
+        expect(within(identity).getByText("Entry ref")).toBeVisible()
+        expect(screen.getByText("Conformers · Thermochemistry · Statistical mechanics")).toBeVisible()
+        expect(screen.queryByText("Entry kind / state")).toBeNull()
         expect(document.querySelector(".record-lede")).toHaveTextContent(
             "One version of this molecule: charge 0, doublet, ground state, an energy minimum. A molecule can have several versions.",
         )
         expect(document.title).toBe("CH3 · Molecule · TCKDB")
     })
+})
 
-    it("lists every record across pages, thermochemistry first, then statistical mechanics", async () => {
-        const region = await open({ thermoPages: true })
-        await waitFor(() => expect(rowRefs(region)).toEqual(["thermo-thm_a1", "thermo-thm_b1", "thermo-thm_a2", "statmech-stm_1"]))
+describe("molecule page: numbers for this entry", () => {
+    it("lists every record across pages, thermochemistry first, then statistical mechanics, then transport", async () => {
+        const region = await open({ thermoPages: true, transportRecords: [transportRecord] })
+        await waitFor(() => expect(rowRefs(region)).toEqual(["thermo-thm_a1", "thermo-thm_b1", "thermo-thm_a2", "statmech-stm_1", "transport-trn_1"]))
         expect(within(region).getByText("143.90")).toBeVisible()
         expect(within(region).getByText("−12.34")).toBeVisible()
     })
 
-    it("states the order the archive served, and says so when it stated none", async () => {
+    it("states the order the archive served once, naming only lists that have rows, and says so when it stated none", async () => {
         await open()
         const note = document.querySelector(".entry-numbers .order-note") as HTMLElement
-        expect(note).toHaveTextContent("Thermochemistry: approved first, then newest deposited first.")
-        expect(note).toHaveTextContent("Statistical mechanics: approved first, then newest deposited first.")
-        expect(note).toHaveTextContent("Transport: the archive did not state an order.")
+        expect(note).toHaveTextContent("Thermochemistry first, then statistical mechanics; inside each, approved first, then newest deposited first.")
+        expect(note).not.toHaveTextContent("Transport")
         cleanup()
         server.resetHandlers()
         resetAllRequestCaches()
@@ -175,36 +223,55 @@ describe("molecule page: numbers for this entry", () => {
         expect(document.querySelector(".entry-numbers .order-note")).toHaveTextContent("Thermochemistry: the archive did not state an order.")
     })
 
-    it("groups by level of theory without re-ordering inside a group", async () => {
+    it("lays each record out as a record column and a values column, with review under the ref", async () => {
+        const region = await open()
+        await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
+        expect(Array.from(region.querySelectorAll("thead th")).map((cell) => cell.textContent)).toEqual(["Record", "Values"])
+        const row = region.querySelector("#thermo-thm_a2") as HTMLElement
+        expect(within(row.querySelector("th") as HTMLElement).getByText("approved")).toBeVisible()
+        expect(region.querySelector("caption")).toHaveTextContent("Numbers for this entry")
+    })
+
+    it("offers the level toggle only for two or more levels, and groups without re-ordering inside a group", async () => {
         const user = userEvent.setup()
         const region = await open()
         await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
+        expect(screen.getByText("These values were computed at 3 levels of theory.")).toBeVisible()
         await user.click(screen.getByRole("button", { name: "Group by level of theory" }))
         expect(screen.getByRole("button", { name: "Group by level of theory" })).toHaveAttribute("aria-pressed", "true")
-        const bodies = Array.from(region.querySelectorAll("tbody"))
-        const groups = bodies.map((body) => ({
+        const groups = Array.from(region.querySelectorAll("tbody")).map((body) => ({
             title: body.querySelector(".entry-numbers-group th")?.textContent ?? "",
             ids: Array.from(body.querySelectorAll("tr[id]")).map((row) => row.id),
         }))
-        expect(groups.map((group) => group.ids)).toEqual([
-            ["thermo-thm_a1", "thermo-thm_a2"],
-            ["thermo-thm_b1"],
-            ["statmech-stm_1"],
-        ])
-        expect(groups[0].title).toContain("wb97xd/def2tzvp")
+        expect(groups.map((group) => group.ids)).toEqual([["thermo-thm_a1", "thermo-thm_a2"], ["thermo-thm_b1"], ["statmech-stm_1"]])
+        expect(groups[0].title).toContain("wb97xd/def2tzvp (geometry, frequency, energy)")
         expect(groups[0].title).toContain("2 records")
-        expect(groups[2].title).toContain("geometry wb97xd/def2tzvp")
-        expect(groups[2].title).toContain("energy ccsdt/ccpvtz")
+        expect(groups[2].title).toContain("wb97xd/def2tzvp (geometry, frequency) · ccsdt/ccpvtz (energy)")
+        expect(region.querySelector(".entry-numbers-group th")).toHaveAttribute("scope", "rowgroup")
+        cleanup()
+        resetAllRequestCaches()
+        await open({ thermoRecords: [thermo("thm_x", lotA, 1, ensemble)], statmechRecords: [] })
+        expect(screen.queryByRole("button", { name: "Group by level of theory" })).toBeNull()
     })
 
     it("words what each thermo record describes from its declared target only", async () => {
-        const region = await open()
-        await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
+        const region = await open({
+            thermoRecords: [
+                ...records(),
+                thermo("thm_u", lotA, 1, { kind: "single_conformer", conformer_group_ref: null, declared_by: "depositor" }),
+                thermo("thm_k", lotA, 1, { kind: "mystery_kind", conformer_group_ref: null, declared_by: "depositor" }),
+                thermo("thm_c", lotA, 1, { kind: "equilibrium_ensemble", conformer_group_ref: null, declared_by: "chemkin_format" }),
+            ],
+        })
+        await waitFor(() => expect(rowRefs(region)).toHaveLength(7))
         const describes = (id: string) => (region.querySelector(`#${id} .entry-numbers-describes`) as HTMLElement)
-        expect(describes("thermo-thm_a1")).toHaveTextContent("Describes All shapes together")
-        expect(describes("thermo-thm_a2")).toHaveTextContent("Describes Not stated by the depositor")
-        expect(describes("thermo-thm_b1")).toHaveTextContent("Describes One shape: Conformer Group 1")
+        expect(describes("thermo-thm_a1")).toHaveTextContent("Describes: all shapes together")
+        expect(describes("thermo-thm_a2")).toHaveTextContent("Describes: not stated by the depositor")
+        expect(describes("thermo-thm_b1")).toHaveTextContent("Describes: one shape, Conformer Group 1")
         expect(within(describes("thermo-thm_b1")).getByRole("link")).toHaveAttribute("href", expect.stringContaining("conformer=cg_1"))
+        expect(describes("thermo-thm_u")).toHaveTextContent("Describes: one shape (not named)")
+        expect(describes("thermo-thm_k")).toHaveTextContent("Describes: mystery_kind")
+        expect(describes("thermo-thm_c")).toHaveTextContent("Describes: all shapes together (implied by the CHEMKIN format)")
         expect(region.querySelector("#statmech-stm_1 .entry-numbers-describes")).toBeNull()
     })
 
@@ -214,53 +281,133 @@ describe("molecule page: numbers for this entry", () => {
         const row = region.querySelector("#thermo-thm_a2") as HTMLElement
         expect(within(row).getAllByText("Not recorded").length).toBeGreaterThanOrEqual(3)
         expect(row).not.toHaveTextContent("0.00")
-        expect(within(row).getAllByText("approved").length).toBeGreaterThanOrEqual(1)
     })
 
-    it("gives a thermo value its full source line, linked to the record's own row on this page", async () => {
+    it("lists the single values the API sends: phase, pressure, range, model form, treatment, rotor kind and the flags", async () => {
         const region = await open()
         await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
+        const thermoRow = region.querySelector("#thermo-thm_a1") as HTMLElement
+        for (const label of ["Phase", "Reference pressure", "Temperature range covered", "Form of the model"]) expect(within(thermoRow).getByText(label)).toBeVisible()
+        expect(within(thermoRow).getByText("Gas")).toBeVisible()
+        expect(thermoRow).toHaveTextContent("300–2000 K")
+        const row = region.querySelector("#statmech-stm_1") as HTMLElement
+        expect(row).toHaveTextContent("Rigid rotor, harmonic oscillator, one-dimensional hindered rotors")
+        expect(row).toHaveTextContent("Asymmetric top")
+        expect(within(row).getByText("Linear molecule").nextElementSibling).toHaveTextContent("No")
+        expect(within(row).getByText("Projected frequencies used").nextElementSibling).toHaveTextContent("Not recorded")
+    })
+
+    it("types the point group with a subscript, never as a link, and shows Not shown for anything else", async () => {
+        const region = await open({ statmechRecords: [statmech("stm_1"), statmech("stm_2", { point_group: "PISS", rigid_rotor_kind: "odd_top", statmech_treatment: "rrho_ad" })] })
+        await waitFor(() => expect(rowRefs(region)).toContain("statmech-stm_2"))
+        const good = within(region.querySelector("#statmech-stm_1") as HTMLElement).getByText("Point group").nextElementSibling as HTMLElement
+        expect(good.querySelector("sub")).toHaveTextContent("2v")
+        expect(good).toHaveTextContent("C2v")
+        expect(good.querySelector("a")).toBeNull()
+        const bad = region.querySelector("#statmech-stm_2") as HTMLElement
+        expect(within(bad).getByText("Point group").nextElementSibling).toHaveTextContent("Not shown")
+        expect(bad).not.toHaveTextContent("PISS")
+        expect(within(bad).getByText("rrho_ad").tagName).toBe("CODE")
+        expect(within(bad).getByText("odd_top").tagName).toBe("CODE")
+        expect(within(bad).getByText("External symmetry number").nextElementSibling?.querySelector("a")).not.toBeNull()
+    })
+
+    it("formats numbers through their specs: significant figures for constants, as deposited for transport", async () => {
+        const region = await open({ transportRecords: [transportRecord] })
+        await waitFor(() => expect(rowRefs(region)).toContain("transport-trn_1"))
+        const statmechRow = region.querySelector("#statmech-stm_1") as HTMLElement
+        expect(within(statmechRow).getByText("Rotational constant A").nextElementSibling).toHaveTextContent("9.5 cm⁻¹")
+        expect(within(statmechRow).getByText("Rotational constant B").nextElementSibling).toHaveTextContent("1.230 × 10−3 cm⁻¹")
+        const transportRow = region.querySelector("#transport-trn_1") as HTMLElement
+        expect(within(transportRow).getByText("Polarizability").nextElementSibling).toHaveTextContent("2.6 Å³")
+        expect(within(transportRow).getByText("Rotational relaxation").nextElementSibling).toHaveTextContent("1.5")
+    })
+
+    it("takes transport levels from the record's own source calculations", async () => {
+        const region = await open({ transportRecords: [transportRecord, { ...transportRecord, transport: { ...transportRecord.transport, transport_ref: "trn_2" }, source_calculations: [] }] })
+        await waitFor(() => expect(rowRefs(region)).toContain("transport-trn_2"))
+        expect(region.querySelector("#transport-trn_1 .value-source")).toHaveTextContent("dipole ccsdt/ccpvtz")
+        expect(region.querySelector("#transport-trn_2 .value-source")).not.toHaveTextContent("ccsdt")
+    })
+
+    it("gives every record the full source line, linked to the record's card in its tab and keeping its row anchor", async () => {
+        const region = await open({ transportRecords: [transportRecord] })
+        await waitFor(() => expect(rowRefs(region)).toHaveLength(5))
         const source = region.querySelector("#thermo-thm_b1 .value-source") as HTMLElement
         expect(source).toHaveTextContent("Source thm_b1")
         expect(source).toHaveTextContent("geometry ccsdt/ccpvtz")
-        expect(within(source).getByRole("link")).toHaveAttribute("href", expect.stringMatching(new RegExp(`^/species-entries/${entryRef}\\?conformer=cg_1#thermo-thm_b1$`)))
+        expect(source).toHaveTextContent("Arkane 1.1.0")
+        expect(source).not.toHaveTextContent("Review of this record")
+        expect(within(source).getByRole("link")).toHaveAttribute("href", `/species-entries/${entryRef}/thermo?conformer=cg_1#thermo-heading-thm_b1`)
+        const value = region.querySelector("#thermo-thm_b1 .value-link") as HTMLElement
+        expect(value).toHaveAttribute("href", `/species-entries/${entryRef}/thermo?conformer=cg_1#thermo-heading-thm_b1`)
+        expect(region.querySelector("#statmech-stm_1 .value-source")).toHaveTextContent("Gaussian 16")
+        expect(region.querySelector("#transport-trn_1 .value-source")).toHaveTextContent("Source trn_1")
+    })
+
+    it("points records folded into an identical-values group at the group's card", async () => {
+        const region = await open({ thermoRecords: [thermo("thm_p", lotA, 1, ensemble), thermo("thm_q", lotA, 1, ensemble)] })
+        await waitFor(() => expect(region.querySelector("#thermo-thm_q")).not.toBeNull())
+        expect(region.querySelector("#thermo-thm_q .value-link")).toHaveAttribute("href", expect.stringContaining("#thermo-heading-thm_p-group"))
     })
 
     it("says when a list was longer than the cap", async () => {
         await open({ endless: true })
-        expect(await screen.findByText(/Showing the first 5 of 5000 thermochemistry records/)).toBeVisible()
+        expect(await screen.findByText(/Showing the first 20 of 5000 thermochemistry records\. The Thermochemistry tab below pages through all of them\./)).toBeVisible()
     })
 
-    it("lists the other versions of the molecule, marking this one", async () => {
+    it("does not fetch the lists again when a tab opens", async () => {
+        const user = userEvent.setup()
+        const counts = { thermo: 0, statmech: 0 }
+        const region = await open({ counts })
+        await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
+        expect(counts).toEqual({ thermo: 1, statmech: 1 })
+        await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
+        await within(await screen.findByRole("tabpanel")).findByText("thm_a1")
+        await user.click(screen.getByRole("tab", { name: "Statistical mechanics" }))
+        await within(await screen.findByRole("tabpanel")).findAllByText("stm_1")
+        expect(counts).toEqual({ thermo: 1, statmech: 1 })
+    })
+
+    it("lists the versions of the molecule, marking this one, with charge in words", async () => {
         await open()
         const section = (await screen.findByRole("heading", { name: "Other versions of this molecule" })).closest("section") as HTMLElement
-        expect(await within(section).findByText("This molecule has 2 entries; this page shows one of them.")).toBeVisible()
+        expect(await within(section).findByText("This molecule has 2 versions listed; this page shows one of them.")).toBeVisible()
+        expect(section).not.toHaveTextContent("levels of theory behind their values")
         const items = Array.from(section.querySelectorAll(".entry-versions-item"))
         expect(items).toHaveLength(2)
         expect(items[0]).toHaveAttribute("aria-current", "true")
-        expect(items[0]).toHaveTextContent("(this page)")
+        expect(items[0]).toHaveTextContent("charge 0 · doublet (2) · minimum · ground state (this page)")
         expect(items[1]).toHaveTextContent("excited state")
         expect(items[1]).toHaveTextContent("4 calculations")
         expect(within(items[1] as HTMLElement).getByRole("link")).toHaveAttribute("href", `/species-entries/${otherEntryRef}`)
     })
 
-    it("keeps depositor text out of everything but a depositor note", async () => {
+    it("marks this version even when the listing leaves it out, and pluralises", async () => {
+        await open({ listing: [entrySummary(otherEntryRef, "excited", 4)] })
+        const section = (await screen.findByRole("heading", { name: "Other versions of this molecule" })).closest("section") as HTMLElement
+        expect(await within(section).findByText("This molecule has 2 versions listed; this page shows one of them.")).toBeVisible()
+        expect(section.querySelector(".entry-versions-item[aria-current='true']")).toHaveTextContent("(this page)")
+        cleanup()
+        resetAllRequestCaches()
+        await open({ listing: [entrySummary(entryRef, "ground", 4)] })
+        expect(await screen.findByText("This is the only version listed for this molecule.")).toBeVisible()
+    })
+
+    it("keeps depositor text, and a point group that is not one, out of everything but a depositor note", async () => {
         const planted = plantSentinels(
-            { thermo: records(), statmech: [statmech("stm_1")], species: { records: [{ entries: [entrySummary(entryRef, "ground", 1)] }] } },
+            { thermo: records(), statmech: [statmech("stm_1")], entries: [entrySummary(entryRef, "ground", 1)] },
             ["note", "species_entry_label"],
         )
         expectPlanted(planted)
-        const region = await open({
-            thermoRecords: planted.value.thermo,
-            species: { records: [{
-                species_ref: speciesRef, canonical_smiles: "[CH3]", inchi_key: "WCYWZMWISLQXQU-UHFFFAOYSA-N", formula: "CH3",
-                charge: 0, multiplicity: 2, entries: planted.value.species.records[0].entries,
-            }] },
-        })
+        setAt(planted.value, "statmech.0.statmech.point_group", ADVERSARIAL.pointGroup)
+        const region = await open({ thermoRecords: planted.value.thermo, statmechRecords: planted.value.statmech, entries: planted.value.entries })
         await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
-        await screen.findByText("This is the only entry listed for this molecule.")
+        await screen.findByText("This is the only version listed for this molecule.")
+        expect(within(region.querySelector("#statmech-stm_1") as HTMLElement).getByText("Point group").nextElementSibling).toHaveTextContent("Not shown")
         expect(document.body.innerHTML).not.toContain(DEPOSITOR_SENTINEL)
         expectDepositorTextOnlyInNotes()
+        expectNoAdversarialText()
     })
 
     it("tabs from the group toggle to the numbers box and on to the first value link", async () => {

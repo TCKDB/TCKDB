@@ -1,3 +1,4 @@
+import { SUPPRESS_SCROLL_SPY_EVENT } from "../hooks/useScrollToHash"
 import { useEffect, useRef, useState, type MutableRefObject } from "react"
 import { useLocation } from "react-router-dom"
 import "../page-shell.css"
@@ -194,6 +195,13 @@ export function TableOfContents() {
             // eslint-disable-next-line react-hooks/exhaustive-deps -- see comment above
             if (settleTimeoutIdRef.current !== null) window.clearTimeout(settleTimeoutIdRef.current)
         }
+    }, [])
+
+    // Another part of the page is about to scroll on its own (a link to a record row): hold the scroll-spy through it.
+    useEffect(() => {
+        const hold = () => beginScrollSuppression(suppressScrollSpyRef, settleTimeoutIdRef)
+        window.addEventListener(SUPPRESS_SCROLL_SPY_EVENT, hold)
+        return () => window.removeEventListener(SUPPRESS_SCROLL_SPY_EVENT, hold)
     }, [])
 
     // Resolve a `#fragment` explicitly rather than relying on the

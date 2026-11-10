@@ -1,8 +1,9 @@
 import type { HiddenByDefault, OrderEcho, Pagination } from "./listEnvelope"
+import { dedupedFetch, type Subscription } from "./requestCache"
 import { loadEntryStatmech, type StatmechRecord } from "./statmechApi"
-import { loadEntryThermoPlain, type ThermoRecord } from "./thermoApi"
-import { loadEntryTransport, type TransportRecord } from "./transportApi"
-import { MAX_PAGES, PAGE_LIMIT } from "../domain/entryNumbers"
+import { loadEntryThermo, type ThermoRecord } from "./thermoApi"
+import { loadEntryTransportWithSources, type TransportRecord } from "./transportApi"
+import { MAX_PAGES } from "../domain/entryNumbers"
 import { nextPageRequest, pagedRef, type PageRequest } from "../domain/paging"
 
 /** Every record of one list the cap allowed, and what the archive said about the list. */
@@ -16,21 +17,36 @@ export type AllPages<T> = {
 }
 
 type Page<T> = { records: T[]; pagination: Pagination; request?: { sort?: OrderEcho | null; hidden_by_default?: HiddenByDefault | null } | null }
+type Loader<T> = (ref: string, signal?: AbortSignal, onRateLimited?: (retryAfterSeconds: number) => void) => Promise<Page<T>>
 
-async function walk<T>(entryRef: string, load: (ref: string, signal?: AbortSignal) => Promise<Page<T>>, signal?: AbortSignal): Promise<AllPages<T>> {
+/** What a walk hands back to its caller so it can show a wait and let go of its requests. */
+export type WalkControl = {
+    onWaiting: (retryAfterSeconds: number) => void
+    subscriptions: Subscription<unknown>[]
+}
+
+/**
+ * Walks one list page by page. The first page is asked for by the plain ref, and later pages by the window the server
+ * advertised, which is exactly how the tabs ask, so a page a tab already holds is not fetched twice.
+ */
+async function walk<T>(entryRef: string, load: Loader<T>, control: WalkControl): Promise<AllPages<T>> {
     const records: T[] = []
-    let request: PageRequest | null = { offset: 0, limit: PAGE_LIMIT }
+    let request: PageRequest | null = null
     let first: Page<T> | null = null
     let total = 0
     let pages = 0
-    while (request && pages < MAX_PAGES) {
-        const page: Page<T> = await load(pagedRef(entryRef, request), signal)
+    do {
+        const key: string = request ? pagedRef(entryRef, request) : entryRef
+        const subscription = dedupedFetch(load, key, (signal, onRateLimited) => load(key, signal, onRateLimited))
+        control.subscriptions.push(subscription as Subscription<unknown>)
+        subscription.onWaiting(control.onWaiting)
+        const page: Page<T> = await subscription.promise
         first ??= page
         records.push(...page.records)
         total = page.pagination.total
         pages += 1
         request = nextPageRequest(page.pagination)
-    }
+    } while (request && pages < MAX_PAGES)
     return {
         records,
         total,
@@ -46,12 +62,12 @@ export type EntryNumbers = {
     transport: AllPages<TransportRecord>
 }
 
-/** Every thermo, statmech and transport record of one species entry, each list walked page by page up to the cap. */
-export async function loadEntryNumbers(entryRef: string, signal?: AbortSignal): Promise<EntryNumbers> {
+/** Every thermo, statmech and transport record of one species entry, each list walked up to the cap. */
+export async function loadEntryNumbers(entryRef: string, control: WalkControl): Promise<EntryNumbers> {
     const [thermo, statmech, transport] = await Promise.all([
-        walk(entryRef, loadEntryThermoPlain, signal),
-        walk(entryRef, loadEntryStatmech, signal),
-        walk(entryRef, loadEntryTransport, signal),
+        walk(entryRef, loadEntryThermo, control),
+        walk(entryRef, loadEntryStatmech, control),
+        walk(entryRef, loadEntryTransportWithSources, control),
     ])
     return { thermo, statmech, transport }
 }

@@ -172,6 +172,11 @@ export function fillValue(value: FillableValue): Filled {
  */
 export const QUANTITY_SPECS = {
     thermo_h298_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
+    thermo_enthalpy_formation_0k_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
+    thermo_enthalpy_formation_0k_uncertainty_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
+    thermo_reference_pressure_bar: { kind: "deposited", digits: 0, unit: "bar" },
+    thermo_temperature_k: { kind: "deposited", digits: 0, unit: "K" },
+    statmech_rotational_constant_cm1: { kind: "scientific", digits: 4, unit: "cm⁻¹" },
     thermo_h298_uncertainty_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
     thermo_s298_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
     thermo_s298_uncertainty_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
@@ -179,11 +184,13 @@ export const QUANTITY_SPECS = {
     transport_sigma_angstrom: { kind: "fixed", digits: 3, unit: "Å" },
     transport_epsilon_over_k_k: { kind: "fixed", digits: 1, unit: "K" },
     transport_dipole_debye: { kind: "fixed", digits: 3, unit: "D" },
+    transport_polarizability_angstrom3: { kind: "deposited", digits: 0, unit: "Å³" },
+    transport_rotational_relaxation: { kind: "deposited", digits: 0, unit: null },
     calculation_electronic_energy_hartree: { kind: "fixed", digits: 6, unit: "hartree" },
     kinetics_ea_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
     kinetics_a: { kind: "scientific", digits: 3, unit: null },
     kinetics_n: { kind: "scientific", digits: 4, unit: null },
-} as const satisfies Record<string, { kind: "fixed" | "scientific"; digits: number; unit: string | null }>
+} as const satisfies Record<string, { kind: "fixed" | "scientific" | "deposited"; digits: number; unit: string | null }>
 
 export type QuantitySpecKey = keyof typeof QUANTITY_SPECS
 
@@ -200,5 +207,7 @@ export function formatQuantity(
 ): Quantity | null {
     const spec = QUANTITY_SPECS[key]
     const unit = unitOverride !== undefined ? unitOverride : spec.unit
+    // "deposited": the number exactly as stored, with no rounding or padding.
+    if (spec.kind === "deposited") return value === null || value === undefined ? null : { value: String(value), unit }
     return spec.kind === "fixed" ? fixed(value, spec.digits, unit) : scientific(value, spec.digits, unit)
 }

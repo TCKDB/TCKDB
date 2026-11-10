@@ -17,7 +17,6 @@ import { Formula } from "../components/Formula"
 import { OtherVersions } from "../components/OtherVersions"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import { facetChips } from "../domain/recordFacets"
-import { useScrollToHash } from "../hooks/useScrollToHash"
 import { EntryTransportSection } from "../components/EntryTransportSection"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
@@ -199,7 +198,6 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
 }) {
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
-    useScrollToHash()
     const requestedRef = searchParams.get("conformer")
     // Read only while the single-point tab is open: loading the entry never waits for it.
     const spEnergies = useSpeciesSinglePoints(entryRef, activeSection === "sp")
@@ -274,11 +272,6 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
     }
 
     return <section className="entry-page">
-        <Breadcrumbs crumbs={[
-            { label: "Molecules", to: BROWSE_KIND_PATHS.species },
-            { label: entry.formula ? <Formula value={entry.formula} /> : entry.canonicalSmiles, to: `/species/${entry.speciesRef}` },
-            { label: facetChips(entry).join(" · ") },
-        ]} />
         {/* `EntryIdentity` now routes through `PageShell`'s `identity` slot
             (previously it rendered directly above `<PageShell>`, spanning
             full width above the ToC/content flex row -- an earlier version
@@ -286,7 +279,14 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
             superseded by the ToC-top-alignment change, which puts every
             record page's header through the same slot so the ToC rail
             starts level with the header, not below it). */}
-        <PageShell identity={<EntryIdentity entry={entry} />}>
+        <PageShell identity={<>
+            <Breadcrumbs crumbs={[
+                { label: "Molecules", to: BROWSE_KIND_PATHS.species },
+                { label: entry.formula ? <Formula value={entry.formula} /> : entry.canonicalSmiles, to: `/species/${entry.speciesRef}` },
+                { label: facetChips(entry).join(" · ") },
+            ]} />
+            <EntryIdentity entry={entry} />
+        </>}>
         {/* Item 5 / BLOCKING-1 (species-entry/browse/chrome residuals
             re-review): "Transition states for reactions of this species"
             now renders INSIDE `EntryIdentity` (`SpeciesEntrySummary.tsx`),
@@ -297,7 +297,7 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
             this page's stylesheet is in scope now, so the fix moved with
             the markup rather than patching a stray sibling `<p>` in place. */}
         <EntryNumbers entryRef={entryRef} entryPath={entryPath} conformerQuery={conformerQuery} conformers={conformers} />
-        <OtherVersions speciesRef={entry.speciesRef} entryRef={entryRef} />
+        <OtherVersions entry={entry} />
         {hasAnyEvidence(entry) ? (
             <>
                 <ConformerSelector

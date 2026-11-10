@@ -48,7 +48,7 @@
 
 .entry-numbers-table {
     width: 100%;
-    min-width: 46rem;
+    min-width: 30rem;
     border-collapse: collapse;
 }
 
@@ -96,6 +96,28 @@
 
 .entry-numbers-values dd {
     margin: 0;
+    white-space: nowrap;
+}
+
+.entry-numbers-review {
+    display: block;
+    margin-top: var(--s-2);
+}
+
+.entry-numbers-levels {
+    margin: var(--s-3) 0 0;
+    color: var(--ink-2);
+}
+
+/* In the accessibility tree, off the screen. */
+.entry-numbers-caption {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
 }
 
 .entry-numbers-describes {

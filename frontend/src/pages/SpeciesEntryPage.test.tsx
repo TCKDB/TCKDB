@@ -381,7 +381,7 @@ describe("species-entry page: identity and errors", () => {
         expect(subscript).toHaveTextContent("3")
         expect(screen.getByText("[CH3]")).toBeVisible()
         expect(screen.getByText("0 / doublet (2)")).toBeVisible()
-        expect(screen.getByText("Conformers · thermo · statmech")).toBeVisible()
+        expect(screen.getByText("Conformers · Thermochemistry · Statistical mechanics")).toBeVisible()
 
         // SMILES and InChIKey are ALWAYS visible chemistry identifiers in
         // the identity header -- never behind the References disclosure.
@@ -423,13 +423,13 @@ describe("species-entry page: identity and errors", () => {
 
         // This entry's own ref: first fact in the identity block, at rest,
         // with the data face and a copy button -- never inside References.
-        expect(within(facts).getByText("Species entry ref")).toBeVisible()
+        expect(within(facts).getByText("Entry ref")).toBeVisible()
         const ownRefValue = within(facts).getByText(entryRef)
         expect(ownRefValue).toBeVisible()
         expect(ownRefValue.tagName).toBe("CODE")
         expect(ownRefValue).toHaveClass("data")
-        expect(Array.from(facts.children)[0]).toHaveTextContent("Species entry ref")
-        expect(within(facts).getByRole("button", { name: /copy species entry ref/i })).toBeVisible()
+        expect(Array.from(facts.children)[0]).toHaveTextContent("Entry ref")
+        expect(within(facts).getByRole("button", { name: /copy entry ref/i })).toBeVisible()
         expect(within(refsPanel).queryByText(entryRef)).not.toBeInTheDocument()
 
         // The availability card grid ("Available in this entry" / "View
@@ -448,13 +448,13 @@ describe("species-entry page: identity and errors", () => {
     // heading in document order (`PageShell` renders `identity` before
     // `children`), which a DOM-order check on `compareDocumentPosition`
     // catches and a same-page `getByRole` presence check would not.
-    it('links "Transition states for reactions of this species" to the TS browse with participant_smiles prefilled, placed after the identity heading', async () => {
+    it('links "Transition states for reactions of this molecule" to the TS browse with participant_smiles prefilled, placed after the identity heading', async () => {
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         const heading = await screen.findByRole("heading", { name: "CH3" })
 
-        const link = screen.getByRole("link", { name: "Transition states for reactions of this species" })
+        const link = screen.getByRole("link", { name: "Transition states for reactions of this molecule" })
         // Points at the canonical `/transition-states` path now (its own
         // route, per the per-kind browse paths change), not the legacy
         // `/species?kind=transition_state`.

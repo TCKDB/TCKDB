@@ -35,12 +35,11 @@ function renderEntry(entry: SpeciesEntryProjection) {
 describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
     it("states the electronic state exactly once -- not the old state-chip AND the fact row AND a pill row", () => {
         renderEntry(baseEntry())
-        // "ground" names this entry's electronic state once, in the
-        // labelled "Entry kind / state" row. A mutation reintroducing the
-        // retired `.state-chip` beside the <h1>, or a `RecordFacetChips`
-        // pill row, would make this find more than one.
-        // The lede sentence under the title is the one other place it is said, in words.
-        expect(screen.getAllByText(/ground/i).filter((node) => !node.closest(".record-lede"))).toHaveLength(1)
+        // "ground" names this entry's electronic state once, in the lede sentence under the title. A mutation
+        // reintroducing the retired `.state-chip`, the fact row or a `RecordFacetChips` pill row would find more.
+        const mentions = screen.getAllByText(/ground/i)
+        expect(mentions).toHaveLength(1)
+        expect(mentions[0].closest(".record-lede")).not.toBeNull()
         expect(document.querySelector(".state-chip")).not.toBeInTheDocument()
         expect(document.querySelector(".record-facet-chips")).not.toBeInTheDocument()
     })
@@ -129,12 +128,12 @@ describe("EntryIdentity: own ref inline, first, never duplicated in References",
         renderEntry(baseEntry())
         const identityFacts = document.querySelector("dl.kv-list.record-identity-facts") as HTMLElement
         expect(identityFacts).not.toBeNull()
-        expect(Array.from(identityFacts.children)[0]).toHaveTextContent("Species entry ref")
+        expect(Array.from(identityFacts.children)[0]).toHaveTextContent("Entry ref")
         const ownRefValue = within(identityFacts).getByText("spe_demo")
         expect(ownRefValue).toBeVisible()
         expect(ownRefValue.tagName).toBe("CODE")
         expect(ownRefValue).toHaveClass("data")
-        expect(within(identityFacts).getByRole("button", { name: /copy species entry ref/i })).toBeVisible()
+        expect(within(identityFacts).getByRole("button", { name: /copy entry ref/i })).toBeVisible()
     })
 
     it("keeps the entry's own ref out of the collapsed References disclosure -- only the related parent species ref stays there", async () => {

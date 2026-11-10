@@ -34,19 +34,6 @@ import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SupersessionNotice } from "./SupersessionNotice"
 import { ThermoCpChart } from "./ThermoCpChart"
 
-/**
- * A thermo record's own geometry/frequency/energy levels of theory: the
- * server's additive `levels` field when present; else derived from this
- * record's own `source_calculations[]` roles when THAT is present (an
- * older API shipping the roles but not yet the derived field); else the
- * oldest fallback -- `provenance.level_of_theory` alone, reused for all
- * three, exactly the single value this page showed before any of the
- * three was split out. Unlike statmech's `source_calculations` (a lazy,
- * include-gated fetch), thermo's is always eager -- nothing on this
- * surface is request-gated (see the module docstring on `api/thermoApi.ts`)
- * -- so this is a plain synchronous function, never a "loading" state.
- */
-
 // ---------------------------------------------------------------------------
 // The thermo/statmech/transport read surfaces are ENTRY-SCOPED LISTS
 // (`GET /species-entries/{id}/thermo` etc.), not `thermo_ref`-addressed

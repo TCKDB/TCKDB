@@ -206,3 +206,14 @@ export async function loadEntryTransportSection(
 export function readTransportSectionField<T>(record: TransportRecord, token: TransportSectionToken): T {
     return (record as unknown as Record<string, unknown>)[sectionField(token)] as T
 }
+
+/** One page of the entry's transport records with the source calculations each cites, for the levels they ran at. */
+export async function loadEntryTransportWithSources(
+    entryRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<TransportListResponse> {
+    const { ref, request } = parsePagedRef(entryRef)
+    const payload = await requestScientificJson(buildEndpoint(ref, ["source_calculations"], request), signal, onRateLimited)
+    return parseScientificResponse(transportListResponseSchema, payload, "transport")
+}

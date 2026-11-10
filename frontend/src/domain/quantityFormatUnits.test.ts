@@ -27,6 +27,9 @@ const ALLOWED_UNITS: ReadonlySet<string> = new Set([
     "K",
     "D", // debye
     "hartree",
+    "bar",
+    "cm\u207B\u00B9", // cm⁻¹, U+207B SUPERSCRIPT MINUS and U+00B9 SUPERSCRIPT ONE
+    "\u00C5\u00B3", // Å³, U+00C5 then U+00B3 SUPERSCRIPT THREE
 ])
 
 /**
@@ -38,6 +41,7 @@ const UNITLESS_SPECS: ReadonlySet<string> = new Set([
     "statmech_frequency_scale_factor", // dimensionless
     "kinetics_n", // dimensionless temperature exponent
     "kinetics_a", // unit is per record (A_units), supplied by the caller
+    "transport_rotational_relaxation", // dimensionless collision number
 ])
 
 const entries = Object.entries(QUANTITY_SPECS) as [string, { unit: string | null }][]

@@ -95,16 +95,21 @@ function describeOrderKey(key: { key: string; meaning: string; direction: string
     return `${base} (${key.direction === "desc" ? "descending" : "ascending"})`
 }
 
+/** The non-tie-break keys of a served order in plain words ("approved first, then newest deposited first"), or `null` when it states none. */
+export function orderWords(sort: OrderEcho | null | undefined): string | null {
+    if (!sort) return null
+    const keys = sort.keys.filter((key) => !isTieBreaker(key))
+    return keys.length === 0 ? null : keys.map(describeOrderKey).join(", then ")
+}
+
 /**
  * The order statement, from the server's own echo. A DEFAULT order is worded as an order for browsing, not a
  * preference. An order the request itself asked for (`requested_by`, e.g. a named ranking) is reported as asked for and
  * is not called "not a ranking", because it is one. Internal tie-break keys are not named.
  */
 export function displayOrderSentence(sort: OrderEcho | null | undefined): string | null {
-    if (!sort || sort.keys.length === 0) return null
-    const keys = sort.keys.filter((key) => !isTieBreaker(key))
-    if (keys.length === 0) return null
-    const words = keys.map(describeOrderKey).join(", then ")
+    const words = orderWords(sort)
+    if (!words || !sort) return null
     if (sort.requested_by) return `Order requested (${sort.requested_by}): ${words}.`
     return `Display order: ${words}. An order for browsing, not a ranking or a recommendation.`
 }

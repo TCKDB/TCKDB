@@ -161,6 +161,8 @@ describe("formatQuantity / QUANTITY_SPECS", () => {
 
     it("every spec key has a positive digit count", () => {
         for (const [key, spec] of Object.entries(QUANTITY_SPECS)) {
+            // A "deposited" spec prints the stored number as it is and rounds to no digit count.
+            if (spec.kind === "deposited") continue
             expect(spec.digits, key).toBeGreaterThan(0)
         }
     })
