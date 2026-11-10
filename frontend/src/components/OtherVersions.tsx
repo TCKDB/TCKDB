@@ -1,25 +1,11 @@
 import { Link } from "react-router-dom"
 import "../entry-numbers.css"
-import type { ScientificSpeciesEntrySummary } from "../api/scientificSpeciesSchemas"
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
-import { chargeText, spinDisplay } from "../domain/chemistryFormat"
+import { versionHolds, versionLabel } from "../domain/entryVersions"
 import { hiddenByDefaultNote } from "../domain/paging"
-import { facetChips } from "../domain/recordFacets"
 import { useSpeciesOverview } from "../hooks/useSpeciesOverview"
 import { SectionHeading } from "./PageSections"
 import { ReviewChip } from "./ReviewChip"
-
-function holds(entry: ScientificSpeciesEntrySummary): string {
-    const kinds = [
-        entry.availability.has_conformers && "conformers",
-        entry.availability.has_thermo && "thermochemistry",
-        entry.availability.has_statmech && "statistical mechanics",
-        entry.availability.has_transport && "transport",
-    ].filter(Boolean)
-    const count = entry.availability.calculation_count
-    const calculations = `${count} ${count === 1 ? "calculation" : "calculations"}`
-    return kinds.length > 0 ? `${calculations}; ${kinds.join(", ")}` : `${calculations}; no deposited results`
-}
 
 /** How many versions are listed, not counting this page's own when the listing left it out. */
 function countSentence(listed: number, currentAdded: boolean): string {
@@ -55,13 +41,13 @@ export function OtherVersions({ entry }: { entry: SpeciesEntryProjection }) {
                     <ul className="entry-versions-list">
                         {versions.map((version) => {
                             const current = version.species_entry_ref === entry.species_entry_ref
-                            const label = `charge ${chargeText(species.charge) ?? "not recorded"} · ${spinDisplay(species.multiplicity)} · ${facetChips(version).join(" · ")}`
+                            const label = versionLabel(species, version)
                             return (
                                 <li key={version.species_entry_ref} className="entry-versions-item" aria-current={current ? "true" : undefined}>
                                     <p className="entry-versions-title">
                                         {current ? <>{label} <span className="entry-versions-here">(this page)</span></> : <Link to={`/species-entries/${version.species_entry_ref}`}>{label}</Link>}
                                     </p>
-                                    <p className="entry-versions-meta">{holds(version)}</p>
+                                    <p className="entry-versions-meta">{versionHolds(version)}</p>
                                     <p className="entry-versions-meta"><ReviewChip status={version.review.status} explain={false} /> <code className="t-preserve-case">{version.species_entry_ref}</code></p>
                                 </li>
                             )

@@ -5,6 +5,8 @@ import { RecordGlyph, type RecordKind } from "./RecordGlyph"
 import { useNearViewport, useSpeciesEntryNeighbours, type NeighboursState } from "../hooks/useNeighbours"
 import { wrapLabel } from "../domain/wrapLabel"
 import type { NeighbourNode } from "../domain/neighbourNodes"
+import type { SpeciesOverview } from "../api/speciesOverviewApi"
+import { versionLabel } from "../domain/entryVersions"
 
 const WIDTH = 320
 const PAD = 8
@@ -20,10 +22,13 @@ const nodeAria = (node: NeighbourNode) =>
  * links, never one image, and the "Connected records" list beside it says the same in text. Below 560px only the list
  * is shown.
  */
-export function RelationshipMap({ selfKind, state, innerRef }: {
+export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This entry", note }: {
     selfKind: RecordKind
     state: NeighboursState
     innerRef?: Ref<HTMLElement>
+    selfLabel?: string
+    /** A line under the heading saying what the nodes stand for. */
+    note?: string
 }) {
     const headingId = useId()
     const { pathname } = useLocation()
@@ -44,15 +49,16 @@ export function RelationshipMap({ selfKind, state, innerRef }: {
     return (
         <section className="rel-map" aria-labelledby={headingId} ref={innerRef}>
             <h2 id={headingId} className="rel-map-heading">Where this record sits</h2>
+            {note && <p className="rel-map-note">{note}</p>}
             {nodes.length > 0 && (
                 <svg className="rel-map-figure" viewBox={`0 0 ${WIDTH} ${height}`} role="group" aria-labelledby={headingId}>
                     {nodes.map((node, index) => (
                         <line key={node.id} className="rel-map-edge" x1={SELF_X + 38} y1={cy} x2={NODE_X} y2={tops[index] + rows[index].height / 2} />
                     ))}
-                    <Link to={pathname} aria-current="page" aria-label="This entry (you are here)" className="rel-map-node rel-map-node--self">
+                    <Link to={pathname} aria-current="page" aria-label={`${selfLabel} (you are here)`} className="rel-map-node rel-map-node--self">
                         <rect className="rel-map-box" x={4} y={cy - 30} width={92} height={60} rx={4} />
                         <g transform={`translate(${SELF_X - 10} ${cy - 22})`}><RecordGlyph kind={selfKind} size={20} /></g>
-                        <text x={SELF_X} y={cy + 20} textAnchor="middle" className="rel-map-label">This entry</text>
+                        <text x={SELF_X} y={cy + 20} textAnchor="middle" className="rel-map-label">{selfLabel}</text>
                     </Link>
                     {nodes.map((node, index) => {
                         const { lines, height: rowHeight } = rows[index]
@@ -102,4 +108,24 @@ export function SpeciesEntryRelationshipMap({ entryRef, smiles }: { entryRef: st
     const near = useNearViewport(ref)
     const state = useSpeciesEntryNeighbours(entryRef, smiles, near)
     return <RelationshipMap selfKind="species-entry" state={state} innerRef={ref} />
+}
+
+const MAP_VERSIONS = 8
+
+/** The map for a molecule page: no reads connect a molecule to reactions or networks, so its nodes are its own versions. */
+export function SpeciesRelationshipMap({ species }: { species: SpeciesOverview }) {
+    const shown = species.entries.slice(0, MAP_VERSIONS)
+    const nodes: NeighbourNode[] = shown.map((version) => ({
+        id: version.species_entry_ref,
+        kind: "species-entry",
+        label: versionLabel(species, version),
+        relation: "A version of this molecule",
+        to: `/species-entries/${version.species_entry_ref}`,
+        found: null,
+    }))
+    const more = species.entries.length - shown.length
+    const note = more > 0
+        ? `This map shows the versions of this molecule: ${shown.length} of ${species.entries.length}. Reactions and networks are on each version's page.`
+        : "This map shows the versions of this molecule. Reactions and networks are on each version's page."
+    return <RelationshipMap selfKind="species" selfLabel="This molecule" note={note} state={{ status: "ready", nodes }} />
 }

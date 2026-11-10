@@ -74,6 +74,13 @@ a.rel-map-node:focus-visible {
     border-top: 1px solid var(--line-2);
 }
 
+.rel-map-note {
+    margin: 0 0 .5rem;
+    color: var(--muted);
+    font: var(--type-ui-font);
+    font-weight: 400;
+}
+
 .rel-map-item-note {
     display: block;
     margin-left: 1.4rem;

@@ -2,21 +2,60 @@ import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { act, cleanup, render, screen, within, waitFor } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import App from "../App"
-import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
+import { ADVERSARIAL, DEPOSITOR_SENTINEL, expectDepositorTextOnlyInNotes, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 import { resetAllRequestCaches } from "../api/requestCache"
 import { titleHasKind } from "../test/routeTitleKinds"
 
 const speciesRef = "spc_atp56uqux2ajao7hvckx7gx7ca"
 const entryRef = "spe_bcbdjwkip75yoziblpntwzblzu"
 const excitedEntryRef = "spe_abcdefghijklmnopqrstuvwxyz"
-// `App` mounts `AuthProvider`, which probes `GET /auth/me` regardless of
-// route -- see `App.test.tsx`'s identical handler for why this default
-// (signed-out) has to be here for every test in this file that renders
-// `<App />`.
+const lotA = { method: "wb97xd", basis: "def2tzvp", display: "wb97xd/def2tzvp", level_of_theory_ref: "lot_a" }
+const lotB = { method: "ccsdt", basis: "ccpvtz", display: "ccsdt/ccpvtz", level_of_theory_ref: "lot_b" }
+const summary = { approved: 0, under_review: 0, not_reviewed: 0, deprecated: 0, rejected: 0, total: 0 }
+const sortEcho = {
+    sort: {
+        keys: [
+            { key: "review_rank", direction: "asc", meaning: "review status" },
+            { key: "created_at", direction: "desc", meaning: "newest deposited" },
+            { key: "id", direction: "desc", meaning: "unique tie-breaker" },
+        ],
+    },
+}
+// `App` mounts `AuthProvider`, which probes `GET /auth/me` regardless of route.
 const server = setupServer(http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })))
 
-function speciesPayload(entries = [groundEntry(), excitedEntry()]) {
+function groundEntry() {
+    return {
+        species_entry_ref: entryRef,
+        species_entry_kind: "minimum",
+        electronic_state_kind: "ground",
+        review: { status: "not_reviewed" },
+        availability: { has_thermo: true, has_statmech: true, has_transport: false, has_conformers: true, calculation_count: 14 },
+    }
+}
+
+function excitedEntry() {
+    return {
+        ...groundEntry(),
+        species_entry_ref: excitedEntryRef,
+        electronic_state_kind: "excited",
+        term_symbol: "3B1",
+        review: { status: "approved" },
+        availability: { ...groundEntry().availability, calculation_count: 3 },
+    }
+}
+
+function secondGroundEntry() {
+    return {
+        ...groundEntry(),
+        species_entry_ref: "spe_secondgroundentryrecordabcdefgh",
+        availability: { ...groundEntry().availability, calculation_count: 7 },
+    }
+}
+
+function speciesPayload(entries: unknown[] = [groundEntry(), excitedEntry()]) {
     return {
         records: [{
             species_ref: speciesRef,
@@ -31,177 +70,358 @@ function speciesPayload(entries = [groundEntry(), excitedEntry()]) {
     }
 }
 
-// `species_entry_label` is left unset here on purpose: the server's own
-// discriminator (`species_identity.species_entry_label`) is `None` for a
-// plain ground-state minimum with nothing else to distinguish it -- see
-// `domain/recordFacets.ts`'s module docstring. Setting it to a hand-typed
-// "ground electronic state" string, as this fixture used to, is not a
-// shape the archive actually produces.
-function groundEntry() {
+function thermo(ref: string, lot: typeof lotA | null, h298: number | null, review = "not_reviewed") {
     return {
-        species_entry_ref: entryRef,
-        species_entry_kind: "minimum",
-        electronic_state_kind: "ground",
-        review: { status: "not_reviewed" },
-        availability: {
-            has_thermo: true,
-            has_statmech: true,
-            has_transport: false,
-            has_conformers: true,
-            calculation_count: 14,
+        thermo_ref: ref, scientific_origin: "computed", model_kind: "nasa", review: { status: review },
+        h298_kj_mol: h298, s298_j_mol_k: h298 === null ? null : 200.5,
+        enthalpy_reference_kind: "formation_298k", thermodynamic_target: null, phase: "gas", reference_pressure_bar: 1,
+        levels: lot ? { geometry: lot, frequency: lot, energy: lot, energy_source: "opt" } : null,
+        provenance: { software_release: { software_release_ref: "srel", software: "Arkane", version: "1.1.0" } },
+        note: "typed by the depositor",
+    }
+}
+
+function thermoRow(ref: string, entry: string, lot: typeof lotA | null, h298: number | null, review?: string) {
+    return { species: { species_ref: speciesRef, species_entry_ref: entry }, thermo: thermo(ref, lot, h298, review) }
+}
+
+function statmech(ref: string, entry: string | null) {
+    return {
+        statmech: {
+            statmech_ref: ref, scientific_origin: "computed", statmech_treatment: "rrho", rigid_rotor_kind: "asymmetric_top",
+            point_group: "C2v", external_symmetry: 6, created_at: "2026-07-29T08:26:29", review: { status: "not_reviewed" },
+            note: "typed by the depositor",
         },
+        species: entry ? { species_ref: speciesRef, species_entry_ref: entry } : null,
+        software_release: { software_release_ref: "srel_g", software: "Gaussian", version: "16" },
+        levels: { geometry: lotA, frequency: lotA, energy: lotB, energy_source: "sp" },
+        evidence_summary: { source_calculation_count: 3, has_opt_calculation: true, has_freq_calculation: true, has_sp_calculation: true, has_rotor_scans: false, torsion_count: 0, has_frequency_scale_factor: false, has_conformer_context: false },
+        available_sections: { has_source_calculations: true, has_torsions: false, has_electronic_levels: false, has_frequencies: true, has_conformers: false, has_review: true },
     }
 }
 
-function excitedEntry() {
-    return {
-        ...groundEntry(),
-        species_entry_ref: excitedEntryRef,
-        electronic_state_kind: "excited",
-        term_symbol: "3B1",
-        availability: { ...groundEntry().availability, calculation_count: 3 },
-    }
-}
+type Values = { thermo?: unknown[]; statmech?: unknown[]; echo?: boolean; calls?: URL[] }
 
-function secondGroundEntry() {
-    return {
-        ...groundEntry(),
-        species_entry_ref: "spe_secondgroundentryrecordabcdefgh",
-        availability: { ...groundEntry().availability, calculation_count: 7 },
+function valueHandlers(values: Values = {}) {
+    const thermoRows = values.thermo ?? [
+        thermoRow("thm_g1", entryRef, lotA, 143.9),
+        thermoRow("thm_e1", excitedEntryRef, lotB, -12.34, "approved"),
+        thermoRow("thm_g2", entryRef, null, null),
+    ]
+    const statmechRows = values.statmech ?? [statmech("stm_g1", entryRef)]
+    const echo = values.echo === false ? {} : sortEcho
+    const page = (rows: unknown[], request: Request) => {
+        const url = new URL(request.url)
+        values.calls?.push(url)
+        const offset = Number(url.searchParams.get("offset") ?? 0)
+        const limit = Number(url.searchParams.get("limit") ?? 50)
+        const slice = rows.slice(offset, offset + limit)
+        return { review_summary: summary, records: slice, pagination: { offset, limit, returned: slice.length, total: rows.length }, request: echo }
     }
+    return [
+        http.get("/api/v1/scientific/thermo/search", ({ request }) => HttpResponse.json(page(thermoRows, request))),
+        http.get("/api/v1/scientific/statmech/search", ({ request }) => HttpResponse.json(page(statmechRows, request))),
+    ]
 }
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
-afterEach(() => { server.resetHandlers(); cleanup(); window.history.replaceState({}, "", "/"); vi.useRealTimers() })
+afterEach(() => { server.resetHandlers(); cleanup(); resetAllRequestCaches(); window.history.replaceState({}, "", "/"); vi.useRealTimers() })
 afterAll(() => server.close())
 
-/** Scopes queries to one entry card, identified by its stable `<code>` ref
- *  -- more robust than matching a link's accessible name, which is exactly
- *  the thing under test here. Async: waits for the record to finish
- *  loading, same as every other assertion on this page. */
-async function cardFor(ref: string): Promise<HTMLElement> {
-    const code = await screen.findByText(ref)
-    const card = code.closest("article")
-    if (!card) throw new Error(`No .entry-card ancestor found for ref "${ref}"`)
-    return card
+async function open(payload: object = speciesPayload(), values: Values = {}) {
+    server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(payload)), ...valueHandlers(values))
+    window.history.replaceState({}, "", `/species/${speciesRef}`)
+    render(<App />)
+    await screen.findByRole("heading", { name: "Versions of this molecule" })
 }
 
-describe("species overview", () => {
-    it("requires explicit electronic-state entry selection and supplies accessible hierarchy links", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", ({ request }) => {
-            const query = new URL(request.url).searchParams
-            expect(query.get("species_ref")).toBe(speciesRef)
-            expect(query.get("limit")).toBe("1")
-            return HttpResponse.json(speciesPayload())
-        }))
-        window.history.replaceState({}, "", `/species/${speciesRef}`)
-        render(<App />)
+async function versionsSection(): Promise<HTMLElement> {
+    return (await screen.findByRole("heading", { name: "Versions of this molecule" })).closest("section") as HTMLElement
+}
 
-        expect(await screen.findByRole("heading", { name: "CH3" })).toBeVisible()
-        expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible()
-        expect(screen.getByRole("heading", { name: "Electronic-state entries" })).toBeVisible()
+async function valuesRegion(): Promise<HTMLElement> {
+    return screen.findByRole("region", { name: "Table of values for this molecule" })
+}
+
+function rowIds(region: HTMLElement): string[] {
+    return Array.from(region.querySelectorAll("tbody tr[id]")).map((row) => row.id)
+}
+
+describe("molecule overview: header", () => {
+    it("heads the page with Molecules > formula breadcrumbs, a formula title, a code-built lede and a Molecule tab title", async () => {
+        await open()
+        const identity = document.querySelector(".page-shell-identity") as HTMLElement
+        const crumbs = within(within(identity).getByRole("navigation", { name: "Breadcrumb" }))
+        expect(crumbs.getByRole("link", { name: "Molecules" })).toHaveAttribute("href", "/species")
+        expect(identity.querySelector(".breadcrumbs [aria-current='page']")).toHaveTextContent("CH3")
+        expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("CH3")
+        expect(screen.getByRole("heading", { level: 1 })).not.toHaveTextContent(speciesRef)
+        expect(document.querySelector(".record-lede")).toHaveTextContent("A molecule with 2 versions; each version holds its own records.")
         await waitFor(() => expect(titleHasKind(document.title, "/species/:ref")).toBe(true))
-        // The section heading no longer carries its own "N entries" total --
-        // that number is only ever shown once, on the per-state-group
-        // heading below, so it isn't stated twice for the same fact.
-        expect(screen.queryByText("2 entries")).not.toBeInTheDocument()
-        expect(screen.getByRole("heading", { name: /ground electronic state.*1 entry/i })).toBeVisible()
-        expect(screen.getByRole("heading", { name: /excited electronic state.*1 entry/i })).toBeVisible()
-
-        // Each card sits inside an `EntryStateGroup` whose own heading
-        // already says "ground electronic state"/"excited electronic
-        // state" -- the card itself no longer repeats the bare state text
-        // (that redundancy was the owner's own report; see
-        // `domain/recordFacets.test.ts`'s `includeState` tests). A card's
-        // heading still carries anything the group heading does NOT
-        // establish -- here, the excited entry's own term symbol "3B1".
-        const groundCard = await cardFor(entryRef)
-        expect(within(groundCard).getByRole("link", { name: "minimum" }))
-            .toHaveAttribute("href", `/species-entries/${entryRef}`)
-        // The row used to link to its own record twice -- the heading link
-        // above, plus a separate "Open state-specific record →" link lower
-        // in the card. One link, one destination, per row now.
-        expect(within(groundCard).getAllByRole("link")).toHaveLength(1)
-        expect(screen.queryByText(/Open state-specific record/)).not.toBeInTheDocument()
-
-        const excitedCard = await cardFor(excitedEntryRef)
-        expect(within(excitedCard).getByRole("link", { name: "minimum · 3B1" }))
-            .toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
-
-        // Scoped to `dd` -- the formula heading above ("CH3") now renders
-        // through `Formula`, which types the "3" subscript as its own
-        // `<sub>3</sub>` element, so an unscoped `getByText("3")` would
-        // ambiguously match both that subscript and this calculation count.
-        expect(screen.getByText("14", { selector: "dd" })).toBeVisible()
-        expect(screen.getByText("3", { selector: "dd" })).toBeVisible()
-        expect(screen.getAllByText("Deposited records")).toHaveLength(2)
-        expect(screen.getAllByText("Available data")).toHaveLength(2)
+        expect(document.title).toBe("CH3 · Molecule · TCKDB")
+        expect(within(identity).getByText("Molecule ref")).toBeVisible()
+        expect(within(identity).getByText("[CH3]")).toBeVisible()
+        expect(within(identity).getByText("WCYWZMWISLQXQU-UHFFFAOYSA-N")).toBeVisible()
+        expect(within(identity).getByText("0 / doublet (2)")).toBeVisible()
     })
 
-    it("groups repeated ground-state entries without merging their stable records", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => (
-            HttpResponse.json(speciesPayload([groundEntry(), secondGroundEntry(), excitedEntry()]))
-        )))
+    it("says one version in the singular", async () => {
+        await open(speciesPayload([groundEntry()]))
+        expect(document.querySelector(".record-lede")).toHaveTextContent("A molecule with 1 version; each version holds its own records.")
+    })
+
+    it("has one h1, a contents list for its two sections, and says nothing for the empty names slot", async () => {
+        await open()
+        expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
+        const toc = await screen.findByRole("navigation", { name: /sections on this page/i })
+        expect(within(toc).getByRole("link", { name: "Versions of this molecule" })).toBeVisible()
+        expect(within(toc).getByRole("link", { name: "All values for this molecule" })).toBeVisible()
+        expect(screen.queryByText(/also known as/i)).not.toBeInTheDocument()
+        expect(document.body.textContent).not.toMatch(/\bSpecies\b/)
+    })
+})
+
+describe("molecule overview: versions", () => {
+    it("lists every version with a code-built label, what it holds, its review status and a link", async () => {
+        await open()
+        const section = await versionsSection()
+        const items = within(section).getAllByRole("listitem")
+        expect(items).toHaveLength(2)
+        const ground = within(items[0]).getByRole("link", { name: "charge 0 · doublet (2) · minimum · ground state" })
+        expect(ground).toHaveAttribute("href", `/species-entries/${entryRef}`)
+        expect(items[0]).toHaveTextContent("14 calculations; conformers, thermochemistry, statistical mechanics")
+        expect(within(items[0]).getByText("not reviewed")).toBeVisible()
+        expect(within(items[0]).getByText(entryRef)).toBeVisible()
+        expect(within(items[1]).getByRole("link", { name: "charge 0 · doublet (2) · minimum · excited state · 3B1" })).toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
+        expect(within(items[1]).getByText("approved")).toBeVisible()
+        expect(within(items[0]).getAllByRole("link")).toHaveLength(1)
+    })
+
+    it("keeps repeated ground-state versions apart by their refs", async () => {
+        await open(speciesPayload([groundEntry(), secondGroundEntry(), excitedEntry()]))
+        const section = await versionsSection()
+        const ground = within(section).getAllByRole("link", { name: "charge 0 · doublet (2) · minimum · ground state" })
+        expect(ground.map((link) => link.getAttribute("href"))).toEqual([`/species-entries/${entryRef}`, "/species-entries/spe_secondgroundentryrecordabcdefgh"])
+        expect(within(section).getByText("spe_secondgroundentryrecordabcdefgh")).toBeVisible()
+        expect(within(section).getByText("7 calculations; conformers, thermochemistry, statistical mechanics")).toBeVisible()
+    })
+
+    it("words a stereo version as a readable phrase, never a bare R", async () => {
+        const entry = { ...groundEntry(), stereo_label: "R", species_entry_label: "R" }
+        await open(speciesPayload([entry]))
+        const link = within(await versionsSection()).getByRole("link", { name: /minimum/ })
+        expect(link).toHaveAccessibleName("charge 0 · doublet (2) · minimum · ground state · R enantiomer")
+        expect(link).not.toHaveTextContent(/^R$/)
+    })
+
+    it("tells excited states apart by their own state and term-symbol words, and hides what is outside the grammar", async () => {
+        const stateEntry = (ref: string, label: string, term: string) => ({ ...excitedEntry(), species_entry_ref: ref, electronic_state_label: label, term_symbol: term })
+        await open(speciesPayload([groundEntry(), stateEntry("spe_singletfirstexcitedabcdefghij", "S1", "¹B₁"), stateEntry("spe_tripletfirstexcitedabcdefghij", "T1", "³B₁")]))
+        const versions = within(await versionsSection())
+        expect(versions.getByRole("link", { name: /state S1 · ¹B₁/ })).toBeVisible()
+        expect(versions.getByRole("link", { name: /state T1 · ³B₁/ })).toBeVisible()
+        cleanup()
+        resetAllRequestCaches()
+        await open(speciesPayload([groundEntry(), stateEntry("spe_legacyexcitedabcdefghijklmn", "R", `${DEPOSITOR_SENTINEL}_term`)]))
+        expect(await screen.findByText("spe_legacyexcitedabcdefghijklmn")).toBeVisible()
+        expect(document.body.textContent).not.toMatch(/state R|enantiomer/)
+        expectNoDepositorText()
+    })
+
+    it("explains when no versions are listed", async () => {
+        await open(speciesPayload([]))
+        expect(await screen.findByText("No versions are currently listed for this molecule.")).toBeVisible()
+    })
+
+    it("says how many versions were not listed, from the server's own count, and nothing when none were hidden", async () => {
+        await open({
+            ...speciesPayload(),
+            request: { hidden_by_default: { counts: { rejected: 2, deprecated: 1 }, include_with: {}, counted: "species_entries" } },
+        })
+        expect(await screen.findByText("Not listed by default: 2 rejected and 1 deprecated species entries.")).toBeVisible()
+        cleanup()
+        resetAllRequestCaches()
+        await open()
+        expect(screen.queryByText(/Not listed by default/)).not.toBeInTheDocument()
+    })
+
+    it("draws the map from the versions and says so", async () => {
+        await open()
+        const rail = document.querySelector(".page-shell-rail") as HTMLElement
+        expect(within(rail).getByText("This map shows the versions of this molecule. Reactions and networks are on each version's page.")).toBeVisible()
+        const list = within(rail).getByRole("list", { name: "Connected records" })
+        expect(within(list).getByRole("link", { name: "charge 0 · doublet (2) · minimum · ground state" })).toHaveAttribute("href", `/species-entries/${entryRef}`)
+        expect(within(rail).getByRole("link", { name: "This molecule (you are here)" })).toBeVisible()
+    })
+})
+
+describe("molecule overview: all values for this molecule", () => {
+    it("asks both searches by the molecule and lists every record, thermochemistry first, each naming its version", async () => {
+        const calls: URL[] = []
+        await open(speciesPayload(), { calls })
+        const region = await valuesRegion()
+        await waitFor(() => expect(rowIds(region)).toEqual(["thermo-thm_g1", "thermo-thm_e1", "thermo-thm_g2", "statmech-stm_g1"]))
+        expect(calls.length).toBeGreaterThanOrEqual(2)
+        for (const call of calls) expect(call.searchParams.get("species_ref")).toBe(speciesRef)
+        const ground = region.querySelector("#thermo-thm_g1") as HTMLElement
+        const link = within(ground).getByRole("link", { name: "charge 0 · doublet (2) · minimum · ground state" })
+        expect(link).toHaveAttribute("href", `/species-entries/${entryRef}`)
+        expect(ground).toHaveTextContent("Version: charge 0 · doublet (2) · minimum · ground state")
+        expect(within(region.querySelector("#thermo-thm_e1") as HTMLElement).getByRole("link", { name: /excited state/ })).toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
+        expect(within(region.querySelector("#statmech-stm_g1") as HTMLElement).getByRole("link", { name: /ground state/ })).toBeVisible()
+        expect(within(ground).getByText("143.90")).toBeVisible()
+        expect(within(region.querySelector("#thermo-thm_e1") as HTMLElement).getByText("−12.34")).toBeVisible()
+    })
+
+    it("links each value to its record on its own version's page", async () => {
+        await open()
+        const region = await valuesRegion()
+        await waitFor(() => expect(rowIds(region)).toHaveLength(4))
+        expect(within(region.querySelector("#thermo-thm_g1") as HTMLElement).getByRole("link", { name: /143\.90/ }))
+            .toHaveAttribute("href", `/species-entries/${entryRef}/thermo#thermo-heading-thm_g1`)
+        expect(within(region.querySelector("#thermo-thm_e1") as HTMLElement).getByRole("link", { name: /12\.34/ }))
+            .toHaveAttribute("href", `/species-entries/${excitedEntryRef}/thermo#thermo-heading-thm_e1`)
+        expect(within(region.querySelector("#statmech-stm_g1") as HTMLElement).getByRole("link", { name: /^6/ }))
+            .toHaveAttribute("href", `/species-entries/${entryRef}/statmech#statmech-heading-stm_g1`)
+    })
+
+    it("shows the full source line on every row: levels, program and review status", async () => {
+        await open()
+        const region = await valuesRegion()
+        await waitFor(() => expect(rowIds(region)).toHaveLength(4))
+        const source = (id: string) => (region.querySelector(`#${id} .value-source`) as HTMLElement)
+        expect(source("thermo-thm_g1")).toHaveTextContent("geometry wb97xd/def2tzvp")
+        expect(source("thermo-thm_g1")).toHaveTextContent("Arkane")
+        expect(source("statmech-stm_g1")).toHaveTextContent("energy ccsdt/ccpvtz")
+        expect(source("statmech-stm_g1")).toHaveTextContent("Gaussian")
+        expect(within(region.querySelector("#thermo-thm_e1 th") as HTMLElement).getByText("approved")).toBeVisible()
+        expect(within(region.querySelector("#thermo-thm_g1 th") as HTMLElement).getByText("not reviewed")).toBeVisible()
+        expect(Array.from(region.querySelectorAll("thead th")).map((cell) => cell.textContent)).toEqual(["Record", "Values"])
+    })
+
+    it("states the order the archive served, once, and says so when it stated none", async () => {
+        await open()
+        await valuesRegion()
+        const note = await waitFor(() => {
+            const found = document.querySelector(".entry-numbers .order-note") as HTMLElement
+            expect(found).not.toBeNull()
+            return found
+        })
+        expect(note).toHaveTextContent("Thermochemistry first, then statistical mechanics; inside each, approved first, then newest deposited first.")
+        expect(note).toHaveTextContent("This order is not a recommendation.")
+        cleanup()
+        resetAllRequestCaches()
+        server.resetHandlers()
+        await open(speciesPayload(), { echo: false })
+        await waitFor(() => expect(document.querySelector(".entry-numbers .order-note")).toHaveTextContent("the archive did not state an order"))
+    })
+
+    it("says Not recorded for a missing value and never shows zero or another version's number", async () => {
+        await open()
+        const region = await valuesRegion()
+        await waitFor(() => expect(rowIds(region)).toHaveLength(4))
+        const row = region.querySelector("#thermo-thm_g2") as HTMLElement
+        expect(within(row).getAllByText("Not recorded").length).toBeGreaterThanOrEqual(3)
+        expect(row).not.toHaveTextContent("0.00")
+        expect(row).not.toHaveTextContent("143.90")
+    })
+
+    it("does not give a record the archive attributes to no version a version of its own", async () => {
+        await open(speciesPayload(), { statmech: [statmech("stm_none", null)] })
+        const region = await valuesRegion()
+        const row = await waitFor(() => {
+            const found = region.querySelector("#statmech-stm_none") as HTMLElement
+            expect(found).not.toBeNull()
+            return found
+        })
+        expect(row).toHaveTextContent("Version not stated by the archive")
+        expect(within(row).queryByRole("link", { name: /ground state|excited state/ })).toBeNull()
+        expect(row.querySelector("a[href*='species-entries']")).toBeNull()
+    })
+
+    it("names a version missing from the listing without inventing a label", async () => {
+        await open(speciesPayload([groundEntry()]), { thermo: [thermoRow("thm_x", excitedEntryRef, lotA, 5)], statmech: [] })
+        const region = await valuesRegion()
+        const row = await waitFor(() => {
+            const found = region.querySelector("#thermo-thm_x") as HTMLElement
+            expect(found).not.toBeNull()
+            return found
+        })
+        expect(within(row).getByRole("link", { name: "Another version" })).toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
+        expect(within(row).getByText(excitedEntryRef)).toBeVisible()
+    })
+
+    it("walks later pages and offers the level toggle for two or more levels", async () => {
+        const user = userEvent.setup()
+        const many = Array.from({ length: 120 }, (_, index) => thermoRow(`thm_${index}`, index % 2 ? entryRef : excitedEntryRef, index % 3 ? lotA : lotB, index))
+        const calls: URL[] = []
+        await open(speciesPayload(), { thermo: many, statmech: [], calls })
+        const region = await valuesRegion()
+        await waitFor(() => expect(rowIds(region)).toHaveLength(120))
+        expect(calls.some((call) => Number(call.searchParams.get("offset")) > 0)).toBe(true)
+        await user.click(screen.getByRole("button", { name: "Group by level of theory" }))
+        expect(screen.getByRole("button", { name: "Group by level of theory" })).toHaveAttribute("aria-pressed", "true")
+        expect(region.querySelectorAll(".entry-numbers-group")).toHaveLength(2)
+    })
+
+    it("says so when there are no values, and when the values could not be loaded", async () => {
+        await open(speciesPayload(), { thermo: [], statmech: [] })
+        expect(await screen.findByText("No thermochemistry or statistical mechanics records are deposited for this molecule.")).toBeVisible()
+        cleanup()
+        resetAllRequestCaches()
+        server.use(http.get("/api/v1/scientific/thermo/search", () => HttpResponse.json({ detail: "down" }, { status: 503 })))
         window.history.replaceState({}, "", `/species/${speciesRef}`)
         render(<App />)
-
-        expect(await screen.findByRole("heading", { name: /ground electronic state.*2 entries/i })).toBeVisible()
-        // Both ground entries carry the same axes (same kind, same state,
-        // no stereo/isotope), so they render IDENTICAL heading text --
-        // their stable refs, not their headings, are what tells them apart.
-        const groundLinks = screen.getAllByRole("link", { name: "minimum" })
-        expect(groundLinks).toHaveLength(2)
-        expect(groundLinks[0]).toHaveAttribute("href", `/species-entries/${entryRef}`)
-        expect(groundLinks[1]).toHaveAttribute("href", "/species-entries/spe_secondgroundentryrecordabcdefgh")
-        expect(screen.getByText("spe_secondgroundentryrecordabcdefgh")).toBeVisible()
-        expect(screen.getByText("7")).toBeVisible()
-        // One explanatory sentence for the whole entry index, not one per
-        // state group -- the per-group "Each row is a separate record..."
-        // paragraph this used to be is gone; the section-level sentence
-        // above the groups is the only one now, however many groups render.
-        expect(screen.getAllByText(/Entries are separate deposited records/)).toHaveLength(1)
-        expect(screen.queryByText(/Each row is a separate record/)).not.toBeInTheDocument()
+        expect(await screen.findByText("The values for this molecule could not be loaded. Each version's page still shows its own records.")).toBeVisible()
+        expect(screen.getByRole("heading", { name: "Versions of this molecule" })).toBeVisible()
     })
 
-    it("explains when no state-specific entries are projected", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload([]))))
-        window.history.replaceState({}, "", `/species/${speciesRef}`)
-        render(<App />)
-        expect(await screen.findByText(
-            "No electronic-state entries are currently projected for this species.",
-        )).toBeVisible()
+    it("tabs through the version links in the versions list, then the version and value links in the table", async () => {
+        const user = userEvent.setup()
+        await open()
+        const region = await valuesRegion()
+        await waitFor(() => expect(rowIds(region)).toHaveLength(4))
+        const versions = await versionsSection()
+        const [first, second] = within(versions).getAllByRole("link")
+        first.focus()
+        expect(first).toHaveFocus()
+        await user.tab()
+        expect(second).toHaveFocus()
+        const firstRow = region.querySelector("#thermo-thm_g1") as HTMLElement
+        const stops: string[] = []
+        for (let index = 0; index < 40 && !stops.includes("thm_g1 value"); index++) {
+            await user.tab()
+            const active = document.activeElement as HTMLElement
+            if (firstRow.contains(active) && active.getAttribute("href")?.includes("#thermo-heading-thm_g1")) stops.push("thm_g1 value")
+            if (firstRow.contains(active) && active.getAttribute("href") === `/species-entries/${entryRef}`) stops.push("thm_g1 version")
+        }
+        expect(stops).toEqual(["thm_g1 version", "thm_g1 value"])
     })
+})
 
+describe("molecule overview: states", () => {
     it("distinguishes absent, malformed, and unavailable projections", async () => {
         server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [] })))
         window.history.replaceState({}, "", `/species/${speciesRef}`)
         const first = render(<App />)
-        expect(await screen.findByRole("heading", { name: "Species not found" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Molecule not found" })).toBeVisible()
+        await waitFor(() => expect(titleHasKind(document.title, "/species/:ref")).toBe(true))
         first.unmount()
         resetAllRequestCaches()
 
         server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [{}] })))
         const second = render(<App />)
-        expect(await screen.findByRole("alert")).toHaveTextContent("Species data could not be read")
+        expect(await screen.findByRole("alert")).toHaveTextContent("Molecule data could not be read")
         second.unmount()
         resetAllRequestCaches()
 
-        server.use(http.get("/api/v1/scientific/species/search", () => (
-            HttpResponse.json({ detail: "archive unavailable" }, { status: 503 })
-        )))
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ detail: "archive unavailable" }, { status: 503 })))
         render(<App />)
-        expect(await screen.findByRole("alert")).toHaveTextContent("Species unavailable")
+        expect(await screen.findByRole("alert")).toHaveTextContent("Molecule unavailable")
     })
 
-    // Review follow-up (SHOULD-FIX #2): `useSpeciesOverview` used to
-    // collapse a double 429 (both automatic-retry attempts exhausted) into
-    // the same generic "Species unavailable" as a real 5xx. Distinct
-    // state, plain-language wording -- same as every other rate-limited
-    // surface (`RecordStatus`, `SpeciesEntryPage`).
     it("gives a double 429 its own rate-limited state, in plain language, distinct from 'unavailable'", async () => {
-        // Load the lazy page module before faking timers: fake timers cannot
-        // advance a module load, so otherwise the page can still be behind
-        // the Suspense fallback when the timers below run.
+        // Load the lazy page module before faking timers: fake timers cannot advance a module load.
         await import("./SpeciesOverviewPage")
         vi.useFakeTimers()
         server.use(http.get("/api/v1/scientific/species/search", () => (
@@ -209,233 +429,19 @@ describe("species overview", () => {
         )))
         window.history.replaceState({}, "", `/species/${speciesRef}`)
         render(<App />)
-        await act(async () => { await vi.advanceTimersByTimeAsync(0) }) // first attempt
-        await act(async () => { await vi.advanceTimersByTimeAsync(45_000) }) // the retry, also 429
+        await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+        await act(async () => { await vi.advanceTimersByTimeAsync(45_000) })
 
         expect(screen.getByRole("heading", { name: "Archive is busy" })).toBeVisible()
-        expect(screen.queryByRole("heading", { name: "Species unavailable" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("heading", { name: "Molecule unavailable" })).not.toBeInTheDocument()
         const message = screen.getByRole("alert")
-        expect(message).toHaveTextContent(
-            "The archive is receiving too many requests right now. Wait about 45 seconds and reload the page.",
-        )
+        expect(message).toHaveTextContent("The archive is receiving too many requests right now. Wait about 45 seconds and reload the page.")
         expect(message.textContent).not.toMatch(/\d+s\b/)
     })
 })
 
-describe("species overview: card heading (the bare-'R' bug, no pill boxes)", () => {
-    // The record measured against the live archive: spc_n7c5snosejeow4z2vr4aivmv34
-    // has one entry whose heading rendered as a bare "R" where every
-    // sibling species on the archive shows "minimum · ground". Its
-    // `species_entry_label` really is `"R"` on the wire -- see
-    // `domain/recordFacets.ts` for why that is the server's OWN compact
-    // discriminator, not free text, and why the heading must not read that
-    // field at all. This fixture reproduces the real shape rather than a
-    // convenient stand-in.
-    const rEnantiomerSpeciesRef = "spc_n7c5snosejeow4z2vr4aivmv34"
-    const rEnantiomerEntryRef = "spe_n7c5rentry00000000000000000"
-
-    function rEnantiomerPayload() {
-        return {
-            records: [{
-                species_ref: rEnantiomerSpeciesRef,
-                canonical_smiles: "C[C@H](N)C(=O)O",
-                inchi_key: "QNAYBMKLOCPYGJ-REOHCLBHSA-N",
-                formula: "C3H7NO2",
-                charge: 0,
-                multiplicity: 1,
-                stereo_kind: "enantiomer",
-                entries: [{
-                    species_entry_ref: rEnantiomerEntryRef,
-                    species_entry_kind: "minimum",
-                    electronic_state_kind: "ground",
-                    stereo_label: "R",
-                    species_entry_label: "R",
-                    review: { status: "not_reviewed" },
-                    availability: {
-                        has_thermo: false, has_statmech: false, has_transport: false,
-                        has_conformers: true, calculation_count: 5,
-                    },
-                }],
-            }],
-        }
-    }
-
-    function headingOf(card: HTMLElement): HTMLElement {
-        const heading = card.querySelector("h4")
-        if (!heading) throw new Error("No <h4> heading found in entry card")
-        return heading
-    }
-
-    it("renders the R record as a readable phrase, not a bare 'R' heading -- this is the bug", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(rEnantiomerPayload())))
-        window.history.replaceState({}, "", `/species/${rEnantiomerSpeciesRef}`)
-        render(<App />)
-
-        const heading = headingOf(await cardFor(rEnantiomerEntryRef))
-        // The lone entry's own state group has 1 member, so the bare
-        // "ground state" phrase is dropped as redundant with the group
-        // heading -- but stereochemistry is NOT established by that group
-        // heading, so it survives into the card: "minimum · R enantiomer".
-        expect(heading).toHaveTextContent("minimum · R enantiomer")
-        // The bug: the heading's own accessible name must never collapse
-        // to a bare, unexplained "R".
-        expect(heading).not.toHaveTextContent(/^R$/)
-        expect(heading).toHaveAccessibleName("minimum · R enantiomer")
-    })
-
-    it("renders no pill boxes at all -- every fact is plain text", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(rEnantiomerPayload())))
-        window.history.replaceState({}, "", `/species/${rEnantiomerSpeciesRef}`)
-        render(<App />)
-
-        await cardFor(rEnantiomerEntryRef)
-        expect(document.querySelector(".record-facet-chips")).not.toBeInTheDocument()
-        expect(document.querySelector(".record-facet-chip")).not.toBeInTheDocument()
-    })
-
-    it("states the electronic state exactly once within its own state group -- the group heading, not the card, carries it", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(rEnantiomerPayload())))
-        window.history.replaceState({}, "", `/species/${rEnantiomerSpeciesRef}`)
-        render(<App />)
-
-        const card = await cardFor(rEnantiomerEntryRef)
-        const group = card.closest("li.entry-state-group") as HTMLElement
-        // Scoped to the group itself (not the whole page, which also
-        // carries an unrelated static intro paragraph that happens to
-        // mention "ground-state" in prose) -- within the group, the group
-        // heading is the ONE place "ground" appears for this entry; a
-        // mutation that re-adds the bare state phrase to the card's own
-        // heading would make this find two.
-        expect(within(group).getAllByText(/ground/i)).toHaveLength(1)
-        expect(within(card).queryByText(/ground/i)).not.toBeInTheDocument()
-    })
-})
-
-// PR D (design-system adoption on the index/record pages): this page used
-// to render its own bespoke `<details class="entry-state-disclosure">`, its
-// own one-off `.entry-review` pill, and its own `.species-identity-grid`/
-// `.entry-facts` dt/dd typography. All three now route through shared
-// design-system primitives (`Disclosure`, `.value-pill`/`.value-pill--muted`,
-// `.kv-list`) -- these tests pin the DOM shape that adoption produces, so a
-// later edit that quietly reverts one back to a page-local implementation
-// fails here instead of shipping unnoticed.
-describe("species overview: shared design-system primitives", () => {
-    it("each state group's records sit behind the shared Disclosure primitive (a <details class=\"disclosure\">), open by default", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
-        window.history.replaceState({}, "", `/species/${speciesRef}`)
-        render(<App />)
-        await screen.findByRole("heading", { name: "CH3" })
-
-        const disclosures = document.querySelectorAll("li.entry-state-group > .disclosure")
-        expect(disclosures).toHaveLength(2)
-        for (const disclosure of disclosures) {
-            expect(disclosure.tagName).toBe("DETAILS")
-            expect(disclosure).toHaveAttribute("open")
-        }
-        // The old bespoke box/summary class this replaced is gone.
-        expect(document.querySelector(".entry-state-disclosure")).not.toBeInTheDocument()
-    })
-
-    it("review status renders through the shared .value-pill/.value-pill--muted primitive, not the retired .entry-review pill", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
-        window.history.replaceState({}, "", `/species/${speciesRef}`)
-        render(<App />)
-        const groundCard = await cardFor(entryRef)
-
-        const reviewPill = within(groundCard).getByText("not reviewed")
-        expect(reviewPill).toHaveClass("value-pill")
-        expect(reviewPill).toHaveClass("value-pill--muted")
-        expect(document.querySelector(".entry-review")).not.toBeInTheDocument()
-    })
-
-    it("the species identity grid and each entry's facts render through the shared .kv-list primitive", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
-        window.history.replaceState({}, "", `/species/${speciesRef}`)
-        render(<App />)
-        await screen.findByRole("heading", { name: "CH3" })
-
-        expect(document.querySelector("dl.species-identity-grid.kv-list")).toBeInTheDocument()
-        expect(document.querySelector("dl.entry-facts.kv-list")).toBeInTheDocument()
-    })
-
-    // Post-review (PR D): at narrow widths the identity grid's auto-fit
-    // columns settle at 3-wide for these 4 pairs, and the two longest
-    // values (the species ref, the InChIKey -- both 30+ characters) wrapped
-    // mid-token inside a ~12rem column. Both now span the full row via
-    // `.kv-list--wide`; SMILES and Charge/multiplicity stay in the narrow
-    // columns.
-    it("the species ref and InChIKey pairs carry .kv-list--wide; SMILES and charge/multiplicity do not", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
-        window.history.replaceState({}, "", `/species/${speciesRef}`)
-        render(<App />)
-        await screen.findByRole("heading", { name: "CH3" })
-
-        const refPair = screen.getByText("Species ref").closest("div") as HTMLElement
-        const inchiPair = screen.getByText("InChIKey").closest("div") as HTMLElement
-        const smilesPair = screen.getByText("SMILES").closest("div") as HTMLElement
-        const chargePair = screen.getByText("Charge / multiplicity").closest("div") as HTMLElement
-
-        expect(refPair).toHaveClass("kv-list--wide")
-        expect(inchiPair).toHaveClass("kv-list--wide")
-        expect(smilesPair).not.toHaveClass("kv-list--wide")
-        expect(chargePair).not.toHaveClass("kv-list--wide")
-    })
-
-    // Post-review (PR D): the old bespoke `<details>` carried `aria-
-    // describedby` linking its "Deposited records" summary back to the
-    // group's own `<h3>` ("ground electronic state") -- the migration to
-    // the shared `Disclosure` primitive dropped that association at first
-    // (the primitive had no attribute hook for `<summary>`). Restored via
-    // `Disclosure`'s new `summaryProps` passthrough. Without it, a screen-
-    // reader user tabbing between this species' TWO identically-worded
-    // "Deposited records" summaries hears no way to tell them apart.
-    it("each Disclosure's summary is aria-describedby its own state group's heading, not the other group's", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
-        window.history.replaceState({}, "", `/species/${speciesRef}`)
-        render(<App />)
-        await screen.findByRole("heading", { name: "CH3" })
-
-        const groundHeading = screen.getByRole("heading", { name: /ground electronic state/i })
-        const excitedHeading = screen.getByRole("heading", { name: /excited electronic state/i })
-        expect(groundHeading).toHaveAttribute("id")
-        expect(excitedHeading).toHaveAttribute("id")
-        expect(groundHeading.id).not.toBe(excitedHeading.id)
-
-        const groundGroup = groundHeading.closest("li.entry-state-group") as HTMLElement
-        const excitedGroup = excitedHeading.closest("li.entry-state-group") as HTMLElement
-        const groundSummary = within(groundGroup).getByText("Deposited records", { exact: false })
-        const excitedSummary = within(excitedGroup).getByText("Deposited records", { exact: false })
-
-        expect(groundSummary).toHaveAttribute("aria-describedby", groundHeading.id)
-        expect(excitedSummary).toHaveAttribute("aria-describedby", excitedHeading.id)
-        // Each summary is tied to ITS OWN group's heading, never the other one.
-        expect(groundSummary.getAttribute("aria-describedby")).not.toBe(excitedHeading.id)
-    })
-})
-
-describe("species overview: entries the default visibility left out", () => {
-    it("says how many entries were not listed, using the server's own count", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({
-            ...speciesPayload(),
-            request: { hidden_by_default: { counts: { rejected: 2, deprecated: 1 }, include_with: {}, counted: "species_entries" } },
-        })))
-        window.history.replaceState({}, "", `/species/${speciesRef}`)
-        render(<App />)
-        expect(await screen.findByRole("heading", { name: "CH3" })).toBeVisible()
-        expect(screen.getByText("Not listed by default: 2 rejected and 1 deprecated species entries.")).toBeVisible()
-    })
-
-    it("says nothing when the server hid nothing", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
-        window.history.replaceState({}, "", `/species/${speciesRef}`)
-        render(<App />)
-        expect(await screen.findByRole("heading", { name: "CH3" })).toBeVisible()
-        expect(screen.queryByText(/Not listed by default/)).not.toBeInTheDocument()
-    })
-})
-
-describe("species overview -- no depositor-typed text (owner decision 2026-11-03)", () => {
-    it("prints none of the typed state label, term symbol or joined species label", async () => {
+describe("molecule overview: depositor text", () => {
+    it("prints none of the typed state label, term symbol, joined label or record note outside a depositor note", async () => {
         const planted = plantSentinels(speciesPayload([
             { ...groundEntry(), electronic_state_label: "x", term_symbol: "x", species_entry_label: "x" } as Record<string, unknown>,
             { ...excitedEntry(), electronic_state_label: "x", term_symbol: "x", species_entry_label: "x" } as Record<string, unknown>,
@@ -443,47 +449,18 @@ describe("species overview -- no depositor-typed text (owner decision 2026-11-03
         expectPlanted(planted)
         const { value } = planted
         setAt(value, "records.0.entries.0.species_entry_label", `${ADVERSARIAL.stereoMark} ${ADVERSARIAL.smilesWord}`)
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(value)))
-        window.history.replaceState({}, "", `/species/${speciesRef}`)
-        render(<App />)
-        // The fixture reached the page: the species heading and both entry refs rendered.
-        expect(await screen.findByRole("heading", { name: "CH3" })).toBeVisible()
-        expect(await screen.findByText(entryRef)).toBeVisible()
-        expect(await screen.findByText(excitedEntryRef)).toBeVisible()
-
+        const thermoPlanted = plantSentinels({ records: [{ ...thermoRow("thm_g1", entryRef, lotA, 143.9), thermo: { ...thermo("thm_g1", lotA, 143.9), note: "x" } }] } as never, ["note"])
+        expectPlanted(thermoPlanted)
+        const statmechPlanted = plantSentinels({ records: [statmech("stm_g1", entryRef)] } as never, ["note"])
+        await open(value, {
+            thermo: (thermoPlanted.value as { records: unknown[] }).records,
+            statmech: (statmechPlanted.value as { records: unknown[] }).records,
+        })
+        const region = await valuesRegion()
+        await waitFor(() => expect(rowIds(region)).toEqual(["thermo-thm_g1", "statmech-stm_g1"]))
+        expect(await screen.findByText(entryRef, { selector: ".entry-versions-meta code" })).toBeVisible()
         expectNoDepositorText()
+        expectDepositorTextOnlyInNotes()
         expectNoAdversarialText()
-    })
-})
-
-describe("species overview -- electronic-state labels and term symbols tell excited states apart", () => {
-    const s1Ref = "spe_singletfirstexcitedabcdefghij"
-    const t1Ref = "spe_tripletfirstexcitedabcdefghij"
-    const stateEntry = (ref: string, label: string, term: string) => ({
-        ...excitedEntry(), species_entry_ref: ref, electronic_state_label: label, term_symbol: term,
-    })
-
-    it("shows S1 and T1 as their own chips in each card's heading, with the canonical term symbol", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload([
-            groundEntry(), stateEntry(s1Ref, "S1", "¹B₁"), stateEntry(t1Ref, "T1", "³B₁"),
-        ]))))
-        window.history.replaceState({}, "", `/species/${speciesRef}`)
-        render(<App />)
-        const s1 = await cardFor(s1Ref)
-        const t1 = await cardFor(t1Ref)
-        expect(within(s1).getByRole("link")).toHaveTextContent("minimum · state S1 · ¹B₁")
-        expect(within(t1).getByRole("link")).toHaveTextContent("minimum · state T1 · ³B₁")
-    })
-
-    it("hides a legacy label or term symbol outside the grammar (the hide-invalid path)", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload([
-            groundEntry(), stateEntry(s1Ref, "R", "DEPOSITOR_SENTINEL_term"),
-        ]))))
-        window.history.replaceState({}, "", `/species/${speciesRef}`)
-        render(<App />)
-        const card = await cardFor(s1Ref)
-        expect(within(card).getByRole("link")).toHaveTextContent(/^minimum$/)
-        expect(document.body.textContent).not.toMatch(/state R|enantiomer/)
-        expectNoDepositorText()
     })
 })

@@ -271,7 +271,7 @@ const reviewStatusSummarySchema = z.object({
     total: z.number(),
 }).passthrough()
 
-const statmechListResponseSchema = z.object({
+export const statmechListResponseSchema = z.object({
     review_summary: reviewStatusSummarySchema,
     records: z.array(statmechRecordSchema),
     pagination: paginationSchema,

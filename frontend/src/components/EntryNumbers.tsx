@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import "../entry-numbers.css"
-import type { EntryNumbers } from "../api/entryNumbersApi"
+import type { HiddenByDefault } from "../api/listEnvelope"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel } from "../domain/conformerEvidence"
 import {
@@ -30,7 +30,7 @@ function PointGroup({ value }: { value: string }) {
     return <span className="t-preserve-case">{symbol}{subscript && <sub>{subscript}</sub>}</span>
 }
 
-function ValueCell({ value, to }: { value: NumberValue; to: string }) {
+function ValueCell({ value, to }: { value: NumberValue; to: string | null }) {
     if (value.value === null) return <span className="entry-numbers-absent">{value.absent ?? "Not recorded"}</span>
     if (value.kind === "pointGroup") return <PointGroup value={value.value} />
     if (value.kind === "code") return <code className="t-preserve-case">{value.value}</code>
@@ -49,14 +49,11 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers }
 }) {
     useScrollToHash()
     const state = useEntryNumbers(entryRef)
-    const [grouped, setGrouped] = useState(false)
     const data = state.status === "ready" ? state.data : null
     const rows = useMemo(() => (data
         ? [...data.thermo.records.map(thermoRow), ...data.statmech.records.map(statmechRow), ...data.transport.records.map(transportRow)]
         : []), [data])
-    const groups = useMemo(() => (grouped ? groupByLevel(rows) : [{ key: null, rows }]), [grouped, rows])
     const groupLabels = useMemo(() => new Map(conformers.map((conformer) => [conformer.conformer_group.conformer_group_ref, conformerLabel(conformer)])), [conformers])
-    const levelCount = new Set(rows.flatMap((row) => row.levels.map((level) => level.label))).size
     const tabPath = (kind: NumberKind) => `${entryPath.replace(/\/(geometry|sp|statmech|thermo|transport)$/, "")}/${kind}`
     const tabLink = (kind: "thermo" | "statmech") => `${tabPath(kind)}${conformerQuery}`
     return (
@@ -70,14 +67,7 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers }
             >
                 Numbers for this entry
             </SectionHeading>
-            {state.status === "loading" && <p className="note" role="status" aria-busy="true">Loading the numbers for this entry…</p>}
-            {state.status === "retrying" && (
-                <p className="note" role="status" aria-busy="true">The archive is busy. Retrying in {formatWaitSeconds(state.retryAfterSeconds)}.</p>
-            )}
-            {state.status === "rate-limited" && (
-                <p className="note" role="alert">The archive is receiving too many requests right now. Wait {formatWaitSeconds(state.retryAfterSeconds)} and reload the page.</p>
-            )}
-            {state.status === "failed" && <p className="note" role="alert">The numbers for this entry could not be loaded. The tabs below still show each record.</p>}
+            <WalkStatus state={state} loading="Loading the numbers for this entry…" failed="The numbers for this entry could not be loaded. The tabs below still show each record." />
             {data && rows.length === 0 && (
                 <p className="empty-projection">No thermochemistry, statistical mechanics or transport records are deposited for this entry.</p>
             )}
@@ -87,46 +77,93 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers }
                         .filter((kind) => data[kind].records.length > 0)
                         .map((kind) => ({ kind, sort: data[kind].sort })))}
                     />
-                    <ListNotes data={data} />
-                    {levelCount > 0 && <p className="entry-numbers-levels">These values were computed at {levelCount} {levelCount === 1 ? "level" : "levels"} of theory.</p>}
-                    {distinctLevelCount(rows) >= 2 && (
-                        <div className="entry-numbers-controls">
-                            <button type="button" className="entry-numbers-toggle" aria-pressed={grouped} onClick={() => setGrouped(!grouped)}>
-                                Group by level of theory
-                            </button>
-                            {grouped && <span className="note">Rows keep their order inside each group.</span>}
-                        </div>
-                    )}
-                    <div className="table-scroll entry-numbers-scroll" tabIndex={0} role="region" aria-label="Table of numbers">
-                        <table className="data-table entry-numbers-table">
-                            <caption className="entry-numbers-caption">Numbers for this entry, one row per record</caption>
-                            <thead>
-                                <tr>
-                                    <th scope="col">Record</th>
-                                    <th scope="col">Values</th>
-                                </tr>
-                            </thead>
-                            {groups.map((group) => (
-                                <tbody key={group.key ?? "all"}>
-                                    {group.key !== null && (
-                                        <tr className="entry-numbers-group">
-                                            <th scope="rowgroup" colSpan={2}>
-                                                <LevelHeading levels={group.rows[0].levels} /> · {group.rows.length} {group.rows.length === 1 ? "record" : "records"}
-                                            </th>
-                                        </tr>
-                                    )}
-                                    {group.rows.map((row) => {
-                                        const query = row.conformerGroupRef ? `?conformer=${encodeURIComponent(row.conformerGroupRef)}` : conformerQuery
-                                        const to = `${tabPath(row.kind)}${query}#${row.kind}-heading-${row.ref}`
-                                        return <NumberRowView key={`${row.kind}-${row.ref}`} row={row} entryPath={entryPath} to={to} groupLabels={groupLabels} />
-                                    })}
-                                </tbody>
-                            ))}
-                        </table>
-                    </div>
+                    <ListNotes
+                        lists={[["thermochemistry", data.thermo], ["statistical mechanics", data.statmech], ["transport", data.transport]]}
+                        rest={(label) => `The ${label.charAt(0).toUpperCase()}${label.slice(1)} tab below pages through all of them.`}
+                    />
+                    <NumbersTable
+                        rows={rows}
+                        caption="Numbers for this entry, one row per record"
+                        label="Table of numbers"
+                        groupLabels={groupLabels}
+                        hrefs={(row) => {
+                            const query = row.conformerGroupRef ? `?conformer=${encodeURIComponent(row.conformerGroupRef)}` : conformerQuery
+                            return { to: `${tabPath(row.kind)}${query}#${row.kind}-heading-${row.ref}`, entryPath }
+                        }}
+                    />
                 </>
             )}
         </section>
+    )
+}
+
+/** The loading, waiting and failure lines of a list that walks every page of a read; nothing once it is ready. */
+export function WalkStatus({ state, loading, failed }: {
+    state: { status: string; retryAfterSeconds?: number }
+    loading: string
+    failed: string
+}) {
+    const wait = formatWaitSeconds(state.retryAfterSeconds ?? 0)
+    if (state.status === "loading") return <p className="note" role="status" aria-busy="true">{loading}</p>
+    if (state.status === "retrying") return <p className="note" role="status" aria-busy="true">The archive is busy. Retrying in {wait}.</p>
+    if (state.status === "rate-limited") return <p className="note" role="alert">The archive is receiving too many requests right now. Wait {wait} and reload the page.</p>
+    if (state.status === "failed") return <p className="note" role="alert">{failed}</p>
+    return null
+}
+
+/**
+ * Rows with their values, levels, programs and review status, optionally grouped by level of theory. `hrefs` says
+ * where each row's values and `describes` link go; `version` adds a line naming the version a row belongs to.
+ */
+export function NumbersTable<R extends NumberRow>({ rows, caption, label, groupLabels, hrefs, version }: {
+    rows: readonly R[]
+    caption: string
+    label: string
+    groupLabels: Map<string, string>
+    hrefs: (row: R) => { to: string | null; entryPath: string | null }
+    version?: (row: R) => ReactNode
+}) {
+    const [grouped, setGrouped] = useState(false)
+    const groups = useMemo(() => (grouped ? groupByLevel(rows) : [{ key: null, rows: [...rows] }]), [grouped, rows])
+    const levelCount = new Set(rows.flatMap((row) => row.levels.map((level) => level.label))).size
+    return (
+        <>
+            {levelCount > 0 && <p className="entry-numbers-levels">These values were computed at {levelCount} {levelCount === 1 ? "level" : "levels"} of theory.</p>}
+            {distinctLevelCount(rows) >= 2 && (
+                <div className="entry-numbers-controls">
+                    <button type="button" className="entry-numbers-toggle" aria-pressed={grouped} onClick={() => setGrouped(!grouped)}>
+                        Group by level of theory
+                    </button>
+                    {grouped && <span className="note">Rows keep their order inside each group.</span>}
+                </div>
+            )}
+            <div className="table-scroll entry-numbers-scroll" tabIndex={0} role="region" aria-label={label}>
+                <table className="data-table entry-numbers-table">
+                    <caption className="entry-numbers-caption">{caption}</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Record</th>
+                            <th scope="col">Values</th>
+                        </tr>
+                    </thead>
+                    {groups.map((group) => (
+                        <tbody key={group.key ?? "all"}>
+                            {group.key !== null && (
+                                <tr className="entry-numbers-group">
+                                    <th scope="rowgroup" colSpan={2}>
+                                        <LevelHeading levels={group.rows[0].levels} /> · {group.rows.length} {group.rows.length === 1 ? "record" : "records"}
+                                    </th>
+                                </tr>
+                            )}
+                            {group.rows.map((row) => {
+                                const { to, entryPath } = hrefs(row)
+                                return <NumberRowView key={`${row.kind}-${row.ref}`} row={row} entryPath={entryPath} to={to} groupLabels={groupLabels} version={version?.(row)} />
+                            })}
+                        </tbody>
+                    ))}
+                </table>
+            </div>
+        </>
     )
 }
 
@@ -137,17 +174,20 @@ function LevelHeading({ levels }: { levels: NumberRow["levels"] }) {
     ))}</>
 }
 
-function ListNotes({ data }: { data: EntryNumbers }) {
+type CountedList = { capped: boolean; records: readonly unknown[]; total: number; hiddenByDefault: HiddenByDefault | null }
+
+/** Notes for a list the cap cut short and for records the default visibility left out. `rest` says where the remainder is. */
+export function ListNotes({ lists, rest }: { lists: readonly (readonly [string, CountedList])[]; rest: (label: string) => string }) {
     const notes: string[] = []
-    for (const [name, label, list] of [["Thermochemistry", "thermochemistry", data.thermo], ["Statistical mechanics", "statistical mechanics", data.statmech], ["Transport", "transport", data.transport]] as const) {
-        if (list.capped) notes.push(`Showing the first ${list.records.length.toLocaleString("en-US")} of ${list.total.toLocaleString("en-US")} ${label} records. The ${name} tab below pages through all of them.`)
+    for (const [label, list] of lists) {
+        if (list.capped) notes.push(`Showing the first ${list.records.length.toLocaleString("en-US")} of ${list.total.toLocaleString("en-US")} ${label} records. ${rest(label)}`)
         const hidden = hiddenByDefaultNote(list.hiddenByDefault, `${label} records`)
         if (hidden) notes.push(hidden)
     }
     return <>{notes.map((note) => <p className="note" key={note} role="note">{note}</p>)}</>
 }
 
-function DescribesLine({ describes, entryPath, groupLabels }: { describes: Describes; entryPath: string; groupLabels: Map<string, string> }) {
+function DescribesLine({ describes, entryPath, groupLabels }: { describes: Describes; entryPath: string | null; groupLabels: Map<string, string> }) {
     let body: ReactNode
     if (describes.kind === "all") body = "all shapes together"
     else if (describes.kind === "unnamed") body = "one shape (not named)"
@@ -155,22 +195,25 @@ function DescribesLine({ describes, entryPath, groupLabels }: { describes: Descr
     else if (describes.kind === "unstated") body = "not stated by the depositor"
     else {
         const ref = describes.groupRef as string
-        body = <>one shape, <Link to={`${entryPath}?conformer=${encodeURIComponent(ref)}`}>{groupLabels.get(ref) ?? <code className="t-preserve-case">{ref}</code>}</Link></>
+        const name = groupLabels.get(ref) ?? <code className="t-preserve-case">{ref}</code>
+        body = <>one shape, {entryPath ? <Link to={`${entryPath}?conformer=${encodeURIComponent(ref)}`}>{name}</Link> : name}</>
     }
     return <>{body}{describes.implied && " (implied by the CHEMKIN format)"}</>
 }
 
-function NumberRowView({ row, entryPath, to, groupLabels }: {
+function NumberRowView({ row, entryPath, to, groupLabels, version }: {
     row: NumberRow
-    entryPath: string
-    to: string
+    entryPath: string | null
+    to: string | null
     groupLabels: Map<string, string>
+    version?: ReactNode
 }) {
     return (
         <tr id={numberAnchor(row.kind, row.ref)}>
             <th scope="row">
                 <span className="entry-numbers-kind">{KIND_WORDS[row.kind]}</span>
                 <code className="t-preserve-case">{row.ref}</code>
+                {version && <span className="entry-numbers-version">{version}</span>}
                 <span className="entry-numbers-review"><ReviewChip status={row.review} explain={false} /></span>
             </th>
             <td>
@@ -185,7 +228,7 @@ function NumberRowView({ row, entryPath, to, groupLabels }: {
                 {row.describes && (
                     <p className="entry-numbers-describes"><span className="entry-numbers-key">Describes:</span> <DescribesLine describes={row.describes} entryPath={entryPath} groupLabels={groupLabels} /></p>
                 )}
-                <ValueSource source={{ recordType: row.kind, ref: row.ref, to }} levels={row.levels} programs={row.programs} />
+                <ValueSource source={{ recordType: row.kind, ref: row.ref, ...(to ? { to } : {}) }} levels={row.levels} programs={row.programs} />
             </td>
         </tr>
     )
