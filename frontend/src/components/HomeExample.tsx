@@ -1,75 +1,51 @@
-import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 import "../home.css"
-import { loadReactionEntry } from "../api/reactionEntryApi"
-import { loadSpeciesEntry } from "../api/speciesEntryApi"
-import type { HomeExample as HomeExampleRef } from "../config/siteConfig"
-import { useLoaded } from "../hooks/useLoaded"
+import type { HomeExampleState } from "../hooks/useHomeExample"
 import { EntryNumbers } from "./EntryNumbers"
-import { SpeciesFace } from "./Formula"
+import { Formula, SpeciesFace } from "./Formula"
 import { ReactionEquation } from "./ReactionEquation"
 import { RecordGlyph } from "./RecordGlyph"
 
-const BROWSE_MOLECULES = <p className="home-example-browse"><Link to="/species">Browse molecules</Link></p>
+function examplePath(state: Extract<HomeExampleState, { ref: string }>): string {
+    return state.status === "molecule" ? `/species-entries/${state.ref}` : `/reaction-entries/${state.ref}`
+}
+
+/** The line under the search that opens the example record. */
+export function SeeExample({ state }: { state: HomeExampleState }) {
+    if (state.status !== "molecule" && state.status !== "reaction") return null
+    const name = state.status === "molecule" && state.formula
+        ? <>: <Formula value={state.formula} /></>
+        : state.status === "reaction" ? " reaction" : ""
+    return <p className="home-see-example"><Link to={examplePath(state)}>See an example{name} →</Link></p>
+}
 
 /**
- * The example record the site was built with. It shows only a record the archive returns under its
- * current visibility; unset, not found, hidden or unreadable, a link to the molecule index stands in.
+ * The example record the operator named. Only a record the archive returns under its current visibility is shown;
+ * when there is none, a link to the molecule index stands in.
  */
-export function HomeExample({ example }: { example: HomeExampleRef | null }) {
-    if (!example) return BROWSE_MOLECULES
-    return example.kind === "molecule" ? <MoleculeExample entryRef={example.ref} /> : <ReactionExample entryRef={example.ref} />
-}
-
-function Frame({ copy, children }: { copy: boolean; children?: ReactNode }) {
-    if (!copy) return BROWSE_MOLECULES
+export function HomeExample({ state }: { state: HomeExampleState }) {
+    if (state.status === "loading") return null
+    if (state.status === "none") {
+        return <section className="home-section" aria-label="Browse molecules"><p className="home-example-browse"><Link to="/species">Browse molecules</Link></p></section>
+    }
+    const path = examplePath(state)
     return (
-        <>
+        <section className="home-section" aria-labelledby="home-example">
+            <h2 id="home-example" className="home-section-title">Example record</h2>
             <p className="home-example-copy">An example record, chosen by the site editors to show how a record reads. It is not a recommendation.</p>
-            {children}
-        </>
-    )
-}
-
-function MoleculeExample({ entryRef }: { entryRef: string }) {
-    const state = useLoaded(loadSpeciesEntry, entryRef)
-    if (state.status === "loading" || state.status === "idle") return <p className="note" role="status" aria-busy="true">Loading the example record…</p>
-    if (state.status !== "ready" || state.data === null) return <Frame copy={false} />
-    const entry = state.data
-    const path = `/species-entries/${entryRef}`
-    return (
-        <Frame copy>
             <article className="card home-example-card" aria-label="Example record">
                 <header className="home-example-head">
-                    <RecordGlyph kind="species-entry" size={18} />
-                    <span className="home-example-name"><SpeciesFace smiles={entry.canonicalSmiles} formula={entry.formula} /></span>
-                    <code className="t-preserve-case home-example-ref">{entryRef}</code>
-                    <Link className="home-example-open" to={path}>Open this molecule</Link>
-                </header>
-                <EntryNumbers entryRef={entryRef} entryPath={path} conformerQuery="" conformers={[]} compact />
-            </article>
-        </Frame>
-    )
-}
-
-function ReactionExample({ entryRef }: { entryRef: string }) {
-    const state = useLoaded(loadReactionEntry, entryRef)
-    if (state.status === "loading" || state.status === "idle") return <p className="note" role="status" aria-busy="true">Loading the example record…</p>
-    if (state.status !== "ready") return <Frame copy={false} />
-    const entry = state.data.reaction_entry
-    const species = state.data.species ?? { reactants: [], products: [] }
-    return (
-        <Frame copy>
-            <article className="card home-example-card" aria-label="Example record">
-                <header className="home-example-head">
-                    <RecordGlyph kind="reaction" size={18} />
+                    <RecordGlyph kind={state.status === "molecule" ? "species-entry" : "reaction"} size={18} />
                     <span className="home-example-name">
-                        <ReactionEquation reactants={species.reactants} products={species.products} reversible={entry.reversible} />
+                        {state.status === "molecule"
+                            ? <SpeciesFace smiles={state.smiles} formula={state.formula} />
+                            : <ReactionEquation reactants={state.record.species?.reactants ?? []} products={state.record.species?.products ?? []} reversible={state.record.reaction_entry.reversible} />}
                     </span>
-                    <code className="t-preserve-case home-example-ref">{entry.reaction_entry_ref}</code>
-                    <Link className="home-example-open" to={`/reaction-entries/${entry.reaction_entry_ref}`}>Open this reaction</Link>
+                    <code className="t-preserve-case home-example-ref">{state.status === "molecule" ? state.ref : state.record.reaction_entry.reaction_entry_ref}</code>
+                    <Link className="home-example-open" to={path}>{state.status === "molecule" ? "Open this molecule" : "Open this reaction"}</Link>
                 </header>
+                {state.status === "molecule" && <EntryNumbers entryRef={state.ref} entryPath={path} conformerQuery="" conformers={[]} compact />}
             </article>
-        </Frame>
+        </section>
     )
 }

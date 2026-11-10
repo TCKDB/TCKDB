@@ -91,6 +91,17 @@ describe(".home-hero h1 -- display-1, the site's one true display headline", () 
     })
 })
 
+describe(".home-hero h1 at every width", () => {
+    it("takes its size from a named display step in each rule, never a literal size", () => {
+        const rules = [...stripComments(homeCss).matchAll(/\.home-hero h1\s*\{([^}]*)\}/g)].map((match) => match[1])
+        expect(rules.length).toBeGreaterThanOrEqual(2)
+        for (const rule of rules) {
+            expect(rule).not.toMatch(/font-size:/)
+            if (/font:/.test(rule)) expect(rule).toMatch(/font:\s*var\(--type-display-[12]-font\)/)
+        }
+    })
+})
+
 describe(".record-placeholder h1 -- display-2, one step down from the hero", () => {
     it("uses var(--type-display-2-font), not a literal clamp", () => {
         const rule = extractRule(css, ".record-placeholder h1")

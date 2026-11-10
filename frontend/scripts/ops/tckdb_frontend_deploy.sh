@@ -12,6 +12,11 @@
 #   tckdb_frontend_deploy.sh sha-<40-char-commit>
 #   tckdb_frontend_deploy.sh --check
 #
+# Optional site config: if TCKDB_FRONTEND_SITE_CONFIG names a regular file, it is
+# mounted read-only as /usr/share/nginx/html/site-config.json (for example
+# {"homeExampleRef": "spe_..."}). Its contents are never printed. When unset, the
+# site serves no such file and the home page shows no example record.
+#
 # Only sha tags are accepted because they identify the exact frontend source
 # revision. This avoids a UI deployment that cannot answer which bundle it
 # serves. The script never reads or modifies .env.pi.
@@ -25,6 +30,7 @@ PORT="${TCKDB_FRONTEND_PORT:-8011}"
 LOCK_FILE="${TCKDB_FRONTEND_LOCK_FILE:-/tmp/tckdb-frontend-deploy.lock}"
 # Health wait: probe about once a second for ~30 s while the container starts.
 HEALTH_ATTEMPTS="${TCKDB_FRONTEND_HEALTH_ATTEMPTS:-30}"
+SITE_CONFIG="${TCKDB_FRONTEND_SITE_CONFIG:-}"
 HAS_PREVIOUS=false
 PREVIOUS_CONTAINER=""
 INCUMBENT_ID=""
@@ -35,6 +41,14 @@ die() { echo "error: $*" >&2; exit 1; }
 # Validate before anything mutates: a typo here must not cost a live outage.
 [[ "$HEALTH_ATTEMPTS" =~ ^[1-9][0-9]{0,2}$ ]] \
     || die "TCKDB_FRONTEND_HEALTH_ATTEMPTS must be an integer 1-999"
+
+# A set path must be a regular file (not a directory, which Docker would create
+# and mount as a directory, and not a symlink to somewhere else).
+if [[ -n "$SITE_CONFIG" ]]; then
+    [[ -f "$SITE_CONFIG" && ! -L "$SITE_CONFIG" ]] \
+        || die "TCKDB_FRONTEND_SITE_CONFIG must name a regular file that exists"
+    [[ "$SITE_CONFIG" = /* ]] || die "TCKDB_FRONTEND_SITE_CONFIG must be an absolute path"
+fi
 
 running_image() {
     docker inspect "$CONTAINER" --format '{{.Config.Image}}' 2>/dev/null || echo "(not running as a container)"
@@ -199,11 +213,13 @@ fi
 
 DEPLOY_PHASE="candidate_starting"
 
-if ! docker run -d --name "$CONTAINER" \
-    --network "$NETWORK" \
-    -p "127.0.0.1:${PORT}:8080" \
-    --restart unless-stopped \
-    "$IMAGE" >/dev/null; then
+RUN_ARGS=(--network "$NETWORK" -p "127.0.0.1:${PORT}:8080" --restart unless-stopped)
+if [[ -n "$SITE_CONFIG" ]]; then
+    RUN_ARGS+=(-v "${SITE_CONFIG}:/usr/share/nginx/html/site-config.json:ro")
+    echo "    site config: mounted read-only"
+fi
+
+if ! docker run -d --name "$CONTAINER" "${RUN_ARGS[@]}" "$IMAGE" >/dev/null; then
     if "$HAS_PREVIOUS"; then
         restore_previous "could not start candidate $IMAGE" || true
     else

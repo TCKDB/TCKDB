@@ -31,13 +31,13 @@ type SearchMode = "species" | "reactions"
  * to explain at once.
  */
 const MODES: { value: SearchMode; label: string }[] = [
-    { value: "species", label: "Species" },
+    { value: "species", label: "Molecules" },
     { value: "reactions", label: "Reactions" },
 ]
 
 const FIELD_LABEL: Record<SearchMode, string> = {
-    species: "Exact species identifier",
-    reactions: "Exact reaction equation",
+    species: "Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref",
+    reactions: "Reaction: exact equation, SMILES or TCKDB ref",
 }
 
 const PLACEHOLDER: Record<SearchMode, string> = {
@@ -46,8 +46,8 @@ const PLACEHOLDER: Record<SearchMode, string> = {
 }
 
 const HELP: Record<SearchMode, string> = {
-    species: "Exact only · no common-name or external resolver lookup",
-    reactions: "Exact only · searches both directions · empty is a real result, not an error",
+    species: "Exact matches only. Names such as \"water\" are not searched.",
+    reactions: "Exact matches only. Both directions are searched.",
 }
 
 function matchCountAnnouncement(count: number): string {

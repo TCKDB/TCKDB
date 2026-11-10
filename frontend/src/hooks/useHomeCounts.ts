@@ -17,7 +17,8 @@ async function levelTotal(_key: string, signal?: AbortSignal): Promise<number> {
 }
 
 /** Each count is the server's own `pagination.total` from the read the matching index page makes; null until it arrives or when the read fails. */
-export type HomeCounts = { molecules: number | null; reactions: number | null; levels: number | null }
+export type CountKey = "molecules" | "reactions" | "levels"
+export type HomeCounts = { molecules: number | null; reactions: number | null; levels: number | null; pending: boolean }
 
 export function useHomeCounts(): HomeCounts {
     const molecules = useLoaded(moleculeTotal, "molecules")
@@ -27,5 +28,6 @@ export function useHomeCounts(): HomeCounts {
         molecules: molecules.status === "ready" ? molecules.data : null,
         reactions: reactions.status === "ready" ? reactions.data : null,
         levels: levels.status === "ready" ? levels.data : null,
+        pending: [molecules, reactions, levels].some((read) => read.status === "idle" || read.status === "loading"),
     }
 }

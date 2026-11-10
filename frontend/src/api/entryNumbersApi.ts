@@ -33,9 +33,9 @@ export type WalkControl = {
  * is not fetched twice. Later pages ask for `LATER_PAGE_LIMIT` records at a time, or for the first page's own window
  * when the server refuses that size, so 1000 records cost 1 + 5 requests.
  */
-async function walk<T>(entryRef: string, load: Loader<T>, control: WalkControl): Promise<AllPages<T>> {
+async function walk<T>(entryRef: string, load: Loader<T>, control: WalkControl, firstPageLimit?: number): Promise<AllPages<T>> {
     const records: T[] = []
-    let request: PageRequest | null = null
+    let request: PageRequest | null = firstPageLimit === undefined ? null : { offset: 0, limit: firstPageLimit }
     let first: Page<T> | null = null
     let total = 0
     let limit = LATER_PAGE_LIMIT
@@ -61,12 +61,12 @@ async function walk<T>(entryRef: string, load: Loader<T>, control: WalkControl):
         records.push(...page.records)
         total = page.pagination.total
         const next = nextPageRequest(page.pagination)
-        request = next ? { offset: next.offset, limit: Math.min(limit, MAX_RECORDS - records.length) } : null
+        request = next && firstPageLimit === undefined ? { offset: next.offset, limit: Math.min(limit, MAX_RECORDS - records.length) } : null
     } while (request && records.length < MAX_RECORDS)
     return {
         records,
         total,
-        capped: request !== null,
+        capped: firstPageLimit === undefined ? request !== null : total > records.length,
         sort: first?.request?.sort ?? null,
         hiddenByDefault: first?.request?.hidden_by_default ?? null,
     }
@@ -79,11 +79,12 @@ export type EntryNumbers = {
 }
 
 /** Every thermo, statmech and transport record of one species entry, each list walked up to the cap. */
-export async function loadEntryNumbers(entryRef: string, control: WalkControl): Promise<EntryNumbers> {
+/** With `firstPageLimit`, only that many records of each list are read, and `total` still says how many exist. */
+export async function loadEntryNumbers(entryRef: string, control: WalkControl, firstPageLimit?: number): Promise<EntryNumbers> {
     const [thermo, statmech, transport] = await Promise.all([
-        walk(entryRef, loadEntryThermo, control),
-        walk(entryRef, loadEntryStatmech, control),
-        walk(entryRef, loadEntryTransportWithSources, control),
+        walk(entryRef, loadEntryThermo, control, firstPageLimit),
+        walk(entryRef, loadEntryStatmech, control, firstPageLimit),
+        walk(entryRef, loadEntryTransportWithSources, control, firstPageLimit),
     ])
     return { thermo, statmech, transport }
 }

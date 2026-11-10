@@ -19,7 +19,7 @@ import { ReviewChip } from "./ReviewChip"
 import { ValueLink } from "./ValueLink"
 import { ValueSource } from "./ValueSource"
 
-const COMPACT_ROWS = 4
+const COMPACT_ROWS = 2
 
 const KIND_WORDS: Record<NumberKind, string> = {
     thermo: "Thermochemistry",
@@ -52,7 +52,7 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers, 
     compact?: boolean
 }) {
     useScrollToHash()
-    const state = useEntryNumbers(entryRef)
+    const state = useEntryNumbers(entryRef, compact ? COMPACT_ROWS : undefined)
     const [grouped, setGrouped] = useState(false)
     const data = state.status === "ready" ? state.data : null
     const rows = useMemo(() => (data
@@ -61,6 +61,7 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers, 
     const shownRows = compact ? rows.slice(0, COMPACT_ROWS) : rows
     const groups = useMemo(() => (grouped ? groupByLevel(shownRows) : [{ key: null, rows: shownRows }]), [grouped, shownRows])
     const groupLabels = useMemo(() => new Map(conformers.map((conformer) => [conformer.conformer_group.conformer_group_ref, conformerLabel(conformer)])), [conformers])
+    const totalRecords = data ? data.thermo.total + data.statmech.total + data.transport.total : 0
     const levelCount = new Set(rows.flatMap((row) => row.levels.map((level) => level.label))).size
     const tabPath = (kind: NumberKind) => `${entryPath.replace(/\/(geometry|sp|statmech|thermo|transport)$/, "")}/${kind}`
     const tabLink = (kind: "thermo" | "statmech") => `${tabPath(kind)}${conformerQuery}`
@@ -94,9 +95,9 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers, 
                         .map((kind) => ({ kind, sort: data[kind].sort })))}
                     />
                     {!compact && <ListNotes data={data} />}
-                    {levelCount > 0 && <p className="entry-numbers-levels">These values were computed at {levelCount} {levelCount === 1 ? "level" : "levels"} of theory.</p>}
-                    {compact && rows.length > COMPACT_ROWS && (
-                        <p className="note">Showing the first {COMPACT_ROWS} of {rows.length} records. <Link to={entryPath}>All records on the molecule page</Link></p>
+                    {!compact && levelCount > 0 && <p className="entry-numbers-levels">These values were computed at {levelCount} {levelCount === 1 ? "level" : "levels"} of theory.</p>}
+                    {compact && totalRecords > shownRows.length && (
+                        <p className="note">Showing the first {shownRows.length} of {totalRecords.toLocaleString("en-US")} records. <Link to={entryPath}>All records on the molecule page</Link></p>
                     )}
                     {!compact && distinctLevelCount(rows) >= 2 && (
                         <div className="entry-numbers-controls">

@@ -72,7 +72,15 @@ export default defineConfig([
 ])
 ```
 
-## Build-time settings
+## Settings
 
-- `VITE_API_BASE_URL`: base URL of the API when it is not on the same origin.
-- `VITE_HOME_EXAMPLE_REF`: public ref (`spe_...` or `rxe_...`) of the example record on the home page. The site editors choose it; it is not a recommendation. When it is unset, malformed, not found or hidden under the curated profile, the home page shows a "Browse molecules" link instead. See `.env.example`.
+- `VITE_API_BASE_URL` (build time): base URL of the API when it is not on the same origin.
+- `/site-config.json` (run time, optional): an operator-supplied file, not part of the image. It names the example record on the home page:
+
+  ```json
+  {"homeExampleRef": "spe_..."}
+  ```
+
+  The value is a molecule entry (`spe_...`) or reaction entry (`rxe_...`) ref. The site editors choose it; it is not a recommendation. When the file is missing, is not JSON, does not match this shape, or names a record the archive does not return under the current profile, the home page shows a "Browse molecules" link instead.
+  - Development: create `frontend/public/site-config.json` (gitignored; never copied into the image).
+  - Deployment: set `TCKDB_FRONTEND_SITE_CONFIG=/absolute/path/site-config.json` when running `scripts/ops/tckdb_frontend_deploy.sh`. The file is mounted read-only at `/usr/share/nginx/html/site-config.json`; the script checks it is a regular file and never prints it. With the variable unset, nothing is mounted and the server answers 404 for that path.
