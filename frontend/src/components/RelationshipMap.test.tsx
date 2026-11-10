@@ -138,8 +138,14 @@ describe("RelationshipMap", () => {
 
     it("hides the drawing and keeps the list below 560px, and keeps its labels at least 12px", () => {
         expect(mapCss).toMatch(/@media \(max-width: 560px\) \{\s*\.rel-map-figure \{\s*display: none;/)
-        const sizes = [...mapCss.matchAll(/font-size:\s*(\d+)px/g)].map((m) => Number(m[1]))
-        expect(sizes.length).toBeGreaterThan(0)
+        const sizes = [...mapCss.matchAll(/font(?:-size)?:\s*(?:\d+\s+)?(\d+)px/g)].map((m) => Number(m[1]))
+        expect(sizes.length).toBeGreaterThan(1)
         expect(Math.min(...sizes)).toBeGreaterThanOrEqual(12)
+    })
+
+    it("scopes the drawn note and ref rules to the figure, so the list's note rule cannot override the ref's code font", () => {
+        expect(mapCss).toMatch(/\.rel-map-figure \.rel-map-note \{[^}]*font: 400 12px var\(--sans\)/)
+        expect(mapCss).toMatch(/\.rel-map-figure \.rel-map-ref \{ font-family: var\(--mono\); \}/)
+        expect(mapCss).not.toMatch(/(^|\n)\.rel-map-ref/)
     })
 })

@@ -1,4 +1,6 @@
 import type { ConformerProjection } from "../api/speciesEntryApi"
+import type { OrderEcho } from "../api/listEnvelope"
+import { orderWords } from "./paging"
 import type { RelativeEnergies, RelativeEnergyMember } from "../api/relativeEnergyApi"
 import type { SpeciesCalculationEnergyRecord } from "../api/speciesCalculationsApi"
 import { lotLabel, type LevelOfTheory } from "../api/scientificSchemas"
@@ -331,4 +333,17 @@ export function spreadLines(rows: readonly ShapeRow[]): SpreadLine[] {
             count: group.values.length,
             kjMol: (Math.max(...group.values) - Math.min(...group.values)) * KJ_MOL_PER_HARTREE,
         }))
+}
+
+const CARD_ORDER = "The cards within a page are listed by conformer number, then label, then reference."
+
+/** One statement of both orders: the order the pages follow, and the card order inside a page. */
+export function shapeOrderSentence(sort: OrderEcho | null | undefined): string {
+    const words = orderWords(sort)
+    const lead = !words
+        ? "Pages follow the archive's display order."
+        : sort?.requested_by
+            ? `Pages follow the order requested (${sort.requested_by}): ${words}.`
+            : `Pages follow the archive's display order: ${words}.`
+    return `${lead} ${CARD_ORDER}`
 }

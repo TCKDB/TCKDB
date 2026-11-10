@@ -7,11 +7,11 @@ import { loadRelativeEnergies, relativeEnergyKey, type RelativeEnergies } from "
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel, sortConformersForDisplay } from "../domain/conformerEvidence"
 import {
-    cardEnergy, depositorWrittenLabel, formatHartree, formatRelativeKj, levelChoices, outcomeNote, pictureGeometryRef,
+    cardEnergy, depositorWrittenLabel, shapeOrderSentence, formatHartree, formatRelativeKj, levelChoices, outcomeNote, pictureGeometryRef,
     programIndex, referenceProgram, shapeCountsSentence,
     type CardEnergy, type LevelChoice, type ProgramIndex,
 } from "../domain/conformerGallery"
-import { hiddenByDefaultNote, orderWords, type PageRequest } from "../domain/paging"
+import { hiddenByDefaultNote, type PageRequest } from "../domain/paging"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { useAnnounce } from "../hooks/useAnnounce"
 import { useLoaded, type LoadedState } from "../hooks/useLoaded"
@@ -23,19 +23,6 @@ import { SectionHeading } from "./PageSections"
 import { RefsDisclosure } from "./RefsDisclosure"
 import { ShapeCardHead } from "./ShapePicture"
 import { ValueLink } from "./ValueLink"
-
-const CARD_ORDER = "The cards within a page are listed by conformer number, then label, then reference."
-
-/** One statement of both orders: the archive's order across pages, and the card order inside a page. */
-function shapeOrder(meta: ListMeta): string {
-    const words = orderWords(meta.sort)
-    const lead = !words
-        ? "Pages follow the archive's display order."
-        : meta.sort?.requested_by
-            ? `Pages follow the order requested (${meta.sort.requested_by}): ${words}.`
-            : `Pages follow the archive's display order: ${words}.`
-    return `${lead} ${CARD_ORDER}`
-}
 
 /** Pictures load by themselves for this many cards; later cards wait to be asked. */
 const AUTO_PICTURES = 12
@@ -246,7 +233,7 @@ export function ConformerGallery({
                             recommendation; choose a shape to see its evidence instead.
                         </p>
                     )}
-                    <OrderNote order={shapeOrder(meta)} requested={Boolean(meta.sort?.requested_by)} />
+                    <OrderNote order={shapeOrderSentence(meta.sort)} />
 
                     <fieldset className="shape-energy-controls">
                         <legend>Energy relative to a reference shape</legend>
