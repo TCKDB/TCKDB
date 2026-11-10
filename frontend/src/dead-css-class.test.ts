@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 /**
  * SHOULD-FIX-15 (species-entry/browse/chrome residuals re-review): four
  * stylesheets this PR's own brief named as carrying dead classes --
- * `species-entry.css`, `entry-science.css`, `browse.css`, `index.css` --
+ * `molecule-page.css`, `entry-science.css`, `browse.css`, `index.css` --
  * plus everything else the same re-review's retirement list named
  * (`.evidence-chip`, `.empty-stage`, `.geometry-list`, `.identifier-chip*`)
  * were already gone or out of this PR's file scope by the time this test
@@ -27,7 +27,7 @@ const ALL_STYLESHEETS: Record<string, string> = Object.fromEntries(
     Object.entries(STYLESHEET_SOURCES).map(([path, css]) => [path.replace(/^\.\//, ""), css]),
 )
 
-const CHECKED_STYLESHEETS = ["species-entry.css", "entry-science.css", "browse.css", "index.css", "calculation-detail.css", "reaction-entry.css"]
+const CHECKED_STYLESHEETS = ["molecule-page.css", "entry-science.css", "browse.css", "index.css", "calculation-detail.css", "reaction-entry.css"]
 
 // Every `.tsx` source in the project, EXCLUDING test files -- a class
 // referenced only by a `*.test.tsx` assertion (`document.querySelector`,

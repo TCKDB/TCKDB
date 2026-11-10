@@ -28,23 +28,31 @@ describe("EntryTabs", () => {
         expect(thermoTab.querySelector(".entry-tab-dot")).not.toBeNull()
     })
 
-    it("leaves an empty tab undotted, without changing its accessible name", () => {
+    it("leaves an empty tab undotted and says in hidden text that it has no data", () => {
         tabs({ has_conformers: true, has_thermo: true, has_statmech: false, has_transport: false })
 
-        const statmechTab = screen.getByRole("tab", { name: "Statistical mechanics" })
+        const statmechTab = screen.getByRole("tab", { name: /^Statistical mechanics/ })
+        expect(statmechTab).toHaveAccessibleName("Statistical mechanics (no data)")
         expect(statmechTab.querySelector(".entry-tab-dot")).toBeNull()
         expect(statmechTab).toHaveAttribute("data-has-content", "false")
 
-        const transportTab = screen.getByRole("tab", { name: "Transport" })
+        const transportTab = screen.getByRole("tab", { name: /^Transport/ })
         expect(transportTab.querySelector(".entry-tab-dot")).toBeNull()
-        expect(transportTab).toHaveAttribute("title", "No data recorded for this section yet")
+        expect(transportTab.querySelector(".visually-hidden")).toHaveTextContent("(no data)")
+        expect(transportTab).not.toHaveAttribute("title")
+    })
+
+    it("puts aria-controls on the active tab only, since the other panels are not in the page", () => {
+        tabs({ has_conformers: true, has_thermo: true, has_statmech: true, has_transport: true })
+        expect(screen.getByRole("tab", { name: "Geometry" })).toHaveAttribute("aria-controls", "panel-geometry")
+        expect(screen.getByRole("tab", { name: "Transport" })).not.toHaveAttribute("aria-controls")
     })
 
     it("keys geometry and single-point energy off has_conformers -- neither has its own availability flag", () => {
         tabs({ has_conformers: false, has_thermo: true, has_statmech: true, has_transport: true })
 
-        expect(screen.getByRole("tab", { name: "Geometry" })).toHaveAttribute("data-has-content", "false")
-        expect(screen.getByRole("tab", { name: "Single-point energy" })).toHaveAttribute("data-has-content", "false")
+        expect(screen.getByRole("tab", { name: /^Geometry/ })).toHaveAttribute("data-has-content", "false")
+        expect(screen.getByRole("tab", { name: /^Single-point energy/ })).toHaveAttribute("data-has-content", "false")
         // Entry-scoped sections stay marked even when there are no conformer
         // basins at all -- they don't depend on `has_conformers`.
         expect(screen.getByRole("tab", { name: "Thermochemistry" })).toHaveAttribute("data-has-content", "true")
@@ -52,12 +60,9 @@ describe("EntryTabs", () => {
         expect(screen.getByRole("tab", { name: "Transport" })).toHaveAttribute("data-has-content", "true")
     })
 
-    it("never lets the empty-tab hint leak into the tab's own accessible name", () => {
+    it("keeps the tab reachable by its section label when every tab is empty", () => {
         tabs({ has_conformers: false, has_thermo: false, has_statmech: false, has_transport: false })
-        // Every tab is empty here -- if the hint text were part of the link's
-        // own content rather than an attribute, `getByRole` with the bare
-        // section label would fail to find it.
-        expect(screen.getByRole("tab", { name: "Geometry" })).toBeVisible()
-        expect(screen.getByRole("tab", { name: "Transport" })).toBeVisible()
+        expect(screen.getByRole("tab", { name: /^Geometry/ })).toBeInTheDocument()
+        expect(screen.getByRole("tab", { name: /^Transport/ })).toBeInTheDocument()
     })
 })

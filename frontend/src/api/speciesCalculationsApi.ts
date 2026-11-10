@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { paginationSchema } from "./listEnvelope"
+import { levelOfTheorySchema } from "./scientificSchemas"
 import { nextPageRequest, pageQuery } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
@@ -40,6 +41,8 @@ const recordSchema = z.object({
     }).passthrough(),
     energy: energyBlockSchema.nullable().optional(),
     conformer: conformerContextSchema.nullable().optional(),
+    level_of_theory: levelOfTheorySchema.nullable().optional(),
+    software_release: z.object({ software: z.string(), version: z.string().nullish() }).passthrough().nullable().optional(),
 }).passthrough()
 
 const responseSchema = z.object({

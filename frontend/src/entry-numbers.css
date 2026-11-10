@@ -148,6 +148,7 @@
 
 .entry-versions-list {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--s-3);
     margin: var(--s-3) 0 0;
     padding: 0;
@@ -156,6 +157,8 @@
 
 .entry-versions-item {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
     gap: var(--s-1);
     padding: var(--s-3);
     border: 1px solid var(--line-2);
@@ -165,6 +168,13 @@
 .entry-versions-item[aria-current="true"] {
     background: var(--surface-sunken);
     border-color: var(--accent);
+}
+
+.entry-versions-title,
+.entry-versions-meta,
+.entry-versions-meta code {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .entry-versions-title {

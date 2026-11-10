@@ -23,4 +23,11 @@ describe("entry-numbers.css", () => {
         // Long wording (a statmech treatment) must wrap on a phone instead of forcing a sideways scroll.
         expect(phone).toMatch(/\.entry-numbers-values dd \{[^}]*white-space: normal/)
     })
+
+    it("lets other-version cards shrink and wrap a long ref at 320px", () => {
+        expect(rule(css, ".entry-versions-item")).toContain("min-width: 0")
+        expect(rule(css, ".entry-versions-item")).toMatch(/grid-template-columns: minmax\(0, 1fr\)/)
+        expect(rule(css, ".entry-versions-meta code")).toContain("overflow-wrap: anywhere")
+        expect(rule(css, ".entry-versions-title")).toContain("overflow-wrap: anywhere")
+    })
 })

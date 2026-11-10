@@ -168,6 +168,10 @@ function handlers(options: Options = {}) {
             })
         }),
         http.get("/api/v1/scientific/species-calculations/search", () => HttpResponse.json({ records: [] })),
+        http.get(`/api/v1/scientific/species-entries/${entryRef}/conformer-usage`, () => HttpResponse.json({ species_entry_ref: entryRef, groups: [], ensemble_thermo_refs: [] })),
+        http.get("/api/v1/scientific/geometries/:ref", () => HttpResponse.json({ detail: "none" }, { status: 404 })),
+        http.get("/api/v1/scientific/networks/search", () => HttpResponse.json({ records: [] })),
+        http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json({ records: [] })),
     ]
 }
 
@@ -386,7 +390,7 @@ describe("molecule page: numbers for this entry", () => {
         await within(await screen.findByRole("tabpanel")).findByText("thm_a1")
         await user.click(screen.getByRole("tab", { name: "Statistical mechanics" }))
         await within(await screen.findByRole("tabpanel")).findAllByText("stm_1")
-        await user.click(screen.getByRole("tab", { name: "Transport" }))
+        await user.click(screen.getByRole("tab", { name: /^Transport/ }))
         await within(await screen.findByRole("tabpanel")).findAllByText("trn_1")
         expect(counts).toEqual({ thermo: 1, statmech: 1, transport: 1 })
     })

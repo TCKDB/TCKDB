@@ -7,6 +7,7 @@ import App from "../App"
 import { resetAllRequestCaches } from "../api/requestCache"
 import { bySummaryText } from "../test/disclosureQueries"
 import { titleHasKind } from "../test/routeTitleKinds"
+import { expectDepositorTextOnlyInNotes } from "../test/depositorSentinel"
 
 // ---------------------------------------------------------------------------
 // Two DISTINCT conformer groups, each with its own observations and its own
@@ -30,7 +31,9 @@ import { titleHasKind } from "../test/routeTitleKinds"
 const entryRef = "spe_bcbdjwkip75yoziblpntwzblzu"
 const groupOneRef = "cg_one"
 const groupTwoRef = "cg_two"
-const lot = { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp" }
+const lot = { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", level_of_theory_ref: "lot_a" }
+const lotB = { method: "ccsd(t)", basis: "cc-pvtz", display: "ccsd(t)/cc-pvtz", level_of_theory_ref: "lot_b" }
+const gaussian = { software_release_ref: "srel_1", software: "Gaussian", version: "Gaussian 16" }
 // `App` mounts `AuthProvider`, which probes `GET /auth/me` regardless of
 // route -- see `App.test.tsx`'s identical handler for why this default
 // (signed-out) has to be here for every test in this file that renders
@@ -57,9 +60,28 @@ type HandlerOptions = {
     // apart.
     reversedOrder?: boolean
     spEnergiesFail?: boolean
+    // calc_sp_1b is computed at a second level of theory.
+    twoLevels?: boolean
+    // What the relative-energies read answers for the second shape.
+    energyAnswer?: "value" | "absent" | "disagree" | "reference_unavailable"
+    usageFails?: boolean
+    // Planted into the second group's typed label.
+    typedLabel?: string
 }
 
+let fixtureFlags: { twoLevels?: boolean; typedLabel?: string } = {}
+
 function conformerRecords() {
+    const records = baseConformerRecords()
+    if (fixtureFlags.twoLevels) {
+        const calc = records[0].observations?.[0].calculations?.find((candidate) => candidate.calculation_ref === "calc_sp_1b")
+        if (calc) calc.level_of_theory = lotB
+    }
+    if (fixtureFlags.typedLabel) records[1].conformer_group.label = fixtureFlags.typedLabel
+    return records
+}
+
+function baseConformerRecords() {
     return [
         {
             conformer_group: { conformer_group_ref: groupOneRef, label: "conformer_1" },
@@ -289,7 +311,19 @@ function statmechRecords(withConformers: boolean) {
     ]
 }
 
+const relativeEnergyBodies: unknown[] = []
+
+/** The card whose own label (not a select option, table row or note) is `label`. */
+function cardFor(label: string): HTMLElement {
+    const node = Array.from(document.querySelectorAll(".conformer-card-label")).find((candidate) => candidate.textContent === label)
+    if (!node) throw new Error(`No card labelled ${label}`)
+    return node.closest(".conformer-card") as HTMLElement
+}
+
+const cardLabels = () => Array.from(document.querySelectorAll(".conformer-card-label")).map((node) => node.textContent)
+
 function handlers(options: HandlerOptions = {}) {
+    fixtureFlags = { twoLevels: options.twoLevels, typedLabel: options.typedLabel }
     return [
         http.get("/api/v1/scientific/species/search", () => {
             if (options.status) return HttpResponse.json({ detail: "archive unavailable" }, { status: options.status })
@@ -351,17 +385,67 @@ function handlers(options: HandlerOptions = {}) {
                 ? HttpResponse.json({ detail: "archive unavailable" }, { status: 503 })
                 : HttpResponse.json({
                     records: [
-                        { calculation: { calculation_ref: "calc_sp_1", calculation_type: "sp" }, energy: { energy_hartree: -76.111111, energy_kind: "electronic_energy" } },
-                        { calculation: { calculation_ref: "calc_sp_1b", calculation_type: "sp" }, energy: { energy_hartree: -76.222222, energy_kind: "electronic_energy" } },
-                        { calculation: { calculation_ref: "calc_sp_3", calculation_type: "sp" }, energy: { energy_hartree: -76.333333, energy_kind: "electronic_energy" } },
+                        { calculation: { calculation_ref: "calc_sp_1", calculation_type: "sp" }, energy: { energy_hartree: -76.111111, energy_kind: "electronic_energy" }, level_of_theory: lot, software_release: gaussian },
+                        { calculation: { calculation_ref: "calc_sp_1b", calculation_type: "sp" }, energy: { energy_hartree: -76.222222, energy_kind: "electronic_energy" }, level_of_theory: options.twoLevels ? lotB : lot, software_release: gaussian },
+                        { calculation: { calculation_ref: "calc_sp_3", calculation_type: "sp" }, energy: { energy_hartree: -76.333333, energy_kind: "electronic_energy" }, level_of_theory: lot, software_release: gaussian },
                     ],
                 })
         )),
+        http.get(`/api/v1/scientific/species-entries/${entryRef}/conformer-usage`, () => (
+            options.usageFails
+                ? HttpResponse.json({ detail: "unavailable" }, { status: 503 })
+                : HttpResponse.json({
+                    species_entry_ref: entryRef,
+                    request: { hidden_by_default: { counts: { rejected: 2 }, counted: "records" } },
+                    ensemble_thermo_refs: ["thm_ensemble"],
+                    groups: [
+                        { conformer_group_ref: groupOneRef, merged_into_conformer_group_ref: null, thermo: [{ thermo_ref: "thm_one", declared_by: "depositor" }], kinetics: [] },
+                        {
+                            conformer_group_ref: groupTwoRef, merged_into_conformer_group_ref: groupOneRef, thermo: [],
+                            kinetics: [{
+                                kinetics_ref: "kin_one", reaction_entry_ref: "rxe_one", role: "reactant", subject_key: "r1",
+                                conformer_selection_kind: "single", ensemble_policy: "single_structure",
+                            }],
+                        },
+                    ],
+                })
+        )),
+        http.post(`/api/v1/scientific/species-entries/${entryRef}/conformers/relative-energies`, async ({ request }) => {
+            relativeEnergyBodies.push(await request.json())
+            const second = options.energyAnswer === "absent"
+                ? { conformer_ref: groupTwoRef, status: "absent", relative_energy_kj_mol: null, value_hartree: null, energy_calculation_refs: [], absent_reason: "no_structure_determination", alternates: [] }
+                : options.energyAnswer === "disagree"
+                    ? {
+                        conformer_ref: groupTwoRef, status: "unresolved", relative_energy_kj_mol: null, value_hartree: null, energy_calculation_refs: [],
+                        absent_reason: "repeat_values_disagree",
+                        alternates: [{ determination_ref: "d1", value_hartree: -76.1 }, { determination_ref: "d2", value_hartree: -76.2 }],
+                    }
+                    : { conformer_ref: groupTwoRef, status: "present", relative_energy_kj_mol: 12.345, value_hartree: -76.33, energy_calculation_refs: ["calc_sp_3"], absent_reason: null, alternates: [] }
+            return HttpResponse.json({
+                outcome: options.energyAnswer === "reference_unavailable" ? "reference_unavailable" : "relative_energies",
+                basis: "stated",
+                reference: { conformer_ref: groupOneRef, status: "reference", absent_reason: null },
+                members: [
+                    { conformer_ref: groupOneRef, status: "reference", relative_energy_kj_mol: 0, value_hartree: -76.1, energy_calculation_refs: ["calc_sp_1"], absent_reason: null, alternates: [] },
+                    second,
+                ],
+            })
+        }),
+        http.get("/api/v1/scientific/geometries/:ref", ({ params }) => HttpResponse.json({
+            geometry_ref: params.ref, natoms: 2, geom_hash: "h", format: "cartesian", coordinate_units: "angstrom", created_at: "2026-01-01",
+            atoms: [
+                { atom_index: 1, element: "C", x: 0, y: 0, z: 0 },
+                { atom_index: 2, element: "H", x: 1.1, y: 0, z: 0 },
+            ],
+            xyz_text: "2\n\nC 0 0 0\nH 1.1 0 0",
+        })),
+        http.get("/api/v1/scientific/networks/search", () => HttpResponse.json({ records: [], pagination: { offset: 0, limit: 1, returned: 0, total: 0 } })),
+        http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json({ records: [], pagination: { offset: 0, limit: 1, returned: 0, total: 0 } })),
     ]
 }
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
-afterEach(() => { server.resetHandlers(); cleanup(); window.history.replaceState({}, "", "/") })
+afterEach(() => { server.resetHandlers(); relativeEnergyBodies.length = 0; cleanup(); window.history.replaceState({}, "", "/") })
 afterAll(() => server.close())
 
 describe("species-entry page: identity and errors", () => {
@@ -454,7 +538,7 @@ describe("species-entry page: identity and errors", () => {
         render(<App />)
         const heading = await screen.findByRole("heading", { name: "CH3" })
 
-        const link = screen.getByRole("link", { name: "Transition states for reactions of this molecule" })
+        const link = screen.getAllByRole("link", { name: "Transition states for reactions of this molecule" })[0]
         // Points at the canonical `/transition-states` path now (its own
         // route, per the per-kind browse paths change), not the legacy
         // `/species?kind=transition_state`.
@@ -518,7 +602,7 @@ describe("species-entry page: identity and errors", () => {
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}/calculations`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
         await waitFor(() => expect(window.location.pathname).toBe(`/species-entries/${entryRef}/geometry`))
         expect(screen.getByRole("tab", { name: "Geometry" })).toHaveAttribute("aria-selected", "true")
     })
@@ -532,7 +616,7 @@ describe("species-entry page: conformer picker", () => {
         server.use(...handlers({ reversedOrder: true }))
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
         // The heading renders before the cards do, and the selection self-heal
         // writes the URL a tick after that -- so both must be waited for, not
         // sampled once. This raced in CI roughly one run in six.
@@ -555,12 +639,12 @@ describe("species-entry page: conformer picker", () => {
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
         // "conformer_1"/"conformer_2" are the ARCHIVE'S deposited labels
         // (auto-numbered basins); the page renders them as "Conformer
         // Group N" -- see `conformerLabel` (domain/conformerEvidence.ts).
-        const conformerOne = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
-        const conformerTwo = screen.getByText("Conformer Group 2").closest(".conformer-card") as HTMLElement
+        const conformerOne = cardFor("Conformer Group 1")
+        const conformerTwo = cardFor("Conformer Group 2")
         expect(within(conformerOne).getByRole("button", { name: /Conformer Group 1/ })).toHaveAttribute("aria-pressed", "true")
         expect(within(conformerTwo).getByRole("button", { name: /Conformer Group 2/ })).toHaveAttribute("aria-pressed", "false")
         // Counts stay distinct: observations, calculation rows (with their
@@ -573,10 +657,8 @@ describe("species-entry page: conformer picker", () => {
         // DIFFERENT number) is how many OBSERVATIONS have that stage --
         // labeling both as "obs" makes the coverage line's unit explicit,
         // never letting a reader sum it against calculation rows.
-        expect(within(conformerOne).getByText("2 obs · 7 calcs (3 opt · 2 freq · 2 sp)")).toBeVisible()
-        expect(within(conformerOne).getByText("opt 2/2 obs · freq 2/2 obs · sp 1/2 obs")).toBeVisible()
-        expect(within(conformerTwo).getByText("1 obs · 3 calcs (1 opt · 1 freq · 1 sp)")).toBeVisible()
-        expect(within(conformerTwo).getByText("opt 1/1 obs · freq 1/1 obs · sp 1/1 obs")).toBeVisible()
+        expect(within(conformerOne).getByText("Found by 7 calculations: 3 geometry optimisations, 2 frequencies, 2 single-point energies.")).toBeVisible()
+        expect(within(conformerTwo).getByText("Found by 3 calculations: 1 geometry optimisation, 1 frequency, 1 single-point energy.")).toBeVisible()
         // The URL becomes addressable for the default selection (reload
         // survives it). `waitFor`, not a bare expect: the self-heal runs in
         // an effect AFTER the render that paints the cards, so a synchronous
@@ -599,7 +681,7 @@ describe("species-entry page: conformer picker", () => {
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
 
         const panelHeading = () => screen.getByRole("heading", { name: /^Evidence for / })
         const stepFor = (kind: "observations" | "calculations" | "geometries") =>
@@ -617,7 +699,7 @@ describe("species-entry page: conformer picker", () => {
         expect(within(stepFor("calculations")).getByText("7")).toBeVisible()
         expect(within(stepFor("geometries")).getByText("2")).toBeVisible()
 
-        await user.click(within(screen.getByText("Conformer Group 2").closest(".conformer-card") as HTMLElement)
+        await user.click(within(cardFor("Conformer Group 2"))
             .getByRole("button", { name: /Conformer Group 2/ }))
 
         expect(await screen.findByRole("heading", { name: "Evidence for Conformer Group 2" })).toBeVisible()
@@ -633,8 +715,8 @@ describe("species-entry page: conformer picker", () => {
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
-        const conformerOne = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
+        const conformerOne = cardFor("Conformer Group 1")
         expect(within(conformerOne).getByText("Conformer Group 1")).toBeVisible()
         expect(within(conformerOne).getByText(bySummaryText("References (1)"))).toBeInTheDocument()
         expect(within(conformerOne).queryByText(groupOneRef)).not.toBeVisible()
@@ -647,7 +729,7 @@ describe("species-entry page: conformer picker", () => {
         server.use(...handlers({ noConformers: true }))
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        expect(await screen.findByRole("heading", { name: "Conformers" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Its 3D shapes" })).toBeVisible()
         expect(screen.getByText("No conformers are recorded for this entry.")).toBeVisible()
         expect(screen.getByText("No conformers are recorded for this entry, so there is no geometry evidence to show.")).toBeVisible()
         // Thermo/statmech/transport are entry-scoped lists, independent of
@@ -661,7 +743,7 @@ describe("species-entry page: conformer picker", () => {
         server.use(...handlers({ noEvidence: true }))
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        expect(await screen.findByRole("heading", { name: "Conformers" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Its 3D shapes" })).toBeVisible()
         expect(screen.getByText("No conformers are recorded for this entry.")).toBeVisible()
         // Exactly one empty-state sentence on the page -- not the picker's
         // own message, a separate evidence panel, AND a tab-panel fallback
@@ -670,18 +752,17 @@ describe("species-entry page: conformer picker", () => {
         // No tab strip at all when there is nothing to switch between.
         expect(screen.queryByRole("tablist")).not.toBeInTheDocument()
         expect(screen.queryByRole("tab", { name: "Geometry" })).not.toBeInTheDocument()
-        expect(screen.queryByRole("tab", { name: "Transport" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("tab", { name: /^Transport/ })).not.toBeInTheDocument()
         // Nor the "Evidence for <conformer>" panel, which has no conformer
         // to be evidence for.
         expect(screen.queryByText(/^Evidence for /)).not.toBeInTheDocument()
     })
 
-    it("uses a neutral 'Conformer' heading, not the imperative 'Choose a conformer', when there is exactly one basin", async () => {
+    it("keeps the shapes heading and says so plainly when there is exactly one basin", async () => {
         server.use(...handlers({ singleConformer: true }))
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        expect(await screen.findByRole("heading", { name: "Conformer" })).toBeVisible()
-        expect(screen.queryByRole("heading", { name: "Choose a conformer" })).not.toBeInTheDocument()
+        expect(await screen.findByRole("heading", { name: "Its 3D shapes" })).toBeVisible()
         expect(screen.getByText("This entry has one deposited conformer basin. Its evidence is shown below.")).toBeVisible()
     })
 })
@@ -692,13 +773,13 @@ describe("species-entry page: tabs are a real, keyboard-operable ARIA tablist", 
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
         const tablist = screen.getByRole("tablist", { name: "Conformer evidence" })
         const geometryTab = within(tablist).getByRole("tab", { name: "Geometry" })
         const spTab = within(tablist).getByRole("tab", { name: "Single-point energy" })
         expect(geometryTab).toHaveAttribute("aria-selected", "true")
         expect(geometryTab).toHaveAttribute("aria-controls", "panel-geometry")
-        expect(spTab).toHaveAttribute("aria-controls", "panel-sp")
+        expect(spTab).not.toHaveAttribute("aria-controls")
         expect(geometryTab).toHaveAttribute("tabIndex", "0")
         expect(spTab).toHaveAttribute("tabIndex", "-1")
         expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", geometryTab.id)
@@ -717,7 +798,7 @@ describe("species-entry page: tabs are a real, keyboard-operable ARIA tablist", 
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
 
         await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
         expect(await within(screen.getByRole("tabpanel")).findByText("thm_one")).toBeVisible()
@@ -740,8 +821,8 @@ describe("species-entry page: tabs are a real, keyboard-operable ARIA tablist", 
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
-        await user.click(screen.getByRole("tab", { name: "Transport" }))
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
+        await user.click(screen.getByRole("tab", { name: /^Transport/ }))
         expect(await screen.findByText(
             "No transport records are deposited for this entry. This is the archive's own answer — not a failed request — so nothing further will load if you retry.",
         )).toBeVisible()
@@ -751,7 +832,7 @@ describe("species-entry page: tabs are a real, keyboard-operable ARIA tablist", 
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
         const tablist = screen.getByRole("tablist", { name: "Conformer evidence" })
         // Default fixture: has_conformers/has_thermo/has_statmech true,
         // has_transport false.
@@ -759,7 +840,7 @@ describe("species-entry page: tabs are a real, keyboard-operable ARIA tablist", 
             const tab = within(tablist).getByRole("tab", { name })
             expect(tab.querySelector(".entry-tab-dot")).not.toBeNull()
         }
-        const transportTab = within(tablist).getByRole("tab", { name: "Transport" })
+        const transportTab = within(tablist).getByRole("tab", { name: /^Transport/ })
         expect(transportTab.querySelector(".entry-tab-dot")).toBeNull()
     })
 })
@@ -770,17 +851,17 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
-        expect(await screen.findByRole("link", { name: "geom_g1" })).toBeVisible()
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
+        expect((await screen.findAllByRole("link", { name: "geom_g1" })).length).toBeGreaterThan(0)
         expect(screen.queryByText("geom_g3")).not.toBeInTheDocument()
 
-        await user.click(within(screen.getByText("Conformer Group 2").closest(".conformer-card") as HTMLElement).getByRole("button", { name: /Conformer Group 2/ }))
-        expect(await screen.findByRole("link", { name: "geom_g3" })).toBeVisible()
+        await user.click(within(cardFor("Conformer Group 2")).getByRole("button", { name: /Conformer Group 2/ }))
+        expect((await screen.findAllByRole("link", { name: "geom_g3" })).length).toBeGreaterThan(0)
         expect(screen.queryByText("geom_g1")).not.toBeInTheDocument()
         expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupTwoRef)
 
         await user.click(screen.getByRole("tab", { name: "Single-point energy" }))
-        expect(await screen.findByRole("link", { name: "calc_sp_3" })).toBeVisible()
+        expect((await screen.findAllByRole("link", { name: "calc_sp_3" })).length).toBeGreaterThan(0)
         // The conformer choice is still the query param after a tab switch.
         expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupTwoRef)
     })
@@ -791,10 +872,11 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         render(<App />)
         // co_1 has two sp calculations -- both must render as their OWN row
         // (two "co_1" observation links), not just the first.
-        expect(await screen.findAllByRole("link", { name: "co_1" })).toHaveLength(2)
-        expect(screen.getByRole("link", { name: "co_2" })).toBeVisible()
-        expect(screen.getByRole("link", { name: "calc_sp_1" })).toBeVisible()
-        expect(screen.getByRole("link", { name: "calc_sp_1b" })).toBeVisible()
+        // (the tab's two rows plus the shape's own calculations row)
+        expect(await screen.findAllByRole("link", { name: "co_1" })).toHaveLength(3)
+        expect(screen.getAllByRole("link", { name: "co_2" }).length).toBeGreaterThan(0)
+        expect(screen.getAllByRole("link", { name: "calc_sp_1" }).length).toBeGreaterThan(0)
+        expect(screen.getAllByRole("link", { name: "calc_sp_1b" }).length).toBeGreaterThan(0)
         expect(screen.getByText("no single-point calculation recorded")).toBeVisible()
     })
 
@@ -802,28 +884,29 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
         render(<App />)
-        await screen.findByRole("link", { name: "calc_sp_1" })
+        await screen.findAllByRole("link", { name: "calc_sp_1" })
         // Two DIFFERENT calculations on the same observation must show
         // their OWN energy, not one value copied onto both rows.
-        expect(await screen.findByText(/-76\.111111 hartree/)).toBeVisible()
-        expect(screen.getByText(/-76\.222222 hartree/)).toBeVisible()
+        expect((await screen.findAllByText(/-76\.111111 hartree/)).length).toBeGreaterThan(0)
+        expect(screen.getAllByText(/-76\.222222 hartree/).length).toBeGreaterThan(0)
     })
 
-    it("does not read the single-point energies until the single-point tab is open, and never blocks the entry on them", async () => {
+    it("reads the single-point energies once for the shapes and the single-point tab together, and never blocks the entry on them", async () => {
         let energyRequests = 0
         server.use(
-            http.get("/api/v1/scientific/species-calculations/search", () => {
-                energyRequests += 1
+            http.get("/api/v1/scientific/species-calculations/search", ({ request }) => {
+                if (new URL(request.url).searchParams.get("limit") !== "1") energyRequests += 1
                 return HttpResponse.json({ records: [], pagination: { offset: 0, limit: 200, returned: 0, total: 0 } })
             }),
             ...handlers(),
         )
         window.history.replaceState({}, "", `/species-entries/${entryRef}/geometry`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
-        expect(energyRequests).toBe(0)
-        fireEvent.click(screen.getByRole("tab", { name: /Single-point energy/ }))
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
         await waitFor(() => expect(energyRequests).toBe(1))
+        fireEvent.click(screen.getByRole("tab", { name: /Single-point energy/ }))
+        await screen.findByRole("heading", { name: "Single-point energy" })
+        expect(energyRequests).toBe(1)
     })
 
     it("shows the entry while the energies are still on their way, and says they are", async () => {
@@ -836,7 +919,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         )
         window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
         render(<App />)
-        expect(await screen.findByRole("link", { name: "calc_sp_1" })).toBeVisible()
+        expect((await screen.findAllByRole("link", { name: "calc_sp_1" })).length).toBeGreaterThan(0)
         expect(screen.getByText(/still being read from the archive/)).toBeVisible()
         await waitFor(() => expect(screen.queryByText(/still being read from the archive/)).not.toBeInTheDocument())
     })
@@ -845,7 +928,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         server.use(...handlers({ spEnergiesFail: true }))
         window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
         render(<App />)
-        expect(await screen.findByRole("link", { name: "calc_sp_1" })).toBeVisible()
+        expect((await screen.findAllByRole("link", { name: "calc_sp_1" })).length).toBeGreaterThan(0)
         await waitFor(() => expect(screen.queryByText(/still being read from the archive/)).not.toBeInTheDocument())
         expect(screen.getAllByText("not recorded").length).toBeGreaterThan(0)
     })
@@ -918,7 +1001,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
 
         const toc = await screen.findByRole("navigation", { name: "Sections on this page" })
         const labels = within(toc).getAllByRole("link").map((link) => link.textContent)
-        expect(labels).toContain("Choose a conformer")
+        expect(labels).toContain("Its 3D shapes")
         expect(labels).toContain("Thermochemistry")
         expect(labels).toContain("Heat capacity vs. temperature")
         expect(labels.length).toBeGreaterThanOrEqual(4)
@@ -1022,7 +1105,8 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
         return [
             http.get("/api/v1/scientific/species/search", ({ request }) => {
                 // The "other versions" read asks by `species_ref`; only the entry lookup counts here.
-                if (new URL(request.url).searchParams.has("species_entry_ref")) counts.species += 1
+                // The map's one-row probe has no include tokens either.
+                if (new URL(request.url).searchParams.has("include")) counts.species += 1
                 return HttpResponse.json({ records: [{
                     species_ref: "spc_atp56uqux2ajao7hvckx7gx7ca",
                     canonical_smiles: "[CH3]", inchi_key: "WCYWZMWISLQXQU-UHFFFAOYSA-N", formula: "CH3",
@@ -1034,8 +1118,8 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
                     }],
                 }] })
             }),
-            http.get("/api/v1/scientific/conformers/search", () => {
-                counts.conformers += 1
+            http.get("/api/v1/scientific/conformers/search", ({ request }) => {
+                if (new URL(request.url).searchParams.get("limit") !== "1") counts.conformers += 1
                 return HttpResponse.json({ records: conformerRecords() })
             }),
             http.get(`/api/v1/scientific/species-entries/${entryRef}/thermo`, () => HttpResponse.json({
@@ -1067,7 +1151,7 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
     // that waits any amount of time before its first query (as these two
     // do, via the request-count assertions and tab clicks below) reliably
     // hits. Scoping to the heading role sidesteps it.
-    const findConformerHeading = () => screen.findByRole("heading", { name: "Choose a conformer" })
+    const findConformerHeading = () => screen.findByRole("heading", { name: "Its 3D shapes" })
 
     it("does not re-show the full-page loading state or refetch the entry on the first tab click, or on any later one", async () => {
         const user = userEvent.setup()
@@ -1095,7 +1179,7 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
         // The FIRST click: sectionless URL -> `:section` URL. This is the one
         // that used to remount the page.
         await user.click(screen.getByRole("tab", { name: "Single-point energy" }))
-        expect(await screen.findByRole("link", { name: "calc_sp_1" })).toBeVisible()
+        expect((await screen.findAllByRole("link", { name: "calc_sp_1" })).length).toBeGreaterThan(0)
         expect(screen.queryByRole("heading", { name: "Loading species entry" })).not.toBeInTheDocument()
         expect(counts).toEqual({ species: 1, conformers: 1 })
         expect(document.querySelector(".entry-page")).toBe(entryPageNodeBefore)
@@ -1120,7 +1204,7 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
         expect(counts).toEqual({ species: 1, conformers: 1 })
 
         await user.click(screen.getByRole("tab", { name: "Single-point energy" }))
-        await screen.findByRole("link", { name: "calc_sp_1" })
+        await screen.findAllByRole("link", { name: "calc_sp_1" })
         expect(counts).toEqual({ species: 1, conformers: 1 })
         // See the node-identity comment in the test above: this is what
         // actually isolates the routing fix from the caching fix.
@@ -1242,7 +1326,7 @@ describe("species-entry page: paging the conformer basins", () => {
         server.use(pagedConformerHandler(120, seen), ...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
         expect(await screen.findByText("Showing 1–50 of 120 conformer basins.")).toBeVisible()
         expect(document.querySelectorAll(".conformer-card")).toHaveLength(50)
         expect(screen.getByText(/This entry has 120 deposited conformer basins/)).toBeVisible()
@@ -1259,12 +1343,12 @@ describe("species-entry page: paging the conformer basins", () => {
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         await screen.findByText("Showing 1–50 of 120 conformer basins.")
-        expect(screen.queryByText("Conformer Group 51")).not.toBeInTheDocument()
+        expect(cardLabels()).not.toContain("Conformer Group 51")
         await user.click(screen.getByRole("button", { name: "Next" }))
         expect(await screen.findByText("Showing 51–100 of 120 conformer basins.")).toBeVisible()
         expect(seen).toContain("50:50")
-        expect(await screen.findByText("Conformer Group 51")).toBeVisible()
-        expect(screen.queryByText("Conformer Group 1")).not.toBeInTheDocument()
+        await waitFor(() => expect(cardLabels()).toContain("Conformer Group 51"))
+        expect(cardLabels()).not.toContain("Conformer Group 1")
         await user.click(screen.getByRole("button", { name: "Next" }))
         expect(await screen.findByText("Showing 101–120 of 120 conformer basins.")).toBeVisible()
         expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
@@ -1274,7 +1358,7 @@ describe("species-entry page: paging the conformer basins", () => {
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
         expect(screen.queryByRole("button", { name: "Next" })).not.toBeInTheDocument()
     })
 })
@@ -1284,16 +1368,16 @@ describe("species-entry page: what the conformer picker says about its own order
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
-        expect(screen.getByText(/Pages follow the archive's display order \(above\); the cards within a page are listed by conformer number, then label, then reference/)).toBeVisible()
-        expect(screen.getByText(/no basin is preferred over another/)).toBeVisible()
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
+        expect(screen.getByText(/Pages follow the archive's display order; the cards within a page are listed by conformer number, then label, then reference\./)).toBeVisible()
+        expect(screen.getAllByText(/This order is not a recommendation\./).length).toBeGreaterThan(0)
     })
 
     it("says a selection the page made by itself is only the first listed, not a preference", async () => {
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
         expect(await screen.findByText(/Conformer Group 1 is selected only because it is listed first/)).toBeVisible()
     })
 
@@ -1311,7 +1395,7 @@ describe("species-entry page: what the conformer picker says about its own order
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}?conformer=${groupTwoRef}`)
         render(<App />)
-        await screen.findByText("Choose a conformer")
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
         await waitFor(() => expect(screen.getByRole("button", { name: /Conformer Group 2/ })).toHaveAttribute("aria-pressed", "true"))
         expect(screen.queryByText(/is selected only because it is listed first/)).not.toBeInTheDocument()
     })
@@ -1384,5 +1468,194 @@ describe("species-entry page: the selected conformer does not depend on the page
         render(<App />)
         expect(await screen.findByRole("heading", { name: "From Conformer Group 100" })).toBeInTheDocument()
         expect(screen.queryByRole("heading", { name: "From cg_many_100" })).not.toBeInTheDocument()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// The 3D shapes: cards, relative energies, "Used by", the stage and the calculations of the selected shape.
+// ---------------------------------------------------------------------------
+
+async function openEntry(options: HandlerOptions = {}, search = "") {
+    server.use(...handlers(options))
+    window.history.replaceState({}, "", `/species-entries/${entryRef}${search}`)
+    render(<App />)
+    await screen.findByRole("heading", { name: "Its 3D shapes" })
+    await waitFor(() => expect(cardLabels()).toHaveLength(options.singleConformer ? 1 : 2))
+}
+
+const levelPicker = () => screen.getByRole("combobox", { name: "Level of theory" })
+
+describe("species-entry page: relative energies on the shape cards", () => {
+    it("fills in the only level, says the first card is the reference only because it is listed first, and shows a signed value that links to its calculation", async () => {
+        await openEntry()
+        expect(await within(cardFor("Conformer Group 2")).findByText("+12.35")).toBeVisible()
+        expect(within(cardFor("Conformer Group 2")).getByRole("link", { name: "calc_sp_3" })).toHaveAttribute("href", "/calculations/calc_sp_3")
+        expect(within(cardFor("Conformer Group 1")).getByText(/the reference shape/)).toBeVisible()
+        expect(screen.getByText(/is the only level with energies here, so it is filled in/)).toBeVisible()
+        expect(screen.getByText(/Conformer Group 1 is the reference only because it is the first card listed/)).toBeVisible()
+        expect(relativeEnergyBodies).toEqual([{
+            reference_conformer_ref: groupOneRef, energy_kind: "electronic_energy",
+            level: { level_of_theory_ref: "lot_a" }, certificate: "local_minimum_any_surface",
+        }])
+        // A table twin lists every card's energy.
+        const table = screen.getByRole("table", { name: /Energy of each shape on this page relative to Conformer Group 1/ })
+        expect(within(table).getAllByRole("row")).toHaveLength(3)
+    })
+
+    it("asks for no energies until the reader picks one of several levels, and then asks for that level alone", async () => {
+        const user = userEvent.setup()
+        await openEntry({ twoLevels: true })
+        expect(relativeEnergyBodies).toHaveLength(0)
+        expect(within(cardFor("Conformer Group 2")).getByText("Not shown until you choose a level.")).toBeVisible()
+        await user.selectOptions(levelPicker(), "lot_b")
+        await waitFor(() => expect(relativeEnergyBodies).toHaveLength(1))
+        expect(relativeEnergyBodies[0]).toMatchObject({ level: { level_of_theory_ref: "lot_b" } })
+        await user.selectOptions(levelPicker(), "lot_a")
+        await waitFor(() => expect(relativeEnergyBodies).toHaveLength(2))
+        expect(relativeEnergyBodies[1]).toMatchObject({ level: { level_of_theory_ref: "lot_a" } })
+    })
+
+    it("sends the reference the reader names instead of the default", async () => {
+        const user = userEvent.setup()
+        await openEntry()
+        await waitFor(() => expect(relativeEnergyBodies).toHaveLength(1))
+        await user.selectOptions(screen.getByRole("combobox", { name: "Reference shape" }), groupTwoRef)
+        await waitFor(() => expect(relativeEnergyBodies).toHaveLength(2))
+        expect(relativeEnergyBodies[1]).toMatchObject({ reference_conformer_ref: groupTwoRef })
+        expect(screen.queryByText(/is the reference only because it is the first card listed/)).not.toBeInTheDocument()
+    })
+
+    it("says there is no value at this level when the archive has none, never a zero", async () => {
+        await openEntry({ energyAnswer: "absent" })
+        expect(await within(cardFor("Conformer Group 2")).findByText(/No value at this level/)).toBeVisible()
+        expect(within(cardFor("Conformer Group 2")).queryByText(/^0/)).not.toBeInTheDocument()
+    })
+
+    it("says the records disagree, with the stored values, and picks neither", async () => {
+        await openEntry({ energyAnswer: "disagree" })
+        const card = cardFor("Conformer Group 2")
+        expect(await within(card).findByText(/Records disagree\./)).toBeVisible()
+        expect(within(card).getByText(/-76\.100000, -76\.200000 hartree/)).toBeVisible()
+    })
+
+    it("explains an unavailable reference instead of showing differences", async () => {
+        await openEntry({ energyAnswer: "reference_unavailable" })
+        expect(await screen.findByText(/The reference shape has no energy at this level/)).toBeVisible()
+    })
+})
+
+describe("species-entry page: which records use each shape", () => {
+    it("states the ensemble thermo once above the cards, and lists thermo and rate records on the shapes that name them", async () => {
+        await openEntry()
+        expect(await screen.findByText(/Describes all shapes together:/)).toBeVisible()
+        expect(screen.getByRole("link", { name: "thm_ensemble" })).toBeVisible()
+        const one = within(cardFor("Conformer Group 1"))
+        expect(await one.findByRole("link", { name: "thm_one" })).toHaveAttribute("href", expect.stringContaining("/thermo?conformer=cg_one#thermo-heading-thm_one"))
+        const two = within(cardFor("Conformer Group 2"))
+        expect(await two.findByRole("link", { name: "kin_one" })).toHaveAttribute("href", "/reaction-entries/rxe_one")
+        expect(two.getByText(/This shape was merged into/)).toBeVisible()
+        expect(screen.getByText("Not listed by default: 2 rejected records.")).toBeVisible()
+    })
+
+    it("keeps the cards when the usage read fails", async () => {
+        await openEntry({ usageFails: true })
+        expect(await screen.findByText("Which records use each shape could not be read.")).toBeVisible()
+        expect(cardLabels()).toHaveLength(2)
+    })
+})
+
+describe("species-entry page: calculations of the selected shape", () => {
+    it("lists one row per deposit with how it was found and every energy on it, and states a spread only within one level and program", async () => {
+        await openEntry()
+        const region = await screen.findByRole("region", { name: "Table of calculations" })
+        const rows = within(region).getAllByRole("row")
+        expect(rows).toHaveLength(3)
+        expect(within(rows[1]).getByRole("link", { name: "co_1" })).toBeVisible()
+        expect(within(rows[1]).getByRole("link", { name: "calc_opt_1a" })).toBeVisible()
+        await waitFor(() => expect(within(rows[1]).getAllByRole("link", { name: /^-76\./ })).toHaveLength(2))
+        expect(within(rows[2]).getByText("No single-point energy recorded.")).toBeVisible()
+        await waitFor(() => expect(document.querySelector(".shape-spread")).toHaveTextContent(/at b3lyp\/def2tzvp with Gaussian 16 differ by up to 291\.\d{2} kJ\/mol across 2 calculations/))
+        expect(screen.getAllByText(/This order is not a recommendation/).length).toBeGreaterThan(1)
+    })
+
+    it("states no spread between energies at different levels", async () => {
+        await openEntry({ twoLevels: true })
+        const region = await screen.findByRole("region", { name: "Table of calculations" })
+        await waitFor(() => expect(within(region).getAllByRole("link", { name: /^-76\./ })).toHaveLength(2))
+        expect(screen.queryByText(/differ by up to/)).not.toBeInTheDocument()
+    })
+})
+
+describe("species-entry page: the stage and the keyboard", () => {
+    it("draws pictures on the cards and offers one 3D view, for the selected shape only", async () => {
+        await openEntry()
+        await waitFor(() => expect(document.querySelectorAll(".conformer-card svg.mol-poster")).toHaveLength(2))
+        expect(screen.getAllByRole("button", { name: "Show in 3D" })).toHaveLength(1)
+        expect(screen.getByRole("heading", { name: "Conformer Group 1 in 3D" })).toBeVisible()
+    })
+
+    it("selects a card with Enter and updates the stage, the calculations and the evidence", async () => {
+        const user = userEvent.setup()
+        await openEntry()
+        const second = within(cardFor("Conformer Group 2")).getByRole("button", { name: /Conformer Group 2/ })
+        second.focus()
+        await user.keyboard("{Enter}")
+        await waitFor(() => expect(second).toHaveAttribute("aria-pressed", "true"))
+        expect(await screen.findByRole("heading", { name: "Conformer Group 2 in 3D" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Evidence for Conformer Group 2" })).toBeVisible()
+        const region = await screen.findByRole("region", { name: "Table of calculations" })
+        expect(within(region).getByRole("link", { name: "co_3" })).toBeVisible()
+    })
+
+    it("moves between the evidence tabs with the arrow keys", async () => {
+        const user = userEvent.setup()
+        await openEntry()
+        const tablist = screen.getByRole("tablist", { name: "Conformer evidence" })
+        within(tablist).getByRole("tab", { name: "Geometry" }).focus()
+        await user.keyboard("{ArrowRight}")
+        expect(document.activeElement).toBe(within(tablist).getByRole("tab", { name: "Single-point energy" }))
+        await user.keyboard("{End}")
+        expect(document.activeElement).toBe(within(tablist).getByRole("tab", { name: /^Transport/ }))
+    })
+
+    it("has no picture, and says so, for a shape with no stored geometry", async () => {
+        server.use(
+            http.get("/api/v1/scientific/conformers/search", () => HttpResponse.json({
+                records: [{ ...baseConformerRecords()[1], geometries: [] }],
+            })),
+            ...handlers(),
+        )
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
+        expect((await screen.findAllByText("No picture")).length).toBeGreaterThan(0)
+        expect(screen.queryByRole("button", { name: "Show in 3D" })).not.toBeInTheDocument()
+    })
+})
+
+describe("species-entry page: depositor text and request counts", () => {
+    it("shows a depositor-written label only inside a depositor note", async () => {
+        await openEntry({ typedLabel: "DEPOSITOR_SENTINEL_label_1" })
+        expect(document.querySelectorAll(".depositor-note")).toHaveLength(1)
+        expectDepositorTextOnlyInNotes()
+    })
+
+    it("reads usage once and geometries once per distinct geometry however many cards there are", async () => {
+        const seen = { usage: 0, geometry: new Set<string>(), energies: 0 }
+        server.use(
+            http.get(`/api/v1/scientific/species-entries/${entryRef}/conformer-usage`, () => { seen.usage += 1; return undefined }),
+            http.get("/api/v1/scientific/geometries/:ref", ({ params }) => { seen.geometry.add(String(params.ref)); return undefined }),
+            http.post(`/api/v1/scientific/species-entries/${entryRef}/conformers/relative-energies`, () => { seen.energies += 1; return undefined }),
+            pagedConformerHandler(50),
+            ...handlers(),
+        )
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText(/This entry has 50 deposited conformer basins/)
+        await waitFor(() => expect(cardLabels()).toHaveLength(50))
+        await waitFor(() => expect(seen.geometry.size).toBeGreaterThan(0))
+        expect(seen.usage).toBe(1)
+        expect(seen.geometry.size).toBeLessThanOrEqual(3)
+        expect(seen.energies).toBeLessThanOrEqual(1)
     })
 })
