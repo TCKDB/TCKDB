@@ -82,10 +82,15 @@ describe("ValueSource", () => {
         expect(screen.getByRole("link")).toHaveAttribute("href", "/species-entries/spe_a")
     })
 
-    it("links a thermo record to the species entry that shows it", () => {
+    it("links a thermo record to its own row on the species entry that shows it", () => {
         inRouter(<ValueSource source={{ recordType: "thermo", ref: "thm_a", container: { recordType: "species_entry", ref: "spe_a" } }} />)
-        expect(screen.getByRole("link")).toHaveAttribute("href", "/species-entries/spe_a")
+        expect(screen.getByRole("link")).toHaveAttribute("href", "/species-entries/spe_a#thermo-thm_a")
         expect(screen.getByRole("link")).toHaveTextContent("thm_a")
+    })
+
+    it("uses a same-page link when given one", () => {
+        inRouter(<ValueSource source={{ recordType: "thermo", ref: "thm_a", to: "/species-entries/spe_a/thermo?conformer=cg_1#thermo-thm_a" }} />)
+        expect(screen.getByRole("link")).toHaveAttribute("href", "/species-entries/spe_a/thermo?conformer=cg_1#thermo-thm_a")
     })
 
     it("sends a transition state ref (ts_) nowhere it is not, and a transition state entry to its page", () => {

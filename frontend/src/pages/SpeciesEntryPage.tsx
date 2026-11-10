@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react"
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import "../species-entry.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { useSpeciesSinglePoints, type SinglePointsState } from "../hooks/useSpeciesSinglePoints"
@@ -11,6 +11,13 @@ import { ConformerSinglePointTab } from "../components/ConformerSinglePointTab"
 import { EntryStatmechSection } from "../components/EntryStatmechSection"
 import { EntryTabs } from "../components/EntryTabs"
 import { EntryThermoSection } from "../components/EntryThermoSection"
+import { Breadcrumbs } from "../components/Breadcrumbs"
+import { EntryNumbers } from "../components/EntryNumbers"
+import { Formula } from "../components/Formula"
+import { OtherVersions } from "../components/OtherVersions"
+import { BROWSE_KIND_PATHS } from "../api/browseApi"
+import { facetChips } from "../domain/recordFacets"
+import { useScrollToHash } from "../hooks/useScrollToHash"
 import { EntryTransportSection } from "../components/EntryTransportSection"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
@@ -31,7 +38,7 @@ export default function SpeciesEntryPage() {
     const navigate = useNavigate()
     const state = useSpeciesEntry(entryRef)
     const titleName = state && !("status" in state) && state.entryRef === entryRef ? (state.entry.formula ?? state.entry.canonicalSmiles) : null
-    useDocumentTitle("Species entry", titleName)
+    useDocumentTitle("Molecule", titleName)
 
     // Canonicalize a known legacy section alias (e.g. a stale
     // `/calculations` link from the earlier chapter-nav design --
@@ -192,6 +199,7 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
 }) {
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
+    useScrollToHash()
     const requestedRef = searchParams.get("conformer")
     // Read only while the single-point tab is open: loading the entry never waits for it.
     const spEnergies = useSpeciesSinglePoints(entryRef, activeSection === "sp")
@@ -266,13 +274,11 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
     }
 
     return <section className="entry-page">
-        <nav className="record-breadcrumbs" aria-label="Breadcrumb">
-            <Link to="/">TCKDB</Link>
-            <span aria-hidden="true">/</span>
-            <Link to={`/species/${entry.speciesRef}`}>Species</Link>
-            <span aria-hidden="true">/</span>
-            <span aria-current="page">Species entry</span>
-        </nav>
+        <Breadcrumbs crumbs={[
+            { label: "Molecules", to: BROWSE_KIND_PATHS.species },
+            { label: entry.formula ? <Formula value={entry.formula} /> : entry.canonicalSmiles, to: `/species/${entry.speciesRef}` },
+            { label: facetChips(entry).join(" · ") },
+        ]} />
         {/* `EntryIdentity` now routes through `PageShell`'s `identity` slot
             (previously it rendered directly above `<PageShell>`, spanning
             full width above the ToC/content flex row -- an earlier version
@@ -290,6 +296,8 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
             (species-entry.css was out of scope for the PR that added it);
             this page's stylesheet is in scope now, so the fix moved with
             the markup rather than patching a stray sibling `<p>` in place. */}
+        <EntryNumbers entryRef={entryRef} entryPath={entryPath} conformerQuery={conformerQuery} conformers={conformers} />
+        <OtherVersions speciesRef={entry.speciesRef} entryRef={entryRef} />
         {hasAnyEvidence(entry) ? (
             <>
                 <ConformerSelector

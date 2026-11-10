@@ -1,0 +1,152 @@
+/* "Numbers for this entry" and "Other versions of this molecule" on the molecule page. */
+
+.entry-numbers,
+.entry-versions {
+    margin-top: var(--s-6);
+}
+
+.entry-numbers-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2) var(--s-4);
+    margin: var(--s-3) 0;
+}
+
+.entry-numbers-toggle {
+    padding: .3rem .65rem;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--accent);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    cursor: pointer;
+}
+
+.entry-numbers-toggle:hover {
+    border-color: var(--accent);
+    background: var(--accent-50);
+}
+
+.entry-numbers-toggle[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--surface);
+}
+
+.entry-numbers-toggle:focus-visible,
+.entry-numbers-scroll:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.entry-numbers-scroll {
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+}
+
+.entry-numbers-table {
+    width: 100%;
+    min-width: 46rem;
+    border-collapse: collapse;
+}
+
+.entry-numbers-table th,
+.entry-numbers-table td {
+    padding: var(--s-3);
+    border-bottom: 1px solid var(--line-2);
+    text-align: left;
+    vertical-align: top;
+}
+
+.entry-numbers-table tbody th[scope="row"] {
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--ink);
+}
+
+.entry-numbers-table .entry-numbers-group th {
+    background: var(--surface-sunken);
+    color: var(--ink);
+}
+
+.entry-numbers-kind,
+.entry-numbers-key {
+    display: block;
+    color: var(--ink-2);
+    font-weight: 600;
+}
+
+.entry-numbers-key {
+    display: inline;
+}
+
+.entry-numbers-values {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--s-1) var(--s-4);
+    margin: 0 0 var(--s-2);
+}
+
+.entry-numbers-values dt {
+    color: var(--ink-2);
+}
+
+.entry-numbers-values dd {
+    margin: 0;
+}
+
+.entry-numbers-describes {
+    margin: 0 0 var(--s-1);
+}
+
+.entry-numbers-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.entry-numbers-absent {
+    color: var(--muted);
+}
+
+.entry-numbers-describes a,
+.entry-versions a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .15em;
+}
+
+.entry-versions-list {
+    display: grid;
+    gap: var(--s-3);
+    margin: var(--s-3) 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.entry-versions-item {
+    display: grid;
+    gap: var(--s-1);
+    padding: var(--s-3);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+}
+
+.entry-versions-item[aria-current="true"] {
+    background: var(--surface-sunken);
+    border-color: var(--accent);
+}
+
+.entry-versions-title {
+    margin: 0;
+    font-weight: 600;
+}
+
+.entry-versions-meta {
+    margin: 0;
+    color: var(--ink-2);
+}

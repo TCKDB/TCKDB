@@ -234,6 +234,12 @@ const thermoRecordSchema = z.object({
     // means the deposit did not state one. A plain sibling field, restored
     // from a short-lived `reference: {...}` grouping (reverted).
     enthalpy_reference_kind: z.enum(['formation_298k']).nullable().optional(),
+    // What the depositor declared the values describe; `null` means none was declared.
+    thermodynamic_target: z.object({
+        kind: z.string(),
+        conformer_group_ref: z.string().nullable().optional(),
+        declared_by: z.string().nullable().optional(),
+    }).passthrough().nullable().optional(),
     enthalpy_formation_0k_kj_mol: z.number().nullable().optional(),
     enthalpy_formation_0k_uncertainty_kj_mol: z.number().nullable().optional(),
     h298_kj_mol: z.number().nullable().optional(),
@@ -306,5 +312,17 @@ export async function loadEntryThermo(
     query.append("include", "calculation_settings")
     const endpoint = `/api/v1/scientific/species-entries/${encodeURIComponent(ref)}/thermo?${query}`
     const payload = await requestScientificJson(endpoint, signal, onRateLimited)
+    return parseScientificResponse(thermoListResponseSchema, payload, "thermo")
+}
+
+/** One page of the entry's thermo records with no include tokens: the numbers table reads only the always-present fields. */
+export async function loadEntryThermoPlain(
+    entryRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<ThermoListResponse> {
+    const { ref, request } = parsePagedRef(entryRef)
+    const query = request ? pageQuery(request) : new URLSearchParams()
+    const payload = await requestScientificJson(`/api/v1/scientific/species-entries/${encodeURIComponent(ref)}/thermo?${query}`, signal, onRateLimited)
     return parseScientificResponse(thermoListResponseSchema, payload, "thermo")
 }

@@ -6,6 +6,7 @@ import { words } from "../domain/provenanceFormat"
 import { stereoDescription } from "../domain/recordFacets"
 import { termSymbolSpoken } from "../domain/electronicState"
 import { publicElectronicStateLabel, publicTermSymbol } from "../domain/publicText"
+import { entryLede } from "../domain/entryLede"
 import { Formula } from "./Formula"
 import { RecordIdentityHeader } from "./RecordIdentityHeader"
 import { RefsDisclosure } from "./RefsDisclosure"
@@ -96,7 +97,8 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
             a page heading) for no disambiguation this page did not
             already have. */}
         <RecordIdentityHeader
-            kicker="Species entry · deposited scientific record"
+            kicker="One entry of a molecule"
+            lede={entryLede(entry)}
             glyph="species-entry"
             review={entry.review.status}
             titleVariant="display-1"

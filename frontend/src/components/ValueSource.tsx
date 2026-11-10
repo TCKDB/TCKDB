@@ -3,7 +3,11 @@ import { Link } from "react-router-dom"
 import { calculationDid } from "../domain/calculationTypeFormat"
 import { resolveRecordLocation } from "../domain/recordRoute"
 import "../record-blocks.css"
+import { numberAnchor, type NumberKind } from "../domain/entryNumbers"
 import { ReviewChip } from "./ReviewChip"
+
+/** Record types whose own row on their container's page carries an id. */
+const ANCHORED: ReadonlySet<string> = new Set(["thermo", "statmech", "transport"])
 
 export type SourceLevel = { role: "geometry" | "frequency" | "energy"; label: string }
 
@@ -13,6 +17,8 @@ export type ValueSourceRecord = {
     ref: string
     /** The record that shows it, for a type with no page of its own. */
     container?: { recordType: string; ref: string }
+    /** A link on the page the reader is already on; it replaces the resolved one. */
+    to?: string
 }
 
 /**
@@ -32,7 +38,8 @@ export function ValueSource({ source, did, levels, programs, review, compact = f
 }) {
     const location = resolveRecordLocation(source.recordType, source.ref, source.container?.recordType ?? null, source.container?.ref ?? null)
     const ref = <code className="t-preserve-case">{source.ref}</code>
-    const link = location.kind === "record" || location.kind === "container" ? <Link to={location.href}>{ref}</Link> : ref
+    const target = source.to ?? (location.kind === "container" && source.container?.recordType === "species_entry" && ANCHORED.has(source.recordType) ? `${location.href}#${numberAnchor(source.recordType as NumberKind, source.ref)}` : location.kind === "record" || location.kind === "container" ? location.href : null)
+    const link = target ? <Link to={target}>{ref}</Link> : ref
     if (compact) {
         return <span className="value-source value-source--compact"><span className="value-source-key">from</span> {link}</span>
     }

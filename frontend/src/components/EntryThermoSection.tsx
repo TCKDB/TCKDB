@@ -10,7 +10,6 @@ import {
     allProductLevelsAgree,
     productLevelsAgree,
     anyNotation,
-    resolveProductLevels,
     type ProductLevels,
 } from "../domain/productLevels"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
@@ -25,6 +24,7 @@ import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { Disclosure } from "./Disclosure"
 import { SectionHeading } from "./PageSections"
+import { thermoRecordProductLevels } from "../domain/entryNumbers"
 import { SettingsBehindValue, SettingsLegend } from "./EffectiveSettings"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
@@ -46,14 +46,6 @@ import { ThermoCpChart } from "./ThermoCpChart"
  * surface is request-gated (see the module docstring on `api/thermoApi.ts`)
  * -- so this is a plain synchronous function, never a "loading" state.
  */
-function thermoRecordProductLevels(record: ThermoRecord): ProductLevels {
-    if (record.levels) return resolveProductLevels(record.levels, null)
-    if (record.source_calculations && record.source_calculations.length > 0) {
-        return resolveProductLevels(null, record.source_calculations)
-    }
-    const lot = record.provenance?.level_of_theory ?? null
-    return { geometry: lot, frequency: lot, energy: lot, energy_source: lot ? "opt" : null }
-}
 
 // ---------------------------------------------------------------------------
 // The thermo/statmech/transport read surfaces are ENTRY-SCOPED LISTS

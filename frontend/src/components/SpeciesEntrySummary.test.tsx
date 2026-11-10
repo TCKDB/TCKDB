@@ -39,7 +39,8 @@ describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
         // labelled "Entry kind / state" row. A mutation reintroducing the
         // retired `.state-chip` beside the <h1>, or a `RecordFacetChips`
         // pill row, would make this find more than one.
-        expect(screen.getAllByText(/ground/i)).toHaveLength(1)
+        // The lede sentence under the title is the one other place it is said, in words.
+        expect(screen.getAllByText(/ground/i).filter((node) => !node.closest(".record-lede"))).toHaveLength(1)
         expect(document.querySelector(".state-chip")).not.toBeInTheDocument()
         expect(document.querySelector(".record-facet-chips")).not.toBeInTheDocument()
     })

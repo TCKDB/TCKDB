@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Molecule page lists every number and every version (2026-11-10)
+
+- The species entry page is titled "Molecule". It has breadcrumbs, a lede built from codes, and a "Numbers for this entry" section listing every thermochemistry, statistical mechanics and transport record with its values, levels of theory, programs and review status.
+- Thermochemistry rows say what they describe (all shapes together, one shape, or not stated). A "Group by level of theory" toggle groups rows without re-ordering them inside a group.
+- "Other versions of this molecule" lists every entry of the molecule.
+- Source lines for thermo, statmech and transport records link to the record's own row on the entry page.
+
 ## Relative conformer energy POSTs count as public reads (2026-11-10)
 
 - **Behaviour:** anonymous `POST .../species-entries/{ref}/conformers/relative-energies` and `.../relative-energies/compare` use the `anon_read` rate-limit bucket instead of `anon_other`; with a credential they use `auth_read` instead of `auth_write`. The `/manifest` downloads are unchanged. Other POSTs under `/scientific/` are unchanged, and the anonymous body-size cap still applies.
