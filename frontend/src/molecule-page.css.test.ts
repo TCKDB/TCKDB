@@ -159,3 +159,41 @@ describe("mono is reserved for identifiers and numbers, not prose (item 3)", () 
         expect(rule).toMatch(/var\(--type-data-large-font\)/)
     })
 })
+
+describe("calculations table and page-wide guards", () => {
+    const code = css.replace(/\/\*[\s\S]*?\*\//g, "")
+
+    it("keeps the deposit column readable: header cells never break mid-word, the row header has a floor, cells may wrap anywhere", () => {
+        expect(extractRule(css, ".shape-calculations-table thead th")).toMatch(/overflow-wrap:\s*normal/)
+        expect(extractRule(css, ".shape-calculations-table thead th")).toMatch(/white-space:\s*nowrap/)
+        expect(extractRule(css, ".shape-calculations-table tbody th")).toMatch(/min-width:\s*8rem/)
+        expect(css).toMatch(/\.shape-calculations-table td \{ overflow-wrap: anywhere; \}/)
+    })
+
+    it("stacks the rows on a phone", () => {
+        const phone = extractBlock(css, /@media \(max-width: 680px\) \{/)
+        expect(phone).toMatch(/\.shape-calculations-table th,[^{]*\{[^}]*display:\s*block/)
+    })
+
+    it("styles the next-steps links as links, with a focus ring", () => {
+        expect(extractRule(css, ".next-steps a")).toMatch(/text-decoration:\s*underline/)
+        expect(extractRule(css, ".next-steps a:focus-visible")).toMatch(/outline:\s*3px solid var\(--focus-ring\)/)
+    })
+
+    it("scopes the hidden-text utility to this page instead of defining a global class", () => {
+        expect(code).not.toMatch(/(^|[\s,}])\.visually-hidden\b/)
+        expect(code).toMatch(/\.molecule-page-visually-hidden\s*\{/)
+    })
+
+    it("never clips text with an ellipsis", () => {
+        expect(code).not.toMatch(/text-overflow\s*:/)
+    })
+
+    it("never pairs overflow: hidden with white-space: nowrap, except in the clip utility that hides text visually", () => {
+        for (const match of code.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+            const selector = match[1].trim()
+            if (selector.includes("molecule-page-visually-hidden")) continue
+            expect(/overflow:\s*hidden/.test(match[2]) && /white-space:\s*nowrap/.test(match[2]), selector).toBe(false)
+        }
+    })
+})

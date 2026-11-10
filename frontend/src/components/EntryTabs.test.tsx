@@ -38,7 +38,7 @@ describe("EntryTabs", () => {
 
         const transportTab = screen.getByRole("tab", { name: /^Transport/ })
         expect(transportTab.querySelector(".entry-tab-dot")).toBeNull()
-        expect(transportTab.querySelector(".visually-hidden")).toHaveTextContent("(no data)")
+        expect(transportTab.querySelector(".molecule-page-visually-hidden")).toHaveTextContent("(no data)")
         expect(transportTab).not.toHaveAttribute("title")
     })
 

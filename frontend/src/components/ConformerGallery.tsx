@@ -4,26 +4,41 @@ import "../molecule-page.css"
 import type { ListMeta } from "../api/listEnvelope"
 import { loadConformerUsage, type ConformerUsage, type ConformerUsageGroup } from "../api/conformerUsageApi"
 import { loadRelativeEnergies, relativeEnergyKey, type RelativeEnergies } from "../api/relativeEnergyApi"
-import type { SpeciesCalculationEnergyRecord } from "../api/speciesCalculationsApi"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel, sortConformersForDisplay } from "../domain/conformerEvidence"
 import {
-    cardEnergy, depositorWrittenLabel, formatRelativeKj, levelChoices, outcomeNote, pictureGeometryRef, shapeCountsSentence,
-    type CardEnergy, type LevelChoice,
+    cardEnergy, depositorWrittenLabel, formatHartree, formatRelativeKj, levelChoices, outcomeNote, pictureGeometryRef,
+    programIndex, referenceProgram, shapeCountsSentence,
+    type CardEnergy, type LevelChoice, type ProgramIndex,
 } from "../domain/conformerGallery"
 import { hiddenByDefaultNote, type PageRequest } from "../domain/paging"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
+import { useAnnounce } from "../hooks/useAnnounce"
 import { useLoaded, type LoadedState } from "../hooks/useLoaded"
+import type { SinglePointsState } from "../hooks/useSpeciesSinglePoints"
 import { DepositorNote } from "./DepositorNote"
 import { ListPager } from "./ListPager"
 import { OrderNote } from "./OrderNote"
 import { SectionHeading } from "./PageSections"
 import { RefsDisclosure } from "./RefsDisclosure"
-import { ShapePicture } from "./ShapePicture"
+import { ShapeCardHead } from "./ShapePicture"
 import { ValueLink } from "./ValueLink"
 
 const SHAPE_ORDER =
     "Pages follow the archive's display order; the cards within a page are listed by conformer number, then label, then reference."
+
+/** Pictures load by themselves for this many cards; later cards wait to be asked. */
+const AUTO_PICTURES = 12
+
+function CalculationLinks({ refs }: { refs: readonly string[] }) {
+    return (
+        <>
+            {refs.map((ref, index) => (
+                <span key={ref}>{index > 0 && ", "}<Link to={`/calculations/${ref}`}><code className="t-preserve-case">{ref}</code></Link></span>
+            ))}
+        </>
+    )
+}
 
 /** What a card or table cell says about one shape's energy; every state is words, never a blank or a zero. */
 function EnergyText({ energy }: { energy: CardEnergy }) {
@@ -33,42 +48,40 @@ function EnergyText({ energy }: { energy: CardEnergy }) {
         case "unread":
             return <span className="shape-energy-absent">Could not be read.</span>
         case "reference":
-            return <>0 <span className="u t-preserve-case">kJ/mol</span> (the reference shape)</>
+            return (
+                <>
+                    0 <span className="u t-preserve-case">kJ/mol</span> (the reference shape{energy.program ? `, ${energy.program}` : ""})
+                    {energy.calculationRefs.length > 0 && <span className="shape-energy-from">{" "}from <CalculationLinks refs={energy.calculationRefs} /></span>}
+                </>
+            )
         case "value": {
             const refs = energy.calculationRefs
             return (
                 <>
                     <ValueLink value={formatRelativeKj(energy.kjMol)} unit="kJ/mol" to={refs.length === 1 ? `/calculations/${refs[0]}` : null} />
-                    {refs.length > 0 && (
-                        <span className="shape-energy-from">
-                            {" "}from{" "}
-                            {refs.map((ref, index) => (
-                                <span key={ref}>{index > 0 && ", "}<Link to={`/calculations/${ref}`}><code className="t-preserve-case">{ref}</code></Link></span>
-                            ))}
-                        </span>
-                    )}
+                    <span className="shape-energy-from">{" "}with <span className="t-preserve-case">{energy.program}</span>, from <CalculationLinks refs={refs} /></span>
                 </>
             )
         }
         case "disagree":
             return (
                 <span className="shape-energy-absent">
-                    Records disagree.{energy.valuesHartree.length > 0 && ` Stored values: ${energy.valuesHartree.map((value) => value.toFixed(6)).join(", ")} hartree.`}
+                    Records disagree.
+                    {energy.valuesHartree.length > 0 && ` Stored values: ${energy.valuesHartree.map(formatHartree).join(", ")} hartree.`}
+                    {energy.calculationRefs.length > 0 && <>{" "}From <CalculationLinks refs={energy.calculationRefs} />.</>}
                 </span>
             )
-        case "absent":
-            return <span className="shape-energy-absent">No value at this level.{energy.reason && ` (${energy.reason})`}</span>
+        case "note":
+            return <span className="shape-energy-absent">{energy.text}</span>
     }
 }
 
-type Energies = { levelRef: string | null; referenceRef: string; state: LoadedState<RelativeEnergies> }
+type Energies = { levelRef: string | null; state: LoadedState<RelativeEnergies>; programs: ProgramIndex }
 
 function energyFor(energies: Energies, groupRef: string): CardEnergy {
     if (energies.levelRef === null) return { kind: "pending" }
-    if (energies.state.status === "ready") return cardEnergy(energies.state.data, groupRef)
-    if (energies.state.status === "failed" || energies.state.status === "rate-limited") {
-        return { kind: "unread" }
-    }
+    if (energies.state.status === "ready") return cardEnergy(energies.state.data, groupRef, energies.programs)
+    if (energies.state.status === "failed" || energies.state.status === "rate-limited") return { kind: "unread" }
     return { kind: "pending" }
 }
 
@@ -106,7 +119,7 @@ function UsedBy({ usage, group, entryRef, groupRef, labelOf }: {
                     {group.kinetics.map((record, index) => (
                         <span key={`${record.kinetics_ref}-${record.role ?? ""}-${index}`}>
                             {index > 0 && ", "}
-                            <Link to={`/reaction-entries/${record.reaction_entry_ref}`}>
+                            <Link to={`/reaction-entries/${record.reaction_entry_ref}#kinetics-heading`}>
                                 <code className="t-preserve-case">{record.kinetics_ref}</code>
                             </Link>
                             {record.role && ` (${record.role})`}
@@ -124,11 +137,12 @@ function UsedBy({ usage, group, entryRef, groupRef, labelOf }: {
 /**
  * One card per conformer group (one shape): picture, label, counts, relative energy at a level and reference the reader
  * picks, and the records that name it. Cards are buttons; choosing one drives the stage, the calculations and the
- * evidence tabs. The first card is only a default, never chosen by energy.
+ * evidence tabs. The first card is only a default, never chosen by energy. A difference is shown only when it and the
+ * reference come from one program.
  */
 export function ConformerGallery({
     entryRef, formula, conformers, allConformers, meta, onPage, pagingBusy, pagingFailed,
-    selectedRef, selectedLabel, selectionIsDefault, defaultReferenceRef, energyRecords, onSelect,
+    selectedRef, selectedLabel, selectionIsDefault, defaultReferenceRef, singlePoints, optimisations, onSelect,
 }: {
     entryRef: string
     formula: string
@@ -145,9 +159,11 @@ export function ConformerGallery({
     selectionIsDefault: boolean
     /** The first card of the first page: the reference shape until the reader names another. */
     defaultReferenceRef: string | null
-    energyRecords: SpeciesCalculationEnergyRecord[]
+    singlePoints: SinglePointsState
+    optimisations: SinglePointsState
     onSelect: (conformerGroupRef: string) => void
 }) {
+    const announce = useAnnounce()
     const total = meta.pagination.total
     const ordered = useMemo(() => sortConformersForDisplay(conformers), [conformers])
     const selectedOnPage = conformers.some((conformer) => conformer.conformer_group.conformer_group_ref === selectedRef)
@@ -157,7 +173,14 @@ export function ConformerGallery({
     )
     const labelOf = (ref: string) => labels.get(ref) ?? ref
     const usage = useLoaded(loadConformerUsage, entryRef)
-    const levels = useMemo(() => levelChoices(allConformers, energyRecords), [allConformers, energyRecords])
+    const records = useMemo(
+        () => [...(singlePoints.status === "ready" ? singlePoints.records : []), ...(optimisations.status === "ready" ? optimisations.records : [])],
+        [singlePoints, optimisations],
+    )
+    const settled = (state: SinglePointsState) => state.status === "ready" || state.status === "failed"
+    const energiesSettled = settled(singlePoints) && settled(optimisations)
+    const levels = useMemo(() => (energiesSettled ? levelChoices(allConformers, records) : []), [energiesSettled, allConformers, records])
+    const programs = useMemo(() => programIndex(allConformers, records), [allConformers, records])
     const [chosenLevel, setChosenLevel] = useState<string | null>(null)
     const [chosenReference, setChosenReference] = useState<string | null>(null)
     const onlyLevel = levels.length === 1 ? levels[0].ref : null
@@ -168,12 +191,17 @@ export function ConformerGallery({
         loadRelativeEnergies,
         levelRef !== null && referenceRef !== null ? relativeEnergyKey({ entryRef, referenceRef, levelRef }) : null,
     )
-    const state: Energies = { levelRef, referenceRef: referenceRef ?? "", state: energies }
+    const state: Energies = { levelRef, state: energies, programs }
     const level: LevelChoice | undefined = levels.find((candidate) => candidate.ref === levelRef)
     const usageData = usage.status === "ready" ? usage.data : null
     const hidden = usageData ? hiddenByDefaultNote(usageData.hidden, "records") : null
     const referenceChoices = useMemo(() => sortConformersForDisplay(allConformers), [allConformers])
     const note = energies.status === "ready" ? outcomeNote(energies.data) : null
+    const tableProgram = energies.status === "ready" ? referenceProgram(energies.data, programs) : null
+    const select = (ref: string) => {
+        onSelect(ref)
+        announce(`${labelOf(ref)} selected; its picture and calculations are below.`)
+    }
 
     return (
         <section className="conformer-picker" aria-labelledby="shapes-heading">
@@ -205,13 +233,16 @@ export function ConformerGallery({
 
                     <fieldset className="shape-energy-controls">
                         <legend>Energy relative to a reference shape</legend>
-                        {levels.length === 0 ? (
+                        {!energiesSettled ? (
+                            <p className="note" role="status" aria-busy="true">Reading the energies on this entry.</p>
+                        ) : levels.length === 0 ? (
                             <p className="note">No level of theory with energies is recorded for the shapes on this page, so no relative energies are shown.</p>
                         ) : (
                             <>
                                 <p className="note">
-                                    Electronic energy at one level of theory, in kJ/mol. A shape needs a stored check that it is a true minimum;
-                                    one without it has no value. Levels are never mixed.
+                                    Electronic energy at one level of theory, in kJ/mol. A shape is compared only when a stored frequency calculation shows it
+                                    is a minimum, at this level or another. A shape without that check is listed without a number. Levels are never mixed, and
+                                    a difference is shown only when both energies came from the same program.
                                 </p>
                                 <div className="shape-energy-fields">
                                     <label>
@@ -241,9 +272,7 @@ export function ConformerGallery({
                                     <p className="note">{levels[0].label} is the only level with energies here, so it is filled in.</p>
                                 )}
                                 {level && level.programs.length > 1 && (
-                                    <p className="note">
-                                        Calculations at this level used {level.programs.join(" and ")}. The comparison is made by level and does not separate programs.
-                                    </p>
+                                    <p className="note">Calculations at this level used {joinPrograms(level.programs)}.</p>
                                 )}
                                 <p className="note" role="status">
                                     {energies.status === "loading" && "Reading energies."}
@@ -261,7 +290,9 @@ export function ConformerGallery({
                             {usageData.ensembleThermoRefs.map((ref, index) => (
                                 <span key={ref}>
                                     {index > 0 && ", "}
-                                    <Link to={`/species-entries/${entryRef}/thermo#thermo-heading-${ref}`}><code className="t-preserve-case">{ref}</code></Link>
+                                    <Link to={`/species-entries/${entryRef}/thermo${selectedRef ? `?conformer=${encodeURIComponent(selectedRef)}` : ""}#thermo-heading-${ref}`}>
+                                        <code className="t-preserve-case">{ref}</code>
+                                    </Link>
                                 </span>
                             ))}
                         </p>
@@ -270,17 +301,20 @@ export function ConformerGallery({
                     {usage.status === "failed" && <p className="note">Which records use each shape could not be read.</p>}
 
                     <ul className="conformer-list" aria-label="Shapes of this entry">
-                        {ordered.map((conformer) => {
+                        {ordered.map((conformer, index) => {
                             const ref = conformer.conformer_group.conformer_group_ref
-                            const isSelected = ref === selectedRef
                             const typed = depositorWrittenLabel(conformer)
                             return (
-                                <li key={ref} className="conformer-card" data-selected={isSelected}>
-                                    <button type="button" className="conformer-card-select" aria-pressed={isSelected} onClick={() => onSelect(ref)}>
-                                        <ShapePicture geometryRef={pictureGeometryRef(conformer)} formula={formula} />
-                                        <span className="conformer-card-label">{conformerLabel(conformer)}</span>
-                                        <span className="conformer-card-meta">{shapeCountsSentence(conformer)}</span>
-                                    </button>
+                                <li key={ref} className="conformer-card" data-selected={ref === selectedRef}>
+                                    <ShapeCardHead
+                                        geometryRef={pictureGeometryRef(conformer)}
+                                        formula={formula}
+                                        auto={index < AUTO_PICTURES}
+                                        selected={ref === selectedRef}
+                                        label={conformerLabel(conformer)}
+                                        counts={shapeCountsSentence(conformer)}
+                                        onSelect={() => select(ref)}
+                                    />
                                     <p className="shape-card-energy"><span className="shape-card-key">Relative energy</span> <EnergyText energy={energyFor(state, ref)} /></p>
                                     <UsedBy usage={usage} group={usageData?.groups.get(ref)} entryRef={entryRef} groupRef={ref} labelOf={labelOf} />
                                     <DepositorNote>{typed}</DepositorNote>
@@ -295,7 +329,7 @@ export function ConformerGallery({
                             <table className="data-table shape-energy-table">
                                 <caption>
                                     Energy of each shape on this page relative to {referenceRef ? labelOf(referenceRef) : "the reference"}
-                                    {level ? ` at ${level.label}` : ""}
+                                    {level ? ` at ${level.label}` : ""}{tableProgram ? ` with ${tableProgram}` : ""}
                                 </caption>
                                 <thead>
                                     <tr><th scope="col">Shape</th><th scope="col">Relative energy</th></tr>
@@ -316,3 +350,5 @@ export function ConformerGallery({
         </section>
     )
 }
+
+const joinPrograms = (programs: readonly string[]) => programs.join(" and ")

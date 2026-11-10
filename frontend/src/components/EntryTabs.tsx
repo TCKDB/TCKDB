@@ -103,7 +103,7 @@ export function EntryTabs({ entryRef, activeSection, conformerQuery, availabilit
                         onKeyDown={(event) => handleKeyDown(event, index)}
                     >
                         {sectionLabels[section]}
-                        {populated ? <span className="entry-tab-dot" aria-hidden="true" /> : <>{" "}<span className="visually-hidden">(no data)</span></>}
+                        {populated ? <span className="entry-tab-dot" aria-hidden="true" /> : <>{" "}<span className="molecule-page-visually-hidden">(no data)</span></>}
                     </Link>
                 )
             })}

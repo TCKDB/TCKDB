@@ -10,7 +10,7 @@ export type LoadedState<T> =
 type Loader<T> = (key: string, signal?: AbortSignal, onRateLimited?: (retryAfterSeconds: number) => void) => Promise<T>
 
 /** One shared, cached read keyed by a string; `key` null means nothing is wanted yet. A failure never throws into the page. */
-export function useLoaded<T>(load: Loader<T>, key: string | null): LoadedState<T> {
+export function useLoaded<T>(load: Loader<T>, key: string | null, retry = 0): LoadedState<T> {
     const [result, setResult] = useState<{ key: string; state: LoadedState<T> } | null>(null)
     useEffect(() => {
         if (key === null) return
@@ -31,7 +31,7 @@ export function useLoaded<T>(load: Loader<T>, key: string | null): LoadedState<T
             mounted = false
             subscription.unsubscribe()
         }
-    }, [load, key])
+    }, [load, key, retry])
     if (key === null) return { status: "idle" }
     return result?.key === key ? result.state : { status: "loading" }
 }

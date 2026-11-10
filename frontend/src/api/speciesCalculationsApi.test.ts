@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { loadSpeciesSinglePointEnergies } from "./speciesCalculationsApi"
+import { loadSpeciesOptimisationEnergies, loadSpeciesSinglePointEnergies } from "./speciesCalculationsApi"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -44,9 +44,9 @@ describe("loadSpeciesSinglePointEnergies", () => {
         expect(requests).toBe(1)
     })
 
-    it("still resolves to an empty list on a failure, as before", async () => {
+    it("rejects on a failure, so a caller can say the energies could not be read", async () => {
         server.use(http.get("/api/v1/scientific/species-calculations/search", () => HttpResponse.json({ detail: "down" }, { status: 503 })))
-        await expect(loadSpeciesSinglePointEnergies("spe_x")).resolves.toEqual({ records: [], capped: false })
+        await expect(loadSpeciesSinglePointEnergies("spe_x")).rejects.toThrow()
     })
 
     it("says it stopped when the page cap is reached, instead of presenting the unread energies as absent", async () => {
@@ -59,5 +59,19 @@ describe("loadSpeciesSinglePointEnergies", () => {
         const result = await loadSpeciesSinglePointEnergies("spe_x")
         expect(result.capped).toBe(true)
         expect(requests).toBe(50)
+    })
+})
+
+describe("loadSpeciesOptimisationEnergies", () => {
+    it("reads the entry's opt calculations and rejects on a failure", async () => {
+        const types: Array<string | null> = []
+        server.use(http.get("/api/v1/scientific/species-calculations/search", ({ request }) => {
+            types.push(new URL(request.url).searchParams.get("calculation_type"))
+            return HttpResponse.json({ records: [], pagination: { offset: 0, limit: 200, returned: 0, total: 0 } })
+        }))
+        await expect(loadSpeciesOptimisationEnergies("spe_x")).resolves.toEqual({ records: [], capped: false })
+        expect(types).toEqual(["opt"])
+        server.use(http.get("/api/v1/scientific/species-calculations/search", () => HttpResponse.json({ detail: "down" }, { status: 503 })))
+        await expect(loadSpeciesOptimisationEnergies("spe_x")).rejects.toThrow()
     })
 })

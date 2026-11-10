@@ -163,3 +163,13 @@ export async function loadGeometry(
     const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(geometryRecordSchema, payload, "geometry")
 }
+
+/** The atoms and coordinates of a geometry, without its provenance; what a picture needs. */
+export async function loadGeometryAtoms(
+    ref: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<GeometryRecord> {
+    const payload = await requestScientificJson(`/api/v1/scientific/geometries/${encodeURIComponent(ref)}`, signal, onRateLimited)
+    return parseScientificResponse(geometryRecordSchema, payload, "geometry")
+}

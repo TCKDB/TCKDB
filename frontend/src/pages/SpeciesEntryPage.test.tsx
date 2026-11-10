@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import App from "../App"
 import { resetAllRequestCaches } from "../api/requestCache"
@@ -34,6 +34,7 @@ const groupTwoRef = "cg_two"
 const lot = { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", level_of_theory_ref: "lot_a" }
 const lotB = { method: "ccsd(t)", basis: "cc-pvtz", display: "ccsd(t)/cc-pvtz", level_of_theory_ref: "lot_b" }
 const gaussian = { software_release_ref: "srel_1", software: "Gaussian", version: "Gaussian 16" }
+const orca = { software_release_ref: "srel_2", software: "ORCA", version: "ORCA 6.0" }
 // `App` mounts `AuthProvider`, which probes `GET /auth/me` regardless of
 // route -- see `App.test.tsx`'s identical handler for why this default
 // (signed-out) has to be here for every test in this file that renders
@@ -63,7 +64,10 @@ type HandlerOptions = {
     // calc_sp_1b is computed at a second level of theory.
     twoLevels?: boolean
     // What the relative-energies read answers for the second shape.
-    energyAnswer?: "value" | "absent" | "disagree" | "reference_unavailable"
+    energyAnswer?: "value" | "absent" | "disagree" | "reference_unavailable" | "multiple_recipes"
+    // calc_sp_3 (the second shape's energy) was run with ORCA, the reference's with Gaussian.
+    twoPrograms?: boolean
+    optFails?: boolean
     usageFails?: boolean
     // Planted into the second group's typed label.
     typedLabel?: string
@@ -380,17 +384,25 @@ function handlers(options: HandlerOptions = {}) {
         // it fetched (see the design brief's recurring-defect list: "a
         // fixture where every row was identical let a records[0] bug
         // survive").
-        http.get("/api/v1/scientific/species-calculations/search", () => (
-            options.spEnergiesFail
-                ? HttpResponse.json({ detail: "archive unavailable" }, { status: 503 })
-                : HttpResponse.json({
-                    records: [
-                        { calculation: { calculation_ref: "calc_sp_1", calculation_type: "sp" }, energy: { energy_hartree: -76.111111, energy_kind: "electronic_energy" }, level_of_theory: lot, software_release: gaussian },
-                        { calculation: { calculation_ref: "calc_sp_1b", calculation_type: "sp" }, energy: { energy_hartree: -76.222222, energy_kind: "electronic_energy" }, level_of_theory: options.twoLevels ? lotB : lot, software_release: gaussian },
-                        { calculation: { calculation_ref: "calc_sp_3", calculation_type: "sp" }, energy: { energy_hartree: -76.333333, energy_kind: "electronic_energy" }, level_of_theory: lot, software_release: gaussian },
-                    ],
+        http.get("/api/v1/scientific/species-calculations/search", ({ request }) => {
+            const type = new URL(request.url).searchParams.get("calculation_type")
+            if (type === "opt") {
+                if (options.optFails) return HttpResponse.json({ detail: "archive unavailable" }, { status: 503 })
+                const opt = (ref: string, hartree: number) => ({
+                    calculation: { calculation_ref: ref, calculation_type: "opt" }, energy: { energy_hartree: hartree, energy_kind: "final_energy" },
+                    level_of_theory: lot, software_release: gaussian,
                 })
-        )),
+                return HttpResponse.json({ records: [opt("calc_opt_1a", -75.9), opt("calc_opt_1b", -75.8), opt("calc_opt_2", -75.95), opt("calc_opt_3", -76.0)] })
+            }
+            if (options.spEnergiesFail) return HttpResponse.json({ detail: "archive unavailable" }, { status: 503 })
+            return HttpResponse.json({
+                records: [
+                    { calculation: { calculation_ref: "calc_sp_1", calculation_type: "sp" }, energy: { energy_hartree: -76.111111, energy_kind: "electronic_energy" }, level_of_theory: lot, software_release: gaussian },
+                    { calculation: { calculation_ref: "calc_sp_1b", calculation_type: "sp" }, energy: { energy_hartree: -76.222222, energy_kind: "electronic_energy" }, level_of_theory: options.twoLevels ? lotB : lot, software_release: gaussian },
+                    { calculation: { calculation_ref: "calc_sp_3", calculation_type: "sp" }, energy: { energy_hartree: -76.333333, energy_kind: "electronic_energy" }, level_of_theory: lot, software_release: options.twoPrograms ? orca : gaussian },
+                ],
+            })
+        }),
         http.get(`/api/v1/scientific/species-entries/${entryRef}/conformer-usage`, () => (
             options.usageFails
                 ? HttpResponse.json({ detail: "unavailable" }, { status: 503 })
@@ -412,23 +424,30 @@ function handlers(options: HandlerOptions = {}) {
         )),
         http.post(`/api/v1/scientific/species-entries/${entryRef}/conformers/relative-energies`, async ({ request }) => {
             relativeEnergyBodies.push(await request.json())
+            const member = (extra: Record<string, unknown>) => ({
+                conformer_ref: groupTwoRef, status: "present", relative_energy_kj_mol: 12.345, value_hartree: -76.33,
+                energy_calculation_refs: ["calc_sp_3"], absent_reason: null, alternates: [], detail: [], ...extra,
+            })
             const second = options.energyAnswer === "absent"
-                ? { conformer_ref: groupTwoRef, status: "absent", relative_energy_kj_mol: null, value_hartree: null, energy_calculation_refs: [], absent_reason: "no_structure_determination", alternates: [] }
-                : options.energyAnswer === "disagree"
-                    ? {
-                        conformer_ref: groupTwoRef, status: "unresolved", relative_energy_kj_mol: null, value_hartree: null, energy_calculation_refs: [],
-                        absent_reason: "repeat_values_disagree",
-                        alternates: [{ determination_ref: "d1", value_hartree: -76.1 }, { determination_ref: "d2", value_hartree: -76.2 }],
-                    }
-                    : { conformer_ref: groupTwoRef, status: "present", relative_energy_kj_mol: 12.345, value_hartree: -76.33, energy_calculation_refs: ["calc_sp_3"], absent_reason: null, alternates: [] }
+                ? member({ status: "absent", relative_energy_kj_mol: null, value_hartree: null, energy_calculation_refs: [], absent_reason: "no_structure_determination" })
+                : options.energyAnswer === "multiple_recipes"
+                    ? member({ status: "absent", relative_energy_kj_mol: null, value_hartree: null, energy_calculation_refs: [], absent_reason: "multiple_recipes_at_level" })
+                    : options.energyAnswer === "reference_unavailable"
+                        ? member({ relative_energy_kj_mol: null, detail: ["reference_unavailable"] })
+                        : options.energyAnswer === "disagree"
+                            ? member({
+                                status: "unresolved", relative_energy_kj_mol: null, value_hartree: null, absent_reason: "repeat_values_disagree",
+                                alternates: [{ determination_ref: "d1", value_hartree: -76.1 }, { determination_ref: "d2", value_hartree: -76.2 }],
+                            })
+                            : member({})
+            const first = options.energyAnswer === "reference_unavailable"
+                ? { conformer_ref: groupOneRef, status: "absent", relative_energy_kj_mol: null, value_hartree: null, energy_calculation_refs: [], absent_reason: "no_value_at_requested_level", alternates: [], detail: [] }
+                : { conformer_ref: groupOneRef, status: "reference", relative_energy_kj_mol: 0, value_hartree: -76.1, energy_calculation_refs: ["calc_sp_1"], absent_reason: null, alternates: [], detail: [] }
             return HttpResponse.json({
-                outcome: options.energyAnswer === "reference_unavailable" ? "reference_unavailable" : "relative_energies",
+                outcome: options.energyAnswer === "reference_unavailable" ? "reference_unavailable" : options.energyAnswer === "multiple_recipes" ? "multiple_recipes_at_level" : "relative_energies",
                 basis: "stated",
-                reference: { conformer_ref: groupOneRef, status: "reference", absent_reason: null },
-                members: [
-                    { conformer_ref: groupOneRef, status: "reference", relative_energy_kj_mol: 0, value_hartree: -76.1, energy_calculation_refs: ["calc_sp_1"], absent_reason: null, alternates: [] },
-                    second,
-                ],
+                reference: { conformer_ref: groupOneRef, status: first.status, absent_reason: first.absent_reason },
+                members: [first, second],
             })
         }),
         http.get("/api/v1/scientific/geometries/:ref", ({ params }) => HttpResponse.json({
@@ -895,7 +914,8 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         let energyRequests = 0
         server.use(
             http.get("/api/v1/scientific/species-calculations/search", ({ request }) => {
-                if (new URL(request.url).searchParams.get("limit") !== "1") energyRequests += 1
+                const params = new URL(request.url).searchParams
+                if (params.get("limit") !== "1" && params.get("calculation_type") === "sp") energyRequests += 1
                 return HttpResponse.json({ records: [], pagination: { offset: 0, limit: 200, returned: 0, total: 0 } })
             }),
             ...handlers(),
@@ -1531,16 +1551,43 @@ describe("species-entry page: relative energies on the shape cards", () => {
         expect(within(cardFor("Conformer Group 2")).queryByText(/^0/)).not.toBeInTheDocument()
     })
 
+    it("shows no number when the shape and the reference were computed with different programs, and says which", async () => {
+        await openEntry({ twoPrograms: true })
+        const card = cardFor("Conformer Group 2")
+        expect(await within(card).findByText("Computed with ORCA 6.0; the reference with Gaussian 16. Energies from different programs are not compared.")).toBeVisible()
+        expect(within(card).queryByText("+12.35")).not.toBeInTheDocument()
+        expect(within(cardFor("Conformer Group 1")).getByText(/the reference shape, Gaussian 16/)).toBeVisible()
+    })
+
+    it("writes the program beside each value and in the table caption", async () => {
+        await openEntry()
+        await waitFor(() => expect(cardFor("Conformer Group 2")).toHaveTextContent(/\+12\.35 kJ\/mol with Gaussian 16, from calc_sp_3/))
+        expect(screen.getByRole("table", { name: /relative to Conformer Group 1 at b3lyp\/def2tzvp with Gaussian 16/ })).toBeVisible()
+    })
+
+    it("words more than one recipe as not compared, never as a disagreement", async () => {
+        await openEntry({ energyAnswer: "multiple_recipes" })
+        expect(await within(cardFor("Conformer Group 2")).findByText("More than one recipe at this level; not compared.")).toBeVisible()
+        expect(within(cardFor("Conformer Group 2")).queryByText(/Records disagree/)).not.toBeInTheDocument()
+    })
+
+    it("words a present value with no reference value as having a value but no difference", async () => {
+        await openEntry({ energyAnswer: "reference_unavailable" })
+        expect(await within(cardFor("Conformer Group 2")).findByText("Has a value at this level; the reference has none, so no difference is shown.")).toBeVisible()
+    })
+
     it("says the records disagree, with the stored values, and picks neither", async () => {
         await openEntry({ energyAnswer: "disagree" })
         const card = cardFor("Conformer Group 2")
         expect(await within(card).findByText(/Records disagree\./)).toBeVisible()
-        expect(within(card).getByText(/-76\.100000, -76\.200000 hartree/)).toBeVisible()
+        expect(within(card).getByText(/\u221276\.100000, \u221276\.200000 hartree/)).toBeVisible()
+        expect(within(card).getByRole("link", { name: "calc_sp_3" })).toBeVisible()
     })
 
     it("explains an unavailable reference instead of showing differences", async () => {
         await openEntry({ energyAnswer: "reference_unavailable" })
         expect(await screen.findByText(/The reference shape has no energy at this level/)).toBeVisible()
+        expect(within(cardFor("Conformer Group 1")).getByText("No value at this level.")).toBeVisible()
     })
 })
 
@@ -1548,11 +1595,11 @@ describe("species-entry page: which records use each shape", () => {
     it("states the ensemble thermo once above the cards, and lists thermo and rate records on the shapes that name them", async () => {
         await openEntry()
         expect(await screen.findByText(/Describes all shapes together:/)).toBeVisible()
-        expect(screen.getByRole("link", { name: "thm_ensemble" })).toBeVisible()
+        expect(screen.getByRole("link", { name: "thm_ensemble" })).toHaveAttribute("href", `/species-entries/${entryRef}/thermo?conformer=${groupOneRef}#thermo-heading-thm_ensemble`)
         const one = within(cardFor("Conformer Group 1"))
         expect(await one.findByRole("link", { name: "thm_one" })).toHaveAttribute("href", expect.stringContaining("/thermo?conformer=cg_one#thermo-heading-thm_one"))
         const two = within(cardFor("Conformer Group 2"))
-        expect(await two.findByRole("link", { name: "kin_one" })).toHaveAttribute("href", "/reaction-entries/rxe_one")
+        expect(await two.findByRole("link", { name: "kin_one" })).toHaveAttribute("href", "/reaction-entries/rxe_one#kinetics-heading")
         expect(two.getByText(/This shape was merged into/)).toBeVisible()
         expect(screen.getByText("Not listed by default: 2 rejected records.")).toBeVisible()
     })
@@ -1571,18 +1618,22 @@ describe("species-entry page: calculations of the selected shape", () => {
         const rows = within(region).getAllByRole("row")
         expect(rows).toHaveLength(3)
         expect(within(rows[1]).getByRole("link", { name: "co_1" })).toBeVisible()
-        expect(within(rows[1]).getByRole("link", { name: "calc_opt_1a" })).toBeVisible()
-        await waitFor(() => expect(within(rows[1]).getAllByRole("link", { name: /^-76\./ })).toHaveLength(2))
-        expect(within(rows[2]).getByText("No single-point energy recorded.")).toBeVisible()
-        await waitFor(() => expect(document.querySelector(".shape-spread")).toHaveTextContent(/at b3lyp\/def2tzvp with Gaussian 16 differ by up to 291\.\d{2} kJ\/mol across 2 calculations/))
+        expect(within(rows[1]).getAllByRole("link", { name: "calc_opt_1a" }).length).toBeGreaterThan(0)
+        // Two single-point energies and the final energy of each of two optimisations, on one geometry.
+        await waitFor(() => expect(within(rows[1]).getAllByRole("link", { name: /^[\u2212-]7\d\.\d+ hartree/ })).toHaveLength(4))
+        expect(within(rows[1]).getAllByText(/final energy of the optimisation/)).toHaveLength(2)
+        expect(within(rows[2]).getAllByRole("link", { name: "calc_opt_2" }).length).toBeGreaterThan(0)
+        expect(within(rows[2]).queryByRole("link", { name: "calc_sp_1" })).not.toBeInTheDocument()
+        await waitFor(() => expect(document.querySelector(".shape-spread")).toHaveTextContent(/Single-point energies at b3lyp\/def2tzvp with Gaussian 16 differ by up to 291\.\d{2} kJ\/mol across 2 calculations/))
+        expect(document.querySelector(".shape-spread")).toHaveTextContent(/Final energies of the optimisations at b3lyp\/def2tzvp with Gaussian 16 differ by up to 393\.\d{2} kJ\/mol across 3 calculations/)
         expect(screen.getAllByText(/This order is not a recommendation/).length).toBeGreaterThan(1)
     })
 
     it("states no spread between energies at different levels", async () => {
         await openEntry({ twoLevels: true })
         const region = await screen.findByRole("region", { name: "Table of calculations" })
-        await waitFor(() => expect(within(region).getAllByRole("link", { name: /^-76\./ })).toHaveLength(2))
-        expect(screen.queryByText(/differ by up to/)).not.toBeInTheDocument()
+        await waitFor(() => expect(within(region).getAllByRole("link", { name: /^[\u2212-]76\.\d+ hartree/ })).toHaveLength(2))
+        await waitFor(() => expect(document.querySelector(".shape-spread")?.textContent ?? "").not.toMatch(/Single-point/))
     })
 })
 
@@ -1657,5 +1708,113 @@ describe("species-entry page: depositor text and request counts", () => {
         expect(seen.usage).toBe(1)
         expect(seen.geometry.size).toBeLessThanOrEqual(3)
         expect(seen.energies).toBeLessThanOrEqual(1)
+    })
+})
+
+describe("species-entry page: failed energy reads, pictures and announcements", () => {
+    it("says the single-point energies could not be read, instead of showing them as not recorded", async () => {
+        await openEntry({ spEnergiesFail: true })
+        const region = await screen.findByRole("region", { name: "Table of calculations" })
+        await waitFor(() => expect(screen.getAllByText("The single-point energies could not be read.").length).toBeGreaterThan(0))
+        expect(within(region).queryAllByText("Energy not recorded")).toHaveLength(0)
+        expect(within(region).getAllByText("Could not be read").length).toBeGreaterThan(0)
+    })
+
+    it("says the optimisation energies could not be read", async () => {
+        await openEntry({ optFails: true })
+        expect(await screen.findByText("The final energies of the optimisations could not be read.")).toBeVisible()
+    })
+
+    it("keeps a pre-filled level once both energy reads settle, rather than choosing before then", async () => {
+        await openEntry()
+        expect(await screen.findByRole("combobox", { name: "Level of theory" })).toHaveValue("lot_a")
+    })
+
+    it("announces a selection politely", async () => {
+        const user = userEvent.setup()
+        await openEntry()
+        await user.click(within(cardFor("Conformer Group 2")).getByRole("button", { name: /Conformer Group 2/ }))
+        await waitFor(() => expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent("Conformer Group 2 selected; its picture and calculations are below."))
+    })
+})
+
+describe("species-entry page: pictures read geometries only when asked or near", () => {
+    function manyWithOwnGeometries(total: number) {
+        return Array.from({ length: total }, (_, index) => {
+            const [template] = conformerRecords()
+            return {
+                ...template,
+                conformer_group: { conformer_group_ref: `cg_pic_${index + 1}`, label: `conformer_${index + 1}` },
+                observations: [],
+                geometries: [{ calculation_ref: "calc_opt_1a", geometry: { geometry_ref: `geom_pic_${index + 1}`, natoms: 2, role: "final" } }],
+            }
+        })
+    }
+
+    const observers: Array<{ callback: IntersectionObserverCallback; target: Element }> = []
+
+    beforeEach(() => {
+        observers.length = 0
+        vi.stubGlobal("IntersectionObserver", class {
+            private callback: IntersectionObserverCallback
+            constructor(callback: IntersectionObserverCallback) { this.callback = callback }
+            observe(target: Element) { observers.push({ callback: this.callback, target }) }
+            disconnect() {}
+            unobserve() {}
+        })
+    })
+    afterEach(() => { vi.unstubAllGlobals() })
+
+    function intersectAll() {
+        for (const { callback, target } of observers) {
+            callback([{ isIntersecting: true, target } as IntersectionObserverEntry], {} as IntersectionObserver)
+        }
+    }
+
+    it("reads no card's geometry before the card is near the viewport, then reads at most twelve, and a card past them waits to be asked", async () => {
+        const user = userEvent.setup()
+        const geometryReads: string[] = []
+        server.use(
+            http.get("/api/v1/scientific/geometries/:ref", ({ params }) => { geometryReads.push(String(params.ref)); return undefined }),
+            http.get("/api/v1/scientific/conformers/search", ({ request }) => {
+                const params = new URL(request.url).searchParams
+                if (params.get("limit") === "1") return HttpResponse.json({ records: [], pagination: { offset: 0, limit: 1, returned: 0, total: 0 } })
+                const records = manyWithOwnGeometries(20)
+                return HttpResponse.json({ records, pagination: { offset: 0, limit: 50, returned: 20, total: 20 } })
+            }),
+            ...handlers(),
+        )
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText(/This entry has 20 deposited conformer basins/)
+        await waitFor(() => expect(cardLabels()).toHaveLength(20))
+        // Only the selected shape's own stage has read its geometry; no card has intersected.
+        await waitFor(() => expect(geometryReads).toEqual(["geom_pic_1"]))
+        act(() => intersectAll())
+        await waitFor(() => expect(new Set(geometryReads).size).toBe(12))
+        const asks = screen.getAllByRole("button", { name: "Show picture" })
+        expect(asks).toHaveLength(8)
+        await user.click(asks[0])
+        await waitFor(() => expect(new Set(geometryReads).size).toBe(13))
+    })
+
+    it("offers a retry after the archive was busy instead of leaving the picture unloaded for good", { timeout: 30000 }, async () => {
+        const user = userEvent.setup()
+        let allow = false
+        server.use(
+            http.get("/api/v1/scientific/geometries/geom_g3", () => (
+                allow ? undefined : new HttpResponse(null, { status: 429, headers: { "Retry-After": "1" } })
+            )),
+            ...handlers(),
+        )
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
+        act(() => intersectAll())
+        const retry = await screen.findByRole("button", { name: "Try the picture again" }, { timeout: 8000 })
+        allow = true
+        await user.click(retry)
+        await waitFor(() => expect(within(cardFor("Conformer Group 2")).queryByRole("button", { name: "Try the picture again" })).not.toBeInTheDocument(), { timeout: 8000 })
+        await waitFor(() => expect(cardFor("Conformer Group 2").querySelector("svg.mol-poster")).not.toBeNull())
     })
 })

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom"
-import { loadGeometry } from "../api/geometryApi"
+import { loadGeometryAtoms } from "../api/geometryApi"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel } from "../domain/conformerEvidence"
 import { pictureGeometryRef } from "../domain/conformerGallery"
@@ -10,7 +10,7 @@ import { ViewerStage } from "./ViewerStage"
 /** The selected shape's picture, with the interactive 3D view on request. At most one live viewer per page. */
 export function ShapeStage({ conformer, formula }: { conformer: ConformerProjection; formula: string }) {
     const geometryRef = pictureGeometryRef(conformer)
-    const geometry = useLoaded(loadGeometry, geometryRef)
+    const geometry = useLoaded(loadGeometryAtoms, geometryRef)
     const label = conformerLabel(conformer)
     const atoms = geometry.status === "ready" ? geometry.data.atoms ?? [] : []
     return (

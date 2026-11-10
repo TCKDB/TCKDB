@@ -8,6 +8,7 @@ const memberSchema = z.object({
     value_hartree: z.number().nullish(),
     energy_calculation_refs: z.array(z.string()).default([]),
     absent_reason: z.string().nullish(),
+    detail: z.array(z.string()).default([]),
     alternates: z.array(z.object({ determination_ref: z.string(), value_hartree: z.number() }).passthrough()).default([]),
 }).passthrough()
 

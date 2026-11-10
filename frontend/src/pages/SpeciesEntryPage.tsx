@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react"
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import "../molecule-page.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
-import { useSpeciesSinglePoints, type SinglePointsState } from "../hooks/useSpeciesSinglePoints"
+import { useSpeciesOptimisations, useSpeciesSinglePoints, type SinglePointsState } from "../hooks/useSpeciesSinglePoints"
 import { ConformerEvidenceLinkage } from "../components/ConformerEvidenceLinkage"
 import { conformerLabel, sortConformersForDisplay } from "../domain/conformerEvidence"
 import { ConformerGeometryTab } from "../components/ConformerGeometryTab"
@@ -203,6 +203,7 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
     const requestedRef = searchParams.get("conformer")
     // The shapes and the single-point tab share this one read; loading the entry never waits for it.
     const spEnergies = useSpeciesSinglePoints(entryRef, entry.availability.has_conformers)
+    const optEnergies = useSpeciesOptimisations(entryRef, entry.availability.has_conformers)
     const selectionParam = searchParams.get("selection")
     // The conformer groups are paged. `pageConformers` is the page on screen (the picker lists exactly these); the
     // SELECTION does not depend on it. A conformer on another page is opened by its own ref, and paging never writes
@@ -315,13 +316,14 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
                     selectedLabel={selectedConformer ? conformerLabel(selectedConformer) : null}
                     selectionIsDefault={selectionIsDefault}
                     defaultReferenceRef={defaultConformer?.conformer_group.conformer_group_ref ?? null}
-                    energyRecords={spEnergies.status === "ready" ? spEnergies.records : []}
+                    singlePoints={spEnergies}
+                    optimisations={optEnergies}
                     onSelect={selectConformer}
                 />
                 {selectedConformer && (
                     <ShapeStage conformer={selectedConformer} formula={entry.formula ?? entry.canonicalSmiles} />
                 )}
-                {selectedConformer && <ShapeCalculations conformer={selectedConformer} spEnergies={spEnergies} />}
+                {selectedConformer && <ShapeCalculations conformer={selectedConformer} singlePoints={spEnergies} optimisations={optEnergies} />}
                 {selectedConformer && <ConformerEvidenceLinkage conformer={selectedConformer} />}
 
                 <EntryTabs
