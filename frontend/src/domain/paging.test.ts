@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { firstPageRequest, nextPageRequest, pagedRef, pageQuery, parsePagedRef, previousPageRequest } from "./paging"
+import { firstPageRequest, hiddenByDefaultNote, nextPageRequest, pagedRef, pageQuery, parsePagedRef, previousPageRequest } from "./paging"
 
 const window = (offset: number, limit: number, returned: number, total: number) => ({ offset, limit, returned, total })
 
@@ -43,5 +43,17 @@ describe("paged refs", () => {
     it("a malformed suffix is treated as part of a plain ref, not as a window", () => {
         expect(parsePagedRef("spe_abc#x:y")).toEqual({ ref: "spe_abc#x:y", request: null })
         expect(parsePagedRef("spe_abc#5:0")).toEqual({ ref: "spe_abc#5:0", request: null })
+    })
+})
+
+describe("hiddenByDefaultNote", () => {
+    const hidden = (counts: Record<string, number>) => ({ counts, include_with: {}, counted: null })
+
+    it("uses the singular noun only when exactly one record was hidden", () => {
+        expect(hiddenByDefaultNote(hidden({ rejected: 1 }), "thermochemistry records", "thermochemistry record"))
+            .toBe("Not listed by default: 1 rejected thermochemistry record.")
+        expect(hiddenByDefaultNote(hidden({ rejected: 1, deprecated: 1 }), "thermochemistry records", "thermochemistry record"))
+            .toBe("Not listed by default: 1 rejected and 1 deprecated thermochemistry records.")
+        expect(hiddenByDefaultNote(hidden({ rejected: 1 }), "records")).toBe("Not listed by default: 1 rejected records.")
     })
 })

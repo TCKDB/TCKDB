@@ -284,7 +284,7 @@ button:focus-visible, input:focus-visible, .search-results a:focus-visible { out
 .archive-footer { display: flex; justify-content: space-between; gap: 1rem; padding: 1.5rem clamp(1rem,4vw,2.5rem); border-top: 1px solid var(--line); background: var(--surface); color: var(--muted-2); font: var(--type-note-font); }
 .record-placeholder, .loading-page { max-width: 52rem; margin: 0 auto; padding: 5rem 1.25rem; }
 /* The path/ref chip is an identifier, not an accent-tinted UI chip -- data
-   step, plain colour, same treatment `.entry-card code`/`.browse-ref` get. */
+   step, plain colour, same treatment `.browse-ref` gets. */
 .record-placeholder code { display: inline-block; margin: 1.25rem 0; overflow-wrap: anywhere; color: var(--muted); font: var(--type-data-font); }.record-placeholder p:last-child { max-width: var(--measure-prose); color: var(--ink-2); font: var(--type-body-font); letter-spacing: var(--type-body-tracking); }
 /* SHOULD-FIX-10 (species-entry/browse/chrome residuals re-review): was
    `.72rem var(--mono)` (11.52px, mono) -- a mixed-case trail of category
@@ -317,8 +317,7 @@ button:focus-visible, input:focus-visible, .search-results a:focus-visible { out
     text-decoration-color: currentColor;
 }
 
-.record-breadcrumbs a:focus-visible,
-.entry-card h4 a:focus-visible {
+.record-breadcrumbs a:focus-visible {
     outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
 }

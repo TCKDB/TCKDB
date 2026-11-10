@@ -222,7 +222,7 @@ const assessmentsSchema = z.object({
     }).passthrough().nullable().optional(),
 }).passthrough()
 
-const thermoRecordSchema = z.object({
+export const thermoRecordSchema = z.object({
     thermo_ref: z.string(),
     scientific_origin: z.string(),
     model_kind: z.string(),

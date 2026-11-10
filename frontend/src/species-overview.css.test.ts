@@ -1,171 +1,51 @@
 import { describe, expect, it } from "vitest"
-// `?raw` loads the file as plain source text, not a processed stylesheet --
-// see the comment atop `geometry-detail.css.test.ts` for why this suffix
-// (not a bare `./species-overview.css` import) is required under this
-// project's `css: true` vitest config, and why `node:fs` is not an option
-// for a file under `src/` (no `"node"` entry in `tsconfig.app.json`'s
-// `types`).
+// `?raw` loads the file as plain source text, not a processed stylesheet.
 import css from "./species-overview.css?raw"
+import numbersCss from "./entry-numbers.css?raw"
 
-/** Extracts the declaration block for a single, non-nested selector, e.g.
- *  `extractRule(css, ".species-header h1")` returns everything between
- *  `.species-header h1 {` and its matching `}`. Throws if the selector
- *  isn't found, so a rename that forgets to update this file fails loudly
- *  rather than silently matching nothing. */
+/** The declaration block of one non-nested selector; throws when it is missing so a rename fails loudly. */
 function extractRule(source: string, selector: string): string {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     const match = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`).exec(source)
-    if (!match) throw new Error(`No rule found for selector "${selector}" in species-overview.css`)
+    if (!match) throw new Error(`No rule found for selector "${selector}"`)
     return match[1]
 }
 
-// PR D (design-system adoption on the index/record pages): this species
-// record page used to define the site's only 102px h1 (`font-size: clamp(
-// 3.5rem, 8vw, 6.4rem)`), a blue-underlined 48px h2, an off-token divider
-// colour, and a bespoke disclosure/pill/kv-list of its own. Every rule below
-// pins one of those migrations so a later edit that quietly reverts one
-// (e.g. someone re-adds a literal font-size to `.species-header h1`) fails
-// here instead of shipping unnoticed.
-describe(".species-header h1 -- the site's primary display heading (--type-display-1)", () => {
-    it("uses the shared display-1 type-scale step, not its own literal clamp", () => {
-        const rule = extractRule(css, ".species-header h1")
-        expect(rule).toMatch(/font:\s*var\(--type-display-1-font\)/)
-        expect(rule).toMatch(/letter-spacing:\s*var\(--type-display-1-tracking\)/)
-        expect(rule).not.toMatch(/font-size:\s*clamp/)
+describe("species-overview.css: the page container only", () => {
+    it("caps the page at the record-page width with the shared gutter", () => {
+        const rule = extractRule(css, ".species-overview")
+        expect(rule).toMatch(/max-width:\s*126rem/)
+        expect(rule).toMatch(/padding:/)
     })
 
-    it("no longer carries the 4px accent left-bar on .species-header", () => {
-        const rule = extractRule(css, ".species-header")
-        expect(rule).not.toMatch(/border-left/)
-    })
-})
-
-describe(".entry-index-heading h2 -- the section heading (--type-heading-1), no underline rule", () => {
-    it("uses the shared heading-1 step", () => {
-        const rule = extractRule(css, ".entry-index-heading h2")
-        expect(rule).toMatch(/font:\s*var\(--type-heading-1-font\)/)
+    it("no longer carries the header, entry-card or state-group rules the shared record blocks replaced", () => {
+        for (const retired of [".species-header", ".species-identity-grid", ".entry-index", ".entry-state-group", ".entry-card", ".entry-rows", ".entry-facts"]) {
+            expect(css, retired).not.toContain(retired)
+        }
     })
 
-    it("the heading row no longer draws the blue border-bottom underline", () => {
-        const rule = extractRule(css, ".entry-index-heading")
-        expect(rule).not.toMatch(/border-bottom/)
-    })
-})
-
-describe(".entry-state-group h3 -- heading-2", () => {
-    it("uses the shared heading-2 step, not its own clamp", () => {
-        const rule = extractRule(css, ".entry-state-group h3")
-        expect(rule).toMatch(/font:\s*var\(--type-heading-2-font\)/)
-        expect(rule).not.toMatch(/font-size:\s*clamp/)
-    })
-})
-
-describe(".entry-state-group border -- the shared --line hairline, not the off-token --divider-strong", () => {
-    it("uses var(--line)", () => {
-        const rule = extractRule(css, ".entry-state-group")
-        expect(rule).toMatch(/border-top:\s*1px solid var\(--line\)/)
-    })
-
-    it("no longer USES --divider-strong anywhere in this file (a comment may still name it for history)", () => {
+    it("uses no off-token divider colour", () => {
         expect(css).not.toMatch(/var\(--divider-strong\)/)
     })
 })
 
-describe("the entry-state disclosure is the shared Disclosure primitive, not a bespoke box", () => {
-    it("no longer defines its own .entry-state-disclosure box/summary rules", () => {
-        expect(css).not.toMatch(/\.entry-state-disclosure/)
+describe("entry-numbers.css: the version line and the version list on a phone", () => {
+    it("the version line names its links with the house underline and a focus ring", () => {
+        expect(numbersCss).toMatch(/\.entry-numbers-version a:focus-visible/)
+        expect(numbersCss).toMatch(/\.entry-numbers-version a,/)
+    })
+
+    it("the version links, the order-note link and the level toggle are 44px high on a phone", () => {
+        const phone = numbersCss.slice(numbersCss.indexOf("@media (max-width: 40rem)"))
+        const links = /\.entry-versions-title a,\s*\.entry-numbers-version a,\s*\.entry-numbers \.order-note a\s*\{([^}]*)\}/.exec(phone)
+        expect(links, "the phone rule for links").not.toBeNull()
+        expect(links![1]).toMatch(/display:\s*inline-flex/)
+        expect(links![1]).toMatch(/align-items:\s*center/)
+        expect(links![1]).toMatch(/min-height:\s*44px/)
+        expect(/\.entry-numbers-toggle\s*\{([^}]*)\}/.exec(phone)?.[1]).toMatch(/min-height:\s*44px/)
+    })
+
+    it("the version line wraps long refs instead of widening the row", () => {
+        expect(extractRule(numbersCss, ".entry-numbers-version")).toMatch(/overflow-wrap:\s*anywhere/)
     })
 })
-
-describe(".entry-card h4 -- heading-2, house link style (no underline except on hover)", () => {
-    it("uses the shared heading-2 step, not its own literal size", () => {
-        const rule = extractRule(css, ".entry-card h4")
-        expect(rule).toMatch(/font:\s*var\(--type-heading-2-font\)/)
-        expect(rule).not.toMatch(/font-size:\s*1\.55rem/)
-    })
-
-    it("the heading link has no underline at rest", () => {
-        const rule = extractRule(css, ".entry-card h4 a")
-        expect(rule).toMatch(/text-decoration:\s*none/)
-    })
-
-    it("the heading link underlines only on hover", () => {
-        const rule = extractRule(css, ".entry-card h4 a:hover")
-        expect(rule).toMatch(/text-decoration:\s*underline/)
-    })
-})
-
-describe("the review-status pill is retired from this file -- .value-pill--muted is now canonical", () => {
-    it("no longer defines its own .entry-review rule", () => {
-        expect(css).not.toMatch(/\.entry-review\s*\{/)
-    })
-})
-
-describe("kv-list adoption -- dt/dd typography no longer duplicated per-page", () => {
-    it(".species-identity-grid no longer defines its own dt/dd font rules (the shared .kv-list primitive does)", () => {
-        expect(css).not.toMatch(/\.species-identity-grid\s+dt/)
-        expect(css).not.toMatch(/\.species-identity-grid\s+dd/)
-    })
-
-    it(".entry-facts no longer defines its own dt/dd font rules", () => {
-        expect(css).not.toMatch(/\.entry-facts\s+dt/)
-        expect(css).not.toMatch(/\.entry-facts\s+dd/)
-    })
-
-    it(".entry-facts keeps only the flex layout it needs inside .entry-card, not its own grid", () => {
-        const rule = extractRule(css, ".entry-facts")
-        expect(rule).not.toMatch(/grid-template-columns/)
-        expect(rule).toMatch(/flex:\s*1 1 25rem/)
-    })
-})
-
-describe("identifiers render at the shared data step", () => {
-    it(".entry-card code no longer sets its own one-off font run (the .data class on the element supplies it)", () => {
-        const rule = extractRule(css, ".entry-card code")
-        expect(rule).not.toMatch(/font:/)
-    })
-})
-
-describe("notes stay under the shared measure", () => {
-    it(".entry-index-intro is capped at --measure-note, not a literal rem value", () => {
-        const rule = extractRule(css, ".entry-index-intro")
-        expect(rule).toMatch(/max-width:\s*var\(--measure-note\)/)
-    })
-})
-
-// Post-review (PR D) fixes:
-describe(".entry-state-group h3 span (\"1 entry\") -- the shared --type-label step, not a hand-rolled 10.88px pair", () => {
-    it("uses var(--type-label-font)", () => {
-        const rule = extractRule(css, ".entry-state-group h3 span")
-        expect(rule).toMatch(/font:\s*var\(--type-label-font\)/)
-        expect(rule).not.toMatch(/font:\s*\.68rem/)
-    })
-})
-
-describe(".entry-rows no longer double-rules the hairline the open .disclosure summary already draws", () => {
-    it("declares no border of its own", () => {
-        const rule = extractRule(css, ".entry-rows")
-        expect(rule).not.toMatch(/border/)
-    })
-})
-
-describe("dead CSS removed", () => {
-    it(".species-intro (never rendered by SpeciesOverviewPage.tsx) is gone", () => {
-        expect(css).not.toMatch(/\.species-intro\s*\{/)
-    })
-
-    it(".entry-index-heading > p (no <p> is ever a child of .entry-index-heading -- it's a sibling) is gone", () => {
-        expect(css).not.toMatch(/\.entry-index-heading\s*>\s*p/)
-    })
-})
-
-describe("identity strip: the wide span is narrow-only", () => {
-    // `.kv-list--wide` on the ref/InChIKey pairs exists for the 680px layout;
-    // at desktop it stacked the four-column strip into four rows (PR D review).
-    it("resets the wide span to a normal cell above 680px", () => {
-        const block = css.match(/@media \(min-width: 681px\) \{([\s\S]*?)\n\}/)
-        expect(block, "a min-width: 681px media block").not.toBeNull()
-        expect(block![1]).toMatch(/\.species-identity-grid \.kv-list--wide \{ grid-column: auto; \}/)
-    })
-})
-

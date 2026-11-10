@@ -17,8 +17,8 @@ export type AllPages<T> = {
     hiddenByDefault: HiddenByDefault | null
 }
 
-type Page<T> = { records: T[]; pagination: Pagination; request?: { sort?: OrderEcho | null; hidden_by_default?: HiddenByDefault | null } | null }
-type Loader<T> = (ref: string, signal?: AbortSignal, onRateLimited?: (retryAfterSeconds: number) => void) => Promise<Page<T>>
+export type Page<T> = { records: T[]; pagination: Pagination; request?: { sort?: OrderEcho | null; hidden_by_default?: HiddenByDefault | null } | null }
+export type Loader<T> = (ref: string, signal?: AbortSignal, onRateLimited?: (retryAfterSeconds: number) => void) => Promise<Page<T>>
 
 /** What a walk hands back to its caller so it can show a wait, stop early and let go of its requests. */
 export type WalkControl = {
@@ -33,7 +33,7 @@ export type WalkControl = {
  * is not fetched twice. Later pages ask for `LATER_PAGE_LIMIT` records at a time, or for the first page's own window
  * when the server refuses that size, so 1000 records cost 1 + 5 requests.
  */
-async function walk<T>(entryRef: string, load: Loader<T>, control: WalkControl, firstPageLimit?: number): Promise<AllPages<T>> {
+export async function walk<T>(listRef: string, load: Loader<T>, control: WalkControl, firstPageLimit?: number): Promise<AllPages<T>> {
     const records: T[] = []
     let request: PageRequest | null = firstPageLimit === undefined ? null : { offset: 0, limit: firstPageLimit }
     let first: Page<T> | null = null
@@ -41,7 +41,7 @@ async function walk<T>(entryRef: string, load: Loader<T>, control: WalkControl, 
     let limit = LATER_PAGE_LIMIT
     do {
         if (control.abandoned()) throw new DOMException("The numbers were no longer wanted.", "AbortError")
-        const key: string = request ? pagedRef(entryRef, request) : entryRef
+        const key: string = request ? pagedRef(listRef, request) : listRef
         const subscription = dedupedFetch(load, key, (signal, onRateLimited) => load(key, signal, onRateLimited))
         control.subscriptions.push(subscription as Subscription<unknown>)
         subscription.onWaiting(control.onWaiting)
@@ -78,13 +78,24 @@ export type EntryNumbers = {
     transport: AllPages<TransportRecord>
 }
 
-/** Every thermo, statmech and transport record of one species entry, each list walked up to the cap. */
-/** With `firstPageLimit`, only that many records of each list are read, and `total` still says how many exist. */
-export async function loadEntryNumbers(entryRef: string, control: WalkControl, firstPageLimit?: number): Promise<EntryNumbers> {
+/** Records of each list a preview reads. */
+export const PREVIEW_ROWS = 2
+
+async function loadLists(entryRef: string, control: WalkControl, firstPageLimit?: number): Promise<EntryNumbers> {
     const [thermo, statmech, transport] = await Promise.all([
         walk(entryRef, loadEntryThermo, control, firstPageLimit),
         walk(entryRef, loadEntryStatmech, control, firstPageLimit),
         walk(entryRef, loadEntryTransportWithSources, control, firstPageLimit),
     ])
     return { thermo, statmech, transport }
+}
+
+/** Every thermo, statmech and transport record of one species entry, each list walked up to the cap. */
+export function loadEntryNumbers(entryRef: string, control: WalkControl): Promise<EntryNumbers> {
+    return loadLists(entryRef, control)
+}
+
+/** The first `PREVIEW_ROWS` records of each list; `total` still says how many exist. */
+export function loadEntryNumbersPreview(entryRef: string, control: WalkControl): Promise<EntryNumbers> {
+    return loadLists(entryRef, control, PREVIEW_ROWS)
 }

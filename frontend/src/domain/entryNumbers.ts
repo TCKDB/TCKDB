@@ -267,8 +267,8 @@ export function transportRow(record: TransportRecord): NumberRow {
 }
 
 /** Rows grouped by `levelKey`: groups in first-seen order, rows inside a group in their given order. */
-export function groupByLevel(rows: readonly NumberRow[]): { key: string; rows: NumberRow[] }[] {
-    const groups = new Map<string, NumberRow[]>()
+export function groupByLevel<R extends NumberRow>(rows: readonly R[]): { key: string; rows: R[] }[] {
+    const groups = new Map<string, R[]>()
     for (const row of rows) groups.set(row.levelKey, [...(groups.get(row.levelKey) ?? []), row])
     return [...groups].map(([key, members]) => ({ key, rows: members }))
 }

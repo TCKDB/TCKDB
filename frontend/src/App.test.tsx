@@ -26,6 +26,11 @@ const server = setupServer(
     ...homeCountHandlers,
 )
 
+const emptyValueSearches = [
+    http.get("/api/v1/scientific/thermo/search", () => HttpResponse.json({ records: [], pagination: { offset: 0, limit: 50, returned: 0, total: 0 } })),
+    http.get("/api/v1/scientific/statmech/search", () => HttpResponse.json({ records: [], pagination: { offset: 0, limit: 50, returned: 0, total: 0 } })),
+]
+
 function overviewSpecies(ref = speciesRef) {
     return {
         species_ref: ref,
@@ -113,16 +118,13 @@ describe("public archive shell", () => {
     it("routes spc references to species even when entries are returned", async () => {
         server.use(http.get("/api/v1/scientific/species/search", () => (
             HttpResponse.json({ records: [overviewSpecies()] })
-        )))
+        )), ...emptyValueSearches)
         const user = userEvent.setup(); render(<App />)
         await user.type(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), speciesRef)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
         expect(screen.getByText(speciesRef)).toBeVisible()
-        // The lone entry's group heading already says "ground electronic
-        // state" -- the card itself drops the redundant bare state phrase
-        // (see `domain/recordFacets.test.ts`'s `includeState` tests).
-        expect(screen.getByRole("link", { name: "minimum" }))
+        expect(screen.getAllByRole("link", { name: "minimum · ground state" })[0])
             .toHaveAttribute("href", `/species-entries/${entryRef}`)
     })
 
@@ -355,7 +357,7 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
 
 const EXPECTED_TITLES: Record<string, string> = {
     "/species": "Molecules · TCKDB",
-    "/species/spc_abcde234567abcde234567abcd": "H2O · Species · TCKDB",
+    "/species/spc_abcde234567abcde234567abcd": "H2O · Molecule · TCKDB",
     "/conformer-groups/cfg_abc": "Conformer basin · TCKDB",
     "/conformer-observations/cfo_abc": "Conformer observation · TCKDB",
     "/calculations/calc_abc": "Single-point · Calculation · TCKDB",
@@ -372,7 +374,7 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
         if (path.startsWith("/species/")) {
             server.use(http.get("/api/v1/scientific/species/search", () => (
                 HttpResponse.json({ records: [overviewSpecies()] })
-            )))
+            )), ...emptyValueSearches)
         }
         if (path.startsWith("/conformer-groups/")) {
             server.use(http.get("/api/v1/scientific/conformer-groups/:ref", () => HttpResponse.json({

@@ -63,13 +63,16 @@ export function pageRangeSentence(page: Pagination, noun: string, nounPlural: st
     return `Showing ${first}–${last} of ${page.total} ${nounPlural}.`
 }
 
-/** Plain-language note for records the default visibility hid, or `null` when it hid none. */
-export function hiddenByDefaultNote(hidden: HiddenByDefault | null | undefined, nounPlural: string): string | null {
+/** Plain-language note for records the default visibility hid, or `null` when it hid none. A singular noun is used when exactly one was hidden. */
+export function hiddenByDefaultNote(hidden: HiddenByDefault | null | undefined, nounPlural: string, nounSingular?: string): string | null {
     if (!hidden) return null
     const entries = Object.entries(hidden.counts).filter(([, count]) => count > 0)
     if (entries.length === 0) return null
     const parts = entries.map(([status, count]) => `${count} ${status.replaceAll("_", " ")}`)
-    const counted = hidden.counted && hidden.counted !== "records" ? hidden.counted.replaceAll("_", " ") : nounPlural
+    const total = entries.reduce((sum, [, count]) => sum + count, 0)
+    const counted = hidden.counted && hidden.counted !== "records"
+        ? hidden.counted.replaceAll("_", " ")
+        : total === 1 && nounSingular ? nounSingular : nounPlural
     return `Not listed by default: ${parts.join(" and ")} ${counted}.`
 }
 
