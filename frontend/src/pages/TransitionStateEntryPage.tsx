@@ -311,7 +311,8 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             docstring for the duplication this avoids. */}
                         <RecordIdentityHeader
                             kicker="Transition state entry · deposited scientific record"
-                            pill={<span className={reviewPillClass(entry.review.status)}>{statusLabel(entry.review.status)}</span>}
+                            glyph="transition-state"
+                            review={entry.review.status}
                             title={reaction.equation ? renderEquationWithBreaks(reaction.equation) : "Reaction not recorded"}
                             titleVariant="display-2"
                             identity={identity}

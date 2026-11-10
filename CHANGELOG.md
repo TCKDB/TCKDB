@@ -24,7 +24,12 @@ dataset must never require a code release.
 
 ## Relative conformer energy POSTs count as public reads (2026-11-10)
 
-- **Behaviour:** anonymous `POST .../species-entries/{ref}/conformers/relative-energies` (and its `/manifest`, `/compare` and `/compare/manifest` variants) use the `anon_read` rate-limit bucket instead of `anon_other`; with a credential they use `auth_read` instead of `auth_write`. Other POSTs under `/scientific/` are unchanged, and the anonymous body-size cap still applies.
+- **Behaviour:** anonymous `POST .../species-entries/{ref}/conformers/relative-energies` and `.../relative-energies/compare` use the `anon_read` rate-limit bucket instead of `anon_other`; with a credential they use `auth_read` instead of `auth_write`. The `/manifest` downloads are unchanged. Other POSTs under `/scientific/` are unchanged, and the anonymous body-size cap still applies.
+- **Schema and migration:** none. No new environment variable.
+
+## Record page building blocks (2026-11-10)
+
+- **Behaviour:** record page headers (species entry, transition state entry, calculation) show the record kind's glyph and the review status as a word beside a filled mark (approved) or an outline mark (every other status), with a "What review status means" explanation. Pages that never have a contents list (the Molecules and Reactions lists, the species overview, the frequency scale factor page) use the full width instead of leaving an empty left column; record pages keep their column. The "Also see" link on the list pages is blue and underlined like other links. Glossary popovers that are closed no longer widen the page on phones. A link to `/guide#order` lands on the ordering note instead of the top of the page.
 - **Schema and migration:** none. No new environment variable.
 
 ## Site bar, numbered contents list and a guide page (2026-11-10)

@@ -102,6 +102,17 @@ export function expectNoDepositorText(): void {
 }
 
 /**
+ * A sentinel may appear only as the text of a `DepositorNote` quote: never in an attribute, a heading,
+ * a title or any other element, and never in a note's label or origin line.
+ */
+export function expectDepositorTextOnlyInNotes(): void {
+    const clone = document.body.cloneNode(true) as HTMLElement
+    clone.querySelectorAll(".depositor-note blockquote").forEach((quote) => { quote.textContent = "" })
+    const leaked = clone.innerHTML.match(new RegExp(`${DEPOSITOR_SENTINEL}_[A-Za-z0-9_]+`, "g")) ?? []
+    expect(Array.from(new Set(leaked))).toEqual([])
+}
+
+/**
  * Adversarial strings must not surface, and must not be turned into TCKDB
  * wording ("R enantiomer", "excited state") by a page that was given only a joined label.
  */
