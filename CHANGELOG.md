@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Record page building blocks (2026-11-10)
+
+- **Behaviour:** record page headers show the record kind's glyph and the review status as a word beside a filled mark (approved) or an outline mark (every other status), with a "What review status means" explanation. A header can carry a one-sentence lede under the title; the title is always a human label and the record's own reference stays a secondary line with a copy button. New shared pieces for the record pages: a value linked to its evidence, a source line under a value (calculation, what it did, level of theory, program, review status; a missing part is left out), an ordering note that says a list's order is not a recommendation, a labelled quote block for the depositor's text, and breadcrumbs with the current page marked. A page with no sections no longer reserves the left contents column, so its content uses the full width. The "Also see" link on the list pages is underlined in the link colour.
+- **Schema and migration:** none. No new environment variable.
+
 ## Site bar, numbered contents list and a guide page (2026-11-10)
 
 - **Behaviour:** the site bar links Molecules, Reactions, Methods and Guide, with a search box (it runs the home page's exact-identifier search), the theme control and sign in. Van der Waals complexes and Transition states leave the bar; each list page has an "Also see" link to its paired listing (Molecules and Van der Waals complexes, Reactions and Transition states). The Species list is now titled Molecules. Below 680px the links move to a bottom tab bar, and the theme control and Guide sit under a "More" button (Enter opens, Esc closes and returns focus). The active link carries `aria-current="page"`. Record pages show a left "On this page" list with numbered entries (3.1 for subsections) and the current section marked; on phones it is a "Contents" disclosure above the page. A new `/guide` page explains the eight kinds of record in plain words and notes that a list's order is never a recommendation.

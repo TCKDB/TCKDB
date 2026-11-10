@@ -268,7 +268,7 @@ export function TableOfContents() {
     )
 
     return (
-        <div className="page-toc">
+        <div className="page-toc" data-sections={sections.length}>
             {showList && (narrow
                 ? <details className="page-toc-disclosure"><summary>Contents</summary>{list}</details>
                 : list)}

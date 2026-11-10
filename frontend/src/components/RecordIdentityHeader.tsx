@@ -2,6 +2,8 @@ import type { ReactNode } from "react"
 import "../record-identity-header.css"
 import { CopyButton } from "./RefsDisclosure"
 import { SpeciesEntryLink } from "./SpeciesEntryLink"
+import { RecordGlyph, type RecordKind } from "./RecordGlyph"
+import { ReviewChip } from "./ReviewChip"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { facetChips } from "../domain/recordFacets"
 import type { EntryFacetAxes } from "../domain/recordFacets"
@@ -84,11 +86,18 @@ import type { RecordIdentity } from "../domain/recordIdentity"
  * collapsed disclosure.
  */
 export function RecordIdentityHeader({
-    kicker, pill, title, titleVariant = "display-1", intro,
+    kicker, pill, glyph, review, lede, title, titleVariant = "display-1", intro,
     identity, facets, submissionRef, explainTransitionStateIdentity = true, ownRef,
 }: {
     kicker: ReactNode
     pill?: ReactNode
+    /** The record kind's glyph, shown before the kicker. */
+    glyph?: RecordKind
+    /** The record's review status, shown as a `ReviewChip` beside the kicker. */
+    review?: string
+    /** One sentence under the title, normally a `Lede`. */
+    lede?: ReactNode
+    /** A human label (a name, a formula or an equation), never the record's ref. */
     title: ReactNode
     titleVariant?: "display-1" | "display-2"
     /** SHOULD-FIX-7 (PR B review): an optional descriptive sentence
@@ -116,12 +125,15 @@ export function RecordIdentityHeader({
     return (
         <div className="record-identity-header">
             <div className="record-identity-kicker-row">
+                {glyph && <RecordGlyph kind={glyph} size={16} />}
                 <span className="t-kicker record-identity-kicker">{kicker}</span>
+                {review !== undefined && <ReviewChip status={review} />}
                 {pill}
             </div>
             <h1 className={titleVariant === "display-2" ? "t-display-2 record-identity-title" : "t-display-1 record-identity-title"}>
                 {title}
             </h1>
+            {lede}
             {intro && <p className="t-body section-intro">{intro}</p>}
             <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} ownRef={ownRef} />
             {/* No pill boxes: a plain, readable phrase built from the same

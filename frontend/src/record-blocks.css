@@ -1,0 +1,152 @@
+/* Shared record-page building blocks: lede, value link, source line, review chip, order note, depositor note, breadcrumbs. */
+
+.record-lede {
+    margin: 0;
+    max-width: var(--measure-prose);
+    color: var(--ink-2);
+    font: var(--type-lede-font);
+}
+
+.value-link {
+    color: var(--accent);
+    text-decoration: underline dotted;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--accent-underline);
+}
+
+.value-link:hover {
+    color: var(--accent-700);
+    text-decoration-color: currentColor;
+}
+
+.value-link--plain {
+    color: var(--ink);
+    text-decoration: none;
+}
+
+.value-link-number {
+    font-family: var(--mono);
+    font-weight: 600;
+}
+
+.value-link .u {
+    color: var(--ink-2);
+    font-family: var(--sans);
+    font-weight: 400;
+}
+
+.value-source {
+    display: block;
+    margin-top: .15rem;
+    color: var(--muted);
+    font: var(--type-note-font);
+    overflow-wrap: anywhere;
+}
+
+.value-source-key {
+    color: var(--ink-2);
+    font-weight: 600;
+}
+
+.value-source code {
+    font-family: var(--mono);
+}
+
+.value-source--compact {
+    display: inline;
+    margin: 0;
+}
+
+.review-chip-wrap {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .25rem .6rem;
+}
+
+.review-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: 0 .45rem;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    font: var(--type-ui-font);
+    white-space: nowrap;
+}
+
+.review-chip-mark {
+    flex: none;
+}
+
+.review-chip--plain {
+    background: var(--surface-sunken);
+    color: var(--ink-2);
+}
+
+.review-chip--pending {
+    background: var(--notice-bg);
+    color: var(--notice-text);
+}
+
+.review-chip--approved {
+    background: var(--status-ok-bg);
+    color: var(--status-ok-ink);
+}
+
+.review-chip-wrap .term {
+    color: var(--ink-2);
+    font: var(--type-note-font);
+}
+
+.order-note {
+    margin: .5rem 0;
+    max-width: var(--measure-prose);
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.depositor-note {
+    margin: var(--s-3) 0;
+    padding: var(--s-3) var(--s-4);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--control-border);
+    border-radius: 4px;
+    background: var(--surface-sunken);
+}
+
+.depositor-note-label {
+    margin: 0 0 .25rem;
+    color: var(--ink-2);
+    font: var(--type-ui-font);
+}
+
+.depositor-note blockquote {
+    margin: 0;
+    color: var(--ink);
+    font: var(--type-value-font);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.breadcrumbs ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem .4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.breadcrumbs li + li::before {
+    content: "\203A";
+    margin-right: .4rem;
+    color: var(--muted);
+}
+
+.breadcrumbs [aria-current="page"] {
+    color: var(--ink);
+}

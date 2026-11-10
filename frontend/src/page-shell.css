@@ -47,6 +47,11 @@
     overflow-y: auto;
 }
 
+/* A page that registers no sections has no contents column at all, so its content uses the full width. */
+.page-toc[data-sections="0"] {
+    display: none;
+}
+
 .page-toc nav::before {
     content: "On this page";
     display: block;

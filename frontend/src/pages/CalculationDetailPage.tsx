@@ -56,7 +56,6 @@ import { slotLabel } from "../domain/compositeSchemeFormat"
 import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { identityFromCalculationOwner } from "../domain/recordIdentity"
-import { reviewPillClass } from "../domain/reviewPillFormat"
 import { hessianMethodLabel, isAssumedTauBasis, tauBasisNote } from "../domain/tauBasis"
 import { useCalculation } from "../hooks/useCalculation"
 import { useCalculationSection, type CalculationSectionState } from "../hooks/useCalculationSection"
@@ -476,7 +475,8 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             header order every record page now follows. */}
                         <RecordIdentityHeader
                             kicker={kickerText}
-                            pill={<span className={reviewPillClass(core.review.status)}>{statusLabel(core.review.status)}</span>}
+                            glyph="calculation"
+                            review={core.review.status}
                             title={<>{titleTypeLabel} of {titleSubject}</>}
                             identity={identity}
                             ownRef={{ label: "Calculation ref", value: core.calculation_ref }}

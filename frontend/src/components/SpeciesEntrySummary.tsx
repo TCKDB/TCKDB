@@ -6,7 +6,6 @@ import { words } from "../domain/provenanceFormat"
 import { stereoDescription } from "../domain/recordFacets"
 import { termSymbolSpoken } from "../domain/electronicState"
 import { publicElectronicStateLabel, publicTermSymbol } from "../domain/publicText"
-import { reviewPillClass } from "../domain/reviewPillFormat"
 import { Formula } from "./Formula"
 import { RecordIdentityHeader } from "./RecordIdentityHeader"
 import { RefsDisclosure } from "./RefsDisclosure"
@@ -98,7 +97,8 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
             already have. */}
         <RecordIdentityHeader
             kicker="Species entry · deposited scientific record"
-            pill={<span className={reviewPillClass(entry.review.status)}>{displayToken(entry.review.status)}</span>}
+            glyph="species-entry"
+            review={entry.review.status}
             titleVariant="display-1"
             title={entry.formula ? <Formula value={entry.formula} /> : entry.canonicalSmiles}
             identity={identity}

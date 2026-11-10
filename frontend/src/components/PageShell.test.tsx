@@ -3,6 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { PageShell } from "./PageShell"
 import { SectionHeading } from "./PageSections"
+import pageShellCss from "../page-shell.css?raw"
 
 afterEach(cleanup)
 
@@ -80,5 +81,27 @@ describe("PageShell: the identity slot renders inside the content column", () =>
         // i.e. identity is NOT a sibling rendered above the flex row.
         expect(container.firstElementChild).toBe(layout)
         expect(layout.contains(identity)).toBe(true)
+    })
+})
+
+describe("PageShell: a page with no sections has no contents column", () => {
+    it("marks the empty column so the stylesheet removes it, and fills it again once sections mount", () => {
+        const { container, rerender } = render(
+            <MemoryRouter><PageShell><p>Plain list</p></PageShell></MemoryRouter>,
+        )
+        expect(container.querySelector(".page-toc")).toHaveAttribute("data-sections", "0")
+        rerender(
+            <MemoryRouter>
+                <PageShell>
+                    <SectionHeading id="one">One</SectionHeading>
+                    <SectionHeading id="two">Two</SectionHeading>
+                </PageShell>
+            </MemoryRouter>,
+        )
+        expect(container.querySelector(".page-toc")).toHaveAttribute("data-sections", "2")
+    })
+
+    it("hides a column marked as having no sections", () => {
+        expect(pageShellCss).toMatch(/\.page-toc\[data-sections="0"\]\s*\{\s*display:\s*none/)
     })
 })
