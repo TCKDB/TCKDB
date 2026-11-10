@@ -11,7 +11,7 @@ const PAD = 12
 const SELF_X = 50
 const NODE_X = 118
 const NODE_W = WIDTH - NODE_X - 4
-const MAX_LABEL = 22
+const MAX_LABEL = 26
 
 const clip = (value: string) => (value.length > MAX_LABEL ? `${value.slice(0, MAX_LABEL - 1)}…` : value)
 const nodeAria = (node: NeighbourNode) =>
@@ -43,7 +43,7 @@ export function RelationshipMap({ selfKind, state, innerRef }: {
                         <line key={node.id} className="rel-map-edge" x1={SELF_X + 38} y1={cy} x2={NODE_X} y2={rowY(index)} />
                     ))}
                     <Link to={pathname} aria-current="page" aria-label="This entry (you are here)" className="rel-map-node rel-map-node--self">
-                        <rect x={4} y={cy - 30} width={92} height={60} rx={4} />
+                        <rect className="rel-map-box" x={4} y={cy - 30} width={92} height={60} rx={4} />
                         <g transform={`translate(${SELF_X - 10} ${cy - 22})`}><RecordGlyph kind={selfKind} size={20} /></g>
                         <text x={SELF_X} y={cy + 20} textAnchor="middle" className="rel-map-label">This entry</text>
                     </Link>
@@ -51,7 +51,7 @@ export function RelationshipMap({ selfKind, state, innerRef }: {
                         const y = rowY(index)
                         const body = (
                             <>
-                                <rect x={NODE_X} y={y - 22} width={NODE_W} height={44} rx={4} />
+                                <rect className="rel-map-box" x={NODE_X} y={y - 22} width={NODE_W} height={44} rx={4} />
                                 <g transform={`translate(${NODE_X + 8} ${y - 10})`}><RecordGlyph kind={node.kind} size={20} /></g>
                                 <text x={NODE_X + 36} y={y - 3} className="rel-map-label">{clip(node.label)}</text>
                                 <text x={NODE_X + 36} y={y + 14} className="rel-map-note">

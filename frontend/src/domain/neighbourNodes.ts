@@ -42,7 +42,7 @@ export function speciesEntryNodes(entryRef: string, probes: SpeciesEntryProbes):
     const speciesRef = text(probes.molecule?.row?.species_ref)
     if (probes.molecule && speciesRef) {
         nodes.push({
-            id: "molecule", kind: "species", label: "The molecule", relation: "All versions of this molecule",
+            id: "molecule", kind: "species", label: "The molecule", relation: "All its versions",
             to: `/species/${encodeURIComponent(speciesRef)}`, found: null,
         })
     }

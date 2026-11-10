@@ -23,7 +23,7 @@
     stroke-width: 1.5;
 }
 
-.rel-map-node rect {
+.rel-map-box {
     fill: var(--surface);
     stroke: var(--line);
     stroke-width: 1;
@@ -34,7 +34,7 @@ a.rel-map-node {
     text-decoration: none;
 }
 
-a.rel-map-node:hover rect {
+a.rel-map-node:hover .rel-map-box {
     stroke: var(--accent);
     fill: var(--accent-50);
 }
@@ -44,7 +44,7 @@ a.rel-map-node:focus-visible {
     outline-offset: 2px;
 }
 
-.rel-map-node--self rect {
+.rel-map-node--self .rel-map-box {
     stroke: var(--accent);
     stroke-width: 2;
 }
