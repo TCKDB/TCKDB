@@ -123,3 +123,45 @@ describe("PageShell: the contents column", () => {
         expect(pageShellCss).toMatch(/\.page-toc:empty\s*\{\s*display:\s*none/)
     })
 })
+
+describe("PageShell: rail slot", () => {
+    afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia })
+
+    function renderWithRail() {
+        const { container } = render(
+            <MemoryRouter>
+                <PageShell rail={<p data-testid="rail-marker">Map</p>}>
+                    <p>Page content</p>
+                    <SectionHeading id="one">One</SectionHeading>
+                    <SectionHeading id="two">Two</SectionHeading>
+                </PageShell>
+            </MemoryRouter>,
+        )
+        const layout = container.querySelector(".page-shell-layout") as HTMLElement
+        return {
+            content: layout.querySelector(".page-shell-content") as HTMLElement,
+            rail: layout.querySelector(".page-shell-rail") as HTMLElement,
+            toc: layout.querySelector(".page-toc") as HTMLElement,
+        }
+    }
+
+    it("renders no rail element when none is given", () => {
+        const { container } = render(<MemoryRouter><PageShell><p>Content</p></PageShell></MemoryRouter>)
+        expect(container.querySelector(".page-shell-rail")).toBeNull()
+    })
+
+    it("places the rail after the content and keeps the contents list", () => {
+        const { content, rail, toc } = renderWithRail()
+        expect(rail).toContainElement(screen.getByTestId("rail-marker"))
+        expect(content.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        expect(toc).not.toBeNull()
+    })
+
+    it("also follows the content on a narrow screen", () => {
+        window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+            matches: query.includes("62rem"), media: query, addEventListener: () => {}, removeEventListener: () => {},
+        })) as unknown as typeof window.matchMedia
+        const { content, rail } = renderWithRail()
+        expect(content.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+})

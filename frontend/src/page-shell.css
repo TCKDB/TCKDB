@@ -32,6 +32,14 @@
     flex: 1 1 0;
 }
 
+/* Optional right-hand column (the relationship map); under the content on narrow screens. */
+.page-shell-rail {
+    flex: 0 0 20rem;
+    min-width: 0;
+    position: sticky;
+    top: 1.5rem;
+    align-self: flex-start;
+}
 
 /*
  * `.page-toc` is the reserved left column: `TableOfContents.tsx` always renders it and
@@ -125,6 +133,13 @@
         align-self: stretch;
         width: 100%;
         min-width: 0;
+    }
+
+    .page-shell-rail {
+        position: static;
+        flex: none;
+        align-self: stretch;
+        width: 100%;
     }
 
     .page-toc {

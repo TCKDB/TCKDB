@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import GeometryDetailPage from "./GeometryDetailPage"
 
@@ -77,6 +77,7 @@ describe("GeometryDetailPage — GeometryViewer prop wiring", () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(record)))
         page()
         await screen.findByRole("heading", { name: "CH geometry" })
+        fireEvent.click(screen.getByRole("button", { name: "Show in 3D" }))
         expect(captured).toHaveLength(1)
         expect(captured[0].xyzText).toBe(record.xyz_text)
         expect(captured[0].atoms).toEqual(record.atoms)
@@ -87,6 +88,7 @@ describe("GeometryDetailPage — GeometryViewer prop wiring", () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ xyz_text: null }))))
         page()
         await screen.findByRole("heading", { name: "CH geometry" })
+        fireEvent.click(screen.getByRole("button", { name: "Show in 3D" }))
         expect(captured).toHaveLength(1)
         expect(captured[0].xyzText).toBeNull()
     })

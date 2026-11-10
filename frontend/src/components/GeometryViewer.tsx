@@ -380,7 +380,7 @@ import "../geometry-measure.css"
  * at it.
  */
 
-type ViewerStatus = "loading" | "ready" | "unavailable"
+export type ViewerStatus = "loading" | "ready" | "unavailable"
 
 // Theme-aware 3D canvas background. This is 3Dmol's own JS-level
 // `backgroundColor` (passed to `createViewer` and, on a later theme
@@ -599,6 +599,7 @@ export function GeometryViewer({
     formula,
     xyzText,
     coordinateUnitMode = "angstrom",
+    onStatusChange,
 }: {
     atoms: GeometryAtom[]
     formula: string
@@ -608,6 +609,8 @@ export function GeometryViewer({
      * existing caller/test that doesn't pass it keeps behaving exactly
      * as before this prop existed. */
     coordinateUnitMode?: CoordinateUnitMode
+    /** Called whenever the viewer settles into "loading", "ready" or "unavailable" (no WebGL). */
+    onStatusChange?: (status: ViewerStatus) => void
 }) {
     const containerRef = useRef<HTMLDivElement | null>(null)
     const viewerRef = useRef<Viewer3DHandle | null>(null)
@@ -640,6 +643,13 @@ export function GeometryViewer({
     const activeMeasurementIdRef = useRef<string | null>(null)
     const measurementSeqRef = useRef(0)
     const [status, setStatus] = useState<ViewerStatus>("loading")
+    const onStatusChangeRef = useRef(onStatusChange)
+    useEffect(() => {
+        onStatusChangeRef.current = onStatusChange
+    }, [onStatusChange])
+    useEffect(() => {
+        onStatusChangeRef.current?.(status)
+    }, [status])
     const [style, setStyleMode] = useState<StyleMode>("ballstick")
     const [labelMode, setLabelMode] = useState<LabelMode>("none")
     const [measureSelection, setMeasureSelection] = useState<GeometryAtom[]>([])
@@ -1166,6 +1176,7 @@ export function GeometryViewer({
                     <>
                         <div
                             className="viewer-controls"
+                            tabIndex={-1}
                             role="group"
                             aria-label={`Rotate the 3D view of ${formula || "this geometry"} (does not change the coordinate table)`}
                         >

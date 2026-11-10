@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import GeometryDetailPage from "./GeometryDetailPage"
 
@@ -72,6 +72,7 @@ describe("GeometryDetailPage — a broken structure view", () => {
         await screen.findByRole("heading", { name: "CH geometry" })
 
         const viewerSection = screen.getByRole("heading", { name: "Structure view" }).closest("section") as HTMLElement
+        fireEvent.click(within(viewerSection).getByRole("button", { name: "Show in 3D" }))
         expect(within(viewerSection).getByRole("alert")).toHaveTextContent(/could not be drawn/)
         expect(viewerSection.querySelector("svg")).toBeNull()
 
