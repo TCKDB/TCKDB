@@ -1,11 +1,12 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, render, screen, within, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import LevelOfTheoryPage from "./LevelOfTheoryPage"
 import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { titleHasKind } from "../test/routeTitleKinds"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -125,6 +126,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         const user = userEvent.setup()
         page()
         expect(await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })).toBeVisible()
+        await waitFor(() => expect(titleHasKind(document.title, "/methods/:ref")).toBe(true))
         const softwareTable = screen.getByRole("table", { name: "Software and workflow tools observed at this level of theory" })
         expect(within(softwareTable).getByText("Gaussian")).toBeVisible()
 

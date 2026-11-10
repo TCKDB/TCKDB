@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import { act, cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { Term } from "./Term"
 import { GLOSSARY } from "../domain/glossary"
@@ -53,6 +53,16 @@ describe("Term", () => {
         expect(popover()).toHaveAttribute("data-open", "true")
         await user.unhover(popover())
         await new Promise((resolve) => setTimeout(resolve, 250))
+        expect(popover()).toHaveAttribute("data-open", "false")
+    })
+
+    it("closes on Esc pressed anywhere in the document after a hover-only open", async () => {
+        const user = userEvent.setup()
+        render(<Term term="species" />)
+        await user.hover(screen.getByRole("button", { name: "Species" }))
+        expect(popover()).toHaveAttribute("data-open", "true")
+        expect(screen.getByRole("button", { name: "Species" })).not.toHaveFocus()
+        await act(async () => { document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })) })
         expect(popover()).toHaveAttribute("data-open", "false")
     })
 

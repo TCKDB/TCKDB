@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event"
 import App from "../App"
 import { resetAllRequestCaches } from "../api/requestCache"
 import { bySummaryText } from "../test/disclosureQueries"
+import { titleHasKind } from "../test/routeTitleKinds"
 
 // ---------------------------------------------------------------------------
 // Two DISTINCT conformer groups, each with its own observations and its own
@@ -371,6 +372,7 @@ describe("species-entry page: identity and errors", () => {
         render(<App />)
         const heading = await screen.findByRole("heading", { name: "CH3" })
         expect(heading).toBeVisible()
+        await waitFor(() => expect(titleHasKind(document.title, "/species-entries/:ref")).toBe(true))
         // Proof this is the <Formula> component, not plain text -- both
         // satisfy the accessible-name query above (markup is flattened),
         // but only Formula emits a real <sub> for the subscript.

@@ -430,10 +430,36 @@ describe("the two dark blocks declare identical values for every token", () => {
     })
 })
 
-describe("no stylesheet draws a focus outline with --accent-300", () => {
+describe("every focus outline is drawn with --focus-ring", () => {
+    // Programmatic landing points (`RouteFocus` targets) are not controls and draw no ring.
+    const LANDING_POINT_SELECTORS = new Set(["main:focus, main h1[tabindex=\"-1\"]:focus"])
+
+    function focusRules(css: string): { selector: string; declarations: string[] }[] {
+        const rules: { selector: string; declarations: string[] }[] = []
+        for (const match of stripComments(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+            const selector = match[1].trim().replace(/\s+/g, " ")
+            if (!/:focus(-visible|-within)?\b/.test(selector)) continue
+            const declarations = [...match[2].matchAll(/(?:^|;|\s)(outline(?:-color)?)\s*:\s*([^;]+)/g)].map((m) => `${m[1]}: ${m[2].trim()}`)
+            rules.push({ selector, declarations })
+        }
+        return rules
+    }
+
+    it("finds focus rules (the scan is not vacuous)", () => {
+        const total = Object.values(NON_TOKEN_STYLESHEETS).reduce((n, css) => n + focusRules(css).filter((r) => r.declarations.length > 0).length, 0)
+        expect(total).toBeGreaterThan(20)
+    })
+
     for (const [name, css] of Object.entries(NON_TOKEN_STYLESHEETS)) {
-        it(`${name} focus outlines use --focus-ring`, () => {
-            expect(stripComments(css)).not.toMatch(/outline\s*:[^;{}]*var\(--accent-300\)/)
+        it(`${name}: a :focus rule that sets an outline colour uses var(--focus-ring)`, () => {
+            const offenders: string[] = []
+            for (const rule of focusRules(css)) {
+                if (LANDING_POINT_SELECTORS.has(rule.selector)) continue
+                for (const declaration of rule.declarations) {
+                    if (!declaration.includes("var(--focus-ring)")) offenders.push(`${rule.selector} { ${declaration} }`)
+                }
+            }
+            expect(offenders).toEqual([])
         })
     }
 })

@@ -1312,7 +1312,7 @@ function MeasurementsPanel({ formula, atoms, canvasReady, onMeasureAtoms, measur
                     ))}
                 </ol>
             )}
-            <KeyboardMeasureForm atoms={atoms} onMeasure={onMeasureAtoms} />
+            {atoms.length >= 2 && <KeyboardMeasureForm atoms={atoms} onMeasure={onMeasureAtoms} />}
         </section>
     )
 }
@@ -1323,15 +1323,21 @@ function atomOptionLabel(atom: GeometryAtom): string {
     return `${atom.atom_index} · ${isotopeLabel(atom)}`
 }
 
-/** Returns an error sentence for a bad atom choice, or null when `picks` (one string per slot) can be measured. */
-function measureChoiceError(picks: string[]): string | null {
+type MeasureChoiceError = { message: string; slots: number[] }
+
+/** Returns the error and the slots at fault for a bad atom choice, or null when `picks` (one string per slot) can be measured. */
+function measureChoiceError(picks: string[]): MeasureChoiceError | null {
     const chosen = picks.map((value) => (value === "" ? null : Number(value)))
-    if (chosen[0] === null || chosen[1] === null) return "Choose Atom 1 and Atom 2 to measure a distance."
-    if (chosen[2] === null && chosen[3] !== null) return "Choose Atom 3 before Atom 4."
+    if (chosen[0] === null || chosen[1] === null) {
+        return { message: "Choose Atom 1 and Atom 2 to measure a distance.", slots: [0, 1].filter((slot) => chosen[slot] === null) }
+    }
+    if (chosen[2] === null && chosen[3] !== null) return { message: "Choose Atom 3 before Atom 4.", slots: [2] }
     for (let i = 1; i < chosen.length; i++) {
         if (chosen[i] === null) continue
         const earlier = chosen.slice(0, i).indexOf(chosen[i])
-        if (earlier !== -1) return `Atom ${i + 1} repeats Atom ${earlier + 1}. Choose a different atom for each slot.`
+        if (earlier !== -1) {
+            return { message: `Atom ${i + 1} repeats Atom ${earlier + 1}. Choose a different atom for each slot.`, slots: [i] }
+        }
     }
     return null
 }
@@ -1342,7 +1348,7 @@ function KeyboardMeasureForm({ atoms, onMeasure }: { atoms: GeometryAtom[]; onMe
     const baseId = useId()
     const errorId = `${baseId}-error`
     const [picks, setPicks] = useState<string[]>(["", "", "", ""])
-    const [error, setError] = useState<string | null>(null)
+    const [error, setError] = useState<MeasureChoiceError | null>(null)
 
     function setPick(slot: number, value: string) {
         setPicks((prev) => prev.map((existing, index) => (index === slot ? value : existing)))
@@ -1354,7 +1360,7 @@ function KeyboardMeasureForm({ atoms, onMeasure }: { atoms: GeometryAtom[]; onMe
         const problem = measureChoiceError(picks)
         setError(problem)
         if (problem) {
-            announce(problem)
+            announce(problem.message)
             return
         }
         const list = picks.filter((value) => value !== "").map((value) => atoms[Number(value)])
@@ -1375,8 +1381,8 @@ function KeyboardMeasureForm({ atoms, onMeasure }: { atoms: GeometryAtom[]; onMe
                             <select
                                 value={picks[index]}
                                 required={slot <= 2}
-                                aria-invalid={error ? true : undefined}
-                                aria-describedby={error ? errorId : undefined}
+                                aria-invalid={error?.slots.includes(index) ? true : undefined}
+                                aria-describedby={error?.slots.includes(index) ? errorId : undefined}
                                 onChange={(event) => setPick(index, event.target.value)}
                             >
                                 <option value="">Choose an atom</option>
@@ -1387,7 +1393,7 @@ function KeyboardMeasureForm({ atoms, onMeasure }: { atoms: GeometryAtom[]; onMe
                         </label>
                     ))}
                 </div>
-                {error && <p id={errorId} className="measure-keyboard-error">{error}</p>}
+                {error && <p id={errorId} className="measure-keyboard-error">{error.message}</p>}
                 <button type="submit" className="measure-keyboard-submit">Measure</button>
             </fieldset>
         </form>

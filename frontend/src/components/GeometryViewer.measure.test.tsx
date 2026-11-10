@@ -568,6 +568,9 @@ describe("GeometryViewer — keyboard atom picker", () => {
         const select = screen.getByLabelText("Atom 2")
         expect(select).toHaveAttribute("aria-invalid", "true")
         expect(select.getAttribute("aria-describedby")).toBe(error.id)
+        // Only the slot at fault is marked.
+        expect(screen.getByLabelText("Atom 1")).not.toHaveAttribute("aria-invalid")
+        expect(screen.getByLabelText("Atom 1")).not.toHaveAttribute("aria-describedby")
     })
 
     it("asks for Atom 3 before Atom 4", async () => {
@@ -585,5 +588,13 @@ describe("GeometryViewer — keyboard atom picker", () => {
         await renderReady()
         const select = screen.getByLabelText("Atom 1")
         expect(within(select).getByRole("option", { name: "2 · H" })).toBeInTheDocument()
+    })
+})
+
+describe("GeometryViewer — keyboard atom picker needs two atoms", () => {
+    it("is not offered for a single-atom geometry", async () => {
+        render(<GeometryViewer atoms={[CH3_ATOMS[0]]} formula="C" xyzText={null} />)
+        await screen.findByRole("group", { name: /Display options/ })
+        expect(screen.queryByRole("group", { name: "Measure with the keyboard" })).toBeNull()
     })
 })

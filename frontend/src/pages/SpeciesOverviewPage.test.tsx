@@ -1,9 +1,10 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
-import { act, cleanup, render, screen, within } from "@testing-library/react"
+import { act, cleanup, render, screen, within, waitFor } from "@testing-library/react"
 import App from "../App"
 import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
+import { titleHasKind } from "../test/routeTitleKinds"
 
 const speciesRef = "spc_atp56uqux2ajao7hvckx7gx7ca"
 const entryRef = "spe_bcbdjwkip75yoziblpntwzblzu"
@@ -98,6 +99,7 @@ describe("species overview", () => {
         expect(await screen.findByRole("heading", { name: "CH3" })).toBeVisible()
         expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible()
         expect(screen.getByRole("heading", { name: "Electronic-state entries" })).toBeVisible()
+        await waitFor(() => expect(titleHasKind(document.title, "/species/:ref")).toBe(true))
         // The section heading no longer carries its own "N entries" total --
         // that number is only ever shown once, on the per-state-group
         // heading below, so it isn't stated twice for the same fact.

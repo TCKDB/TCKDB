@@ -153,7 +153,7 @@
        short 1-2 sentence lede rather than a multi-paragraph read. Named,
        not a fourth ad hoc bespoke declaration -- exactly the "one style
        per role" rule every other step in this file already follows. */
-    --type-lede-font: 400 1.15rem/1.5 var(--serif);
+    --type-lede-font: 400 1.15rem/1.5 var(--sans);
     --type-lede-tracking: 0em;
     --type-lede-transform: none;
 

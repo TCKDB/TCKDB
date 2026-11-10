@@ -55,7 +55,7 @@ export default function ConformerGroupPage() {
 }
 
 function Ledger({ group }: { group: ConformerGroup }) {
-    useDocumentTitle("Conformer", group.species?.formula)
+    useDocumentTitle("Conformer basin", group.species?.formula)
     const {
         conformer_group: basin,
         species,

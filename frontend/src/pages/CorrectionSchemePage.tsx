@@ -60,7 +60,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
     // (`domain/correctionSchemeFormat.ts`) so the two pages can never label
     // the same scheme kind two different ways.
     const title = schemeKindLabel(scheme.scheme_kind)
-    useDocumentTitle("Correction scheme", title)
+    useDocumentTitle("Energy-correction scheme", title)
 
     return (
         <section className="conformer-page methods-page">

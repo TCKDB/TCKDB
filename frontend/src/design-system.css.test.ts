@@ -58,7 +58,7 @@ describe("type scale: every step declares the exact font/tracking/transform", ()
         // copy) -- see design-system.css's own comment above
         // --type-lede-font for the three bespoke serif declarations this
         // replaces.
-        "lede": { font: "400 1.15rem/1.5 var(--serif)", tracking: "0em", transform: "none" },
+        "lede": { font: "400 1.15rem/1.5 var(--sans)", tracking: "0em", transform: "none" },
         "value": { font: "400 .9375rem/1.45 var(--sans)", tracking: "0em", transform: "none" },
         "data": { font: "400 .8125rem/1.5 var(--mono)", tracking: "0em", transform: "none" },
         "note": { font: "400 .8125rem/1.5 var(--sans)", tracking: "0em", transform: "none" },
@@ -467,3 +467,16 @@ describe(".data inside .data-table stays unbreakable", () => {
     })
 })
 
+
+describe("every font-family in a rule resolves to a font token", () => {
+    // `index.css` declares the tokens and the @font-face faces themselves; everything else must use them.
+    const OWN_DECLARATIONS = /@font-face\s*\{[^}]*\}|:root\s*\{[^}]*\}/g
+    for (const [name, css] of Object.entries(ALL_STYLESHEETS)) {
+        it(`${name} sets font-family only through var(--mono), var(--sans), var(--display) or inherit`, () => {
+            const bare = [...stripComments(css).replace(OWN_DECLARATIONS, "").matchAll(/(?<![\w-])font-family\s*:\s*([^;}]+)/g)]
+                .map((m) => m[1].trim())
+                .filter((value) => !/^(var\(--(mono|sans|display)\)|inherit)$/.test(value))
+            expect(bare).toEqual([])
+        })
+    }
+})

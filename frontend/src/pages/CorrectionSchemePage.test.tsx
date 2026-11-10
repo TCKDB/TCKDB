@@ -1,10 +1,11 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, render, screen, within, waitFor } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import CorrectionSchemePage from "./CorrectionSchemePage"
 import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { titleHasKind } from "../test/routeTitleKinds"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -78,6 +79,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
         // owning level of theory -- NOT the depositor's own `name` text
         // (see the dedicated mutation-table test below).
         expect(await screen.findByRole("heading", { name: "Petersson bond-additivity correction b3lyp/def2tzvp", level: 1 })).toBeVisible()
+        await waitFor(() => expect(titleHasKind(document.title, "/methods/schemes/:ref")).toBe(true))
         // Two links to the SAME level of theory -- one inside the title
         // (the new fix) and one in the identity kv-list below it, which
         // already linked before this change and is unaffected by it.

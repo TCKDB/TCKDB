@@ -156,7 +156,7 @@
 }
 
 /* Keyboard focus: BOTH a real `outline` around the whole link (the same
-   3px/accent-300/3px-offset the house link treatment uses,
+   3px/focus-ring/3px-offset the house link treatment uses,
    design-system.css) AND the node's own border switching to a thicker
    accent stroke -- belt and suspenders, since the outline alone can be
    hard to see against the node's own already-drawn border at the box's

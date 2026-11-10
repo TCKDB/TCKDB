@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import App from "./App"
 import { bySummaryText } from "./test/disclosureQueries"
+import { titleHasKind, type RouteTitleKindKey } from "./test/routeTitleKinds"
 
 const speciesRef = "spc_abcde234567abcde234567abcd"
 const speciesRefTwo = "spc_bcdef234567bcdef234567abcde"
@@ -348,7 +349,7 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
 const EXPECTED_TITLES: Record<string, string> = {
     "/species": "Species · TCKDB",
     "/species/spc_abcde234567abcde234567abcd": "H2O · Species · TCKDB",
-    "/conformer-groups/cfg_abc": "Conformer · TCKDB",
+    "/conformer-groups/cfg_abc": "Conformer basin · TCKDB",
     "/conformer-observations/cfo_abc": "Conformer observation · TCKDB",
     "/calculations/calc_abc": "Single-point · Calculation · TCKDB",
     "/geometries/geom_abc": "Geometry · TCKDB",
@@ -955,5 +956,80 @@ describe("unmatched routes (finding #12)", () => {
             expect(window.location.pathname).toBe(`/species-entries/${entryRef}/${section}`)
             cleanup()
         }
+    })
+})
+
+// Every route in App.tsx sets a title naming its kind and renders exactly one h1. Record routes are
+// checked in their "not found" state here (the title in that state is built from the same kind the
+// loaded page uses; each page's own test checks the loaded title against ROUTE_TITLE_KINDS).
+describe("every route sets a title and renders exactly one h1", () => {
+    const missing = () => HttpResponse.json({ detail: "not found", code: "not_found" }, { status: 404 })
+
+    function allRouteHandlers() {
+        server.use(
+            http.get("/api/v1/scientific/*", missing),
+            ...emptyVocabHandlers(),
+            http.get("/api/v1/scientific/species/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+            http.get("/api/v1/scientific/reactions/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+            http.get("/api/v1/scientific/transition-states/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+            http.get("/api/v1/scientific/vdw-complexes/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+            http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [] })),
+            http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json({ records: [], pagination: { offset: 0, limit: 20, returned: 0, total: 0 } })),
+        )
+    }
+
+    const NON_RECORD_ROUTES: Array<[path: string, title: string]> = [
+        ["/", "Home · TCKDB"],
+        ["/species", "Species · TCKDB"],
+        ["/reactions", "Reactions · TCKDB"],
+        ["/transition-states", "Transition states · TCKDB"],
+        ["/vdw-complexes", "Van der Waals complexes · TCKDB"],
+        ["/methods", "Methods · TCKDB"],
+        ["/login", "Sign in · TCKDB"],
+        ["/account", "Sign in · TCKDB"],
+        ["/admin", "Administration · TCKDB"],
+        ["/admin/curator-queue", "Machine findings · TCKDB"],
+        ["/review-queue", "Record review · TCKDB"],
+        ["/no/such/page", "Page not found · TCKDB"],
+        ["/species-entries/spe_abc/not-a-tab", "Page not found · TCKDB"],
+        ["/admin/machine-review-inspection", "Machine review inspection · TCKDB"],
+    ]
+
+    it.each(NON_RECORD_ROUTES)("%s is titled %s", async (path, title) => {
+        allRouteHandlers()
+        window.history.replaceState({}, "", path)
+        // The admin inspection route sits outside the shell and uses react-query.
+        render(<QueryClientProvider client={new QueryClient()}><App /></QueryClientProvider>)
+        await waitFor(() => expect(document.title).toBe(title))
+        // The admin inspection page sits outside the shell and titles itself with an h2.
+        if (path !== "/admin/machine-review-inspection") {
+            await waitFor(() => expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1))
+        }
+    })
+
+    const RECORD_ROUTES: Array<[path: string, key: RouteTitleKindKey]> = [
+        ["/species/spc_missing", "/species/:ref"],
+        ["/species-entries/spe_missing", "/species-entries/:ref"],
+        ["/species-entries/spe_missing/thermo", "/species-entries/:ref"],
+        ["/conformer-groups/cfg_missing", "/conformer-groups/:ref"],
+        ["/conformer-observations/cfo_missing", "/conformer-observations/:ref"],
+        ["/calculations/calc_missing", "/calculations/:ref"],
+        ["/geometries/geom_missing", "/geometries/:ref"],
+        ["/transition-state-entries/tse_missing", "/transition-state-entries/:ref"],
+        ["/reaction-entries/rxe_missing", "/reaction-entries/:ref"],
+        ["/reactions/rxn_missing", "/reactions/:ref"],
+        ["/networks/net_missing", "/networks/:ref"],
+        ["/methods/lot_missing", "/methods/:ref"],
+        ["/methods/schemes/ecs_missing", "/methods/schemes/:ref"],
+        ["/methods/composite-schemes/csch_missing", "/methods/composite-schemes/:ref"],
+        ["/methods/frequency-scale-factors/fsf_missing", "/methods/frequency-scale-factors/:ref"],
+    ]
+
+    it.each(RECORD_ROUTES)("%s is titled with its kind", async (path, key) => {
+        allRouteHandlers()
+        window.history.replaceState({}, "", path)
+        render(<App />)
+        await waitFor(() => expect(titleHasKind(document.title, key)).toBe(true))
+        await waitFor(() => expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1))
     })
 })

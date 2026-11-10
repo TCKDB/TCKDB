@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { GLOSSARY, type GlossaryKey } from "../domain/glossary"
 import "../term.css"
 
@@ -32,14 +32,24 @@ export function Term({ term, children }: { term: GlossaryKey; children?: ReactNo
 
     useEffect(() => cancelClose, [])
 
-    // A tap outside closes it; the pointer path has no blur to rely on.
+    // A tap outside closes it, and Esc closes it wherever focus is, including after a hover-only open.
     useEffect(() => {
         if (!open) return
         function onPointerDown(event: PointerEvent) {
             if (!wrapRef.current?.contains(event.target as Node)) setOpen(false)
         }
+        function onKeyDown(event: globalThis.KeyboardEvent) {
+            if (event.key === "Escape") {
+                cancelClose()
+                setOpen(false)
+            }
+        }
         document.addEventListener("pointerdown", onPointerDown)
-        return () => document.removeEventListener("pointerdown", onPointerDown)
+        document.addEventListener("keydown", onKeyDown)
+        return () => {
+            document.removeEventListener("pointerdown", onPointerDown)
+            document.removeEventListener("keydown", onKeyDown)
+        }
     }, [open])
 
     // Keeps the popover inside the viewport.
@@ -56,20 +66,12 @@ export function Term({ term, children }: { term: GlossaryKey; children?: ReactNo
         if (shift !== 0) popover.style.transform = `translateX(${shift}px)`
     }, [open])
 
-    function onKeyDown(event: KeyboardEvent<HTMLSpanElement>) {
-        if (event.key !== "Escape" || !open) return
-        event.stopPropagation()
-        cancelClose()
-        setOpen(false)
-    }
-
     return (
         <span
             ref={wrapRef}
             className="term-wrap"
             onMouseEnter={show}
             onMouseLeave={hideSoon}
-            onKeyDown={onKeyDown}
             onBlur={(event) => {
                 if (!event.currentTarget.contains(event.relatedTarget as Node | null)) hideSoon()
             }}

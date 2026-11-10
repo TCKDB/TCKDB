@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Screenshots routes at true viewport widths through the DevTools protocol (a plain --window-size is clamped to 500 px).
 // Usage: node scripts/a11y/shoot.mjs --base http://127.0.0.1:4173 --out DIR [--prefix before_] [--chrome PATH] /route ...
+// Each shot waits for a non-loading `main h1`; a route that never gets one fails the run.
 // Pass: scrollWidth <= viewport width at 390 and 320, and no element sticks out of its scroll container.
 import { spawn } from "node:child_process"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
@@ -14,10 +15,11 @@ const VIEWPORTS = [
     { name: "320", width: 320, height: 640, scheme: "light" },
 ]
 const MAX_SHOT_HEIGHT = 6000
-const SETTLE_MS = 1500
+const SETTLE_MS = 400
+const READY_PROBE = `(() => !!document.querySelector("main h1") && !document.querySelector("main [aria-busy='true']"))()`
 
 const args = process.argv.slice(2)
-const options = { base: "http://127.0.0.1:4173", out: "shots", prefix: "", chrome: "google-chrome-stable", port: "9333" }
+const options = { base: "http://127.0.0.1:4173", out: "shots", prefix: "", chrome: "google-chrome-stable", port: "9333", timeout: "15000" }
 const routes = []
 for (let i = 0; i < args.length; i++) {
     const a = args[i]
@@ -90,6 +92,16 @@ function connect(url) {
     return { opened, send, close: () => ws.close() }
 }
 
+async function waitForReady(call, timeoutMs) {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+        const result = await call("Runtime.evaluate", { expression: READY_PROBE, returnByValue: true })
+        if (result.result.value === true) return true
+        await sleep(150)
+    }
+    return false
+}
+
 const report = []
 let failed = false
 try {
@@ -105,6 +117,13 @@ try {
             await call("Emulation.setDeviceMetricsOverride", { width: vp.width, height: vp.height, deviceScaleFactor: 1, mobile: vp.width < 500 })
             await call("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: vp.scheme }] })
             await call("Page.navigate", { url: options.base + route })
+            const ready = await waitForReady(call, Number(options.timeout))
+            if (!ready) {
+                failed = true
+                report.push({ route, viewport: vp.name, pass: false, error: `main h1 not ready within ${options.timeout} ms` })
+                console.log(`FAIL ${route} @${vp.name} main h1 not ready within ${options.timeout} ms (no screenshot taken)`)
+                continue
+            }
             await sleep(SETTLE_MS)
             const probe = (await call("Runtime.evaluate", { expression: OVERFLOW_PROBE, returnByValue: true })).result.value
             const metrics = await call("Page.getLayoutMetrics")

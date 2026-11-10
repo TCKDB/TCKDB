@@ -766,7 +766,7 @@
 
 .entry-tabs a:focus-visible,
 .conformer-card-select:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
 }
 

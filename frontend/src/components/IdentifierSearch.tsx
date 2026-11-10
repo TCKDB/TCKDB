@@ -49,8 +49,6 @@ const HELP: Record<SearchMode, string> = {
     reactions: "Exact only · searches both directions · empty is a real result, not an error",
 }
 
-const NO_MATCH_ANNOUNCEMENT = "No exact match"
-
 function matchCountAnnouncement(count: number): string {
     return `${count} ${count === 1 ? "match" : "matches"}`
 }
@@ -190,7 +188,6 @@ export function IdentifierSearch() {
             if (activeRequest.current !== controller || controller.signal.aborted) return
             if (found.length === 0) {
                 setMessage(`No exact ${classified.label} record was found.`)
-                announce(NO_MATCH_ANNOUNCEMENT)
             } else if (classified.identifier.kind === "species-ref" || classified.identifier.kind === "species-entry-ref") {
                 navigate(resultPath(found[0]))
             } else {
@@ -237,7 +234,6 @@ export function IdentifierSearch() {
             if (activeRequest.current !== controller || controller.signal.aborted) return
             if (found.length === 0) {
                 setMessage(reactionEmptyMessage(classified))
-                announce(NO_MATCH_ANNOUNCEMENT)
             } else {
                 setReactionResult({ matches: found, total, query: classified })
                 announce(matchCountAnnouncement(total))

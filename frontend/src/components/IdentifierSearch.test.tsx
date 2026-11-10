@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { IdentifierSearch } from "./IdentifierSearch"
 import { Announcer } from "./Announcer"
+import { announce } from "../hooks/useAnnounce"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -297,11 +298,15 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
         expect(screen.queryByText(/could not be parsed/i)).not.toBeInTheDocument()
     })
 
-    it("announces 'No exact match' through the live region", async () => {
+    it("leaves a no-match result to the existing status message, with no second announcement", async () => {
         server.use(http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({ records: [] })))
+        announce("")
+        await new Promise((resolve) => setTimeout(resolve, 100))
         const user = userEvent.setup(); page()
         await searchSpecies(user, "smiles:CCO")
-        await waitFor(() => expect(document.querySelector(".announcer")).toHaveTextContent("No exact match"))
+        expect(await screen.findByRole("status")).toHaveTextContent(/No exact SMILES record was found/)
+        await new Promise((resolve) => setTimeout(resolve, 150))
+        expect(document.querySelector(".announcer")).toBeEmptyDOMElement()
     })
 
     it("announces the number of matches through the live region", async () => {

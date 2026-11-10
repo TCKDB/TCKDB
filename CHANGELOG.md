@@ -22,7 +22,7 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
-## Pages are titled and focus follows navigation; keyboard atom measuring; new colours and type
+## Pages are titled and focus follows navigation; keyboard atom measuring; new colours and type (2026-11-10)
 
 - **Behaviour:** each page sets its own browser-tab title ("CH3 · Species entry · TCKDB") and, after a link navigation, focus moves to the page's main heading. A filter, hash or species-entry tab change leaves focus where it is. The geometry viewer gains a "Measure with the keyboard" form (two to four atom selects) that adds to the same measurement list as clicking atoms, and it stays available when WebGL is not. Search announces "N matches" or "No exact match" in a polite live region. The focus ring is blue and the control borders darker, both measured at 3:1 or more on every surface. Colours and type are refreshed (self-hosted Bricolage Grotesque and Instrument Sans); labels are sentence case.
 - **Schema and migration:** none. No new environment variable.

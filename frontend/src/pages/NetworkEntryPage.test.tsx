@@ -8,6 +8,7 @@ import "../design-system.css"
 import NetworkEntryPage from "./NetworkEntryPage"
 import { channelHandle } from "../domain/publicText"
 import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { titleHasKind } from "../test/routeTitleKinds"
 
 const NETWORK_REF = "net_test1"
 const server = setupServer()
@@ -189,6 +190,7 @@ describe("NetworkEntryPage -- identity, evidence, reactions, review", () => {
         handleEverything()
         page()
         expect(await screen.findByRole("heading", { name: "Pressure-dependent network" })).toBeVisible()
+        await waitFor(() => expect(titleHasKind(document.title, "/networks/:ref")).toBe(true))
         expect(screen.getByText(NETWORK_REF)).toBeVisible()
         expect(screen.getByRole("heading", { name: "Evidence on this network" })).toBeVisible()
         expect(screen.getByRole("heading", { name: "Reactions" })).toBeVisible()
