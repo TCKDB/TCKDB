@@ -27,7 +27,7 @@ const NBSP = " "
  * link in this app) -- that component renders its optional stereo-label
  * suffix (`species_entry_label`, e.g. "Z") as bare inherited-size text
  * with no wrapping element to scope. MEASURED (post-review): composed
- * into this h1 at `--type-display-2` (36px serif), "· Z isomer" inherited
+ * into this h1 at `--type-display-2` (36px display face), "· Z isomer" inherited
  * the full 36px and read as the single largest, most prominent text on
  * the chooser page -- a plain-English aside outweighing the chemistry
  * itself. This component builds its own link markup instead so the chip

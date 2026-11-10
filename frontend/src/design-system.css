@@ -139,20 +139,8 @@
     --type-body-tracking: 0em;
     --type-body-transform: none;
 
-    /* SHOULD-FIX-14 (species-entry/browse/chrome residuals re-review): a
-       named step for a PAGE LEDE -- `.tagline` (index.css, already
-       commented "the one editorial intro on the site"), `.browse-intro`,
-       `.evidence-linkage-story` -- three places that deliberately set
-       serif prose where `--type-body` (sans) is the default, each with
-       its own slightly different bespoke size (1rem, all three, but three
-       separate declarations rather than one shared step). A lede reads as
-       distinct from body copy on PURPOSE (the sentence a reader's eye
-       lands on first) -- one step up in size (1.15rem vs body's 1rem)
-       makes that distinction real rather than "the same size, but serif",
-       and a slightly tighter 1.5 line-height (vs body's 1.6) suits a
-       short 1-2 sentence lede rather than a multi-paragraph read. Named,
-       not a fourth ad hoc bespoke declaration -- exactly the "one style
-       per role" rule every other step in this file already follows. */
+    /* The page lede (`.tagline`, `.browse-intro`, `.evidence-linkage-story`): one step up from body copy
+       (1.15rem vs 1rem) with a tighter 1.5 line height for a short one or two sentence read. */
     --type-lede-font: 400 1.15rem/1.5 var(--sans);
     --type-lede-tracking: 0em;
     --type-lede-transform: none;

@@ -19,11 +19,7 @@
     letter-spacing: var(--type-display-2-tracking);
 }
 
-/* SHOULD-FIX-14 (species-entry/browse/chrome residuals re-review): was a
-   bespoke `1rem/1.6 var(--serif)` -- one of three near-identical serif
-   "lede" declarations across the site (`.tagline`, index.css;
-   `.evidence-linkage-story`, species-entry.css). Now the named
-   `--type-lede` step (design-system.css). */
+/* The intro uses the named `--type-lede` step (design-system.css). */
 .browse-intro {
     max-width: var(--measure-prose);
     margin: 1rem 0 0;

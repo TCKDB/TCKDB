@@ -41,4 +41,6 @@ configure({ asyncUtilTimeout: 5000 })
  */
 afterEach(() => {
     resetAllRequestCaches()
+    // A title left by one test must not satisfy the next test's assertion.
+    document.title = ""
 })

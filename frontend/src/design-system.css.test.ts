@@ -468,15 +468,39 @@ describe(".data inside .data-table stays unbreakable", () => {
 })
 
 
-describe("every font-family in a rule resolves to a font token", () => {
+describe("every font family in a rule resolves to a font token", () => {
     // `index.css` declares the tokens and the @font-face faces themselves; everything else must use them.
     const OWN_DECLARATIONS = /@font-face\s*\{[^}]*\}|:root\s*\{[^}]*\}/g
+    const TOKEN_FAMILY = /^(var\(--(mono|sans|display)(\s*,[^)]*)?\)|inherit)$/
+
+    /** The family list of a `font:` shorthand value: everything after the size (and optional line height). */
+    function shorthandFamily(value: string): string | null {
+        if (/^(inherit|initial|unset)$/.test(value) || /^var\(--type-[\w-]+-font\)$/.test(value)) return null
+        const match = /(?:^|\s)(?:\d*\.?\d+(?:px|rem|em|%|pt)|clamp\([^)]*\)|(?:x-)?(?:small|medium|large))(?:\/[\d.]+(?:px|rem|em|%)?)?\s+(.+)$/.exec(value)
+        return match ? match[1].trim() : value
+    }
+
+    /** Every family list declared by `font-family` or `font` in the CSS that is outside the token declarations. */
+    function familyLists(css: string): string[] {
+        const body = stripComments(css).replace(OWN_DECLARATIONS, "")
+        const lists = [...body.matchAll(/(?<![\w-])font-family\s*:\s*([^;}]+)/g)].map((m) => m[1].trim())
+        for (const m of body.matchAll(/(?<![\w-])font\s*:\s*([^;}]+)/g)) {
+            const family = shorthandFamily(m[1].trim())
+            if (family !== null) lists.push(family)
+        }
+        return lists
+    }
+
     for (const [name, css] of Object.entries(ALL_STYLESHEETS)) {
-        it(`${name} sets font-family only through var(--mono), var(--sans), var(--display) or inherit`, () => {
-            const bare = [...stripComments(css).replace(OWN_DECLARATIONS, "").matchAll(/(?<![\w-])font-family\s*:\s*([^;}]+)/g)]
-                .map((m) => m[1].trim())
-                .filter((value) => !/^(var\(--(mono|sans|display)\)|inherit)$/.test(value))
-            expect(bare).toEqual([])
+        it(`${name} sets font-family and the font shorthand only through var(--mono), var(--sans), var(--display) or inherit`, () => {
+            expect(familyLists(css).filter((value) => !TOKEN_FAMILY.test(value))).toEqual([])
         })
     }
+
+    it("catches a literal family in either form (the scan is not vacuous)", () => {
+        expect(familyLists(".a { font: 400 1rem/1.4 Georgia, serif; }")).toEqual(["Georgia, serif"])
+        expect(familyLists(".a { font-family: Georgia, serif; }")).toEqual(["Georgia, serif"])
+        expect(familyLists(".a { font: 600 .8rem var(--mono); font: var(--type-ui-font); }")).toEqual(["var(--mono)"])
+        expect(familyLists(".a { font: .74rem var(--mono, ui-monospace, monospace); }").filter((v) => !TOKEN_FAMILY.test(v))).toEqual([])
+    })
 })

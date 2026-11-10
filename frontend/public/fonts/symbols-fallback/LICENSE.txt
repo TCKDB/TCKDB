@@ -1,4 +1,4 @@
-Glyph subset in this folder: IBMPlexSans-symbols-Regular.woff2, from IBM Plex Sans.
+IBMPlexSans-Regular.woff2 is the unmodified IBM Plex Sans Regular file; it is loaded only for Greek and symbol characters.
 Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"
 
 Licensed under the SIL Open Font License, Version 1.1, copied below, also available with a FAQ at: https://openfontlicense.org
