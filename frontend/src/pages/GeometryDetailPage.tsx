@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../geometry-detail.css"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
-import { GeometryViewer } from "../components/GeometryViewer"
+import { ViewerStage } from "../components/ViewerStage"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
@@ -403,7 +403,7 @@ function ViewerSection({ atoms, atomsAvailability, formula, xyzText, coordinateU
                         </p>
                     )}
                 >
-                    <GeometryViewer atoms={rows} formula={formula} xyzText={xyzText} coordinateUnitMode={coordinateUnit} />
+                    <ViewerStage atoms={rows} formula={formula} xyzText={xyzText} coordinateUnitMode={coordinateUnit} />
                 </SectionErrorBoundary>
             ) : (
                 <SectionEmptyMessage

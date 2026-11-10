@@ -1,0 +1,25 @@
+/* Ball-and-stick poster: a fixed square that shrinks with its column and never grows past its own size. */
+.mol-poster {
+    display: block;
+    width: 100%;
+    max-width: 15rem;
+    height: auto;
+    aspect-ratio: 1 / 1;
+}
+
+.mol-poster-bond {
+    stroke: var(--bond);
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+.mol-poster-atom {
+    stroke: var(--bond);
+    stroke-width: 1.5;
+}
+
+.mol-poster-atom--c { fill: var(--atom-C); }
+.mol-poster-atom--h { fill: var(--atom-H); }
+.mol-poster-atom--o { fill: var(--atom-O); }
+.mol-poster-atom--n { fill: var(--atom-N); }
+.mol-poster-atom--other { fill: var(--atom-other); }

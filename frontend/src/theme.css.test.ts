@@ -406,6 +406,12 @@ describe("focus, control, kind and text tokens clear their contrast floors in ev
             })
         }
 
+        // The ball-and-stick poster outlines every atom with --bond, so a hydrogen filled with --atom-H stays visible.
+        it(`${blockName}: --bond outline is at least 3:1 on the surfaces`, () => {
+            const { ratio, against } = worst(block, "bond", SURFACES)
+            expect(ratio, `--bond vs --${against} (${ratio.toFixed(2)}:1)`).toBeGreaterThanOrEqual(3)
+        })
+
         it(`${blockName}: --status-ok-ink is at least 4.5:1 on its tint`, () => {
             const { ratio } = worst(block, "status-ok-ink", ["status-ok-bg"])
             expect(ratio).toBeGreaterThanOrEqual(4.5)

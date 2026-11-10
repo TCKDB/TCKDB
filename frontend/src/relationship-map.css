@@ -1,0 +1,97 @@
+/* Relationship map: a drawing made of links, with a text list that says the same. Below 560px only the list shows. */
+.rel-map {
+    min-width: 0;
+}
+
+.rel-map-heading {
+    margin: 0 0 .5rem;
+    color: var(--ink);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+}
+
+.rel-map-figure {
+    display: block;
+    width: 100%;
+    max-width: 24rem;
+    height: auto;
+    overflow: visible;
+}
+
+.rel-map-edge {
+    stroke: var(--line);
+    stroke-width: 1.5;
+}
+
+.rel-map-box {
+    fill: var(--surface);
+    stroke: var(--line);
+    stroke-width: 1;
+}
+
+a.rel-map-node {
+    cursor: pointer;
+    text-decoration: none;
+}
+
+a.rel-map-node:hover .rel-map-box {
+    stroke: var(--accent);
+    fill: var(--accent-50);
+}
+
+a.rel-map-node:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.rel-map-node--self .rel-map-box {
+    stroke: var(--accent);
+    stroke-width: 2;
+}
+
+.rel-map-label {
+    fill: var(--ink);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.rel-map-note {
+    fill: var(--muted);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.rel-map-list {
+    margin: .75rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.rel-map-item {
+    padding: .35rem 0;
+    border-top: 1px solid var(--line-2);
+}
+
+.rel-map-item-note {
+    display: block;
+    margin-left: 1.4rem;
+    color: var(--muted);
+    font: var(--type-ui-font);
+    font-weight: 400;
+}
+
+.rel-map-empty {
+    color: var(--muted);
+}
+
+@media (max-width: 560px) {
+    .rel-map-figure {
+        display: none;
+    }
+
+    .rel-map-list {
+        margin-top: 0;
+    }
+}

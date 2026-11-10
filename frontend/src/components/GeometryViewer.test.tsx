@@ -391,6 +391,16 @@ describe("GeometryViewer", () => {
         await waitFor(() => expect(container).toHaveAttribute("data-viewer-status", "ready"))
     })
 
+    it("reports its status through onStatusChange, and the controls group can take focus once ready", async () => {
+        const seen: string[] = []
+        render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} onStatusChange={(status) => seen.push(status)} />)
+        await waitFor(() => expect(seen).toContain("ready"))
+        expect(seen[seen.length - 1]).toBe("ready")
+        const controls = screen.getByRole("group", { name: /Rotate the 3D view of CH/ })
+        controls.focus()
+        expect(controls).toHaveFocus()
+    })
+
     it("discloses that bonds are inferred from interatomic distance, not deposited data", () => {
         render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
         // A distinct sentence from the "interactive 3D view" framing

@@ -250,79 +250,17 @@
     background: var(--surface);
 }
 
-/* Ordinary keyboard-operable buttons: rotate/zoom/reset the camera.
-   Mouse drag-to-rotate and wheel/touch handling are also live on the
-   canvas itself (see the "Mouse/touch" section of GeometryViewer.tsx's
-   module docstring) — these buttons are an addition, not the only way
-   in. Only rendered once the viewer is "ready", so there is nothing to
-   focus before there is anything for it to control.
-
-   On a device that actually has a mouse (`hover: hover` — real desktop
-   trackpads/mice; a touchscreen never matches this), drag-to-rotate makes
-   the Rotate buttons redundant, so they start invisible and reveal on
-   hover-over-the-toolbar or keyboard focus-within. This is `opacity`,
-   NOT `display: none`/`visibility: hidden`: those remove an element from
-   the tab order (and the accessibility tree, for the latter), which
-   would make a keyboard user unable to ever reach the ONLY rotation
-   affordance a mouse-optional, `hover: hover` desktop otherwise has no
-   substitute for. `opacity: 0` leaves the buttons focusable and
-   clickable exactly as before; only their paint changes. On a
-   touchscreen (`hover` never matches `hover: hover`) this block does not
-   apply at all — see the module docstring's "Mouse/touch" section for
-   why these buttons are the ONLY way to rotate there, one-finger drag
-   having been claimed for page scroll. The opacity transition is a
-   cosmetic fade only; the global `prefers-reduced-motion` rule in
-   `index.css` (`transition: none !important`) already turns it off. */
+/* Keyboard-operable buttons: rotate, zoom and reset the camera. Mouse drag and wheel work on the canvas too, and these
+   are the only way to rotate on a touchscreen. Always visible; shown once the viewer is ready. */
 .viewer-controls {
     display: flex;
     flex-wrap: wrap;
     gap: .5rem;
 }
 
-@media (hover: hover) {
-    .viewer-controls {
-        opacity: 0;
-        transition: opacity .15s ease;
-    }
-
-    /* Reveal on hovering the STAGE (the picture, or the card around it),
-       not only `.viewer-controls:hover` on its own — MEASURED (real
-       Chromium): with only the latter, hovering the canvas or the card
-       left `.viewer-controls` at opacity 0, because that selector's
-       hover target IS the invisible toolbar strip itself. A mouse aimed
-       at the picture — the one thing a user actually points at —
-       revealed nothing; the only way in was a blank ~30px band with no
-       affordance. That is worse than it sounds: wheel-over-canvas is
-       deliberately reserved for page scroll (see `.viewer-canvas` above
-       and GeometryViewer.tsx's module docstring, "Mouse/touch" section),
-       so on a `hover: hover` desktop the Zoom in / Zoom out buttons are
-       the ONLY zoom affordance in the product. `.viewer-controls:hover`
-       stays listed too, so the toolbar does not re-hide itself the
-       instant the pointer crosses from the stage onto a button at the
-       stage's edge. `:focus-within` stays for the keyboard path.
-
-       Judgment call (Rotate-only fade vs. keep-all-together): Zoom
-       in/out/Reset and the four Rotate buttons all render as one flat
-       button list inside a single `.viewer-controls` div, with no
-       sub-grouping in the DOM (see GeometryViewer.tsx, the
-       `.viewer-controls` block). Splitting "always-visible Zoom/Reset"
-       from "fades-on-hover Rotate" would need a second wrapper element —
-       an `nth-child` selector over the current flat list would silently
-       start targeting the wrong buttons the instant one is reordered or
-       another is added, which is exactly the fragile coupling this
-       codebase avoids elsewhere (see e.g. the `data-column` hook added
-       below, in preference to a label-text selector). The complaint that
-       forced this fix was "hovering the picture reveals nothing", not
-       "Zoom should never fade" — revealing the whole toolbar together,
-       the instant the pointer reaches the picture instead of a blank
-       strip, answers that directly. A DOM split into two independently
-       faded groups is a real, defensible follow-up, but it is a larger
-       structural change than this fixup takes on. */
-    .viewer-stage:hover .viewer-controls,
-    .viewer-controls:hover,
-    .viewer-controls:focus-within {
-        opacity: 1;
-    }
+.viewer-controls:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
 }
 
 /* SHOULD-FIX-10 ("record-page residuals" re-review): was `.72rem

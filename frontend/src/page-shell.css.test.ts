@@ -117,3 +117,18 @@ describe("<=62rem: .page-shell-content stretches to fill the column layout's cro
         expect(rule).toMatch(/min-width:\s*0/)
     })
 })
+
+describe(".page-shell-rail: right column on wide screens, full width under the content on narrow ones", () => {
+    it("shrinks inside the row with min-width: 0 and has a fixed basis", () => {
+        const rule = extractRule(css, ".page-shell-rail")
+        expect(rule).toMatch(/min-width:\s*0/)
+        expect(rule).toMatch(/flex:\s*0 0 20rem/)
+    })
+
+    it("stretches to the column's width at <=62rem like the content does", () => {
+        const rule = extractRule(extractBlock(css, /@media \(max-width: 62rem\) \{/), ".page-shell-rail")
+        expect(rule).toMatch(/align-self:\s*stretch/)
+        expect(rule).toMatch(/width:\s*100%/)
+        expect(rule).toMatch(/position:\s*static/)
+    })
+})
