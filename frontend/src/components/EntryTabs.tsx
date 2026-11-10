@@ -95,16 +95,15 @@ export function EntryTabs({ entryRef, activeSection, conformerQuery, availabilit
                         role="tab"
                         id={`tab-${section}`}
                         aria-selected={isActive}
-                        aria-controls={`panel-${section}`}
+                        aria-controls={isActive ? `panel-${section}` : undefined}
                         tabIndex={isActive ? 0 : -1}
                         data-has-content={populated}
-                        title={populated ? undefined : "No data recorded for this section yet"}
                         ref={(node) => { tabRefs.current[section] = node }}
                         to={`/species-entries/${entryRef}/${section}${conformerQuery}`}
                         onKeyDown={(event) => handleKeyDown(event, index)}
                     >
                         {sectionLabels[section]}
-                        {populated && <span className="entry-tab-dot" aria-hidden="true" />}
+                        {populated ? <span className="entry-tab-dot" aria-hidden="true" /> : <>{" "}<span className="molecule-page-visually-hidden">(no data)</span></>}
                     </Link>
                 )
             })}

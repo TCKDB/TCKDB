@@ -1,0 +1,683 @@
+/*
+ * Molecule (species entry) page. Colour tokens come from theme.css; none is redeclared here so the page follows the
+ * theme. Prose keeps its own narrower measure; the page itself is capped wide enough for three shape cards per row.
+ */
+
+.entry-page {
+    max-width: 126rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 6rem;
+}
+
+/* Ties "Transition states for reactions of this species" (item 1/5;
+   `.note`, design-system.css, at its call site) to the identity block
+   immediately above it, with no bottom margin -- it is the last thing
+   before `RefsDisclosure`, which supplies its own top spacing. */
+.entry-ts-browse-note {
+    margin: 1.5rem 0 0;
+}
+
+.entry-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.8rem;
+    margin: 1.6rem 0 0;
+    padding: 1.1rem 0 0;
+    border-top: 1px solid var(--line);
+    list-style: none;
+}
+
+.entry-facts li {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    min-width: 8.5rem;
+}
+
+/* Was `.64rem var(--mono)` (10.24px) -- below the 11px floor, and its own
+   third label style next to `.kv-list dt`/`.identifier-chip-label`'s
+   `--type-label`. This is the same fact-label role as those two -- same
+   step now, so a reader sees one label typography for the whole hero,
+   not three near-identical ones. */
+.entry-facts span {
+    color: var(--muted-2);
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+}
+
+/* `--type-value` (sans, 400) -- matches `.kv-list dd`'s own step exactly,
+   so this hero's facts and every `.kv-list` value below it on the page
+   read as the same kind of thing. Was bolded (600); `--type-value` has
+   no bold variant of its own (the type scale is 400/600 by ROLE, not a
+   free choice per rule -- see design-system.css), and a value already
+   reads as distinct here by sitting under its own muted label. */
+.entry-facts strong {
+    overflow-wrap: anywhere;
+    color: var(--ink-2);
+    font: var(--type-value-font);
+    letter-spacing: var(--type-value-tracking);
+}
+
+/* Shapes: one card per conformer group. */
+
+.conformer-picker {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--line);
+}
+
+.conformer-picker-note {
+    max-width: var(--measure-note);
+    margin: .6rem 0 0;
+    color: var(--ink-2);
+    line-height: 1.6;
+}
+
+.shape-energy-controls {
+    min-width: 0;
+    margin: 1.2rem 0 0;
+    padding: .9rem 1rem 1rem;
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+}
+
+.shape-energy-controls legend {
+    padding: 0 .4rem;
+    font: var(--type-heading-3-font);
+}
+
+.shape-energy-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem 1.5rem;
+    margin: .6rem 0;
+}
+
+.shape-energy-fields label {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: .25rem;
+    font: var(--type-label-font);
+}
+
+.shape-energy-fields select {
+    max-width: 100%;
+    padding: .35rem .5rem;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink);
+    font: var(--type-ui-font);
+}
+
+.shape-energy-fields select:focus-visible,
+.conformer-card-select:focus-visible,
+.shape-calculations .table-scroll:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.shape-ensemble {
+    margin: 1rem 0 0;
+    color: var(--ink-2);
+}
+
+.conformer-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 1.3rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+@media (max-width: 1500px) {
+    .conformer-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.conformer-card {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    overflow: hidden;
+}
+
+.conformer-card[data-selected="true"] {
+    border-color: var(--accent);
+    background: var(--accent-50);
+}
+
+.conformer-card-select {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    padding: 1rem 1.1rem;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+}
+
+.conformer-card-select:hover .conformer-card-label { text-decoration: underline; }
+
+.conformer-card-label {
+    font: var(--type-heading-2-font);
+    letter-spacing: var(--type-heading-2-tracking);
+    color: var(--ink);
+}
+
+.conformer-card[data-selected="true"] .conformer-card-label { color: var(--accent-700); }
+
+.conformer-card-meta {
+    color: var(--ink-2);
+    font: var(--type-note-font);
+}
+
+.shape-picture {
+    display: flex;
+    min-height: 11rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+
+.shape-picture-empty {
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.shape-card-energy,
+.shape-usedby {
+    margin: 0;
+    padding: .7rem 1.1rem;
+    border-top: 1px solid var(--line-2);
+    overflow-wrap: anywhere;
+    font: var(--type-note-font);
+}
+
+.shape-usedby p { margin: .2rem 0 0; }
+
+.shape-card-key,
+.shape-usedby-key {
+    display: block;
+    color: var(--muted);
+    font: var(--type-label-font);
+}
+
+.shape-energy-absent { color: var(--ink-2); }
+
+.conformer-card .depositor-note { margin: 0; border-radius: 0; }
+
+.shape-energy-table caption { text-align: left; }
+
+.shape-stage { margin-top: 2rem; }
+
+.shape-calculations {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--line);
+}
+
+.shape-spread {
+    margin: .8rem 0 0;
+    padding-left: 1.2rem;
+    color: var(--ink-2);
+}
+
+.shape-calculations-table {
+    width: 100%;
+    min-width: 36rem;
+    border-collapse: collapse;
+}
+
+.shape-calculations-table th,
+.shape-calculations-table td {
+    padding: var(--s-3);
+    border-bottom: 1px solid var(--line-2);
+    text-align: left;
+    vertical-align: top;
+}
+
+.shape-calculations-table td { overflow-wrap: anywhere; }
+
+.shape-calculations-table thead th {
+    overflow-wrap: normal;
+    white-space: nowrap;
+}
+
+.shape-calculations-table tbody th {
+    min-width: 8rem;
+}
+
+.shape-picture-ask {
+    margin: 0;
+    padding: .4rem 1.1rem;
+    font: var(--type-note-font);
+}
+
+.shape-picture-ask button {
+    padding: .25rem .6rem;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--accent);
+    font: var(--type-ui-font);
+    cursor: pointer;
+}
+
+.shape-picture-ask button:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.shape-cell-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.shape-cell-list li + li { margin-top: .4rem; }
+
+.molecule-page-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.next-steps { margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--line); }
+.next-steps ul { margin: .8rem 0 0; padding-left: 1.2rem; }
+.next-steps li + li { margin-top: .4rem; }
+
+.next-steps a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .15em;
+}
+
+.next-steps a:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------
+   Evidence linkage — the shape behind the conformer card's own numbers:
+   observations fan out to calculation rows, calculation rows converge on
+   shared geometries. Directly answers the owner's report that "2 distinct
+   Geoms but then 4 conformers... 14 calculation rows but only 12 I see" --
+   every number was already correct, it just never said what it counted.
+   --------------------------------------------------------------------- */
+
+/* SHOULD-FIX-7 (species-entry/browse/chrome residuals re-review): this
+   used to carry `.card.card--sunken` (a sunken box) at its call site,
+   sitting between the bare `.conformer-picker` above it and the bare tab
+   strip below it -- one boxed section between two unboxed ones, the only
+   box of its kind on this page. Neither `SpeciesOverviewPage` nor any
+   record page boxes a plain content section either (a box on this page
+   means "this content is quoted/aside", e.g. `.supersession-notice` --
+   evidence for the selected conformer is neither), so this becomes bare
+   too, with the SAME top-rule rhythm `.conformer-picker` above it already
+   uses -- one shared "next section starts here" boundary treatment
+   rather than a second, box-shaped one. */
+.evidence-linkage {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--line);
+}
+
+.evidence-linkage h2 {
+    margin: 0;
+    font: var(--type-heading-1-font);
+    letter-spacing: var(--type-heading-1-tracking);
+    color: var(--ink);
+}
+
+/* The lead sentence -- `describeConformerEvidence` -- sits OUTSIDE the
+   `Disclosure` below, on purpose: it is the answer, and it must read
+   without a click. Kept at its own serif prose size (distinct from
+   `.note`'s smaller step) so it still reads as the panel's thesis, not as
+   another muted caption.
+
+   SHOULD-FIX-14 (species-entry/browse/chrome residuals re-review): was a
+   bespoke `1rem/1.6 var(--serif)` -- the named `--type-lede` step
+   (design-system.css) now, the same one `.tagline`/`.browse-intro` use --
+   see that token's own comment for why this role gets a named step
+   rather than a third near-identical bespoke declaration. */
+.evidence-linkage-story {
+    max-width: var(--measure-prose);
+    margin: .6rem 0 0;
+    color: var(--ink);
+    font: var(--type-lede-font);
+}
+
+/* `.evidence-linkage-note`/`.linkage-coverage` are RETIRED onto `.note`
+   (design-system.css) at their call sites -- both used to be their own
+   near-duplicate of that primitive (muted, capped prose width, small
+   sans text); one shared style now, per the same "one canonical style per
+   role" consolidation the rest of this page follows.
+   `.evidence-linkage-detail`'s own summary styling is RETIRED onto the
+   shared `Disclosure` component -- collapsed-by-default box/chevron/
+   summary chrome now comes from `.disclosure` (design-system.css) rather
+   than a local summary rule that had drifted to its own mono,
+   uncoloured-chevron style. It keeps ONE rule of its own: pure spacing
+   above the box (this is the last child inside `.evidence-linkage`, so
+   there is nothing below it to leave flush) -- the original top value,
+   preserved, so the disclosure's now-visible border doesn't sit flush
+   against `.evidence-linkage-story` immediately above it. */
+.evidence-linkage-detail {
+    margin-top: 1.1rem;
+}
+
+.linkage-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 1rem 0;
+    margin-top: 1.4rem;
+    /* SHOULD-FIX-5 (species-entry/browse/chrome residuals re-review): a
+       named container so the hide-on-wrap rule below (near
+       `.linkage-connector`) can key off THIS ROW'S OWN rendered width,
+       not the viewport's. At 1100px viewport the reserved 14rem ToC rail
+       (`page-shell.css`) leaves this row narrower than the ~836px three
+       steps need side by side, so it wraps mid-row -- above the existing
+       880px viewport breakpoint below, which never fires there (MEASURED:
+       third tile wraps, connector left pointing at nothing). A container
+       query catches the case a viewport media query structurally cannot:
+       chrome the row's OWN box, not the window, is eating. */
+    container-type: inline-size;
+    container-name: linkage-flow;
+}
+
+.linkage-step {
+    display: flex;
+    flex: 1 1 14rem;
+    flex-direction: column;
+    gap: .25rem;
+    min-width: 12rem;
+    padding: 0 1.25rem;
+}
+
+/* SHOULD-FIX-3 (re-review): was `600 2rem var(--serif)` -- a bespoke
+   headline size with no named step. This IS a number (the count each
+   step names, "18"/"7"/"11") -- `--type-data-large`, the design system's
+   own step for a headline scientific figure, is mono deliberately (per
+   the "mono only where the text is an identifier or number" target this
+   whole item measures against), not a face swap to avoid. */
+.linkage-step-count {
+    color: var(--accent-700);
+    font: var(--type-data-large-font);
+    letter-spacing: var(--type-data-large-tracking);
+    line-height: 1;
+}
+
+/* Was `600 .8rem var(--sans)` -- a bespoke size next to `--type-heading-3`
+   (sans 600 .875rem), the step this component's own role (a short label
+   naming what the number above it counts) already matches elsewhere on
+   this page. */
+.linkage-step-unit {
+    color: var(--ink);
+    font: var(--type-heading-3-font);
+    letter-spacing: var(--type-heading-3-tracking);
+}
+
+/* SHOULD-FIX-3 (re-review): face changed mono -> `--type-note-font`
+   (sans). "each a separate sighting of this basin" / "18 opt · 7 freq ·
+   7 sp, in 11 optimisation chains" are prose fragments describing what
+   the number above means, not identifiers -- MEASURED, this and its
+   mono siblings were most of why this page ran 51-68% mono by visible
+   character count. */
+.linkage-step-detail {
+    color: var(--muted-2);
+    font: var(--type-note-font);
+}
+
+/* SHOULD-FIX-3 (re-review): face changed mono -> `--type-note-font`
+   (sans) on the LIST -- "— 2 calculation outputs" is prose, not an
+   identifier. The geometry ref itself (`code` below) keeps `--type-data-
+   font` (mono) explicitly now that it no longer inherits it from this
+   parent -- "mono only where the text is an identifier or number", never
+   zero mono on this page. */
+.linkage-geometry-list {
+    margin: .4rem 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--ink-2);
+    font: var(--type-note-font);
+    line-height: 1.7;
+}
+
+.linkage-geometry-list code {
+    overflow-wrap: anywhere;
+    color: var(--accent-700);
+    font: var(--type-data-font);
+}
+
+.linkage-connector {
+    display: flex;
+    flex: none;
+    align-items: center;
+    /* SHOULD-FIX-5 (re-review): this used to be centered on the cross
+       axis against the WHOLE column -- against a short tile (a "1
+       observations" step with little detail text under it, next to a
+       taller sibling) the arrow hung well below the number it belongs
+       next to (MEASURED, ~150px below on a 350px-tall column). `start`
+       plus a top margin approximating the number's own baseline keeps
+       the arrow level with `.linkage-step-count` (2rem/line-height 1)
+       regardless of how much text renders beneath either step. */
+    align-self: start;
+    margin-top: .55rem;
+    color: var(--faint);
+    font-size: 1.4rem;
+}
+
+/* Companion to `.linkage-flow`'s container-query above: once a step
+   drops to its own line (the row is too narrow for three side by side,
+   but not narrow enough to have already switched to the deliberate
+   column layout below), an arrow next to a wrapped tile points at
+   nothing -- hide it rather than let it float. Gated to viewports ABOVE
+   the 880px column breakpoint: below that, `.linkage-flow` is
+   INTENTIONALLY a column with a rotated down-arrow between every step
+   (see that rule), which this must never suppress. */
+@media (min-width: 881px) {
+    @container linkage-flow (max-width: 836px) {
+        .linkage-connector { display: none; }
+    }
+}
+
+/* Layout-only now -- typography comes from `.note` (design-system.css) at
+   the call site (`className="note linkage-coverage"`); this keeps only
+   what `.note` doesn't supply: the top rule separating this line from the
+   flow diagram above it, and the emphasis on "Stage coverage" itself. */
+.linkage-coverage {
+    margin: 1.4rem 0 0;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--line-2);
+}
+
+.linkage-coverage strong { color: var(--ink); }
+
+/* ---------------------------------------------------------------------
+   Entry tabs — a real ARIA tablist. One flat row, one accent, no second
+   color marking "this is a computed product": the selected conformer
+   already carries that distinction now.
+   --------------------------------------------------------------------- */
+
+.entry-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.6rem;
+    margin: 2.5rem 0 0;
+    padding-bottom: 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.entry-tabs a {
+    padding: .1rem 0 .9rem;
+    color: var(--ink-2);
+    /* `--type-ui` (design-system.css) -- was a literal 500 originally,
+       replaced with a literal 400/600 pair, now the named UI step so this
+       tablist shares its face/size with every other UI control on the
+       page (chart toggles, disclosure summaries). Weight itself is still
+       overridden per state, never left at `--type-ui`'s own default 600:
+       400 here reads as the inactive tab against the selected tab's
+       explicit 600 immediately below. */
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    font-weight: 400;
+    white-space: nowrap;
+}
+
+.entry-tabs a:hover { color: var(--accent-700); }
+
+.entry-tabs a[aria-selected="true"] {
+    box-shadow: inset 0 -2px var(--accent);
+    color: var(--accent-700);
+    font-weight: 600;
+}
+
+/* A tab with content gets a small dot, not a colour change -- shape, not
+   colour alone, is what survives a colour-blind or high-contrast viewer.
+   `currentColor` ties it to whatever colour the tab link already has
+   (muted at rest, accent when selected/hovered), so it never needs its
+   own colour token. */
+.entry-tab-dot {
+    display: inline-block;
+    width: .4em;
+    height: .4em;
+    margin-left: .45em;
+    border-radius: 50%;
+    background: currentColor;
+    vertical-align: middle;
+}
+
+.entry-tabs a:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.tab-panel { margin-top: 2rem; }
+
+/* `.geometry-list`/`.geometry-item`/`.geometry-meta` (review finding,
+   NIT, PR 366): DELETED -- dead, no component in this page's scope
+   renders these classes; `ConformerGeometryTab.tsx` renders the geometry
+   tab through `.checklist` (entry-science.css) instead. */
+
+/* ---------------------------------------------------------------------
+   Records grouped by whether they trace to the selected conformer's own
+   evidence, or sit at entry level (not linked to one conformer). Neither
+   group is styled as more or less trustworthy than the other — this is
+   provenance shape, not a quality signal.
+   --------------------------------------------------------------------- */
+
+.conformer-evidence-group { margin-top: 1.75rem; }
+
+.conformer-evidence-group-heading {
+    margin: 0;
+    color: var(--ink);
+    font: var(--type-heading-2-font);
+    letter-spacing: var(--type-heading-2-tracking);
+}
+
+/* "Say so first and plainly" -- when the selected conformer has no records
+   of this kind, that fact is the whole answer to the question the reader
+   opened this tab to ask. Emphasized relative to the plain `.empty-projection`
+   wording every OTHER empty state on this page uses, so it reads as an
+   answer rather than a caption easy to skim past. */
+/* SHOULD-FIX-3 (re-review): was `600 .92rem/1.55 var(--sans)` -- a
+   bespoke size next to `--type-heading-3` (sans 600 .875rem), the
+   nearest named step for a short, emphasized statement like this one.
+   `line-height` stays its own wider value (this can run to two lines
+   inside the box; `--type-heading-3`'s own 1.4 was tuned for a
+   single-line heading). */
+.conformer-attribution-answer {
+    margin: .5rem 0 0;
+    padding: .85rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--accent-50);
+    color: var(--ink);
+    font: var(--type-heading-3-font);
+    letter-spacing: var(--type-heading-3-tracking);
+    line-height: 1.55;
+}
+
+/* Records traced to a conformer OTHER than the one selected are context,
+   not the answer -- collapsed by default, and visually secondary even once
+   opened, so "From Conformer Group 1" never reads with the same weight as
+   the selected conformer's own "From Conformer Group 2" heading above it. */
+/* Renders through the shared `Disclosure` component now -- box/chevron/
+   summary chrome comes from `.disclosure` (design-system.css); this rule
+   keeps only the spacing above it and the nested-group indentation below,
+   neither of which the shared primitive has an opinion on. */
+.conformer-attribution-other {
+    margin-top: 1.75rem;
+}
+
+.conformer-attribution-other .conformer-evidence-group {
+    margin-top: 1rem;
+    padding-left: 1rem;
+    border-left: 2px solid var(--line);
+}
+
+/* SHOULD-FIX-3 (re-review): was a bare `font-size: .95rem` override (on
+   the base rule's serif `--type-heading-2`) -- another off-scale size.
+   `--type-heading-3` (sans 600 .875rem) is the demoted-heading step this
+   page already uses elsewhere for "a heading, but a secondary one"
+   (`entry-science.css`'s `.model-block-heading`, this same fix's own
+   change to statmech's per-record card heading -- see that component's
+   comment); a demoted "From Conformer Group N" heading matches that
+   role, not a smaller serif restatement of the primary one. */
+.conformer-attribution-other .conformer-evidence-group-heading {
+    color: var(--muted-2);
+    font: var(--type-heading-3-font);
+    letter-spacing: var(--type-heading-3-tracking);
+}
+
+/* `.linkage-flow`'s three steps (`flex: 1 1 14rem` + `0 1.25rem` padding
+   each, plus two connectors) have an intrinsic width around 836px -- wider
+   than the 680px breakpoint everything else on this page stacks at. Below
+   680px that gap is moot (the 680px rule below already stacks it), but the
+   681-836px tablet band (an iPad portrait at 768px, for instance) sat
+   between the two: too narrow for three steps side by side, too wide to
+   trigger the 680px stack, so the row wrapped mid-flow and left a "→"
+   pointing at nothing. This own breakpoint, above the tablet band, covers
+   it; the shared 680px rule below still handles the narrower stack for
+   phones (it doesn't need its own linkage rules once this one exists,
+   since a max-width media query still applies at any narrower width). */
+@media (max-width: 880px) {
+    .linkage-flow { flex-direction: column; }
+    .linkage-step { flex: none; padding: 0; }
+    .linkage-connector { align-self: flex-start; transform: rotate(90deg); margin: .3rem 0 .3rem .4rem; }
+}
+
+@media (max-width: 680px) {
+    .entry-facts { gap: .85rem 1.2rem; }
+    .entry-tabs { gap: 1.1rem 1.6rem; }
+    .conformer-list { grid-template-columns: 1fr; }
+    .shape-calculations-table { min-width: 0; }
+    .shape-calculations-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .shape-calculations-table tr,
+    .shape-calculations-table th,
+    .shape-calculations-table td { display: block; width: auto; min-width: 0; }
+    .shape-calculations-table td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--muted);
+        font: var(--type-label-font);
+    }
+}

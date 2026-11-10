@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { paginationSchema } from "./listEnvelope"
+import { levelOfTheorySchema } from "./scientificSchemas"
 import { nextPageRequest, pageQuery } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
@@ -40,6 +41,8 @@ const recordSchema = z.object({
     }).passthrough(),
     energy: energyBlockSchema.nullable().optional(),
     conformer: conformerContextSchema.nullable().optional(),
+    level_of_theory: levelOfTheorySchema.nullable().optional(),
+    software_release: z.object({ software: z.string(), version: z.string().nullish() }).passthrough().nullable().optional(),
 }).passthrough()
 
 const responseSchema = z.object({
@@ -58,41 +61,45 @@ export type SinglePointEnergies = {
 export const SINGLE_POINT_PAGE_SIZE = 200
 export const SINGLE_POINT_MAX_PAGES = 50
 
+async function walkEnergies(
+    entryRef: string,
+    calculationType: "sp" | "opt",
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<SinglePointEnergies> {
+    const records: SpeciesCalculationEnergyRecord[] = []
+    let request = { offset: 0, limit: SINGLE_POINT_PAGE_SIZE }
+    for (let page = 0; page < SINGLE_POINT_MAX_PAGES; page += 1) {
+        const query = new URLSearchParams({ species_entry_ref: entryRef, calculation_type: calculationType })
+        for (const [key, value] of pageQuery(request)) query.set(key, value)
+        const payload = await requestScientificJson(`/api/v1/scientific/species-calculations/search?${query}`, signal, onRateLimited)
+        const response = parseScientificResponse(responseSchema, payload, "species calculation energy")
+        records.push(...response.records)
+        const next = response.pagination ? nextPageRequest(response.pagination) : null
+        if (!next) return { records, capped: false }
+        request = next
+    }
+    return { records, capped: true }
+}
+
 /**
- * Loads every `sp` calculation's electronic energy for one species entry,
- * keyed by `calculation_ref` for `ConformerSinglePointTab` to join against
- * the calculations it already has. It is a join index, not a list the reader
- * pages, so it reads every page, up to `SINGLE_POINT_MAX_PAGES`; past that it
- * says it stopped (`capped`) instead of presenting the rest as absent. It runs
- * only when the single-point tab is open (`useSpeciesSinglePoints`), never as
- * part of loading the entry.
- *
- * Returns `[]` (not a thrown error) on any network/parse failure -- this is
- * a "nice to have" enrichment of a page that otherwise renders fine without
- * it (the calculation ref link still works).
+ * Every `sp` calculation's electronic energy for one species entry, read page by page up to `SINGLE_POINT_MAX_PAGES`;
+ * past that it says it stopped (`capped`) instead of presenting the rest as absent. A failed read rejects, so a caller
+ * can say the energies could not be read instead of showing them as missing.
  */
-export async function loadSpeciesSinglePointEnergies(
+export function loadSpeciesSinglePointEnergies(
     entryRef: string,
     signal?: AbortSignal,
     onRateLimited?: (retryAfterSeconds: number) => void,
 ): Promise<SinglePointEnergies> {
-    try {
-        const records: SpeciesCalculationEnergyRecord[] = []
-        let request = { offset: 0, limit: SINGLE_POINT_PAGE_SIZE }
-        for (let page = 0; page < SINGLE_POINT_MAX_PAGES; page += 1) {
-            const query = new URLSearchParams({ species_entry_ref: entryRef, calculation_type: "sp" })
-            for (const [key, value] of pageQuery(request)) query.set(key, value)
-            const payload = await requestScientificJson(`/api/v1/scientific/species-calculations/search?${query}`, signal, onRateLimited)
-            const response = parseScientificResponse(responseSchema, payload, "species calculation energy")
-            records.push(...response.records)
-            const next = response.pagination ? nextPageRequest(response.pagination) : null
-            if (!next) return { records, capped: false }
-            request = next
-        }
-        return { records, capped: true }
-    } catch {
-        // A caller-initiated abort (route navigated away) is not a failure to swallow silently forever, but both
-        // callers already ignore an aborted fetch's result, so an empty result is a harmless value either way.
-        return { records: [], capped: false }
-    }
+    return walkEnergies(entryRef, "sp", signal, onRateLimited)
+}
+
+/** The final energy of every `opt` calculation of one entry, read the same way as the single-point energies. */
+export function loadSpeciesOptimisationEnergies(
+    entryRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<SinglePointEnergies> {
+    return walkEnergies(entryRef, "opt", signal, onRateLimited)
 }

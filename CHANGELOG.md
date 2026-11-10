@@ -2257,6 +2257,12 @@ wrapper over a contract that is itself still moving.
 
 ## Unreleased
 
+### Molecule page: its 3D shapes
+
+- Each conformer group is a card with a picture, plain-word counts, its energy relative to a reference shape at a level of theory the reader picks, and the thermo and rate records that name it.
+- The selected shape drives the 3D stage, a table of its calculations (how each deposit was found and every single-point energy on it) and the evidence tabs. Empty evidence tabs say so in hidden text, and only the active tab points at its panel.
+- Other versions of the molecule wrap long refs at 320 px.
+
 ### Tests pin sigma-vinyl radical E/Z perception from geometry (#820)
 
 - No behaviour change. Tests pin that a bent sigma-vinyl radical (1-propenyl, 1-methyl-1-propenyl,

@@ -81,7 +81,10 @@ export function ConformerSinglePointTab({ conformer, spEnergies }: {
                 <SectionHeading id="sp-heading">Single-point energy</SectionHeading>
                 <p>Single-point energy evidence for {conformerLabel(conformer)}, one row per deposited observation.</p>
             </div>
-            {spEnergies.status !== "ready" && (
+            {spEnergies.status === "failed" && (
+                <p className="note" role="alert">The single-point energies could not be read.</p>
+            )}
+            {(spEnergies.status === "loading" || spEnergies.status === "idle") && (
                 <p className="note" role="status">
                     The energies are still being read from the archive; an energy shown as not recorded may simply not have arrived yet.
                 </p>
@@ -141,6 +144,8 @@ export function ConformerSinglePointTab({ conformer, spEnergies }: {
                                             <td className="num" data-label="Energy">
                                                 {!row.calculation ? (
                                                     <span className="energy-display-absent">no single-point calculation recorded</span>
+                                                ) : spEnergies.status === "failed" ? (
+                                                    <span className="energy-display-absent">could not be read</span>
                                                 ) : valueHartree === null ? (
                                                     <span className="energy-display-absent">not recorded</span>
                                                 ) : (

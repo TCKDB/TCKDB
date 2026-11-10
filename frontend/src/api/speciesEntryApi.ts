@@ -133,7 +133,7 @@ export async function loadSpeciesEntry(
     return null
 }
 
-const CONFORMER_INCLUDES = ["observations", "observation_details", "calculations", "geometries", "fingerprints"]
+const CONFORMER_INCLUDES = ["observations", "observation_details", "calculations", "geometries"]
 
 /** Joins an entry ref and a conformer group ref into the one string key the cached loaders take. */
 export function conformerKey(entryRef: string, conformerGroupRef: string): string {
@@ -200,14 +200,6 @@ export async function loadEntryConformerPage(
     const { ref: entryRef, request } = parsePagedRef(pagedRefValue)
     const query = new URLSearchParams({ species_entry_ref: entryRef })
     for (const [key, value] of (request ? pageQuery(request) : new URLSearchParams({ limit: "50" }))) query.set(key, value)
-    // `fingerprints` populates `conformer_group.fingerprint` -- the numeric
-    // basin identity (quantized torsion bins + representative angles) that
-    // distinguishes one group from another under the same entry. Small
-    // (bounded per group, a handful of rotors) so requesting it on every
-    // load of this list -- rather than lazily, per card -- costs nothing
-    // meaningful and lets `ConformerSelector` render it without a second
-    // round trip per card.
-    //
     // `observation_details` is required alongside `observations` to get
     // each embedded observation's own `calculations` -- since issue #537
     // the default `observations` shape is a lean summary with no

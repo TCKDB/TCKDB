@@ -40,4 +40,13 @@ describe("shell links and controls keep the focus ring", () => {
             expect(focusRuleDeclarations(shellCss, `${withoutChild}:focus-visible`), selector).toMatch(RING)
         }
     })
+
+    it("wraps the site bar and gives search its own row below 60rem, so it never forces the page wider between 681px and 960px", () => {
+        const start = shellCss.indexOf("@media (max-width: 60rem)")
+        expect(start).toBeGreaterThan(-1)
+        const block = shellCss.slice(start, shellCss.indexOf("\n}\n", start))
+        expect(block).toMatch(/\.site-bar \{[^}]*flex-wrap: wrap/)
+        expect(block).toMatch(/\.site-search \{[^}]*flex: 1 0 100%/)
+        expect(block).toMatch(/\.site-search input \{[^}]*width: 100%/)
+    })
 })

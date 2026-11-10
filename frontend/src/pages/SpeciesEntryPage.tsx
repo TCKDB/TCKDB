@@ -1,12 +1,15 @@
 import { useEffect, useMemo } from "react"
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
-import "../species-entry.css"
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
+import "../molecule-page.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
-import { useSpeciesSinglePoints, type SinglePointsState } from "../hooks/useSpeciesSinglePoints"
+import { useSpeciesOptimisations, useSpeciesSinglePoints, type SinglePointsState } from "../hooks/useSpeciesSinglePoints"
 import { ConformerEvidenceLinkage } from "../components/ConformerEvidenceLinkage"
 import { conformerLabel, sortConformersForDisplay } from "../domain/conformerEvidence"
 import { ConformerGeometryTab } from "../components/ConformerGeometryTab"
-import { ConformerSelector } from "../components/ConformerSelector"
+import { ConformerGallery } from "../components/ConformerGallery"
+import { ShapeCalculations } from "../components/ShapeCalculations"
+import { ShapeStage } from "../components/ShapeStage"
+import { SpeciesEntryRelationshipMap } from "../components/RelationshipMap"
 import { ConformerSinglePointTab } from "../components/ConformerSinglePointTab"
 import { EntryStatmechSection } from "../components/EntryStatmechSection"
 import { EntryTabs } from "../components/EntryTabs"
@@ -180,9 +183,8 @@ function hasAnyEvidence(entry: SpeciesEntryProjection): boolean {
 // no id collision.
 function EmptyEntryEvidence() {
     return (
-        <section className="conformer-picker" aria-labelledby="conformer-picker-title">
-            <p className="eyebrow">Conformers</p>
-            <SectionHeading id="conformer-picker-title">Conformers</SectionHeading>
+        <section className="conformer-picker" aria-labelledby="shapes-heading">
+            <SectionHeading id="shapes-heading">Its 3D shapes</SectionHeading>
             <p className="empty-projection">No conformers are recorded for this entry.</p>
         </section>
     )
@@ -199,8 +201,9 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
     const requestedRef = searchParams.get("conformer")
-    // Read only while the single-point tab is open: loading the entry never waits for it.
-    const spEnergies = useSpeciesSinglePoints(entryRef, activeSection === "sp")
+    // The shapes and the single-point tab share this one read; loading the entry never waits for it.
+    const spEnergies = useSpeciesSinglePoints(entryRef, entry.availability.has_conformers)
+    const optEnergies = useSpeciesOptimisations(entryRef, entry.availability.has_conformers)
     const selectionParam = searchParams.get("selection")
     // The conformer groups are paged. `pageConformers` is the page on screen (the picker lists exactly these); the
     // SELECTION does not depend on it. A conformer on another page is opened by its own ref, and paging never writes
@@ -279,7 +282,7 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
             superseded by the ToC-top-alignment change, which puts every
             record page's header through the same slot so the ToC rail
             starts level with the header, not below it). */}
-        <PageShell identity={<>
+        <PageShell rail={<SpeciesEntryRelationshipMap entryRef={entryRef} smiles={entry.canonicalSmiles} />} identity={<>
             <Breadcrumbs crumbs={[
                 { label: "Molecules", to: BROWSE_KIND_PATHS.species },
                 { label: entry.formula ? <Formula value={entry.formula} /> : entry.canonicalSmiles, to: `/species/${entry.speciesRef}` },
@@ -300,17 +303,27 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
         <OtherVersions entry={entry} />
         {hasAnyEvidence(entry) ? (
             <>
-                <ConformerSelector
+                <ConformerGallery
+                    entryRef={entryRef}
+                    formula={entry.formula ?? entry.canonicalSmiles}
                     conformers={pageConformers}
-                    selectedRef={selectedRef}
-                    selectedLabel={selectedConformer ? conformerLabel(selectedConformer) : null}
-                    selectionIsDefault={selectionIsDefault}
+                    allConformers={conformers}
                     meta={conformerPages.meta}
                     onPage={conformerPages.goTo}
                     pagingBusy={conformerPages.busy}
                     pagingFailed={conformerPages.failed}
+                    selectedRef={selectedRef}
+                    selectedLabel={selectedConformer ? conformerLabel(selectedConformer) : null}
+                    selectionIsDefault={selectionIsDefault}
+                    defaultReferenceRef={defaultConformer?.conformer_group.conformer_group_ref ?? null}
+                    singlePoints={spEnergies}
+                    optimisations={optEnergies}
                     onSelect={selectConformer}
                 />
+                {selectedConformer && (
+                    <ShapeStage conformer={selectedConformer} formula={entry.formula ?? entry.canonicalSmiles} />
+                )}
+                {selectedConformer && <ShapeCalculations conformer={selectedConformer} singlePoints={spEnergies} optimisations={optEnergies} />}
                 {selectedConformer && <ConformerEvidenceLinkage conformer={selectedConformer} />}
 
                 <EntryTabs
@@ -334,8 +347,27 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
         ) : (
             <EmptyEntryEvidence />
         )}
+        <NextSteps entry={entry} />
         </PageShell>
     </section>
+}
+
+function NextSteps({ entry }: { entry: SpeciesEntryProjection }) {
+    return (
+        <section className="next-steps" aria-labelledby="next-steps">
+            <SectionHeading id="next-steps">Where to go next</SectionHeading>
+            <ul>
+                <li><Link to={`/species/${entry.speciesRef}`}>All versions of this molecule</Link></li>
+                <li>
+                    <Link to={`${BROWSE_KIND_PATHS.transition_state}?participant_smiles=${encodeURIComponent(entry.canonicalSmiles)}`}>
+                        Transition states for reactions of this molecule
+                    </Link>
+                </li>
+                <li><Link to="/methods">Levels of theory and methods</Link></li>
+                <li><Link to="/guide">How to read a record</Link></li>
+            </ul>
+        </section>
+    )
 }
 
 // The tab itself already carries the section's name (`EntryTabs`, id
