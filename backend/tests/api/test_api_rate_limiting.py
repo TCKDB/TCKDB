@@ -8,7 +8,7 @@ the fixed-window behavior in isolation.
 Bucket coverage:
 
 - ``login`` / ``register`` — unchanged from the original limiter.
-- ``anon_read`` — anonymous public scientific reads (GET + POST search).
+- ``anon_read`` — anonymous public scientific reads (GET + POST search and relative-energy).
 - ``auth_read`` — same routes with a credential present, plus the
   authenticated non-mutating fallback for non-public-read paths.
 - ``auth_write`` — authenticated mutating routes (uploads, admin, etc.).
@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.api.app import create_app
 from app.api.config import settings
-from app.api.deps import get_db, get_write_db
+from app.api.deps import get_db, get_snapshot_db, get_write_db
 from app.api.rate_limit import reset_rate_limit_store
 
 # A real authenticated mutating route; the upload handler will refuse
@@ -305,12 +305,8 @@ def test_default_budgets_match_spec():
 # ---------------------------------------------------------------------------
 
 _REL_BASE = "/api/v1/scientific/species-entries/se_abc123/conformers/relative-energies"
-_REL_READ_PATHS = [
-    _REL_BASE,
-    _REL_BASE + "/manifest",
-    _REL_BASE + "/compare",
-    _REL_BASE + "/compare/manifest",
-]
+_REL_READ_PATHS = [_REL_BASE, _REL_BASE + "/compare"]
+_REL_MANIFEST_PATHS = [_REL_BASE + "/manifest", _REL_BASE + "/compare/manifest"]
 
 
 def _bucket(method: str, path: str, *, api_key: str | None = None, query: bytes = b"") -> str:
@@ -342,6 +338,33 @@ def test_authenticated_relative_energy_post_uses_auth_read(path):
     assert _bucket("POST", path, api_key="k") == "auth_read"
 
 
+@pytest.mark.parametrize("path", _REL_MANIFEST_PATHS)
+def test_relative_energy_manifest_posts_are_not_reads(path):
+    assert _bucket("POST", path) == "anon_other"
+    assert _bucket("POST", path, api_key="k") == "auth_write"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/scientific/networks/search?x/kinetics/export-selected",
+        "/api/v1/scientific/species-entries/search?x/conformers/select",
+        "/api/v1/scientific/species-entries/search#x/conformers/select",
+        "/api/v1/scientific/species-entries/se_abc/conformers/relative-energies?x/manifest",
+        "/api/v1/scientific/species-entries/se_abc/conformers/relative-energies#x/manifest",
+    ],
+)
+def test_decoded_query_or_fragment_chars_cannot_shorten_the_path(path):
+    """A decoded %3F / %23 in the path stays part of the path being classified."""
+    assert _bucket("POST", path) == "anon_other"
+
+
+def test_real_search_paths_stay_reads():
+    assert _bucket("POST", "/api/v1/scientific/reactions/search") == "anon_read"
+    assert _bucket("POST", "/api/v1/scientific/species/search", api_key="k") == "auth_read"
+    assert _bucket("POST", "/api/v1/scientific/species/search", query=b"a=1") == "anon_read"
+
+
 def test_other_scientific_post_stays_anon_other():
     assert _bucket("POST", "/api/v1/scientific/species-entries/se_abc123/calculations/select") == "anon_other"
     assert _bucket("POST", "/api/v1/scientific/species-entries/se_abc123/anything") == "anon_other"
@@ -363,8 +386,28 @@ def test_other_scientific_post_stays_anon_other():
         "/api/v2/scientific/species-entries/se_abc/conformers/relative-energies",
         "/api/v1/other/species-entries/se_abc/conformers/relative-energies",
         "/api/v1/scientific/species-entries/se_abc/conformers/relative-energies-x",
+        "/api/v1/scientific/species-entries/se_abc/conformers/Relative-Energies",
+        "/api/v1/scientific/species-entries/spe;x/conformers/relative-energies",
+        "/api/v1/scientific/species-entries/spe-x/conformers/relative-energies",
+        "/api/v1/scientific/species-entries/s\u0435_abc/conformers/relative-energies",
         "/api/v1/scientific/species-entries/" + "a" * 65 + "/conformers/relative-energies",
     ],
 )
 def test_relative_energy_near_misses_stay_anon_other(path):
     assert _bucket("POST", path) == "anon_other"
+
+
+def test_relative_energy_post_is_counted_through_the_middleware(rate_limited_client, db_session, monkeypatch):
+    """Full stack: the read path spends anon_read; a manifest path spends anon_other."""
+    rate_limited_client.app.dependency_overrides[get_snapshot_db] = lambda: db_session
+    monkeypatch.setattr(settings, "rate_limit_anon_read_per_minute", 1)
+    monkeypatch.setattr(settings, "rate_limit_anon_other_per_minute", 1)
+    rate_limited_client.post(_REL_BASE, json={})
+    blocked = rate_limited_client.post(_REL_BASE, json={})
+    assert blocked.status_code == 429
+    assert blocked.json()["bucket"] == "anon_read"
+
+    rate_limited_client.post(_REL_BASE + "/manifest", json={})
+    blocked = rate_limited_client.post(_REL_BASE + "/manifest", json={})
+    assert blocked.status_code == 429
+    assert blocked.json()["bucket"] == "anon_other"
