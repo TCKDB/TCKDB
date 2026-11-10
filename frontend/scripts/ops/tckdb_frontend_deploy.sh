@@ -35,7 +35,7 @@ PORT="${TCKDB_FRONTEND_PORT:-8011}"
 LOCK_FILE="${TCKDB_FRONTEND_LOCK_FILE:-/tmp/tckdb-frontend-deploy.lock}"
 # Health wait: probe about once a second for ~30 s while the container starts.
 HEALTH_ATTEMPTS="${TCKDB_FRONTEND_HEALTH_ATTEMPTS:-30}"
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../../.." && pwd -P)"
 SITE_CONFIG="${TCKDB_FRONTEND_SITE_CONFIG:-}"
 if [[ -z "$SITE_CONFIG" && -f "$REPO_ROOT/.site-config.json" ]]; then
     SITE_CONFIG="$REPO_ROOT/.site-config.json"
@@ -62,6 +62,11 @@ d=json.load(sys.stdin)
 sys.exit(0 if isinstance(d,dict) and isinstance(d.get("homeExampleRef"),str) and re.fullmatch(r"(spe|rxe)_[a-z2-7]{26}",d["homeExampleRef"]) else 1)' >/dev/null 2>&1
     fi
 }
+
+# With a config file in play a JSON validator is required; without one the deploy needs neither.
+if [[ -n "$SITE_CONFIG" ]] && ! command -v jq >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
+    die "a site config is set but no JSON validator is installed; install jq or python3"
+fi
 
 # A path must be a regular file (not a directory, which Docker would create and mount as a
 # directory, and not a symlink), absolute, free of characters that split a mount option,
@@ -283,7 +288,11 @@ done
 echo "error: frontend not healthy after ${HEALTH_ATTEMPTS} attempts (~${HEALTH_ATTEMPTS}s): $LAST_FAILURE" >&2
 docker logs "$CONTAINER" 2>&1 | tail -50 >&2 || true
 if "$HAS_PREVIOUS"; then
-    restore_previous "candidate $IMAGE failed SPA/API health verification" || true
+    if [[ "$LAST_FAILURE" == *site-config.json* ]]; then
+        restore_previous "candidate $IMAGE served an invalid or missing /site-config.json" || true
+    else
+        restore_previous "candidate $IMAGE failed SPA/API health verification" || true
+    fi
 else
     docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
     echo "error: first-install candidate $IMAGE failed health verification; NPM remains on the API upstream" >&2
