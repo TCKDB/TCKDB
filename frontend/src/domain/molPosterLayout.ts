@@ -8,7 +8,7 @@ const COVALENT: Record<string, number> = {
     H: 0.31, B: 0.84, C: 0.76, N: 0.71, O: 0.66, F: 0.57, Si: 1.11, P: 1.07, S: 1.05, Cl: 1.02, Br: 1.2, I: 1.39,
 }
 const FALLBACK_RADIUS = 1.2
-const MAX_BOND_ATOMS = 400
+export const MAX_BOND_ATOMS = 400
 const radiusOf = (element: string) => COVALENT[element] ?? FALLBACK_RADIUS
 
 type Vec = [number, number, number]

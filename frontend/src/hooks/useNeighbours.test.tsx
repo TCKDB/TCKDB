@@ -69,7 +69,7 @@ describe("species entry neighbours", () => {
         await waitFor(() => expect(list.textContent).toContain("Reactions with this molecule"))
         expect(list.textContent).toContain("The molecule")
         expect(list.textContent).toContain("3 found")
-        expect(list.textContent).toContain("2 found")
+        expect(list.textContent).toContain("2 reaction entries")
         expect(list.textContent).not.toContain("Calculations")
         for (const link of screen.getAllByRole("link", { name: /^Networks/ })) expect(link).toHaveAttribute("href", "/networks/net_1")
         expect(screen.queryAllByRole("link", { name: /^Reactions with this molecule/ })).toHaveLength(0)
@@ -104,12 +104,30 @@ describe("species entry neighbours", () => {
         expect(hits).toHaveLength(5)
     })
 
-    it("leaves out the node of a read that fails and keeps the rest", async () => {
+    it("marks the node of a read that fails as not available and keeps the rest", async () => {
         mockReads({ conformers: () => HttpResponse.json({ error: "boom" }, { status: 500 }) as unknown as Response })
         render(map())
         act(() => observers[0].callback([{ isIntersecting: true }]))
         const list = await screen.findByRole("list", { name: "Connected records" })
         await waitFor(() => expect(list.textContent).toContain("The molecule"))
-        expect(list.textContent).not.toContain("Conformer groups")
+        expect(list.textContent).toContain("Conformer groups")
+        expect(list.textContent).toContain("Not available right now")
+        expect(screen.queryAllByRole("link", { name: /Conformer groups/ })).toHaveLength(0)
+    })
+
+    it("shows every node as not available, not as no connections, when all five reads fail", async () => {
+        const fail = () => HttpResponse.json({ detail: "boom" }, { status: 500 })
+        server.use(
+            http.get("/api/v1/scientific/species/search", fail),
+            http.get("/api/v1/scientific/conformers/search", fail),
+            http.get("/api/v1/scientific/species-calculations/search", fail),
+            http.get("/api/v1/scientific/networks/search", fail),
+            http.get("/api/v1/scientific/reactions/search", fail),
+        )
+        render(map())
+        act(() => observers[0].callback([{ isIntersecting: true }]))
+        await waitFor(() => expect(screen.getAllByText("Not available right now").length).toBeGreaterThanOrEqual(5))
+        expect(screen.queryByText("No connected records were found.")).toBeNull()
+        expect(screen.queryAllByRole("link", { name: /Conformer groups/ })).toHaveLength(0)
     })
 })

@@ -82,6 +82,15 @@ describe("RelationshipMap", () => {
         expect(screen.getByTestId("where")).toHaveTextContent("/species/spc_1")
     })
 
+    it("wraps long labels onto lines at word boundaries and never clips with an ellipsis", () => {
+        const { container } = renderMap()
+        const texts = Array.from(container.querySelectorAll("svg.rel-map-figure text"))
+        expect(texts.some((t) => (t.textContent ?? "").includes("\u2026"))).toBe(false)
+        const reactions = renderMap([{ id: "r", kind: "reaction", label: "Reactions with this molecule", relation: "x", to: null, found: "4 reaction entries" }])
+        const label = Array.from(reactions.container.querySelectorAll("svg.rel-map-figure text.rel-map-label")).pop()!
+        expect(Array.from(label.querySelectorAll("tspan")).map((t) => t.textContent)).toEqual(["Reactions with this", "molecule"])
+    })
+
     it("says so when nothing is connected, and while it is loading", () => {
         renderMap([], "ready")
         expect(screen.getByText("No connected records were found.")).toBeInTheDocument()

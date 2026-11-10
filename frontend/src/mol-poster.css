@@ -15,7 +15,7 @@
 
 .mol-poster-atom {
     stroke: var(--bond);
-    stroke-width: 1;
+    stroke-width: 1.5;
 }
 
 .mol-poster-atom--c { fill: var(--atom-C); }

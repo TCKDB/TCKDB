@@ -32,51 +32,74 @@ export type SpeciesEntryProbes = {
     reactions: NeighbourProbe | null
 }
 
+const UNAVAILABLE = "Not available right now"
+
+type ProbeName = keyof SpeciesEntryProbes
+const FAILED_NODES: Record<ProbeName, Pick<NeighbourNode, "kind" | "label" | "relation">> = {
+    molecule: { kind: "species", label: "The molecule", relation: "All its versions" },
+    conformers: { kind: "conformer-group", label: "Conformer groups", relation: "Shapes of this entry" },
+    calculations: { kind: "calculation", label: "Calculations", relation: "Run on this entry" },
+    networks: { kind: "network", label: "Networks", relation: "Pressure-dependent networks with this entry" },
+    reactions: { kind: "reaction", label: "Reactions with this molecule", relation: "Either side of the equation" },
+}
+
 /**
- * Nodes for a species entry. A probe that failed (`null`) or found nothing leaves its node out. A group opens a
- * record page only when the read found exactly one record; otherwise it opens the section of this page that lists
- * them, if there is one, and is plain text if not.
+ * Nodes for a species entry. A probe that found nothing leaves its node out; one that failed (`failed`) stays as plain
+ * text saying it is not available. A group opens a record page only when the read found exactly one record; otherwise
+ * it opens the section of this page that lists them, if there is one, and is plain text if not. Calculations are
+ * always plain text, since no page lists them for this entry.
  */
-export function speciesEntryNodes(entryRef: string, probes: SpeciesEntryProbes): NeighbourNode[] {
+export function speciesEntryNodes(
+    entryRef: string,
+    probes: SpeciesEntryProbes,
+    failed: ReadonlySet<ProbeName> = new Set(),
+): NeighbourNode[] {
     const nodes: NeighbourNode[] = []
-    const speciesRef = text(probes.molecule?.row?.species_ref)
-    if (probes.molecule && speciesRef) {
-        nodes.push({
-            id: "molecule", kind: "species", label: "The molecule", relation: "All its versions",
-            to: `/species/${encodeURIComponent(speciesRef)}`, found: null,
-        })
-    }
     const geometrySection = `/species-entries/${encodeURIComponent(entryRef)}/geometry`
-    if (probes.conformers && probes.conformers.total > 0) {
+    const unavailable = (name: ProbeName) =>
+        nodes.push({ id: name, ...FAILED_NODES[name], to: null, found: UNAVAILABLE })
+
+    if (failed.has("molecule")) unavailable("molecule")
+    else {
+        const speciesRef = text(probes.molecule?.row?.species_ref)
+        if (probes.molecule && speciesRef) {
+            nodes.push({
+                id: "molecule", ...FAILED_NODES.molecule, to: `/species/${encodeURIComponent(speciesRef)}`, found: null,
+            })
+        }
+    }
+    if (failed.has("conformers")) unavailable("conformers")
+    else if (probes.conformers && probes.conformers.total > 0) {
         const ref = text(record(probes.conformers.row?.conformer_group)?.conformer_group_ref)
         nodes.push({
-            id: "conformers", kind: "conformer-group", label: "Conformer groups", relation: "Shapes of this entry",
+            id: "conformers", ...FAILED_NODES.conformers,
             to: probes.conformers.total === 1 && ref ? `/conformer-groups/${encodeURIComponent(ref)}` : geometrySection,
             found: foundText(probes.conformers.total),
         })
     }
-    if (probes.calculations && probes.calculations.total > 0) {
-        const ref = text(record(probes.calculations.row?.calculation)?.calculation_ref)
+    if (failed.has("calculations")) unavailable("calculations")
+    else if (probes.calculations && probes.calculations.total > 0) {
         nodes.push({
-            id: "calculations", kind: "calculation", label: "Calculations", relation: "Run on this entry",
-            to: probes.calculations.total === 1 && ref ? `/calculations/${encodeURIComponent(ref)}` : geometrySection,
-            found: foundText(probes.calculations.total),
+            id: "calculations", ...FAILED_NODES.calculations, to: null, found: foundText(probes.calculations.total),
         })
     }
-    if (probes.networks && probes.networks.total > 0) {
+    if (failed.has("networks")) unavailable("networks")
+    else if (probes.networks && probes.networks.total > 0) {
         const ref = text(record(probes.networks.row?.network)?.network_ref)
         nodes.push({
-            id: "networks", kind: "network", label: "Networks", relation: "Pressure-dependent networks with this entry",
+            id: "networks", ...FAILED_NODES.networks,
             to: probes.networks.total === 1 && ref ? `/networks/${encodeURIComponent(ref)}` : null,
             found: foundText(probes.networks.total),
         })
     }
-    if (probes.reactions && probes.reactions.total > 0) {
+    if (failed.has("reactions")) unavailable("reactions")
+    else if (probes.reactions && probes.reactions.total > 0) {
         const ref = text(probes.reactions.row?.reaction_entry_ref)
+        const total = probes.reactions.total
         nodes.push({
-            id: "reactions", kind: "reaction", label: "Reactions with this molecule", relation: "Either side of the equation",
-            to: probes.reactions.total === 1 && ref ? `/reaction-entries/${encodeURIComponent(ref)}` : null,
-            found: foundText(probes.reactions.total),
+            id: "reactions", ...FAILED_NODES.reactions,
+            to: total === 1 && ref ? `/reaction-entries/${encodeURIComponent(ref)}` : null,
+            found: `${total} reaction ${total === 1 ? "entry" : "entries"}`,
         })
     }
     return nodes

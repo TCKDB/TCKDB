@@ -20,7 +20,7 @@ export function createLiveViewerSlot(): LiveViewerSlot {
     }
 }
 
-/** Without a provider each stage has its own slot, so a lone viewer still works. */
+/** Without a provider there is no one-viewer limit. */
 export const LiveViewerSlotContext = createContext<LiveViewerSlot | null>(null)
 
 export function useLiveViewerSlot(): LiveViewerSlot | null {

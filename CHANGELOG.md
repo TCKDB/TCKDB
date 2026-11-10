@@ -24,7 +24,7 @@ dataset must never require a code release.
 
 ## Picture first on the geometry page (2026-11-10)
 
-- **Behaviour:** the geometry page shows a ball-and-stick picture drawn from the stored coordinates, with a "Show in 3D" button that opens the interactive viewer; the viewer's rotate and zoom buttons are always visible. Only one interactive viewer is open per page, and if the browser cannot start WebGL the picture stays with one sentence saying so. Page shells can carry an optional side column, and a relationship map component (connected records as links plus a text list) is available for record pages to adopt.
+- **Behaviour:** the geometry page shows a ball-and-stick picture drawn from the stored coordinates, with a "Show in 3D" button that opens the interactive viewer; the viewer's rotate and zoom buttons are always visible. Only one interactive viewer is open per page, and if the browser cannot start WebGL the picture stays with one sentence saying so.
 - **Schema and migration:** none. No new environment variable.
 
 ## Record page building blocks (2026-11-10)

@@ -406,7 +406,7 @@ describe("GeometryDetailPage", () => {
         expect(within(viewerSection).getByRole("button", { name: "Show in 3D" })).toBeVisible()
         expect(viewerSection.querySelector(".viewer-canvas")).toBeNull()
         expect(within(viewerSection).getByText(
-            /Bonds shown are inferred from interatomic distance for legibility only; they are not part of the deposited record\./,
+            /Bonds are drawn where two atoms are close enough to be bonded\. The record itself stores only atoms and their positions\./,
         )).toBeVisible()
     })
 
@@ -417,7 +417,7 @@ describe("GeometryDetailPage", () => {
         await screen.findByRole("heading", { name: "CH4 geometry" })
         const viewerSection = screen.getByRole("heading", { name: "Structure view" }).closest("section") as HTMLElement
         fireEvent.click(within(viewerSection).getByRole("button", { name: "Show in 3D" }))
-        expect(await within(viewerSection).findByText(/The 3D view could not start in this browser/)).toBeVisible()
+        expect(await within(viewerSection).findByText(/The interactive 3D view could not start in this browser/)).toBeVisible()
         expect(within(viewerSection).getByRole("img", { name: "Ball-and-stick picture of CH4" })).toBeVisible()
         expect(within(viewerSection).queryByRole("button", { name: "Show in 3D" })).toBeNull()
         expect(viewerSection.querySelector(".viewer-canvas")).toBeNull()

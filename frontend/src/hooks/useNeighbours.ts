@@ -88,6 +88,7 @@ export function useSpeciesEntryNeighbours(entryRef: string, smiles: string | nul
         const probes = settled.scope === scope ? settled.probes : {}
         const expected = PROBES.filter(({ key }) => key(entryRef, smiles) !== null).map(({ name }) => name)
         const done = expected.every((name) => name in probes)
+        const failed = new Set(expected.filter((name) => name in probes && probes[name] === null))
         return {
             status: done ? "ready" : "loading",
             nodes: speciesEntryNodes(entryRef, {
@@ -96,7 +97,7 @@ export function useSpeciesEntryNeighbours(entryRef: string, smiles: string | nul
                 calculations: probes.calculations ?? null,
                 networks: probes.networks ?? null,
                 reactions: probes.reactions ?? null,
-            }),
+            }, failed),
         }
     }, [enabled, settled, scope, entryRef, smiles])
 }
