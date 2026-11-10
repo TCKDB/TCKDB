@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom"
 import { RelationshipMap } from "./RelationshipMap"
 import type { NeighbourNode } from "../domain/neighbourNodes"
+import { LINE_CHARS } from "../domain/wrapLabel"
 import mapCss from "../relationship-map.css?raw"
 
 afterEach(cleanup)
@@ -30,6 +31,21 @@ function renderMap(nodes: NeighbourNode[] = NODES, status: "ready" | "loading" =
 }
 
 describe("RelationshipMap", () => {
+    it("keeps every drawn line within the per-line budget, including a long reference", () => {
+        const long = `spe_${"x".repeat(25)}`
+        expect(long).toHaveLength(29)
+        const nodes: NeighbourNode[] = [
+            { id: long, kind: "species-entry", label: "CC(C)(C)OC(=O)N1CCC(CC1)C(=O)O, singlet", relation: `A version of this molecule, ${long}`, to: `/species-entries/${long}`, found: null },
+        ]
+        const { container } = renderMap(nodes)
+        const lines = [...container.querySelectorAll("svg.rel-map-figure tspan")].map((el) => el.textContent ?? "")
+        expect(lines.length).toBeGreaterThan(3)
+        for (const line of lines) expect(line.length).toBeLessThanOrEqual(LINE_CHARS)
+        expect(lines.join("")).toContain(long.replace(/\s/g, ""))
+        expect(screen.getAllByRole("link", { name: new RegExp(long) }).length).toBeGreaterThan(0)
+        expect(container.querySelector(".rel-map-item-note")?.textContent).toContain(long)
+    })
+
     it("draws a group of links under a heading, never one image around the links", () => {
         const { container } = renderMap()
         const svg = container.querySelector("svg.rel-map-figure")!

@@ -1,12 +1,12 @@
 const LINE_CHARS = 21
 
-/** Breaks a word longer than a line, preferably after a bracket, "=", ",", "." or "-", else at the line width. */
+/** Breaks a word longer than a line, preferably after a bracket, "=", ",", ".", "-" or "_", else at the line width. */
 function splitLongWord(word: string): string[] {
     const parts: string[] = []
     let rest = word
     while (rest.length > LINE_CHARS) {
         const window = rest.slice(0, LINE_CHARS)
-        const at = Math.max(...[...window].map((ch, i) => ("()=,.-".includes(ch) ? i : -1)))
+        const at = Math.max(...[...window].map((ch, i) => ("()=,.-_".includes(ch) ? i : -1)))
         const cut = at >= LINE_CHARS / 2 ? at + 1 : LINE_CHARS
         parts.push(rest.slice(0, cut))
         rest = rest.slice(cut)

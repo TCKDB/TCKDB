@@ -51,6 +51,9 @@
     margin-left: auto;
 }
 
+/* Search comes last in the markup so the Tab order matches the narrow layout; on a full-width bar it is drawn first. */
+.site-search { order: -1; }
+
 .site-search input {
     width: clamp(10rem, 24vw, 19rem);
     min-height: 2.25rem;

@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Site polish: map labels, shapes note, search order, linked records (Unreleased)
+
+- **Behaviour:** every line of a relationship map label, including the line that names a version's reference, wraps inside its box. The molecule page's "Its 3D shapes" section states its order once (the archive's order across pages and the card order within a page) and says "shape" where it said "conformer basin". The site search comes after the theme control and Sign in in Tab order; on a full-width bar it is still drawn first. A link to a thermochemistry, statistical mechanics or transport record on a later page opens that tab on the page holding the record.
+- **Schema and migration:** none. No new environment variable.
+
 ## Molecule page: versions and all values (Unreleased)
 
 - **Behaviour:** the molecule page (`/species/:ref`) opens with breadcrumbs, a lede built from codes and a map of its versions. "Versions of this molecule" lists every version with what it holds and its review status. "All values for this molecule" lists every thermochemistry and statistical mechanics record across all versions, each naming its version, with its values, levels of theory, programs and review status, in the order the archive served the lists (stated on the page). Links and buttons on the numbers tables are at least 44px high on phones.

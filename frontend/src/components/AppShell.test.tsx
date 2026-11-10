@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { BROWSE_KINDS, BROWSE_KIND_PATHS, RELATED_BROWSE_KIND, type BrowseKind } from "../api/browseApi"
+import shellCss from "../app-shell.css?raw"
 import { AppShell } from "./AppShell"
 import { AuthProvider } from "./AuthProvider"
 import { PageShell } from "./PageShell"
@@ -47,15 +48,29 @@ describe("primary navigation", () => {
         ])
     })
 
-    it("tabs through the skip link, the wordmark, each link, then the search box", async () => {
+    it("tabs through the skip link, the wordmark, each link, the theme control, sign in, then the search box", async () => {
         const user = userEvent.setup()
         renderShell()
+        await screen.findByRole("link", { name: "Sign in" })
         await user.tab(); expect(screen.getByText("Skip to content")).toHaveFocus()
         await user.tab(); expect(screen.getByRole("link", { name: "TCKDB home" })).toHaveFocus()
         for (const name of ["Molecules", "Reactions", "Methods", "Guide"]) {
             await user.tab(); expect(screen.getByRole("link", { name })).toHaveFocus()
         }
+        for (const name of ["Light", "Dark", "System"]) {
+            await user.tab(); expect(screen.getByRole("radio", { name })).toHaveFocus()
+        }
+        await user.tab(); expect(screen.getByRole("link", { name: "Sign in" })).toHaveFocus()
         await user.tab(); expect(screen.getByRole("searchbox", { name: "Search molecules and reactions" })).toHaveFocus()
+    })
+
+    it("puts the search last in the markup and draws it first only on a full-width bar", () => {
+        const { container } = renderShell()
+        const end = container.querySelector(".site-bar-end")!
+        expect(end.lastElementChild).toHaveClass("site-search")
+        const narrow = shellCss.slice(shellCss.indexOf("@media (max-width: 60rem)"))
+        expect(shellCss).toMatch(/\.site-search \{ order: -1; \}/)
+        expect(narrow).toMatch(/\.site-search \{ order: 3;/)
     })
 
     it("marks only the link for the current page", () => {

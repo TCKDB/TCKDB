@@ -718,6 +718,41 @@ describe("EntryThermoSection", () => {
         expect(seen.at(-1)).toEqual({ offset: "0", limit: "2" })
     })
 
+    it("opens on the page that holds the record a fragment names, when that record is not on the first page", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const url = new URL(request.url)
+            const start = Number(url.searchParams.get("offset") ?? 0)
+            const size = Number(url.searchParams.get("limit") ?? 2)
+            const all = mockRecords()
+            return HttpResponse.json(mockResponse({
+                records: all.slice(start, start + size),
+                pagination: { offset: start, limit: size, returned: all.slice(start, start + size).length, total: all.length },
+            }))
+        }))
+        render(
+            <MemoryRouter initialEntries={["/#thermo-heading-thm_gamma"]}>
+                <EntryThermoSection entryRef={entryRef} />
+            </MemoryRouter>,
+        )
+        expect(await screen.findByText("Showing 3\u20133 of 3 thermochemistry records.")).toBeVisible()
+        expect(document.getElementById("thermo-heading-thm_gamma")).not.toBeNull()
+        expect(screen.queryByText("thm_alpha")).not.toBeInTheDocument()
+    })
+
+    it("stays on the first page when the fragment names a record the list does not hold", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
+            records: mockRecords().slice(0, 2),
+            pagination: { offset: 0, limit: 2, returned: 2, total: 3 },
+        }))))
+        render(
+            <MemoryRouter initialEntries={["/#thermo-heading-thm_missing"]}>
+                <EntryThermoSection entryRef={entryRef} />
+            </MemoryRouter>,
+        )
+        expect(await screen.findByText("thm_alpha")).toBeVisible()
+        expect(screen.getByText("Showing 1\u20132 of 3 thermochemistry records.")).toBeVisible()
+    })
+
     it("states what the server said about the list: its display order and the records it hid by default", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
             request: {

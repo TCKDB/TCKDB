@@ -35,7 +35,8 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
     const { nodes } = state
     const rows = nodes.map((node) => {
         const lines = wrapLabel(node.label)
-        return { lines, height: 22 + 16 * (lines.length + 1) }
+        const noteLines = wrapLabel(node.found ?? node.relation)
+        return { lines, noteLines, height: 22 + 16 * (lines.length + noteLines.length) }
     })
     const tops: number[] = []
     let total = PAD
@@ -61,7 +62,7 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
                         <text x={SELF_X} y={cy + 20} textAnchor="middle" className="rel-map-label">{selfLabel}</text>
                     </Link>
                     {nodes.map((node, index) => {
-                        const { lines, height: rowHeight } = rows[index]
+                        const { lines, noteLines, height: rowHeight } = rows[index]
                         const boxTop = tops[index] + 4
                         const mid = tops[index] + rowHeight / 2
                         const body = (
@@ -74,7 +75,9 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
                                     ))}
                                 </text>
                                 <text x={NODE_X + 36} y={boxTop + 18 + 16 * lines.length} className="rel-map-note">
-                                    {node.found ?? node.relation}
+                                    {noteLines.map((line, lineIndex) => (
+                                        <tspan key={lineIndex} x={NODE_X + 36} dy={lineIndex === 0 ? 0 : 16}>{line}</tspan>
+                                    ))}
                                 </text>
                             </>
                         )
