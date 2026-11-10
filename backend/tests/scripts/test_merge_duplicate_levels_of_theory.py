@@ -82,7 +82,6 @@ def _pre_574_hash(method: str, basis: str) -> str:
         "dispersion": None,
         "solvent": None,
         "solvent_model": None,
-        "keywords": None,
         "spin_treatment": "unknown",
     }
     return hashlib.sha256(

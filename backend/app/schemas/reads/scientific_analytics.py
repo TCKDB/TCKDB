@@ -54,15 +54,15 @@ from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH,
 )
 from app.schemas.reads.scientific_common import (
+    MAX_CURSOR_LENGTH,
+    CursorToken,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
+    WatermarkEcho,
 )
-
-#: A cursor is base64 of a small JSON payload. The bound exists to reject a
-#: 10 MB query parameter, not to validate the token — decoding does that.
-MAX_CURSOR_LENGTH: int = 4096
 
 #: Point groups are short symbols (``C2v``, ``D3h``, ``Ci``).
 MAX_POINT_GROUP_LENGTH: int = 32
@@ -90,28 +90,12 @@ class AnalyticsPagingRequest(BaseModel):
     include: list[str] = Field(default_factory=list)
     offset: int = 0
     limit: int = 50
-    cursor: str | None = Field(default=None, max_length=MAX_CURSOR_LENGTH)
+    cursor: CursorToken = None
 
 
 # ---------------------------------------------------------------------------
 # Shared response fragments
 # ---------------------------------------------------------------------------
-
-
-class WatermarkEcho(BaseModel):
-    """The snapshot bound in force for this traversal.
-
-    ``taken_at`` is when the traversal's snapshot was established — the
-    moment the first page was served, not the moment this page was. It is
-    informational: the authoritative bound travels inside the opaque cursor.
-
-    The bound itself is a record id and is therefore deliberately not echoed;
-    internal integer ids are hidden from public responses by policy, and the
-    caller never needs it.
-    """
-
-    taken_at: datetime
-    release_ref: str | None = None
 
 
 class AnalyticsRequestEcho(ProfiledRequestEcho):
@@ -120,8 +104,6 @@ class AnalyticsRequestEcho(ProfiledRequestEcho):
     filter: dict[str, object]
     sort: OrderEcho
     include: list[str] = Field(default_factory=list)
-    #: ``offset`` or ``cursor`` — which traversal contract served this page.
-    pagination_mode: str
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +204,7 @@ class KineticsAnalyticsRecord(BaseModel):
     created_at: datetime | None = None
 
 
-class KineticsAnalyticsResponse(BaseModel):
+class KineticsAnalyticsResponse(ScientificResponse):
     """Response envelope for ``/scientific/analytics/kinetics``."""
 
     request: AnalyticsRequestEcho
@@ -299,7 +281,7 @@ class ThermoAnalyticsRecord(BaseModel):
     created_at: datetime | None = None
 
 
-class ThermoAnalyticsResponse(BaseModel):
+class ThermoAnalyticsResponse(ScientificResponse):
     """Response envelope for ``/scientific/analytics/thermo``."""
 
     request: AnalyticsRequestEcho
@@ -378,7 +360,7 @@ class StatmechAnalyticsRecord(BaseModel):
     created_at: datetime | None = None
 
 
-class StatmechAnalyticsResponse(BaseModel):
+class StatmechAnalyticsResponse(ScientificResponse):
     """Response envelope for ``/scientific/analytics/statmech``."""
 
     request: AnalyticsRequestEcho
@@ -462,7 +444,7 @@ class CalculationAnalyticsRecord(BaseModel):
     created_at: datetime | None = None
 
 
-class CalculationAnalyticsResponse(BaseModel):
+class CalculationAnalyticsResponse(ScientificResponse):
     """Response envelope for ``/scientific/analytics/calculations``."""
 
     request: AnalyticsRequestEcho

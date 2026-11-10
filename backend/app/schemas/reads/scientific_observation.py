@@ -44,6 +44,8 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
+    WatermarkEcho,
 )
 
 
@@ -138,13 +140,17 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificSpeciesObservationsResponse(BaseModel):
+class ScientificSpeciesObservationsResponse(ScientificResponse):
     """Response envelope for GET .../species-entries/{id}/observations."""
 
     request: RequestEcho
     review_summary: ReviewStatusSummary
     records: list[MolecularPropertyObservationRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [

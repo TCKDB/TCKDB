@@ -394,13 +394,13 @@ def persist_structure_determinations(
                             session,
                             calc=calculation,
                             geometry_id=source_geometry_id,
-                            field=f"structure_determinations['{declaration.key}']",
+                            field=f"structure_determinations[{declaration.key!r}]",
                         )
                         assert_isotopes(
                             session,
                             calc=calculation,
                             geometry_id=source_geometry_id,
-                            field=f"structure_determinations['{declaration.key}']",
+                            field=f"structure_determinations[{declaration.key!r}]",
                         )
                     session.add(
                         StructureDeterminationSource(

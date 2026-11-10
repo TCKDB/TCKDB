@@ -15,12 +15,20 @@ Backend-only read/CRUD species-entry schemas remain in the backend
 package and continue to import the mixin from this module via the shim.
 """
 
+import re
 from collections.abc import Sequence
 from typing import Self
 
 from pydantic import Field, field_validator, model_validator
 
 from tckdb_schemas.common import SchemaBase
+from tckdb_schemas.electronic_state import (
+    canonical_term_symbol,
+    check_electronic_state_label,
+    check_term_symbol,
+    is_valid_term_symbol,
+    TRIM_CHARS,
+)
 from tckdb_schemas.enums import (
     MoleculeKind,
     SpeciesEntryStateKind,
@@ -28,6 +36,9 @@ from tckdb_schemas.enums import (
     StereoKind,
 )
 from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
+
+#: The closed vocabulary of a stereo descriptor (and of ``stereo_label``).
+STEREO_DESCRIPTOR_PATTERN = re.compile(r"(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*")
 
 _IDENTITY_TEXT_FIELDS = (
     "unmapped_smiles",
@@ -51,6 +62,59 @@ class SpeciesEntryIdentityValidatorMixin:
             )
 
         return self
+
+
+class SpeciesEntryIdentityWriteValidatorMixin:
+    """The state-label and term-symbol checks, for models that *accept* the fields.
+
+    Deliberately separate from :class:`SpeciesEntryIdentityValidatorMixin`, which read schemas
+    share: a read model must keep rendering a row stored before the grammar existed.
+
+    Each accepted value is replaced by its one canonical spelling
+    (:mod:`tckdb_schemas.electronic_state`), so every spelling of a state is one stored value and
+    one species-entry identity. A term symbol the depositor wrote differently is kept as typed in
+    ``term_symbol_raw`` unless they supplied a ``term_symbol_raw`` of their own; a state label has
+    no raw field and is only canonicalised.
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def keep_the_typed_term_symbol_as_raw(cls, data: object) -> object:
+        """Copy a differently spelled ``term_symbol`` into ``term_symbol_raw`` before it is canonicalised."""
+
+        if not isinstance(data, dict):
+            return data
+        typed = data.get("term_symbol")
+        raw = data.get("term_symbol_raw")
+        # A blank raw is "not given": it would be cleared to None, losing the typed spelling.
+        if not isinstance(typed, str) or (isinstance(raw, str) and raw.strip()) or (raw is not None and not isinstance(raw, str)):
+            return data
+        typed = typed.strip(TRIM_CHARS)
+        if typed and is_valid_term_symbol(typed) and canonical_term_symbol(typed) != typed:
+            return {**data, "term_symbol_raw": typed}
+        return data
+
+    @field_validator("electronic_state_label", mode="before", check_fields=False)
+    @classmethod
+    def electronic_state_label_has_accepted_shape(cls, value: object) -> object:
+        """Refuse a state label outside the strict grammar (``electronic_state_label_invalid``); store its canonical form.
+
+        Runs before the length cap so a too-long or junk value gets the coded refusal.
+        """
+
+        return check_electronic_state_label(value)
+
+    @field_validator("term_symbol", mode="before", check_fields=False)
+    @classmethod
+    def term_symbol_has_accepted_shape(cls, value: object) -> object:
+        """Refuse a term symbol outside the strict grammar (``term_symbol_invalid``); store its canonical form.
+
+        ``term_symbol_raw`` is deliberately not checked: it is the depositor's own wording, kept
+        verbatim for provenance (the CCCBDB importer writes ``X 1A1g (planar, D6h)``), and is never
+        joined into a displayed label.
+        """
+
+        return check_term_symbol(value)
 
 
 #: The reserved token that declares a free electron as a reaction participant.
@@ -239,6 +303,7 @@ class SpeciesIdentityPayload(SchemaBase):
 
 
 class SpeciesEntryIdentityPayload(
+    SpeciesEntryIdentityWriteValidatorMixin,
     SpeciesEntryIdentityValidatorMixin,
     SpeciesIdentityPayload,
 ):
@@ -247,11 +312,22 @@ class SpeciesEntryIdentityPayload(
     :param species_entry_kind: Stationary-point kind for the resolved entry.
     :param unmapped_smiles: Optional display/search SMILES for the resolved entry.
     :param stereo_kind: Stereo classification for the resolved entry.
-    :param stereo_label: Optional stereo label such as ``R`` or ``E``.
+    :param stereo_label: Optional stereo descriptor in the closed vocabulary
+        ``R``/``S``/``r``/``s`` (lower case: a pseudo-asymmetric centre)/``E``/``Z``/``-`` (an
+        element that is not stereogenic in this configuration)/``?``, one comma-separated
+        token per potential stereo element in canonical order (``E``, ``R,S``, ``E,?``). Free text
+        such as ``"trans"`` is refused. It fills only the elements the geometry
+        and the SMILES marks leave unresolved and is cross-checked where they
+        exist; the server decides whether it fits the molecule.
     :param electronic_state_kind: Electronic-state classification.
-    :param electronic_state_label: Optional state label such as ``X`` or ``A``.
-    :param term_symbol_raw: Optional raw uploaded term symbol.
-    :param term_symbol: Optional canonicalized term symbol.
+    :param electronic_state_label: Optional state label such as ``X``, ``A``, ``E`` or
+        ``T1``; only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted
+        (``electronic_state_label_invalid`` otherwise) and the canonical spelling is stored.
+    :param term_symbol_raw: Optional raw uploaded term symbol, kept verbatim and not checked.
+    :param term_symbol: Optional canonicalized term symbol such as ``2Pi``, ``3P2`` or ``X 1A1``;
+        only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted
+        (``term_symbol_invalid`` otherwise) and the canonical spelling (``²Π``) is stored, the
+        typed spelling going to ``term_symbol_raw`` when that is not given.
 
     Isotopic resolution is *not* a field on this payload. It is derived
     server-side from the atom-resolved isotope labels in ``smiles`` (see
@@ -265,10 +341,26 @@ class SpeciesEntryIdentityPayload(
     unmapped_smiles: str | None = None
 
     stereo_kind: StereoKind = StereoKind.unspecified
-    stereo_label: str | None = Field(default=None, max_length=64)
+    stereo_label: str | None = Field(default=None, max_length=512)
 
     electronic_state_kind: SpeciesEntryStateKind = SpeciesEntryStateKind.ground
     electronic_state_label: str | None = Field(default=None, max_length=8)
 
     term_symbol_raw: str | None = Field(default=None, max_length=64)
     term_symbol: str | None = Field(default=None, max_length=64)
+
+    @field_validator("stereo_label")
+    @classmethod
+    def stereo_label_uses_descriptor_vocabulary(cls, value: str | None) -> str | None:
+        """Accept only descriptor tokens; a blank label is "not given"."""
+
+        if value is None or not value.strip():
+            return value
+        if not STEREO_DESCRIPTOR_PATTERN.fullmatch(value.strip()):
+            raise ValueError(
+                "stereo_label must be stereo descriptor tokens R, S, r, s, E, Z, e, z, Ra, Sa "
+                "(an allene axis), - (not stereogenic here) or ? (unknown), comma-separated, one per stereo "
+                "element in canonical order (for example 'E' or 'R,S' or 'E,?'); free "
+                "text such as 'trans' is not accepted"
+            )
+        return value

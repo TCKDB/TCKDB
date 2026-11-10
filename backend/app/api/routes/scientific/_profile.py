@@ -21,6 +21,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.db.models.common import ReadProfile
+from app.services.scientific_read.hidden_by_default import reset_holder, set_holder
+from app.services.scientific_read.keyset import reset_paging_holder, set_paging_holder
 from app.services.scientific_read.profile import (
     ResolvedReadProfile,
     UnknownReleaseError,
@@ -37,9 +39,14 @@ from app.services.scientific_read.ref_guard import (
 _PROFILE_DESCRIPTION = (
     "Read contract. 'exploratory' (default) returns every visible candidate "
     "with its review state and carries no TCKDB recommendation. 'curated' "
-    "restricts results to records at or above the 'approved' review floor and "
-    "claims nothing further (profile_recommendation='approved_floor_only'); it "
-    "does NOT mean a curator selected these records. For records an attributed "
+    "applies the 'approved' review floor to the records a list, search, browse, "
+    "select or export returns. A detail page serves any record that is not "
+    "rejected or deprecated, and the linked evidence of a returned record is "
+    "shown (with a badge where the response carries review_status_by_ref; a "
+    "legacy single-record read carries the record's own status in "
+    "X-TCKDB-Review-Status); only rejected and deprecated records are "
+    "withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does "
+    "NOT mean a curator selected these records. For records an attributed "
     "release selection actually names, use /api/v1/scientific/releases/*."
 )
 
@@ -78,6 +85,8 @@ async def resolve_profile_dependency(
 
     request.state.read_profile = resolved
     token = set_current_read_profile(resolved)
+    holder_token = set_holder()
+    paging_token = set_paging_holder()
     # The curated-ref guard needs the route's own session and the route template; both are known here.
     # ``scope["route"]`` is set by the router when it matches, before dependencies are solved.
     route = request.scope.get("route")
@@ -88,6 +97,8 @@ async def resolve_profile_dependency(
         yield resolved
     finally:
         reset_ref_guard_context(guard_token)
+        reset_paging_holder(paging_token)
+        reset_holder(holder_token)
         reset_current_read_profile(token)
 
 

@@ -18,13 +18,15 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._actor import publish_read_actor
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     ANYWHERE_SCOPE,
     CONFORMER_RECORD_SECTIONS,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import (
     ConformerSelectionKind,
     RecordReviewStatus,
@@ -48,9 +50,9 @@ from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
 
-cg_router = APIRouter(prefix="/conformer-groups")
-co_router = APIRouter(prefix="/conformer-observations")
-search_router = APIRouter(prefix="/conformers")
+cg_router = APIRouter(route_class=ServerFaultRoute, prefix="/conformer-groups")
+co_router = APIRouter(route_class=ServerFaultRoute, prefix="/conformer-observations")
+search_router = APIRouter(route_class=ServerFaultRoute, prefix="/conformers")
 
 
 # The router-level ``?profile=`` dependency puts these two keys on every
@@ -60,10 +62,16 @@ search_router = APIRouter(prefix="/conformers")
 _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 
+# GET: every declared search field plus the profile keys. Derived from the request model so a new filter cannot be
+# refused here by oversight, and a misspelt one is refused rather than ignored.
+_GET_ALLOWED_QS_KEYS: set[str] = set(ConformersSearchRequest.model_fields) | set(PROFILE_QUERY_KEYS)
+
+
 @search_router.get(
     "/search", response_model=ScientificConformersSearchResponse
 )
 def scientific_conformers_search_get(
+    request: Request,
     session: Session = Depends(get_db),
     species_ref: str | None = Query(None),
     species_entry_ref: str | None = Query(None),
@@ -72,6 +80,14 @@ def scientific_conformers_search_get(
     selection_kind: ConformerSelectionKind | None = Query(None),
     has_selection: bool | None = Query(None),
     assignment_scheme_ref: str | None = Query(None),
+    wide_basin: bool | None = Query(
+        None,
+        description="true: only wide basins (optimised members linked end to end but not all within tolerance of "
+        "each other); false: only basins whose optimised members all are. Groups with no optimised member match neither.",
+    ),
+    min_span_deg: float | None = Query(
+        None, ge=0.0, le=360.0, description="Largest torsion difference between two optimised members, at least this."
+    ),
     has_observations: bool | None = Query(None),
     has_calculations: bool | None = Query(None),
     has_geometries: bool | None = Query(None),
@@ -95,7 +111,8 @@ def scientific_conformers_search_get(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """MVP scientific conformer-group search.
@@ -106,7 +123,18 @@ def scientific_conformers_search_get(
     review knobs are not enough — see
     ``backend/docs/specs/scientific_conformer_reads.md``.
     """
-    request_obj = ConformersSearchRequest(
+    unknown = set(request.query_params.keys()) - _GET_ALLOWED_QS_KEYS
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "unknown_query_parameter: query-string keys "
+                f"{sorted(unknown)!r} are not conformer search filters; "
+                "an unrecognised key is refused rather than ignored."
+            ),
+        )
+    request_obj = caller_input(
+        ConformersSearchRequest,
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,
         conformer_group_ref=conformer_group_ref,
@@ -114,6 +142,8 @@ def scientific_conformers_search_get(
         selection_kind=selection_kind,
         has_selection=has_selection,
         assignment_scheme_ref=assignment_scheme_ref,
+        wide_basin=wide_basin,
+        min_span_deg=min_span_deg,
         has_observations=has_observations,
         has_calculations=has_calculations,
         has_geometries=has_geometries,
@@ -136,6 +166,7 @@ def scientific_conformers_search_get(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = search_conformers(session, request_obj)
@@ -228,6 +259,7 @@ def scientific_conformer_group_detail(
 @co_router.get(
     "/{conformer_observation_ref_or_id}",
     response_model=ScientificConformerObservationDetailResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def scientific_conformer_observation_detail(
     conformer_observation_ref_or_id: str = Path(

@@ -28,8 +28,14 @@ from typing import Any
 
 from app.db.models.common import CalculationQuality, RecordReviewStatus
 from app.services.selection_kernel import Applicability
+from app.services.selection_kernel.requested import OFFER_FINDINGS, Eligibility
 
-#: Version of the eligibility semantics.
+#: Version of the eligibility semantics. It is deliberately unchanged by the named eligibility defaults
+#: (``selection_kernel.requested``): under the default settings every unit is assessed exactly as before, and a lifted
+#: default only moves a confirmed finding from ``blocking`` to an advisory, which the request records. What a stored
+#: decision now means is carried by the manifest format (version 3) and its ``verdicts``, not by this number; this one also
+#: keys the transition-state evidence rubric, which this change does not touch. Bumping it would force a rubric bump for
+#: an assessment that returns the same verdicts under every default setting.
 ASSESSMENT_VERSION = 1
 #: Version of the recipe normaliser (which facts a cohort needs established).
 NORMALIZER_VERSION = 1
@@ -208,6 +214,34 @@ DEFAULT_PERMITTED_QUALITY = frozenset({CalculationQuality.raw, CalculationQualit
 
 
 @dataclass(frozen=True)
+class StructureFilters:
+    """The caller's filters, with the calculation, conformer and transition-state searches' vocabulary and meaning.
+
+    The method, basis, software and workflow-tool filters keep a unit when at least one of the calculations it rests on
+    that the read profile shows matches every one supplied: the calculation itself at the calculation grain, the
+    calculations a determination pins as its sources at the conformer and transition-state grains.
+    """
+
+    method: str | None = None
+    basis: str | None = None
+    software: str | None = None
+    software_version: str | None = None
+    workflow_tool: str | None = None
+    workflow_tool_version: str | None = None
+
+    def to_record(self) -> dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items() if v is not None}
+
+    @classmethod
+    def from_record(cls, raw: dict[str, Any]) -> StructureFilters:
+        return cls(**raw)
+
+    @property
+    def active(self) -> bool:
+        return any(v is not None for v in self.__dict__.values())
+
+
+@dataclass(frozen=True)
 class StructureRequest:
     """The normalised request.
 
@@ -247,6 +281,8 @@ class StructureRequest:
     result_mode: ResultMode = ResultMode.all
     repeat_policy: RepeatPolicy = RepeatPolicy.retain_alternates
     bounds: SelectionBounds = field(default_factory=SelectionBounds)
+    filters: StructureFilters = field(default_factory=StructureFilters)
+    eligibility: Eligibility = field(default_factory=lambda: Eligibility(offered=OFFER_FINDINGS))
 
     def __post_init__(self) -> None:
         if self.intent not in INTENTS_BY_GRAIN[self.grain]:
@@ -306,6 +342,8 @@ class StructureRequest:
             "result_mode": self.result_mode.value,
             "repeat_policy": self.repeat_policy.value,
             "bounds": self.bounds.to_dict(),
+            "filters": self.filters.to_record(),
+            "eligibility": self.eligibility.to_record(),
         }
 
     @classmethod
@@ -328,6 +366,8 @@ class StructureRequest:
             result_mode=ResultMode(raw["result_mode"]),
             repeat_policy=RepeatPolicy(raw["repeat_policy"]),
             bounds=SelectionBounds.from_dict(raw["bounds"]),
+            filters=StructureFilters.from_record(raw["filters"]),
+            eligibility=Eligibility.from_record(raw["eligibility"], offered=OFFER_FINDINGS),
         )
 
 
@@ -489,8 +529,6 @@ class NormalizedCalculation:
     lineage: tuple[LineageEdge, ...] = ()
     #: True when the traversal stopped at the depth bound with parents unexplored.
     lineage_truncated: bool = False
-    #: True when the walk met a calculation it had already passed through (a dependency cycle).
-    lineage_cyclic: bool = False
     findings: tuple[FindingFacts, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -517,7 +555,6 @@ class NormalizedCalculation:
             "conformer_observation_ref": self.conformer_observation_ref,
             "lineage": [e.to_dict() for e in self.lineage],
             "lineage_truncated": self.lineage_truncated,
-            "lineage_cyclic": self.lineage_cyclic,
             "findings": [f.to_dict() for f in self.findings],
         }
 
@@ -576,7 +613,15 @@ class NormalizedDetermination:
     conformer_observation_ref: str | None
     conformer_group_ref: str | None
     evaluated_geometry_ref: str
-    review_status: RecordReviewStatus
+    #: The determination's review standing: the weakest of its conformer observation's and that observation's group's, or
+    #: of its transition-state entry's. ``None`` for a determination with none of those: it has no review of its own, and
+    #: its species entry is a scoping parent whose status is never copied onto it.
+    review_status: RecordReviewStatus | None
+    #: The two statuses ``review_status`` combines for a conformer basin, recorded apart (manifest format 5, ADR 0023): the
+    #: conformer GROUP is the record that gates the basin and keeps the record floor; the conformer OBSERVATION inside it is
+    #: linked evidence and follows the evidence rule. ``None`` when the determination has no observation (and so no group).
+    observation_review_status: RecordReviewStatus | None
+    group_review_status: RecordReviewStatus | None
     created_at: datetime
     id_rank: int
     entry_kind: str | None
@@ -599,7 +644,11 @@ class NormalizedDetermination:
             "conformer_observation_ref": self.conformer_observation_ref,
             "conformer_group_ref": self.conformer_group_ref,
             "evaluated_geometry_ref": self.evaluated_geometry_ref,
-            "review_status": self.review_status.value,
+            "review_status": self.review_status.value if self.review_status is not None else None,
+            "observation_review_status": (
+                self.observation_review_status.value if self.observation_review_status is not None else None
+            ),
+            "group_review_status": self.group_review_status.value if self.group_review_status is not None else None,
             "created_at": self.created_at.isoformat(),
             "id_rank": self.id_rank,
             "entry_kind": self.entry_kind,
@@ -613,7 +662,15 @@ class NormalizedDetermination:
         return cls(
             **{
                 **raw,
-                "review_status": RecordReviewStatus(raw["review_status"]),
+                "review_status": RecordReviewStatus(raw["review_status"]) if raw["review_status"] is not None else None,
+                "observation_review_status": (
+                    RecordReviewStatus(raw["observation_review_status"])
+                    if raw["observation_review_status"] is not None
+                    else None
+                ),
+                "group_review_status": (
+                    RecordReviewStatus(raw["group_review_status"]) if raw["group_review_status"] is not None else None
+                ),
                 "created_at": datetime.fromisoformat(raw["created_at"]),
                 "sources": tuple(NormalizedSource.from_dict(s) for s in raw["sources"]),
                 "findings": tuple(FindingFacts.from_dict(f) for f in raw["findings"]),
@@ -809,6 +866,12 @@ class StructureAssessmentResult:
     unresolved_refs: tuple[str, ...] = ()
     unsupported_refs: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
+    #: What a unit's own review status may be: the effective statuses plus the terminal ones the request lifted.
+    candidate_statuses: tuple[RecordReviewStatus, ...] = ()
+    #: Each unit's verdict record under the request's eligibility settings, by unit ref (JSON-ready).
+    verdicts: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: The recorded funnel (``selection_kernel.requested.funnel``).
+    funnel: dict[str, Any] = field(default_factory=dict)
 
 
 def finite(value: float | None) -> bool:

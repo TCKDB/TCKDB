@@ -21,8 +21,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from tckdb_schemas.fragments.version import VersionRef
 from tckdb_schemas.network_declarations import NetworkObservable, NetworkRegimeKind
 
-from app.db.models.common import PhaseKind, RecordReviewStatus
+from app.db.models.common import NetworkKineticsModelKind, PhaseKind, RecordReviewStatus
 from app.schemas.reads.scientific_common import ProfiledRequestEcho
+from app.schemas.reads.scientific_selection_common import (
+    CalculationProvenanceFilters,
+    ReviewEligibilityIn,
+    SelectionStepsAnswer,
+)
 
 QUANTITY_RATE_COEFFICIENT: Final = "rate_coefficient"
 MOLE_FRACTION_TOLERANCE: Final = 1e-9
@@ -136,6 +141,17 @@ class NetworkSelectionOutputIn(BaseModel):
     observable: NetworkObservable
 
 
+class NetworkSelectionFilters(CalculationProvenanceFilters):
+    """The filters the network-kinetics search offers, with their meaning.
+
+    ``model_kind`` keeps the fits of that form (a solve with none is out). The provenance fields keep a solve when at
+    least one of its source calculations that the read profile shows matches every supplied field. Applied before
+    eligibility; a filter excludes on a fact and ranks nothing.
+    """
+
+    model_kind: NetworkKineticsModelKind | None = None
+
+
 class NetworkSelectionRequest(BaseModel):
     """Request body. ``quantity`` and ``phase`` may be omitted; if given they must agree with the endpoint.
 
@@ -169,6 +185,15 @@ class NetworkSelectionRequest(BaseModel):
     min_review_status: RecordReviewStatus | None = Field(
         default=None,
         description="Optional floor, applied on top of the read profile's floor (the stricter wins).",
+    )
+    filters: NetworkSelectionFilters = Field(
+        default_factory=NetworkSelectionFilters,
+        description="Narrow the solves by facts before eligibility, with the network-kinetics search's own filters.",
+    )
+    eligibility: ReviewEligibilityIn = Field(
+        default_factory=ReviewEligibilityIn,
+        description="Lift named eligibility defaults: a solve's rejected or deprecated review status. Every default is "
+        "applied unless lifted here; the answer lists each.",
     )
 
     @model_validator(mode="after")
@@ -243,6 +268,21 @@ class NetworkSelectionMember(BaseModel):
     )
 
 
+class NetworkSelectionSolve(BaseModel):
+    """One solve that competed: its review status, and the default it passed only because the request lifted it.
+
+    Review and provenance belong to the solve, so this is where the eligibility defaults act; every determination
+    and bundle in the answer belongs to one of these.
+    """
+
+    solve_ref: str
+    review_status: RecordReviewStatus
+    passed_only_by_override: list[str] = Field(
+        default_factory=list,
+        description="Eligibility defaults this solve would fail but the request lifted: it competes because of that.",
+    )
+
+
 class NetworkSelectionPick(BaseModel):
     """The node this response names: a determination of one channel, or a declared product set of one solve."""
 
@@ -274,7 +314,7 @@ class NetworkSelectionDisclosures(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
-class NetworkSelectionResponse(BaseModel):
+class NetworkSelectionResponse(SelectionStepsAnswer):
     """The decision, its basis and everything it rests on, as public refs only."""
 
     request: NetworkSelectionRequestEcho
@@ -294,6 +334,11 @@ class NetworkSelectionResponse(BaseModel):
     )
     bundles: list[dict[str, Any]] = Field(
         default_factory=list, description="The assessment of every declared product set (bundle and full-network)."
+    )
+    solves: list[NetworkSelectionSolve] = Field(
+        default_factory=list,
+        description="Every solve that competed (passed the filters and the applied defaults), with the default it "
+        "passed only by override, if any.",
     )
     representations: list[dict[str, Any]] = Field(
         default_factory=list,

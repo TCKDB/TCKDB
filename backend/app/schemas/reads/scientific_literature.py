@@ -18,10 +18,11 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.db.models.common import LiteratureKind
+from app.db.models.common import LiteratureKind, LiteratureTitleSource
 from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
 )
 
 # ---------------------------------------------------------------------------
@@ -52,6 +53,7 @@ class LiteratureCoreBlock(BaseModel):
     literature_ref: str
     kind: LiteratureKind
     title: str
+    title_source: LiteratureTitleSource | None = None
     journal: str | None = None
     year: int | None = None
     volume: str | None = None
@@ -162,7 +164,7 @@ class ScientificLiteratureRecord(BaseModel):
     available_sections: AvailableLiteratureSections
 
 
-class ScientificLiteratureDetailResponse(BaseModel):
+class ScientificLiteratureDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/literature/{handle}``."""
 
     request: RequestEcho

@@ -23,6 +23,7 @@ import type {
     LevelOfTheoryUsage,
     LevelOfTheoryWorkflowToolUsage,
 } from "../api/methodsApi"
+import { publicCitationText } from "../domain/literatureCitation"
 
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
@@ -118,7 +119,12 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                                     <div><dt>Core treatment</dt><dd>{lot.core_treatment ? words(lot.core_treatment) : "not recorded"}</dd></div>
                                     {lot.aux_basis && <div><dt>Auxiliary basis</dt><dd>{lot.aux_basis}</dd></div>}
                                     {lot.cabs_basis && <div><dt>CABS basis</dt><dd>{lot.cabs_basis}</dd></div>}
-                                    {lot.keywords && <div><dt>Keywords</dt><dd>{lot.keywords}</dd></div>}
+                                    {/* Method qualifiers are shown only when the deposit states them: there is
+                                        no "not recorded" row for each, so a plain level stays short. They
+                                        are the program's own tokens (dkh2, rijcosx), so they print as stored. */}
+                                    {lot.relativistic_hamiltonian && <div><dt>Relativistic Hamiltonian</dt><dd>{lot.relativistic_hamiltonian}</dd></div>}
+                                    {lot.pno_truncation && <div><dt>PNO truncation</dt><dd>{lot.pno_truncation}</dd></div>}
+                                    {lot.ri_approximation && <div><dt>RI approximation</dt><dd>{lot.ri_approximation}</dd></div>}
                                     {lot.composite_scheme && (
                                         <div>
                                             <dt>Composite recipe</dt>
@@ -138,8 +144,8 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                         <Disclosure summary="Level-of-theory hash" defaultOpen={false} className="lot-hash-disclosure">
                             <p className="note">
                                 A content hash over method, basis, auxiliary/CABS basis, dispersion, solvent,
-                                solvent model, keywords, spin treatment, and core treatment (when stated) — two deposits with the same six
-                                displayed facts above but a different hash differ in one of the fields not shown
+                                solvent model, spin treatment, and core treatment, relativistic Hamiltonian, PNO truncation and RI approximation (when stated) — two deposits that read alike above
+                                but have a different hash differ in a field not shown
                                 inline (most often spin treatment). Not an identifier a reader looks up by; shown
                                 for exact-identity comparison only.
                             </p>
@@ -363,16 +369,20 @@ function CorrectionSchemesSection({ schemes, available }: { schemes: EnergyCorre
  * chosen.
  */
 function CorrectionSchemeKindGroup({ schemes }: { schemes: EnergyCorrectionSchemeRecord[] }) {
-    const [selectedRef, setSelectedRef] = useState(
-        schemes[0].energy_correction_scheme.energy_correction_scheme_ref,
-    )
+    // `null` until the reader picks one: until then the first listed scheme is shown, and the page says that is all it is.
+    const [chosenRef, setChosenRef] = useState<string | null>(null)
     const selected = schemes.find(
-        (scheme) => scheme.energy_correction_scheme.energy_correction_scheme_ref === selectedRef,
+        (scheme) => scheme.energy_correction_scheme.energy_correction_scheme_ref === chosenRef,
     ) ?? schemes[0]
     return (
         <div className="correction-scheme-kind-group">
             {schemes.length > 1 && (
-                <CorrectionSchemeSelect schemes={schemes} selectedRef={selected.energy_correction_scheme.energy_correction_scheme_ref} onSelect={setSelectedRef} />
+                <CorrectionSchemeSelect schemes={schemes} selectedRef={selected.energy_correction_scheme.energy_correction_scheme_ref} onSelect={setChosenRef} />
+            )}
+            {schemes.length > 1 && chosenRef === null && (
+                <p className="note correction-scheme-default-note">
+                    {schemes.length} schemes of this kind are deposited. The first listed is shown until you choose one; it is not preferred over the others.
+                </p>
             )}
             <CorrectionSchemeBox key={selected.energy_correction_scheme.energy_correction_scheme_ref} scheme={selected} />
         </div>
@@ -393,7 +403,7 @@ function correctionSchemeSelectorLabel(scheme: EnergyCorrectionSchemeRecord, sib
         (sibling) => (softwareLabel(sibling.software_release) ?? "software not recorded") === releaseLabel,
     ).length > 1
     if (!sharesReleaseLabel) return releaseLabel
-    const citation = scheme.literature?.title ?? scheme.literature?.literature_ref
+    const citation = scheme.literature ? publicCitationText(scheme.literature) : null
     return citation
         ? `${releaseLabel} · ${citation}`
         : `${releaseLabel} · ${scheme.energy_correction_scheme.energy_correction_scheme_ref}`
@@ -461,9 +471,8 @@ function CorrectionSchemeBox({ scheme }: { scheme: EnergyCorrectionSchemeRecord 
                         </dd>
                     </div>
                 )}
-                {scheme.energy_correction_scheme.note && (
-                    <div><dt>Note</dt><dd>{scheme.energy_correction_scheme.note}</dd></div>
-                )}
+                {/* No `energy_correction_scheme.note`: depositor free text (house rule,
+                    owner decision 2026-11-03). */}
                 {/* ADR 0021 / P6: the level the scheme's own frequencies were
                     computed at is part of its identity. Always a row: an
                     unstated one reads "not recorded", never the scheme's

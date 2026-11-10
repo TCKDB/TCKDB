@@ -19,7 +19,8 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._actor import publish_read_actor
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     DETAIL_SCOPE,
@@ -28,9 +29,12 @@ from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
     omit_unrequested_sections,
     prepare_assessment_response,
+    refuse_check_inputs,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import (
     RecordReviewStatus,
+    ScientificOriginKind,
     StatmechTreatmentKind,
 )
 from app.schemas.reads.scientific_statmech import (
@@ -46,7 +50,7 @@ from app.services.scientific_read.public_assessments import (
 from app.services.scientific_read.statmech import get_statmech
 from app.services.scientific_read.statmech_search import search_statmech
 
-router = APIRouter(prefix="/statmech")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/statmech")
 
 
 # The router-level ``?profile=`` dependency puts these two keys on every
@@ -61,7 +65,8 @@ _GET_ALLOWED_QS_KEYS: set[str] = set(StatmechSearchRequest.model_fields) | set(P
 
 
 @router.get(
-    "/search", response_model=ScientificStatmechSearchResponse
+    "/search", response_model=ScientificStatmechSearchResponse,
+    dependencies=[Depends(refuse_check_inputs)],
 )
 def scientific_statmech_search_get(
     request: Request,
@@ -74,6 +79,7 @@ def scientific_statmech_search_get(
     transition_state_entry_ref: str | None = Query(None),
     declared_conformer_group_ref: str | None = Query(None),
     model_kind: StatmechTreatmentKind | None = Query(None),
+    scientific_origin: ScientificOriginKind | None = Query(None),
     has_source_calculations: bool | None = Query(None),
     has_freq_calculation: bool | None = Query(None),
     has_rotor_scans: bool | None = Query(None),
@@ -89,7 +95,8 @@ def scientific_statmech_search_get(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """MVP scientific statmech search.
@@ -110,7 +117,8 @@ def scientific_statmech_search_get(
                 "an unrecognised key is refused rather than ignored."
             ),
         )
-    request_obj = StatmechSearchRequest(
+    request_obj = caller_input(
+        StatmechSearchRequest,
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,
         statmech_ref=statmech_ref,
@@ -119,6 +127,7 @@ def scientific_statmech_search_get(
         transition_state_entry_ref=transition_state_entry_ref,
         declared_conformer_group_ref=declared_conformer_group_ref,
         model_kind=model_kind,
+        scientific_origin=scientific_origin,
         has_source_calculations=has_source_calculations,
         has_freq_calculation=has_freq_calculation,
         has_rotor_scans=has_rotor_scans,
@@ -135,6 +144,7 @@ def scientific_statmech_search_get(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = search_statmech(session, request_obj)
@@ -151,7 +161,8 @@ def scientific_statmech_search_get(
 
 
 @router.post(
-    "/search", response_model=ScientificStatmechSearchResponse
+    "/search", response_model=ScientificStatmechSearchResponse,
+    dependencies=[Depends(refuse_check_inputs)],
 )
 def scientific_statmech_search_post(
     request: Request,
@@ -189,6 +200,7 @@ def scientific_statmech_search_post(
 @router.get(
     "/{statmech_ref_or_id}",
     response_model=ScientificStatmechDetailResponse,
+    dependencies=[Depends(refuse_check_inputs), Depends(publish_read_actor)],
 )
 def scientific_statmech_detail(
     statmech_ref_or_id: str = Path(..., min_length=1, max_length=64),
@@ -207,7 +219,7 @@ def scientific_statmech_detail(
         include=parse_include(include),
     )
     visibility = prepare_assessment_response(
-        session, payload, attach_assessments=attach_statmech_assessments
+        session, payload, attach_assessments=attach_statmech_assessments, check_inputs=True
     )
     visibility = omit_trust_unless_requested(visibility, payload)
     return omit_unrequested_sections(

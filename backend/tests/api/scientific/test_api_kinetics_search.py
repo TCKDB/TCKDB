@@ -199,7 +199,7 @@ def test_invalid_temperature_range_returns_422(client, db_session):
     _setup(db_session, r="T1", p="T2")
     resp = client.get(
         "/api/v1/scientific/kinetics/search"
-        "?reactants=T1&products=T2&temperature_min=2000&temperature_max=300"
+        "?reactants=T1&products=T2&coverage_temperature_min_k=2000&coverage_temperature_max_k=300"
     )
     assert resp.status_code == 422
     assert "invalid_temperature_range" in resp.text

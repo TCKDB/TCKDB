@@ -12,6 +12,8 @@ are rejected; the backend does not manufacture missing scientific evidence.
   stands behind it. It defaults to `elementary`, so a payload that names its
   paths is unaffected. It is orthogonal to `kind`, which classifies the
   channel's macroscopic reaction type.
+- A channel's `kind` is derived from the two states it joins, and is optional
+  in the upload (see "Channel kinds" below).
 - An `elementary` channel supplies explicit `microreaction_paths`. A path names
   a `micro_reaction_key` and either the `transition_state_key` of the saddle
   point it goes through, or nothing at all — omitting it declares the path
@@ -220,3 +222,23 @@ set omits the transition state and the record does not delegate its
 parameterization to a network fit via `network_kinetics_ref`. Variational TST
 is intentionally *not* exempt: VTST still evaluates a partition function at
 the variational dividing surface.
+
+## Channel kinds
+
+A channel is directed, source to sink. Its `kind` follows from the kinds of the two states it joins; termolecular is
+treated exactly like bimolecular, so every pair has a kind.
+
+| source state | sink state | `kind` |
+|---|---|---|
+| well | well | `isomerization` |
+| bimolecular or termolecular | well | `association` |
+| well | bimolecular or termolecular | `dissociation` |
+| bimolecular or termolecular | bimolecular or termolecular | `exchange` |
+
+- `kind` is optional. Omit it and the server fills it in and stores it. Supply it and it is checked: a value that
+  disagrees is refused as `network_channel_kind_mismatch` (422), naming the channel's local key, the kind you sent and
+  the kind derived.
+- A stereo isomerisation of a fragment set (`E-N2H2 + H2 -> Z-N2H2 + H2`) is `exchange`, and so is a well-skipping
+  channel between two fragment sets. `mechanism` is independent of `kind`: a well-skipping channel derives its kind from
+  its endpoints the same way.
+- The rule is `tckdb_schemas.network_channel_kind.derive_channel_kind`.

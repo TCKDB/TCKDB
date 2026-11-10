@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { ParticipantChips } from "../components/ParticipantChips"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 // `record-identity-header.css` -- this page hand-builds its identity
@@ -28,6 +29,8 @@ import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { levelOfTheoryPath } from "../domain/methodsLinks"
+import { buildEquationSides, type EquationParticipant } from "../domain/reactionEquation"
+import { participantChips } from "../domain/participantFacets"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
@@ -118,32 +121,32 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     const transitionStates = record.transition_states ?? []
     const networksState = useReactionEntryNetworks(entry.reaction_entry_ref, record.networks)
 
-    // Related-refs disclosure: the reaction identity and every TS ref
-    // always; the level-of-theory/software/workflow-tool refs from the
-    // FIRST kinetics record only (a pragmatic simplification for a
-    // multi-kinetics-record entry -- the live archive samples this page
-    // was built against never carry more than one kinetics record per
-    // entry; see the PR body for the follow-up this leaves open).
-    const firstKinetics = kinetics[0]
+    // Related-refs disclosure: the reaction identity, every TS ref, and the level-of-theory / software /
+    // workflow-tool refs of EVERY kinetics record, each distinct ref once. An entry can carry several kinetics
+    // records (different levels, different fitters); naming only the first one's would present one record's
+    // provenance as the entry's own.
+    const provenanceRefs: RefEntry[] = []
+    const seenProvenance = new Set<string>()
+    const addProvenanceRef = (ref: RefEntry) => {
+        const key = `${ref.label}|${ref.value}`
+        if (seenProvenance.has(key)) return
+        seenProvenance.add(key)
+        provenanceRefs.push(ref)
+    }
+    for (const record of kinetics) {
+        const lot = record.provenance.primary_level_of_theory?.level_of_theory_ref
+        if (lot) addProvenanceRef({ label: "Level of theory", value: lot, to: levelOfTheoryPath(lot) })
+        const primarySoftware = record.provenance.primary_software?.software_release_ref
+        if (primarySoftware) addProvenanceRef({ label: "Software (opt / freq / sp / irc)", value: primarySoftware })
+        const fitSoftware = record.provenance.software_release?.software_release_ref
+        if (fitSoftware) addProvenanceRef({ label: "Software (kinetics fit)", value: fitSoftware })
+        const tool = record.provenance.workflow_tool_release?.workflow_tool_release_ref
+        if (tool) addProvenanceRef({ label: "Workflow tool", value: tool })
+    }
     const refs: RefEntry[] = [
         { label: "Reaction identity", value: entry.reaction_ref, to: `/reactions/${entry.reaction_ref}` },
         ...transitionStates.flatMap((ts) => (ts.transition_state_ref ? [{ label: "Transition state", value: ts.transition_state_ref }] : [])),
-        ...(firstKinetics?.provenance.primary_level_of_theory?.level_of_theory_ref
-            ? [{
-                label: "Level of theory",
-                value: firstKinetics.provenance.primary_level_of_theory.level_of_theory_ref,
-                to: levelOfTheoryPath(firstKinetics.provenance.primary_level_of_theory.level_of_theory_ref),
-            }]
-            : []),
-        ...(firstKinetics?.provenance.primary_software?.software_release_ref
-            ? [{ label: "Software (opt / freq / sp / irc)", value: firstKinetics.provenance.primary_software.software_release_ref }]
-            : []),
-        ...(firstKinetics?.provenance.software_release?.software_release_ref
-            ? [{ label: "Software (kinetics fit)", value: firstKinetics.provenance.software_release.software_release_ref }]
-            : []),
-        ...(firstKinetics?.provenance.workflow_tool_release?.workflow_tool_release_ref
-            ? [{ label: "Workflow tool", value: firstKinetics.provenance.workflow_tool_release.workflow_tool_release_ref }]
-            : []),
+        ...provenanceRefs,
     ]
 
     const hasPathSearch = transitionStates.some((ts) => ts.evidence_summary.has_path_search)
@@ -194,7 +197,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                                     </div>
                                     <div className="record-identity-fact-wide">
                                         <dt>Equation (as deposited)</dt>
-                                        <dd><code className="data">{entry.equation}</code></dd>
+                                        <dd><code className="data">{equationWithEntries(entry.equation, entry.reversible, species.reactants, species.products)}</code></dd>
                                     </div>
                                 </dl>
                             </div>
@@ -261,7 +264,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                         calculations={record.calculations}
                         transitionStates={transitionStates}
                         networksStatus={networksState.status === "ready" ? (networksState.networks.length ? "populated" : "empty") : "loading"}
-                        networkRef={networksState.status === "ready" ? networksState.networks[0]?.network_ref : undefined}
+                        networkRefs={networksState.status === "ready" ? networksState.networks.map((network) => network.network_ref) : undefined}
                     />
                 </section>
 
@@ -322,6 +325,28 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
 // is the reference rather than it being in the same column as Formula")
 // is untouched: this table still never folds the species-entry ref or
 // its copy button into the identity cell.
+/**
+ * The served `equation` string is the written form and is left as the server wrote it. When the participant rows
+ * are loaded this line is rebuilt from them instead, so that each side's entries read apart: a Z to E isomerisation
+ * is `CC=CC => CC=CC` in the served string (both participants are entries of one species) and
+ * `CC=CC [Z] -> CC=CC [E]` here. Built from the same collapsed sides as the hero equation (one participant per
+ * distinct entry, a coefficient only when it is greater than 1), with the server's arrows: `->` irreversible,
+ * `<=>` reversible. Falls back to the served string when the participants are not loaded.
+ */
+function equationWithEntries(
+    served: string,
+    reversible: boolean,
+    reactants: ReactionEntrySpeciesParticipant[],
+    products: ReactionEntrySpeciesParticipant[],
+): string {
+    if (reactants.length === 0 || products.length === 0) return served
+    const sides = buildEquationSides(reactants, products)
+    const side = (participants: EquationParticipant[]) => participants
+        .map((p) => `${p.coefficient > 1 ? `${p.coefficient} ` : ""}${p.smiles}${p.chips.length > 0 ? ` [${p.chips.join(", ")}]` : ""}`)
+        .join(" + ")
+    return `${side(sides.reactants)} ${reversible ? "<=>" : "->"} ${side(sides.products)}`
+}
+
 function ParticipantsTable({ label, participants }: {
     label: "Reactants" | "Products"
     participants: ReactionEntrySpeciesParticipant[]
@@ -345,6 +370,9 @@ function ParticipantsTable({ label, participants }: {
                                     <Link to={`/species-entries/${participant.species_entry_ref}`}>
                                         <SpeciesFace smiles={participant.smiles} formula={participant.formula} />
                                     </Link>
+                                    {participantChips(participant).length > 0 && (
+                                        <span className="reaction-equation-chip"><ParticipantChips chips={participantChips(participant)} /></span>
+                                    )}
                                 </td>
                                 <td data-label="Ref">
                                     <code className="data">{participant.species_entry_ref}</code>
@@ -384,7 +412,7 @@ function NetworkSection({ state }: { state: NetworksState }) {
                 <tbody>
                     {state.networks.map((network) => (
                         <tr key={network.network_ref}>
-                            <td data-label="Network">{network.name ?? "not recorded"}</td>
+                            <td data-label="Network">Pressure-dependent network</td>
                             <td data-label="Ref">
                                 {/* `/networks/:ref` is a real page now (PR 2 of
                                     `docs/plans/pressure-dependent-network-surface.md`)

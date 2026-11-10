@@ -78,6 +78,7 @@ from app.services import (
     gaussian_parameter_parser,
     molpro_parameter_parser,
     orca_parameter_parser,
+    xtb_banner,
 )
 from app.services.best_effort import isolated_best_effort
 from app.services.calculation_resolution import (
@@ -97,6 +98,7 @@ VERSION_PARSERS: dict[str, Callable[[str], dict | None]] = {
     "gaussian": gaussian_parameter_parser.parse_software_version,
     "orca": orca_parameter_parser.parse_software_version,
     "molpro": molpro_parameter_parser.parse_software_version,
+    "xtb": xtb_banner.parse_software_version,
 }
 
 #: Informational: the declared release had no version, the output log's
@@ -216,14 +218,12 @@ def _reconcile(
     after = calculation.software_release
     if result is None or after is None or after.public_ref == before:
         return None
-    return UploadWarning(
+    return UploadWarning.from_code(
         field="software_release",
         code=W_SOFTWARE_RELEASE_VERSION_FILLED_FROM_ARTIFACT,
-        message=(
-            f"The declared {declared_name} release gave no version; the "
-            f"uploaded output log '{same_program[0][0]}' states version "
-            f"{after.version!r}. This calculation now cites that release "
-            f"({after.public_ref}). The banner is kept on "
-            "observed_software_banner."
-        ),
+        context={
+            "version": after.version,
+            "release_ref": after.public_ref,
+            "depositor_supplied": {"declared_software": declared_name, "log_filename": same_program[0][0]},
+        },
     )

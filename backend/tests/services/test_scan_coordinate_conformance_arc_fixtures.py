@@ -229,21 +229,24 @@ def test_adr_0020_conformance_over_the_real_arc_corpus(client) -> None:
         f"{n_series}: {dict(tally)}"
     )
 
-    assert tally["consistent_with_legacy_relative_axis"] == 35, (
-        "expected 35 of 36 real ARC scan series to classify as "
-        "consistent_with_legacy_relative_axis (33 directly, 2 more via the "
-        "circular-mean fix for series whose start_value lands on the "
-        "+/-180 branch cut); got "
+    # 34 of the 35 series that carry geometry are classified as the relative sweep. The 35th has a start_value of
+    # 359.977 degrees (0.023 short of a full turn, a wrap coincidence), so its constant offset is +0.0229 degrees: below
+    # the 1 degree ceiling under which a constant is not named as a relative sweep (#835), so it is
+    # ``small_constant_offset``, which names no cause. It is
+    # still reported as disagreeing (all 46 points deviate), and still earns the deposit warning.
+    assert tally["consistent_with_legacy_relative_axis"] == 34, (
+        "expected 34 of 36 real ARC scan series to classify as consistent_with_legacy_relative_axis; got "
         f"{tally['consistent_with_legacy_relative_axis']}. Tally: "
         f"{dict(tally)}\nNon-legacy series:\n" + "\n".join(non_legacy)
     )
+    assert tally["small_constant_offset"] == 1, dict(tally)
+    assert tally["insufficient_data"] == 1, dict(tally)
+    small = next(s for s in non_legacy_series if s.classification is SeriesClassification.small_constant_offset)
+    assert abs(small.implied_constant - 0.0229) < 1e-3, small.implied_constant
+    assert sum(1 for p in small.points if p.status is PointStatus.deviates) == small.n_points == 46
+    non_legacy = [line for line, s in zip(non_legacy, non_legacy_series, strict=True) if s.classification is SeriesClassification.insufficient_data]
+    non_legacy_series = [s for s in non_legacy_series if s.classification is SeriesClassification.insufficient_data]
 
-    # The one series that is not consistent_with_legacy_relative_axis is
-    # pinned to its exact, measured shape -- not just counted -- so a
-    # regression that turns it (or any other series) into a *different*
-    # non-legacy classification (no_pattern_detected, in particular, which
-    # is what a sign error produces) fails loudly here instead of hiding
-    # behind an unchanged "35 of 36" total.
     assert len(non_legacy) == 1, non_legacy
     the_one_exception = non_legacy_series[0]
     assert the_one_exception.classification is SeriesClassification.insufficient_data, non_legacy

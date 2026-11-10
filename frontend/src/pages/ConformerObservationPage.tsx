@@ -179,7 +179,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                     second row is gone too -- it would only ever
                                     have duplicated the same ref the link itself now
                                     shows. */}
-                                {/* Absent (not "unknown") when the read is curated and the basin is not approved. */}
+                                {/* Absent (not "unknown") when the read is curated and the basin is rejected or deprecated. */}
                                 {group && (
                                     <div>
                                         <dt>Conformer basin</dt>
@@ -193,26 +193,13 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                 <div>
                                     <dt>Species entry</dt>
                                     <dd>
-                                        {/* Item 4/5 ("record-page residuals" re-review): no
-                                            longer shows `species_entry_label` ALONE as
-                                            link text -- see `SpeciesEntryLink`'s own
-                                            docstring for why that field is a computed
-                                            discriminator, not depositor free text, and why
-                                            the fix is to always pair it with the formula
-                                            rather than suppress it. This endpoint's
-                                            `species` context now carries `formula` (backend
-                                            fix: conformer observation/group reads reuse the
-                                            same RDKit-derived expression the calculation/
-                                            geometry surfaces already served), so the base
-                                            text is the formula when present, falling back
-                                            to the ref -- matching every other caller of
-                                            `SpeciesEntryLink`; the label, when present,
-                                            still rides along after it. */}
+                                        {/* Formula-then-SMILES link text, or the ref. `species_entry_label`
+                                            is never printed: it joins in depositor-typed parts. */}
                                         <SpeciesEntryLink
                                             speciesEntryRef={species.species_entry_ref}
                                             smiles={species.canonical_smiles}
                                             formula={species.formula}
-                                            speciesEntryLabel={species.species_entry_label}
+                                            facets={species}
                                         />
                                     </dd>
                                 </div>
@@ -234,7 +221,8 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                 )}
                             </dl>
                         </div>
-                        {core.note && <p className="observation-note">{core.note}</p>}
+                        {/* No `core.note`: a depositor's free-text note is never printed on a public page
+                            (house rule, owner decision 2026-11-03). */}
                     </header>
                 )}
             >
@@ -332,7 +320,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 )}
             </section>
 
-            {/* The siblings are this basin's other members: with the basin withheld (a curated read of an unapproved
+            {/* The siblings are this basin's other members: with the basin withheld (a curated read of a rejected or deprecated
                 group) naming them would name the basin, so the whole ledger goes with it. */}
             {group && (
                 <section className="ledger-section" aria-labelledby="sibling-ledger">

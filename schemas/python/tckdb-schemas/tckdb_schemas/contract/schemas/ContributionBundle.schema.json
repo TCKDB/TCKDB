@@ -1903,22 +1903,43 @@
           "default": null,
           "title": "Dispersion"
         },
-        "keywords": {
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "pno_truncation": {
           "anyOf": [
             {
-              "type": "string"
+              "$ref": "#/$defs/PnoTruncation"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Keywords"
+          "default": null
         },
-        "method": {
-          "minLength": 1,
-          "title": "Method",
-          "type": "string"
+        "relativistic_hamiltonian": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelativisticHamiltonian"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ri_approximation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiApproximation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "solvent": {
           "anyOf": [
@@ -2255,10 +2276,11 @@
       "type": "string"
     },
     "CoreTreatment": {
-      "description": "Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).\n\n``frozen_core``: the chemical core is held uncorrelated. ``all_electron``:\nevery electron is correlated. CCSD(T)/cc-pCVTZ frozen-core and all-electron\nare different levels (their difference is the core-valence term of a\nfocal-point scheme). Part of the level identity only when stated: a level\nthat does not say stays ``NULL`` and keeps the hash it always had.\n\nTwo members on purpose. A partial treatment (Gaussian ``FC=1`` /\n``FreezeInnerNobleGasCore``, an ORCA ``FC_EWIN`` energy window, an explicit\norbital range) is real but has no agreed name across codes; it is left\n``NULL`` and described in ``keywords`` until a producer needs it named.",
+      "description": "Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).\n\n``frozen_core``: the chemical core is held uncorrelated. ``all_electron``:\nevery electron is correlated. CCSD(T)/cc-pCVTZ frozen-core and all-electron\nare different levels (their difference is the core-valence term of a\nfocal-point scheme). Part of the level identity only when stated: a level\nthat does not say stays ``NULL`` and keeps the hash it always had.\n\n``window``: a partial treatment (a Gaussian ``Window=(m,n)`` orbital range,\nan ORCA ``FC_EWIN`` energy window). It is one value on purpose: the\nspecific window has no agreed form across codes and stays on the\ncalculation's ``core.frozen`` parameter rows, so two different windows are\none level of theory.",
       "enum": [
         "frozen_core",
-        "all_electron"
+        "all_electron",
+        "window"
       ],
       "title": "CoreTreatment",
       "type": "string"
@@ -3530,6 +3552,7 @@
         "parsed_fchk",
         "parsed_hess",
         "parsed_log",
+        "parsed_log_archive",
         "uploaded",
         "derived"
       ],
@@ -3952,6 +3975,27 @@
       ],
       "title": "KineticsBarrierBasis",
       "type": "string"
+    },
+    "KineticsBathGasUpload": {
+      "additionalProperties": false,
+      "description": "One bath-gas component of a rate, named by species content.\n\n:param species_entry: Species-entry identity of the component (resolved or created, as for a\n    reaction participant).\n:param mole_fraction: Mole fraction of this component, in (0, 1].",
+      "properties": {
+        "mole_fraction": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Mole Fraction",
+          "type": "number"
+        },
+        "species_entry": {
+          "$ref": "#/$defs/SpeciesEntryIdentityPayload"
+        }
+      },
+      "required": [
+        "species_entry",
+        "mole_fraction"
+      ],
+      "title": "KineticsBathGasUpload",
+      "type": "object"
     },
     "KineticsCalculationPurpose": {
       "description": "What a supporting calculation supplies to the rate.",
@@ -4870,7 +4914,7 @@
     },
     "KineticsUploadRequest": {
       "additionalProperties": false,
-      "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param t0_k: Reference temperature T0 in K, so that\n    ``k = A (T/T0)^n exp(-Ea/RT)``. Defaults to 1 K.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional finite, strictly positive reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param determination: Needs ``direction`` and a literature or workflow tool.\n:param applicability: Optional declaration of what the coefficient is.\n:param protocol: Optional declaration of how the rate was produced.\n:param note: Optional free-text note.",
+      "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution. The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant. When at least one participant is open-shell, closed-shell participants (singlets computed restricted, restricted-open, or unrestricted collapsing to restricted) do not constrain it; the open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference. When every participant is closed-shell, a stated spin treatment must match their spin treatment.\n:param bath_gas: Optional bath gas the rate was obtained for (species entries with mole\n    fractions summing to 1; not valid at ``pressure_context='high_p_limit'``).\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param t0_k: Reference temperature T0 in K, so that\n    ``k = A (T/T0)^n exp(-Ea/RT)``. Defaults to 1 K.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional finite, strictly positive reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param determination: Needs ``direction`` and a literature or workflow tool.\n:param applicability: Optional declaration of what the coefficient is.\n:param protocol: Optional declaration of how the rate was produced.\n:param note: Optional free-text note.",
       "examples": [
         {
           "a": 1230000000000.0,
@@ -4971,6 +5015,14 @@
             "$ref": "#/$defs/MultiArrheniusEntryUpload"
           },
           "title": "Arrhenius Entries",
+          "type": "array"
+        },
+        "bath_gas": {
+          "description": "The bath gas this rate was obtained for, where the depositor states it: each component is a species entry (by content) with its mole fraction. The fractions sum to 1 and the same species is named once. Meaningless for a high-pressure-limit rate (refused). Empty means not stated; it is never inferred.",
+          "items": {
+            "$ref": "#/$defs/KineticsBathGasUpload"
+          },
+          "title": "Bath Gas",
           "type": "array"
         },
         "chebyshev": {
@@ -5393,18 +5445,6 @@
           "default": null,
           "title": "Dispersion"
         },
-        "keywords": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Keywords"
-        },
         "method": {
           "anyOf": [
             {
@@ -5417,6 +5457,39 @@
           ],
           "default": null,
           "title": "Method"
+        },
+        "pno_truncation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PnoTruncation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "relativistic_hamiltonian": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelativisticHamiltonian"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ri_approximation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiApproximation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "solvent": {
           "anyOf": [
@@ -6209,6 +6282,16 @@
       "title": "PlogEntryUpload",
       "type": "object"
     },
+    "PnoTruncation": {
+      "description": "The DLPNO truncation preset a level of theory was run with.\n\nSource: ORCA 6.1 manual, DLPNO \"Basic Usage\": the ``LoosePNO``,\n``NormalPNO`` and ``TightPNO`` keywords are the recommended way to control\naccuracy. A hand-set numeric threshold is not representable here and stays\na parameter row. Part of the level identity only when stated.",
+      "enum": [
+        "loose",
+        "normal",
+        "tight"
+      ],
+      "title": "PnoTruncation",
+      "type": "string"
+    },
     "PressureContext": {
       "description": "What a rate coefficient means with respect to pressure (DR-0032).\n\n``high_p_limit``: the high-pressure-limit rate k∞.\n``apparent_at_pressure``: an apparent rate at a specific pressure\n    (requires ``kinetics.pressure_bar``).\n``pressure_dependent``: a record whose full P-dependence lives in an\n    associated model (a network solve, or a falloff/PLOG table).\nNULL (unset) means the pressure context was not specified.",
       "enum": [
@@ -6244,6 +6327,21 @@
       "title": "RelativisticFact",
       "type": "object"
     },
+    "RelativisticHamiltonian": {
+      "description": "Scalar-relativistic Hamiltonian a level of theory was run with.\n\nOne vocabulary with the parsed parameter ``relativistic.hamiltonian``\n(``app/services/parameter_closed_values.py``). ``none`` is a stated\nnon-relativistic run and is a different level from not stating it.\nSources: ORCA 6.1 manual Table 2.54 (DKH2/DKH, ZORA, IORA, X2C);\nGaussian 09 ``Integral`` (DKH/DKH2, DKH0, DKHSO, RESC, NoDKH).\nPart of the level identity only when stated.",
+      "enum": [
+        "none",
+        "dkh0",
+        "dkh2",
+        "dkhso",
+        "resc",
+        "x2c",
+        "zora",
+        "iora"
+      ],
+      "title": "RelativisticHamiltonian",
+      "type": "string"
+    },
     "RelativisticTreatment": {
       "description": "The scalar-relativistic Hamiltonian: none (non-relativistic), Douglas-Kroll-Hess, X2C or ZORA.",
       "enum": [
@@ -6253,6 +6351,18 @@
         "zora"
       ],
       "title": "RelativisticTreatment",
+      "type": "string"
+    },
+    "RiApproximation": {
+      "description": "The resolution-of-the-identity approximation of the SCF step.\n\nOne vocabulary with the parsed parameter ``ri.approximation``. ``none`` is\na stated no-RI run. RI inside a method name (``RI-MP2``) is the method's own\nand is not stated here. Part of the level identity only when stated.",
+      "enum": [
+        "none",
+        "rij",
+        "rijcosx",
+        "rijk",
+        "rijonx"
+      ],
+      "title": "RiApproximation",
       "type": "string"
     },
     "SCFStabilityPayload": {
@@ -6662,7 +6772,7 @@
     },
     "SpeciesEntryIdentityPayload": {
       "additionalProperties": false,
-      "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo label such as ``R`` or ``E``.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X`` or ``A``.\n:param term_symbol_raw: Optional raw uploaded term symbol.\n:param term_symbol: Optional canonicalized term symbol.\n\nIsotopic resolution is *not* a field on this payload. It is derived\nserver-side from the atom-resolved isotope labels in ``smiles`` (see\n``SpeciesIdentityPayload.smiles``). The former free-text\n``isotopologue_label`` has been removed: an arbitrary string could mint\ntwo species identities that no scientific content distinguished, and a\nderived key may never be accepted from an uploader.",
+      "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo descriptor in the closed vocabulary\n    ``R``/``S``/``r``/``s`` (lower case: a pseudo-asymmetric centre)/``E``/``Z``/``-`` (an\n    element that is not stereogenic in this configuration)/``?``, one comma-separated\n    token per potential stereo element in canonical order (``E``, ``R,S``, ``E,?``). Free text\n    such as ``\"trans\"`` is refused. It fills only the elements the geometry\n    and the SMILES marks leave unresolved and is cross-checked where they\n    exist; the server decides whether it fits the molecule.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X``, ``A``, ``E`` or\n    ``T1``; only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted\n    (``electronic_state_label_invalid`` otherwise) and the canonical spelling is stored.\n:param term_symbol_raw: Optional raw uploaded term symbol, kept verbatim and not checked.\n:param term_symbol: Optional canonicalized term symbol such as ``2Pi``, ``3P2`` or ``X 1A1``;\n    only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted\n    (``term_symbol_invalid`` otherwise) and the canonical spelling (``²Π``) is stored, the\n    typed spelling going to ``term_symbol_raw`` when that is not given.\n\nIsotopic resolution is *not* a field on this payload. It is derived\nserver-side from the atom-resolved isotope labels in ``smiles`` (see\n``SpeciesIdentityPayload.smiles``). The former free-text\n``isotopologue_label`` has been removed: an arbitrary string could mint\ntwo species identities that no scientific content distinguished, and a\nderived key may never be accepted from an uploader.",
       "properties": {
         "charge": {
           "title": "Charge",
@@ -6710,7 +6820,7 @@
         "stereo_label": {
           "anyOf": [
             {
-              "maxLength": 64,
+              "maxLength": 512,
               "type": "string"
             },
             {
@@ -6923,6 +7033,15 @@
         "imported"
       ],
       "title": "ThermoCalculationRole",
+      "type": "string"
+    },
+    "ThermoDeclarationSource": {
+      "description": "Whose claim a thermo record's thermodynamic-target declaration is.\n\n``depositor`` is the depositor's own statement. ``chemkin_format`` is a statement by the\ndepositing client that the CHEMKIN format defines the target; the server checks it is coherent\nbut cannot verify which tool produced it.",
+      "enum": [
+        "depositor",
+        "chemkin_format"
+      ],
+      "title": "ThermoDeclarationSource",
       "type": "string"
     },
     "ThermoDepartureComponent": {
@@ -7485,7 +7604,7 @@
     },
     "ThermoTargetDeclaration": {
       "additionalProperties": false,
-      "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.",
+      "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.\n:param declared_by: ``depositor`` (the default) is the depositor's own statement.\n    ``chemkin_format`` is a statement by the depositing client that the CHEMKIN format defines\n    the target; the server checks it is coherent but cannot verify which tool produced it.",
       "properties": {
         "conformer_group_ref": {
           "anyOf": [
@@ -7512,6 +7631,10 @@
           ],
           "default": null,
           "title": "Conformer Key"
+        },
+        "declared_by": {
+          "$ref": "#/$defs/ThermoDeclarationSource",
+          "default": "depositor"
         },
         "kind": {
           "$ref": "#/$defs/ThermoTargetKind"
@@ -7864,7 +7987,7 @@
             }
           ],
           "default": null,
-          "description": "What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted."
+          "description": "What the values describe (see ThermoTargetDeclaration). The server never infers it; omitted, it reads as not stated."
         },
         "tmax_k": {
           "anyOf": [
@@ -8044,7 +8167,7 @@
     },
     "WavefunctionDiagnosticPayload": {
       "additionalProperties": false,
-      "description": "Optional inline wavefunction diagnostics parsed from a calculation's output.\n\nCarries scalar coupled-cluster / multireference diagnostics — T1\n(Lee–Taylor), D1 (Janowski), the norm of the T1 amplitude vector,\nand the largest T2 amplitude. Spin-contamination ``<S^2>`` signals\nare intentionally NOT included in this first slice.\n\nGeneric across calculation types that produce electronic-structure\noutput (typically ``sp``). The producer contract is to emit a block\nonly when at least one diagnostic was actually parsed from the\ncalculation; this payload rejects an all-null block with no note.\n\n:param t1_diagnostic: Coupled-cluster T1 diagnostic (Lee–Taylor).\n:param d1_diagnostic: Janowski D1 diagnostic.\n:param t1_norm: Norm of the T1 amplitude vector, when reported.\n:param largest_t2_amplitude: Largest T2 amplitude magnitude, when\n    reported.\n:param note: Optional free-text annotation.",
+      "description": "Optional inline wavefunction diagnostics parsed from a calculation's output.\n\nCarries scalar coupled-cluster / multireference diagnostics — T1\n(Lee–Taylor), D1 (Janssen and Nielsen, 1998), the norm of the T1 amplitude vector,\nand the largest T2 amplitude. Spin-contamination ``<S^2>`` signals\nare intentionally NOT included in this first slice.\n\nGeneric across calculation types that produce electronic-structure\noutput (typically ``sp``). The producer contract is to emit a block\nonly when at least one diagnostic was actually parsed from the\ncalculation; this payload rejects an all-null block with no note.\n\n:param t1_diagnostic: Coupled-cluster T1 diagnostic (Lee–Taylor).\n:param d1_diagnostic: D1 diagnostic of Janssen and Nielsen (1998).\n:param t1_norm: Norm of the T1 amplitude vector, when reported.\n:param largest_t2_amplitude: Largest T2 amplitude magnitude, when\n    reported.\n:param note: Optional free-text annotation.",
       "properties": {
         "d1_diagnostic": {
           "anyOf": [

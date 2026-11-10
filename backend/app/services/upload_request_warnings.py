@@ -33,6 +33,11 @@ from app.schemas.workflows.reaction_upload import ReactionUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.schemas.workflows.transition_state_upload import TransitionStateUploadRequest
 from app.schemas.workflows.transport_upload import TransportUploadRequest
+from app.services.atomic_electronic_warnings import (
+    collect_conformer_atomic_warnings,
+    collect_pdep_atomic_warnings,
+    collect_thermo_atomic_warnings,
+)
 from app.services.frequency_geometry_linearity import (
     computed_reaction_linearity_warnings,
     inline_calculation_linearity_warnings,
@@ -49,6 +54,7 @@ from app.services.upload_reconciliation import (
     reconcile_species_entry,
     reconcile_species_entry_full,
     stationary_point_warnings,
+    stereo_unresolved_warnings,
 )
 
 
@@ -79,6 +85,7 @@ def conformer_request_warnings(request: ConformerUploadRequest) -> list[UploadWa
         reference_xyz_text=request.geometry.xyz_text,
     )
     warnings.extend(collect_ref_warnings(request))
+    warnings.extend(collect_conformer_atomic_warnings(request))
     return warnings
 
 
@@ -104,14 +111,26 @@ def kinetics_request_warnings(request: KineticsUploadRequest) -> list[UploadWarn
     return warnings
 
 
+def _network_species_stereo_warnings(request: NetworkUploadRequest) -> list[UploadWarning]:
+    warnings: list[UploadWarning] = []
+    for i, link in enumerate(request.species_links):
+        for w in stereo_unresolved_warnings(link.species_entry):
+            warnings.append(w.model_copy(update={"field": f"species_links[{i}].{w.field}"}))
+    return warnings
+
+
 def network_request_warnings(request: NetworkUploadRequest) -> list[UploadWarning]:
-    return list(collect_ref_warnings(request))
+    warnings = _network_species_stereo_warnings(request)
+    warnings.extend(collect_ref_warnings(request))
+    return warnings
 
 
 def network_pdep_request_warnings(request: NetworkPDepUploadRequest) -> list[UploadWarning]:
-    warnings: list[UploadWarning] = stationary_point_warnings(request.stationary_point_findings())
+    warnings: list[UploadWarning] = _species_with_conformers_stereo_warnings(request.species, prefix="species")
+    warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
     warnings.extend(network_pdep_linearity_warnings(request))
     warnings.extend(collect_ref_warnings(request))
+    warnings.extend(collect_pdep_atomic_warnings(request))
     return warnings
 
 
@@ -121,6 +140,7 @@ def thermo_request_warnings(request: ThermoUploadRequest) -> list[UploadWarning]
     warnings.extend(inline_calculation_linearity_warnings(request.calculations))
     warnings.extend(collect_thermo_provenance_warnings(request))
     warnings.extend(collect_ref_warnings(request))
+    warnings.extend(collect_thermo_atomic_warnings(request))
     return warnings
 
 
@@ -141,10 +161,21 @@ def transport_request_warnings(request: TransportUploadRequest) -> list[UploadWa
     return warnings
 
 
+def _species_with_conformers_stereo_warnings(species, *, prefix: str) -> list[UploadWarning]:
+    """``species_entry_stereo_unresolved`` for each species of a bundle, resolved from its own conformer geometries."""
+    warnings: list[UploadWarning] = []
+    for i, sp in enumerate(species):
+        geometries = [conf.geometry.to_payload() for conf in sp.conformers]
+        for w in stereo_unresolved_warnings(sp.species_entry, geometries):
+            warnings.append(w.model_copy(update={"field": f"{prefix}[{i}].{w.field}"}))
+    return warnings
+
+
 def computed_reaction_request_warnings(request: ComputedReactionUploadRequest) -> list[UploadWarning]:
     # Derived from the request, not the persisted rows, so a caller merges
     # these *ahead of* whatever the workflow reported.
     return [
+        *_species_with_conformers_stereo_warnings(request.species, prefix="species"),
         *stationary_point_warnings(request.stationary_point_findings()),
         *computed_reaction_linearity_warnings(request),
         *collect_ref_warnings(request),

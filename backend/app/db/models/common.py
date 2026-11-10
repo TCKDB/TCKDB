@@ -80,8 +80,10 @@ class HessianMethod(str, Enum):
     #
     # Recorded only when the output says so explicitly (Gaussian
     # ``Freq=Numer``, ORCA ``NumFreq`` / ``AnFreq``). Absence means "not
-    # recorded", which resolves to the conservative tolerance -- it is
-    # never assumed to be analytic.
+    # recorded", which resolves to the producing program's assumed default
+    # for the level of theory (tckdb_schemas.hessian_method_assumption,
+    # stored with an ``assumed_*`` basis), or to the conservative tolerance
+    # where that is unknown. A recorded value always wins over an assumption.
     #
     # Not a database column: it is the canonical *value* of the
     # ``freq.hessian_method`` parameter row, and lives here so the
@@ -118,7 +120,7 @@ IMAGINARY_MODE_TAU_BASIS_VALUES: tuple[str, ...] = (
     # ADR 0012's 2026-09-04 amendment: an unrecorded Hessian method may
     # be assumed from the producing program's documented default for the
     # level-of-theory's method family (see
-    # app/services/hessian_method_inference.py). Never confusable with a
+    # tckdb_schemas.hessian_method_assumption). Never confusable with a
     # recorded statement -- hence separate members rather than reusing
     # the three above -- and widened onto this CHECK constraint by the
     # revision following e2a7c9d4b615, not folded into it.
@@ -185,6 +187,18 @@ class ThermoTargetKind(str, Enum):
 
     equilibrium_ensemble = "equilibrium_ensemble"
     single_conformer = "single_conformer"
+
+
+class ThermoDeclarationSource(str, Enum):
+    """Whose claim a thermo record's thermodynamic-target declaration is.
+
+    ``depositor`` is the depositor's own statement. ``chemkin_format`` is a statement by the
+    depositing client that the CHEMKIN format defines the target; the server checks it is coherent
+    but cannot verify which tool produced it.
+    """
+
+    depositor = "depositor"
+    chemkin_format = "chemkin_format"
 
 
 class PhaseKind(str, Enum):
@@ -677,6 +691,7 @@ class HessianSource(str, Enum):
     parsed_fchk = "parsed_fchk"
     parsed_hess = "parsed_hess"
     parsed_log = "parsed_log"
+    parsed_log_archive = "parsed_log_archive"
     uploaded = "uploaded"
     derived = "derived"
 
@@ -731,6 +746,18 @@ class ParameterSource(str, Enum):
     parser = "parser"
     upload = "upload"
     curated = "curated"
+
+
+class ParameterStatementKind(str, Enum):
+    """What a parser-read ``calculation_parameter`` row says about a setting.
+
+    ``requested`` is what the input deck, or the input a log echoes, asked for. ``reported`` is what the program
+    printed in its output log as the value it used, defaults included. Only a log can carry a ``reported`` row.
+    NULL on typed (``upload``) and ``curated`` rows.
+    """
+
+    requested = "requested"
+    reported = "reported"
 
 
 class SoftwareVersionEvidenceKind(str, Enum):
@@ -1131,14 +1158,66 @@ class CoreTreatment(str, Enum):
     focal-point scheme). Part of the level identity only when stated: a level
     that does not say stays ``NULL`` and keeps the hash it always had.
 
-    Two members on purpose. A partial treatment (Gaussian ``FC=1`` /
-    ``FreezeInnerNobleGasCore``, an ORCA ``FC_EWIN`` energy window, an explicit
-    orbital range) is real but has no agreed name across codes; it is left
-    ``NULL`` and described in ``keywords`` until a producer needs it named.
+    ``window``: a partial treatment (a Gaussian ``Window=(m,n)`` orbital range,
+    an ORCA ``FC_EWIN`` energy window). It is one value on purpose: the
+    specific window has no agreed form across codes and stays on the
+    calculation's ``core.frozen`` parameter rows, so two different windows are
+    one level of theory.
     """
 
     frozen_core = "frozen_core"
     all_electron = "all_electron"
+    window = "window"
+
+
+class RelativisticHamiltonian(str, Enum):
+    """Scalar-relativistic Hamiltonian a level of theory was run with.
+
+    One vocabulary with the parsed parameter ``relativistic.hamiltonian``
+    (``app/services/parameter_closed_values.py``). ``none`` is a stated
+    non-relativistic run and is a different level from not stating it.
+    Sources: ORCA 6.1 manual Table 2.54 (DKH2/DKH, ZORA, IORA, X2C);
+    Gaussian 09 ``Integral`` (DKH/DKH2, DKH0, DKHSO, RESC, NoDKH).
+    Part of the level identity only when stated.
+    """
+
+    none = "none"
+    dkh0 = "dkh0"
+    dkh2 = "dkh2"
+    dkhso = "dkhso"
+    resc = "resc"
+    x2c = "x2c"
+    zora = "zora"
+    iora = "iora"
+
+
+class PnoTruncation(str, Enum):
+    """The DLPNO truncation preset a level of theory was run with.
+
+    Source: ORCA 6.1 manual, DLPNO "Basic Usage": the ``LoosePNO``,
+    ``NormalPNO`` and ``TightPNO`` keywords are the recommended way to control
+    accuracy. A hand-set numeric threshold is not representable here and stays
+    a parameter row. Part of the level identity only when stated.
+    """
+
+    loose = "loose"
+    normal = "normal"
+    tight = "tight"
+
+
+class RiApproximation(str, Enum):
+    """The resolution-of-the-identity approximation of the SCF step.
+
+    One vocabulary with the parsed parameter ``ri.approximation``. ``none`` is
+    a stated no-RI run. RI inside a method name (``RI-MP2``) is the method's own
+    and is not stated here. Part of the level identity only when stated.
+    """
+
+    none = "none"
+    rij = "rij"
+    rijcosx = "rijcosx"
+    rijk = "rijk"
+    rijonx = "rijonx"
 
 
 class CompositeSchemeKind(str, Enum):
@@ -1299,6 +1378,17 @@ class LiteratureKind(str, Enum):
     webpage = "webpage"
 
 
+class LiteratureTitleSource(str, Enum):
+    """Where a ``literature.title`` came from.
+
+    ``NULL`` on the column means "not recorded" (rows written before the column
+    existed); it is never a third value to infer from.
+    """
+
+    resolved_metadata = "resolved_metadata"  # fetched from the DOI/ISBN registry
+    depositor_supplied = "depositor_supplied"  # typed by the depositor
+
+
 class AppUserRole(str, Enum):
     user = "user"
     curator = "curator"
@@ -1311,6 +1401,20 @@ class StereoKind(str, Enum):
     enantiomer = "enantiomer"
     diastereomer = "diastereomer"
     ez_isomer = "ez_isomer"
+
+
+class StereoResolution(str, Enum):
+    """How completely a species entry's stereo descriptor is pinned down.
+
+    Derived from ``species_entry.stereo_descriptor`` and never uploaded:
+    ``resolved`` when no element is ``?``, ``unresolved`` when every element
+    is, ``partial`` otherwise. An entry with no stereo element at all
+    (``stereo_descriptor IS NULL``) carries no resolution.
+    """
+
+    resolved = "resolved"
+    partial = "partial"
+    unresolved = "unresolved"
 
 
 class SpeciesEntryStateKind(str, Enum):
@@ -1380,10 +1484,31 @@ class NetworkEnergyTransferScope(str, Enum):
 
 
 class NetworkChannelKind(str, Enum):
+    """Macroscopic type of a network channel, derived from the states it joins.
+
+    A channel is directed (source to sink). Its kind follows from the kinds of its two states, with
+    termolecular treated exactly like bimolecular. A deposit may omit ``kind``; if it supplies one
+    it is checked against this rule, and a disagreement is refused as ``network_channel_kind_mismatch``.
+
+    ``isomerization``
+        well to well.
+
+    ``association``
+        bimolecular or termolecular to well.
+
+    ``dissociation``
+        well to bimolecular or termolecular.
+
+    ``exchange``
+        bimolecular or termolecular to bimolecular or termolecular, including stereo
+        isomerisation of a fragment set.
+
+    The kind comes from the two endpoints whatever the channel's mechanism: a well-skipping channel
+    that ends at a well is ``association`` or ``dissociation``, not ``exchange``.
+    """
     isomerization = "isomerization"
     association = "association"
     dissociation = "dissociation"
-    stabilization = "stabilization"
     exchange = "exchange"
 
 
@@ -2017,7 +2142,18 @@ class ReadProfile(str, Enum):
     ``exploratory``  every visible candidate, with its review/trust state.
                      TCKDB makes **no recommendation** about which candidate
                      is right; the caller is looking at the archive.
-    ``curated``      only records at or above the ``approved`` review floor.
+    ``curated``      the ``approved`` review floor decides which **records** a
+                     list, search, browse, select or export returns (approved
+                     only). A detail page serves any record that is not
+                     ``rejected`` or ``deprecated``, with its review badge,
+                     and the linked evidence of a returned record is shown
+                     with its badge too; only ``rejected`` and ``deprecated``
+                     evidence is withheld, and a request cannot lift that
+                     (ADR 0023). The badge is carried
+                     where the response carries ``review_status_by_ref``; a
+                     legacy ``/api/v1/*`` single-record read carries only the
+                     served record's own status, in the
+                     ``X-TCKDB-Review-Status`` header.
                      Records are **not** annotated with the release selection
                      that names them — no such per-record annotation exists —
                      so the accompanying
@@ -2044,13 +2180,18 @@ class ProfileRecommendation(str, Enum):
 
     ``none``                    the records are candidates. TCKDB is not
                                 telling you which one to use.
-    ``approved_floor_only``     every record shown is at or above the
-                                ``approved`` review floor, and **nothing more
-                                is claimed**. No attributed
-                                ``release_selection`` stands behind these
-                                specific records; a human reviewer accepted
-                                them, which is not the same as TCKDB
-                                recommending them over their siblings.
+    ``approved_floor_only``     the ``approved`` review floor was applied to
+                                the records a list, search, browse, select or
+                                export returned, and **nothing more is
+                                claimed**. Those records were accepted by a
+                                human reviewer, which is not the same as TCKDB
+                                recommending them over their siblings, and no
+                                attributed ``release_selection`` stands behind
+                                them. A detail page and the linked evidence of
+                                a returned record may be unreviewed: they
+                                carry their review badge, and the approval
+                                above does not apply to them. ``rejected`` and
+                                ``deprecated`` records are withheld.
     ``tckdb_curated_release``   these records *are* the ones an attributed,
                                 append-only ``release_selection`` names, in a
                                 published release. Only the

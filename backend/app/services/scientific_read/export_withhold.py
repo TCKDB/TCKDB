@@ -12,7 +12,8 @@ Two rules that the callers must keep:
   variable is not readable here (or anywhere inside a generator);
 * the session is the one that read the rows, so a batch is judged from the same snapshot as its content.
 
-Under the exploratory profile nothing is buffered and nothing is asked: each line is released as it is built, exactly
+Under curated each released line also carries ``review_status_by_ref``: the review badge of every gated ref the line still
+names (a withheld ref is not in the line, so not in the map). Under the exploratory profile nothing is buffered and nothing is asked: each line is released as it is built, exactly
 as before.
 """
 
@@ -61,7 +62,21 @@ class WithheldBatcher:
         # The guard returns a withheld copy and leaves ``batch`` alone: the copy is what is released.
         report = ref_guard.withhold_in_document(self._session, batch, profile=self._profile, mode="null")
         assert report.facts is not None
-        return [dumps_line(record) for record in report.facts]
+        # Linked evidence is shown WITH its badge (ADR 0023): every gated ref the finished line still names, and its review
+        # status. Built from the withheld copy, so a withheld ref is never in the map. Curated only (the batcher is inactive
+        # otherwise), from the statuses the one lookup above already fetched.
+        return [
+            dumps_line(
+                {
+                    **record,
+                    "review_status_by_ref": {
+                        ref: status.value
+                        for ref, status in ref_guard.badges_for(ref_guard.refs_present(record), report.statuses).items()
+                    },
+                }
+            )
+            for record in report.facts
+        ]
 
 
 __all__ = ["EXPORT_BATCH_SIZE", "WithheldBatcher", "dumps_line"]

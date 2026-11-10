@@ -239,3 +239,41 @@ describe("MethodsIndexPage: the levels-of-theory filter", () => {
         expect(screen.queryByLabelText("Method or basis")).not.toBeInTheDocument()
     })
 })
+
+describe("MethodsIndexPage: paging the levels of theory", () => {
+    it("an archive with more levels than one page says so, and Next asks for the following window", async () => {
+        const user = userEvent.setup()
+        const seen: string[] = []
+        server.use(
+            ...emptyVocab(),
+            http.get(LOT_ENDPOINT, ({ request }) => {
+                const params = new URL(request.url).searchParams
+                const offset = Number(params.get("offset") ?? 0)
+                const limit = Number(params.get("limit") ?? 200)
+                seen.push(`${offset}:${limit}`)
+                const all = Array.from({ length: 450 }, (_, index) => lotRecord({
+                    level_of_theory: { level_of_theory_ref: `lot_${index}`, method: `m${index}`, basis: "def2tzvp", dispersion: null, solvent: null, lot_hash: `h${index}`, created_at: "2026-07-21T11:59:29Z" },
+                }))
+                const records = all.slice(offset, offset + limit)
+                return HttpResponse.json({ records, pagination: { offset, limit, returned: records.length, total: all.length } })
+            }),
+        )
+        page()
+        expect(await screen.findByText("Showing 1–200 of 450 levels of theory.")).toBeVisible()
+        expect(seen[0]).toBe("0:200")
+        await user.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText("Showing 201–400 of 450 levels of theory.")).toBeVisible()
+        expect(seen).toContain("200:200")
+        expect(await screen.findByRole("link", { name: "m200/def2tzvp" })).toBeVisible()
+    })
+
+    it("an archive that fits one page shows no paging buttons", async () => {
+        server.use(
+            ...emptyVocab(),
+            http.get(LOT_ENDPOINT, () => HttpResponse.json({ records: [lotRecord()], pagination: { offset: 0, limit: 200, returned: 1, total: 1 } })),
+        )
+        page()
+        await screen.findByRole("link", { name: "b3lyp/def2tzvp" })
+        expect(screen.queryByRole("button", { name: "Next" })).not.toBeInTheDocument()
+    })
+})

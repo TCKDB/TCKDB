@@ -989,52 +989,33 @@ def collect_state_energy_source_warnings(
     is left out of the not-compared warning so one problem is not reported twice.
     """
     warnings: list[UploadWarning] = []
-    skipped: list[str] = []
+    skipped: list[dict[str, str]] = []
+    reasons: set[str] = set()
     for energy, comparison in zip(energies, comparisons, strict=True):
         cited = [p for p in energy.participants if p.calculation is not None]
         if cited and len(cited) < len(energy.participants):
-            missing = ", ".join(f"'{p.species_key}'" for p in energy.participants if p.calculation is None)
+            missing = [p.species_key for p in energy.participants if p.calculation is None]
             warnings.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field=f"solve.state_energies[{energy.index}]",
                     code=W_NETWORK_STATE_ENERGY_SOURCES_PARTIAL,
-                    message=(
-                        f"The energy of state '{energy.state_key}' is a sum over "
-                        f"{len(energy.participants)} species but names a source calculation for "
-                        f"{len(cited)}; no source is stated for {missing}. It is stored as given "
-                        "and reads back as partial_sources, and the sum is not compared. Cite "
-                        "every participant with source_calculation_keys."
-                    ),
+                    context={
+                        "participants": len(energy.participants),
+                        "cited_participants": len(cited),
+                        "depositor_supplied": {"state_key": energy.state_key, "uncited_species_keys": missing},
+                    },
                 )
             )
         elif comparison.status == COMPARISON_NOT_COMPARED and comparison.reason != NOT_COMPARED_NO_SOURCE_STATED:
-            skipped.append(f"'{energy.state_key}' ({comparison.reason})")
+            skipped.append({"state_key": energy.state_key, "reason": comparison.reason or ""})
+            if comparison.reason:
+                reasons.add(comparison.reason)
     if skipped:
-        scaling_hint = (
-            " A 'zpe_scaling_unstated' energy cites a frequency ZPE but states no zpe_scale_factor: "
-            "TCKDB stores the unscaled ZPE and never assumes the scale is one, so state the factor "
-            "(to at least 4 decimals) and it is compared."
-            if any("zpe_scaling_unstated" in item for item in skipped)
-            else ""
-        )
-        precision_hint = (
-            " A 'stated_precision_unknown' energy differs from the stored sum by more than "
-            "printed precision but by no more than honest rounding of the stated number could "
-            "explain: state energy_precision_kj_mol (the rounding unit) for it, or state "
-            "unrounded kJ/mol derived from hartree with 2625.499639, and it is compared."
-            if any("stated_precision_unknown" in item for item in skipped)
-            else ""
-        )
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field="solve.state_energies",
                 code=W_NETWORK_STATE_ENERGY_SUM_NOT_COMPARED,
-                message=(
-                    "State energies that could not be held against the sum of the energies stored "
-                    f"for the calculations they cite: {'; '.join(skipped)}. They are stored as not "
-                    "compared with their reason, and each rests on the stated number alone."
-                    f"{precision_hint}{scaling_hint}"
-                ),
+                context={"reasons": sorted(reasons), "depositor_supplied": {"not_compared": skipped}},
             )
         )
     return warnings
@@ -1078,18 +1059,14 @@ def collect_zpe_source_absent_warnings(
         ]
         if missing:
             warnings.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field=f"solve.state_energies[{energy.index}]",
                     code=W_NETWORK_ENERGY_ZPE_SOURCE_ABSENT,
-                    message=(
-                        f"The energy of state '{energy.state_key}' states "
-                        f"'{energy.correction_convention.value}', which includes a vibrational term, "
-                        f"but the source for {', '.join(repr(k) for k in missing)} is a bare "
-                        "electronic-energy calculation and the upload carries no freq calculation "
-                        "for it. The energy is stored as stated, with no source for its zero-point "
-                        "energy. Cite the freq (zpe_calculation_key), include it in the upload, or "
-                        "cite a composite that holds the E0."
-                    ),
+                    context={
+                        "correction_convention": energy.correction_convention.value,
+                        "subject": "state_energy",
+                        "depositor_supplied": {"state_key": energy.state_key, "species_keys": missing},
+                    },
                 )
             )
     for index, ts_key, convention, calculation in barriers:
@@ -1100,15 +1077,14 @@ def collect_zpe_source_absent_warnings(
             and calculation.transition_state_entry_id not in transition_state_entries_with_freq
         ):
             warnings.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field=f"solve.channel_barriers[{index}]",
                     code=W_NETWORK_ENERGY_ZPE_SOURCE_ABSENT,
-                    message=(
-                        f"The barrier through '{ts_key}' states '{convention.value}', which includes "
-                        "a vibrational term, but its source is a bare electronic-energy calculation "
-                        "and the upload carries no freq calculation for the transition state. The "
-                        "barrier is stored as stated, with no source for its zero-point energy."
-                    ),
+                    context={
+                        "correction_convention": convention.value,
+                        "subject": "channel_barrier",
+                        "depositor_supplied": {"transition_state_key": ts_key},
+                    },
                 )
             )
     return warnings

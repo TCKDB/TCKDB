@@ -28,12 +28,11 @@ from collections import defaultdict
 from types import SimpleNamespace
 
 import pytest
-from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
 from app.chemistry.basis_set_names import basis_identity_key
 from app.chemistry.lot_component_names import component_identity_key
 from app.chemistry.method_names import method_identity_key
-from app.services.calculation_resolution import _level_of_theory_hash
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 from tests.services.test_basis_identity_key import _all_spellings
 from tests.services.test_lot_component_identity_key import _ALL as _COMPONENT_SPELLINGS
 from tests.services.test_method_identity_key import SAME_METHOD, _all_methods
@@ -169,7 +168,7 @@ def test_frozen_hash_agrees_with_the_application_where_630_changes_nothing(mig):
         "spin_treatment": None,
     }
     row = SimpleNamespace(_mapping=fields)
-    assert mig._lot_hash(row, aliased=True) == _level_of_theory_hash(LevelOfTheoryRef(**fields))
+    assert mig._lot_hash(row, aliased=True) == frozen_level_of_theory_hash(**fields)
 
 
 def test_frozen_pre_revision_formula_is_the_parent_revisions(mig, parent):

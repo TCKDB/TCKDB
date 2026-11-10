@@ -200,7 +200,7 @@ def _fetch_doi_metadata_uncached(normalized_doi: str) -> dict[str, Any] | None:
         "page": metadata.get("page"),
         "volume": metadata.get("volume"),
         "issue": metadata.get("issue"),
-        "title": metadata.get("title", [None])[0],
+        "title": (metadata.get("title") or [None])[0],
         "language": metadata.get("language"),
     }
 

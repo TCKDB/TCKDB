@@ -70,7 +70,7 @@ class Route:
 
 @pytest.fixture
 def world(db_session, login_as):
-    w = build_sweep_world(db_session)
+    w = build_sweep_world(db_session, withheld=True)
     login_as(w.extra["curator"].id)
     return w
 
@@ -129,7 +129,9 @@ def _routes(w):
             "structure",
             f"/species-entries/{sa}/conformers/select/manifest",
             structure,
-            ("determinations[*].conformer_group_ref",),
+            # A conformer group is a gated kind: a basin whose observation sits in a hidden group hides with the group, so
+            # no identity position holds a token and the document never names the group or its observation.
+            (),
             ("cg_h",),
         ),
         Route(
@@ -240,6 +242,69 @@ def test_every_nested_position_holds_a_token_and_the_real_ref_is_nowhere(client,
         assert spy.context is not None and spy.context.documents >= 1, f"{route.name}: the seam was not crossed"
 
 
+def test_unlisted_evidence_is_named_in_a_selection_document_and_holds_no_token(client, db_session, login_as):
+    """ADR 0023: a record that is merely below the floor (not reviewed, under review) is linked evidence, not withheld
+    evidence. Its ref stands in the curated document as it does in the exploratory one, and no position holds a token.
+
+    This is the flip of the pin above (which now runs over rejected / deprecated records): the same world, with its hidden
+    records left unlisted. Thermo, kinetics, statmech and the network name the records the positions held tokens for. The
+    structure and relative-energy documents name none of their ``hidden`` keys because those are conformer GROUPS, which are
+    records there (Q4) and which the floor still holds out; the calculations and observations inside a group are evidence and
+    are named (see the next test). No document holds a token.
+
+    Kills: the earlier rule (a token or a gap for every record below the floor); a token for an unlisted record.
+    """
+    unlisted = build_sweep_world(db_session)
+    login_as(unlisted.extra["curator"].id)
+    hidden_refs = unlisted.hidden_refs()
+    named_now = {"thermo", "kinetics", "statmech", "network"}
+    for route in _routes(unlisted):
+        curated = _post(client, route.path, route.body, "curated")
+        text = json.dumps(curated)
+        assert not TOKEN.search(text), f"{route.name}: a token stands for a record that is not withheld"
+        if route.name in named_now:
+            for key in route.hidden:
+                assert hidden_refs[key] in text, f"{route.name}: the unlisted {key} is not named"
+
+
+#: Per route, the unlisted EVIDENCE the loader's own population reads (ADR 0023 step 5), by world key.
+LOADER_EVIDENCE = {
+    "structure": ("calc_h",),
+    "statmech": ("calc_h", "co_h"),
+    "relative_energy": ("calc_h",),
+}
+
+
+def test_the_loaders_own_populations_use_unreviewed_evidence_and_drop_rejected(client, db_session, login_as):
+    """Step 5 of ADR 0023: the calculations and observations a selection reads are evidence of the record it returns.
+
+    In the world as built (hidden records unlisted: not reviewed or under review) the structure, statmech and
+    relative-energy documents name the unlisted calculation (and the statmech document the unlisted observation) under
+    ``curated`` exactly as ``exploratory`` does. In the same world with those records rejected or deprecated the curated
+    documents name none of them, and ``exploratory`` still does.
+
+    Kills: a loader that keeps the record floor for the evidence it reads (the unlisted ref absent from the curated
+    document), and one that stops withholding rejected evidence (the withheld ref present).
+    """
+    unlisted = build_sweep_world(db_session)
+    login_as(unlisted.extra["curator"].id)
+    refs = unlisted.hidden_refs()
+    routes = {r.name: r for r in _routes(unlisted)}
+    for name, keys in LOADER_EVIDENCE.items():
+        route = routes[name]
+        exploratory = json.dumps(_post(client, route.path, route.body, "exploratory"))
+        curated = json.dumps(_post(client, route.path, route.body, "curated"))
+        for key in keys:
+            assert refs[key] in exploratory, f"{name}: the world never puts {key} in the exploratory document"
+            assert refs[key] in curated, f"{name}: the unlisted {key} is not named under curated"
+    unlisted.withhold_hidden(db_session)
+    for name, keys in LOADER_EVIDENCE.items():
+        route = routes[name]
+        curated = json.dumps(_post(client, route.path, route.body, "curated"))
+        for key in keys:
+            assert refs[key] not in curated, f"{name}: the withheld {key} is named under curated"
+
+
 def test_a_composite_ref_field_keeps_its_key_after_the_ref_is_a_token(client, world):
     """``network_channel_ref`` is ``<network ref>/<channel key>``: the ref is replaced in place, the key stays."""
     route = next(r for r in _routes(world) if r.name == "kinetics")
@@ -335,6 +400,19 @@ def test_a_curated_manifest_replays_and_reproduces_its_decision_byte_for_byte(cl
         assert TOKEN.search(json.dumps(manifest)), f"{name}: the replayed manifest holds no token"
 
 
+@pytest.mark.parametrize("name", ["thermo", "kinetics", "network", "structure", "statmech", "relative_energy"])
+def test_a_curated_manifest_over_unlisted_evidence_replays_byte_for_byte(client, db_session, login_as, name):
+    """ADR 0023: a curated manifest that names records which are merely below the floor (as evidence) still replays and
+    reproduces its decision. Kills: a replay consistency check that holds the captured evidence to the record floor."""
+    unlisted = build_sweep_world(db_session)
+    login_as(unlisted.extra["curator"].id)
+    route = next(r for r in _routes(unlisted) if r.name == name)
+    manifest = _post(client, route.path, route.body, "curated")
+    assert not TOKEN.search(json.dumps(manifest))
+    replayed = _replay(name, copy.deepcopy(manifest))
+    assert json.dumps(replayed, sort_keys=True) == json.dumps(_decision_of(name, manifest), sort_keys=True)
+
+
 def test_a_curated_structure_manifest_replays_every_assessment_from_its_tokens(client, world):
     """The structure replay recomputes each assessment from the normalised inputs it holds, tokens included."""
     sa = world.extra["species_entry"].public_ref
@@ -388,21 +466,28 @@ def test_the_current_format_version_of_every_engine_is_written(client, world):
         manifest = _post(client, route.path, route.body, "exploratory")
         versions[route.name] = ((manifest.get("format") or {}).get("version"), (manifest.get("versions") or {}).get("relative_energy"))
     assert versions == {
-        "thermo": (2, None),
-        "kinetics": (2, None),
-        "network": (2, None),
-        "structure": (2, None),
-        "statmech": (2, None),
-        "relative_energy": (2, 1),
+        "thermo": (5, None),
+        "kinetics": (5, None),
+        "network": (4, None),
+        "structure": (5, None),
+        "statmech": (4, None),
+        "relative_energy": (5, 1),
     }
 
 
 @pytest.mark.parametrize(
     ("name", "previous"),
-    [("thermo", 1), ("kinetics", 1), ("network", 1), ("structure", 1), ("statmech", 1)],
+    [
+        (engine, previous)
+        for engine in ("thermo", "kinetics", "network", "structure", "statmech", "relative_energy")
+        for previous in (1, 3)
+    ]
+    # Format 4 is retired for the two engines whose recorded inputs now carry a basin's group and observation statuses apart.
+    + [("structure", 4), ("relative_energy", 4)],
 )
 def test_a_manifest_of_another_format_version_is_refused(client, world, name, previous):
-    """Kills: another format version added to an engine's registry.
+    """Kills: another format version added to an engine's registry. Format 3 is the one ADR 0023 retired: a manifest
+    recorded before the evidence rule is refused, not read as the rule that came after it.
 
     Rewritten with the other version (and nothing else), then resealed where the engine checks a digest, so the
     refusal can only be the format."""
@@ -415,6 +500,8 @@ def test_a_manifest_of_another_format_version_is_refused(client, world, name, pr
         _reseal_integrity(manifest, structure_manifest.digest)
     elif name == "statmech":
         _reseal_integrity(manifest, statmech_manifest.digest)
+    elif name == "relative_energy":
+        _reseal_integrity(manifest, relative_manifest.digest)
     with pytest.raises(Exception, match="manifest format|unsupported_manifest_format"):
         _replay(name, manifest)
 
@@ -444,6 +531,26 @@ def test_a_comparison_manifest_of_a_retired_relative_energy_version_is_refused(c
     with pytest.raises(relative_manifest.ReplayError) as raised:
         relative_manifest.replay_comparison_matches(_reseal_integrity(manifest, relative_manifest.digest))
     assert raised.value.code == "unsupported_semantic_version"
+
+
+def test_a_format_3_relative_energy_manifest_and_comparison_are_refused(client, world):
+    """ADR 0023: the single manifest and the comparison, each recorded before the evidence rule (format 3), are refused on
+    replay, not read as format 4. Kills: format 3 left registered for either document."""
+    routes = {r.name: r for r in _routes(world)}
+    single = _post(client, routes["relative_energy"].path, routes["relative_energy"].body, "exploratory")
+    single["format"]["version"] = 3
+    with pytest.raises(Exception, match="manifest format|unsupported_manifest_format"):
+        relative_manifest.replay_matches(_reseal_integrity(single, relative_manifest.digest))
+
+    from tests.api.scientific import _curated_sweep_inputs as inputs
+
+    path = f"/species-entries/{world.extra['species_entry'].public_ref}/conformers/relative-energies/compare/manifest"
+    (variant,) = inputs._RELATIVE_ENERGIES_COMPARE(world)
+    comparison = _post(client, path, variant["json"], "exploratory")
+    assert comparison["format"]["version"] == 5
+    comparison["format"]["version"] = 3
+    with pytest.raises(Exception, match="manifest format|unsupported_manifest_format"):
+        relative_manifest.replay_comparison_matches(_reseal_integrity(comparison, relative_manifest.digest))
 
 
 @pytest.mark.parametrize("name", ["thermo", "kinetics", "network", "structure", "statmech"])
@@ -508,7 +615,7 @@ def test_a_curated_selection_costs_exactly_one_statement_more_for_the_seam(clien
 
 def test_two_identical_requests_make_the_same_tokens_and_the_same_digest(client, world, monkeypatch):
     spy = install_spy(monkeypatch)
-    route = next(r for r in _routes(world) if r.name == "structure")
+    route = next(r for r in _routes(world) if r.name == "statmech")
     first = _post(client, route.path, route.body, "curated")
     first_tokens = _tokens_made(spy)
     second = _post(client, route.path, route.body, "curated")

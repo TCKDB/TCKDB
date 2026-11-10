@@ -33,6 +33,12 @@ from urllib.parse import quote
 from ..config import Config
 from ..errors import invalid_input
 from ..http_client import TCKDBHttpClient
+from ._select_steps import (
+    ELIGIBILITY_REVIEW_AND_FINDINGS,
+    PROVENANCE_FILTERS,
+    forward_steps,
+    step_properties,
+)
 from ._path_handles import PUBLIC_REF_MAX_LENGTH, validate_path_handle
 
 PROFILES = ("exploratory", "curated")
@@ -166,6 +172,7 @@ def _input_schema(tool: StructureTool) -> dict[str, Any]:
         "repeat_policy": {"type": "string", "enum": list(REPEAT_POLICIES), "default": "retain_alternates"},
         "profile": {"type": "string", "enum": list(PROFILES), "default": "exploratory"},
     }
+    properties.update(step_properties(PROVENANCE_FILTERS, ELIGIBILITY_REVIEW_AND_FINDINGS))
     if tool.connectivity:
         properties["require_connectivity"] = {"type": "boolean"}
     return {"type": "object", "required": [tool.ref_field], "properties": properties, "additionalProperties": False}
@@ -270,6 +277,8 @@ def run(name: str, client: TCKDBHttpClient, config: Config, arguments: dict[str,
         if not isinstance(args["recipe"], dict):
             raise invalid_input(f"recipe must be an object; got {type(args['recipe']).__name__}")
         body["recipe"] = args["recipe"]
+
+    forward_steps(args, body, filters=PROVENANCE_FILTERS, eligibility=ELIGIBILITY_REVIEW_AND_FINDINGS)
 
     profile = args.get("profile")
     if profile is not None and profile not in PROFILES:

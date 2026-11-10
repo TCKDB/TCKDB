@@ -1,4 +1,5 @@
 import { words } from "./provenanceFormat"
+import { publicElectronicStateLabel, publicTermSymbol } from "./publicText"
 
 /**
  * The four orthogonal axes that make one species entry chemically
@@ -14,6 +15,11 @@ export type EntryFacetAxes = {
     electronic_state_label?: string | null
     term_symbol?: string | null
     stereo_label?: string | null
+    /** The entry's stereo key (DR-0038): one CIP token per potential stereo element, `null` only for an achiral species. */
+    stereo_descriptor?: string | null
+    stereo_resolution?: string | null
+    /** Stereo elements whose `?` no data can settle yet (`axial`, `cumulene`). */
+    stereo_not_represented?: string[] | null
     isotope_key?: string | null
 }
 
@@ -26,10 +32,26 @@ function kindChip(kind: string): string {
     return KIND_LABELS[kind] ?? words(kind) ?? kind
 }
 
-function stateChip(kind: string, label?: string | null, termSymbol?: string | null): string {
-    const base = kind === "ground" ? "ground state" : kind === "excited" ? "excited state" : `${words(kind) ?? kind} state`
-    const extra = [label, termSymbol].filter((part): part is string => Boolean(part)).join(" · ")
-    return extra ? `${base} · ${extra}` : base
+function stateChip(kind: string): string {
+    return kind === "ground" ? "ground state" : kind === "excited" ? "excited state" : `${words(kind) ?? kind} state`
+}
+
+/**
+ * The chips for the typed electronic-state label (`state T1`) and term symbol (`²Π`), each its own chip and each
+ * only when it is in the grammar the API enforces on write (`electronicState.ts`); anything else is hidden (house
+ * rule: no depositor free text on a public page). The label chip carries the word `state` so a bare `E` or `S1`
+ * can never be read as a stereo descriptor.
+ */
+function stateDetailChips(entry: Pick<EntryFacetAxes, "electronic_state_label" | "term_symbol">): string[] {
+    const label = publicElectronicStateLabel(entry.electronic_state_label)
+    const term = publicTermSymbol(entry.term_symbol)
+    // A term symbol that leads with the same letter (`X ³Σg⁻` under label `X`) already says it: one chip, not
+    // `state X` beside `X ³Σg⁻`. An ordinal (`T1`) never prefixes a term symbol, so it stays two chips.
+    if (label && term && term.startsWith(`${label} `)) return [`state ${term}`]
+    const chips: string[] = []
+    if (label) chips.push(`state ${label}`)
+    if (term) chips.push(term)
+    return chips
 }
 
 // Exported: reused by `SpeciesEntrySummary.tsx`'s `EntryIdentity` to print
@@ -38,9 +60,45 @@ function stateChip(kind: string, label?: string | null, termSymbol?: string | nu
 // component's own comment for the report this fixes ("why ... does it not
 // show ... E isomer like it does for Review etc.").
 export function stereoChip(label: string): string {
+    if (label === "Ra" || label === "Sa") return `${label} allene`
     if (label === "R" || label === "S") return `${label} enantiomer`
     if (label === "E" || label === "Z") return `${label} isomer`
     return label
+}
+
+const NOT_REPRESENTED_TEXT: Record<string, string> = {
+    axial_small_ring: "cyclic allene (ring of 5 or fewer) stereo not represented",
+    allene_dependent: "stereo that depends on an allene's sense not represented",
+    cumulene_tied_end: "cumulene with stereo-bearing arms at one end: stereo not represented",
+}
+
+/**
+ * What an entry's stereo is, in words -- from the descriptor and its resolution, never from the
+ * display `stereo_label` alone. `stereo_label` is deliberately NULL for an entry whose every stereo
+ * element is unknown (DR-0038), so reading that NULL as "not stereochemically distinguished" says
+ * the opposite of the truth: the entry IS a stereo-capable molecule whose configuration nobody
+ * pinned down. The cases:
+ *
+ * - descriptor `null` -> "Achiral" (the molecule has no stereo element at all);
+ * - `resolved` -> "E isomer", "R enantiomer", or the descriptor for several elements ("R,S");
+ * - `partial` -> "Partly resolved (E,?)";
+ * - `unresolved` -> "Unresolved (?)";
+ * - an element no data can settle (`stereo_not_represented`) is named, so the `?` is not read
+ *   as "not yet supplied": "cyclic allene (ring of 5 or fewer) stereo not represented".
+ *
+ * A response from before the descriptor existed (field absent, not `null`) falls back to
+ * `stereo_label`, and returns `null` (nothing to say) when that is absent too.
+ */
+export function stereoDescription(entry: EntryFacetAxes): string | null {
+    const descriptor = entry.stereo_descriptor
+    if (descriptor === undefined) return entry.stereo_label ? stereoChip(entry.stereo_label) : null
+    if (descriptor === null) return entry.stereo_label ? stereoChip(entry.stereo_label) : "Achiral"
+    let text: string
+    if (entry.stereo_resolution === "partial") text = `Partly resolved (${descriptor})`
+    else if (entry.stereo_resolution === "unresolved") text = `Unresolved (${descriptor})`
+    else text = stereoChip(descriptor)
+    const notes = (entry.stereo_not_represented ?? []).map((kind) => NOT_REPRESENTED_TEXT[kind] ?? `${kind} stereo not represented`)
+    return notes.length > 0 ? `${text} · ${notes.join(" · ")}` : text
 }
 
 function isotopeChip(key: string): string {
@@ -54,21 +112,16 @@ function isotopeChip(key: string): string {
  * (`SpeciesOverviewPage.tsx`'s `EntryCard`, before this module existed).
  *
  * That fallback chain is not what produced the "bare R" bug it looks
- * like it should explain. `species_entry_label` on the wire is not free
- * text a curator typed — it is computed server-side by
- * `app.services.scientific_read.species_identity.species_entry_label`
- * as a compact DISCRIMINATOR: every column that agrees with the
- * species' default (ground state, no term symbol, no isotope label) is
- * deliberately left OUT, so only what makes this entry different from
- * its siblings survives into the string. For an entry whose only
- * distinguishing feature is a stereo descriptor, that discriminator
- * really is just `"R"` — correct on the server's own terms. The bug is
- * entirely on this side: treating that discriminator as if it were a
- * complete heading silently drops "minimum · ground" instead of adding
- * to it.
+ * like it should explain. `species_entry_label` on the wire is built
+ * server-side (`app.services.scientific_read.species_identity.species_entry_label`)
+ * as a compact discriminator that joins stereo, state kind, the typed
+ * `electronic_state_label`, the typed `term_symbol` and the isotope key, so it
+ * MIXES computed and depositor-typed parts and cannot be split safely on the
+ * client. Treating it as a complete heading also silently dropped
+ * "minimum · ground".
  *
  * Chips close that gap structurally rather than by re-ordering the same
- * fallback: they are built ONLY from the four raw axes below and never
+ * fallback: they are built ONLY from the raw axes below and never
  * read `species_entry_label` at all, so there is nothing left that can
  * silently stand in for the whole classification. An axis that is unset
  * (no stereochemistry, no isotopologue) contributes no chip — never a
@@ -90,15 +143,13 @@ function isotopeChip(key: string): string {
 export function facetChips(entry: EntryFacetAxes, options?: { includeState?: boolean }): string[] {
     const includeState = options?.includeState ?? true
     const chips = [kindChip(entry.species_entry_kind)]
-    if (includeState) {
-        chips.push(stateChip(entry.electronic_state_kind, entry.electronic_state_label, entry.term_symbol))
-    } else {
-        const extra = [entry.electronic_state_label, entry.term_symbol]
-            .filter((part): part is string => Boolean(part))
-            .join(" · ")
-        if (extra) chips.push(extra)
-    }
-    if (entry.stereo_label) chips.push(stereoChip(entry.stereo_label))
+    if (includeState) chips.push(stateChip(entry.electronic_state_kind))
+    chips.push(...stateDetailChips(entry))
+    // An achiral entry contributes no chip: "achiral" on every ordinary card is noise, and its
+    // absence misleads nobody. Every other case -- including an unresolved one, whose display
+    // `stereo_label` is NULL -- is said.
+    const stereo = stereoDescription(entry)
+    if (stereo && stereo !== "Achiral") chips.push(stereo)
     if (entry.isotope_key) chips.push(isotopeChip(entry.isotope_key))
     return chips
 }

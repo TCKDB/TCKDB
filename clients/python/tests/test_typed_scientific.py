@@ -53,7 +53,7 @@ from tckdb_client.scientific_types import ObservationRecord
 def _page(*, offset: int = 0, limit: int = 50, total: int = 0) -> dict[str, Any]:
     returned = min(limit, max(total - offset, 0))
     return {
-        "request": {"filter": {}, "sort": "stable", "collapse": "all", "include": []},
+        "request": {"filter": {}, "sort": "stable", "include": []},
         "review_summary": {"total": total},
         "records": [{"ordinal": offset + index} for index in range(returned)],
         "pagination": {
@@ -62,7 +62,14 @@ def _page(*, offset: int = 0, limit: int = 50, total: int = 0) -> dict[str, Any]
             "returned": returned,
             "total": total,
         },
+        "next_cursor": f"c{offset + returned}" if offset + returned < total else None,
     }
+
+
+def _offset_of(params: dict[str, Any]) -> int:
+    """The position a request asks for: its cursor (``c<position>`` in these tests) or its offset."""
+    cursor = params.get("cursor")
+    return int(cursor[1:]) if cursor else int(params.get("offset", 0))
 
 
 def test_detail_and_composed_record_types_are_distinct_and_exported() -> None:
@@ -381,13 +388,11 @@ def test_every_supported_search_has_a_lazy_complete_iterator(
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if request.method == "GET":
-            query = parse_qs(urlsplit(str(request.url)).query)
-            offset = int(query["offset"][0])
-            limit = int(query["limit"][0])
+            query = {k: v[0] for k, v in parse_qs(urlsplit(str(request.url)).query).items()}
         else:
-            payload = json.loads(request.content)
-            offset = payload["offset"]
-            limit = payload["limit"]
+            query = json.loads(request.content)
+        offset = _offset_of(query)
+        limit = int(query["limit"])
         return httpx.Response(200, json=_page(offset=offset, limit=limit, total=3))
 
     client, _recorder = make_client(handler)
@@ -398,7 +403,7 @@ def test_every_supported_search_has_a_lazy_complete_iterator(
     assert len(requests) == 2
 
 
-def test_iterator_keeps_filters_and_includes_stable_while_advancing_offset() -> None:
+def test_iterator_keeps_filters_and_includes_stable_while_following_the_cursor() -> None:
     bodies: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -406,7 +411,7 @@ def test_iterator_keeps_filters_and_includes_stable_while_advancing_offset() -> 
         bodies.append(payload)
         return httpx.Response(
             200,
-            json=_page(offset=payload["offset"], limit=payload["limit"], total=3),
+            json=_page(offset=_offset_of(payload), limit=payload["limit"], total=3),
         )
 
     client, _recorder = make_client(handler)
@@ -419,7 +424,8 @@ def test_iterator_keeps_filters_and_includes_stable_while_advancing_offset() -> 
     )
 
     assert len(records) == 3
-    assert [body["offset"] for body in bodies] == [0, 2]
+    assert [body.get("cursor") for body in bodies] == [None, "c2"]
+    assert all("offset" not in body or body["offset"] is None for body in bodies)
     assert all(body["limit"] == 2 for body in bodies)
     assert all(
         body["source_species_entry_refs"] == ["spe_a", "spe_a"] for body in bodies
@@ -553,131 +559,17 @@ def test_iterator_rejects_nonempty_page_past_total() -> None:
         list(iter_paginated_records(lambda **_kwargs: page, {"limit": 1}))
 
 
-def test_collapsed_iterator_stops_after_the_single_collapsed_record() -> None:
-    calls = 0
-
-    def fetch(**_kwargs: Any) -> Any:
-        nonlocal calls
-        calls += 1
-        page = _page(limit=1, total=8)
-        page["request"]["collapse"] = "first"
-        return page
-
-    records = list(iter_paginated_records(fetch, {"collapse": "first", "limit": 1}))
-
-    assert records == [{"ordinal": 0}]
-    assert calls == 1
-
-
-def test_iterator_uses_post_collapse_total_as_authoritative_bound() -> None:
-    calls = 0
-
-    def fetch(**_kwargs: Any) -> Any:
-        nonlocal calls
-        calls += 1
-        page = _page(limit=1, total=8)
-        page["pagination"]["post_collapse_total"] = 1
-        return page
-
-    records = list(
-        iter_paginated_records(fetch, {"collapse": "first", "limit": 1})
-    )
-
-    assert records == [{"ordinal": 0}]
-    assert calls == 1
-
-
-@pytest.mark.parametrize("post_collapse_total", [-1, 3])
-def test_iterator_rejects_invalid_post_collapse_total(
-    post_collapse_total: int,
-) -> None:
-    page = _page(limit=1, total=2)
-    page["pagination"]["post_collapse_total"] = post_collapse_total
-
-    with pytest.raises(TCKDBPaginationError, match="post_collapse_total"):
-        list(iter_paginated_records(lambda **_kwargs: page, {"limit": 1}))
-
-
-@pytest.mark.parametrize(
-    ("collapse", "total", "post_collapse_total"),
-    [
-        ("all", 8, 0),
-        ("all", 8, 1),
-        ("first", 8, 0),
-        ("first", 8, 8),
-    ],
-)
-def test_iterator_rejects_post_collapse_total_that_disagrees_with_mode(
-    collapse: str,
-    total: int,
-    post_collapse_total: int,
-) -> None:
-    page = _page(limit=1, total=total)
-    page["pagination"]["post_collapse_total"] = post_collapse_total
-
-    with pytest.raises(TCKDBPaginationError, match="collapse mode"):
-        list(
-            iter_paginated_records(
-                lambda **_kwargs: page,
-                {"collapse": collapse, "limit": 1},
-            )
-        )
-
-
-def test_legacy_collapsed_iterator_rejects_empty_first_page_before_total() -> None:
-    page = _page(limit=1, total=8)
-    page["records"] = []
-    page["pagination"]["returned"] = 0
-
-    with pytest.raises(TCKDBPaginationError, match="did not advance"):
-        list(
-            iter_paginated_records(
-                lambda **_kwargs: page,
-                {"collapse": "first", "limit": 1},
-            )
-        )
-
-
-@pytest.mark.parametrize(("offset", "returned"), [(0, 2), (1, 1)])
-def test_legacy_collapsed_iterator_rejects_records_outside_single_result(
-    offset: int,
-    returned: int,
-) -> None:
-    page = _page(offset=offset, limit=2, total=8)
-    page["records"] = [{"ordinal": offset + index} for index in range(returned)]
-    page["pagination"]["returned"] = returned
-
-    with pytest.raises(TCKDBPaginationError, match="legacy collapsed"):
-        list(
-            iter_paginated_records(
-                lambda **_kwargs: page,
-                {"collapse": "first", "offset": offset, "limit": 2},
-            )
-        )
-
-
-def test_collapsed_iterator_accepts_empty_page_after_offset() -> None:
+def test_iterator_walks_every_page_of_the_total() -> None:
+    """No read collapses to one record, so the iterator follows ``total`` to the end."""
     calls = 0
 
     def fetch(**parameters: Any) -> Any:
         nonlocal calls
         calls += 1
-        return {
-            "records": [],
-            "pagination": {
-                "offset": parameters["offset"],
-                "limit": parameters["limit"],
-                "returned": 0,
-                "total": 8,
-            },
-        }
+        return _page(offset=parameters["offset"], limit=parameters["limit"], total=5)
 
-    records = list(
-        iter_paginated_records(
-            fetch,
-            {"collapse": "first", "offset": 1, "limit": 1},
-        )
-    )
+    records = list(iter_paginated_records(fetch, {"limit": 2}))
 
-    assert records == []
-    assert calls == 1
+    assert [r["ordinal"] for r in records] == [0, 1, 2, 3, 4]
+    assert calls == 3
+

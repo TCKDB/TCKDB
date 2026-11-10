@@ -12,9 +12,9 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 | Classification | Operations |
 |---|---|
 | typed | 127 |
-| raw_only | 107 |
+| raw_only | 106 |
 | not_applicable | 47 |
-| **total** | **281** |
+| **total** | **280** |
 
 ## Typed coverage
 
@@ -215,7 +215,6 @@ Deliberately reachable only through the generic request helpers. Each group stat
 | `GET /api/v1/species` | yes | — | — | — | — |
 | `GET /api/v1/species-entries/{entry_id}` | yes | — | — | — | — |
 | `GET /api/v1/species-entries/{entry_id}/conformer-groups` | yes | — | — | — | — |
-| `GET /api/v1/species-entries/{entry_id}/conformer-observations/lowest-sp` | yes | — | — | — | — |
 | `GET /api/v1/species-entries/{entry_id}/conformers` | yes | — | — | — | — |
 | `GET /api/v1/species-entries/{entry_id}/statmech` | yes | — | — | — | — |
 | `GET /api/v1/species-entries/{entry_id}/thermo` | yes | — | — | — | — |

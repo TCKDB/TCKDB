@@ -520,6 +520,7 @@ the placeholders. The non-negotiable hosted toggles:
 | `LEGACY_READS_REQUIRE_AUTH` | `true` | Legacy `/api/v1/{thermo,…}` routes leak integer PKs. |
 | `ALLOW_PUBLIC_INTERNAL_IDS` | `false` | Clients use refs as handles. |
 | `RATE_LIMIT_ENABLED` | `true` | Hosted abuse control is mandatory. |
+| `PAGING_CURSOR_KEY` | random, 32+ characters | Seals paging cursors; the API refuses to start without it. Rotating it only invalidates cursors in flight. |
 | `SESSION_COOKIE_SECURE` | `true` | TLS-only cookies. Cloudflare terminates TLS. |
 | `AUTH_ALLOW_OPEN_REGISTRATION` | `false` | Seeded accounts only. |
 | `TRUSTED_PROXY_HEADER` | `CF-Connecting-IP` | See next section. |

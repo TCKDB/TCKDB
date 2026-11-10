@@ -830,7 +830,7 @@ def test_multiple_conformers_create_distinct_groups(db_conn) -> None:
             session.scalar(
                 select(func.count())
                 .select_from(ConformerObservation)
-                .join(ConformerGroup)
+                .join(ConformerGroup, ConformerGroup.id == ConformerObservation.conformer_group_id)
                 .where(
                     ConformerGroup.species_entry_id == outcome.species_entry_id
                 )

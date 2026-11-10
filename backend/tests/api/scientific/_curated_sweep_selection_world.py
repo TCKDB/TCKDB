@@ -184,6 +184,7 @@ def extend_for_selection_documents(session, w, *, lot, lit, sa) -> None:
                     conformer_group_id=member_group.id if member_group is not None else None,
                     counting_multiplicity=1,
                     relative_energy_kj_mol=0.0,
+                    relative_energy_convention="electronic_plus_zpe",
                 )
             )
         session.flush()

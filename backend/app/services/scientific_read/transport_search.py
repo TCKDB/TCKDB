@@ -10,18 +10,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import exists, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     SubmissionRecordType,
 )
-from app.db.models.level_of_theory import LevelOfTheory
-from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transport import Transport, TransportSourceCalculation
-from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     RecordReviewBadge,
@@ -35,20 +32,27 @@ from app.schemas.reads.scientific_transport_search import (
     ScientificTransportSearchResponse,
     TransportSearchRequest,
 )
+from app.services.scientific_read.calculation_provenance_filters import apply_calculation_provenance_filter
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     reject_client_sort,
     review_summary,
     validate_includes,
     validate_pagination,
     visible_statuses,
+    where_visible,
 )
 from app.services.scientific_read.handles import resolve_filter_ref
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.scientific_read.transport import (
     _INTERNAL_INCLUDE_TOKENS,
@@ -89,6 +93,7 @@ def search_transport(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/transport/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -144,20 +149,30 @@ def search_transport(
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[cid].status for cid in candidate_ids),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
+    )
     visible_ids = [cid for cid in candidate_ids if badges[cid].status in visible]
     if not visible_ids:
         return _empty_response(request, includes, offset, limit)
 
+    visible_ids = paging.snapshot(visible_ids, id_of=lambda cid: cid)
     summary = review_summary(badges[cid] for cid in visible_ids)
-    visible_ids.sort(
-        key=lambda cid: (
+    page = paging.window(
+        visible_ids,
+        key_of=lambda cid: (
             REVIEW_RANK[badges[cid].status],
             -created_at_by_id[cid].timestamp(),
             -cid,
-        )
+        ),
     )
-    total = len(visible_ids)
-    page_ids = visible_ids[offset : offset + limit]
+    total = page.total
+    page_ids = page.items
     records = _materialize_records(session, page_ids, badges, includes)
 
     return ScientificTransportSearchResponse(
@@ -169,8 +184,9 @@ def search_transport(
         review_summary=summary,
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset, limit=limit, returned=len(records), total=total, page=page
         ),
+        **page.envelope(),
     )
 
 
@@ -245,9 +261,7 @@ def _apply_scalar_filters(stmt, request: TransportSearchRequest):
 
 def _apply_evidence_filters(stmt, request: TransportSearchRequest):
     if request.has_source_calculations is not None:
-        ex = exists().where(
-            TransportSourceCalculation.transport_id == Transport.id
-        )
+        ex = _shown_source_calculations().exists()
         stmt = stmt.where(ex if request.has_source_calculations else ~ex)
     if request.has_lj_parameters is not None:
         # ``lj_pair_both_or_neither`` constraint ensures sigma and
@@ -271,18 +285,14 @@ def _apply_method_basis_software_filters(
 ):
     """Provenance filters narrow transport rows to those whose
     source-calculation graph carries at least one row matching the
-    supplied method / basis / software / workflow."""
-    method_or_basis = request.method is not None or request.basis is not None
-    sw_filter = (
-        request.software is not None or request.software_version is not None
-    )
-    wf_filter = (
-        request.workflow_tool is not None
-        or request.workflow_tool_version is not None
-    )
-    if not (method_or_basis or sw_filter or wf_filter):
-        return stmt
+    supplied method / basis / software / workflow. A source calculation the read profile hides
+    contributes nothing to a match when the evidence rule withholds it (rejected or deprecated under
+    curated, ADR 0023); a not-reviewed one matches."""
+    return apply_calculation_provenance_filter(stmt, request, _shown_source_calculations())
 
+
+def _shown_source_calculations():
+    """``select(Calculation.id)`` over this transport row's source calculations the active profile shows."""
     sub = (
         select(Calculation.id)
         .join(
@@ -291,38 +301,7 @@ def _apply_method_basis_software_filters(
         )
         .where(TransportSourceCalculation.transport_id == Transport.id)
     )
-    if method_or_basis:
-        sub = sub.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
-        if request.method is not None:
-            sub = sub.where(method_matches(request.method))
-        if request.basis is not None:
-            sub = sub.where(basis_matches(request.basis))
-    if sw_filter:
-        sub = sub.join(
-            SoftwareRelease,
-            SoftwareRelease.id == Calculation.software_release_id,
-        ).join(Software, Software.id == SoftwareRelease.software_id)
-        if request.software is not None:
-            sub = sub.where(Software.name == request.software)
-        if request.software_version is not None:
-            sub = sub.where(
-                SoftwareRelease.version == request.software_version
-            )
-    if wf_filter:
-        sub = sub.join(
-            WorkflowToolRelease,
-            WorkflowToolRelease.id == Calculation.workflow_tool_release_id,
-        ).join(
-            WorkflowTool,
-            WorkflowTool.id == WorkflowToolRelease.workflow_tool_id,
-        )
-        if request.workflow_tool is not None:
-            sub = sub.where(WorkflowTool.name == request.workflow_tool)
-        if request.workflow_tool_version is not None:
-            sub = sub.where(
-                WorkflowToolRelease.version == request.workflow_tool_version
-            )
-    return stmt.where(sub.exists())
+    return where_visible(sub, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
 
 
 # ---------------------------------------------------------------------------

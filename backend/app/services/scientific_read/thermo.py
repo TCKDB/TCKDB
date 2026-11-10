@@ -6,7 +6,7 @@ See docs/specs/browse_order.md.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Any
 
 from pydantic import ValidationError
@@ -51,6 +51,7 @@ from app.db.models.thermo import (
     ThermoWilhoit,
 )
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.schemas.reads._method_family import echo_source_provenance
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
     CompositeEnergyVerification,
@@ -61,7 +62,6 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
     browse_order,
-    effective_order_echo,
     simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_thermo import (
@@ -79,14 +79,20 @@ from app.schemas.reads.scientific_thermo import (
     ThermoTargetBlock,
     ThermoWilhoitBlock,
 )
-from app.services.calculation_levels import RoleCalcInfo, derive_levels
+from app.services.calculation_levels import (
+    RoleCalcInfo,
+    derive_levels,
+    level_suppliers,
+    withhold_levels_from_calculations,
+)
 from app.services.composite_verification import verify_composite_calculations
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    ids_withheld_as_evidence,
     reject_client_sort,
     review_summary,
-    slice_for_pagination,
     temperature_coverage,
     validate_includes,
     validate_pagination,
@@ -113,10 +119,17 @@ from app.services.scientific_read.handles import (
     NO_MATCH,
     reconcile_level_of_theory_pair,
 )
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
+from app.services.scientific_read.role_settings import LevelPlan, attach_calculation_settings, make_level_plan
 from app.services.scientific_read.supersession import fetch_supersession_notices
+from app.services.selection_filters import filter_by_provenance, source_provenance_kwargs
 from app.services.trust import (
     TrustFragment,
     build_trust_fragment,
@@ -133,6 +146,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "all",
     "trust",
     "assessments",
+    "calculation_settings",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
 _TRUST_EAGER_LOADS = (
@@ -200,14 +214,16 @@ THERMO_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
 _DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 # Priority order for links that are not a typed composite: sp → composite →
-# freq → opt → any. A calculation of *type* ``composite`` ranks above all of
+# freq → opt → any. It picks the one calculation a record DISPLAYS as its
+# ``primary_calculation``; it decides no filter (``level_of_theory_*`` and
+# ``software`` match any linked calculation). A calculation of *type* ``composite`` ranks above all of
 # these (``_primary_calc_id`` takes it first), which is R1's energy order
 # (``app.services.calculation_levels.derive_levels``: composite > sp > opt,
 # ADR 0021 decision 4); the ``composite`` entry here is only the legacy shape,
 # a calculation of another type linked under that role, which keeps the place it
 # always had. ``freq`` sits before ``opt`` as ever: R1's energy chain has no
 # ``freq`` in it and this picker also chooses the record's software.
-_LOT_FILTER_ROLE_PRIORITY = (
+_PRIMARY_CALC_ROLE_PRIORITY = (
     ThermoCalculationRole.sp,
     ThermoCalculationRole.composite,
     ThermoCalculationRole.freq,
@@ -227,9 +243,10 @@ def get_species_thermo(
 
     The species_entry_id path parameter is strictly ``species_entry.id``;
     ``species.id`` is rejected with 404. Sort: review_rank ASC, created_at
-    DESC, id DESC (#648; the export's ``simple_selection_sort_key``).
-    ``temperature_min`` / ``temperature_max`` do not filter and do not affect
+    DESC, id DESC (#648; the order the exports list records in).
+    ``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` do not filter and do not affect
     the order: they only fill each record's ``temperature_coverage`` field.
+    Every matching record is returned; the read never picks one.
     Client-supplied sort= rejected (v0).
 
     :raises NotFoundError: 404 when species_entry_id is unknown.
@@ -244,7 +261,18 @@ def get_species_thermo(
         internal_tokens=_INTERNAL_INCLUDE_TOKENS | {"trust"},
     )
     includes = filter_internal_ids_from_resolved(includes)
-    validate_temperature_range(request.temperature_min, request.temperature_max)
+    validate_temperature_range(
+        request.coverage_temperature_min_k, request.coverage_temperature_max_k,
+        min_name="coverage_temperature_min_k",
+        max_name="coverage_temperature_max_k",
+    )
+    paging = Paging(
+        "/scientific/species-entries/{id}/thermo",
+        request,
+        offset=offset,
+        limit=limit,
+        scope_extra={"species_entry_id": species_entry_id},
+    )
 
     species_entry = session.get(SpeciesEntry, species_entry_id)
     if species_entry is None:
@@ -265,6 +293,8 @@ def get_species_thermo(
     effective_lot_id: int | None = lot_id_or_match  # type: ignore[assignment]
 
     stmt = select(Thermo).where(Thermo.species_entry_id == species_entry_id)
+    if request.scientific_origin is not None:
+        stmt = stmt.where(Thermo.scientific_origin == request.scientific_origin)
     if "trust" in includes:
         stmt = stmt.options(*_TRUST_EAGER_LOADS)
     thermo_rows = list(session.scalars(stmt).all())
@@ -304,27 +334,21 @@ def get_species_thermo(
     if not classified:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
-    # LoT filter applied against primary source calc (per Phase 2.3 spec).
-    if effective_lot_id is not None:
-        classified = [
-            (t, kind)
-            for t, kind in classified
-            if _primary_lot_id(sources_by_thermo.get(t.id, []))
-            == effective_lot_id
-        ]
-    if not classified:
-        return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
-
-    # Software filter.
-    if request.software is not None:
-        kept = []
-        for t, kind in classified:
-            sw_name = _primary_software_name(
-                session, sources_by_thermo.get(t.id, [])
-            )
-            if sw_name == request.software:
-                kept.append((t, kind))
-        classified = kept
+    # One source calculation has to match every supplied provenance field at once (level of theory, software, method,
+    # basis, workflow tool, method family, DFT rung): a record never matches through two different calculations. Under
+    # ``curated`` a source calculation that is rejected or deprecated contributes nothing to a match (the shared helper
+    # subtracts only the evidence the profile withholds), and a not-reviewed one does match (ADR 0023 step 4). The
+    # record's own link to a withheld calculation stays a fact of the record (the ref guard withholds the ref); what
+    # the calculation ran at or in is a fact about the withheld calculation. There is no "primary" calculation for a
+    # filter.
+    provenance = source_provenance_kwargs(request, level_of_theory_id=effective_lot_id)
+    if provenance:
+        kept = filter_by_provenance(
+            session,
+            {t.id: {sc.calculation_id for sc in sources_by_thermo.get(t.id, [])} for t, _ in classified},
+            **provenance,
+        )
+        classified = [(t, kind) for t, kind in classified if t.id in kept]
     if not classified:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
@@ -339,7 +363,17 @@ def get_species_thermo(
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[t.id].status for t, _ in classified),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        ),
+        scope=("thermo", species_entry_id),
+    )
     classified = [(t, kind) for t, kind in classified if badges[t.id].status in visible]
+    classified = paging.snapshot(classified, id_of=lambda pair: pair[0].id)
     if not classified:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
@@ -366,6 +400,18 @@ def get_species_thermo(
         for srcs in statmech_sources_by_id.values()
         for sc in srcs
     }
+    # Evidence rule (ADR 0023): a source calculation the profile WITHHOLDS (rejected or deprecated under ``curated``) is not
+    # counted, supplies no level and is not the primary; an unreviewed one is shown with its badge. One lookup for the
+    # page, none without a floor. The LISTS that name calculations keep every link; the ref guard removes the withheld.
+    withheld_calc_ids = ids_withheld_as_evidence(
+        session, record_type=SubmissionRecordType.calculation, record_ids=all_source_calc_ids
+    )
+    # A linked statmech the rule withholds contributes nothing to the record: no flag, no level, no primary calculation.
+    withheld_statmech_ids = ids_withheld_as_evidence(
+        session,
+        record_type=SubmissionRecordType.statmech,
+        record_ids={t.statmech_id for t, _ in classified if t.statmech_id is not None},
+    )
     geom_vals = _geometry_validations(session, all_source_calc_ids)
     scf_vals = _scf_stabilities(session, all_source_calc_ids)
     calc_meta = _calc_lot_meta(session, all_source_calc_ids)
@@ -472,9 +518,10 @@ def get_species_thermo(
         record_statmech_id = t.statmech_id
         record_statmech_sources = (
             statmech_sources_by_id.get(record_statmech_id, [])
-            if record_statmech_id is not None
+            if record_statmech_id is not None and record_statmech_id not in withheld_statmech_ids
             else []
         )
+        statmech_shown = record_statmech_id is not None and record_statmech_id not in withheld_statmech_ids
 
         # Determine the "effective" temperature range for coverage. Precedence
         # (mirroring how a NASA-7 block already wins over row-level bounds):
@@ -499,8 +546,8 @@ def get_species_thermo(
             )
 
         coverage = temperature_coverage(
-            requested_min=request.temperature_min,
-            requested_max=request.temperature_max,
+            requested_min=request.coverage_temperature_min_k,
+            requested_max=request.coverage_temperature_max_k,
             record_min=record_min,
             record_max=record_max,
         )
@@ -509,8 +556,9 @@ def get_species_thermo(
         evidence = _evidence_breakdown(
             thermo=t,
             sources=sources,
-            has_statmech_link=t.statmech_id is not None,
+            has_statmech_link=statmech_shown,
             statmech_sources=record_statmech_sources,
+            withheld_calc_ids=withheld_calc_ids,
             nasa_present=nasa_block is not None,
             points_count=len(points_by_thermo.get(t.id, [])),
             has_nasa9=bool(nasa9_by_thermo.get(t.id)),
@@ -538,12 +586,13 @@ def get_species_thermo(
                 else None
             ),
             conformer_links=conformer_links,
+            withheld_calc_ids=withheld_calc_ids,
         )
         # Derived levels (#636): the record's own source calculations, then
         # (per role) the statmech it is LINKED to by ``thermo.statmech_id``.
         # An unlinked thermo with no source calculations has no levels (null).
         own_statmech_sources = record_statmech_sources
-        levels = _build_levels_thermo(
+        levels, level_plan = _build_levels_thermo(
             sources=sources,
             statmech_sources=own_statmech_sources,
             calc_meta=calc_meta,
@@ -552,12 +601,13 @@ def get_species_thermo(
             composite_facts=composite_facts,
             recipe_level_summaries=recipe_level_summaries,
             composite_verifications=composite_verifications,
+            withheld_calc_ids=withheld_calc_ids,
         )
         declared_lot_id = (
             t.energy_level_of_theory_id
             if t.energy_level_of_theory_id is not None
             # Only through the record's OWN statmech link.
-            else statmech_declared_lot_ids.get(t.statmech_id)
+            else (statmech_declared_lot_ids.get(t.statmech_id) if statmech_shown else None)
         )
         if declared_lot_id is not None:
             levels = levels.model_copy(
@@ -583,6 +633,7 @@ def get_species_thermo(
         record = ThermoRecord(
             thermo_id=t.id,
             thermo_ref=t.public_ref,
+            created_at=t.created_at,
             scientific_origin=t.scientific_origin,
             model_kind=model_kind,
             review=badges[t.id],
@@ -593,6 +644,7 @@ def get_species_thermo(
             thermodynamic_target=(
                 ThermoTargetBlock(
                     kind=t.thermodynamic_target_kind,
+                    declared_by=t.thermodynamic_target_declared_by,
                     conformer_group_ref=target_group_refs.get(t.target_conformer_group_id),
                 )
                 if t.thermodynamic_target_kind is not None
@@ -653,83 +705,68 @@ def get_species_thermo(
                 else None
             ),
         )
+        record._level_plan = level_plan
         records.append(record)
 
     summary = review_summary(badges[t.id] for t, _ in classified)
 
-    # L3 thermo sort (#648): review status, then newest -- the same key the
-    # export, CHEMKIN and ML selection use (``simple_selection_sort_key``), so
-    # the read and the export cannot list different records first (display order, never a preference).
+    # L3 thermo sort (#648): review status, then newest, then id -- the same order the native, CHEMKIN and ML
+    # exports list records in, so the read and an export cannot list different records first (display order,
+    # never a preference; nothing is picked).
     #
     # Deliberately NOT in the key:
     #   * ``evidence_completeness.score``: six of its eight predicates are
     #     calculation / statmech traceability, so an experimental record can
     #     score at most 2/8. It stays a displayed field, not a ranking input.
-    #   * temperature coverage: ``temperature_min`` / ``temperature_max`` are
+    #   * temperature coverage: ``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` are
     #     not filters; they only fill each record's ``temperature_coverage``
     #     field. Ranking by it was dropped on the owner's decision (review
     #     status, then newest), and because a scalar record (e.g. an
     #     experimental 298 K value) carries no range, it counted as "not
     #     covering" and sank below every fitted record whatever its review
     #     status. Coverage is still reported per record; callers who need a
-    #     record spanning a window should read it from the response
-    #     (``collapse=all``).
+    #     record spanning a window should read it from the response.
     created_at = {t.id: t.created_at for t, _ in classified}
     review_status_by_id = {t.id: badges[t.id].status for t, _ in classified}
 
-    records.sort(
-        key=lambda rec: simple_selection_sort_key(
+    page = paging.window(
+        records,
+        key_of=lambda rec: simple_selection_sort_key(
             rec.thermo_id,
             policy=SelectionPolicy.default,
             review_status_by_id=review_status_by_id,
             created_at_by_id=created_at,
-        )
+        ),
     )
-
-    pre_collapse_total = len(records)
-    collapse_first = request.collapse.value == "first"
-    ordered_records = records
-    if collapse_first and request.selection_policy is not SelectionPolicy.default:
-        # Named policy re-ranks the selected record only; the default candidate
-        # order (collapse=all) is unaffected.
-        ordered_records = sorted(
-            records,
-            key=lambda rec: simple_selection_sort_key(
-                rec.thermo_id,
-                policy=request.selection_policy,
-                review_status_by_id=review_status_by_id,
-                created_at_by_id=created_at,
-            ),
-        )
-    returned = slice_for_pagination(
-        ordered_records,
-        offset=offset,
-        limit=limit,
-        collapse_first=collapse_first,
-    )
+    returned = page.items
+    # The settings behind each level, for the returned page and for nothing else: a fixed number of statements.
+    if "calculation_settings" in includes:
+        attach_calculation_settings(session, returned)
 
     return ScientificSpeciesThermoResponse(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
-            selection_policy=request.selection_policy,
             include=sorted(includes),
-            effective_order=effective_order_echo(
-                collapse_first=request.collapse.value == "first", policy=request.selection_policy
-            ),
+            check_inputs=request.check_inputs,
         ),
         species_entry_id=species_entry_id,
         species_entry_ref=species_entry_ref,
         review_summary=summary,
         records=returned,
+        **deposit_warning_envelope(
+            session,
+            SubmissionRecordType.thermo,
+            {r.thermo_id: r.thermo_ref for r in returned},
+        ),
         pagination=build_pagination(
             offset=offset,
             limit=limit,
             returned=len(returned),
-            total=pre_collapse_total,
-            collapse_first=collapse_first,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 
@@ -996,6 +1033,9 @@ def _calc_lot_meta(session: Session, calc_ids: set[int]) -> dict[int, dict]:
             LevelOfTheory.cabs_basis,
             LevelOfTheory.solvent_model,
             LevelOfTheory.spin_treatment,
+            LevelOfTheory.relativistic_hamiltonian,
+            LevelOfTheory.pno_truncation,
+            LevelOfTheory.ri_approximation,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -1038,6 +1078,9 @@ def _calc_lot_meta(session: Session, calc_ids: set[int]) -> dict[int, dict]:
             "lot_cabs_basis": row[16],
             "lot_solvent_model": row[17],
             "lot_spin_treatment": row[18],
+            "lot_relativistic_hamiltonian": row[19],
+            "lot_pno_truncation": row[20],
+            "lot_ri_approximation": row[21],
         }
         for row in rows
     }
@@ -1213,36 +1256,11 @@ def _primary_calc_id(sources: list[ThermoSourceCalculation]) -> int | None:
     for sc in sources:
         if _is_composite_link(sc):
             return sc.calculation_id
-    for role in _LOT_FILTER_ROLE_PRIORITY:
+    for role in _PRIMARY_CALC_ROLE_PRIORITY:
         for sc in sources:
             if sc.role == role:
                 return sc.calculation_id
     return sources[0].calculation_id if sources else None
-
-
-def _primary_lot_id(sources: list[ThermoSourceCalculation]) -> int | None:
-    primary = _primary_calc_id(sources)
-    if primary is None:
-        return None
-    for sc in sources:
-        if sc.calculation_id == primary and sc.calculation is not None:
-            return sc.calculation.lot_id
-    return None
-
-
-def _primary_software_name(
-    session: Session, sources: list[ThermoSourceCalculation]
-) -> str | None:
-    primary = _primary_calc_id(sources)
-    if primary is None:
-        return None
-    name = session.scalar(
-        select(Software.name)
-        .join(SoftwareRelease, SoftwareRelease.software_id == Software.id)
-        .join(Calculation, Calculation.software_release_id == SoftwareRelease.id)
-        .where(Calculation.id == primary)
-    )
-    return name
 
 
 def _build_provenance(
@@ -1256,6 +1274,7 @@ def _build_provenance(
     thermo_software: SoftwareReleaseSummary | None,
     thermo_workflow_tool: WorkflowToolReleaseSummary | None,
     conformer_links: Mapping[int, tuple[int | None, str | None, int | None, str | None]],
+    withheld_calc_ids: Collection[int] = frozenset(),
 ) -> ThermoProvenance:
     """Build a ``ThermoProvenance`` block for one thermo record.
 
@@ -1288,15 +1307,18 @@ def _build_provenance(
     (population B: no source calcs at all) reports no conformer either.
 
     Slots are picked from EVERY link, never from a profile-filtered subset: which calculation is the
-    primary / freq / sp must not depend on the profile, or a hidden pick would let the picker fall through
-    to a different, visible calculation. A ref the profile hides is withheld afterwards, at the response
-    boundary (``ref_guard``), which only ever empties a slot.
+    primary / freq / sp must not depend on the profile, or a withheld pick would let the picker fall through
+    to a different, shown calculation. A ref the profile withholds is removed afterwards, at the response
+    boundary (``ref_guard``), which only ever empties a slot. The primary's own level and software are facts
+    about that calculation (ADR 0023): when it is withheld they are null with it, never read from another.
     """
     primary_calc_id_v = _primary_calc_id(sources)
     # Fall back to a statmech-derived primary when thermo declared none.
     if primary_calc_id_v is None:
         primary_calc_id_v = _statmech_primary_calc_id(statmech_sources)
     primary_meta = calc_meta.get(primary_calc_id_v) if primary_calc_id_v else None
+    if primary_calc_id_v in withheld_calc_ids:
+        primary_meta = None
 
     primary_calc_summary: CalculationEvidenceSummary | None = None
     primary_lot: LevelOfTheorySummary | None = None
@@ -1331,7 +1353,7 @@ def _build_provenance(
 
     conformer_link = (
         conformer_links.get(primary_calc_id_v)
-        if primary_calc_id_v is not None
+        if primary_calc_id_v is not None and primary_calc_id_v not in withheld_calc_ids
         else None
     )
     if conformer_link is not None:
@@ -1385,6 +1407,9 @@ def _lot_summary(meta: dict) -> LevelOfTheorySummary | None:
         cabs_basis=meta["lot_cabs_basis"],
         solvent_model=meta["lot_solvent_model"],
         spin_treatment=meta["lot_spin_treatment"],
+        relativistic_hamiltonian=meta["lot_relativistic_hamiltonian"],
+        pno_truncation=meta["lot_pno_truncation"],
+        ri_approximation=meta["lot_ri_approximation"],
         composite_scheme=meta.get("composite_scheme"),
     )
 
@@ -1458,8 +1483,13 @@ def _build_levels_thermo(
     composite_facts: dict[int, CompositeRoleFacts],
     recipe_level_summaries: dict[int, LevelOfTheorySummary],
     composite_verifications: dict[int, CompositeEnergyVerification],
-) -> ScientificLevelsSummary:
+    withheld_calc_ids: Collection[int] = frozenset(),
+) -> tuple[ScientificLevelsSummary, LevelPlan]:
     """R1 for one thermo record: derive its geometry/frequency/energy levels.
+
+    The derivation reads every link. A level whose supplying calculations are all in ``withheld_calc_ids`` (the evidence
+    rule, ADR 0023: rejected or deprecated under ``curated``) is then nulled with its source, never re-derived from what is
+    left.
 
     Delegates the actual priority decision to
     :func:`app.services.calculation_levels.derive_levels` -- the same
@@ -1475,42 +1505,56 @@ def _build_levels_thermo(
     def is_composite(cid: int) -> bool:
         return calc_meta[cid]["type"] == CalculationType.composite
 
-    def infos(role: str) -> list[RoleCalcInfo]:
+    def linked(role: str) -> list[tuple[int, RoleCalcInfo]]:
         if role == "composite":
             # Only a calculation of type ``composite`` is a composite energy;
-            # the legacy shape is read through ``legacy_infos``.
+            # the legacy shape is read through ``legacy_linked``.
             return [
-                composite_role_info(
-                    calc_meta[cid]["lot_id"], cid in freq_calc_ids, composite_facts.get(cid)
+                (
+                    cid,
+                    composite_role_info(
+                        calc_meta[cid]["lot_id"], cid in freq_calc_ids, composite_facts.get(cid)
+                    ),
                 )
                 for cid in role_calc_ids.get(role, [])
                 if cid in calc_meta and is_composite(cid)
             ]
         return [
-            RoleCalcInfo(
-                lot_id=calc_meta[cid]["lot_id"],
-                carries_frequencies=cid in freq_calc_ids,
-            )
+            (cid, RoleCalcInfo(lot_id=calc_meta[cid]["lot_id"], carries_frequencies=cid in freq_calc_ids))
             for cid in role_calc_ids.get(role, [])
             if cid in calc_meta
         ]
 
+    legacy_linked = [
+        (cid, RoleCalcInfo(lot_id=calc_meta[cid]["lot_id"], carries_frequencies=cid in freq_calc_ids))
+        for cid in role_calc_ids.get("composite", [])
+        if cid in calc_meta and not is_composite(cid)
+    ]
+    roles = {
+        "opts": linked("opt"),
+        "freqs": linked("freq"),
+        "sps": linked("sp"),
+        "composites": linked("composite"),
+        "importeds": linked("imported"),
+        "legacy_composites": legacy_linked,
+    }
     derived = derive_levels(
-        opts=infos("opt"),
-        freqs=infos("freq"),
-        sps=infos("sp"),
-        composites=infos("composite"),
-        importeds=infos("imported"),
-        legacy_composites=[
-            RoleCalcInfo(lot_id=calc_meta[cid]["lot_id"], carries_frequencies=cid in freq_calc_ids)
-            for cid in role_calc_ids.get("composite", [])
-            if cid in calc_meta and not is_composite(cid)
-        ],
+        opts=[info for _, info in roles["opts"]],
+        freqs=[info for _, info in roles["freqs"]],
+        sps=[info for _, info in roles["sps"]],
+        composites=[info for _, info in roles["composites"]],
+        importeds=[info for _, info in roles["importeds"]],
+        legacy_composites=[info for _, info in roles["legacy_composites"]],
     )
+    plan = make_level_plan(level_suppliers(derived, **roles), withheld_calc_ids)
+    derived = withhold_levels_from_calculations(derived, withheld=withheld_calc_ids, **roles)
+    shown_composite_ids = [
+        cid for cid in role_calc_ids.get("composite", []) if cid in calc_meta and is_composite(cid) and cid not in withheld_calc_ids
+    ]
     geometry = _lot_summary_from_id(calc_meta_by_lot_id, derived.geometry_lot_id, recipe_level_summaries)
     frequency = _lot_summary_from_id(calc_meta_by_lot_id, derived.frequency_lot_id, recipe_level_summaries)
     energy = _lot_summary_from_id(calc_meta_by_lot_id, derived.energy_lot_id)
-    return ScientificLevelsSummary(
+    levels = ScientificLevelsSummary(
         geometry=geometry,
         frequency=frequency,
         energy=energy,
@@ -1519,14 +1563,13 @@ def _build_levels_thermo(
         frequency_source=derived.frequency_source,
         composite_energy_verification=record_composite_verification(
             energy_source=derived.energy_source,
-            typed_composite_ids=[
-                cid for cid in role_calc_ids.get("composite", []) if cid in calc_meta and is_composite(cid)
-            ],
+            typed_composite_ids=shown_composite_ids,
             verifications=composite_verifications,
         ),
         legacy_composite_shape=legacy_composite_shape(
             composite_role_on_non_composite=any(
-                cid in calc_meta and not is_composite(cid) for cid in role_calc_ids.get("composite", [])
+                cid in calc_meta and not is_composite(cid) and cid not in withheld_calc_ids
+                for cid in role_calc_ids.get("composite", [])
             ),
             geometry=geometry,
             geometry_source=derived.geometry_source,
@@ -1536,6 +1579,7 @@ def _build_levels_thermo(
             energy_source=derived.energy_source,
         ),
     )
+    return levels, plan
 
 
 def _calc_ids_with_freq_result(session: Session, calc_ids: set[int]) -> set[int]:
@@ -1581,6 +1625,7 @@ def _evidence_breakdown(
     has_wilhoit: bool = False,
     geom_vals: dict[int, ValidationStatus],
     scf_vals: dict[int, SCFStabilityStatus],
+    withheld_calc_ids: Collection[int] = frozenset(),
 ) -> EvidenceCompletenessBreakdown:
     """Thermo L1 checklist, max=8.
 
@@ -1593,11 +1638,15 @@ def _evidence_breakdown(
     link counts only its own sources and ``has_statmech_source`` is false
     (#645: never borrow). The predicate names and ``max`` are unchanged.
     """
-    statmech_roles = {sc.role for sc in statmech_sources}
-    has_sources = len(sources) > 0 or len(statmech_sources) > 0
+    # Evidence rule (ADR 0023): the role targets are chosen from EVERY link, then a withheld target is dropped; a role is
+    # never filled from another link because the first was withheld. The role flags count the links that are shown.
+    shown_sources = [sc for sc in sources if sc.calculation_id not in withheld_calc_ids]
+    shown_statmech_sources = [sc for sc in statmech_sources if sc.calculation_id not in withheld_calc_ids]
+    statmech_roles = {sc.role for sc in shown_statmech_sources}
+    has_sources = len(shown_sources) > 0 or len(shown_statmech_sources) > 0
     has_statmech = has_statmech_link
 
-    source_roles = {sc.role for sc in sources}
+    source_roles = {sc.role for sc in shown_sources}
     has_freq_evidence = (
         ThermoCalculationRole.freq in source_roles
         or StatmechCalculationRole.freq in statmech_roles
@@ -1625,7 +1674,7 @@ def _evidence_breakdown(
             statmech_sources, StatmechCalculationRole.opt
         )
     has_geom_val = False
-    if opt_calc_id is not None:
+    if opt_calc_id is not None and opt_calc_id not in withheld_calc_ids:
         gv = geom_vals.get(opt_calc_id)
         has_geom_val = gv in {ValidationStatus.passed, ValidationStatus.warning}
 
@@ -1636,7 +1685,7 @@ def _evidence_breakdown(
             statmech_sources, StatmechCalculationRole.sp
         )
     has_scf = False
-    if sp_calc_id is not None:
+    if sp_calc_id is not None and sp_calc_id not in withheld_calc_ids:
         s = scf_vals.get(sp_calc_id)
         has_scf = s in {SCFStabilityStatus.stable, SCFStabilityStatus.stabilized}
 
@@ -1751,10 +1800,10 @@ def _build_nasa_block(nasa: ThermoNASA) -> ThermoNASABlock:
 
 def _filter_echo(request: ThermoReadRequest) -> dict[str, object]:
     echo: dict[str, object] = {}
-    if request.temperature_min is not None:
-        echo["temperature_min"] = request.temperature_min
-    if request.temperature_max is not None:
-        echo["temperature_max"] = request.temperature_max
+    if request.coverage_temperature_min_k is not None:
+        echo["coverage_temperature_min_k"] = request.coverage_temperature_min_k
+    if request.coverage_temperature_max_k is not None:
+        echo["coverage_temperature_max_k"] = request.coverage_temperature_max_k
     if request.model_kind is not None:
         echo["model_kind"] = request.model_kind.value
     if request.level_of_theory_id is not None:
@@ -1763,6 +1812,7 @@ def _filter_echo(request: ThermoReadRequest) -> dict[str, object]:
         echo["level_of_theory_ref"] = request.level_of_theory_ref
     if request.software is not None:
         echo["software"] = request.software
+    echo_source_provenance(request, echo)
     if request.min_review_status is not None:
         echo["min_review_status"] = request.min_review_status.value
     if request.include_rejected:
@@ -1784,12 +1834,7 @@ def _empty_response(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
-            selection_policy=request.selection_policy,
             include=sorted(includes),
-            effective_order=effective_order_echo(
-                collapse_first=request.collapse.value == "first", policy=request.selection_policy
-            ),
         ),
         species_entry_id=species_entry_id,
         species_entry_ref=species_entry_ref,

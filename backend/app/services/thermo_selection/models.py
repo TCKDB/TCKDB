@@ -16,6 +16,8 @@ from app.db.models.common import RecordReviewStatus, ThermoTargetKind
 from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.manifest_formats import new_current_only_registry, new_format_registry
 from app.services.selection_kernel import Applicability, Outcome
+from app.services.selection_kernel.requested import Eligibility
+from app.services.selection_kernel.source_filters import SourceFilters
 
 #: The one quantity this selector answers.
 QUANTITY = "formation_enthalpy_298k"
@@ -35,21 +37,40 @@ POLICY_NAME = "h298_selection"
 #: The name changed with the removal of the method-preference rules (it was ``h298_method_preferred``).
 POLICY_VERSION = 1
 #: Version of how eligibility is assessed: an automated geometry-validation fail is advisory and a live confirmed
-#: finding about a source calculation excludes the record (``structure_selection.source_findings``). A manifest with no
+#: finding about a source calculation excludes the record (``structure_selection.source_findings``). Version 2: each of
+#: those exclusions, and the rejected and deprecated review statuses, is a named default the request may lift, and the
+#: recorded ``eligible`` flag is the verdict under the request's own settings (``selection_kernel.requested``). A manifest with no
 #: block, or one recording a version the registry does not hold, is refused on replay.
-ASSESSMENT_SEMANTICS_VERSION = 1
+ASSESSMENT_SEMANTICS_VERSION = 2
 ASSESSMENT_SEMANTICS_NAME = "thermo_selection_assessment"
 ASSESSMENT_SEMANTICS = new_current_only_registry(
     "thermo_selection_assessment_semantics", ASSESSMENT_SEMANTICS_NAME, ASSESSMENT_SEMANTICS_VERSION
 )
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
 #: reads exactly this format; a manifest in any other is refused. Version 2: the decision no longer holds rules,
-#: rule matches, edges, overridden edges, opposing pairs or cycles.
-MANIFEST_FORMAT_VERSION = 2
+#: rule matches, edges, overridden edges, opposing pairs or cycles. Version 3: the request records its filters and its
+#: eligibility settings, each candidate records which defaults it failed or passed only by override, and the population
+#: records the funnel. Version 4: the manifest records its ``read_profile`` and, in it, the review statuses whose
+#: linked evidence that profile withheld (ADR 0023); under ``curated`` a not-reviewed or under-review record is shown
+#: as evidence and only a rejected or deprecated one is a token.
+#: Version 5: the filters are the browse's full provenance set (method, basis, software version,
+#: workflow tool, method family, DFT rung, scientific origin), and the provenance fields are matched through ONE source
+#: calculation (version 4 matched level of theory and software through any, independently). A decision recorded
+#: under version 4 means something else and is not replayable.
+MANIFEST_FORMAT_VERSION = 5
 MANIFEST_FORMAT_NAME = "thermo_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "thermo_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
 )
+
+
+@dataclass(frozen=True)
+class ThermoFilters(SourceFilters):
+    """The caller's filters, with the per-entry thermo browse's vocabulary and meaning (public refs only).
+
+    The provenance fields (level of theory, software, method, basis, workflow tool, method family, DFT rung) are matched
+    through ONE shown source calculation: it has to satisfy every one supplied (``SourceFilters``).
+    """
 
 
 @dataclass(frozen=True)
@@ -62,6 +83,10 @@ class H298Request:
     :param min_review_status: Optional caller floor; the read-profile floor is applied on top.
     :param admin_policy: Administrative order of the eligible candidates. Display order, never a method preference.
     :param max_candidates: Population cap; the endpoint contract is 500.
+    :param filters: The caller's filters, applied before eligibility.
+    :param eligibility: The eligibility defaults the caller lifted.
+    :param forwarded_from_conformer_group_ref: The conformer-group ref the caller named when that group had been merged
+        into another and the request was forwarded to the group that took its members; recorded in the manifest.
     """
 
     target_kind: ThermoTargetKind
@@ -69,6 +94,9 @@ class H298Request:
     min_review_status: RecordReviewStatus | None = None
     admin_policy: SelectionPolicy = SelectionPolicy.default
     max_candidates: int = MAX_CANDIDATES
+    filters: ThermoFilters = field(default_factory=ThermoFilters)
+    eligibility: Eligibility = field(default_factory=Eligibility)
+    forwarded_from_conformer_group_ref: str | None = None
 
     def __post_init__(self) -> None:
         if self.target_kind is ThermoTargetKind.single_conformer and self.conformer_group_id is None:
@@ -111,6 +139,8 @@ class NormalizedCandidate:
 
     :param protocol_state: ``absent`` (no declaration), ``valid`` (parsed) or ``unreadable``
         (stored but not a version-1 declaration this server can read).
+    :param target_declared_by: Whose claim the declared target is (``depositor`` or ``chemkin_format``);
+        ``None`` when no target is declared.
     :param linked_recipe_keys: Catalogue keys of the named composite methods the record's own
         declared energy level and own source calculations carry. Empty when none does.
     """
@@ -127,6 +157,7 @@ class NormalizedCandidate:
     protocol_state: str
     protocol: dict[str, Any] | None
     linked_recipe_keys: tuple[str, ...] = ()
+    target_declared_by: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -142,6 +173,8 @@ class NormalizedCandidate:
             "protocol_state": self.protocol_state,
             "protocol": self.protocol,
             "linked_recipe_keys": list(self.linked_recipe_keys),
+            # Added only when a target is declared, so a record with none keeps the manifest it had.
+            **({"target_declared_by": self.target_declared_by} if self.target_declared_by is not None else {}),
         }
 
     @classmethod
@@ -159,6 +192,7 @@ class NormalizedCandidate:
             protocol_state=raw["protocol_state"],
             protocol=raw["protocol"],
             linked_recipe_keys=tuple(raw["linked_recipe_keys"]),
+            target_declared_by=raw.get("target_declared_by"),
         )
 
 

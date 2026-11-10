@@ -9,7 +9,7 @@ data is scientifically coherent, not just mechanically valid.
 
 from __future__ import annotations
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from app.db.models.calculation import (
     Calculation,
@@ -141,6 +141,26 @@ class TestScanCoordinates:
         assert coords[0]["coordinate_index"] == 1
         assert coords[1]["coordinate_index"] == 2
 
+    def test_scan_result_points_carry_geometry(self, client, db_session):
+        from app.db.models.geometry import Geometry
+
+        calc_id = _get_calc_id(client, db_session, calc_type="scan")
+        geom_id = db_session.scalars(select(Geometry.id)).first()
+        assert geom_id is not None
+        db_session.add(CalculationScanResult(
+            calculation_id=calc_id, dimension=1, is_relaxed=True,
+        ))
+        db_session.add(CalculationScanPoint(
+            calculation_id=calc_id, point_index=1, geometry_id=geom_id,
+        ))
+        db_session.add(CalculationScanPoint(calculation_id=calc_id, point_index=2))
+        db_session.flush()
+
+        resp = client.get(f"/api/v1/calculations/{calc_id}/scan-result")
+        assert resp.status_code == 200, resp.text
+        points = resp.json()["points"]
+        assert [p["geometry_id"] for p in points] == [geom_id, None]
+
 
 class TestScanPoints:
     def test_empty(self, client):
@@ -172,6 +192,30 @@ class TestScanPoints:
         assert points[0]["electronic_energy_hartree"] == -1.1
         assert len(points[0]["coordinate_values"]) == 1
         assert points[0]["coordinate_values"][0]["coordinate_value"] == 0.9
+
+    def test_with_and_without_geometry(self, client, db_session):
+        """A point carrying a geometry must serialise through the response model."""
+        from app.db.models.geometry import Geometry
+
+        calc_id = _get_calc_id(client, db_session, calc_type="scan")
+        geom_id = db_session.scalars(select(Geometry.id)).first()
+        assert geom_id is not None
+        db_session.add(CalculationScanPoint(
+            calculation_id=calc_id, point_index=1,
+            electronic_energy_hartree=-1.1, geometry_id=geom_id,
+        ))
+        db_session.add(CalculationScanPoint(
+            calculation_id=calc_id, point_index=2,
+            electronic_energy_hartree=-1.0,
+        ))
+        db_session.flush()
+
+        resp = client.get(f"/api/v1/calculations/{calc_id}/scan-points")
+        assert resp.status_code == 200, resp.text
+        points = resp.json()
+        assert [p["point_index"] for p in points] == [1, 2]
+        assert points[0]["geometry_id"] == geom_id
+        assert points[1]["geometry_id"] is None
 
 
 # ---------------------------------------------------------------------------

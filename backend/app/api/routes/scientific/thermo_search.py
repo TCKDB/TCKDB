@@ -6,19 +6,26 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     ANYWHERE_SCOPE,
+    THERMO_RECORD_SECTIONS,
     omit_trust_unless_requested,
+    omit_unrequested_sections,
     prepare_assessment_response,
+    refuse_check_inputs,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
+from app.chemistry.method_families import MethodFamily
 from app.db.models.common import (
     RecordReviewStatus,
+    ScientificOriginKind,
     SpeciesEntryStateKind,
     StationaryPointKind,
 )
-from app.schemas.reads.scientific_common import CollapseMode
+from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_thermo import ThermoModelKindQuery
 from app.schemas.reads.scientific_thermo_search import (
     ScientificThermoSearchResponse,
@@ -29,7 +36,7 @@ from app.services.scientific_read.public_assessments import (
 )
 from app.services.scientific_read.thermo_search import search_thermo
 
-router = APIRouter(prefix="/thermo")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/thermo")
 
 # The router-level ``?profile=`` dependency puts these two keys on every
 # scientific operation, POSTs included, so they must be allowed through the
@@ -38,8 +45,9 @@ router = APIRouter(prefix="/thermo")
 _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 
-@router.get("/search", response_model=ScientificThermoSearchResponse)
+@router.get("/search", response_model=ScientificThermoSearchResponse, dependencies=[Depends(refuse_check_inputs)])
 def thermo_search_get(
+    http_request: Request,
     session: Session = Depends(get_db),
     smiles: str | None = Query(None),
     inchi: str | None = Query(None),
@@ -51,19 +59,28 @@ def thermo_search_get(
     species_entry_kind: StationaryPointKind | None = Query(None),
     species_ref: str | None = Query(None),
     species_entry_ref: str | None = Query(None),
-    temperature_min: float | None = Query(None),
-    temperature_max: float | None = Query(None),
+    coverage_temperature_min_k: float | None = Query(None),
+    coverage_temperature_max_k: float | None = Query(None),
     model_kind: ThermoModelKindQuery | None = Query(None),
     level_of_theory_id: int | None = Query(None),
     level_of_theory_ref: str | None = Query(None),
     software: str | None = Query(None),
+    method: str | None = Query(None),
+    basis: str | None = Query(None),
+    software_version: str | None = Query(None),
+    workflow_tool: str | None = Query(None),
+    workflow_tool_version: str | None = Query(None),
+    method_family: list[MethodFamily] | None = Query(None),
+    dft_rung_min: int | None = Query(None, ge=1, le=5),
+    dft_rung_max: int | None = Query(None, ge=1, le=5),
+    scientific_origin: ScientificOriginKind | None = Query(None),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ) -> ScientificThermoSearchResponse:
     """Chemistry-first thermo search by species identifiers.
@@ -71,9 +88,14 @@ def thermo_search_get(
     At least one of ``smiles`` / ``inchi`` / ``inchi_key`` / ``formula``
     must be supplied; multiple identifiers AND-combine. Returns thermo
     records with the resolved species/species_entry identity attached, so
-    workflow tools never need to know the entry id up front.
+    workflow tools never need to know the entry id up front. Every matching
+    record is returned, ordered by the record's own review status, then
+    newest deposition, then id; ``collapse`` is refused (422) and
+    ``POST /species-entries/{ref}/thermo/select`` answers "give me one".
     """
-    request = ThermoSearchRequest(
+    reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
+    request = caller_input(
+        ThermoSearchRequest,
         smiles=smiles,
         inchi=inchi,
         inchi_key=inchi_key,
@@ -84,19 +106,28 @@ def thermo_search_get(
         species_entry_kind=species_entry_kind,
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,
-        temperature_min=temperature_min,
-        temperature_max=temperature_max,
+        coverage_temperature_min_k=coverage_temperature_min_k,
+        coverage_temperature_max_k=coverage_temperature_max_k,
         model_kind=model_kind,
         level_of_theory_id=level_of_theory_id,
         level_of_theory_ref=level_of_theory_ref,
         software=software,
+        method=method,
+        basis=basis,
+        software_version=software_version,
+        workflow_tool=workflow_tool,
+        workflow_tool_version=workflow_tool_version,
+        method_family=method_family,
+        dft_rung_min=dft_rung_min,
+        dft_rung_max=dft_rung_max,
+        scientific_origin=scientific_origin,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
-        collapse=collapse,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = search_thermo(session, request)
@@ -112,10 +143,11 @@ def thermo_search_get(
     # occurred" passing. The same asymmetry is why ``assessments`` — which
     # hard-codes the payload-wide scope — has always behaved correctly at
     # this exact depth on this exact response.
-    return omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
+    visibility = omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
+    return omit_unrequested_sections(visibility, payload, table=THERMO_RECORD_SECTIONS, scope=ANYWHERE_SCOPE)
 
 
-@router.post("/search", response_model=ScientificThermoSearchResponse)
+@router.post("/search", response_model=ScientificThermoSearchResponse, dependencies=[Depends(refuse_check_inputs)])
 def thermo_search_post(
     request: Request,
     body: ThermoSearchRequest,
@@ -123,7 +155,7 @@ def thermo_search_post(
 ) -> ScientificThermoSearchResponse:
     """JSON-body variant for structured thermo search.
 
-    All search fields, filters, includes, collapse, offset, and limit live
+    All search fields, filters, includes, offset, and limit live
     in the body. Query-string parameters are rejected (per Phase 4 POST
     convention). ``sort`` in the body is rejected by the service layer.
     """
@@ -143,4 +175,5 @@ def thermo_search_post(
         payload,
         attach_assessments=attach_thermo_assessments,
     )
-    return omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
+    visibility = omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
+    return omit_unrequested_sections(visibility, payload, table=THERMO_RECORD_SECTIONS, scope=ANYWHERE_SCOPE)

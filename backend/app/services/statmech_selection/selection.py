@@ -18,7 +18,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.services.scientific_read.profile import current_read_profile
+from app.services.scientific_read.common import read_profile_block
 from app.services.statmech_selection.decision import StatmechDecision, decide_statmech
 from app.services.statmech_selection.manifest import build_manifest
 from app.services.statmech_selection.models import StatmechRequest
@@ -54,11 +54,7 @@ def select_statmech(
     decision = decide_statmech(
         request=request, candidates=qualification.candidates, assessments=qualification.assessments
     )
-    resolved = current_read_profile()
-    profile = {
-        "profile": resolved.profile.value,
-        "review_floor": resolved.review_floor.value if resolved.review_floor is not None else None,
-    }
+    profile = read_profile_block()
     manifest = build_manifest(qualification, decision, profile=profile)
     return StatmechSelection(outcome=decision.outcome, qualification=qualification, decision=decision, manifest=manifest)
 

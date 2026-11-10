@@ -24,9 +24,12 @@ from app.schemas.reads.scientific_calculation import (
     ScanCoordinateSummary,
 )
 from app.schemas.reads.scientific_common import (
+    CursorToken,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
+    ScientificResponse,
+    WatermarkEcho,
 )
 
 # ---------------------------------------------------------------------------
@@ -48,6 +51,7 @@ class ScanRequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
     sort: OrderEcho | None = None
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 0
 
 
@@ -130,6 +134,7 @@ class IRCRequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
     sort: OrderEcho | None = None
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 0
 
 
@@ -164,7 +169,7 @@ class IRCPointDetail(BaseModel):
     geometry_link: PointGeometryLink | None = None
 
 
-class ScientificCalculationIRCResponse(BaseModel):
+class ScientificCalculationIRCResponse(ScientificResponse):
     """Full-data IRC response for one calculation.
 
     Reuses ``CalculationCoreBlock`` / ``CalculationOwnerSummary`` /
@@ -183,6 +188,10 @@ class ScientificCalculationIRCResponse(BaseModel):
     irc: CalculationIRCSummary
     points: list[IRCPointDetail]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 class PathSearchRequestEcho(ProfiledRequestEcho):
@@ -197,6 +206,7 @@ class PathSearchRequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
     sort: OrderEcho | None = None
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 0
 
 
@@ -237,7 +247,7 @@ class PathSearchPointDetail(BaseModel):
     geometry_link: PointGeometryLink | None = None
 
 
-class ScientificCalculationPathSearchResponse(BaseModel):
+class ScientificCalculationPathSearchResponse(ScientificResponse):
     """Full-data path-search response for one calculation.
 
     Reuses ``CalculationCoreBlock`` / ``CalculationOwnerSummary`` /
@@ -255,9 +265,13 @@ class ScientificCalculationPathSearchResponse(BaseModel):
     path_search: CalculationPathSearchSummary
     points: list[PathSearchPointDetail]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
-class ScientificCalculationScanResponse(BaseModel):
+class ScientificCalculationScanResponse(ScientificResponse):
     """Full-data scan response for one calculation.
 
     Reuses ``CalculationCoreBlock`` / ``CalculationOwnerSummary`` /
@@ -278,6 +292,10 @@ class ScientificCalculationScanResponse(BaseModel):
     coordinates: list[ScanCoordinateSummary]
     points: list[ScanPointDetail]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [

@@ -8,20 +8,35 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    Gate,
+    LegacyVisibility,
+    entity_page,
+    legacy_route_class,
+)
+from app.db.models.common import SubmissionRecordType
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.entities.transition_state import (
     TransitionStateEntryRead,
     TransitionStateRead,
 )
 
-router = APIRouter()
+router = APIRouter(
+    route_class=legacy_route_class(
+        {
+            "ts_id": Gate(SubmissionRecordType.transition_state, "TransitionState"),
+            "entry_id": Gate(SubmissionRecordType.transition_state_entry, "TransitionStateEntry"),
+        }
+    )
+)
 
 
-@router.get("", response_model=PaginatedResponse[TransitionStateRead])
+@router.get("", response_model=EntityListResponse[TransitionStateRead])
 def list_transition_states(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
+    visibility: LegacyVisibility = Depends(),
     reaction_entry_id: int | None = Query(None),
     label: str | None = Query(None),
 ):
@@ -30,6 +45,9 @@ def list_transition_states(
         base = base.where(TransitionState.reaction_entry_id == reaction_entry_id)
     if label is not None:
         base = base.where(TransitionState.label == label)
+
+    hidden = visibility.hidden(session, SubmissionRecordType.transition_state, base)
+    base = visibility.restrict(base, TransitionState.id, SubmissionRecordType.transition_state)
 
     total = session.scalar(
         select(func.count()).select_from(base.subquery())
@@ -41,16 +59,19 @@ def list_transition_states(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[TransitionStateRead.model_validate(r) for r in rows],
+    return entity_page(
+        [TransitionStateRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
+        hidden=hidden,
     )
 
 
 @router.get("/{ts_id}", response_model=TransitionStateRead)
-def get_transition_state(ts_id: int, session: Session = Depends(get_db)):
+def get_transition_state(
+    ts_id: int, session: Session = Depends(get_db), visibility: LegacyVisibility = Depends()
+):
     ts = session.get(TransitionState, ts_id)
     if ts is None:
         raise NotFoundError("TransitionState not found")

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.models.common import LiteratureKind
+from app.db.models.common import LiteratureKind, LiteratureTitleSource
 from app.db.models.literature import Literature
 from app.schemas.entities.literature import LiteratureCreate
 from app.schemas.upload_warning import UploadWarning
@@ -114,15 +114,13 @@ def _resolve_literature_field_mismatches(
         != _normalize_title_for_comparison(fetched_title)
     ):
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=f"{field_prefix}title",
                 code=W_LITERATURE_TITLE_MISMATCH,
-                message=(
-                    f"Supplied literature title {request.title!r} does not "
-                    "match the title fetched from the supplied DOI/ISBN "
-                    f"({fetched_title!r}). The fetched title was kept; "
-                    "verify the identifier is correct for this citation."
-                ),
+                context={
+                    "fetched_title": fetched_title,
+                    "depositor_supplied": {"supplied_title": request.title},
+                },
             )
         )
 
@@ -133,15 +131,10 @@ def _resolve_literature_field_mismatches(
         and request.year != fetched_year
     ):
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=f"{field_prefix}year",
                 code=W_LITERATURE_YEAR_MISMATCH,
-                message=(
-                    f"Supplied literature year {request.year!r} does not "
-                    "match the year fetched from the supplied DOI/ISBN "
-                    f"({fetched_year!r}). The fetched year was kept; "
-                    "verify the identifier is correct for this citation."
-                ),
+                context={"supplied_year": request.year, "fetched_year": fetched_year},
             )
         )
 
@@ -252,13 +245,22 @@ def resolve_literature_submission(
         normalized_isbn=normalized_isbn,
     )
 
-    title = metadata_fields.get("title") or request.title
+    fetched_title = metadata_fields.get("title")
+    title = fetched_title or request.title
     if title is None:
         raise ValueError("Resolved literature submission still requires a title")
+    # Recorded from what actually happened: a title is "resolved" only when
+    # the registry lookup returned one; otherwise it is the depositor's text.
+    title_source = (
+        LiteratureTitleSource.resolved_metadata
+        if fetched_title
+        else LiteratureTitleSource.depositor_supplied
+    )
 
     return LiteratureCreate(
         kind=kind,
         title=title,
+        title_source=title_source,
         journal=metadata_fields.get("journal") or request.journal,
         year=metadata_fields.get("year") or request.year,
         volume=metadata_fields.get("volume") or request.volume,
@@ -377,6 +379,10 @@ def resolve_or_create_literature(
         normalized_isbn=normalized_isbn,
     )
     if existing is not None:
+        # Literature is an identity table: an existing row is adopted as it
+        # stands. Its title and ``title_source`` are never rewritten, even when
+        # the stored title was typed and the registry would now resolve one --
+        # that would silently change a row other records already cite.
         return existing
 
     literature_create = resolve_literature_submission(
@@ -387,6 +393,7 @@ def resolve_or_create_literature(
         return Literature(
             kind=literature_create.kind,
             title=literature_create.title,
+            title_source=literature_create.title_source,
             journal=literature_create.journal,
             year=literature_create.year,
             volume=literature_create.volume,

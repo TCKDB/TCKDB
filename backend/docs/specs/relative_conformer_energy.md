@@ -80,12 +80,12 @@ The structure assessment's own bound codes pass through unchanged. Order of ref 
 
 ## Disclosure
 
-Under `curated` a hidden group, observation, determination or pinned calculation is not in the world: it is filtered
-before the assessment, so it is not listed, counted, used or named in the response or the manifest. Nothing is borrowed
+Under `curated` a group below the record floor is not in the world, and a withheld (rejected or deprecated) observation,
+determination or pinned calculation is not either: it is filtered before the assessment, so it is not listed, counted, used
+or named in the response or the manifest. Nothing is borrowed
 from a visible sibling. The response carries no database id and is returned directly (not through the internal-id
 stripper), so the central curated ref guard (`scientific_read/ref_guard.py`) does not see these routes: they are listed
-as unguarded in the curated sweep. **The population filter is the only line of defence** until the guard's selection-seam
-PR adds `run_relative_energies` to that seam. It is tested at the API level and by the sweep, which finds no hidden ref.
+as unguarded in the curated sweep. **The population filter is the line of defence** here: the response-level guard does not see these routes. It is tested at the API level and by the sweep, which finds no withheld ref.
 Under `curated` the compared population shrinks by design, so `coverage.requested_members` and `coverage.absent` count
 visible members only.
 
@@ -205,6 +205,5 @@ this release. Owner decisions O2, O3 and O4 of 2026-10-13 defer them until a rea
 
 ## Related
 
-The legacy `GET /api/v1/species-entries/{id}/conformer-observations/lowest-sp` collapses several single points on one
-observation to the lowest, the opposite of "repeats are alternates". It is **deprecated** in favour of this operation and
-will be removed once unused.
+The old `GET /api/v1/species-entries/{id}/conformer-observations/lowest-sp`, which collapsed several single points on one
+observation to the lowest (the opposite of "repeats are alternates"), is removed. This operation replaces it.

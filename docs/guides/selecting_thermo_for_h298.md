@@ -18,8 +18,8 @@ better than another.
 - **Read-only.** Nothing is stored, no curator endorsement is created or
   changed, and no record is edited.
 - **Opt-in.** `GET /scientific/species-entries/{ref}/thermo` is unchanged.
-  Its order, and `collapse=first`, are exactly what they were. Passing
-  `temperature_min` or `collapse=first` there does not turn selection on.
+  It lists every record in display order and never picks one: `collapse` and `selection_policy` are
+  refused there (422 `browse_parameter_removed`, which points here). `coverage_temperature_min_k` does not turn selection on.
 - **One quantity.** Gas-phase formation enthalpy at 298.15 K. Heat capacity
   intervals, entropy, coherent H/S/Cp sets and export are not covered.
 - **Not a recommendation.** A curator or a dataset release recommends

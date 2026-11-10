@@ -425,7 +425,6 @@ offset?: integer (>=0, default 0)
 limit?: integer (>=1, capped at TCKDB_MCP_MAX_LIMIT)
 include?: string[]           # subset of {thermo, statmech, transport,
                              #            conformers, review, all}
-collapse?: "all" | "first"   # default "all"
 ```
 
 Example:
@@ -466,7 +465,6 @@ offset?: integer (>=0, default 0)
 limit?: integer (>=1, capped at TCKDB_MCP_MAX_LIMIT)
 include?: string[]              # subset of {species, kinetics,
                                 #            transition_states, review, all}
-collapse?: "all" | "first"      # default "all"
 ```
 
 Example:
@@ -483,6 +481,11 @@ Example:
 Output: the server search envelope (`request`, `pagination`, `records`,
 `review_summary`) propagated unchanged.
 
+> **List reads never pick a record.** The search and per-entry read tools below return every matching record in display order (review
+> status, newest deposited, id) and no longer take `collapse`; the first record is first in display order, not a recommendation. For
+> "give me one", use the `tckdb_select_*` tools. `coverage_temperature_min_k` / `coverage_temperature_max_k` filter nothing: they set the
+> window each record's `temperature_coverage` is computed against.
+
 ### `tckdb_get_reaction_entry_kinetics`
 
 Fetch kinetics records scoped to a single reaction entry by its public
@@ -492,8 +495,8 @@ after both prefix and path-safety validation.
 ```text
 reaction_entry_ref: string         # REQUIRED, must start with "rxe_"
 quantity?: "rate_coefficient"      # must be this if given (server refuses otherwise)
-temperature_min?: number
-temperature_max?: number
+coverage_temperature_min_k?: number
+coverage_temperature_max_k?: number
 pressure?: number
 model_kind?: string                # validated server-side
 level_of_theory_ref?: string       # must start with "lot_"
@@ -507,7 +510,6 @@ include?: string[]                 # subset of {provenance, calculations,
                                    #            transition_states, path_search,
                                    #            irc, review, artifacts, all};
                                    # defaults to ["provenance"]
-collapse?: "all" | "first"         # default "all"
 ```
 
 Example:
@@ -515,8 +517,8 @@ Example:
 ```json
 {
   "reaction_entry_ref": "rxe_01HZY3K9X2",
-  "temperature_min": 300,
-  "temperature_max": 2000,
+  "coverage_temperature_min_k": 300,
+  "coverage_temperature_max_k": 2000,
   "include": ["provenance", "transition_states"]
 }
 ```
@@ -531,8 +533,8 @@ Fetch thermo records scoped to a single species entry by its public
 
 ```text
 species_entry_ref: string         # REQUIRED, must start with "spe_"
-temperature_min?: number
-temperature_max?: number
+coverage_temperature_min_k?: number
+coverage_temperature_max_k?: number
 model_kind?: string                # validated server-side
 level_of_theory_ref?: string       # must start with "lot_"
 software?: string
@@ -544,7 +546,6 @@ limit?: integer (>=1, capped at TCKDB_MCP_MAX_LIMIT)
 include?: string[]                 # subset of {provenance, calculations,
                                    #            statmech, review, artifacts,
                                    #            all}; defaults to ["provenance"]
-collapse?: "all" | "first"         # default "all"
 ```
 
 Example:
@@ -552,8 +553,8 @@ Example:
 ```json
 {
   "species_entry_ref": "spe_01HZ5K9X2A",
-  "temperature_min": 298,
-  "temperature_max": 1500,
+  "coverage_temperature_min_k": 298,
+  "coverage_temperature_max_k": 1500,
   "include": ["provenance", "statmech"]
 }
 ```
@@ -837,8 +838,8 @@ electronic_state_kind?: string
 species_entry_kind?: string
 species_ref?: string                 # must start with "spc_"
 species_entry_ref?: string           # must start with "spe_"
-temperature_min?: number (> 0 K)
-temperature_max?: number (> 0 K)     # min <= max if both provided
+coverage_temperature_min_k?: number (> 0 K)
+coverage_temperature_max_k?: number (> 0 K)     # min <= max if both provided
 model_kind?: "nasa" | "points" | "scalar"
 level_of_theory_ref?: string         # must start with "lot_"
 software?: string
@@ -850,13 +851,12 @@ limit?: integer (>= 1, capped at TCKDB_MCP_MAX_LIMIT)
 include?: string[]                   # subset of {provenance, calculations,
                                      #            artifacts, review, all};
                                      # defaults to ["provenance"]
-collapse?: "all" | "first"           # default "all"
 ```
 
 Example by SMILES:
 
 ```json
-{"smiles": "CCO", "temperature_min": 298, "temperature_max": 1500}
+{"smiles": "CCO", "coverage_temperature_min_k": 298, "coverage_temperature_max_k": 1500}
 ```
 
 Example by InChIKey:
@@ -898,8 +898,8 @@ match?: "contains" | "exact"         # modifier; default "contains"
 family?: string
 reaction_ref?: string                # must start with "rxn_"
 reaction_entry_ref?: string          # must start with "rxe_"
-temperature_min?: number (> 0)
-temperature_max?: number (> 0)       # min <= max if both provided
+coverage_temperature_min_k?: number (> 0)
+coverage_temperature_max_k?: number (> 0)       # min <= max if both provided
 pressure?: number (> 0)
 model_kind?: "arrhenius" | "modified_arrhenius"
 level_of_theory_ref?: string         # must start with "lot_"
@@ -914,7 +914,6 @@ include?: string[]                   # subset of {provenance, calculations,
                                      #            transition_states, path_search,
                                      #            irc, all};
                                      # defaults to ["provenance"]
-collapse?: "all" | "first"           # default "all"
 ```
 
 Example by reactants/products:
@@ -923,8 +922,8 @@ Example by reactants/products:
 {
   "reactants": ["[OH]", "CC"],
   "products": ["O", "[CH2]C"],
-  "temperature_min": 300,
-  "temperature_max": 2000,
+  "coverage_temperature_min_k": 300,
+  "coverage_temperature_max_k": 2000,
   "include": ["provenance", "transition_states"]
 }
 ```
@@ -1051,7 +1050,7 @@ which field. Common causes:
   but not this one (`statmech` on `tckdb_search_thermo`,
   `transition_states` on `tckdb_get_species_entry_thermo`, etc.). The
   error lists the legal tokens for this tool.
-- A search tool was called with only modifiers (e.g. `temperature_min`
+- A search tool was called with only modifiers (e.g. `coverage_temperature_min_k`
   alone) and no identity discriminator. Add at least one of
   `smiles`/`inchi`/`inchi_key`/`formula`/`species_ref`/`species_entry_ref`
   (species and thermo searches) or

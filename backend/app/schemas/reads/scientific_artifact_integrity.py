@@ -37,7 +37,13 @@ from app.db.models.common import (
     ArtifactIntegrityDetectionContext,
     ArtifactIntegrityFinding,
 )
-from app.schemas.reads.scientific_common import OrderEcho, Pagination, ProfiledRequestEcho
+from app.schemas.reads.scientific_common import (
+    OrderEcho,
+    Pagination,
+    ProfiledRequestEcho,
+    ScientificResponse,
+    WatermarkEcho,
+)
 
 
 class ArtifactIntegrityObservation(BaseModel):
@@ -123,15 +129,19 @@ class IntegrityRequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificArtifactIntegrityResponse(BaseModel):
+class ScientificArtifactIntegrityResponse(ScientificResponse):
     """Response envelope for ``/scientific/artifacts/integrity``."""
 
     request: IntegrityRequestEcho
     records: list[ArtifactIntegrityDigestSummary]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
-class ScientificArtifactIntegrityHistoryResponse(BaseModel):
+class ScientificArtifactIntegrityHistoryResponse(ScientificResponse):
     """Response envelope for ``/scientific/artifacts/{sha256}/integrity``.
 
     The summary and the sequence together: a caller that only needs the
@@ -145,6 +155,10 @@ class ScientificArtifactIntegrityHistoryResponse(BaseModel):
     summary: ArtifactIntegrityDigestSummary | None = None
     observations: list[ArtifactIntegrityObservation] = Field(default_factory=list)
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [

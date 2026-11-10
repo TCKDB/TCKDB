@@ -3,6 +3,7 @@ import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { act, cleanup, render, screen, within } from "@testing-library/react"
 import App from "../App"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 
 const speciesRef = "spc_atp56uqux2ajao7hvckx7gx7ca"
 const entryRef = "spe_bcbdjwkip75yoziblpntwzblzu"
@@ -55,7 +56,7 @@ function excitedEntry() {
         ...groundEntry(),
         species_entry_ref: excitedEntryRef,
         electronic_state_kind: "excited",
-        term_symbol: "T1",
+        term_symbol: "3B1",
         availability: { ...groundEntry().availability, calculation_count: 3 },
     }
 }
@@ -110,7 +111,7 @@ describe("species overview", () => {
         // (that redundancy was the owner's own report; see
         // `domain/recordFacets.test.ts`'s `includeState` tests). A card's
         // heading still carries anything the group heading does NOT
-        // establish -- here, the excited entry's own term symbol "T1".
+        // establish -- here, the excited entry's own term symbol "3B1".
         const groundCard = await cardFor(entryRef)
         expect(within(groundCard).getByRole("link", { name: "minimum" }))
             .toHaveAttribute("href", `/species-entries/${entryRef}`)
@@ -121,7 +122,7 @@ describe("species overview", () => {
         expect(screen.queryByText(/Open state-specific record/)).not.toBeInTheDocument()
 
         const excitedCard = await cardFor(excitedEntryRef)
-        expect(within(excitedCard).getByRole("link", { name: "minimum · T1" }))
+        expect(within(excitedCard).getByRole("link", { name: "minimum · 3B1" }))
             .toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
 
         // Scoped to `dd` -- the formula heading above ("CH3") now renders
@@ -404,5 +405,80 @@ describe("species overview: shared design-system primitives", () => {
         expect(excitedSummary).toHaveAttribute("aria-describedby", excitedHeading.id)
         // Each summary is tied to ITS OWN group's heading, never the other one.
         expect(groundSummary.getAttribute("aria-describedby")).not.toBe(excitedHeading.id)
+    })
+})
+
+describe("species overview: entries the default visibility left out", () => {
+    it("says how many entries were not listed, using the server's own count", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({
+            ...speciesPayload(),
+            request: { hidden_by_default: { counts: { rejected: 2, deprecated: 1 }, include_with: {}, counted: "species_entries" } },
+        })))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        expect(await screen.findByRole("heading", { name: "CH3" })).toBeVisible()
+        expect(screen.getByText("Not listed by default: 2 rejected and 1 deprecated species entries.")).toBeVisible()
+    })
+
+    it("says nothing when the server hid nothing", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        expect(await screen.findByRole("heading", { name: "CH3" })).toBeVisible()
+        expect(screen.queryByText(/Not listed by default/)).not.toBeInTheDocument()
+    })
+})
+
+describe("species overview -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the typed state label, term symbol or joined species label", async () => {
+        const planted = plantSentinels(speciesPayload([
+            { ...groundEntry(), electronic_state_label: "x", term_symbol: "x", species_entry_label: "x" } as Record<string, unknown>,
+            { ...excitedEntry(), electronic_state_label: "x", term_symbol: "x", species_entry_label: "x" } as Record<string, unknown>,
+        ] as never), ["electronic_state_label", "term_symbol", "species_entry_label"])
+        expectPlanted(planted)
+        const { value } = planted
+        setAt(value, "records.0.entries.0.species_entry_label", `${ADVERSARIAL.stereoMark} ${ADVERSARIAL.smilesWord}`)
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(value)))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        // The fixture reached the page: the species heading and both entry refs rendered.
+        expect(await screen.findByRole("heading", { name: "CH3" })).toBeVisible()
+        expect(await screen.findByText(entryRef)).toBeVisible()
+        expect(await screen.findByText(excitedEntryRef)).toBeVisible()
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
+    })
+})
+
+describe("species overview -- electronic-state labels and term symbols tell excited states apart", () => {
+    const s1Ref = "spe_singletfirstexcitedabcdefghij"
+    const t1Ref = "spe_tripletfirstexcitedabcdefghij"
+    const stateEntry = (ref: string, label: string, term: string) => ({
+        ...excitedEntry(), species_entry_ref: ref, electronic_state_label: label, term_symbol: term,
+    })
+
+    it("shows S1 and T1 as their own chips in each card's heading, with the canonical term symbol", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload([
+            groundEntry(), stateEntry(s1Ref, "S1", "¹B₁"), stateEntry(t1Ref, "T1", "³B₁"),
+        ]))))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        const s1 = await cardFor(s1Ref)
+        const t1 = await cardFor(t1Ref)
+        expect(within(s1).getByRole("link")).toHaveTextContent("minimum · state S1 · ¹B₁")
+        expect(within(t1).getByRole("link")).toHaveTextContent("minimum · state T1 · ³B₁")
+    })
+
+    it("hides a legacy label or term symbol outside the grammar (the hide-invalid path)", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload([
+            groundEntry(), stateEntry(s1Ref, "R", "DEPOSITOR_SENTINEL_term"),
+        ]))))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        const card = await cardFor(s1Ref)
+        expect(within(card).getByRole("link")).toHaveTextContent(/^minimum$/)
+        expect(document.body.textContent).not.toMatch(/state R|enantiomer/)
+        expectNoDepositorText()
     })
 })

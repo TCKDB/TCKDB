@@ -118,6 +118,7 @@ def member(key: str = "m1", **changes: Any) -> MemberFacts:
         "conformer_group_ref": None,
         "counting_multiplicity": 1,
         "relative_energy_kj_mol": 0.0,
+        "relative_energy_convention": "electronic_plus_zpe",
         "region_key": None,
         "review_status": APPROVED,
     }

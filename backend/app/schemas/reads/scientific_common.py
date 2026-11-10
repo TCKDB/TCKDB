@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
@@ -22,15 +22,49 @@ from app.db.models.common import (
     CompositeSchemeKind,
     CoreTreatment,
     LegacyCompositeShape,
+    LiteratureTitleSource,
+    PnoTruncation,
     ProfileRecommendation,
     ReadProfile,
     RecordReviewStatus,
+    RelativisticHamiltonian,
+    RiApproximation,
     SpinTreatment,
 )
 
 # ---------------------------------------------------------------------------
 # Request-side enums and shared knobs
 # ---------------------------------------------------------------------------
+
+
+class HiddenByDefault(BaseModel):
+    """How many records the default visibility hid from this list, and how to include them.
+
+    Reported only under the ``exploratory`` profile, and only for an exclusion the request left at its default
+    (``include_rejected`` / ``include_deprecated`` not set). ``counts`` has one key per such exclusion, counted over the
+    records that matched the request's other filters. Under ``curated`` the block is never present: records below the
+    review floor are left out of a list and are not counted (the record floor, ADR 0023).
+    """
+
+    counts: dict[str, int]
+    include_with: dict[str, str]
+    #: What ``counts`` counts, when it is not the records the list returns: a species list counts the species
+    #: *entries* the default hid (``"species_entries"``). ``"records"`` means the listed records themselves.
+    counted: str = "records"
+
+
+class ScientificResponse(BaseModel):
+    """Base class for every ``/scientific/*`` response envelope (a block with a ``request`` echo).
+
+    ``review_status_by_ref`` is the review badge of every gated record the response names (ADR 0023: linked evidence is shown
+    WITH its badge). It exists because most nested pointers are bare refs with no badge field of their own. Under the
+    ``curated`` profile it maps each such ref still present in the finished response to its review status (a record with no
+    review row reads as ``not_reviewed``); a ref the evidence rule withheld is not in the response and so not in the map.
+    It is ``null`` under the exploratory profile, where no review lookup is made. The record floor, not the badge, decides
+    which records a list returns.
+    """
+
+    review_status_by_ref: dict[str, RecordReviewStatus] | None = None
 
 
 class ProfiledRequestEcho(BaseModel):
@@ -50,10 +84,14 @@ class ProfiledRequestEcho(BaseModel):
     ``profile``                 which contract the response answers under.
     ``profile_recommendation``  whether TCKDB endorses these records. Never
                                 inferred from ``profile`` alone: a curated
-                                read of a database with no published release
-                                still reports ``none``.
-    ``profile_release_ref``     the dataset release backing a curated read,
-                                when one exists.
+                                read on the general read surface reports
+                                ``approved_floor_only`` (the approved floor
+                                was applied to the records returned, nothing
+                                more), whether or not a release has been
+                                published.
+    ``profile_release_ref``     the dataset release a response was resolved
+                                through. Only the release routes set it; it
+                                is always null on the general read surface.
 
     All three are machine tokens. The prose explanation lives in
     ``backend/docs/specs/dataset_release_and_profiles.md``, never in the value.
@@ -62,21 +100,18 @@ class ProfiledRequestEcho(BaseModel):
     profile: ReadProfile = ReadProfile.exploratory
     profile_recommendation: ProfileRecommendation = ProfileRecommendation.none
     profile_release_ref: str | None = None
-
-
-class CollapseMode(str, Enum):
-    """Collapse axis values per spec D4 / Phase 2.1.
-
-    ``all``    return every eligible record after filter/sort/pagination.
-    ``first``  return at most one record (zero or one) after filter and sort.
-    """
-
-    all = "all"
-    first = "first"
+    #: What the default visibility hid (exploratory only; see :class:`HiddenByDefault`). ``None`` when nothing was
+    #: excluded by default, on every read that applies no default visibility, and always under ``curated``.
+    hidden_by_default: HiddenByDefault | None = None
+    #: Public refs this request named that belong to a species, species entry or reaction that was merged into another
+    #: (DR-0038), each mapped to the ref of the row it stands for and whose results the response shows. Empty when
+    #: no named ref was merged. A merged row keeps its ref, so a citation of it still resolves; this says that it did so
+    #: by forwarding.
+    merged_refs: dict[str, str] = Field(default_factory=dict)
 
 
 class SelectionPolicy(str, Enum):
-    """Named, read-time *administrative* order used when ``collapse=first``.
+    """Named, read-time *administrative* order a ``.../select`` request states (``policy``).
 
     A selection policy makes "show me one product for this species form" an
     *explicit, named* choice rather than an implicit one. Every policy is an
@@ -141,19 +176,59 @@ DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
 
 
+#: A cursor is base64 of a small JSON payload. The bound exists to reject a 10 MB query parameter, not to validate the
+#: token; decoding does that.
+MAX_CURSOR_LENGTH: int = 4096
+
+CURSOR_DESCRIPTION = (
+    "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the "
+    "traversal to the records that existed when it began and is bound to this endpoint, these filters and this read "
+    "profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random "
+    "access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record "
+    "whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable "
+    "set use a published dataset release."
+)
+
+#: The ``cursor`` field of a list request.
+CursorToken = Annotated[str | None, Field(max_length=MAX_CURSOR_LENGTH, description=CURSOR_DESCRIPTION)]
+
+
 class Pagination(BaseModel):
     """Echoed pagination block per L5.
 
-    ``total``                pre-collapse, post-filter match count.
-    ``post_collapse_total``  count after collapse, before page slicing.
-    ``returned``             actual length of ``records``.
+    ``total``     post-filter match count, before page slicing.
+    ``returned``  actual length of ``records``.
+    ``mode``      which contract served this page: ``offset`` (random access) or ``cursor`` (stable traversal).
+
+    Two ways to move through a list
+    -------------------------------
+    ``offset`` is random access: "page N of M". It is deterministic only for a static corpus. An upload that sorts
+    above the reader's position, or a record that leaves the visible set, shifts every later page, and the reader
+    silently skips or repeats a record. ``next_cursor`` (a field of the response, beside this block) is the stable
+    traversal: pass it back as ``cursor`` for the following page. It is ``null`` on the last page. A cursor pins the
+    traversal to the records that existed when it began; it does not freeze review state. For an immutable, citable
+    set read a published dataset release. ``offset`` and ``cursor`` cannot be combined.
     """
 
     offset: int = Field(ge=0)
     limit: int = Field(ge=1, le=MAX_LIMIT)
     returned: int = Field(ge=0)
     total: int = Field(ge=0)
-    post_collapse_total: int = Field(ge=0)
+    mode: Literal["offset", "cursor"] = "offset"
+
+
+class WatermarkEcho(BaseModel):
+    """The snapshot bound in force for a cursor traversal.
+
+    ``taken_at`` is when the traversal's snapshot was established: the moment the first page was served, not the
+    moment this page was. It is informational: the authoritative bound travels inside the opaque cursor.
+
+    The bound itself is a record id and is therefore deliberately not echoed; internal integer ids are hidden from
+    public responses by policy, and the caller never needs it.
+    """
+
+    taken_at: datetime
+    release_ref: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +237,7 @@ class Pagination(BaseModel):
 
 
 class ReviewStatusSummary(BaseModel):
-    """Counts per review status across a candidate record set (pre-collapse)."""
+    """Counts per review status across a candidate record set."""
 
     approved: int = 0
     under_review: int = 0
@@ -337,6 +412,11 @@ class LevelOfTheorySummary(BaseModel):
     #: when set. Every builder passes it explicitly
     #: (``tests/invariants/test_level_summary_carries_composite_scheme.py``).
     core_treatment: CoreTreatment | None = None
+    #: Method qualifiers (relativistic Hamiltonian, DLPNO truncation, RI approximation); ``None`` = not stated.
+    #: Each is part of the level's identity only when set. Every builder passes them explicitly.
+    relativistic_hamiltonian: RelativisticHamiltonian | None = None
+    pno_truncation: PnoTruncation | None = None
+    ri_approximation: RiApproximation | None = None
     #: The auxiliary (RI) and CABS basis sets, the solvent model and (with ``dispersion`` and ``solvent``) the
     #: spin and core treatment are the parts of the level's identity, beside ``method`` and ``basis``, that
     #: ``notation`` writes. ``None`` means not stated. Every builder passes them explicitly
@@ -494,8 +574,8 @@ def level_label(level: LevelOfTheorySummary) -> str:
     ``display`` is method and basis only, so B3LYP-D3BJ/def2-TZVP and plain B3LYP/def2-TZVP both render
     ``B3LYP/def2-TZVP``. The notation of a record's levels is a headline people read, so it uses the one shared
     renderer (:func:`app.chemistry.level_label.render_level_label`, also behind the ML export's ``label``): auxiliary
-    and CABS basis, dispersion, solvent with its model, spin treatment and core treatment, each only when stated.
-    Raw ``keywords`` are not written; see that module.
+    and CABS basis, dispersion, solvent with its model, spin treatment, core treatment and the relativistic Hamiltonian, PNO truncation and RI approximation, each only
+    when stated.
     """
     return render_level_label(
         method=level.method,
@@ -507,6 +587,9 @@ def level_label(level: LevelOfTheorySummary) -> str:
         solvent_model=level.solvent_model,
         spin_treatment=level.spin_treatment,
         core_treatment=level.core_treatment,
+        relativistic_hamiltonian=level.relativistic_hamiltonian,
+        pno_truncation=level.pno_truncation,
+        ri_approximation=level.ri_approximation,
     )
 
 
@@ -587,8 +670,10 @@ class LiteratureSummary(BaseModel):
     id: int
     literature_ref: str
     title: str | None = None
+    title_source: LiteratureTitleSource | None = None
     year: int | None = None
     doi: str | None = None
+    isbn: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -766,11 +851,15 @@ class OrderEcho(BaseModel):
     kind: Literal["display_order"] = "display_order"
     keys: list[OrderKeyEcho]
     statement: str = DISPLAY_ORDER_STATEMENT
+    #: Set when the request itself asked for this order (``ranking=lowest_energy``, ``mode=similarity``), naming the
+    #: parameter and value. ``null`` means this is the default display order and the request chose nothing.
+    requested_by: str | None = None
 
 
 #: Every key any browse order uses: its default direction and what it means. The echo is built only from here, so a
-#: response cannot name a key this table does not explain (``tests/api/test_browse_order_echo.py`` checks the catalog against every ``browse_order`` call statically, and
-#: three reads against the order they actually served; a check of every list endpoint is still to come).
+#: response cannot name a key this table does not explain. ``tests/api/test_browse_order_echo.py`` checks the catalog
+#: against every ``browse_order`` call statically, and checks every list endpoint that returns an ``OrderEcho``
+#: against the order it actually served, on rows whose review status, deposition time and id disagree.
 ORDER_KEY_CATALOG: dict[str, tuple[OrderDirection, str]] = {
     "review_rank": (
         "asc",
@@ -779,13 +868,6 @@ ORDER_KEY_CATALOG: dict[str, tuple[OrderDirection, str]] = {
     ),
     "created_at": ("desc", "deposition time, the row's created_at: when it was deposited in TCKDB, newest first"),
     "id": ("desc", "unique tie-breaker that makes the order total (the internal row id); no scientific meaning"),
-    "quality_rank": ("asc", "calculation quality flag: curated, then raw, then rejected, then unknown"),
-    "has_entries": ("desc", "species with at least one visible entry first"),
-    "has_kinetics": ("desc", "reactions with at least one visible kinetics record first"),
-    "has_transition_state": ("desc", "reactions with a visible transition state first"),
-    "reaction_entry_review_rank": ("asc", "review rank of the parent reaction entry (see review_rank)"),
-    "reaction_entry_id": ("desc", "parent reaction entry tie-breaker: the newer row first"),
-    "species_review_rank": ("asc", "review rank of the parent species entry (see review_rank)"),
     "species_entry_id": ("desc", "unique tie-breaker: the newer species entry first"),
     "heavy_atom_count": (
         "asc",
@@ -809,8 +891,11 @@ ORDER_KEY_CATALOG: dict[str, tuple[OrderDirection, str]] = {
 }
 
 
-def browse_order(*keys: str | tuple[str, OrderDirection]) -> OrderEcho:
+def browse_order(*keys: str | tuple[str, OrderDirection], requested_by: str | None = None) -> OrderEcho:
     """The structured echo of an order, from the catalog. A key is a name, or ``(name, direction)`` to override.
+
+    ``requested_by`` labels an order the request asked for (``"ranking=lowest_energy"``); leave it ``None`` for the
+    default display order.
 
     :raises KeyError: a key the catalog does not explain.
     """
@@ -819,26 +904,7 @@ def browse_order(*keys: str | tuple[str, OrderDirection]) -> OrderEcho:
         name, override = (item, None) if isinstance(item, str) else item
         default_direction, meaning = ORDER_KEY_CATALOG[name]
         out.append(OrderKeyEcho(key=name, direction=override or default_direction, meaning=meaning))
-    return OrderEcho(keys=out)
-
-
-# The orders ``simple_selection_sort_key`` produces, written once as data so
-# the echo cannot be restated by hand. ``test_echoed_order_agrees_with_the_real_sort_key``
-# sorts by both and requires the same sequence, so the two cannot drift.
-_REVIEW_FIRST_ORDER: tuple[str, ...] = ("review_rank", "created_at", "id")
-_RECENCY_ONLY_ORDER: tuple[str, ...] = ("created_at", "id")
-
-
-def effective_order_echo(*, collapse_first: bool, policy: SelectionPolicy | None) -> OrderEcho:
-    """The display order the review/recency-only reads actually applied.
-
-    ``collapse=all`` (and broad search, which passes ``collapse_first=False``)
-    always lists candidates review-rank first; ``selection_policy`` only
-    reorders when a single record is being chosen, and only ``latest`` drops
-    the review rank.
-    """
-    recency_only = collapse_first and policy is SelectionPolicy.latest
-    return browse_order(*(_RECENCY_ONLY_ORDER if recency_only else _REVIEW_FIRST_ORDER))
+    return OrderEcho(keys=out, requested_by=requested_by)
 
 
 class ReviewVisibilityEcho(BaseModel):

@@ -23,6 +23,7 @@ from app.services.consistency.isotope_identity import compare_isotope_identity
 from app.services.consistency.kinetics import compare_kinetics
 from app.services.consistency.kirchhoff import compare_kirchhoff
 from app.services.consistency.thermo import compare_thermo
+from app.services.consistency.wide_basin import compare_wide_basin
 from app.services.external_comparison.cp import compare_thermo_with_cp_observations
 
 CHECK_EXTERNAL_CP_COMPARISON = ScientificCheck(
@@ -215,6 +216,33 @@ CHECK_ISOTOPE_IDENTITY_CONSISTENCY = ScientificCheck(
             "whose isotope_key is NULL; a labelled entry is reported as not judged. Reads each atom's own "
             "stored mass number, or for a legacy row the one its own symbol names. The Pi held no D/T rows "
             "when measured on 2026-10-03; self-hosted instances are unknown."
+        ),
+    ),),
+    escape_hatch=None,
+)
+
+__all__ += ["CHECK_WIDE_BASIN_CONSISTENCY"]
+
+CHECK_WIDE_BASIN_CONSISTENCY = ScientificCheck(
+    group="Advisory consistency", sort_key=7, code=None,
+    asserts=(
+        "Report a conformer group whose converged optimised structures are linked end to end but are not all within "
+        "the matching tolerance of each other (a wide basin), with the largest torsion difference between two of them."
+    ),
+    tier=CheckTier.review, channel=CodeChannel.none,
+    tier_rationale=(
+        "A basin is the connected component of its optimised structures, so a chain can be wider than the tolerance. "
+        "Splitting it automatically would put back an arbitrary threshold or a dependence on the order of deposition, "
+        "so it is reported for curation instead: one append-only record_machine_review row a curator may read, with no "
+        "status, selection, trust or approval effect."
+    ),
+    adr="0008, 0005", enforced_by=(PythonCheck(
+        compare_wide_basin,
+        note=(
+            "Explicit CLI/service invocation only (--check wide-basin, a cg_ ref). Reads the group's stored "
+            "basin_is_clique and basin_span_deg, which the upload path and the reassignment derive from its defining "
+            "members; a group with no defining member is reported as not judged. The reassignment logs a WARNING for "
+            "each wide basin it writes."
         ),
     ),),
     escape_hatch=None,

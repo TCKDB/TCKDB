@@ -72,7 +72,7 @@ def test_an_older_g4_and_a_newer_g3_are_incomparable_and_listed_in_display_order
     old_g4 = g4(db_session, methane, age_days=500, status=S.approved)
     new_g3 = g3(db_session, methane, age_days=1, status=S.approved)
 
-    browse = client.get(f"/api/v1/scientific/species-entries/{methane.public_ref}/thermo", params={"collapse": "first"})
+    browse = client.get(f"/api/v1/scientific/species-entries/{methane.public_ref}/thermo")
     assert browse.status_code == 200
     assert browse.json()["records"][0]["thermo_ref"] == new_g3.public_ref
 
@@ -340,6 +340,31 @@ def test_single_conformer_and_equilibrium_targets_stay_distinct(client, db_sessi
     assert post(client, methane).json()["selection"]["thermo_ref"] == eq.public_ref
 
 
+def test_a_target_group_a_merge_emptied_is_forwarded_and_the_response_says_so(client, db_session, methane):
+    survivor = make_conformer_group(db_session, methane, label="conformer_1")
+    emptied = make_conformer_group(db_session, methane, label="conformer_2")
+    emptied.merged_into_conformer_group_id = survivor.id
+    db_session.flush()
+    one = g4(db_session, methane, target=ThermoTargetKind.single_conformer, group_id=survivor.id)
+    response = post(client, methane, {"target": {"kind": "single_conformer", "conformer_group_ref": emptied.public_ref}})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["selection"]["thermo_ref"] == one.public_ref, "the decision is made on the group that took its members"
+    assert body["request"]["target"] == {"kind": "single_conformer", "conformer_group_ref": survivor.public_ref}
+    assert body["forwarded_from_conformer_group_ref"] == emptied.public_ref
+    # asked for directly, nothing is forwarded
+    direct = post(client, methane, {"target": {"kind": "single_conformer", "conformer_group_ref": survivor.public_ref}})
+    assert direct.json()["forwarded_from_conformer_group_ref"] is None
+    # the manifest download says it too, and a manifest of a direct request carries no such key
+    manifest = post(client, methane, {"target": {"kind": "single_conformer", "conformer_group_ref": emptied.public_ref}}, manifest=True)
+    assert manifest.status_code == 200, manifest.text
+    request = manifest.json()["request"]
+    assert request["target"]["conformer_group_ref"] == survivor.public_ref
+    assert request["forwarded_from_conformer_group_ref"] == emptied.public_ref
+    direct_manifest = post(client, methane, {"target": {"kind": "single_conformer", "conformer_group_ref": survivor.public_ref}}, manifest=True)
+    assert "forwarded_from_conformer_group_ref" not in direct_manifest.json()["request"]
+
+
 def test_a_group_of_another_entry_is_refused(client, db_session, methane):
     other = make_species_entry(db_session, make_species(db_session, smiles="CC", inchi_key="OTHERKEYAAAAAA-UHFFFAOYSA-N"))
     group = make_conformer_group(db_session, other)
@@ -427,7 +452,7 @@ def test_the_manifest_download_replays_to_the_decision_it_records(client, db_ses
     assert response.headers["content-disposition"].startswith("attachment;")
     manifest = response.json()
     assert manifest["outcome"] == "incomparable_alternatives"
-    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 2}
+    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 5}
     assert replay_matches(manifest)
     assert replay_decision(manifest)["fronts"] == manifest["decision"]["fronts"]
     # The response and the download are one decision.
@@ -507,10 +532,23 @@ def _assert_integers_are_pinned(doc, *, is_manifest, curated):
         "decision.overridden_edges[].overridden_by_rule_version",
     ):
         pinned[path] = one
+    pinned["assessment_semantics.version"] = lambda v: set(v) == {2}
+    # Counts of candidates, never ids: the funnel says how many each step removed, and nothing says which.
+    counts = lambda v: all(isinstance(n, int) and n >= 0 for n in v)  # noqa: E731
+    for path in (
+        "funnel.considered", "funnel.removed_by_filters", "funnel.removed_by_floor", "funnel.removed_by_eligibility", "funnel.remaining",
+        "filters.removed", "eligibility[].excluded", "eligibility[].admitted_by_override",
+        "population.funnel.considered", "population.funnel.removed_by_filters", "population.funnel.removed_by_floor",
+        "population.funnel.removed_by_eligibility", "population.funnel.remaining",
+    ):
+        pinned[path] = counts
+    for name in ("rejected_review_status", "deprecated_review_status", "evidence_hard_fail", "confirmed_blocking_findings"):
+        for kind in ("excluded_by_default", "admitted_by_override"):
+            pinned[f"population.funnel.{kind}.{name}"] = counts
     if is_manifest:
         population = doc["population"]
         pinned.update({
-            "format.version": lambda v: v == [2],
+            "format.version": lambda v: v == [5],
             "candidates[].id_rank": lambda v: sorted(v) == list(range(1, len(candidates) + 1)),
             "population.visible_candidates": lambda v: v == [len(candidates)],
             "population.assessed": lambda v: v == [len(candidates)],

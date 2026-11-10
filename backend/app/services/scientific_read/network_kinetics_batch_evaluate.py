@@ -47,7 +47,7 @@ from app.schemas.reads.scientific_network_kinetics_batch_evaluate import (
     NetworkKineticsBatchFitEvaluation,
 )
 from app.services.scientific_read.common import review_floor_predicate, where_visible
-from app.services.scientific_read.handles import resolve_network_handle
+from app.services.scientific_read.handles import resolve_selection_handle
 from app.services.scientific_read.network_kinetics import (
     EVALUATE_GRID_POINT_CAP,
     evaluate_network_kinetics,
@@ -178,7 +178,9 @@ def evaluate_network_kinetics_batch(
             context={"grid_size": grid_size, "cap": EVALUATE_GRID_POINT_CAP},
         )
 
-    network_id = resolve_network_handle(session, network_handle)
+    # A population of fits, not a detail of the network: the approved record floor decides which networks it can name, as
+    # for ``/kinetics/select`` and ``export-selected`` (ADR 0023 step 7).
+    network_id = resolve_selection_handle(session, Network, network_handle, kind_label="network")
     network = session.get(Network, network_id)
     if network is None:  # pragma: no cover — defended by resolver 404
         raise not_found("network", row_id=network_id, code="handle_not_found")

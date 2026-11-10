@@ -5,9 +5,15 @@ by every later family PR: add a link here, not a new world.
 
 Conventions
 -----------
-* ``*_v`` is visible under ``profile=curated`` (approved); ``*_h`` is hidden (``not_reviewed`` with no review row, or
-  ``under_review``). Both hidden statuses stay visible under the default exploratory profile, so the exploratory pass
-  can see every hidden record and the positive control means something.
+* ``*_v`` is visible under ``profile=curated`` (approved); ``*_h`` is hidden. A hidden record is in one of two states
+  (ADR 0023), and :meth:`SweepWorld.withhold_hidden` moves the whole world from the first to the second:
+
+  - **unlisted** (as built): ``not_reviewed`` with no review row, or ``under_review``. Below the approved record floor, so
+    never a subject (``record`` / ``records[*]`` / a candidate), but it may be named nested, with its badge. Both statuses
+    stay visible under the default exploratory profile, so the exploratory pass can see every hidden record and the
+    positive control means something.
+  - **withheld**: ``rejected`` or ``deprecated``. Linked evidence at these statuses is withheld, so a record in this
+    state must appear nowhere under curated.
 * Link first, approve last: approval switches on accepted-science immutability, so a record's links exist before it
   is approved.
 * Every hidden record has a visible sibling of the same role, so a "withhold" that quietly *substitutes* the sibling
@@ -18,8 +24,9 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import (
@@ -61,6 +68,7 @@ from app.db.models.common import (
     ThermoCalculationRole,
     TransportCalculationRole,
 )
+from app.db.models.record_review import RecordReview
 from app.services.record_review import ensure_record_review, set_record_review_status
 from app.services.scientific_record_supersession import supersede_scientific_record
 from tests.api.scientific._curated_sweep_selection_world import extend_for_selection_documents
@@ -137,6 +145,35 @@ class SweepWorld:
     def kind_of(self, key: str) -> str:
         return key.split("_", 1)[0]
 
+    def withhold_hidden(self, session) -> dict[str, RecordReviewStatus]:
+        """Turn every hidden record from unlisted into withheld: ``rejected`` and ``deprecated`` alternately, in key order.
+
+        A record reviewed through a parent (a network-kinetics fit, through its solve) has no review row of its own and is
+        left to its solve. Returns what each record was set to, so a test can pin both statuses are in use.
+        """
+        from app.services.scientific_read.ref_guard import GATED_TYPES
+
+        out: dict[str, RecordReviewStatus] = {}
+        for i, (key, row) in enumerate(sorted(self.hidden.items())):
+            gated = GATED_TYPES[row.public_ref.split("_", 1)[0]]
+            if gated.parent_fk is not None:
+                continue
+            status = RecordReviewStatus.rejected if i % 2 == 0 else RecordReviewStatus.deprecated
+            existing = session.scalar(
+                select(RecordReview).where(
+                    RecordReview.record_type == gated.record_type, RecordReview.record_id == row.id
+                )
+            )
+            if existing is None:
+                set_review(session, record_type=gated.record_type, record_id=row.id, status=status)
+            else:
+                existing.status = status
+                existing.reviewed_by = existing.reviewed_by or self.extra["curator"].id
+                existing.reviewed_at = existing.reviewed_at or datetime.now(timezone.utc)
+            out[key] = status
+        session.flush()
+        return out
+
 
 def _approve(session, record_type, row):
     set_review(session, record_type=record_type, record_id=row.id, status=APPROVED)
@@ -152,7 +189,20 @@ def _hash(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def build_sweep_world(session) -> SweepWorld:
+def build_sweep_world(session, *, withheld: bool = False) -> SweepWorld:
+    """The world, its hidden records unlisted (as built), or with ``withheld=True`` already rejected / deprecated.
+
+    A test of the evidence rule for a record that is merely below the floor takes the default; a test that a record the rule
+    withholds is named nowhere takes ``withheld=True``. A test that needs the exploratory read of the same world as a control
+    builds the default and calls :meth:`SweepWorld.withhold_hidden` after taking it.
+    """
+    w = _build_unlisted_world(session)
+    if withheld:
+        w.withhold_hidden(session)
+    return w
+
+
+def _build_unlisted_world(session) -> SweepWorld:
     w = SweepWorld()
     hid, vis, ext = w.hidden, w.visible, w.extra
 

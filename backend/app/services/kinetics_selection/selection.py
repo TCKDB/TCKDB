@@ -57,7 +57,7 @@ def select_reaction_entry_kinetics(
         session, reaction_entry_id=reaction_entry_id, request=request, require_snapshot=require_snapshot
     )
     by_ref = {c.kinetics_ref: c for c in assessment.candidates}
-    eligible = [by_ref[a.kinetics_ref] for a in assessment.assessments if a.physically_eligible]
+    eligible = [by_ref[a.kinetics_ref] for a in assessment.assessments if assessment.verdicts[a.kinetics_ref].competes]
     candidates = build_candidates(eligible, admin_policy=request.admin_policy)
     decision = decide(candidates, admin_policy=request.admin_policy)
     manifest = build_manifest(assessment, decision)

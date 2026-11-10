@@ -105,7 +105,7 @@ def test_species_ref_and_entry_ref_on_the_wire_are_bound_to_their_own_row(
     )
 
 
-def test_get_parses_collapse_offset_limit(client, db_session):
+def test_get_parses_offset_limit(client, db_session):
     a = make_species(
         db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("APIBRCO1")
     )
@@ -116,7 +116,7 @@ def test_get_parses_collapse_offset_limit(client, db_session):
     make_species_entry(db_session, b)
 
     resp = client.get(
-        "/api/v1/scientific/species/browse?collapse=first&offset=0&limit=1"
+        "/api/v1/scientific/species/browse?offset=0&limit=1"
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -372,6 +372,10 @@ def test_record_envelope_matches_search_shape(client, db_session):
         "species_entry_kind",
         "electronic_state_kind",
         "stereo_label",
+        "stereo_descriptor",
+        "stereo_resolution",
+        "stereo_smiles",
+        "stereo_not_represented",
         "electronic_state_label",
         "term_symbol",
         "isotope_key",

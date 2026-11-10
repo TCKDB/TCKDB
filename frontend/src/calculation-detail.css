@@ -243,3 +243,21 @@
     margin: var(--s-2) 0 0;
     max-width: 24rem;
 }
+
+/* A lazy section's "<heading> loaded." confirmation stays in the accessibility tree (the live region announces it)
+   but is not drawn: the content that follows is the confirmation. Clip-based technique, scoped like the other
+   visually-hidden classes in this app. */
+.section-status-quiet {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}

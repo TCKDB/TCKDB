@@ -641,6 +641,9 @@ def test_two_row_fixture_survives_downgrade_and_reupgrade(db_engine, monkeypatch
     inserted_ids: list[int] = []
     lot_ids: list[int] = []
     try:
+        # Stand on this revision, not on head: a revision above it (``d5f2b8c1a704``) refuses to downgrade
+        # while ``level_of_theory`` holds a row, and this fixture needs one. Head is restored in ``finally``.
+        command.downgrade(config, _MIGRATION.revision)
         with engine.begin() as connection:
             suffix = uuid4().hex[:8]
             lot_ids = list(
@@ -747,6 +750,9 @@ def test_downgrade_after_release_only_distinction_fails_loudly(db_engine, monkey
     software_ids: list[int] = []
     software_release_ids: list[int] = []
     try:
+        # Stand on this revision, not on head: a revision above it (``d5f2b8c1a704``) refuses to downgrade
+        # while ``level_of_theory`` holds a row, and this fixture needs one. Head is restored in ``finally``.
+        command.downgrade(config, _MIGRATION.revision)
         with engine.begin() as connection:
             suffix = uuid4().hex[:8]
             lot_ids = list(

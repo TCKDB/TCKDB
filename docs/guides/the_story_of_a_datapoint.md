@@ -360,7 +360,7 @@ Months later, a modeler in another group — call him Idris — needs
 thermo for n-butanol. He hits the public read API:
 
 ```
-GET /api/v1/scientific/thermo/search?smiles=CCCCO&collapse=first
+GET /api/v1/scientific/thermo/search?smiles=CCCCO
 ```
 
 What happens next is the design's quietest radical choice. The
@@ -369,9 +369,10 @@ flag exists anywhere. Instead, the read service gathers every
 candidate thermo record for that species entry and *sorts* them, at
 query time, in an explicit, documented display order: review rank (approved
 first) → newest deposited (the temperature window and the evidence checklist
-are reported on each record but do not order them). `collapse=first` returns
-the first record in that order; `collapse=all` returns the whole list, so Idris
-can see every record and judge for himself. The first record is display order,
+are reported on each record but do not order them). The read
+returns the whole list in that order, so Idris can see every record and judge
+for himself; if he wants one record under a policy he states, he calls the
+select endpoint. The first record is display order,
 not a scientific preference.
 
 Why go to this trouble? Because *"best" is a policy, not a property, and TCKDB

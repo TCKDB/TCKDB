@@ -22,22 +22,25 @@ for the full contract.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     ANYWHERE_SCOPE,
     SPECIES_BROWSE_SECTIONS,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
+from app.chemistry.method_families import MethodFamily
 from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
     StationaryPointKind,
 )
-from app.schemas.reads.scientific_common import CollapseMode
+from app.schemas.reads.removed_parameters import SPECIES as _REMOVED_PARAMETERS
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_species import (
     ElementMatchMode,
     ScientificSpeciesBrowseResponse,
@@ -49,11 +52,12 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.species import browse_species
 
-router = APIRouter(prefix="/species")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species")
 
 
 @router.get("/browse", response_model=ScientificSpeciesBrowseResponse)
 def species_browse(
+    http_request: Request,
     session: Session = Depends(get_db),
     formula: str | None = Query(None),
     charge: int | None = Query(None),
@@ -118,6 +122,15 @@ def species_browse(
             "/meta/workflow-tool-versions."
         ),
     ),
+    method_family: list[MethodFamily] | None = Query(
+        None,
+        description=(
+            "Classification of the calculation's method (not a measure of accuracy); repeat the parameter for "
+            "several. Matched on the same calculation as method=/basis=/software=."
+        ),
+    ),
+    dft_rung_min: int | None = Query(None, ge=1, le=5, description="Lowest DFT rung (1 LDA .. 5 double hybrid). Implies method_family=dft."),
+    dft_rung_max: int | None = Query(None, ge=1, le=5, description="Highest DFT rung. Implies method_family=dft."),
     query_smiles: str | None = Query(
         None,
         description=(
@@ -165,9 +178,9 @@ def species_browse(
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ) -> ScientificSpeciesBrowseResponse:
     """List species with no identifier required, for a catalogue page.
@@ -194,7 +207,9 @@ def species_browse(
     rejected with 422 (``client_sort_not_supported``), matching the
     sibling endpoint.
     """
-    request = SpeciesBrowseRequest(
+    reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
+    request = caller_input(
+        SpeciesBrowseRequest,
         formula=formula,
         charge=charge,
         multiplicity=multiplicity,
@@ -210,6 +225,9 @@ def species_browse(
         software_version=software_version,
         workflow_tool=workflow_tool,
         workflow_tool_version=workflow_tool_version,
+        method_family=method_family,
+        dft_rung_min=dft_rung_min,
+        dft_rung_max=dft_rung_max,
         query_smiles=query_smiles,
         query_smarts=query_smarts,
         mode=mode,
@@ -218,9 +236,9 @@ def species_browse(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
-        collapse=collapse,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = browse_species(session, request)

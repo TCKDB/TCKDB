@@ -223,3 +223,48 @@ def test_known_operational_boundaries_are_recorded_where_a_reader_will_look():
     # posture, not just the accepted-science ones.
     assert "release_selection" in roles
     assert "dataset_release_and_profiles.md" in roles
+
+
+@pytest.mark.parametrize(
+    "package_dir",
+    ["clients/python", "schemas/python/tckdb-schemas"],
+)
+def test_published_package_license_is_the_root_license(package_dir):
+    """Each PyPI package ships its own copy of the root ``LICENSE`` (a build
+    only sees its own directory). The copies must stay byte-identical."""
+    copy = REPO_ROOT / package_dir / "LICENSE"
+    assert copy.is_file(), f"{package_dir}/LICENSE is missing; the wheel would ship no licence"
+    assert copy.read_bytes() == (REPO_ROOT / "LICENSE").read_bytes(), (
+        f"{package_dir}/LICENSE has drifted from the root LICENSE; copy it again"
+    )
+
+
+def test_client_schemas_window_contains_the_in_repo_schemas_version():
+    """The client's ``tckdb-schemas`` window must contain the schemas version in
+    this repository, so a schemas bump that reaches the ceiling fails here with
+    a message rather than later as a resolver error."""
+    import re
+
+    schemas = tomllib.loads(
+        (REPO_ROOT / "schemas/python/tckdb-schemas/pyproject.toml").read_text()
+    )["project"]["version"]
+    deps = tomllib.loads((REPO_ROOT / "clients/python/pyproject.toml").read_text())[
+        "project"
+    ]["dependencies"]
+    spec = next(d for d in deps if d.replace("_", "-").startswith("tckdb-schemas"))
+    floor = re.search(r">=\s*([0-9.]+)", spec)
+    ceiling = re.search(r"<\s*([0-9.]+)", spec)
+    assert floor and ceiling, f"client tckdb-schemas requirement is not a window: {spec!r}"
+
+    def key(v: str) -> tuple[int, ...]:
+        return tuple(int(x) for x in v.split("."))
+
+    current = key(schemas)
+    assert key(floor.group(1)) <= current, (
+        f"schemas {schemas} is below the client window floor {floor.group(1)}; "
+        "move the client's window and bump the client"
+    )
+    assert current < key(ceiling.group(1)), (
+        f"schemas {schemas} is outside the client window {spec!r} (ceiling "
+        f"{ceiling.group(1)}); move the client's window and bump the client"
+    )

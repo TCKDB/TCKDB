@@ -62,3 +62,11 @@ converse; rows that state no convention contradict nothing); an output the catal
 
 `network_declaration_invalid` (`context.field` names the declaration) and `network_declaration_version_unsupported`
 (only version `1`). A declaration that contradicts the network or a column of the solve is refused, never reconciled.
+
+## Channel kinds
+
+A channel's `kind` is derived from its two states, so you can leave it out: well to well is `isomerization`,
+bimolecular or termolecular to well is `association`, well to bimolecular or termolecular is `dissociation`, and
+bimolecular or termolecular to bimolecular or termolecular is `exchange`. If you send `kind` it must agree, or the
+deposit is refused as `network_channel_kind_mismatch` (422). `mechanism` (`elementary` or `well_skipping`) is a
+separate axis and does not change the kind.

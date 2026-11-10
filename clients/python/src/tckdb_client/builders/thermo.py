@@ -26,7 +26,10 @@ from enum import Enum
 import math
 
 from pydantic import ValidationError
-from tckdb_schemas.enthalpy_reference import enthalpy_reference_error
+from tckdb_schemas.enthalpy_reference import (
+    W_ENTHALPY_DECLARATION_ABSENT,
+    enthalpy_reference_error,
+)
 from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate, ThermoStateFields
 from tckdb_schemas.thermo_declarations import (
     ThermoProtocolDeclaration,
@@ -210,6 +213,48 @@ class _Omitted(Enum):
     value = "omitted"
 
 
+class _Unset(Enum):
+    """Sentinel: the caller did not pass ``enthalpy_reference_kind``."""
+
+    value = "unset"
+
+
+_UNSET = _Unset.value
+
+#: The declaration the factories fill in when the argument is omitted and the
+#: record carries enthalpy content: formation enthalpy at 298.15 K, plus the
+#: species' own increment from 298.15 K at other temperatures.
+DEFAULT_ENTHALPY_REFERENCE_KIND = "formation_298k"
+
+
+def _resolve_enthalpy_reference_kind(
+    kind: "str | None | _Unset",
+    *,
+    h298_kj_mol: float | None,
+    nasa_block: dict[str, Any] | None,
+    point_table: list[dict[str, Any]],
+) -> str | None:
+    """Default an omitted ``enthalpy_reference_kind`` when there is enthalpy content.
+
+    Only an omitted argument (:data:`_UNSET`) triggers the default; an explicit
+    value, including ``None``, is returned unchanged. "Has enthalpy content" is
+    decided by the shared rule in ``tckdb_schemas.enthalpy_reference``: the
+    record is one that rule refuses as ``enthalpy_declaration_absent`` when it
+    carries no declaration.
+    """
+    if kind is not _UNSET:
+        return kind  # type: ignore[return-value]
+    error = enthalpy_reference_error({
+        "enthalpy_reference_kind": None,
+        "h298_kj_mol": h298_kj_mol,
+        "nasa": nasa_block,
+        "points": point_table,
+    })
+    if error is not None and error[0] == W_ENTHALPY_DECLARATION_ABSENT:
+        return DEFAULT_ENTHALPY_REFERENCE_KIND
+    return None
+
+
 @dataclass(eq=False)
 class Thermo:
     """One thermo block attached to a species.
@@ -219,6 +264,17 @@ class Thermo:
     representations may coexist on a single ``Thermo`` (a NASA fit can
     carry h298 / s298 from the same data, for instance) — the backend's
     ``BundleThermoIn`` simply emits whichever fields are present.
+
+    **Enthalpy declaration default.** The factories take
+    ``enthalpy_reference_kind`` with an omitted-argument sentinel. When it is
+    omitted and the record carries enthalpy content (an H298 scalar, a NASA
+    fit, or points with H or G -- judged by the shared rule in
+    ``tckdb_schemas.enthalpy_reference``), it is set to ``"formation_298k"``:
+    formation enthalpy at 298.15 K plus the species' own increment from
+    298.15 K (negative below it). The built payload carries the field. An
+    explicit value wins, and an explicit ``None`` stays ``None``, so the
+    builder refuses at construction with ``enthalpy_declaration_absent``.
+    With no enthalpy content nothing is set.
 
     ``source_calculations`` is held on the builder for forward
     compatibility; the computed-reaction endpoint does not consume
@@ -351,7 +407,7 @@ class Thermo:
     def scalar(
         cls,
         *,
-        enthalpy_reference_kind: str | None = None,
+        enthalpy_reference_kind: str | None | _Unset = _UNSET,
         phase: str | None | _Omitted = _Omitted.value,
         reference_pressure_bar: float | None | _Omitted = _Omitted.value,
         enthalpy_formation_0k_kj_mol: float | None = None,
@@ -385,6 +441,9 @@ class Thermo:
                 "Thermo.scalar requires at least one of h298_kj_mol or "
                 "s298_j_mol_k or enthalpy_formation_0k_kj_mol."
             )
+        enthalpy_reference_kind = _resolve_enthalpy_reference_kind(
+            enthalpy_reference_kind, h298_kj_mol=h298_kj_mol, nasa_block=None, point_table=[]
+        )
         out = cls(
             phase=phase,
             reference_pressure_bar=reference_pressure_bar,
@@ -418,7 +477,7 @@ class Thermo:
         t_low: float,
         t_mid: float,
         t_high: float,
-        enthalpy_reference_kind: str | None = None,
+        enthalpy_reference_kind: str | None | _Unset = _UNSET,
         phase: str | None | _Omitted = _Omitted.value,
         reference_pressure_bar: float | None | _Omitted = _Omitted.value,
         enthalpy_formation_0k_kj_mol: float | None = None,
@@ -490,6 +549,9 @@ class Thermo:
         for i, value in enumerate(cleaned_high, start=1):
             nasa_dict[f"b{i}"] = value
 
+        enthalpy_reference_kind = _resolve_enthalpy_reference_kind(
+            enthalpy_reference_kind, h298_kj_mol=h298_kj_mol, nasa_block=nasa_dict, point_table=[]
+        )
         out = cls(
             phase=phase,
             reference_pressure_bar=reference_pressure_bar,
@@ -522,7 +584,7 @@ class Thermo:
         *,
         tmin_k: float | None = None,
         tmax_k: float | None = None,
-        enthalpy_reference_kind: str | None = None,
+        enthalpy_reference_kind: str | None | _Unset = _UNSET,
         phase: str | None | _Omitted = _Omitted.value,
         reference_pressure_bar: float | None | _Omitted = _Omitted.value,
         enthalpy_formation_0k_kj_mol: float | None = None,
@@ -582,6 +644,9 @@ class Thermo:
                     entry[key] = float(val)
             cleaned.append(entry)
 
+        enthalpy_reference_kind = _resolve_enthalpy_reference_kind(
+            enthalpy_reference_kind, h298_kj_mol=h298_kj_mol, nasa_block=None, point_table=cleaned
+        )
         out = cls(
             phase=phase,
             reference_pressure_bar=reference_pressure_bar,

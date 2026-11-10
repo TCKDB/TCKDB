@@ -55,6 +55,7 @@ from app.schemas.reads.scientific_network_search import (
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     reject_client_sort,
     review_floor_predicate,
     review_summary,
@@ -64,9 +65,14 @@ from app.services.scientific_read.common import (
     where_visible,
 )
 from app.services.scientific_read.handles import resolve_filter_ref
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.scientific_read.networks import (
     _INTERNAL_INCLUDE_TOKENS,
@@ -120,7 +126,9 @@ def search_networks(
 
     _enforce_at_least_one_filter(request)
 
-    return _run_network_query(session, request, includes=includes, offset=offset, limit=limit)
+    return _run_network_query(
+        session, request, includes=includes, offset=offset, limit=limit, endpoint="/scientific/networks/search"
+    )
 
 
 def browse_networks(
@@ -173,7 +181,9 @@ def browse_networks(
     )
     includes = filter_internal_ids_from_resolved(includes)
 
-    return _run_network_query(session, request, includes=includes, offset=offset, limit=limit)
+    return _run_network_query(
+        session, request, includes=includes, offset=offset, limit=limit, endpoint="/scientific/networks/browse"
+    )
 
 
 def _run_network_query(
@@ -183,6 +193,7 @@ def _run_network_query(
     includes: set[str],
     offset: int,
     limit: int,
+    endpoint: str,
 ) -> ScientificNetworkSearchResponse:
     """Shared ref-resolution + candidate-query + materialization pipeline.
 
@@ -191,6 +202,7 @@ def _run_network_query(
     exactly once, so a search record and a browse record cannot drift
     apart in shape or in review-visibility handling.
     """
+    paging = Paging(endpoint, request, offset=offset, limit=limit)
     # --- ref resolution -----------------------------------------------------
     network_id, short = _resolve_ref(
         session, Network, request.network_ref, "network"
@@ -248,20 +260,30 @@ def _run_network_query(
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[cid].status for cid in candidate_ids),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
+    )
     visible_ids = [cid for cid in candidate_ids if badges[cid].status in visible]
     if not visible_ids:
         return _empty_response(request, includes, offset, limit)
 
+    visible_ids = paging.snapshot(visible_ids, id_of=lambda cid: cid)
     summary = review_summary(badges[cid] for cid in visible_ids)
-    visible_ids.sort(
-        key=lambda cid: (
+    page = paging.window(
+        visible_ids,
+        key_of=lambda cid: (
             REVIEW_RANK[badges[cid].status],
             -created_at_by_id[cid].timestamp(),
             -cid,
-        )
+        ),
     )
-    total = len(visible_ids)
-    page_ids = visible_ids[offset : offset + limit]
+    total = page.total
+    page_ids = page.items
     records = _materialize_records(session, page_ids, badges, includes)
 
     return ScientificNetworkSearchResponse(
@@ -273,8 +295,9 @@ def _run_network_query(
         review_summary=summary,
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset, limit=limit, returned=len(records), total=total, page=page
         ),
+        **page.envelope(),
     )
 
 
@@ -517,7 +540,7 @@ def _apply_method_basis_software_filters(
         .where(NetworkSolve.network_id == Network.id)
     )
     sub = _visible_solves(sub)
-    sub = where_visible(sub, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
+    sub = where_visible(sub, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
     if method_or_basis:
         sub = sub.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
         if request.method is not None:

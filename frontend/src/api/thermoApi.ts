@@ -1,6 +1,10 @@
 import { z } from "zod"
 import { levelOfTheorySchema, productLevelsSchema } from "./scientificSchemas"
+import { roleCalculationSettingsSchema } from "./effectiveSettingsSchema"
+import { listRequestEchoSchema, paginationSchema } from "./listEnvelope"
+import { pageQuery, parsePagedRef } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
+import { madeUnderSchema } from "../domain/madeUnder"
 
 // ---------------------------------------------------------------------------
 // Shape notes (measured 2026-08-29 against a hosted TCKDB deployment,
@@ -209,6 +213,15 @@ const groupAdditivitySchema = z.object({
     components: z.array(groupAdditivityComponentSchema).optional(),
 }).passthrough()
 
+// Only the facts the page words are pulled out; the rest of the summary rides on `.passthrough()`.
+const assessmentsSchema = z.object({
+    reproducibility: z.object({
+        state: z.string(),
+        grade: z.string().nullable().optional(),
+        made_under: madeUnderSchema.nullable().optional(),
+    }).passthrough().nullable().optional(),
+}).passthrough()
+
 const thermoRecordSchema = z.object({
     thermo_ref: z.string(),
     scientific_origin: z.string(),
@@ -242,6 +255,11 @@ const thermoRecordSchema = z.object({
     // missing.
     levels: productLevelsSchema.nullable().optional(),
     source_calculations: z.array(thermoSourceCalculationSchema).nullable().optional(),
+    // `include=calculation_settings` (requested below): the calculation this record links for its geometry,
+    // frequency and energy, with the grid and SCF convergence each used.
+    calculation_settings: z.array(roleCalculationSettingsSchema).nullable().optional(),
+    // `include=assessments` (requested below): the reproducibility assessment, with the rubric it was made under.
+    assessments: assessmentsSchema.nullable().optional(),
 }).passthrough()
 
 const reviewStatusSummarySchema = z.object({
@@ -253,19 +271,12 @@ const reviewStatusSummarySchema = z.object({
     total: z.number(),
 }).passthrough()
 
-const paginationSchema = z.object({
-    offset: z.number(),
-    limit: z.number(),
-    returned: z.number(),
-    total: z.number(),
-    post_collapse_total: z.number(),
-}).passthrough()
-
 const thermoListResponseSchema = z.object({
     species_entry_ref: z.string(),
     review_summary: reviewStatusSummarySchema,
     records: z.array(thermoRecordSchema),
     pagination: paginationSchema,
+    request: listRequestEchoSchema.optional(),
 }).passthrough()
 
 export type ThermoRecord = z.infer<typeof thermoRecordSchema>
@@ -285,7 +296,15 @@ export async function loadEntryThermo(
     signal?: AbortSignal,
     onRateLimited?: (retryAfterSeconds: number) => void,
 ): Promise<ThermoListResponse> {
-    const endpoint = `/api/v1/scientific/species-entries/${encodeURIComponent(entryRef)}/thermo`
+    // `include=assessments` is the one token requested: it adds the compact reproducibility assessment and the rubric
+    // it was made under, which the "made under" line states. It is not expanded by `include=all`.
+    // `entryRef` may be a paged ref (`entryRef#offset:limit`, see `domain/paging.ts`) naming one page of the list;
+    // a plain ref names the first page.
+    const { ref, request } = parsePagedRef(entryRef)
+    const query = request ? pageQuery(request) : new URLSearchParams()
+    query.append("include", "assessments")
+    query.append("include", "calculation_settings")
+    const endpoint = `/api/v1/scientific/species-entries/${encodeURIComponent(ref)}/thermo?${query}`
     const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(thermoListResponseSchema, payload, "thermo")
 }

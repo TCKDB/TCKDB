@@ -51,6 +51,8 @@ __all__ = [
     "assert_transition_state_calculations_unanchored",
     "conformer_key_by_unique_geometry_key",
     "calculation_geometry_conformer_error",
+    "dependency_cycle_message",
+    "find_dependency_cycle",
     "find_scf_source_cycle",
     "owner_mismatch_context",
     "owner_mismatch_detail",
@@ -196,7 +198,7 @@ def calculation_geometry_conformer_error(
     """
     if primary_of is not None:
         detail = (
-            f"calculations['{calculation_key}'] is the primary calculation of conformer "
+            f"calculations[{calculation_key!r}] is the primary calculation of conformer "
             f"'{primary_of}', so it belongs to that conformer and ran on its geometry; but "
             f"conformer_key='{conformer_key}' and geometry_key='{geometry_key}' describe "
             + (
@@ -210,7 +212,7 @@ def calculation_geometry_conformer_error(
         )
     else:
         detail = (
-            f"calculations['{calculation_key}']: conformer_key='{conformer_key}' and "
+            f"calculations[{calculation_key!r}]: conformer_key='{conformer_key}' and "
             f"geometry_key='{geometry_key}' describe different conformers "
             f"(geometry '{geometry_key}' belongs to conformer '{geometry_conformer_key}'). "
             f"A calculation is evidence for one conformer and ran on that conformer's "
@@ -221,7 +223,7 @@ def calculation_geometry_conformer_error(
         W_CALCULATION_GEOMETRY_CONFORMER_MISMATCH,
         detail,
         context={
-            "field": f"calculations['{calculation_key}']",
+            "field": f"calculations[{calculation_key!r}]",
             "calculation_key": calculation_key,
             "conformer_key": conformer_key,
             "geometry_key": geometry_key,
@@ -271,7 +273,7 @@ def assert_conformer_primaries_agree(conformers: Iterable[Any]) -> None:
                 W_CONFORMER_KEY_UNDECLARED,
                 f"Conformer '{conf.key}' calculation '{calc.key}' conformer_key "
                 f"must reference one of that species's own conformers.",
-                field=f"calculations['{calc.key}'].conformer_key",
+                field=f"calculations[{calc.key!r}].conformer_key",
                 key=calc.conformer_key,
                 declared=conformer_keys,
             )
@@ -280,7 +282,7 @@ def assert_conformer_primaries_agree(conformers: Iterable[Any]) -> None:
                 W_GEOMETRY_KEY_UNRESOLVED,
                 f"Conformer '{conf.key}' calculation '{calc.key}' geometry_key "
                 f"must reference one of that species's conformer geometries.",
-                field=f"calculations['{calc.key}'].geometry_key",
+                field=f"calculations[{calc.key!r}].geometry_key",
                 key=calc.geometry_key,
                 declared=all_geometry_keys,
             )
@@ -315,11 +317,11 @@ def assert_transition_state_calculations_unanchored(
         if calc.conformer_key is not None:
             raise CodedValidationError(
                 W_TRANSITION_STATE_CALCULATION_CONFORMER_KEY,
-                f"calculations['{calc.key}'].conformer_key='{calc.conformer_key}': a "
+                f"calculations[{calc.key!r}].conformer_key='{calc.conformer_key}': a "
                 f"transition state has no conformers, so a calculation of it cannot "
                 f"state a conformer_key. Remove it.",
                 context={
-                    "field": f"calculations['{calc.key}'].conformer_key",
+                    "field": f"calculations[{calc.key!r}].conformer_key",
                     "calculation_key": calc.key,
                     "conformer_key": calc.conformer_key,
                 },
@@ -328,11 +330,11 @@ def assert_transition_state_calculations_unanchored(
         if calc.geometry_key is not None and calc.geometry_key in species_geometry_keys:
             raise CodedValidationError(
                 W_TRANSITION_STATE_CALCULATION_SPECIES_GEOMETRY,
-                f"calculations['{calc.key}'].geometry_key='{calc.geometry_key}' names a "
+                f"calculations[{calc.key!r}].geometry_key='{calc.geometry_key}' names a "
                 f"species conformer's geometry. A transition-state calculation ran on "
                 f"the saddle point, not on a species minimum.",
                 context={
-                    "field": f"calculations['{calc.key}'].geometry_key",
+                    "field": f"calculations[{calc.key!r}].geometry_key",
                     "calculation_key": calc.key,
                     "geometry_key": calc.geometry_key,
                 },
@@ -450,3 +452,46 @@ def find_scf_source_cycle(sources: Mapping[str, str]) -> list[str] | None:
             node = sources.get(node)
         done.update(path)
     return None
+
+
+def find_dependency_cycle(parents: Mapping[str, Iterable[str]]) -> list[str] | None:
+    """Return a cycle in ``calculation key -> parent calculation keys``, or ``None``.
+
+    Unlike a stability citation, a calculation may depend on several parents, so
+    this is a general directed-graph search (iterative, three colours). The
+    returned list names the depositor's own keys in dependency order, e.g.
+    ``["a", "b"]`` when a depends on b and b depends on a. A shared parent
+    reached by two paths is not a cycle.
+    """
+    done: set[str] = set()
+    for start in parents:
+        if start in done:
+            continue
+        path: list[str] = [start]
+        on_path = {start: 0}
+        stack = [iter(parents.get(start, ()))]
+        while stack:
+            for parent in stack[-1]:
+                if parent in on_path:
+                    return path[on_path[parent]:]
+                if parent in done:
+                    continue
+                on_path[parent] = len(path)
+                path.append(parent)
+                stack.append(iter(parents.get(parent, ())))
+                break
+            else:
+                stack.pop()
+                node = path.pop()
+                del on_path[node]
+                done.add(node)
+    return None
+
+
+def dependency_cycle_message(cycle: list[str]) -> str:
+    """The 422 sentence for a ``depends_on`` ring; names only the depositor's own keys."""
+    ring = " -> ".join([*cycle, cycle[0]])
+    return (
+        f"depends_on forms a cycle: {ring}. A calculation cannot depend, directly or through "
+        f"others, on itself; drop or reverse one of these dependencies."
+    )

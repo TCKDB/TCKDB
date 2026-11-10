@@ -15,7 +15,7 @@ import pytest
 from app.db.models.common import CalculationType, ThermoCalculationRole
 from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.scientific_read.kinetics import _build_kinetics_levels, _CalcMeta
-from app.services.scientific_read.thermo import _LOT_FILTER_ROLE_PRIORITY, _primary_calc_id
+from app.services.scientific_read.thermo import _PRIMARY_CALC_ROLE_PRIORITY, _primary_calc_id
 
 OPT = RoleCalcInfo(lot_id=1)
 SP = RoleCalcInfo(lot_id=2)
@@ -168,7 +168,7 @@ def test_a_typed_composite_outranks_a_legacy_composite_and_an_sp():
 
 
 def test_the_non_composite_part_of_the_thermo_priority_is_the_pre_existing_one():
-    assert list(_LOT_FILTER_ROLE_PRIORITY) == [
+    assert list(_PRIMARY_CALC_ROLE_PRIORITY) == [
         ThermoCalculationRole.sp,
         ThermoCalculationRole.composite,
         ThermoCalculationRole.freq,

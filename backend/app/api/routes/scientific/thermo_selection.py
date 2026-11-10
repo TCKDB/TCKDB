@@ -25,12 +25,14 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_snapshot_db
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.server_faults import ServerFaultRoute
 from app.schemas.reads.scientific_thermo_selection import (
     ThermoSelectionManifest,
     ThermoSelectionRequest,
     ThermoSelectionResponse,
 )
 from app.services.scientific_read.profile import stamp_read_profile
+from app.services.scientific_read.ref_guard import attach_review_statuses
 from app.services.thermo_selection.public import (
     build_response,
     profile_has_floor,
@@ -39,7 +41,7 @@ from app.services.thermo_selection.public import (
     run_selection,
 )
 
-router = APIRouter(prefix="/species-entries")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species-entries")
 
 _ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
@@ -81,10 +83,12 @@ def select_species_thermo(
     """
     _refuse_unknown_query_keys(request)
     entry_id = resolve_species_entry_ref(session, species_entry_ref)
-    selection, _ = run_selection(session, species_entry_id=entry_id, body=body)
+    selection, forwarded_from = run_selection(session, species_entry_id=entry_id, body=body)
     manifest = redact_manifest(selection.manifest, withhold_excluded=profile_has_floor())
     payload = build_response(selection, body=body, species_entry_ref=species_entry_ref, manifest=manifest)
+    payload.forwarded_from_conformer_group_ref = forwarded_from
     stamp_read_profile(payload)
+    attach_review_statuses(payload)
     return payload
 
 

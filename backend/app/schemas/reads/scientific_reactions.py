@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from tckdb_schemas.coded_error import CodedValidationError
 
 from app.db.models.common import RecordReviewStatus
@@ -23,14 +23,18 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_SMILES_LENGTH as _MAX_SMILES_LENGTH,
 )
+from app.schemas.reads.removed_parameters import REACTIONS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
+    CursorToken,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
+    WatermarkEcho,
 )
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 
 
 class ReactionDirectionQuery(str, Enum):
@@ -80,7 +84,15 @@ class ReactionMatchMode(str, Enum):
 
 
 class ReactionSearchRequest(BaseModel):
-    """Service-layer request model for reaction search."""
+    """Service-layer request model for reaction search.
+
+    Every matching record is returned in display order; ``collapse`` and ``selection_policy`` are refused (422).
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_parameters(cls, data):
+        return _REMOVED_PARAMETERS.guard_body(data)
 
     reactants: list[str] = Field(
         default_factory=list,
@@ -107,9 +119,9 @@ class ReactionSearchRequest(BaseModel):
 
     sort: str | None = None  # rejected non-None per v0 sort policy.
 
-    collapse: CollapseMode = CollapseMode.all
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
     @field_validator("reactants", "products")
@@ -257,6 +269,7 @@ class ReactionsBrowseRequest(BaseModel):
     include_deprecated: bool = False
 
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
     @field_validator("reactant_smiles", "product_smiles")
@@ -274,7 +287,7 @@ class ReactionsBrowseRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ReactionParticipantSummary(BaseModel):
+class ReactionParticipantSummary(EntryFacetFields):
     """Reactant or product participant within a reaction-entry record.
 
     Phase B: ``species_entry_ref`` is the public stable handle for the
@@ -296,11 +309,9 @@ class ReactionParticipantSummary(BaseModel):
     consumers parse, so it is left alone here; render from
     ``species_entry_label`` if you need the equation to be unambiguous.
 
-    ``formula`` and ``stoichiometry`` mirror
-    ``ReactionFullSpeciesParticipant`` (``scientific_provenance.py``) — the
-    same RDKit Hill-notation expression and the same
-    ``chem_reaction.reaction_participant`` coefficient, so a search row and
-    a ``/full`` participant row render identically.
+    ``formula`` and ``stoichiometry`` mirror ``ReactionFullSpeciesParticipant`` (``scientific_provenance.py``): each
+    distinct species entry is served once per side, ``stoichiometry`` being how many times it occurs there
+    (``H + H -> H2`` serves the one H entry once, with 2), so a search row and a ``/full`` row render identically.
     """
 
     species_entry_id: int
@@ -358,14 +369,17 @@ class RequestEcho(ProfiledRequestEcho):
 
     filter: dict[str, object]
     sort: OrderEcho
-    collapse: CollapseMode
     include: list[str]
 
 
-class ScientificReactionSearchResponse(BaseModel):
+class ScientificReactionSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/reactions/search."""
 
     request: RequestEcho
     review_summary: ReviewStatusSummary
     records: list[ReactionScientificRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None

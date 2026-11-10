@@ -24,6 +24,13 @@ from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import PhaseKind, RecordReviewStatus, ThermoTargetKind
 from app.schemas.reads.scientific_common import ProfiledRequestEcho
+from app.schemas.reads.scientific_selection_common import (
+    CandidateEligibility,
+    SelectionEligibilityIn,
+    SelectionStepsAnswer,
+    SourceCalculationFilters,
+)
+from app.schemas.reads.scientific_thermo import ThermoModelKindQuery
 
 #: The one quantity this endpoint answers, and the conditions that define it.
 QUANTITY_H298: Final = "formation_enthalpy_298k"
@@ -100,6 +107,15 @@ class ThermoSelectionTargetIn(BaseModel):
         return self
 
 
+class ThermoSelectionFilters(SourceCalculationFilters):
+    """The filters the thermo browse and search offer, with their meaning: model form, origin and the provenance set.
+
+    Applied before eligibility. A filter excludes on a fact and ranks nothing.
+    """
+
+    model_kind: ThermoModelKindQuery | None = None
+
+
 class ThermoSelectionRequest(BaseModel):
     """Request body. ``quantity``, ``temperature_k`` and ``phase`` may be omitted; if given they must agree."""
 
@@ -118,6 +134,14 @@ class ThermoSelectionRequest(BaseModel):
     min_review_status: RecordReviewStatus | None = Field(
         default=None,
         description="Optional floor, applied on top of the read profile's floor (the stricter wins).",
+    )
+    filters: ThermoSelectionFilters = Field(
+        default_factory=ThermoSelectionFilters,
+        description="Narrow the candidates by facts before eligibility, with the thermo search's own filters.",
+    )
+    eligibility: SelectionEligibilityIn = Field(
+        default_factory=SelectionEligibilityIn,
+        description="Lift named eligibility defaults. Every default is applied unless lifted here; the answer lists each.",
     )
 
     @model_validator(mode="after")
@@ -160,6 +184,8 @@ class ThermoSelectionRequestEcho(ProfiledRequestEcho):
     policy: ThermoSelectionPolicy
     result_mode: ThermoSelectionMode
     min_review_status: RecordReviewStatus | None = None
+    filters: dict[str, Any] = Field(default_factory=dict, description="The filters as supplied, normalised.")
+    eligibility: SelectionEligibilityIn = Field(default_factory=SelectionEligibilityIn)
 
 
 class ThermoSelectionReview(BaseModel):
@@ -195,7 +221,7 @@ class ThermoSelectionReason(BaseModel):
     applicability: str
 
 
-class ThermoSelectionCandidate(BaseModel):
+class ThermoSelectionCandidate(CandidateEligibility):
     """One assessed record: its declared claims, its H298 applicability, and whether it competed."""
 
     thermo_ref: str
@@ -205,6 +231,9 @@ class ThermoSelectionCandidate(BaseModel):
     phase: str | None = None
     enthalpy_reference_kind: str | None = None
     target_kind: str | None = None
+    target_declared_by: str | None = Field(
+        default=None, description="Whose claim the target is (depositor or chemkin_format); null when no target is declared."
+    )
     target_group_ref: str | None = None
     protocol_state: str = Field(description="absent, valid or unreadable. Absent is 'not stated', never 'standard'.")
     protocol: dict[str, Any] | None = None
@@ -216,7 +245,9 @@ class ThermoSelectionCandidate(BaseModel):
     representations: list[dict[str, Any]] = Field(default_factory=list)
     blocking: list[str] = Field(default_factory=list)
     advisory: list[str] = Field(default_factory=list)
-    eligible: bool = Field(description="Applicable, with no blocking finding: it competes in the ordering.")
+    eligible: bool = Field(
+        description="Applicable, and no applied eligibility default excludes it: it competes in the ordering."
+    )
 
 
 class ThermoSelectionExcluded(BaseModel):
@@ -240,10 +271,15 @@ class ThermoSelectionDisclosures(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
-class ThermoSelectionResponse(BaseModel):
+class ThermoSelectionResponse(SelectionStepsAnswer):
     """The decision, its basis, and everything it rests on, as public refs only."""
 
     request: ThermoSelectionRequestEcho
+    forwarded_from_conformer_group_ref: str | None = Field(
+        default=None,
+        description="Set when the requested conformer group had been merged into another: the ref that was asked "
+        "for. The decision was made on the group that took its members, which is the one the request echoes.",
+    )
     review: ThermoSelectionReview
     policy: ThermoSelectionPolicyInfo
     outcome: ThermoSelectionOutcome
@@ -288,6 +324,10 @@ class ThermoSelectionManifest(BaseModel):
     """How each candidate's eligibility was assessed: ``version``, the evidence rubric (its ``name`` and ``version``) and the source-finding
     gate. A manifest without a well-formed block is refused on replay. ``policy`` is the decision
     procedure replay re-runs; this is the assessment that produced the recorded ``eligible`` flags, which replay does not rerun."""
+    read_profile: dict[str, Any]
+    """The read profile the manifest was made under: ``profile``, its ``review_floor`` and ``linked_evidence_withheld``, the
+    review statuses whose linked evidence that profile withheld (ADR 0023; format 4). A manifest without a block whose
+    evidence rule matches its profile is refused on replay."""
     request: ThermoSelectionManifestRequest
     subject: dict[str, Any]
     population: dict[str, Any]

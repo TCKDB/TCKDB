@@ -96,10 +96,12 @@ from app.schemas.reads.scientific_network import (
     ScientificNetworkSolveDetailResponse,
     ScientificNetworkSolveRecord,
 )
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read.common import (
     fetch_review_badges,
-    review_floor_predicate,
+    linked_evidence_predicate,
     review_summary,
+    shown_predicate,
     validate_includes,
     where_visible,
 )
@@ -118,6 +120,9 @@ from app.services.scientific_read.network_channel_chemistry import (
 )
 from app.services.scientific_read.network_declarations import solve_declarations, solve_determinations
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
+    STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
 
@@ -163,12 +168,13 @@ def get_network(
 
     badge = _load_review_badge(session, n.id)
     record = build_network_record(
-        session, n=n, badge=badge, includes=includes
+        session, n=n, badge=badge, includes=includes, detail=True
     )
     return ScientificNetworkDetailResponse(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([badge]),
         record=record,
+        **deposit_warning_envelope(session, SubmissionRecordType.network, {n.id: n.public_ref}),
     )
 
 
@@ -183,8 +189,14 @@ def build_network_record(
     n: Network,
     badge: RecordReviewBadge,
     includes: set[str],
+    detail: bool = False,
 ) -> ScientificNetworkRecord:
-    """Project one Network row into the public scientific record shape."""
+    """Project one Network row into the public scientific record shape.
+
+    ``detail`` is True for the network's own detail read. Its solves (and the counts, envelope and kinetics flags that rest
+    on them) are then embedded records of a served page: under ``curated`` they are shown badged unless rejected or
+    deprecated, and the counts agree with the list the page returns (ADR 0023 step 7). A search row keeps the record floor.
+    """
     # --- bulk-load counts + envelope -------------------------------------
     species_count = _count(
         session, NetworkSpecies, NetworkSpecies.network_id == n.id
@@ -198,11 +210,12 @@ def build_network_record(
     channel_count = _count(
         session, NetworkChannel, NetworkChannel.network_id == n.id
     )
-    # Counts, the envelope and the kinetics flags rest on the solves the profile shows (owner decision D5).
+    # Counts, the envelope and the kinetics flags rest on the solves the page shows (owner decision D5; the evidence rule
+    # on a served detail, the record floor on a search row).
     solve_rows = session.scalars(
         where_visible(
             select(NetworkSolve).where(NetworkSolve.network_id == n.id),
-            review_floor_predicate(NetworkSolve.id, SubmissionRecordType.network_solve),
+            shown_predicate(NetworkSolve.id, SubmissionRecordType.network_solve, detail=detail),
         ).order_by(NetworkSolve.id.asc())
     ).all()
     solve_count = len(solve_rows)
@@ -226,7 +239,7 @@ def build_network_record(
                     select(func.count())
                     .select_from(NetworkSolveSourceCalculation)
                     .where(NetworkSolveSourceCalculation.solve_id.in_(solve_ids)),
-                    review_floor_predicate(
+                    linked_evidence_predicate(
                         NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation
                     ),
                 )
@@ -311,7 +324,7 @@ def build_network_record(
 
     channels_block: list[NetworkChannelSummary] | None = None
     if "channels" in includes:
-        channels_block = _build_channels(session, n.id)
+        channels_block = _build_channels(session, n.id, detail=detail)
 
     solves_block: list[NetworkSolveSummary] | None = None
     if "solves" in includes:
@@ -359,14 +372,6 @@ def _count(session: Session, model_cls, where) -> int:
         )
         or 0
     )
-
-
-def _visible_calculation_ids(session: Session, calculation_ids: set[int]) -> set[int]:
-    """The subset of ``calculation_ids`` the active read profile shows (all of them under the default profile)."""
-    visible = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
-    if visible is None or not calculation_ids:
-        return set(calculation_ids)
-    return set(session.scalars(where_visible(select(Calculation.id).where(Calculation.id.in_(calculation_ids)), visible)))
 
 
 def _exists_review_for(
@@ -474,8 +479,10 @@ def _build_literature_summary(
         id=lit.id,
         literature_ref=lit.public_ref,
         title=getattr(lit, "title", None),
+        title_source=getattr(lit, "title_source", None),
         year=getattr(lit, "year", None),
         doi=getattr(lit, "doi", None),
+        isbn=getattr(lit, "isbn", None),
     )
 
 
@@ -496,11 +503,12 @@ def _build_species(
             Species.smiles,
             Species.inchi_key,
             NetworkSpecies.role,
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         )
         .join(
             SpeciesEntry,
@@ -515,6 +523,7 @@ def _build_species(
             species_entry_id=r.species_entry_id,
             species_entry_ref=r.entry_ref,
             species_entry_label=species_entry_label_for(r),
+            **entry_facets_of(r),
             species_ref=r.species_ref,
             role=r.role,
             canonical_smiles=r.smiles,
@@ -596,7 +605,7 @@ def _build_states(
 
 
 def _build_channels(
-    session: Session, network_id: int
+    session: Session, network_id: int, *, detail: bool = False
 ) -> list[NetworkChannelSummary]:
     rows = session.scalars(
         select(NetworkChannel)
@@ -657,7 +666,7 @@ def _build_channels(
         for (cid,) in session.execute(
             where_visible(
                 select(NetworkKinetics.channel_id).where(NetworkKinetics.channel_id.in_([r.id for r in rows])),
-                review_floor_predicate(NetworkKinetics.solve_id, SubmissionRecordType.network_solve),
+                shown_predicate(NetworkKinetics.solve_id, SubmissionRecordType.network_solve, detail=detail),
             ).distinct()
         ).all()
     }
@@ -736,7 +745,7 @@ def _build_solves(
                     NetworkSolveSourceCalculation.solve_id,
                     func.count(),
                 ).where(NetworkSolveSourceCalculation.solve_id.in_(solve_ids)),
-                review_floor_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
+                linked_evidence_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
             ).group_by(NetworkSolveSourceCalculation.solve_id)
         ).all()
     )
@@ -979,6 +988,9 @@ def _bulk_lot_summaries(
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
             core_treatment=lot.core_treatment,
+            relativistic_hamiltonian=lot.relativistic_hamiltonian,
+            pno_truncation=lot.pno_truncation,
+            ri_approximation=lot.ri_approximation,
             aux_basis=lot.aux_basis,
             cabs_basis=lot.cabs_basis,
             solvent_model=lot.solvent_model,
@@ -1156,12 +1168,15 @@ def get_network_solve(
 
     badge = _load_solve_review_badge(session, s.id)
     record = build_network_solve_record(
-        session, s=s, badge=badge, includes=includes
+        session, s=s, badge=badge, includes=includes, detail=True
     )
     return ScientificNetworkSolveDetailResponse(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([badge]),
         record=record,
+        **deposit_warning_envelope(
+            session, SubmissionRecordType.network_solve, {s.id: s.public_ref}
+        ),
     )
 
 
@@ -1171,8 +1186,16 @@ def build_network_solve_record(
     s: NetworkSolve,
     badge: RecordReviewBadge,
     includes: set[str],
+    detail: bool = False,
 ) -> ScientificNetworkSolveRecord:
-    """Project one NetworkSolve row into the public scientific record shape."""
+    """Project one NetworkSolve row into the public scientific record shape.
+
+    ``detail`` is True for the solve's own detail read. Under ``curated`` the transition-state entries it names (its channel
+    barriers) are then embedded records of a served detail and follow the evidence rule: shown with their badge unless
+    rejected or deprecated (ADR 0023 step 7, owner decision Q9). A search row (``detail=False``) counts the barriers of
+    the entries the record floor lists, as a list does.
+    """
+    barrier_entries_shown = _barrier_entry_visible(detail=detail)
     parent = session.get(Network, s.network_id)
     # Owner decision D1: the owner block is always built here; under ``profile=curated`` the ref guard blanks it when the
     # network is hidden (``NetworkContextSummary`` is a registered pointer and the field is nullable).
@@ -1201,15 +1224,10 @@ def build_network_solve_record(
     )
     channel_barrier_count = int(
         session.scalar(
-            where_visible(
-                select(func.count())
-                .select_from(NetworkSolveChannelBarrier)
-                .where(NetworkSolveChannelBarrier.solve_id == s.id),
-                review_floor_predicate(
-                    NetworkSolveChannelBarrier.transition_state_entry_id,
-                    SubmissionRecordType.transition_state_entry,
-                ),
-            )
+            select(func.count())
+            .select_from(NetworkSolveChannelBarrier)
+            .where(NetworkSolveChannelBarrier.solve_id == s.id)
+            .where(barrier_entries_shown)
         )
         or 0
     )
@@ -1219,7 +1237,7 @@ def build_network_solve_record(
                 select(func.count())
                 .select_from(NetworkSolveSourceCalculation)
                 .where(NetworkSolveSourceCalculation.solve_id == s.id),
-                review_floor_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
+                linked_evidence_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
             )
         )
         or 0
@@ -1291,7 +1309,7 @@ def build_network_solve_record(
 
     channel_barrier_block: list[NetworkSolveChannelBarrierSummary] | None = None
     if "channel_barriers" in includes:
-        channel_barrier_block = _build_channel_barriers_for_solve(session, s.id)
+        channel_barrier_block = _build_channel_barriers_for_solve(session, s.id, detail=detail)
 
     sources_block: list[NetworkSourceCalculationSummary] | None = None
     if "source_calculations" in includes:
@@ -1448,7 +1466,7 @@ def _build_state_energies_for_solve(
         )
     ).all():
         if source.zpe_calculation_id is not None and source.zpe_public_ref is None:
-            # The zero-point calculation is hidden: the source is withheld whole (a source without its zero-point
+            # The zero-point calculation is withheld: the source is withheld whole (a source without its zero-point
             # calculation would read as one that cited none).
             continue
         listed_by_state.setdefault(source.state_id, []).append(
@@ -1510,25 +1528,28 @@ def _build_state_energies_for_solve(
 
 
 def _visible_join(calculation, id_column):
-    """``calculation.id = id_column`` that holds only for a calculation the profile shows.
+    """``calculation.id = id_column`` that holds only for a calculation the evidence rule shows.
 
     Used for the per-participant sources of a state energy, where the service (not only the guard) must drop a source
-    whose calculation is hidden: ``partial_sources`` is computed here from the sources that remain, and a guard that
-    deleted the element afterwards would leave it saying the sources are complete.
+    whose calculation is withheld (rejected or deprecated under ``curated``; an unreviewed one is shown, ADR 0023):
+    ``partial_sources`` is computed here from the sources that remain, and a guard that deleted the element afterwards
+    would leave it saying the sources are complete.
     """
-    visible = review_floor_predicate(calculation.id, SubmissionRecordType.calculation)
+    visible = linked_evidence_predicate(calculation.id, SubmissionRecordType.calculation)
     return calculation.id == id_column if visible is None else and_(calculation.id == id_column, visible)
 
 
-def _barrier_entry_visible():
-    visible = review_floor_predicate(
-        NetworkSolveChannelBarrier.transition_state_entry_id, SubmissionRecordType.transition_state_entry
+def _barrier_entry_visible(*, detail: bool):
+    """The channel-barrier rows whose transition-state entry is shown: the record floor for a list row, the evidence rule
+    for the barriers embedded in a served solve detail (ADR 0023 step 7)."""
+    visible = shown_predicate(
+        NetworkSolveChannelBarrier.transition_state_entry_id, SubmissionRecordType.transition_state_entry, detail=detail
     )
     return True if visible is None else visible
 
 
 def _build_channel_barriers_for_solve(
-    session: Session, solve_id: int
+    session: Session, solve_id: int, *, detail: bool = False
 ) -> list[NetworkSolveChannelBarrierSummary]:
     rows = session.execute(
         select(
@@ -1543,7 +1564,7 @@ def _build_channel_barriers_for_solve(
         .join(TransitionStateEntry, TransitionStateEntry.id == NetworkSolveChannelBarrier.transition_state_entry_id)
         .outerjoin(Calculation, Calculation.id == NetworkSolveChannelBarrier.source_calculation_id)
         .where(NetworkSolveChannelBarrier.solve_id == solve_id)
-        .where(_barrier_entry_visible())
+        .where(_barrier_entry_visible(detail=detail))
         .order_by(NetworkChannel.channel_key, ReactionEntry.public_ref, TransitionStateEntry.public_ref)
     ).all()
     return [

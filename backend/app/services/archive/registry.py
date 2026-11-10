@@ -29,6 +29,11 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "applied_group_additivity",
         "applied_group_additivity_component",
         "author",
+        # Deposit-time warnings, stored beside the record they concern (raw record_type/record_id, no FK, like
+        # ``submission_record_link``). A restore that dropped them would hand every record back reading ``not_recorded``.
+        "deposit_warning",
+        # Which deposit warnings were retired, and why.
+        "deposit_warning_retirement",
         # An assembled composite's inputs (ADR 0021): the slot each cited
         # calculation fills. Evidence: a restore that dropped them would hand back
         # a composite energy with no recipe slots behind it.
@@ -77,6 +82,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "composite_scheme_term_input",
         "conformer_assignment_scheme",
         "conformer_group",
+        "conformer_group_merge_pending",
         "conformer_observation",
         "conformer_selection",
         "curation_policy",
@@ -98,6 +104,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "group_additivity_scheme",
         "kinetics",
         "kinetics_arrhenius_entry",
+        "kinetics_bath_gas",
         "kinetics_chebyshev",
         # A complete determination of a rate: identity. A restore that dropped it would hand
         # back records whose determination_id points at nothing.
@@ -284,8 +291,14 @@ PRESEEDED_TABLES: Mapping[
         frozenset(
             (key,)
             for key in (
+                "basis.d_function_type",
+                "basis.f_function_type",
+                "core.frozen",
+                "dispersion.correction",
                 "f12.ansatz",
                 "freq.hessian_method",
+                "grid.angular_max",
+                "grid.integration_accuracy",
                 "grid.quality",
                 "guess.strategy",
                 "integral.accuracy",
@@ -302,19 +315,30 @@ PRESEEDED_TABLES: Mapping[
                 "parallel.nproc",
                 "parallel.nproc_shared",
                 "pno.truncation",
+                "relativistic.hamiltonian",
+                "ri.approximation",
                 "scf.convergence",
                 "scf.convergence_failure_action",
                 "scf.convergence_failure_ignored",
                 "scf.direct",
                 "scf.fallback",
                 "scf.max_cycles",
+                "scf.stability_analysis",
+                "scf.tol_diis_error",
+                "scf.tol_energy_eh",
+                "scf.tol_max_density",
+                "scf.tol_orbital_gradient",
+                "scf.tol_orbital_rotation",
+                "scf.tol_rms_density",
+                "solvation.model",
+                "solvation.solvent",
                 "symmetry.disabled",
             )
         ),
     ),
     "conformer_assignment_scheme": (
         ("name", "version"),
-        frozenset({("torsion_basin", 1)}),
+        frozenset({("torsion_basin", 1), ("torsion_basin", 2), ("torsion_basin", 3)}),
     ),
 }
 

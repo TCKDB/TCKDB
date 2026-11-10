@@ -124,6 +124,7 @@ def run_pass(client, db_session, specs, world, spy: GuardSpy, *, profile: str, w
                 except ref_guard.RefGuardUnplaceable:
                     result = Result(500, "")
                 result.statements = len(statements) - before
+                result.statement_texts = statements[before:]
                 documents = spy.context.documents if spy.context is not None else 0
                 result.documents = documents
                 result.document_tokens = sorted(

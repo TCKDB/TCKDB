@@ -1,4 +1,6 @@
 import { z } from "zod"
+import { listMetaOf, listRequestEchoSchema, type ListMeta } from "./listEnvelope"
+import { pageQuery, type PageRequest } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 import { compositeSchemeSummarySchema, levelOfTheorySchema } from "./scientificSchemas"
 
@@ -38,13 +40,15 @@ const workflowToolReleaseSchema = z.object({
 const literatureSchema = z.object({
     literature_ref: z.string(),
     title: z.string().nullable().optional(),
+    title_source: z.string().nullable().optional(),
     year: z.number().nullable().optional(),
     doi: z.string().nullable().optional(),
+    isbn: z.string().nullable().optional(),
 }).passthrough()
 
 // The LOT summary embedded inside an ECS/FSF record -- a DIFFERENT, smaller
 // shape than the LOT core block below (no `aux_basis`/`cabs_basis`/
-// `solvent_model`/`keywords`/`lot_hash`/`created_at`/`level_of_theory_id`).
+// `solvent_model`/`lot_hash`/`created_at`/`level_of_theory_id`).
 // Reuses `levelOfTheorySchema` (`api/scientificSchemas.ts`) -- the same
 // summary shape every other calculation-adjacent surface already parses
 // LOT summaries with -- rather than a fourth bespoke LOT schema in this
@@ -221,11 +225,14 @@ const levelOfTheoryCoreSchema = z.object({
     dispersion: z.string().nullable().optional(),
     solvent: z.string().nullable().optional(),
     solvent_model: z.string().nullable().optional(),
-    keywords: z.string().nullable().optional(),
     spin_treatment: z.string().nullable().optional(),
-    // ADR 0021 / P7a: `frozen_core`/`all_electron`, or `null` when the
+    // ADR 0021 / P7a: `frozen_core`/`all_electron`/`window`, or `null` when the
     // deposit does not state it (never defaulted to either).
     core_treatment: z.string().nullable().optional(),
+    // Method qualifiers: part of the level's identity only when stated, `null` otherwise.
+    relativistic_hamiltonian: z.string().nullable().optional(),
+    pno_truncation: z.string().nullable().optional(),
+    ri_approximation: z.string().nullable().optional(),
     // The composite recipe this level is bound to, or `null`.
     composite_scheme: compositeSchemeSummarySchema.nullable().optional(),
     // The level written in full by the server (`method/basis (core=...)`), so
@@ -322,9 +329,14 @@ const paginationSchema = z.object({
 const lotBrowseResponseSchema = z.object({
     records: z.array(levelOfTheoryRecordSchema),
     pagination: paginationSchema,
+    request: listRequestEchoSchema.optional(),
 }).passthrough()
 
-export type LevelOfTheoryBrowseResult = { records: LevelOfTheoryRecord[]; pagination: z.infer<typeof paginationSchema> }
+export type LevelOfTheoryBrowseResult = {
+    records: LevelOfTheoryRecord[]
+    pagination: z.infer<typeof paginationSchema>
+    meta: ListMeta
+}
 
 // ---------------------------------------------------------------------------
 // Loaders
@@ -341,30 +353,30 @@ export interface LevelOfTheoryBrowseFilter {
     coreTreatment?: CoreTreatmentValue | "" | null
 }
 
-/** The query string for the browse call: `limit=200` always, `core_treatment`
+/** The query string for the browse call: the first page at `limit=200` unless a page is named, `core_treatment`
  *  only when a value is chosen (an empty choice sends nothing, never an empty
  *  parameter the API would reject). */
-export function levelOfTheoryBrowseQuery(filter: LevelOfTheoryBrowseFilter = {}): URLSearchParams {
-    const query = new URLSearchParams({ limit: "200" })
+export function levelOfTheoryBrowseQuery(filter: LevelOfTheoryBrowseFilter = {}, request?: PageRequest): URLSearchParams {
+    const query = request ? pageQuery(request) : new URLSearchParams({ limit: "200" })
     if (filter.coreTreatment) query.set("core_treatment", filter.coreTreatment)
     return query
 }
 
 /**
  * `/methods` index data -- unfiltered, every level of theory with >=1
- * attributing calculation (§4.1). `limit=200` (the endpoint's own cap) is
- * enough headroom for this archive's 4 rows and any near-term growth;
- * this index does not paginate (§4.1: "the index itself stays exactly as
- * small as v1 planned").
+ * attributing calculation (§4.1). The first page is `limit=200` (the endpoint's
+ * own cap); an archive with more levels than that is paged by the caller from
+ * the response's `pagination`, never shown as if the first page were all of it.
  */
 export async function loadLevelOfTheoryBrowse(
     signal?: AbortSignal,
     filter: LevelOfTheoryBrowseFilter = {},
+    request?: PageRequest,
 ): Promise<LevelOfTheoryBrowseResult> {
-    const endpoint = `/api/v1/scientific/level-of-theories/browse?${levelOfTheoryBrowseQuery(filter)}`
+    const endpoint = `/api/v1/scientific/level-of-theories/browse?${levelOfTheoryBrowseQuery(filter, request)}`
     const payload = await requestScientificJson(endpoint, signal)
     const parsed = parseScientificResponse(lotBrowseResponseSchema, payload, "level-of-theory browse")
-    return { records: parsed.records, pagination: parsed.pagination }
+    return { records: parsed.records, pagination: parsed.pagination, meta: listMetaOf(parsed) }
 }
 
 /**

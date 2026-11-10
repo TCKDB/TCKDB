@@ -174,8 +174,10 @@ def test_a_stated_value_that_makes_a_twin_is_accepted_and_the_twin_is_named_in_e
     assert _reactions(db_session) == [first, second], "identity is unchanged: two rows"
     warning = next(w for w in two.json()["warnings"] if w["code"] == W_REACTION_REVERSIBLE_TWIN)
     other = db_session.scalars(select(ChemReaction).where(ChemReaction.reversible.is_(first))).one()
-    assert other.public_ref in warning["message"]
-    assert str(other.id) not in warning["message"].replace(other.public_ref, "")
+    # The twin is named by its public ref in the context; the sentence carries no ref and no row id.
+    assert warning["context"]["twin_ref"] == other.public_ref
+    assert warning["context"]["reversible"] is second
+    assert other.public_ref not in warning["message"] and str(other.id) not in warning["message"]
     assert warning["field"] == "reaction.reversible"
 
 

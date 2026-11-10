@@ -37,6 +37,7 @@ from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
 )
 
 
@@ -116,7 +117,7 @@ class ScientificCompositeSchemeRecord(BaseModel):
     bound_levels_of_theory: list[CompositeSchemeBoundLevel]
 
 
-class ScientificCompositeSchemeDetailResponse(BaseModel):
+class ScientificCompositeSchemeDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/composite-schemes/{ref}``."""
 
     request: RequestEcho

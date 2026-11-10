@@ -27,14 +27,17 @@ from app.services.calculation_resolution import (
 )
 from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
+from app.services.deposit_warnings import note_anchor, note_calculation_keys
 from app.services.local_key_resolution import resolve_calculation_key
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scan_coordinate_conformance import collect_scan_coordinate_warnings
 from app.services.species_resolution import resolve_species_entry
 from app.services.transport_resolution import resolve_and_create_transport
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +113,16 @@ def persist_transport_upload(
                 session, [calc.id for calc in calculations_by_key.values()]
             )
         )
+        warnings_out.extend(
+            collect_scan_coordinate_warnings(
+                session, [calc.id for calc in calculations_by_key.values()]
+            )
+        )
+        warnings_out.extend(
+            collect_wavefunction_reliability_warnings(
+                session, [calc.id for calc in calculations_by_key.values()]
+            )
+        )
 
     resolved_source_calcs = [
         TransportSourceCalculationCreate(
@@ -142,6 +155,8 @@ def persist_transport_upload(
         RecordRef(SubmissionRecordType.calculation, c.id)
         for c in calculations_by_key.values()
     )
+    note_anchor(session, "", SubmissionRecordType.transport, transport.id)
+    note_calculation_keys(session, {key: calc.id for key, calc in calculations_by_key.items()})
     apply_review_policy(
         session, targets=targets, policy=review_policy, created_by=created_by
     )

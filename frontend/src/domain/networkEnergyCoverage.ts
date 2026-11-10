@@ -58,3 +58,20 @@ export function computeSpeciesEnergyCoverage(
 export function coverageFraction(coveredCount: number, totalCount: number): { covered: number; total: number } {
     return { covered: coveredCount, total: totalCount }
 }
+
+/**
+ * Which deposited solve the state and channel energies on a network page were read from. The page reads ONE solve's
+ * energies, the first the archive lists; with several solves deposited that is a choice the page made, not a
+ * property of the network, so it is named. `null` when there is no solve to name.
+ */
+export function solveEnergySourceSentence(solveRefs: readonly string[]): string | null {
+    if (solveRefs.length === 0) return null
+    if (solveRefs.length === 1) return `These energies are read from the network's one deposited solve, ${solveRefs[0]}.`
+    return `These energies are read from solve ${solveRefs[0]}, the first of ${solveRefs.length} deposited solves in the `
+        + "archive's order. The other solves' energies are not read on this page, and the first is not preferred."
+}
+
+/** What the row order of the solve's state-energy table is. */
+export const STATE_ENERGY_ORDER_NOTE =
+    "Rows are listed from the lowest relative energy to the highest. That is the order of the rows only; it "
+    + "ranks nothing."

@@ -429,7 +429,9 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_codes: s
 #: statmech pull request would have brought it to 699_942 bytes and the one after would have crossed.
 #: Each surface keeps its own code table and its one-line meanings; only the long per-code entries moved.
 #: 686_228 to 588_881 bytes, with the ceiling left at 700_000.
-MARKDOWN_BYTE_CEILING = 700_000
+#:
+#: 663_683 to about 710_000 bytes at 0.162.0 (more register entries, each listed on every surface that reaches it).
+MARKDOWN_BYTE_CEILING = 725_000
 
 
 def test_the_contract_stays_readable_in_pieces(committed_markdown: str) -> None:

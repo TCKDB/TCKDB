@@ -893,7 +893,7 @@ Tests column lists representative test files (not exhaustive).
 | `transition_state_selection` | — | — | — | — | — | **Table not in ORM** |
 | `conformer_assignment_scheme` | — | — | — | — | — | ORM exists but no API |
 | `conformer_group` | ✓ | ✓ | (in species composite) | `ConformerGroupRead`/`Detail` | `test_api_reads.py` | — |
-| `conformer_observation` | ✓ | ✓ | (in species composite) | `ConformerObservationRead` | `test_api_lowest_sp_conformer.py` | — |
+| `conformer_observation` | ✓ | ✓ | (in species composite) | `ConformerObservationRead` | — | — |
 | `conformer_selection` | (POST create) | — | — | `ConformerSelectionRead` | `test_api_conformer_selections.py` | **No GET surface** |
 
 ### 5.2 Calculations
@@ -1123,8 +1123,8 @@ or a calculation type** — only species-rooted search exists.
 Scientific endpoints use a richer envelope
 (`backend/app/schemas/reads/scientific_common.py:55-65`):
 `offset` (≥0, default 0), `limit` (1–200, default 50),
-`returned` (actual page count), `total` (pre-collapse, post-filter), and
-`post_collapse_total` (post-collapse, pre-page count).
+`returned` (actual page count) and `total` (post-filter). (An earlier version
+also carried `post_collapse_total`; it was removed when `collapse` was.)
 Bounds enforced in `validate_pagination()` (services/scientific_read/common.py:59-83):
 `offset` capped at `settings.public_max_offset`, `limit` capped at
 `min(MAX_LIMIT=200, settings.public_max_limit)`. Excess → 422.

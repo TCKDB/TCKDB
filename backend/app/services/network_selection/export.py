@@ -62,6 +62,7 @@ from app.services.scientific_read.chemkin_serialize import (
     _flatten_cheb,
     _formula,
     _sanitize_name,
+    structure_comment,
 )
 from app.services.scientific_read.profile import current_read_profile
 from app.services.selection_kernel import Outcome
@@ -348,11 +349,31 @@ def _load_fits(session: Session, network_ref: str, solve_ref: str, fit_refs: lis
 
 def _species_content(session: Session, refs: set[str]) -> dict[str, dict[str, Any]]:
     rows = session.execute(
-        select(SpeciesEntry.public_ref, Species.smiles, Species.public_ref)
+        select(
+            SpeciesEntry.public_ref,
+            Species.smiles,
+            Species.public_ref,
+            SpeciesEntry.stereo_descriptor,
+            Species.multiplicity,
+            SpeciesEntry.stereo_resolution,
+            SpeciesEntry.stereo_smiles,
+            SpeciesEntry.isotope_key,
+        )
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.public_ref.in_(refs))
     ).tuples()
-    return {entry_ref: {"smiles": smiles, "species_ref": species_ref} for entry_ref, smiles, species_ref in rows}
+    return {
+        entry_ref: {
+            "smiles": smiles,
+            "species_ref": species_ref,
+            "stereo_descriptor": descriptor,
+            "multiplicity": multiplicity,
+            "stereo_resolution": resolution,
+            "stereo_smiles": stereo_smiles,
+            "isotope_key": isotope_key,
+        }
+        for entry_ref, smiles, species_ref, descriptor, multiplicity, resolution, stereo_smiles, isotope_key in rows
+    }
 
 
 def _solve_origin(session: Session, manifest: dict[str, Any], solve_ref: str) -> dict[str, Any]:
@@ -540,7 +561,15 @@ def _chemkin_files(
         ]
     lines += ["ELEMENTS", " ".join(elements) or " ", "END", "", "SPECIES"]
     for ref in sorted(names):
-        lines.append(f"{names[ref]}   ! SMILES={species[ref]['smiles']} ref={species[ref]['species_ref']}")
+        comment = structure_comment(
+            species[ref]["smiles"],
+            stereo_descriptor=species[ref]["stereo_descriptor"],
+            stereo_resolution=species[ref]["stereo_resolution"],
+            stereo_smiles=species[ref]["stereo_smiles"],
+            multiplicity=species[ref]["multiplicity"],
+            isotope_key=species[ref]["isotope_key"],
+        )
+        lines.append(f"{names[ref]}   ! {comment} ref={species[ref]['species_ref']}")
     lines += ["END", "", f"REACTIONS {_EA_UNIT_HEADERS.get(choice.energy_units.lower(), 'CAL/MOLE')} MOLES"]
     for equation, fit in blocks:
         lines.extend(_reaction_block(equation, fit, choice.energy_units, origin_note))

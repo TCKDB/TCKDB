@@ -38,6 +38,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from app.db.models.common import ArrheniusAUnits, NetworkChannelKind, NetworkKineticsModelKind
+from app.schemas.reads.scientific_common import ScientificResponse
 from app.schemas.reads.scientific_network_kinetics_evaluate import (
     NetworkKineticsEvaluatedPoint,
 )
@@ -106,7 +107,7 @@ class NetworkKineticsBatchFitEvaluation(BaseModel):
     points: list[NetworkKineticsEvaluatedPoint] = Field(default_factory=list)
 
 
-class NetworkKineticsBatchEvaluateResponse(BaseModel):
+class NetworkKineticsBatchEvaluateResponse(ScientificResponse):
     """Response envelope for
     ``POST /scientific/networks/{ref}/kinetics/evaluate``.
 

@@ -651,27 +651,20 @@ def test_structure_search_pushes_limit_into_sql():
     exact_start = source.index("def _run_exact_query")
     end = source.index("# ----", exact_start)
 
-    substructure = source[sub_start:sim_start]
-    similarity = source[sim_start:exact_start]
-    exact = source[exact_start:end]
-
+    # The three builders hand the matched set to one shared page query, which is where LIMIT / OFFSET / ORDER BY live.
     for name, body in (
-        ("substructure", substructure),
-        ("similarity", similarity),
-        ("exact", exact),
+        ("substructure", source[sub_start:sim_start]),
+        ("similarity", source[sim_start:exact_start]),
+        ("exact", source[exact_start:end]),
     ):
-        assert "LIMIT :row_limit" in body, (
-            f"{name} builder must push LIMIT into SQL; row materialization "
-            "must be bounded server-side."
-        )
-        assert "OFFSET :row_offset" in body, (
-            f"{name} builder must push OFFSET into SQL; deep pagination "
-            "must not require materializing skipped rows."
-        )
-        assert "ORDER BY" in body, (
-            f"{name} builder must declare ORDER BY before LIMIT so "
-            "pagination is deterministic."
-        )
+        assert "_keyset_page(" in body, f"{name} builder must page through the shared SQL page query"
+
+    page_start = source.index("def _keyset_page")
+    page_end = source.index("def _run_substructure_query")
+    page_query = source[page_start:page_end]
+    assert "LIMIT :row_limit" in page_query, "the page query must push LIMIT into SQL"
+    assert "OFFSET :row_offset" in page_query, "the page query must push OFFSET into SQL"
+    assert "ORDER BY" in page_query, "the page query must declare ORDER BY before LIMIT"
 
 
 def test_broad_substructure_respects_requested_limit(client, db_session):

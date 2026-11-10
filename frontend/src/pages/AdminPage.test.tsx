@@ -62,8 +62,8 @@ describe("who can see /admin", () => {
         ])
         renderPage()
 
-        expect(await screen.findByRole("combobox", { name: "Role for noah" })).toHaveValue("user")
-        expect(screen.getByRole("combobox", { name: "Role for calvin" })).toHaveValue("admin")
+        expect(await screen.findByRole("combobox", { name: /^noah/  })).toHaveValue("user")
+        expect(screen.getByRole("combobox", { name: /^calvin/  })).toHaveValue("admin")
     })
 
     it("a signed-in non-admin is told, and no account list is fetched", async () => {
@@ -104,14 +104,14 @@ describe("changing a role", () => {
         }))
 
         renderPage()
-        const select = await screen.findByRole("combobox", { name: "Role for noah" })
+        const select = await screen.findByRole("combobox", { name: /^noah/  })
         await userEvent.selectOptions(select, "curator")
 
         // Both halves: the request carried the right id and role, AND the
         // rendered row moved. A test asserting only the select's value would
         // pass on a control that never called the server at all.
         expect(patched).toEqual({ id: "2", body: { role: "curator" } })
-        expect(await screen.findByRole("combobox", { name: "Role for noah" })).toHaveValue("curator")
+        expect(await screen.findByRole("combobox", { name: /^noah/  })).toHaveValue("curator")
     })
 
     it("shows the archive's own sentence when it refuses to remove the last admin", async () => {
@@ -124,7 +124,7 @@ describe("changing a role", () => {
         }, { status: 409 })))
 
         renderPage()
-        const select = await screen.findByRole("combobox", { name: "Role for calvin" })
+        const select = await screen.findByRole("combobox", { name: /^calvin/  })
         await userEvent.selectOptions(select, "curator")
 
         const alert = await screen.findByRole("alert")
@@ -133,7 +133,7 @@ describe("changing a role", () => {
         expect(alert).toHaveTextContent(/promote another account to admin first/i)
         expect(alert.textContent).not.toContain("last_admin_demotion:")
         // And the row must not pretend the change happened.
-        expect(screen.getByRole("combobox", { name: "Role for calvin" })).toHaveValue("admin")
+        expect(screen.getByRole("combobox", { name: /^calvin/  })).toHaveValue("admin")
     })
 
     it("a failed change leaves the other rows alone", async () => {
@@ -147,11 +147,11 @@ describe("changing a role", () => {
 
         renderPage()
         await userEvent.selectOptions(
-            await screen.findByRole("combobox", { name: "Role for noah" }), "curator")
+            await screen.findByRole("combobox", { name: /^noah/  }), "curator")
 
         await screen.findByRole("alert")
-        expect(screen.getByRole("combobox", { name: "Role for calvin" })).toHaveValue("admin")
-        expect(screen.getByRole("combobox", { name: "Role for noah" })).toHaveValue("user")
+        expect(screen.getByRole("combobox", { name: /^calvin/  })).toHaveValue("admin")
+        expect(screen.getByRole("combobox", { name: "noah" })).toHaveValue("user")
     })
 })
 
@@ -169,7 +169,7 @@ describe("what the page does not show", () => {
         })))
 
         renderPage()
-        await screen.findByRole("combobox", { name: "Role for noah" })
+        await screen.findByRole("combobox", { name: /^noah/  })
 
         const table = screen.getByRole("table")
         expect(within(table).queryByText(/noah@example\.com/)).not.toBeInTheDocument()
@@ -193,7 +193,7 @@ describe("what the page does not show", () => {
         meIs(admin)
         usersAre([userRow()])
         renderPage()
-        await screen.findByRole("combobox", { name: "Role for noah" })
+        await screen.findByRole("combobox", { name: /^noah/  })
 
         const hrefs = screen.queryAllByRole("link").map((a) => a.getAttribute("href"))
         for (const path of ["/review-queue", "/admin/curator-queue", "/admin/machine-review-inspection"]) {

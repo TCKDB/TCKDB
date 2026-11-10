@@ -21,7 +21,14 @@ fix:
   (a key added or removed, a value changed, a check's evidence edited) moves the digest.
 
 The digests were re-captured once, in versioning PR-4, because the stored snapshot's rubric block and reason
-tokens changed shape (name plus integer version). Grades and checks did not change. Otherwise these literals are
+tokens changed shape (name plus integer version), and again when the unreachable ``cycle_detected`` evidence
+key was dropped from ``upstream_dependency_snapshot`` (the dependency graph is acyclic by trigger). Grades and
+checks did not change either time. The digest of
+``declaration_with_members_and_sources`` was re-captured a third time when an ensemble member's relative energy gained
+its stated convention: the scenario's member carries an energy, so its row now carries the convention too (a member
+with no energy keeps its digest, see ``snapshot_defaults``). Grade and checks did not change. All twelve were re-captured a fourth time when ``level_of_theory.keywords`` was dropped: a snapshot holds every
+mapped column of a level of theory, so removing a column removes its key from every digest (a *removed* column cannot
+be listed in ``snapshot_defaults``, which covers added ones). Grades and checks did not change. Otherwise these literals are
 expected to stay byte-identical when the owner-scoped rubric lands. If one of them changes,
 species grading changed: that is the failure this file exists to catch, not a literal to refresh.
 """
@@ -424,28 +431,6 @@ def _dependency_edges(db_session, user):
     return statmech
 
 
-def _dependency_cycle(db_session, user):
-    """Two source calculations that are each other's parent.
-
-    Nothing in the schema forbids the pair (the primary key is the ordered pair, and self-edges are the only edge
-    refused), so the closure walk's cycle branch is reachable from stored data.
-    """
-    entry = _entry(db_session)
-    statmech = make_statmech(db_session, species_entry=entry)
-    calcs = _opt_freq_sp(db_session, entry, statmech, user=user)
-    opt, freq = calcs[CalculationType.opt], calcs[CalculationType.freq]
-    db_session.add_all(
-        [
-            _edge(opt, freq, CalculationDependencyRole.freq_on),
-            _edge(freq, opt, CalculationDependencyRole.optimized_from),
-        ]
-    )
-    db_session.flush()
-    for calculation in calcs.values():
-        db_session.refresh(calculation)
-    return statmech
-
-
 def _scan_with_result(db_session, user):
     entry = _entry(db_session)
     statmech = make_statmech(db_session, species_entry=entry)
@@ -557,6 +542,7 @@ def _declaration_with_members_and_sources(db_session, user):
                 member_statmech_id=member.id,
                 counting_multiplicity=1,
                 relative_energy_kj_mol=0.0,
+                relative_energy_convention="electronic_plus_zpe",
             ),
             StatmechModelSource(
                 declaration_id=declaration.id,
@@ -607,7 +593,6 @@ SCENARIOS = {
     "estimated_with_literature": _estimated_with_literature,
     "estimated_without_literature": _estimated_without_literature,
     "dependency_edges": _dependency_edges,
-    "dependency_cycle": _dependency_cycle,
     "scan_source_with_result": _scan_with_result,
     "composite_source": _composite_source,
     "object_missing_break_on_source_artifact": _object_missing_break,
@@ -652,7 +637,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "f2199624f6b5eb86bd6ab76e654c773060b3cd7ad084da5f0a8cc753e4fdf60f",
+        "digest": "bce5a4c754c879dd8947c52612e41d3bf398da454fa39c2261f3b30596303b26",
     },
     "computed_no_sources": {
         "grade": "insufficient",
@@ -671,7 +656,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "0146b4628683eb575996a492d5d435f9703ef3abb439e43e33697be432901d7c",
+        "digest": "7ffedf9cf7f260b7da634e97b418446a6868409d9180f2d084504e66c07b18aa",
     },
     "computed_opt_freq_sp": {
         "grade": "described",
@@ -690,7 +675,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "8cc2bb4093c98e96d36b1ab2e5101733320a8420f74bfd250ea38d596b464e9c",
+        "digest": "21f7293ca99a98696bc7ea5ea680c292a56b6eec7af162188aaa39c1c7d07ee6",
     },
     "custody_break_on_source_artifact": {
         "grade": "described",
@@ -709,7 +694,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'missing'],
         ],
-        "digest": "f624b537e33a61f5d5a7dd955a3583caca2a3f4aae2f82ff38711e850f2342b7",
+        "digest": "471ea39555456fc7faffe19c5defac945b0d0e3c9fa284241b4d9642bb3155d4",
     },
     "declaration_with_members_and_sources": {
         "grade": "described",
@@ -728,26 +713,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "0b2662750a1ada19bc2cf2c5d83f7a6051ddf55a7f1063040301494782ae6c80",
-    },
-    "dependency_cycle": {
-        "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
-        "checks": [
-            ['target_identity', 'described', 'passed'],
-            ['scientific_context', 'described', 'passed'],
-            ['source_attribution', 'described', 'passed'],
-            ['record_type_audit_policy', 'auditable', 'missing'],
-            ['calculation_metadata', 'auditable', 'missing'],
-            ['typed_output_evidence', 'auditable', 'missing'],
-            ['verified_output_artifact_bytes', 'auditable', 'missing'],
-            ['source_role_preservation', 'auditable', 'missing'],
-            ['preserved_input_artifacts', 'rerunnable', 'missing'],
-            ['execution_parameter_snapshot', 'rerunnable', 'missing'],
-            ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
-            ['evidence_warnings_clear', 'rerunnable', 'passed'],
-        ],
-        "digest": "c34b3c19bfaeac24c935d936fc28088dd723471073f332eace4e4c997dad7ac5",
+        "digest": "81b4f8eb98d02003887b1baf421c73ad7989bf3c978dc17260384a8af314556b",
     },
     "dependency_edges": {
         "grade": "described",
@@ -766,7 +732,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "847d46ee843541cc7970972b864cf430c114b14adb342648b90757e0cad9dd4f",
+        "digest": "58e3c29bb360e1820828eb5131b8ace2fe07bbdec988e83230ec1bf170f893be",
     },
     "estimated_with_literature": {
         "grade": "described",
@@ -785,7 +751,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "43761f23bbfcca30da67c0542ee7eecf16b60e11614d8c309b518649988c2e8a",
+        "digest": "77ebb13fd7ff59e890c9a236457e6e71f594713d8e0c8eba24f81c968d912405",
     },
     "estimated_without_literature": {
         "grade": "insufficient",
@@ -804,7 +770,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "8034ae2aa024e9a8ea9cdd57d43e3aa02e81fd1ffc4cd9cf8c2df6372b1c63b3",
+        "digest": "ffe4479e5e458d349cd34d9bad44c0e87068b5e69095b8e9007314f359f3f31b",
     },
     "experimental_with_literature": {
         "grade": "described",
@@ -823,7 +789,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "d2509d54848fab242fc4b89cafba4b22c7bfe44260d622c6f5f3d8dc1929ca5b",
+        "digest": "12165f53a83ee2c3c3b802a2f3e5499e9d2262a0299ed98236cbfa6b52957d39",
     },
     "experimental_without_literature": {
         "grade": "insufficient",
@@ -842,7 +808,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "9937334ef6dfc198fbf3da2074011e253dbb74f0e0f9d8599856f553f32e470d",
+        "digest": "c0c5d05e6964aa528380e156db60da0c9c95c8547aef0b2ac9559778532a2a8b",
     },
     "external_symmetry_only": {
         "grade": "described",
@@ -861,7 +827,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "26f02c83a30dfc9727008b85ca9851b95dfc6d32585ed1bb7b51be0b6594b922",
+        "digest": "4991e9946c565dba17b6dc4b86b4582c3c9b01293c5983455727e344f1f06763",
     },
     "object_missing_break_on_source_artifact": {
         "grade": "described",
@@ -880,7 +846,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'missing'],
         ],
-        "digest": "bc9b91697fb98188214a072ed951a93e7c7e4a0a4b46b9ab3a089df28b4bc833",
+        "digest": "4b7d4769688ab4872075ac53264b374c2e958d26dd773a1a5dbc7e78f1ec7bb6",
     },
     "point_group_only": {
         "grade": "described",
@@ -899,7 +865,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "e98e5dfada93b263a2891bc7ec95f80d6a476b567be30ddeb0802350eefb1deb",
+        "digest": "ad061614703ae66030be3609498daa00d244fe32e102eb53d466df5b2cd8dd71",
     },
     "scan_source_with_result": {
         "grade": "described",
@@ -918,7 +884,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "e16bd41713bdfe7d285b71a7fbdec3f2f027a19438f04bf9987bb6105d6d2539",
+        "digest": "77262b449faf141eac7723328a897e55fc1f64308f398f10030fd98cdb1fe2d1",
     },
     "source_geometries_and_parameters": {
         "grade": "described",
@@ -937,7 +903,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "cbd84546070f548d0a382a0e89cca98cb0b0ad759653dd5d6ae28a79292eb30b",
+        "digest": "ab93dd2570a70270304e3360040f5c988c3fe604c0341cff29be127627098a8b",
     },
     "sparse": {
         "grade": "insufficient",
@@ -956,7 +922,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "a1282654af73123cddac60213723493ce057f04d710e647c49fad8f91cb27ed3",
+        "digest": "d047342cd4bf6c06ea25b2808f24de41fef40026a33364bfe109543cfd08a0bb",
     },
     "torsion_with_scan": {
         "grade": "described",
@@ -975,7 +941,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "13b44054ce0f6d5120d6101ab1c58a6daaf311fc140b45d298dc9a2165d06b53",
+        "digest": "b12f0c8d256e60a266b9fb7606008e3c795830532c97778af79b6effc6bc0912",
     },
     "with_model_declaration": {
         "grade": "described",
@@ -994,7 +960,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "7f0bfa89c1cd15a2d2801bd22802753f11674f745ae9b3e97b246e3e13bd9002",
+        "digest": "5e648227532b96a02fd1dad2e9c9772d69fcba4b1e8d941286176604ac528e11",
     },
 }
 
@@ -1025,10 +991,6 @@ def test_the_new_shapes_reach_the_branches_they_exist_for(db_session, _api_test_
     def evidence(name):
         context = _context(db_session, name, user)
         return context, list(context["calculation_evidence"].values())
-
-    context, _ = evidence("dependency_cycle")
-    check = next(c for c in context["checks"] if c["name"] == "upstream_dependency_snapshot")
-    assert check["evidence"]["cycle_detected"] is True
 
     _, calcs = evidence("dependency_edges")
     assert sum(len(c["upstream_dependencies"]) for c in calcs) == 2

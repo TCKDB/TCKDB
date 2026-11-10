@@ -43,13 +43,15 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     ANYWHERE_SCOPE,
     TRANSITION_STATE_RECORD_SECTIONS,
     omit_trust_unless_requested,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
+from app.chemistry.method_families import MethodFamily
 from app.db.models.common import (
     RecordReviewStatus,
     TransitionStateEntryStatus,
@@ -65,7 +67,7 @@ from app.services.scientific_read.transition_states_search import (
     browse_transition_states,
 )
 
-router = APIRouter(prefix="/transition-states")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/transition-states")
 
 
 @router.get(
@@ -90,6 +92,15 @@ def scientific_transition_states_browse(
     software_version: str | None = Query(None),
     workflow_tool: str | None = Query(None),
     workflow_tool_version: str | None = Query(None),
+    method_family: list[MethodFamily] | None = Query(
+        None,
+        description=(
+            "Classification of the calculation's method (not a measure of accuracy); repeat the parameter for "
+            "several. Matched on the same calculation as method=/basis=/software=."
+        ),
+    ),
+    dft_rung_min: int | None = Query(None, ge=1, le=5, description="Lowest DFT rung (1 LDA .. 5 double hybrid). Implies method_family=dft."),
+    dft_rung_max: int | None = Query(None, ge=1, le=5, description="Highest DFT rung. Implies method_family=dft."),
     family: str | None = Query(
         None,
         description=(
@@ -112,7 +123,8 @@ def scientific_transition_states_browse(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ) -> ScientificTransitionStatesBrowseResponse:
     """List transition-state entries with no filter required, for a catalogue page.
@@ -148,7 +160,8 @@ def scientific_transition_states_browse(
     equation string) -- enough to identify the record and say what
     reaction it belongs to without a second request.
     """
-    request = TransitionStatesBrowseRequest(
+    request = caller_input(
+        TransitionStatesBrowseRequest,
         status=status,
         charge=charge,
         multiplicity=multiplicity,
@@ -166,6 +179,9 @@ def scientific_transition_states_browse(
         software_version=software_version,
         workflow_tool=workflow_tool,
         workflow_tool_version=workflow_tool_version,
+        method_family=method_family,
+        dft_rung_min=dft_rung_min,
+        dft_rung_max=dft_rung_max,
         family=family,
         participant_smiles=participant_smiles,
         min_review_status=min_review_status,
@@ -174,6 +190,7 @@ def scientific_transition_states_browse(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = browse_transition_states(session, request)

@@ -35,6 +35,7 @@ from app.db.models.thermo import Thermo
 from app.db.models.transport import Transport
 from app.schemas.reads.scientific_assessment import (
     DeterministicTrustSummary,
+    MadeUnder,
     PublicAssessmentSummary,
     ReproducibilityAssessmentSummary,
 )
@@ -43,6 +44,7 @@ from app.services.reproducibility_assessment import (
 )
 from app.services.reproducibility_rubric import (
     evaluate_reproducibility,
+    reproducibility_rubric_for,
 )
 from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
 from app.services.scientific_read.statmech import STATMECH_TRUST_EAGER_LOADS
@@ -58,11 +60,12 @@ from app.services.trust import (
 from app.services.trust.models import EvidenceEvaluation
 
 
-def attach_kinetics_assessments(session: Session, payload: Any) -> Any:
+def attach_kinetics_assessments(session: Session, payload: Any, *, check_inputs: bool = False) -> Any:
     """Attach summaries to detail or chemistry-search kinetics records."""
     records = list(_kinetics_records(payload))
     _attach(
         session,
+        check_inputs=check_inputs,
         records=records,
         record_type=SubmissionRecordType.kinetics,
         model=Kinetics,
@@ -72,11 +75,12 @@ def attach_kinetics_assessments(session: Session, payload: Any) -> Any:
     return payload
 
 
-def attach_thermo_assessments(session: Session, payload: Any) -> Any:
+def attach_thermo_assessments(session: Session, payload: Any, *, check_inputs: bool = False) -> Any:
     """Attach summaries to detail or chemistry-search thermo records."""
     records = list(_thermo_records(payload))
     _attach(
         session,
+        check_inputs=check_inputs,
         records=records,
         record_type=SubmissionRecordType.thermo,
         model=Thermo,
@@ -86,10 +90,11 @@ def attach_thermo_assessments(session: Session, payload: Any) -> Any:
     return payload
 
 
-def attach_statmech_assessments(session: Session, payload: Any) -> Any:
+def attach_statmech_assessments(session: Session, payload: Any, *, check_inputs: bool = False) -> Any:
     """Attach summaries to statmech detail, search, and subresource records."""
     _attach(
         session,
+        check_inputs=check_inputs,
         records=list(_statmech_records(payload)),
         record_type=SubmissionRecordType.statmech,
         model=Statmech,
@@ -99,10 +104,11 @@ def attach_statmech_assessments(session: Session, payload: Any) -> Any:
     return payload
 
 
-def attach_transport_assessments(session: Session, payload: Any) -> Any:
+def attach_transport_assessments(session: Session, payload: Any, *, check_inputs: bool = False) -> Any:
     """Attach summaries to transport detail, search, and subresource records."""
     _attach(
         session,
+        check_inputs=check_inputs,
         records=list(_transport_records(payload)),
         record_type=SubmissionRecordType.transport,
         model=Transport,
@@ -179,6 +185,7 @@ def _evaluate(
     model: type[Any],
     eager_loads: tuple[Any, ...],
     evaluator: Callable[[Any], EvidenceEvaluation],
+    targets_out: dict[int, Any] | None = None,
 ) -> dict[int, EvidenceEvaluation]:
     """Evaluate the deterministic rubric for a whole page in one load.
 
@@ -191,6 +198,8 @@ def _evaluate(
         select(model).where(model.id.in_(ids)).options(*eager_loads)
     ).all()
     target_by_id = {target.id: target for target in targets}
+    if targets_out is not None:
+        targets_out.update(target_by_id)
     return {
         record_id: evaluator(target_by_id[record_id])
         for record_id in ids
@@ -242,6 +251,7 @@ def attach_trust_fragments(
 def _attach(
     session: Session,
     *,
+    check_inputs: bool,
     records: list[tuple[Any, int]],
     record_type: SubmissionRecordType,
     model: type[Any],
@@ -251,12 +261,14 @@ def _attach(
     if not records:
         return
     ids = list(dict.fromkeys(record_id for _, record_id in records))
+    targets: dict[int, Any] = {}
     evaluations = _evaluate(
         session,
         ids=ids,
         model=model,
         eager_loads=eager_loads,
         evaluator=evaluator,
+        targets_out=targets,
     )
     latest = _latest_assessments(session, record_type=record_type, record_ids=ids)
 
@@ -270,12 +282,23 @@ def _attach(
                 rubric_version=trust.rubric_version,
                 grade=trust.label.value,
                 hard_fail=(trust.hard_fail_reason.value if trust.hard_fail_reason is not None else None),
+                # Evaluated just now, under the rubric version in force: current by construction.
+                made_under=MadeUnder(
+                    rubric=trust.rubric,
+                    assessed_version=trust.rubric_version,
+                    current_rubric=trust.rubric,
+                    current_version=trust.rubric_version,
+                    state="current",
+                    inputs_checked=True,
+                ),
             ),
             reproducibility=_reproducibility_summary(
                 session,
                 record_type=record_type,
                 record_id=record_id,
                 assessment=assessment,
+                target=targets.get(record_id),
+                check_inputs=check_inputs,
             ),
         )
 
@@ -322,17 +345,60 @@ def _reproducibility_summary(
     record_type: SubmissionRecordType,
     record_id: int,
     assessment: RecordReproducibilityAssessment | None,
+    target: Any | None = None,
+    check_inputs: bool = False,
 ) -> ReproducibilityAssessmentSummary:
     if assessment is None:
-        return ReproducibilityAssessmentSummary(state="unassessed")
+        return ReproducibilityAssessmentSummary(state="unassessed", made_under=MadeUnder(state="unassessed", inputs_checked=None))
 
+    if not check_inputs:
+        # Whether the inputs of a stored assessment still match is a full re-evaluation (tens of statements) per record,
+        # so only a route that is asked to (and bounds its page) does it. Here the rubric name and version are compared
+        # and nothing is claimed about the inputs.
+        rubric = reproducibility_rubric_for(target)
+        rubric_is_current = (assessment.rubric_name, assessment.rubric_version) == (rubric.name, rubric.version)
+        state = "inputs_unchecked" if rubric_is_current else "stale"
+        return ReproducibilityAssessmentSummary(
+            state=state,
+            assessment_ref=assessment.public_ref,
+            rubric=assessment.rubric_name,
+            rubric_version=assessment.rubric_version,
+            grade=assessment.grade,
+            assessed_at=assessment.assessed_at,
+            made_under=MadeUnder(
+                rubric=assessment.rubric_name,
+                assessed_version=assessment.rubric_version,
+                current_rubric=rubric.name,
+                current_version=rubric.version,
+                state=state,
+                stale_reason=None if rubric_is_current else "rubric_version",
+                inputs_checked=False,
+            ),
+        )
+
+    # A stored stamp was computed from the full set of inputs, with no read profile, so whether it is current is a property
+    # of the record and its stamp, not of the reader: the recomputation below reads nothing from the request's profile
+    # (``evaluate_reproducibility`` never consults it) and the answer is the same under ``curated`` and ``exploratory``
+    # (ADR 0023, step 6). The answer is a state and a reason, never a ref.
     current = evaluate_reproducibility(session, record_type=record_type, record_id=record_id)
-    is_current = (
-        (assessment.rubric_name, assessment.rubric_version) == (current.rubric_name, current.rubric_version)
-        and is_reproducibility_assessment_context_current(assessment, current_context_json=current.context_json)
+    rubric_is_current = (assessment.rubric_name, assessment.rubric_version) == (
+        current.rubric_name,
+        current.rubric_version,
+    )
+    is_current = rubric_is_current and is_reproducibility_assessment_context_current(
+        assessment, current_context_json=current.context_json
     )
     return ReproducibilityAssessmentSummary(
         state="current" if is_current else "stale",
+        made_under=MadeUnder(
+            rubric=assessment.rubric_name,
+            assessed_version=assessment.rubric_version,
+            current_rubric=current.rubric_name,
+            current_version=current.rubric_version,
+            state="current" if is_current else "stale",
+            stale_reason=None if is_current else ("inputs_changed" if rubric_is_current else "rubric_version"),
+            inputs_checked=True,
+        ),
         assessment_ref=assessment.public_ref,
         rubric=assessment.rubric_name,
         rubric_version=assessment.rubric_version,

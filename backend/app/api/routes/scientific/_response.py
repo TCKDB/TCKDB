@@ -32,12 +32,14 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
+from fastapi import Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.services.scientific_read.internal_ids import apply_internal_ids_visibility
 
-AssessmentAttacher = Callable[[Session, Any], Any]
+AssessmentAttacher = Callable[..., Any]
 
 # Envelope shapes the strip knows how to walk. ``scope`` names *where the
 # records are*, never *which fields to drop* — that is the table's job and
@@ -83,11 +85,8 @@ class IncludeGatedSections:
     "omit null optionals" pass would turn every completed traversal into a
     restart and silently yield the entire result set twice — duplicated
     records in a chemistry dataset, with no error anywhere. The same rule
-    read from the other side: ``pagination.py`` also tests
-    ``"post_collapse_total" in pagination``, so that field must never
-    start being emitted as an explicit ``null``. Never null a field a
-    client tests for presence, and never omit a field a client tests for
-    nullity.
+    read from the other side: never null a field a client tests for
+    presence, and never omit a field a client tests for nullity.
 
     **The table is per-surface and explicit rather than derived from field
     names, because names collide.** One calculation response carries two
@@ -159,7 +158,7 @@ CALCULATION_RECORD_SECTIONS = IncludeGatedSections(
         "scf_stability": ("scf_stability",),
         "wavefunction_diagnostic": ("wavefunction_diagnostic",),
         "spin_diagnostic": ("spin_diagnostic",),
-        "parameters": ("parameters",),
+        "parameters": ("parameters", "effective_settings"),
         "constraints": ("constraints",),
         "review": ("review_history",),
         "freq_modes": ("freq_modes",),
@@ -360,7 +359,16 @@ STATMECH_RECORD_SECTIONS = IncludeGatedSections(
         "frequencies": ("frequencies",),
         "conformers": ("conformers",),
         "review": ("review_history",),
+        "calculation_settings": ("calculation_settings",),
     },
+)
+
+# ``/thermo`` records, on the species-entry route and on ``/thermo/search`` (where the record sits one level down,
+# inside the ``thermo`` wrapper, so the strip is applied at ``ANYWHERE_SCOPE``). ``trust`` and ``assessments`` have
+# their own one-entry tables; this one holds the thermo record's heavy include.
+THERMO_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/thermo",
+    sections={"calculation_settings": ("calculation_settings",)},
 )
 
 # ``/transport/search``, ``/transport/{ref}``,
@@ -512,6 +520,7 @@ INCLUDE_GATED_COMPONENTS: Mapping[str, Mapping[str, str]] = MappingProxyType(
         "KineticsRecord": MappingProxyType(TRUST_SECTION.fields_by_token()),
         "ThermoRecord": MappingProxyType(
             {
+                **THERMO_RECORD_SECTIONS.fields_by_token(),
                 **TRUST_SECTION.fields_by_token(),
                 **ASSESSMENTS_SECTION.fields_by_token(),
             }
@@ -687,13 +696,52 @@ def omit_unrequested_sections(
     return JSONResponse(data)
 
 
+#: The most records an opt-in ``check_inputs`` read may cover: each one re-evaluates its stored assessment's inputs.
+MAX_CHECKED_ASSESSMENTS = 10
+
+
+def refuse_check_inputs(request: Request) -> None:
+    """Dependency for every route that serves ``include=assessments`` but does not compare inputs: refuse the query
+    parameter rather than ignore it, so a caller never believes a check ran. A search body is refused by its request
+    model (``refuse_check_inputs_in_body``), which judges the parsed object, not the raw text."""
+    present = "check_inputs" in request.query_params
+    if present:
+        raise CodedValueError(
+            "check_inputs_not_supported",
+            "check_inputs is supported only on the thermo and kinetics entry-scoped lists (with include=assessments) and, "
+            "implicitly, on by-ref statmech and transport reads; this route does not compare inputs.",
+        )
+
+
+def require_bounded_input_check(*, request_include: list[str], check_inputs: bool, limit: int) -> None:
+    """Refuse ``check_inputs=true`` without ``include=assessments`` or beyond the bound, so the cost is explicit."""
+    if not check_inputs:
+        return
+    if "assessments" not in set(request_include):
+        raise CodedValueError(
+            "check_inputs_needs_assessments",
+            "check_inputs=true compares the inputs of the assessments returned by include=assessments; "
+            "request include=assessments as well.",
+        )
+    if limit > MAX_CHECKED_ASSESSMENTS:
+        raise CodedValueError(
+            "assessment_input_check_limit",
+            f"check_inputs=true re-evaluates every stored assessment on the page; ask for limit={MAX_CHECKED_ASSESSMENTS} "
+            "or fewer.",
+        )
+
+
 def prepare_assessment_response(
     session: Session,
     payload: Any,
     *,
     attach_assessments: AssessmentAttacher,
+    check_inputs: bool = False,
 ) -> Any:
     """Attach requested assessments, then apply public-field visibility.
+
+    ``check_inputs`` is the ROUTE's decision, never the page size: a by-ref detail read and an explicit, bounded opt-in
+    compare a stored assessment's inputs with today's; every other route compares the rubric version only.
 
     The resolved read profile is stamped inside
     :func:`app.services.scientific_read.internal_ids.apply_internal_ids_visibility`,
@@ -702,7 +750,7 @@ def prepare_assessment_response(
     """
 
     if "assessments" in set(payload.request.include):
-        attach_assessments(session, payload)
+        attach_assessments(session, payload, check_inputs=check_inputs)
     visibility = apply_internal_ids_visibility(payload)
     return omit_assessments_unless_requested(visibility, payload)
 
@@ -781,6 +829,7 @@ ALL_INCLUDE_GATED_TABLES: Mapping[str, IncludeGatedSections] = MappingProxyType(
         "SPECIES_BROWSE_SECTIONS": SPECIES_BROWSE_SECTIONS,
         "SPECIES_SEARCH_SECTIONS": SPECIES_SEARCH_SECTIONS,
         "STATMECH_RECORD_SECTIONS": STATMECH_RECORD_SECTIONS,
+        "THERMO_RECORD_SECTIONS": THERMO_RECORD_SECTIONS,
         "TRANSITION_STATE_RECORD_SECTIONS": TRANSITION_STATE_RECORD_SECTIONS,
         "TRANSPORT_RECORD_SECTIONS": TRANSPORT_RECORD_SECTIONS,
         "TRUST_SECTION": TRUST_SECTION,
@@ -813,6 +862,7 @@ __all__ = [
     "SPECIES_CALCULATIONS_SEARCH_SECTIONS",
     "SPECIES_SEARCH_SECTIONS",
     "STATMECH_RECORD_SECTIONS",
+    "THERMO_RECORD_SECTIONS",
     "TRANSITION_STATE_RECORD_SECTIONS",
     "TRANSPORT_RECORD_SECTIONS",
     "TRUST_SECTION",

@@ -133,7 +133,7 @@ def test_search_reactions_post_serializes_reaction_refs_in_body():
 def test_search_reactions_get_serializes_reaction_refs_in_query():
     seen, handler = _capture()
     client, _ = make_client(handler)
-    client.search_reactions(reaction_entry_ref="rxe_def", method="GET")
+    client.search_reactions(reaction_entry_ref="rxe_def", method_http="GET")
     qs = _qs(str(seen[0].url))
     assert qs["reaction_entry_ref"] == ["rxe_def"]
 

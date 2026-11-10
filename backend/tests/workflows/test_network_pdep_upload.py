@@ -2485,7 +2485,7 @@ def test_every_pdep_saddle_point_reports_its_missing_atom_map(
     # highlights ``field`` in the submitted payload would otherwise be sent to
     # a path that does not resolve.
     assert {w.field for w in absent} == {
-        f"transition_states[{ts.key}]" for ts in request.transition_states
+        f"transition_states[{ts.key!r}]" for ts in request.transition_states
     }
     assert not any(w.field.endswith(".atom_map") for w in absent)
     # And it does not send a depositor looking for a field this bundle has not
@@ -3447,3 +3447,32 @@ def test_network_species_calculation_without_any_key_is_reported(
             "behaviour the shared seam exists to make impossible"
         )
         assert reported[0].field == "species['ethyl'].calculations['ethyl_coarse']"
+
+
+def test_network_solve_bath_gas_sum_refusal_carries_the_kinetics_code() -> None:
+    """One rule, one code, one tolerance with a kinetics rate's bath gas."""
+    from pydantic import ValidationError
+
+    payload = _reported_payload(with_bath_gas=True)
+    payload["solve"]["bath_gas"][0]["mole_fraction"] = 0.5
+    with pytest.raises(ValidationError) as excinfo:
+        NetworkPDepUploadRequest(**payload)
+    error = excinfo.value.errors()[0]["ctx"]["error"]
+    assert error.code == "kinetics_bath_gas_mole_fraction_sum"
+    assert error.context == {"field": "solve.bath_gas", "sum": 0.5, "tolerance": 1e-9}
+
+    # Inside the tolerance is accepted, outside is not.
+    payload["solve"]["bath_gas"][0]["mole_fraction"] = 1.0 - 5e-10
+    NetworkPDepUploadRequest(**payload)
+    payload["solve"]["bath_gas"][0]["mole_fraction"] = 1.0 - 2e-9
+    with pytest.raises(ValidationError):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_network_solve_bath_gas_sum_over_the_api(client) -> None:
+    """The wire body of the refusal: status and code."""
+    payload = _full_payload()
+    payload["solve"]["bath_gas"] = [{"species_key": "Ar", "mole_fraction": 0.5}]
+    response = client.post("/api/v1/uploads/networks/pdep", json=payload)
+    assert response.status_code == 422
+    assert response.json()["code"] == "kinetics_bath_gas_mole_fraction_sum"

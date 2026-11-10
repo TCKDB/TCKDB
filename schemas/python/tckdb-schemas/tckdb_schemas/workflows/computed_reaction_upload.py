@@ -25,6 +25,8 @@ from tckdb_schemas.bundle_source_rules import (
     assert_conformer_primaries_agree,
     assert_transition_state_calculations_unanchored,
     conformer_key_by_unique_geometry_key,
+    dependency_cycle_message,
+    find_dependency_cycle,
     find_scf_source_cycle,
     owner_mismatch_error,
     scf_source_cycle_error,
@@ -60,6 +62,10 @@ from tckdb_schemas.fragments.calculation import (
     PathSearchResultPayload,
 )
 from tckdb_schemas.fragments.geometry import GeometryPayload
+from tckdb_schemas.fragments.kinetics_bath_gas import (
+    BundleKineticsBathGasIn,
+    check_kinetics_bath_gas,
+)
 from tckdb_schemas.fragments.kinetics_evidence import (
     T0_K_DESCRIPTION,
     T0_K_MAX,
@@ -112,13 +118,12 @@ from tckdb_schemas.shared.calculation_in import (
     CalculationIn as _BaseCalculationIn,
     GeometryIn,
     calculation_in_to_with_results_payload as _base_calc_to_payload,
-    freq_evidence,
+    species_entry_frequency_findings,
     frequency_completeness_findings,
     transition_state_frequency_findings,
 )
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
-    evaluate_species_entry_frequency,
     raise_for_blocking_findings,
 )
 from tckdb_schemas.statmech_declarations import (
@@ -799,18 +804,18 @@ class BundleSpeciesIn(SchemaBase):
 
         locations: list[str] = []
         for conformer in self.conformers:
-            locations.append(f"conformers['{conformer.key}'].geometry")
+            locations.append(f"conformers[{conformer.key!r}].geometry")
         for conformer in self.conformers:
             locations.extend(
                 self._calculation_structure_locations(
                     conformer.calculation,
-                    path=f"conformers['{conformer.key}'].calculation",
+                    path=f"conformers[{conformer.key!r}].calculation",
                 )
             )
         for calc in self.calculations:
             locations.extend(
                 self._calculation_structure_locations(
-                    calc, path=f"calculations['{calc.key}']"
+                    calc, path=f"calculations[{calc.key!r}]"
                 )
             )
         return locations
@@ -881,7 +886,7 @@ class BundleSpeciesIn(SchemaBase):
                     f"Species '{self.key}' calculation '{calc.key}' "
                     f"conformer_key must reference one of that species's "
                     f"own conformers.",
-                    field=f"calculations['{calc.key}'].conformer_key",
+                    field=f"calculations[{calc.key!r}].conformer_key",
                     key=calc.conformer_key,
                     declared=conformer_keys,
                 )
@@ -899,7 +904,7 @@ class BundleSpeciesIn(SchemaBase):
                     W_GEOMETRY_KEY_UNRESOLVED,
                     f"Species '{self.key}' calculation '{calc.key}' geometry_key "
                     f"must reference one of that species's conformer geometries.",
-                    field=f"calculations['{calc.key}'].geometry_key",
+                    field=f"calculations[{calc.key!r}].geometry_key",
                     key=calc.geometry_key,
                     declared=conformer_geometry_keys,
                 )
@@ -936,13 +941,12 @@ class BundleSpeciesIn(SchemaBase):
         findings: list[StationaryPointFinding] = []
         for conformer in self.conformers:
             location = (
-                f"species['{self.key}'].conformers['{conformer.key}']"
+                f"species[{self.key!r}].conformers[{conformer.key!r}]"
                 f".calculation"
             )
-            n_imag, imag_freq_cm1 = freq_evidence(conformer.calculation)
             findings.extend(
-                evaluate_species_entry_frequency(
-                    kind, n_imag, imag_freq_cm1, location=location
+                species_entry_frequency_findings(
+                    conformer.calculation, kind, location=location
                 )
             )
             findings.extend(
@@ -953,12 +957,9 @@ class BundleSpeciesIn(SchemaBase):
                 )
             )
         for calc in self.calculations:
-            location = f"species['{self.key}'].calculations['{calc.key}']"
-            n_imag, imag_freq_cm1 = freq_evidence(calc)
+            location = f"species[{self.key!r}].calculations[{calc.key!r}]"
             findings.extend(
-                evaluate_species_entry_frequency(
-                    kind, n_imag, imag_freq_cm1, location=location
-                )
+                species_entry_frequency_findings(calc, kind, location=location)
             )
             findings.extend(
                 frequency_completeness_findings(
@@ -1111,7 +1112,7 @@ class BundleTransitionStateIn(SchemaBase):
         """Judge this transition state against its own frequency evidence."""
         findings: list[StationaryPointFinding] = []
         for calc in (self.calculation, *self.calculations):
-            location = f"transition_state.calculations['{calc.key}']"
+            location = f"transition_state.calculations[{calc.key!r}]"
             findings.extend(
                 transition_state_frequency_findings(calc, location=location)
             )
@@ -1325,6 +1326,8 @@ class BundleKineticsIn(SchemaBase):
         ``1.0``.
     :param degeneracy_convention: Whether degeneracy is already included in
         the reported rate. Defaults to ``unknown`` for legacy producers.
+    :param bath_gas: Optional bath gas the rate was obtained for (species keys with mole
+        fractions summing to 1; not valid at ``pressure_context='high_p_limit'``).
     :param note: Optional note.
 
     :param t0_k: Reference temperature T0 in K, so that
@@ -1344,7 +1347,7 @@ class BundleKineticsIn(SchemaBase):
     :param applicability: Optional declaration of what the coefficient is.
     :param protocol: Optional declaration of how the rate was produced.
     :param energy_level_of_theory: Optional level of theory the fit's energies came from,
-        stored as declared. A level the linked calculations contradict is refused.
+        stored as declared. A level the linked calculations contradict is refused. The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant. When at least one participant is open-shell, closed-shell participants (singlets computed restricted, restricted-open, or unrestricted collapsing to restricted) do not constrain it; the open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference. When every participant is closed-shell, a stated spin treatment must match their spin treatment.
 
     This model and ``KineticsUploadRequest`` share their kinetics-evidence
     models and their cross-field checks (``kinetics_evidence``), so the two
@@ -1397,6 +1400,15 @@ class BundleKineticsIn(SchemaBase):
     network_kinetics_ref: str | None = Field(default=None, min_length=1)
     pressure_context: PressureContext | None = None
     pressure_bar: float | None = Field(default=None, gt=0)
+    bath_gas: list[BundleKineticsBathGasIn] = Field(
+        default_factory=list,
+        description=(
+            "The bath gas this rate was obtained for, where the depositor states it: each "
+            "component names a species of the bundle by key, with its mole fraction. The "
+            "fractions sum to 1 and the same species is named once. Meaningless for a "
+            "high-pressure-limit rate (refused). Empty means not stated; it is never inferred."
+        ),
+    )
     note: str | None = None
 
     source_calculations: list[KineticsSourceCalculationIn] = Field(
@@ -1453,6 +1465,21 @@ class BundleKineticsIn(SchemaBase):
             raise ValueError(
                 "pressure_context='apparent_at_pressure' requires pressure_bar."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_bath_gas(self) -> Self:
+        """A stated bath gas is a composition the rate could have been obtained for.
+
+        Not at the ``high_p_limit`` pressure context (the limit has no collider), each species at most
+        once, and the mole fractions sum to 1.0 within 1e-9, as for a network solve's bath gas. An
+        empty list is "not stated" and is never refused or inferred.
+        """
+        check_kinetics_bath_gas(
+            pressure_context=self.pressure_context,
+            mole_fractions=[bg.mole_fraction for bg in self.bath_gas],
+            identities=[bg.species_key for bg in self.bath_gas],
+        )
         return self
 
     @model_validator(mode="after")
@@ -1953,6 +1980,16 @@ class ComputedReactionUploadRequest(SchemaBase):
                             key=key,
                             declared=species_keys,
                         )
+            for index, bath in enumerate(kin.bath_gas):
+                if bath.species_key not in species_keys:
+                    raise undeclared_key_error(
+                        W_SPECIES_KEY_UNDECLARED,
+                        f"Kinetics bath gas references species key '{bath.species_key}' "
+                        f"which is not defined in the species list.",
+                        field=f"kinetics[{kin_index}].bath_gas[{index}].species_key",
+                        key=bath.species_key,
+                        declared=species_keys,
+                    )
         return self
 
     @model_validator(mode="after")
@@ -2016,7 +2053,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"unknown parent_calculation_key="
                         f"'{dep.parent_calculation_key}'.",
                         field=(
-                            f"calculations['{calc.key}'].depends_on."
+                            f"calculations[{calc.key!r}].depends_on."
                             f"parent_calculation_key"
                         ),
                         key=dep.parent_calculation_key,
@@ -2040,6 +2077,24 @@ class ComputedReactionUploadRequest(SchemaBase):
             _check_depends_on(self.transition_state.calculation)
             for calc in self.transition_state.calculations:
                 _check_depends_on(calc)
+
+        dependency_edges: dict[str, list[str]] = {}
+
+        def _collect_depends_on(calc: ComputedReactionCalculationIn) -> None:
+            dependency_edges.setdefault(calc.key, []).extend(d.parent_calculation_key for d in calc.depends_on)
+
+        for sp in self.species:
+            for conf in sp.conformers:
+                _collect_depends_on(conf.calculation)
+            for calc in sp.calculations:
+                _collect_depends_on(calc)
+        if self.transition_state:
+            _collect_depends_on(self.transition_state.calculation)
+            for calc in self.transition_state.calculations:
+                _collect_depends_on(calc)
+        dependency_cycle = find_dependency_cycle(dependency_edges)
+        if dependency_cycle is not None:
+            raise ValueError(dependency_cycle_message(dependency_cycle))
 
         for kin in self.kinetics:
             for entry_index, entry in enumerate(kin.source_calculations):
@@ -2109,7 +2164,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"calculation_key references undefined "
                         f"calculation_key '{sc.calculation_key}'.",
                         field=(
-                            f"species['{sp.key}'].thermo.source_calculations"
+                            f"species[{sp.key!r}].thermo.source_calculations"
                             f"[{i}].calculation_key"
                         ),
                         key=sc.calculation_key,
@@ -2134,7 +2189,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"'{target.conformer_key}' does not reference one of that "
                         f"species's own conformers.",
                         field=(
-                            f"species['{sp.key}'].thermo.thermodynamic_target"
+                            f"species[{sp.key!r}].thermo.thermodynamic_target"
                             f".conformer_key"
                         ),
                         key=target.conformer_key,
@@ -2149,7 +2204,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                             f"[{i}].calculation_key references undefined "
                             f"calculation_key '{ref.calculation_key}'.",
                             field=(
-                                f"species['{sp.key}'].thermo.protocol."
+                                f"species[{sp.key!r}].thermo.protocol."
                                 f"supporting_calculations[{i}].calculation_key"
                             ),
                             key=ref.calculation_key,
@@ -2173,7 +2228,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"calculation_key references undefined "
                         f"calculation_key '{msc.calculation_key}'.",
                         field=(
-                            f"species['{sp.key}'].statmech.source_calculations"
+                            f"species[{sp.key!r}].statmech.source_calculations"
                             f"[{i}].calculation_key"
                         ),
                         key=msc.calculation_key,
@@ -2191,7 +2246,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"source_scan_calculation_key '{key}' references "
                         f"undefined calculation_key.",
                         field=(
-                            f"species['{sp.key}'].statmech.torsions[{i}]."
+                            f"species[{sp.key!r}].statmech.torsions[{i}]."
                             f"source_scan_calculation_key"
                         ),
                         key=key,
@@ -2240,7 +2295,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                 continue
             for i, tsc in enumerate(sp.transport.source_calculations):
                 field_path = (
-                    f"species['{sp.key}'].transport.source_calculations"
+                    f"species[{sp.key!r}].transport.source_calculations"
                     f"[{i}].calculation_key"
                 )
                 if tsc.calculation_key not in all_calc_keys:
@@ -2284,7 +2339,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                 continue
             src_key = stability.source_calculation_key
             field_path = (
-                f"calculations['{calc.key}'].scf_stability.source_calculation_key"
+                f"calculations[{calc.key!r}].scf_stability.source_calculation_key"
             )
             if src_key == calc.key:
                 raise ValueError(
@@ -2364,7 +2419,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"source_calculation_key references undefined "
                         f"calculation_key '{ac.source_calculation_key}'.",
                         field=(
-                            f"species['{sp.key}'].applied_energy_corrections"
+                            f"species[{sp.key!r}].applied_energy_corrections"
                             f"[{i}].source_calculation_key"
                         ),
                         key=ac.source_calculation_key,

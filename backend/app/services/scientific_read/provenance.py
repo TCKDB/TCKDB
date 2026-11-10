@@ -37,7 +37,6 @@ from app.db.models.reaction import (
     ReactionEntry,
     ReactionEntryStructureParticipant,
     ReactionFamily,
-    ReactionParticipant,
 )
 from app.db.models.reaction_atom_map import (
     ReactionAtomMap,
@@ -90,24 +89,28 @@ from app.services.scientific_read.calculations import (
     build_calculation_trust_fragment,
 )
 from app.services.scientific_read.common import (
+    detail_visible_statuses,
+    evidence_withheld_under_profile,
     fetch_review_badges,
     molecular_formula_expr,
     reject_client_sort,
     review_summary,
     validate_includes,
-    visible_statuses,
 )
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
 )
 from app.services.scientific_read.conformers import build_group_record
-from app.services.scientific_read.handles import status_hidden_under_profile
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.kinetics import get_reaction_kinetics
 from app.services.scientific_read.networks import build_network_record
+from app.services.scientific_read.reaction_participants import collapse_occurrences, format_reaction_equation
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
+    STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
 from app.services.scientific_read.transition_states import (
@@ -198,7 +201,8 @@ def get_reaction_full(
             )
         )
 
-    visible = visible_statuses(
+    # A served detail shows what it embeds badged, unless withheld (ADR 0023 step 7, Q9).
+    visible = detail_visible_statuses(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
@@ -582,9 +586,6 @@ def _build_species_section(
     reaction_entry_id: int,
     visible_review_statuses: set,
 ) -> ReactionFullSpecies:
-    entry = session.get(ReactionEntry, reaction_entry_id)
-    reaction_id = entry.reaction_id if entry is not None else None
-
     rows = session.execute(
         select(
             ReactionEntryStructureParticipant.species_entry_id,
@@ -594,11 +595,12 @@ def _build_species_section(
             Species.id.label("species_id"),
             Species.smiles,
             molecular_formula_expr(Species.smiles).label("formula"),
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         )
         .join(
             SpeciesEntry,
@@ -616,46 +618,30 @@ def _build_species_section(
         record_ids=[r[0] for r in rows],
     )
 
-    # Graph-identity stoichiometry lives on ``chem_reaction.reaction_participant``,
-    # keyed by (reaction_id, species_id, role) -- not on the per-deposit
-    # structure-participant row, which lists a repeated species once
-    # regardless of how many times it reacts (see ReactionFullSpeciesParticipant's
-    # docstring).
-    stoichiometry_by_key: dict[tuple[int, ReactionRole], int] = {}
-    if reaction_id is not None:
-        stoichiometry_by_key = {
-            (species_id, role): stoichiometry
-            for species_id, role, stoichiometry in session.execute(
-                select(
-                    ReactionParticipant.species_id,
-                    ReactionParticipant.role,
-                    ReactionParticipant.stoichiometry,
-                ).where(ReactionParticipant.reaction_id == reaction_id)
-            ).all()
-        }
+    # One structure-participant row is stored per OCCURRENCE; each distinct entry is served once per side, at the
+    # first position it was written at, with its own occurrence count (the shared rule in ``reaction_participants``).
+    visible = [r for r in rows if badge_by_entry[r.species_entry_id].status in visible_review_statuses]
+    occurrence_rows = [(r.species_entry_id, r.role, r.participant_index) for r in visible]
+    row_by_entry = {(r.species_entry_id, r.role): r for r in visible}
 
     reactants: list[ReactionFullSpeciesParticipant] = []
     products: list[ReactionFullSpeciesParticipant] = []
-    for row in rows:
-        species_entry_id = row.species_entry_id
-        role = row.role
-        badge = badge_by_entry[species_entry_id]
-        if badge.status not in visible_review_statuses:
-            continue
-        participant = ReactionFullSpeciesParticipant(
-            species_entry_id=species_entry_id,
-            species_entry_ref=row.public_ref,
-            species_entry_label=species_entry_label_for(row),
-            smiles=row.smiles,
-            formula=row.formula,
-            stoichiometry=stoichiometry_by_key.get((row.species_id, role), 1),
-            participant_index=row.participant_index,
-            review=badge,
-        )
-        if role == ReactionRole.reactant:
-            reactants.append(participant)
-        else:
-            products.append(participant)
+    for role, bucket in ((ReactionRole.reactant, reactants), (ReactionRole.product, products)):
+        for species_entry_id, count, first_index in collapse_occurrences(occurrence_rows, role):
+            row = row_by_entry[(species_entry_id, role)]
+            bucket.append(
+                ReactionFullSpeciesParticipant(
+                    species_entry_id=species_entry_id,
+                    species_entry_ref=row.public_ref,
+                    species_entry_label=species_entry_label_for(row),
+                    **entry_facets_of(row),
+                    smiles=row.smiles,
+                    formula=row.formula,
+                    stoichiometry=count,
+                    participant_index=first_index,
+                    review=badge_by_entry[species_entry_id],
+                )
+            )
 
     reactants.sort(
         key=lambda p: (REVIEW_RANK[p.review.status], p.participant_index, p.species_entry_id)
@@ -700,6 +686,7 @@ def _build_kinetics_section(
         session,
         reaction_entry_id=reaction_entry_id,
         request=kinetics_request,
+        detail=True,
     )
     return list(response.records)
 
@@ -866,6 +853,9 @@ def _build_calculations_section(
             LevelOfTheory.cabs_basis,
             LevelOfTheory.solvent_model,
             LevelOfTheory.spin_treatment,
+            LevelOfTheory.relativistic_hamiltonian,
+            LevelOfTheory.pno_truncation,
+            LevelOfTheory.ri_approximation,
         )
         .join(
             TransitionStateEntry,
@@ -925,6 +915,9 @@ def _build_calculations_section(
                     cabs_basis=row[17],
                     solvent_model=row[18],
                     spin_treatment=row[19],
+                    relativistic_hamiltonian=row[20],
+                    pno_truncation=row[21],
+                    ri_approximation=row[22],
                     composite_scheme=schemes.get(row[3]),
                 )
                 if row[3] is not None
@@ -1360,9 +1353,9 @@ def _build_review_records_section(
             .order_by(RecordReview.record_id.asc(), RecordReview.id.asc())
         ).all()
         for r in rows:
-            # The review row of a record the active profile hides (its own detail route answers 404) is not listed:
+            # The review row of a record the active profile withholds (its own detail route answers 404) is not listed:
             # its type, status and id would say that record exists. The reaction entry is a scoping parent, never gated.
-            if record_type is not SubmissionRecordType.reaction_entry and status_hidden_under_profile(r.status):
+            if record_type is not SubmissionRecordType.reaction_entry and evidence_withheld_under_profile(r.status):
                 continue
             out.append(
                 ReviewRecordEntry(
@@ -1636,15 +1629,8 @@ def _format_entry_equation(
             ReactionEntryStructureParticipant.reaction_entry_id == entry.id
         )
     ).all()
-    reactants = sorted(
+    return format_reaction_equation(
         [(idx, smiles) for role, idx, smiles in rows if role == ReactionRole.reactant],
-        key=lambda x: x[0],
-    )
-    products = sorted(
         [(idx, smiles) for role, idx, smiles in rows if role == ReactionRole.product],
-        key=lambda x: x[0],
+        chem is None or chem.reversible,
     )
-    arrow = "<=>" if (chem is None or chem.reversible) else "->"
-    left = " + ".join(s for _, s in reactants)
-    right = " + ".join(s for _, s in products)
-    return f"{left} {arrow} {right}"

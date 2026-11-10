@@ -40,6 +40,7 @@ from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import (
     ConformerAssignmentScheme,
     ConformerGroup,
+    ConformerGroupMergePending,
     ConformerObservation,
     ConformerSelection,
     Species,
@@ -64,6 +65,8 @@ from app.schemas.reads.scientific_conformer import (
     ConformerGroupCoreBlock,
     ConformerGroupEvidenceSummary,
     ConformerGroupFingerprint,
+    ConformerGroupMergePendingBlock,
+    ConformerGroupRefilePendingBlock,
     ConformerObservationCoreBlock,
     ConformerObservationEvidenceSummary,
     ConformerObservationGroupSummary,
@@ -80,12 +83,16 @@ from app.schemas.reads.scientific_conformer import (
     ScientificConformerObservationDetailResponse,
     ScientificConformerObservationRecord,
 )
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    ids_withheld_as_evidence,
+    linked_evidence_predicate,
     molecular_formula_expr,
     review_summary,
     validate_includes,
+    where_visible,
 )
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
@@ -98,6 +105,9 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
+    STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
 
@@ -265,6 +275,14 @@ def build_group_record(
         .where(ConformerObservation.conformer_group_id == cg.id)
         .order_by(ConformerObservation.id.asc())
     ).all()
+    # An observation is evidence of its group (Q2): the page lists those the evidence rule leaves visible, so it counts
+    # those (the ref guard removes the rejected and deprecated ones from the list).
+    withheld_obs_ids = ids_withheld_as_evidence(
+        session,
+        record_type=SubmissionRecordType.conformer_observation,
+        record_ids=[o.id for o in obs_rows],
+    )
+    obs_rows = [o for o in obs_rows if o.id not in withheld_obs_ids]
     obs_ids = [o.id for o in obs_rows]
 
     observations_summary = _build_observations_summary(obs_rows)
@@ -282,7 +300,7 @@ def build_group_record(
     )
 
     cg_core = _build_group_core_block(
-        cg, cg_badge, include_fingerprint="fingerprints" in includes
+        session, cg, cg_badge, include_fingerprint="fingerprints" in includes
     )
 
     observations_block: (
@@ -437,7 +455,7 @@ def get_conformer_observation(
     )
     species_context = _build_species_context(session, cg.species_entry_id)
     cg_core = _build_group_core_block(
-        cg, cg_badge, include_fingerprint="fingerprints" in includes
+        session, cg, cg_badge, include_fingerprint="fingerprints" in includes
     )
 
     record = _build_observation_record(
@@ -453,6 +471,9 @@ def get_conformer_observation(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([obs_badge]),
         record=record,
+        **deposit_warning_envelope(
+            session, SubmissionRecordType.conformer_observation, {obs.id: obs.public_ref}
+        ),
     )
 
 
@@ -648,6 +669,7 @@ def _build_sibling_observation_records(
 
 
 def _build_group_core_block(
+    session: Session,
     cg: ConformerGroup,
     badge: RecordReviewBadge,
     *,
@@ -663,7 +685,48 @@ def _build_group_core_block(
         fingerprint=(
             _build_group_fingerprint(cg) if include_fingerprint else None
         ),
+        merged_into_conformer_group_ref=(
+            cg.merged_into.public_ref if cg.merged_into is not None else None
+        ),
+        wide_basin=(None if cg.basin_is_clique is None else not cg.basin_is_clique),
+        basin_span_deg=cg.basin_span_deg,
+        merge_pending=_pending_merge_of(session, cg.id),
+        refile_pending=_pending_refile_of(session, cg.id),
     )
+
+
+def _pending_refile_of(session: Session, group_id: int) -> ConformerGroupRefilePendingBlock | None:
+    """Structures sitting in this group that owe a re-file into a basin with no group yet, if any."""
+    rows = session.execute(
+        select(ConformerGroupMergePending.reason)
+        .where(
+            ConformerGroupMergePending.absorbed_conformer_group_id == group_id,
+            ConformerGroupMergePending.kept_conformer_group_id.is_(None),
+            ConformerGroupMergePending.completed_at.is_(None),
+        )
+        .order_by(ConformerGroupMergePending.id)
+    ).all()
+    if not rows:
+        return None
+    return ConformerGroupRefilePendingBlock(observation_count=len(rows), reason=rows[0].reason)
+
+
+def _pending_merge_of(session: Session, group_id: int) -> ConformerGroupMergePendingBlock | None:
+    """The merge of this group into another that is still owed, if any (the lowest-numbered target)."""
+    row = session.execute(
+        select(ConformerGroupMergePending.reason, ConformerGroup.public_ref)
+        # an inner join: a re-file owed has no kept group and is a different kind of owed work
+        .join(ConformerGroup, ConformerGroup.id == ConformerGroupMergePending.kept_conformer_group_id)
+        .where(
+            ConformerGroupMergePending.absorbed_conformer_group_id == group_id,
+            ConformerGroupMergePending.completed_at.is_(None),
+        )
+        .order_by(ConformerGroupMergePending.kept_conformer_group_id, ConformerGroupMergePending.id)
+        .limit(1)
+    ).first()
+    if row is None:
+        return None
+    return ConformerGroupMergePendingBlock(target_conformer_group_ref=row.public_ref, reason=row.reason)
 
 
 def _build_group_fingerprint(
@@ -777,11 +840,12 @@ def _build_species_context(
             # entry of the species this record belongs to. Selected here
             # under their own names because species_entry_label_for()
             # reads them by attribute.
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         )
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.id == species_entry_id)
@@ -797,6 +861,7 @@ def _build_species_context(
         species_entry_id=row.entry_id,
         species_entry_ref=row.entry_ref,
         species_entry_label=species_entry_label_for(row),
+        **entry_facets_of(row),
         formula=row.formula,
         canonical_smiles=row.smiles,
         inchi_key=row.inchi_key,
@@ -990,16 +1055,17 @@ def _build_group_evidence_summary(
     # ``tests/services/scientific_read/test_record_builder_statement_cost.py``
     # fails on.
     type_rows = session.execute(
-        select(
-            Calculation.type,
-            func.count(Calculation.id),
-            func.count(func.distinct(Calculation.conformer_observation_id)),
-            func.count(Calculation.id).filter(
-                ~_feeds_a_refinement_on_the_same_observation()
-            ),
-        )
-        .where(Calculation.conformer_observation_id.in_(observation_ids))
-        .group_by(Calculation.type)
+        where_visible(
+            select(
+                Calculation.type,
+                func.count(Calculation.id),
+                func.count(func.distinct(Calculation.conformer_observation_id)),
+                func.count(Calculation.id).filter(
+                    ~_feeds_a_refinement_on_the_same_observation()
+                ),
+            ).where(Calculation.conformer_observation_id.in_(observation_ids)),
+            linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
+        ).group_by(Calculation.type)
     ).all()
     calc_counts: dict[CalculationType, int] = {
         row[0]: row[1] for row in type_rows
@@ -1070,14 +1136,17 @@ def _observation_coverage_via_join(
     """
     return int(
         session.scalar(
-            select(
-                func.count(
-                    func.distinct(Calculation.conformer_observation_id)
+            where_visible(
+                select(
+                    func.count(
+                        func.distinct(Calculation.conformer_observation_id)
+                    )
                 )
+                .select_from(Calculation)
+                .join(joined, onclause)
+                .where(Calculation.conformer_observation_id.in_(observation_ids)),
+                linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
             )
-            .select_from(Calculation)
-            .join(joined, onclause)
-            .where(Calculation.conformer_observation_id.in_(observation_ids))
         )
         or 0
     )
@@ -1088,16 +1157,19 @@ def _distinct_geometry_count(
 ) -> int:
     return int(
         session.scalar(
-            select(
-                func.count(func.distinct(CalculationOutputGeometry.geometry_id))
-            )
-            .select_from(CalculationOutputGeometry)
-            .join(
-                Calculation,
-                Calculation.id == CalculationOutputGeometry.calculation_id,
-            )
-            .where(
-                Calculation.conformer_observation_id.in_(observation_ids)
+            where_visible(
+                select(
+                    func.count(func.distinct(CalculationOutputGeometry.geometry_id))
+                )
+                .select_from(CalculationOutputGeometry)
+                .join(
+                    Calculation,
+                    Calculation.id == CalculationOutputGeometry.calculation_id,
+                )
+                .where(
+                    Calculation.conformer_observation_id.in_(observation_ids)
+                ),
+                linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
             )
         )
         or 0
@@ -1119,24 +1191,31 @@ def _build_observation_evidence_summary(
     :class:`ConformerGroupEvidenceSummary`).
     """
     observation_ids = [observation_id]
+    calc_shown = linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation)
     type_rows = session.execute(
-        select(Calculation.type, func.count(Calculation.id))
-        .where(Calculation.conformer_observation_id.in_(observation_ids))
-        .group_by(Calculation.type)
+        where_visible(
+            select(Calculation.type, func.count(Calculation.id)).where(
+                Calculation.conformer_observation_id.in_(observation_ids)
+            ),
+            calc_shown,
+        ).group_by(Calculation.type)
     ).all()
     type_counts: dict[CalculationType, int] = {row[0]: row[1] for row in type_rows}
 
     has_geom_val = bool(
         session.scalar(
             select(
-                exists().where(
-                    and_(
-                        CalculationGeometryValidation.calculation_id
-                        == Calculation.id,
-                        Calculation.conformer_observation_id.in_(
-                            observation_ids
-                        ),
-                    )
+                where_visible(
+                    exists().where(
+                        and_(
+                            CalculationGeometryValidation.calculation_id
+                            == Calculation.id,
+                            Calculation.conformer_observation_id.in_(
+                                observation_ids
+                            ),
+                        )
+                    ),
+                    calc_shown,
                 )
             )
         )
@@ -1144,14 +1223,17 @@ def _build_observation_evidence_summary(
     has_scf = bool(
         session.scalar(
             select(
-                exists().where(
-                    and_(
-                        CalculationSCFStability.calculation_id
-                        == Calculation.id,
-                        Calculation.conformer_observation_id.in_(
-                            observation_ids
-                        ),
-                    )
+                where_visible(
+                    exists().where(
+                        and_(
+                            CalculationSCFStability.calculation_id
+                            == Calculation.id,
+                            Calculation.conformer_observation_id.in_(
+                                observation_ids
+                            ),
+                        )
+                    ),
+                    calc_shown,
                 )
             )
         )
@@ -1196,12 +1278,16 @@ def _build_available_sections(
     """
     has_calcs = False
     has_geoms = False
+    calc_shown = linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation)
     if obs_ids:
         has_calcs = bool(
             session.scalar(
                 select(
-                    exists().where(
-                        Calculation.conformer_observation_id.in_(obs_ids)
+                    where_visible(
+                        exists().where(
+                            Calculation.conformer_observation_id.in_(obs_ids)
+                        ),
+                        calc_shown,
                     )
                 )
             )
@@ -1210,14 +1296,17 @@ def _build_available_sections(
             has_geoms = bool(
                 session.scalar(
                     select(
-                        exists().where(
-                            and_(
-                                CalculationOutputGeometry.calculation_id
-                                == Calculation.id,
-                                Calculation.conformer_observation_id.in_(
-                                    obs_ids
-                                ),
-                            )
+                        where_visible(
+                            exists().where(
+                                and_(
+                                    CalculationOutputGeometry.calculation_id
+                                    == Calculation.id,
+                                    Calculation.conformer_observation_id.in_(
+                                        obs_ids
+                                    ),
+                                )
+                            ),
+                            calc_shown,
                         )
                     )
                 )
@@ -1268,12 +1357,16 @@ def _exists_other_observations_in_group(
     return bool(
         session.scalar(
             select(
-                exists().where(
-                    and_(
-                        ConformerObservation.conformer_group_id
-                        == conformer_group_id,
-                        ConformerObservation.id != exclude_observation_id,
-                    )
+                where_visible(
+                    exists().where(
+                        and_(
+                            ConformerObservation.conformer_group_id
+                            == conformer_group_id,
+                            ConformerObservation.id != exclude_observation_id,
+                        )
+                    ),
+                    # The siblings the page lists: an observation is evidence, withheld only if rejected or deprecated.
+                    linked_evidence_predicate(ConformerObservation.id, SubmissionRecordType.conformer_observation),
                 )
             )
         )
@@ -1463,6 +1556,9 @@ def _bulk_lot_summaries(
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
             core_treatment=lot.core_treatment,
+            relativistic_hamiltonian=lot.relativistic_hamiltonian,
+            pno_truncation=lot.pno_truncation,
+            ri_approximation=lot.ri_approximation,
             aux_basis=lot.aux_basis,
             cabs_basis=lot.cabs_basis,
             solvent_model=lot.solvent_model,

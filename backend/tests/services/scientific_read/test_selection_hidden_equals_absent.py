@@ -99,6 +99,7 @@ DESCRIBES_THE_READ = frozenset(
         "canonical_bytes",
         "snapshot_isolation",
         "effective_review_statuses",
+        "candidate_review_statuses",
         "excluded_by_review_withheld",
     }
 )
@@ -299,10 +300,57 @@ def differences(a, b, path=""):
     return [] if a == b else [f"{path}: {a!r} != {b!r}"]
 
 
+def withhold_hidden_refs(session, refs) -> None:
+    """Turn every record of the scene that is not approved from merely-unreviewed into rejected, so the evidence rule
+    withholds it (``refs`` is every ref the scene labelled, the identity-position groups and entries included).
+
+    ADR 0023: under curated a record that is only below the floor is linked evidence, shown; "hidden == absent" is the
+    property of evidence the profile WITHHOLDS (rejected, deprecated). The scenes build their hidden records unreviewed, so
+    this pins them to the withheld state before the curated run. A record reviewed through a parent (a network-kinetics fit,
+    through its solve) has no review row of its own and is left to the parent. The loaders' own populations follow the
+    evidence rule since step 5; what they do with the UNLISTED state is pinned in ``test_curated_selection_documents``.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from app.db.models.record_review import RecordReview
+
+    for ref in sorted(refs):
+        gated = ref_guard.GATED_TYPES.get(ref.split("_", 1)[0])
+        if gated is None or gated.parent_fk is not None:
+            continue
+        row = session.scalar(select(gated.model).where(gated.model.public_ref == ref))
+        existing = session.scalar(
+            select(RecordReview).where(RecordReview.record_type == gated.record_type, RecordReview.record_id == row.id)
+        )
+        if existing is not None and existing.status is APPROVED:
+            continue  # the scene's visible records stay as they are
+        if existing is None:
+            set_review(session, record_type=gated.record_type, record_id=row.id, status=RecordReviewStatus.rejected)
+        else:
+            existing.status = RecordReviewStatus.rejected
+            existing.reviewed_at = existing.reviewed_at or datetime.now(timezone.utc)
+            if existing.reviewed_by is None:
+                existing.reviewed_by = _reviewer(session)
+    session.flush()
+
+
+def _reviewer(session) -> int:
+    from app.db.models.app_user import AppUser
+    from app.db.models.common import AppUserRole
+
+    user = AppUser(username=f"hea_reviewer_{uuid4().hex[:8]}", role=AppUserRole.curator)
+    session.add(user)
+    session.flush()
+    return user.id
+
+
 def assert_hidden_equals_absent(session, scene, captured, keep, *, tokens_expected: bool):
     """Curated over the full world == exploratory over the world without the hidden records."""
     captured.clear()
     full = scene(session, hidden=True)
+    withhold_hidden_refs(session, set(full.labels) | set(full.hidden_refs))
     curated_doc = run_under(CURATED, full.run)
     tokens = dict(captured)
     assert bool(tokens) == tokens_expected, tokens
@@ -651,7 +699,10 @@ def structure_scene(session, hidden: bool, grain: str = "conformer") -> Scene:
     from tests.services.structure_selection.test_service import build_basin
 
     world = make_world(session)
-    group = make_conformer_group(session, world.entry)  # never reviewed: hidden under curated, shown under exploratory
+    # A conformer group is a gated kind: a basin whose observation sits in a hidden group hides with it (see
+    # ``test_a_basin_in_a_group_below_the_curated_floor_hides_with_the_group_and_is_not_mentioned``), so the group is
+    # approved here and this scene proves the one that remains: a hidden dependency parent of a visible basin.
+    group = make_conformer_group(session, world.entry)
     obs = make_conformer_observation(session, conformer_group=group)
     det, opt, sp, freq = build_basin(
         world,
@@ -667,6 +718,7 @@ def structure_scene(session, hidden: bool, grain: str = "conformer") -> Scene:
     world.settle()
     approve(session, R.calculation, opt)
     approve(session, R.conformer_observation, obs)  # last: nothing may be added under an accepted observation
+    approve(session, R.conformer_group, group)
     labels = label_all(det=det, group=group, obs=obs, parent=parent) | world_labels(world)
 
     def run():
@@ -687,7 +739,7 @@ def test_structure_hidden_equals_absent(db_session, captured):
         structure_scene,
         captured,
         {"calculations", "determinations", "assessments", "decision", "outcome"},
-        tokens_expected=True,
+        tokens_expected=False,  # a dropped dependency edge leaves no token: nothing names the parent
     )
 
 
@@ -801,6 +853,7 @@ def statmech_scene(session, hidden: bool) -> Scene:
             conformer_group_id=away.id if hidden else None,  # the member's own group: unavailable, or never stated
             counting_multiplicity=1,
             relative_energy_kj_mol=0.0,
+            relative_energy_convention="electronic_plus_zpe",
         )
     )
     session.add(

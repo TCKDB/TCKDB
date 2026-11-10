@@ -4,6 +4,7 @@ import {
     geometrySummarySchema,
     levelOfTheorySchema,
     recordReviewSchema,
+    entryFacetFields,
 } from "./scientificSchemas"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
@@ -16,6 +17,7 @@ const speciesContextSchema = z.object({
     species_ref: z.string(),
     species_entry_ref: z.string(),
     species_entry_label: z.string().nullable().optional(),
+    ...entryFacetFields,
     formula: z.string().nullable().optional(),
     canonical_smiles: z.string().nullable().optional(),
     inchi_key: z.string().nullable().optional(),
@@ -101,7 +103,7 @@ export type ConformerObservationSibling = z.infer<typeof siblingObservationSchem
 
 export interface ConformerObservation {
     conformer_observation: z.infer<typeof observationCoreSchema>
-    // null under `profile=curated` when the group is not approved: the observation is shown, its basin is not named.
+    // null under `profile=curated` when the group is rejected or deprecated: the observation is shown, its basin is not named.
     conformer_group: z.infer<typeof conformerGroupContextSchema> | null
     species: z.infer<typeof speciesContextSchema>
     assignment_scheme?: z.infer<typeof assignmentSchemeSchema> | null

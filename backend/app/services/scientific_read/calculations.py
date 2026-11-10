@@ -104,6 +104,7 @@ from app.schemas.reads.scientific_calculation import (
     CalculationSpinDiagnosticSummary,
     CalculationSPResultSummary,
     CalculationWavefunctionDiagnosticSummary,
+    EffectiveSettingSummary,
     ExecutionEnvironmentManifestSummary,
     ImaginaryModeProjectionEntry,
     ImaginaryModeProjectionSummary,
@@ -126,9 +127,11 @@ from app.schemas.reads.scientific_common import (
     WorkflowToolReleaseSummary,
 )
 from app.services.composite_verification import verify_composite_calculation
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    linked_evidence_predicate,
     molecular_formula_expr,
     review_summary,
     validate_includes,
@@ -136,6 +139,7 @@ from app.services.scientific_read.common import (
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summary,
 )
+from app.services.scientific_read.effective_settings import build_effective_settings
 from app.services.scientific_read.handles import resolve_calculation_handle
 from app.services.scientific_read.imaginary_mode_projection import (
     build_imaginary_mode_projection,
@@ -144,6 +148,8 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.species_identity import (
+    STEREO_DISPLAY,
+    derived_stereo_label,
     species_entry_label,
 )
 from app.services.trust import (
@@ -324,6 +330,9 @@ def get_calculation(
         request=RequestEcho(include=sorted(includes)),
         review_summary=summary,
         record=record,
+        **deposit_warning_envelope(
+            session, SubmissionRecordType.calculation, {calc.id: calc.public_ref}
+        ),
     )
 
 
@@ -449,8 +458,10 @@ def build_record(
         spin_diagnostic_block = _build_spin_diagnostic(session, calc.id)
 
     parameters_block: list[CalculationParameterSummary] | None = None
+    effective_settings_block: list[EffectiveSettingSummary] | None = None
     if "parameters" in includes:
         parameters_block = _build_parameters(session, calc.id)
+        effective_settings_block = build_effective_settings(session, calc)
 
     constraints_block: list[CalculationConstraintSummary] | None = None
     if "constraints" in includes:
@@ -539,6 +550,7 @@ def build_record(
         wavefunction_diagnostic=wavefunction_diagnostic_block,
         spin_diagnostic=spin_diagnostic_block,
         parameters=parameters_block,
+        effective_settings=effective_settings_block,
         constraints=constraints_block,
         review_history=review_history_block,
         freq_modes=freq_modes_block,
@@ -643,10 +655,12 @@ def _build_species_owner(
             Species.inchi_key.label("inchi_key"),
             Species.charge.label("charge"),
             Species.multiplicity.label("multiplicity"),
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            SpeciesEntry.stereo_descriptor,
+            SpeciesEntry.stereo_resolution,
             _owner_formula_expr(Species.smiles).label("formula"),
         )
         .join(Species, Species.id == SpeciesEntry.species_id)
@@ -658,7 +672,7 @@ def _build_species_owner(
         species_entry_id=row.entry_id,
         species_entry_ref=row.entry_ref,
         species_entry_label=species_entry_label(
-            stereo_label=row.stereo_label,
+            stereo_label=row.stereo_display,
             electronic_state_kind=row.electronic_state_kind,
             electronic_state_label=row.electronic_state_label,
             term_symbol=row.term_symbol,
@@ -671,6 +685,10 @@ def _build_species_owner(
         multiplicity=row.multiplicity,
         species_entry_kind=row.entry_kind,
         electronic_state_kind=row.electronic_state_kind,
+        stereo_label=derived_stereo_label(row.stereo_descriptor, row.stereo_resolution),
+        stereo_descriptor=row.stereo_descriptor,
+        stereo_resolution=row.stereo_resolution,
+        isotope_key=row.isotope_key,
     )
 
 
@@ -813,6 +831,9 @@ def _build_lot_summary(
         solvent=lot.solvent,
         spin_treatment=lot.spin_treatment,
         core_treatment=lot.core_treatment,
+        relativistic_hamiltonian=lot.relativistic_hamiltonian,
+        pno_truncation=lot.pno_truncation,
+        ri_approximation=lot.ri_approximation,
         aux_basis=lot.aux_basis,
         cabs_basis=lot.cabs_basis,
         solvent_model=lot.solvent_model,
@@ -885,8 +906,10 @@ def _build_literature_summary(
         id=lit.id,
         literature_ref=lit.public_ref,
         title=getattr(lit, "title", None),
+        title_source=getattr(lit, "title_source", None),
         year=getattr(lit, "year", None),
         doi=getattr(lit, "doi", None),
+        isbn=getattr(lit, "isbn", None),
     )
 
 
@@ -1016,10 +1039,7 @@ def _build_provenance_and_sections(
                 "has_artifacts"
             ),
             exists()
-            .where(
-                (CalculationDependency.parent_calculation_id == calculation_id)
-                | (CalculationDependency.child_calculation_id == calculation_id)
-            )
+            .where(_dependency_edge_shown(calculation_id))
             .label("has_dependencies"),
             (
                 _exists_for_calc(primary_table, calculation_id)
@@ -1738,6 +1758,24 @@ def _build_energy_correction_components(
 # ---------------------------------------------------------------------------
 # include=dependencies loader
 # ---------------------------------------------------------------------------
+
+
+def _dependency_edge_shown(calculation_id: int):
+    """The dependency edges of *calculation_id* whose OTHER calculation the evidence rule leaves visible.
+
+    The list (``include=dependencies``) loses an edge whose other end is withheld (the ref guard removes the pointer), so
+    the ``has_dependencies`` flag counts the same edges (ADR 0023). With no review floor the predicate is ``None`` and the
+    condition is the plain "any edge touches this calculation".
+    """
+    from sqlalchemy import and_, or_
+
+    parent_edge = CalculationDependency.parent_calculation_id == calculation_id
+    child_edge = CalculationDependency.child_calculation_id == calculation_id
+    child_shown = linked_evidence_predicate(CalculationDependency.child_calculation_id, SubmissionRecordType.calculation)
+    parent_shown = linked_evidence_predicate(CalculationDependency.parent_calculation_id, SubmissionRecordType.calculation)
+    if child_shown is None or parent_shown is None:
+        return or_(parent_edge, child_edge)
+    return or_(and_(parent_edge, child_shown), and_(child_edge, parent_shown))
 
 
 def _build_dependencies(
@@ -2482,6 +2520,9 @@ def _build_parameters(
             value_type=row.value_type,
             unit=row.unit,
             parameter_index=row.parameter_index,
+            source=row.source,
+            artifact_kind=row.artifact_kind,
+            statement_kind=row.statement_kind,
             created_at=row.created_at,
         )
         for row in rows
@@ -2702,6 +2743,7 @@ def _build_imaginary_mode_projections(session: Session, calculation_id: int) -> 
                     TauProtocolParameterEntry(
                         canonical_key=parameter.canonical_key,
                         canonical_value=parameter.canonical_value,
+                        statement_kind=parameter.statement_kind,
                     )
                     for parameter in result.tau_context.protocol_parameters
                 ],

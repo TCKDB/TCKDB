@@ -1051,3 +1051,26 @@ def test_a_hydrazine_state_energy_that_is_off_its_sources_is_refused(db_engine) 
         with pytest.raises(CodedValueError) as raised:
             persist_network_pdep_upload(session, request, created_by=None)
     assert raised.value.code == "network_state_energy_sum_mismatch"
+
+
+def test_channel_kinds_come_from_the_shared_derivation() -> None:
+    """The builder labels each channel with ``derive_channel_kind`` of its states, nothing else."""
+    from tckdb_schemas.network_channel_kind import derive_channel_kind
+
+    payload, _gap = build_network_pdep_payload(FIXTURE_DIR)
+    state_kind = {s["key"]: s["kind"] for s in payload["states"]}
+    assert payload["channels"]
+    for channel in payload["channels"]:
+        expected = derive_channel_kind(state_kind[channel["source_state_key"]], state_kind[channel["sink_state_key"]])
+        assert channel["kind"] == expected.value
+
+
+def test_an_unmappable_pair_raises_instead_of_defaulting_to_isomerization(monkeypatch) -> None:
+    from scripts.pdep_ingestion import builder
+
+    def cannot_map(source, sink):
+        raise ValueError("no rule for this pair")
+
+    monkeypatch.setattr(builder, "derive_channel_kind", cannot_map)
+    with pytest.raises(ValueError, match="cannot derive a channel kind"):
+        build_network_pdep_payload(FIXTURE_DIR)

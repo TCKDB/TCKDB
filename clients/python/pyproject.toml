@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "tckdb-client"
-version = "0.161.0"
+version = "0.199.0"
 description = "Synchronous Python HTTP client and scientific upload builders for the TCKDB API."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "TCKDB" }]
 keywords = [
     "tckdb",
@@ -46,10 +47,11 @@ dependencies = [
     # `CalculationPayload`. A resolver was free to pick any of them and the
     # client would import cleanly and fail at upload time instead.
     #
-    # No upper bound here on purpose: whether these two packages should be
-    # pinned in lockstep is the coupling question tracked in #112, and
-    # guessing at it in a dependency line is how the 0.10.0 floor survived.
-    "tckdb-schemas>=0.131.0",
+    # Rolling window (owner decision 2026-11-05, #112): the floor is the
+    # schemas release this client release was built and tested with; the
+    # ceiling is five minors above it. Each client release moves the window.
+    # See clients/python/docs/development.md ("The tckdb-schemas window").
+    "tckdb-schemas>=0.158,<0.171",
 ]
 
 [project.optional-dependencies]
@@ -73,10 +75,11 @@ tckdb-replay = "tckdb_client.cli:main"
 tckdb = "tckdb_client.cli:main_tckdb"
 
 [project.urls]
-Homepage = "https://github.com/calvinp0/tckdbv2"
-Repository = "https://github.com/calvinp0/tckdbv2"
-Issues = "https://github.com/calvinp0/tckdbv2/issues"
-Documentation = "https://github.com/calvinp0/tckdbv2/tree/main/clients/python"
+Homepage = "https://github.com/TCKDB/TCKDB"
+Repository = "https://github.com/TCKDB/TCKDB"
+Issues = "https://github.com/TCKDB/TCKDB/issues"
+Documentation = "https://github.com/TCKDB/TCKDB/tree/main/clients/python"
+Changelog = "https://github.com/TCKDB/TCKDB/blob/main/clients/python/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]

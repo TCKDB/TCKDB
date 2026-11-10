@@ -63,6 +63,7 @@ from app.schemas.workflows.contribution_bundle import (
 )
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.services.contribution_bundle_dry_run import dry_run_contribution_bundle
+from app.services.deposit_warnings import store_deposit_warnings
 from app.services.literature_metadata import failure_scope
 from app.services.literature_resolution import prefetch_literature_metadata
 from app.services.record_review import ReviewPolicy
@@ -184,6 +185,7 @@ def _carry_forward_messages(
             field=msg.field,
             local_ref=msg.local_ref,
             record_type=msg.record_type,
+            context=msg.context,
         )
         for msg in dry_run.messages
         if msg.level is not DryRunMessageLevel.error
@@ -198,7 +200,7 @@ def _import_warning_messages(
 ) -> list[ContributionBundleSubmitMessage]:
     """Render one upload's warnings as bundle messages.
 
-    The warning's own ``field``, ``code`` and ``message`` are kept exactly as
+    The warning's own ``field``, ``code``, ``message`` and ``context`` are kept exactly as
     the direct upload route returns them (``field`` is relative to that one
     upload); ``local_ref`` says which upload of the bundle it belongs to.
     """
@@ -210,6 +212,7 @@ def _import_warning_messages(
             field=w.field,
             local_ref=local_ref,
             record_type=record_type,
+            context=w.context,
         )
         for w in warnings
     ]
@@ -254,6 +257,7 @@ def _import_thermo_bundle(
                 warnings, local_ref=local_ref, record_type=DryRunRecordType.thermo
             )
         )
+        store_deposit_warnings(session, review_policy.submission_id, warnings)
         records.append(
             ContributionBundleSubmittedRecord(
                 record_type=SubmittedRecordType.thermo,
@@ -310,6 +314,7 @@ def _import_kinetics_bundle(
                 warnings, local_ref=local_ref, record_type=DryRunRecordType.kinetics
             )
         )
+        store_deposit_warnings(session, review_policy.submission_id, warnings)
         records.append(
             ContributionBundleSubmittedRecord(
                 record_type=SubmittedRecordType.kinetics,

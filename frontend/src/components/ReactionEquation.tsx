@@ -1,8 +1,8 @@
 import type { ReactNode } from "react"
+import { ParticipantChips } from "./ParticipantChips"
 import { Link } from "react-router-dom"
 import { SpeciesFace } from "./Formula"
 import { buildEquationSides, type EquationParticipant, type EquationParticipantInput } from "../domain/reactionEquation"
-import { stereoChip } from "../domain/recordFacets"
 
 const NBSP = " "
 
@@ -139,8 +139,9 @@ function EquationParticipantFace({
             formulaOnly={formulaOnly}
         />
     )
-    const chip = participant.speciesEntryLabel && (
-        <span className="reaction-equation-chip"> · {stereoChip(participant.speciesEntryLabel)}</span>
+    // Chips come from the structured facets only (`participantChips`), never the joined species_entry_label.
+    const chip = participant.chips.length > 0 && (
+        <span className="reaction-equation-chip"><ParticipantChips chips={participant.chips} /></span>
     )
     return (
         <>

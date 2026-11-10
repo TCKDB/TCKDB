@@ -18,7 +18,6 @@ from typing import Protocol
 from tckdb_schemas.enums import StationaryPointKind
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
-    evaluate_species_entry_frequency,
 )
 
 from app.schemas.fragments.calculation import CalculationWithResultsPayload
@@ -47,13 +46,10 @@ def inline_calculation_findings(
         freq_result = item.calculation.freq_result
         if freq_result is None:
             continue
-        location = f"calculations['{item.key}'].freq_result"
+        location = f"calculations[{item.key!r}].freq_result"
         findings.extend(
-            evaluate_species_entry_frequency(
-                kind,
-                freq_result.n_imag,
-                freq_result.imag_freq_cm1,
-                location=location,
+            item.calculation.species_entry_frequency_findings(
+                kind, location=location
             )
         )
         # No reference geometry to fall back to: these three requests

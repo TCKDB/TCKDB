@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._actor import publish_read_actor
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     DETAIL_SCOPE,
@@ -16,6 +17,7 @@ from app.api.routes.scientific._response import (
     SEARCH_SCOPE,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import (
     NetworkKineticsModelKind,
     NetworkSolveKind,
@@ -67,9 +69,9 @@ from app.services.scientific_read.network_solves_search import (
 from app.services.scientific_read.networks import get_network, get_network_solve
 from app.services.scientific_read.networks_search import search_networks
 
-router = APIRouter(prefix="/networks")
-solve_router = APIRouter(prefix="/network-solves")
-kinetics_router = APIRouter(prefix="/network-kinetics")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/networks")
+solve_router = APIRouter(route_class=ServerFaultRoute, prefix="/network-solves")
+kinetics_router = APIRouter(route_class=ServerFaultRoute, prefix="/network-kinetics")
 
 
 # The router-level ``?profile=`` dependency puts these two keys on every
@@ -113,7 +115,8 @@ def scientific_networks_search_get(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """MVP scientific network search.
@@ -122,7 +125,8 @@ def scientific_networks_search_get(
     required. Explicit ``False`` bool filter values count as
     meaningful.
     """
-    request_obj = NetworkSearchRequest(
+    request_obj = caller_input(
+        NetworkSearchRequest,
         network_ref=network_ref,
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,
@@ -153,6 +157,7 @@ def scientific_networks_search_get(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = search_networks(session, request_obj)
@@ -197,6 +202,7 @@ def scientific_networks_search_post(
 @router.get(
     "/{network_ref_or_id}",
     response_model=ScientificNetworkDetailResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def scientific_network_detail(
     network_ref_or_id: str = Path(..., min_length=1, max_length=64),
@@ -335,7 +341,8 @@ def scientific_network_solves_search_get(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """MVP scientific network-solve search.
@@ -349,7 +356,8 @@ def scientific_network_solves_search_get(
     ``method`` / ``basis`` filter through the source-calculation
     level-of-theory join.
     """
-    request_obj = NetworkSolveSearchRequest(
+    request_obj = caller_input(
+        NetworkSolveSearchRequest,
         network_solve_ref=network_solve_ref,
         network_ref=network_ref,
         kind=kind,
@@ -377,6 +385,7 @@ def scientific_network_solves_search_get(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = search_network_solves(session, request_obj)
@@ -421,6 +430,7 @@ def scientific_network_solves_search_post(
 @solve_router.get(
     "/{network_solve_ref_or_id}",
     response_model=ScientificNetworkSolveDetailResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def scientific_network_solve_detail(
     network_solve_ref_or_id: str = Path(..., min_length=1, max_length=64),
@@ -479,7 +489,8 @@ def scientific_network_kinetics_search_get(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """MVP scientific network-kinetics search.
@@ -492,7 +503,8 @@ def scientific_network_kinetics_search_get(
     route through the parent solve's source-calc graph. Review state
     is inherited from the parent solve.
     """
-    request_obj = NetworkKineticsSearchRequest(
+    request_obj = caller_input(
+        NetworkKineticsSearchRequest,
         network_kinetics_ref=network_kinetics_ref,
         network_ref=network_ref,
         network_solve_ref=network_solve_ref,
@@ -521,6 +533,7 @@ def scientific_network_kinetics_search_get(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = search_network_kinetics(session, request_obj)

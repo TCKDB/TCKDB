@@ -48,6 +48,7 @@ from app.services.composite_scheme_resolution import (
     named_method_definition_hash,
 )
 from app.services.public_refs import make_content_ref
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 
 _MIGRATION_FILE = next(
     (Path(__file__).resolve().parents[2] / "alembic" / "versions").glob("d7a3f1b9c284_*.py")
@@ -227,7 +228,7 @@ def test_the_binding_does_not_change_the_level_row_or_its_hash(db_session):
     db_session.expire_all()
     stored = db_session.get(LevelOfTheory, lot.id)
     assert stored.lot_hash == before_hash
-    assert (stored.method, stored.basis, stored.keywords) == ("CBS-QB3", None, None)
+    assert (stored.method, stored.basis) == ("CBS-QB3", None)
 
 
 # ---------------------------------------------------------------------------
@@ -522,8 +523,9 @@ def test_migration_hash_and_ref_formulas_agree_with_the_application():
         for level in (entry.geometry_level, entry.frequency_level):
             if level is None:
                 continue
-            assert mig._internal_level_hash(level.method, level.basis) == _level_of_theory_hash(
-                LevelOfTheoryRef(method=level.method, basis=level.basis)
+            # The revision's frozen copy hashes the pre-Stage-2 payload.
+            assert mig._internal_level_hash(level.method, level.basis) == frozen_level_of_theory_hash(
+                method=level.method, basis=level.basis
             )
 
 

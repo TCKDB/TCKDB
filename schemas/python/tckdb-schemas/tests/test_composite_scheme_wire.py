@@ -95,7 +95,7 @@ SCHEME_C = {
             "operation": "difference",
             "energy_component": "total",
             "inputs": [
-                {"slot": "high", "level_of_theory": {"method": "CCSD(T)", "basis": "cc-pVTZ-DK", "keywords": "DKH2"}},
+                {"slot": "high", "level_of_theory": {"method": "CCSD(T)", "basis": "cc-pVTZ-DK", "relativistic_hamiltonian": "dkh2"}},
                 {"slot": "low", "level_of_theory": {"method": "CCSD(T)", "basis": "cc-pVTZ"}},
             ],
         },
@@ -160,6 +160,18 @@ def test_a_method_with_an_inline_definition_is_refused_named_composite_or_not(me
 def test_method_level_fields_next_to_a_scheme_are_refused():
     with pytest.raises(ValidationError) as exc:
         LevelOfTheoryRef(composite_scheme=SCHEME_B, basis="cc-pVQZ")
+    error = _code(exc)
+    assert error.code == "composite_scheme_malformed"
+    assert error.context["rule"] == "ordinary_fields_with_scheme"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("relativistic_hamiltonian", "dkh2"), ("pno_truncation", "tight"), ("ri_approximation", "rijcosx")],
+)
+def test_method_qualifiers_next_to_a_scheme_are_refused(field, value):
+    with pytest.raises(ValidationError) as exc:
+        LevelOfTheoryRef(composite_scheme=SCHEME_B, **{field: value})
     error = _code(exc)
     assert error.code == "composite_scheme_malformed"
     assert error.context["rule"] == "ordinary_fields_with_scheme"

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from tckdb_schemas.fragments.identity import (
     _IDENTITY_TEXT_FIELDS,
     SpeciesEntryIdentityValidatorMixin,
+    SpeciesEntryIdentityWriteValidatorMixin,
 )
 
 from app.db.models.common import (
@@ -31,7 +32,7 @@ class SpeciesEntryBase(SpeciesEntryIdentityValidatorMixin, BaseModel):
     term_symbol: str | None = Field(default=None, max_length=64)
 
 
-class SpeciesEntryCreate(SpeciesEntryBase, SchemaBase):
+class SpeciesEntryCreate(SpeciesEntryIdentityWriteValidatorMixin, SpeciesEntryBase, SchemaBase):
     """Create shape for a species entry.
 
     ``isotope_key`` is deliberately absent: it is a *derived* identity key
@@ -41,7 +42,7 @@ class SpeciesEntryCreate(SpeciesEntryBase, SchemaBase):
     """
 
 
-class SpeciesEntryUpdate(SpeciesEntryIdentityValidatorMixin, SchemaBase):
+class SpeciesEntryUpdate(SpeciesEntryIdentityWriteValidatorMixin, SpeciesEntryIdentityValidatorMixin, SchemaBase):
     species_id: int | None = None
     kind: StationaryPointKind | None = None
 

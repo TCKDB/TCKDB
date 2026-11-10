@@ -15,7 +15,18 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from tckdb_schemas.hessian_method_detection import (  # noqa: F401  (re-exported: the deck readers live in tckdb-schemas)
+    ORCA_FREQ_HESSIAN_KEYWORDS,
+    _extract_input_block,
+    _extract_log_echo_input,
+    _looks_like_orca_input_line,
+    _strip_coordinate_block,
+    orca_freq_hessian,
+    orca_keyword_lines,
+)
+
 from app.parser_registry import PARSERS
+from app.services.parameter_closed_values import canonical_or_none, normalise_solvent
 
 # ---------------------------------------------------------------------------
 # Canonical key mapping — ORCA-specific entries
@@ -51,8 +62,11 @@ _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
     # ORCA says so explicitly in the keyword line, so it is recorded
     # rather than guessed; a run that says neither leaves the key absent
     # and gets the conservative tau.
-    ("freq", "numfreq"): ("freq.hessian_method", "finite_difference_gradient"),
-    ("freq", "anfreq"): ("freq.hessian_method", "analytic"),
+    # Shared with upload validation (``tckdb_schemas.hessian_method_detection``).
+    **{
+        ("freq", keyword): ("freq.hessian_method", method.value)
+        for keyword, method in ORCA_FREQ_HESSIAN_KEYWORDS.items()
+    },
     # Grid keywords (from ! line, section="grid")
     ("grid", "defgrid1"): ("grid.quality", "defgrid1"),
     ("grid", "defgrid2"): ("grid.quality", "defgrid2"),
@@ -61,6 +75,36 @@ _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
     ("grid", "grid5"): ("grid.quality", "grid5"),
     ("grid", "grid6"): ("grid.quality", "grid6"),
     ("grid", "grid7"): ("grid.quality", "grid7"),
+    # Resolution of the identity (from ! line; ``scf`` is where these have always been filed).
+    # ``NoCOSX`` only turns the chain-of-spheres part off (ORCA 6 manual, RIJCOSX, "Basic Usage"); what is left
+    # depends on the method, so it stays a raw row with no canonical key.
+    ("scf", "nori"): ("ri.approximation", "none"),
+    ("scf", "ri"): ("ri.approximation", "rij"),
+    ("scf", "rijcosx"): ("ri.approximation", "rijcosx"),
+    ("scf", "rijk"): ("ri.approximation", "rijk"),
+    ("scf", "rijonx"): ("ri.approximation", "rijonx"),
+    # Empirical dispersion keywords (ORCA 6 manual, Table 3.13; ORCA 5.0.4, "DFT-D3": ``! D3BJ`` "or simply
+    # ``! D3``"). Bare ``D3`` is Becke-Johnson damping in ORCA, whereas Gaussian's ``GD3`` is zero damping, so the
+    # two programs genuinely differ here and each parser maps its own spelling.
+    ("dispersion", "d2"): ("dispersion.correction", "d2"),
+    ("dispersion", "d3"): ("dispersion.correction", "d3_bj"),
+    ("dispersion", "d3bj"): ("dispersion.correction", "d3_bj"),
+    ("dispersion", "d3zero"): ("dispersion.correction", "d3_zero"),
+    ("dispersion", "d30"): ("dispersion.correction", "d3_zero"),
+    ("dispersion", "d4"): ("dispersion.correction", "d4"),
+    ("dispersion", "novdw"): ("dispersion.correction", "none"),
+    ("dispersion", "nod3"): ("dispersion.correction", "none"),
+    ("dispersion", "nod3bj"): ("dispersion.correction", "none"),
+    ("dispersion", "nod4"): ("dispersion.correction", "none"),
+    # Frozen core.
+    ("core", "frozencore"): ("core.frozen", "frozen_core"),
+    ("core", "nofrozencore"): ("core.frozen", "all_electron"),
+    # Scalar relativistic Hamiltonian. ``DKH`` is DKH2 (ORCA 6 manual, %rel: ``Order`` defaults to 2).
+    ("relativity", "dkh"): ("relativistic.hamiltonian", "dkh2"),
+    ("relativity", "dkh2"): ("relativistic.hamiltonian", "dkh2"),
+    ("relativity", "zora"): ("relativistic.hamiltonian", "zora"),
+    ("relativity", "iora"): ("relativistic.hamiltonian", "iora"),
+    ("relativity", "x2c"): ("relativistic.hamiltonian", "x2c"),
     # Resource blocks: %maxcore → section="memory"; %pal → section="parallel".
     ("memory", "maxcore"): ("memory.maxcore_mb", None),
     ("parallel", "nprocs"): ("parallel.nproc", None),
@@ -95,7 +139,7 @@ _JOB_TYPES = frozenset({
 })
 
 #: Keywords that name the frequency job's second-derivative method.
-_FREQ_METHOD_KEYWORDS = frozenset({"numfreq", "anfreq"})
+_FREQ_METHOD_KEYWORDS = frozenset(ORCA_FREQ_HESSIAN_KEYWORDS)
 
 #: Known method keywords — belong in level_of_theory, not parameters.
 #: Matched as **prefixes**, so ``dlpno-ccsd(t)-f12`` is recognised
@@ -119,7 +163,7 @@ def _is_method_token(kw_lower: str) -> bool:
 
 #: Dispersion correction keywords — belong in level_of_theory.dispersion.
 _DISPERSION_KEYWORDS = frozenset({
-    "d3", "d3bj", "d3zero", "d4", "vdwfn",
+    "d2", "d3", "d3bj", "d3zero", "d30", "d4", "vdwfn", "novdw",
     "nod3", "nod3bj", "nod4", "novdwfn",
 })
 
@@ -144,9 +188,18 @@ _BASIS_PATTERNS = re.compile(
 
 _SCF_KEYWORDS = frozenset({
     "tightscf", "verytightscf", "loosescf", "normalscf",
-    "scfconv", "nori", "rijcosx", "rijonx", "rijk",
+    "scfconv", "nori", "rijcosx", "rijonx", "rijk", "ri", "nocosx",
     "noiter", "conv", "unconventionalscf",
 })
+
+_CORE_KEYWORDS = frozenset({"frozencore", "nofrozencore"})
+
+_RELATIVISTIC_KEYWORDS = frozenset({"dkh", "dkh2", "zora", "iora", "x2c"})
+
+#: ``CPCM(Water)``, ``SMD(Water)``, ``ALPB(Water)``, ``COSMO(Water)`` or the bare model name.
+_SOLVATION_KEYWORD = re.compile(r"^(cpcm|smd|alpb|cosmo)(\(.*\))?$", re.IGNORECASE)
+
+_AUX_BASIS = re.compile(r"^(.+/(j|jk|c)|autoaux)$", re.IGNORECASE)
 
 _PNO_KEYWORDS = frozenset({
     "tightpno", "normalpno", "loosepno",
@@ -189,9 +242,24 @@ def _classify_keyword(kw: str) -> str | None:
     if _BASIS_PATTERNS.match(kw_lower):
         return None
 
-    # Dispersion → skip (LoT territory)
+    # Dispersion keywords state a separate correction; they are a parameter of the level of theory.
     if kw_lower in _DISPERSION_KEYWORDS:
-        return None
+        return "dispersion"
+
+    # Frozen core, relativistic Hamiltonian
+    if kw_lower in _CORE_KEYWORDS:
+        return "core"
+    if kw_lower in _RELATIVISTIC_KEYWORDS:
+        return "relativity"
+
+    # Continuum solvation: ``CPCM(Water)``, ``SMD(Water)`` or bare ``CPCM``
+    if _SOLVATION_KEYWORD.match(kw_lower):
+        return "solvation"
+
+    # Auxiliary fitting basis sets (``def2/J``, ``def2/JK``, ``def2-TZVP/C``, ``AutoAux``). Kept as raw rows
+    # with no canonical key: ``level_of_theory.aux_basis`` is their home (see the vocabulary revision).
+    if _AUX_BASIS.match(kw_lower):
+        return "basis_aux"
 
     # SCF keywords
     if kw_lower in _SCF_KEYWORDS:
@@ -217,98 +285,77 @@ def _classify_keyword(kw: str) -> str | None:
 # Input block extraction
 # ---------------------------------------------------------------------------
 
-_INPUT_DELIM = re.compile(r"^={60,}$")
-_INPUT_LINE = re.compile(r"^\|\s*\d+>\s*(.*)$")
 
 
-def _extract_input_block(text: str) -> list[str]:
-    """Return the ORCA input lines, from a log echo or a raw ``.in`` file.
-
-    Two layouts are supported:
-
-    * **Log echo**: ORCA echoes the input between ``INPUT FILE`` and
-      ``****END OF INPUT****`` markers, with each line prefixed
-      ``|  N> ``.
-    * **Raw input**: a ``.in`` / ``.inp`` artifact uploaded directly,
-      with no log markers and no line prefixes. Detected by the
-      presence of ORCA-style ``!`` keyword or ``%`` block lines.
-
-    The coordinate block (``* xyz ... *``) is filtered out so atom
-    rows can never reach the keyword/block parsers.
-    """
-    lines = text.splitlines()
-
-    log_echo = _extract_log_echo_input(lines)
-    if log_echo:
-        return log_echo
-
-    if any(_looks_like_orca_input_line(line) for line in lines):
-        return lines
-
-    return []
 
 
-def _extract_log_echo_input(lines: list[str]) -> list[str]:
-    """Extract the ``|  N> content`` lines from a log file echo.
-
-    Returns ``[]`` when no ``INPUT FILE`` block is present.
-    """
-    in_input = False
-    input_lines: list[str] = []
-
-    for line in lines:
-        stripped = line.strip()
-
-        if "INPUT FILE" in stripped:
-            in_input = True
-            continue
-
-        if in_input and "****END OF INPUT****" in stripped:
-            break
-
-        if in_input:
-            m = _INPUT_LINE.match(stripped)
-            if m:
-                input_lines.append(m.group(1))
-
-    return input_lines
 
 
-def _looks_like_orca_input_line(line: str) -> bool:
-    """Best-effort signal that a raw line is ORCA input syntax."""
-    stripped = line.lstrip()
-    return stripped.startswith(("!", "%"))
 
 
-def _strip_coordinate_block(lines: list[str]) -> list[str]:
-    """Drop the ``* xyz ... *`` (or ``* int ... *``) coordinate block.
-
-    The opening line starts with ``*`` and contains ``xyz`` or ``int``;
-    the block ends at the next bare ``*`` line. Atom rows in between
-    must never be passed to the keyword/block parsers.
-    """
-    out: list[str] = []
-    in_coord = False
-    for line in lines:
-        stripped = line.strip()
-        if not in_coord:
-            if stripped.startswith("*") and (
-                "xyz" in stripped.lower() or "int" in stripped.lower()
-            ):
-                in_coord = True
-                continue
-            out.append(line)
-        else:
-            if stripped == "*":
-                in_coord = False
-                continue
-            # Atom row inside the coordinate block — drop.
-    return out
 
 
 # ---------------------------------------------------------------------------
 # Keyword line parsing
 # ---------------------------------------------------------------------------
+
+
+_SOLVATION_MODELS = {"smd": "smd", "cpcm": "cpcm", "cosmo": "cosmo", "alpb": "alpb"}
+
+
+def _solvation_rows(keyword: str) -> list[dict]:
+    """Rows for ``CPCM(Water)`` / ``SMD(Water)``: the model, and the solvent when the keyword names one."""
+    match = _SOLVATION_KEYWORD.match(keyword)
+    if match is None:
+        return []
+    model = match.group(1).lower()
+    rows = [{
+        "raw_key": model,
+        "canonical_key": "solvation.model",
+        "raw_value": "true",
+        "canonical_value": _SOLVATION_MODELS[model],
+        "section": "solvation",
+        "value_type": "enum",
+    }]
+    solvent = (match.group(2) or "")[1:-1]
+    if solvent.strip():
+        rows.append({
+            "raw_key": f"{model}_solvent",
+            "canonical_key": "solvation.solvent",
+            "raw_value": solvent,
+            "canonical_value": normalise_solvent(solvent),
+            "section": "solvation",
+            "value_type": "string",
+        })
+    return rows
+
+
+def _resolve_dkh_order(params: list[dict]) -> list[dict]:
+    """``%rel Method DKH`` is DKH2 when no ``Order`` is given or the order is 2 (ORCA 6 manual: ``Order`` defaults to 2).
+
+    Any other order is a different Hamiltonian the closed set does not hold, so the row stays raw.
+    """
+    rel = [p for p in params if p.get("section") == "relativity"]
+    orders = [p["raw_value"].strip() for p in rel if p["raw_key"].lower() == "order"]
+    for p in rel:
+        if p["raw_key"].lower() == "method" and p["raw_value"].strip().lower() == "dkh" and all(o == "2" for o in orders):
+            p["canonical_key"], p["canonical_value"] = "relativistic.hamiltonian", "dkh2"
+    return params
+
+
+def _resolve_smd_over_cpcm(params: list[dict]) -> list[dict]:
+    """``! CPCM(Water)`` with ``%cpcm smd true`` is the SMD model: keep one canonical model row.
+
+    SMD in ORCA is switched on inside the CPCM block, so a deck that names both states one model. The
+    ``cpcm`` row stays as written; only its canonical key is withdrawn, so the two rows never contradict.
+    """
+    models = [p for p in params if p.get("canonical_key") == "solvation.model"]
+    if any(p["canonical_value"] == "smd" for p in models):
+        for p in models:
+            if p["canonical_value"] == "cpcm":
+                p["canonical_key"] = None
+                p["canonical_value"] = None
+    return params
 
 
 def _parse_keyword_lines(input_lines: list[str]) -> list[dict]:
@@ -320,18 +367,16 @@ def _parse_keyword_lines(input_lines: list[str]) -> list[dict]:
     """
     params: list[dict] = []
 
-    for line in _strip_coordinate_block(input_lines):
-        stripped = line.strip()
-        if not stripped.startswith("!"):
-            continue
-
-        # Strip the ! and optional leading space, then remove inline comments
-        keywords_str = stripped.lstrip("!").strip()
-        if "#" in keywords_str:
-            keywords_str = keywords_str[:keywords_str.index("#")].strip()
-        if not keywords_str:
-            continue
-
+    keyword_lines = orca_keyword_lines(input_lines)
+    all_keywords = [kw for keywords_str in keyword_lines for kw in keywords_str.split()]
+    # One ``freq.hessian_method`` row per deck, at the place of the winning
+    # directive. Its raw text is that directive as written (``NumFreq`` or
+    # ``NumFreq NumGrad``) and its canonical value the overall method, so a row's
+    # raw text never contradicts its canonical value. The reader is shared with
+    # upload validation.
+    freq_hessian = orca_freq_hessian(all_keywords)
+    freq_row_written = False
+    for keywords_str in keyword_lines:
         for kw in keywords_str.split():
             section = _classify_keyword(kw)
             if section is None:
@@ -339,10 +384,30 @@ def _parse_keyword_lines(input_lines: list[str]) -> list[dict]:
                 continue
 
             ck, cv = _lookup_canonical(section, kw)
+            if section == "freq":
+                if freq_hessian is None or freq_row_written:
+                    continue
+                directive, method = freq_hessian
+                if kw.lower() != directive.split()[0].lower():
+                    continue
+                freq_row_written = True
+                params.append({
+                    "raw_key": directive,
+                    "canonical_key": ck,
+                    "raw_value": "true",
+                    "canonical_value": method.value,
+                    "section": "freq",
+                    "value_type": "enum",
+                })
+                continue
             # When a normalised canonical_value comes back, the keyword
             # encodes a discrete choice (``tightscf`` → ``tight``);
             # value_type=enum lines this up with the vocab's
             # expected_value_type. Otherwise it's a presence flag.
+            if section == "solvation":
+                params.extend(_solvation_rows(kw))
+                continue
+            ck, cv = canonical_or_none(ck, cv)
             value_type = "enum" if cv is not None else "bool"
             params.append({
                 "raw_key": kw,
@@ -441,6 +506,20 @@ def _parse_block_sections(input_lines: list[str]) -> list[dict]:
     return params
 
 
+def _block_canonical(section: str, raw_key: str, raw_value: str) -> tuple[str | None, str | None]:
+    """Canonical key and value for one ``%block`` setting, reading the value where it decides the meaning."""
+    key, value = raw_key.lower(), raw_value.strip().strip("\"'").lower()
+    if section == "cpcm" and key == "smd" and value == "true":
+        return "solvation.model", "smd"
+    if section == "cpcm" and key == "smdsolvent" and value:
+        return "solvation.solvent", normalise_solvent(value)
+    if section == "relativity" and key == "method":
+        return canonical_or_none("relativistic.hamiltonian", {"zora": "zora", "iora": "iora", "x2c": "x2c"}.get(value))
+    if section == "general" and key == "frozencore":
+        return canonical_or_none("core.frozen", {"fc_none": "all_electron", "fc_ewin": "window", "fc_electrons": "frozen_core"}.get(value))
+    return _lookup_canonical(section, raw_key)
+
+
 def _parse_block_content(
     block_name: str, lines: list[str], *, single_line: bool = False
 ) -> list[dict]:
@@ -498,14 +577,20 @@ def _parse_block_content(
             i = 0
             while i < len(tokens):
                 raw_key = tokens[i]
-                if i + 1 < len(tokens) and _looks_like_value(tokens[i + 1]):
+                if i + 1 < len(tokens) and (
+                    _looks_like_value(tokens[i + 1])
+                    or (
+                        (raw_key.lower(), tokens[i + 1].lower().split("_")[0])
+                        in {("frozencore", "fc"), ("method", "zora"), ("method", "iora"), ("method", "x2c"), ("method", "dkh")}
+                    )
+                ):
                     raw_value = tokens[i + 1]
                     i += 2
                 else:
                     raw_value = "true"
                     i += 1
 
-                ck, cv = _lookup_canonical(section, raw_key)
+                ck, cv = _block_canonical(section, raw_key, raw_value)
                 params.append({
                     "raw_key": raw_key,
                     "canonical_key": ck,
@@ -522,7 +607,7 @@ def _parse_block_content(
             raw_key = parts[0]
             raw_value = parts[1].strip() if len(parts) > 1 else "true"
 
-            ck, cv = _lookup_canonical(section, raw_key)
+            ck, cv = _block_canonical(section, raw_key, raw_value)
             params.append({
                 "raw_key": raw_key,
                 "canonical_key": ck,
@@ -1051,6 +1136,57 @@ def parse_software_version(text: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 
+_NEW_JOB = re.compile(r"^\s*\$new_job\s*$", re.IGNORECASE)
+
+
+def parse_method_basis_jobs(text: str) -> list[dict]:
+    """``{"methods": [...], "basis": basis}`` for each job of the deck (``$new_job`` starts the next one)."""
+    jobs: list[list[str]] = [[]]
+    for line in _extract_input_block(text):
+        if _NEW_JOB.match(line):
+            jobs.append([])
+        else:
+            jobs[-1].append(line)
+    out = []
+    for lines in jobs:
+        found = _method_basis_of_lines(lines)
+        if found:
+            out.append({"methods": found["methods"], "basis": found["basis"]})
+    return out
+
+
+def parse_qualifier_jobs(text: str) -> list[dict]:
+    """One entry per job of the deck: its methods, basis and the canonical settings the job states.
+
+    ``{"methods": [...], "basis": basis, "pairs": {(canonical_key, canonical_value), ...}}``. ``$new_job`` starts the
+    next job, so a setting of one job is never read as another's.
+    """
+    jobs: list[list[str]] = [[]]
+    for line in _extract_input_block(text):
+        if _NEW_JOB.match(line):
+            jobs.append([])
+        else:
+            jobs[-1].append(line)
+    out = []
+    for lines in jobs:
+        found = _method_basis_of_lines(lines)
+        params = _resolve_dkh_order(_resolve_smd_over_cpcm(_parse_keyword_lines(lines) + _parse_block_sections(lines)))
+        pairs = {
+            (p["canonical_key"], p["canonical_value"])
+            for p in params
+            if p.get("canonical_key") is not None and p.get("canonical_value") is not None
+        }
+        if found or pairs:
+            out.append(
+                {
+                    "methods": found["methods"] if found else [],
+                    "basis": found["basis"] if found else None,
+                    "pairs": pairs,
+                }
+            )
+    return out
+
+
 def parse_method_basis(text: str) -> dict | None:
     """Extract method and basis from ORCA ! keyword line.
 
@@ -1061,12 +1197,16 @@ def parse_method_basis(text: str) -> dict | None:
     - first orbital basis → primary basis
     - remaining → aux_basis
     """
-    input_lines = _extract_input_block(text)
+    return _method_basis_of_lines(_extract_input_block(text))
 
+
+def _method_basis_of_lines(input_lines: list[str]) -> dict | None:
+    """:func:`parse_method_basis` over already-extracted input lines (one job's, or all)."""
     method = None
     basis = None
     aux_basis = None
     cabs_basis = None
+    methods: list[str] = []
 
     for line in input_lines:
         stripped = line.strip()
@@ -1083,6 +1223,7 @@ def parse_method_basis(text: str) -> dict | None:
             # Method detection
             if _is_method_token(kw_lower):
                 method = kw
+                methods.append(kw)
 
             # Basis detection
             elif _BASIS_PATTERNS.match(kw_lower):
@@ -1101,6 +1242,9 @@ def parse_method_basis(text: str) -> dict | None:
             "basis": basis,
             "aux_basis": aux_basis,
             "cabs_basis": cabs_basis,
+            # Every method token in order. A deck can name several (``DLPNO-CCSD(T)-F12`` with its ``HF``
+            # reference); ``method`` keeps the last, so a comparison with a declared method uses this list.
+            "methods": methods,
         }
     return None
 
@@ -1153,7 +1297,7 @@ def parse_orca_log(
     # Parse all parameter sources
     keyword_params = _parse_keyword_lines(input_lines)
     block_params = _parse_block_sections(input_lines)
-    all_params = keyword_params + block_params
+    all_params = _resolve_dkh_order(_resolve_smd_over_cpcm(keyword_params + block_params))
 
     # Parse scan coordinate definitions from %GEOM blocks (if any)
     scan_coordinates = _parse_scan_definitions(input_lines)
@@ -1182,6 +1326,8 @@ def parse_orca_log(
         "software": parse_software_version(text),
         "charge_multiplicity": parse_charge_multiplicity(text),
         "method_basis": parse_method_basis(text),
+        "method_basis_jobs": parse_method_basis_jobs(text),
+        "qualifier_jobs": parse_qualifier_jobs(text),
         "parser": PARSERS.get("orca_parameters").stamp().model_dump(),
     }
 

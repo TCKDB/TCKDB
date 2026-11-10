@@ -249,11 +249,11 @@ def test_persist_reaction_upload_reuses_species_entries_from_conformer_upload(
             product_observation = persist_conformer_upload(
                 session,
                 _conformer_request(
-                    smiles="[H]",
+                    smiles="[H][H]",
                     charge=0,
-                    multiplicity=2,
-                    xyz_text="1\nH atom\nH 0.0 0.0 0.0\n",
-                    label="h-conf-b",
+                    multiplicity=1,
+                    xyz_text="2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74\n",
+                    label="h2-conf",
                 ),
             ).observation
 
@@ -270,7 +270,11 @@ def test_persist_reaction_upload_reuses_species_entries_from_conformer_upload(
                 session,
                 ReactionUploadRequest(
                     reversible=False,
-                    reactants=[{"species_entry_id": reactant_group.species_entry_id}],
+                    # H + H -> H2: two slots of one entry, and a product entry that differs.
+                    reactants=[
+                        {"species_entry_id": reactant_group.species_entry_id},
+                        {"species_entry_id": reactant_group.species_entry_id},
+                    ],
                     products=[{"species_entry_id": product_group.species_entry_id}],
                 ),
             )

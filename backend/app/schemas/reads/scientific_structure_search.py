@@ -33,13 +33,17 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
     StereoKind,
+    StereoResolution,
 )
 from app.schemas.reads.scientific_common import (
+    CursorToken,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
+    WatermarkEcho,
 )
 
 # ---------------------------------------------------------------------------
@@ -145,6 +149,11 @@ class ScientificSpeciesStructureSearchRecord(BaseModel):
     species_entry_kind: StationaryPointKind
     electronic_state_kind: SpeciesEntryStateKind
     stereo_label: str | None = None
+    stereo_descriptor: str | None = None
+    stereo_resolution: StereoResolution | None = None
+    stereo_smiles: str | None = None
+    #: See ``SpeciesEntryScientificRecord.stereo_not_represented``.
+    stereo_not_represented: list[str] = Field(default_factory=list)
     electronic_state_label: str | None = None
     term_symbol: str | None = None
     isotope_key: str | None = None
@@ -180,6 +189,12 @@ class ScientificSpeciesStructureSearchRequest(BaseModel):
     similarity_threshold: float | None = Field(
         default=None, ge=0.0, le=1.0
     )
+    #: Entry-level isomeric search (``exact`` mode with ``query_smiles``): keep
+    #: only the entries whose stereo descriptor equals the one the query's
+    #: stereo marks specify, so ``C/C=C/C`` finds the E entries of 2-butene and
+    #: not the Z or unresolved ones. Species identity is stereo-blind (DR-0038),
+    #: so without it every stereo entry of the species is returned.
+    isomeric: bool = False
 
     # Trust / review filters mirror the other scientific search surfaces.
     min_review_status: RecordReviewStatus | None = None
@@ -191,6 +206,7 @@ class ScientificSpeciesStructureSearchRequest(BaseModel):
     sort: str | None = None
     include: list[str] = Field(default_factory=list)
     offset: int = Field(default=0, ge=0)
+    cursor: CursorToken = None
     limit: int = Field(default=50, ge=1, le=200)
 
 
@@ -208,13 +224,17 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificSpeciesStructureSearchResponse(BaseModel):
+class ScientificSpeciesStructureSearchResponse(ScientificResponse):
     """Response envelope for /scientific/species/structure-search."""
 
     request: RequestEcho
     review_summary: ReviewStatusSummary
     records: list[ScientificSpeciesStructureSearchRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [

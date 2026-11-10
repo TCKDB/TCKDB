@@ -103,20 +103,18 @@ def test_search_thermo_defaults_to_post_with_json_body():
     client, _ = make_client(handler)
     client.search_thermo(
         smiles="C[CH2]",
-        temperature_min=300,
-        temperature_max=3000,
+        coverage_temperature_min_k=300,
+        coverage_temperature_max_k=3000,
         include=["provenance", "review"],
-        collapse="first",
     )
 
     assert seen[0].method == "POST"
     assert urlsplit(str(seen[0].url)).path == "/api/v1/scientific/thermo/search"
     payload = json.loads(seen[0].content.decode("utf-8"))
     assert payload["smiles"] == "C[CH2]"
-    assert payload["temperature_min"] == 300
-    assert payload["temperature_max"] == 3000
+    assert payload["coverage_temperature_min_k"] == 300
+    assert payload["coverage_temperature_max_k"] == 3000
     assert payload["include"] == ["provenance", "review"]
-    assert payload["collapse"] == "first"
 
 
 def test_search_thermo_post_omits_none_keys():
@@ -143,21 +141,21 @@ def test_search_thermo_get_form_uses_query_params():
     client, _ = make_client(handler)
     client.search_thermo(
         smiles="O",
-        temperature_min=300,
+        coverage_temperature_min_k=300,
         include=["provenance"],
-        method="GET",
+        method_http="GET",
     )
 
     assert seen[0].method == "GET"
     qs = _split_qs(str(seen[0].url))
     assert qs["smiles"] == ["O"]
-    assert qs["temperature_min"] == ["300"]
+    assert qs["coverage_temperature_min_k"] == ["300"]
     assert qs["include"] == ["provenance"]
 
 
 def test_search_thermo_returns_raw_dict():
     body = {
-        "request": {"filter": {"smiles": "X"}, "sort": "...", "collapse": "all", "include": []},
+        "request": {"filter": {"smiles": "X"}, "sort": "...", "include": []},
         "review_summary": {"approved": 0, "total": 1},
         "records": [
             {
@@ -210,8 +208,8 @@ def test_search_kinetics_defaults_to_post_with_json_body():
         reactants=["[CH3]", "c1ccccc1"],
         products=["CH4", "[c]1ccccc1"],
         direction="either",
-        temperature_min=300,
-        temperature_max=2000,
+        coverage_temperature_min_k=300,
+        coverage_temperature_max_k=2000,
         include=["provenance"],
     )
 
@@ -221,8 +219,8 @@ def test_search_kinetics_defaults_to_post_with_json_body():
     assert payload["reactants"] == ["[CH3]", "c1ccccc1"]
     assert payload["products"] == ["CH4", "[c]1ccccc1"]
     assert payload["direction"] == "either"
-    assert payload["temperature_min"] == 300
-    assert payload["temperature_max"] == 2000
+    assert payload["coverage_temperature_min_k"] == 300
+    assert payload["coverage_temperature_max_k"] == 2000
     assert payload["include"] == ["provenance"]
 
 
@@ -238,7 +236,7 @@ def test_search_kinetics_get_form_uses_repeated_query_params():
         reactants=["A1", "A2"],
         products=["B1"],
         direction="forward",
-        method="GET",
+        method_http="GET",
     )
 
     assert seen[0].method == "GET"
@@ -340,7 +338,6 @@ def test_search_species_calculations_defaults_to_post_with_json_body():
         smiles="C[CH2]",
         calculation_type="sp",
         ranking="lowest_energy",
-        collapse="first",
         include=["provenance", "conformers", "review"],
     )
 
@@ -352,7 +349,6 @@ def test_search_species_calculations_defaults_to_post_with_json_body():
     assert payload["smiles"] == "C[CH2]"
     assert payload["calculation_type"] == "sp"
     assert payload["ranking"] == "lowest_energy"
-    assert payload["collapse"] == "first"
     assert payload["include"] == ["provenance", "conformers", "review"]
 
 
@@ -463,3 +459,24 @@ def test_search_species_calculations_post_omits_none_keys():
 
     payload = json.loads(seen[0].content.decode("utf-8"))
     assert payload == {"smiles": "C"}
+
+
+def test_search_thermo_and_kinetics_send_method_as_the_method_name_filter_and_method_http_as_the_verb():
+    """Kills: the HTTP verb still taking the name ``method``, so the method-name filter could not be sent."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return _ok()
+
+    client, _ = make_client(handler)
+    client.search_thermo(smiles="O", method="b3lyp", method_family=["dft"], dft_rung_min=4, scientific_origin="computed")
+    client.search_kinetics(reactants=["O"], method="b3lyp", method_http="GET", method_family="dft")
+
+    assert seen[0].method == "POST"
+    assert json.loads(seen[0].content.decode("utf-8")) == {
+        "smiles": "O", "method": "b3lyp", "method_family": ["dft"], "dft_rung_min": 4, "scientific_origin": "computed",
+    }
+    assert seen[1].method == "GET"
+    qs = _split_qs(str(seen[1].url))
+    assert qs["method"] == ["b3lyp"] and qs["method_family"] == ["dft"]

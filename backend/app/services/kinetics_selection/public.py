@@ -54,18 +54,34 @@ from app.schemas.reads.scientific_kinetics_selection import (
     KineticsSelectionReview,
     KineticsSelectionTargetEcho,
 )
+from app.schemas.reads.scientific_selection_common import (
+    ELIGIBILITY_CONFIRMED_FINDINGS,
+    ELIGIBILITY_DEPRECATED,
+    ELIGIBILITY_HARD_FAILED_EVIDENCE,
+    ELIGIBILITY_REJECTED,
+)
 from app.services.kinetics_selection.models import (
     MAX_CANDIDATES,
     ColliderRequest,
+    KineticsFilters,
     KineticsRequest,
     PressureKind,
     PressureRequest,
     TargetRequest,
 )
 from app.services.kinetics_selection.selection import KineticsSelection, select_reaction_entry_kinetics
-from app.services.scientific_read.handles import is_ref_handle, resolve_path_handle
+from app.services.scientific_read.handles import is_ref_handle, resolve_selection_handle
 from app.services.scientific_read.profile import current_read_profile
 from app.services.selection_kernel import Outcome
+from app.services.selection_kernel.requested import Eligibility, answer_steps
+
+#: The eligibility defaults a kinetics selection applies, in the order the answer lists them.
+KINETICS_DEFAULTS = (
+    ELIGIBILITY_REJECTED,
+    ELIGIBILITY_DEPRECATED,
+    ELIGIBILITY_HARD_FAILED_EVIDENCE,
+    ELIGIBILITY_CONFIRMED_FINDINGS,
+)
 
 
 def _ref_only(session: Session, model_cls: type, handle: str, *, kind_label: str) -> int:
@@ -77,7 +93,7 @@ def _ref_only(session: Session, model_cls: type, handle: str, *, kind_label: str
     """
     if not is_ref_handle(handle):
         raise ValueError(f"invalid_handle: {handle!r} is not a <prefix>_<body> public ref")
-    return resolve_path_handle(session, model_cls, handle, kind_label=kind_label)
+    return resolve_selection_handle(session, model_cls, handle, kind_label=kind_label)
 
 
 def resolve_reaction_entry_ref(session: Session, ref: str) -> int:
@@ -124,6 +140,11 @@ def to_service_request(body: KineticsSelectionRequest) -> KineticsRequest:
         min_review_status=body.min_review_status,
         admin_policy=_admin_policy(body.policy),
         max_candidates=MAX_CANDIDATES,
+        filters=KineticsFilters(
+            model_kind=body.filters.model_kind.value if body.filters.model_kind is not None else None,
+            **body.filters.source_filter_values(),
+        ),
+        eligibility=Eligibility.from_request(body.eligibility),
     )
 
 
@@ -240,6 +261,8 @@ def build_response(
             protocol_state=c["protocol_state"],
             protocol=c["protocol"],
             applicability=c["assessment"]["applicability"],
+            blocked_by=c["eligibility"]["blocked_by"],
+            passed_only_by_override=c["eligibility"]["passed_only_by_override"],
             reasons=[KineticsSelectionReason(**r) for r in c["assessment"]["reasons"]],
             blocking=c["assessment"]["blocking"],
             advisory=c["assessment"]["advisory"],
@@ -274,6 +297,8 @@ def build_response(
             policy=body.policy,
             mode=body.mode,
             min_review_status=body.min_review_status,
+            filters=request["filters"],
+            eligibility=body.eligibility,
         ),
         review=KineticsSelectionReview(effective_floor=floor, effective_statuses=statuses),
         policy=KineticsSelectionPolicyInfo(
@@ -289,6 +314,13 @@ def build_response(
             KineticsSelectionDetermination(**d) for d in manifest["determinations"]
         ],
         candidates=candidates,
+        **answer_steps(
+            request_filters=request["filters"],
+            eligibility_record=request["eligibility"],
+            funnel_record=population["funnel"],
+            names=KINETICS_DEFAULTS,
+            profile_floor=profile_has_floor(),
+        ),
         disclosures=KineticsSelectionDisclosures(
             unresolved_refs=disclosures.get("unresolved_refs", []),
             unsupported_refs=disclosures.get("unsupported_refs", []),

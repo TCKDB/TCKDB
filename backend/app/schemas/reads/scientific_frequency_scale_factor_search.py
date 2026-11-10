@@ -27,10 +27,13 @@ from app.schemas.reads._field_bounds import (
     MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
 )
 from app.schemas.reads.scientific_common import (
+    CursorToken,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
+    WatermarkEcho,
 )
 from app.schemas.reads.scientific_frequency_scale_factor import (
     ScientificFrequencyScaleFactorRecord,
@@ -87,6 +90,7 @@ class FrequencyScaleFactorSearchRequest(BaseModel):
     sort: str | None = None  # rejected non-None per v0 sort policy
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
 
@@ -98,13 +102,17 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificFrequencyScaleFactorSearchResponse(BaseModel):
+class ScientificFrequencyScaleFactorSearchResponse(ScientificResponse):
     """Response envelope for the FSF search endpoint."""
 
     request: RequestEcho
     review_summary: ReviewStatusSummary
     records: list[ScientificFrequencyScaleFactorRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [

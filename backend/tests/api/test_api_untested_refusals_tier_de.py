@@ -523,8 +523,8 @@ def test_a_composed_search_refuses_a_candidate_set_that_changed_under_it(
     real_search_species = thermo_search_mod.search_species
     pages_fetched = {"n": 0}
 
-    def inject_a_concurrent_deposit_after_the_first_page(session, request):
-        result = real_search_species(session, request)
+    def inject_a_concurrent_deposit_after_the_first_page(session, request, **kwargs):
+        result = real_search_species(session, request, **kwargs)
         pages_fetched["n"] += 1
         if pages_fetched["n"] == 1:
             _seed_species(session, [_NEOPENTANE])
@@ -559,8 +559,8 @@ def test_the_same_traversal_with_no_concurrent_deposit_is_accepted(
     real_search_species = thermo_search_mod.search_species
     pages_fetched = {"n": 0}
 
-    def count_only(session, request):
-        result = real_search_species(session, request)
+    def count_only(session, request, **kwargs):
+        result = real_search_species(session, request, **kwargs)
         pages_fetched["n"] += 1
         return result
 

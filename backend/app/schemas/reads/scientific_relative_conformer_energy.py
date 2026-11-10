@@ -24,7 +24,7 @@ from tckdb_schemas.fragments.version import VersionRef
 from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
 from app.db.models.common import CalculationQuality, RecordReviewStatus
-from app.schemas.reads.scientific_common import ProfiledRequestEcho
+from app.schemas.reads.scientific_common import ProfiledRequestEcho, ScientificResponse
 from app.services.relative_conformer_energy.compare import ComparisonOutcome
 from app.services.relative_conformer_energy.compare import Pairing as ComparisonPairing
 from app.services.relative_conformer_energy.models import (
@@ -241,7 +241,7 @@ class RelativeEnergyIntegrity(BaseModel):
     note: str
 
 
-class RelativeConformerEnergyResponse(BaseModel):
+class RelativeConformerEnergyResponse(ScientificResponse):
     """The relative energies, built from the replayable manifest so the two cannot disagree."""
 
     request: RelativeEnergyRequestEcho
@@ -487,7 +487,7 @@ class RelativeEnergyCompareClaims(BaseModel):
     statement: str
 
 
-class RelativeConformerEnergyCompareResponse(BaseModel):
+class RelativeConformerEnergyCompareResponse(ScientificResponse):
     """The descriptive comparison, built from the replayable manifest so the two cannot disagree."""
 
     request: RelativeEnergyCompareRequestEcho

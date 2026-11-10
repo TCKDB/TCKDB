@@ -21,8 +21,8 @@ one generic code that does not distinguish "hidden" from "absent".
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass, field, replace
+from typing import Any, cast
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -38,6 +38,7 @@ from app.db.models.calculation import (
     CalculationOutputGeometry,
 )
 from app.db.models.common import (
+    CalculationQuality,
     CalculationType,
     RecordReviewStatus,
     SubmissionRecordType,
@@ -52,9 +53,18 @@ from app.db.models.structure_determination import (
 )
 from app.db.models.transition_state import TransitionStateEntry, TransitionStateValidationEvidence
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
-from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.schemas.reads.scientific_selection_common import ELIGIBILITY_ENTRY_STATUS, ELIGIBILITY_REJECTED_QUALITY
+from app.services.scientific_read.common import (
+    evidence_usable_statuses,
+    evidence_visible_statuses,
+    fetch_review_badges,
+    visible_statuses,
+)
 from app.services.scientific_read.composite_binding import composite_scheme_summaries
 from app.services.scientific_read.handles import canonical_level_of_theory_id
+from app.services.scientific_read.profile import current_read_profile
+from app.services.selection_filters import filter_by_provenance
+from app.services.selection_kernel.requested import review_default
 from app.services.structure_selection.bounds import check_candidates, check_nested_rows, traversal_too_deep
 from app.services.structure_selection.models import (
     CurvatureFacts,
@@ -66,6 +76,7 @@ from app.services.structure_selection.models import (
     NormalizedCalculation,
     NormalizedDetermination,
     NormalizedSource,
+    StructureFilters,
     StructureRequest,
     StructureSubject,
 )
@@ -76,8 +87,8 @@ CODE_UNKNOWN_MEMBER = "unknown_structure_member_ref"
 MAX_EXCLUDED_LISTED = 100
 REASON_TERMINAL = "terminal_review_status"
 REASON_BELOW_FLOOR = "below_review_floor"
-REASON_QUALITY = "quality_not_permitted"
 REASON_OWNER_BELOW_FLOOR = "owner_below_review_floor"
+REASON_QUALITY = "quality_not_permitted"
 #: The one reason a hidden, absent or unusable pinned calculation reads as: it names no record.
 REASON_EVIDENCE_UNAVAILABLE = "required_evidence_unavailable"
 REASON_SOURCE_BELOW_FLOOR = "source_below_review_floor"
@@ -100,12 +111,35 @@ class PopulationScan:
     effective_statuses: frozenset[RecordReviewStatus]
     profile_statuses: frozenset[RecordReviewStatus]
     unit_ids: tuple[int, ...]
-    unit_status: dict[int, RecordReviewStatus]
+    unit_status: dict[int, RecordReviewStatus | None]
     excluded: tuple[tuple[int, RecordReviewStatus | None, str], ...]
     total_units: int
     nested_rows: int
     #: determination id -> the ids of its observation, for a basin (None otherwise).
     observation_of: dict[int, int | None] = field(default_factory=dict)
+    #: What a unit's own review status may be: ``effective_statuses`` plus the terminal statuses the request lifted.
+    candidate_statuses: frozenset[RecordReviewStatus] = frozenset()
+    #: The status the review defaults judge a unit by: a calculation's own, or a determination's conformer observation's
+    #: (``None`` for one without an observation: its entry is a scoping parent and never gates it).
+    gate_status: dict[int, RecordReviewStatus | None] = field(default_factory=dict)
+    #: Rows the read profile shows, before any step; those the filters (and the caller's own floor and permitted
+    #: qualities) removed; and those a not-lifted default removed, by default name.
+    considered: int = 0
+    removed_by_filters: int = 0
+    removed_by_floor: int = 0
+    terminal_excluded: dict[str, int] = field(default_factory=dict)
+    #: The evidence rule (ADR 0023). ``evidence_shown``: the statuses at which linked evidence is not withheld under the profile
+    #: (a source calculation, a lineage parent, an anchoring observation, a validation-evidence calculation).
+    #: ``evidence_usable``: the statuses a pinned source may have to be USED (the caller's own floor over the non-terminal
+    #: ones). Neither carries the profile's record floor, which decides the units only. Under exploratory they equal
+    #: ``profile_statuses`` and ``effective_statuses``.
+    evidence_shown: frozenset[RecordReviewStatus] = frozenset()
+    evidence_usable: frozenset[RecordReviewStatus] = frozenset()
+    #: A determination's conformer observation's and that observation's group's own review statuses (a basin only), kept
+    #: apart so the manifest can record them and a replay can judge the group (a record) and the observation (evidence) by
+    #: their own rules.
+    observation_review: dict[int, RecordReviewStatus | None] = field(default_factory=dict)
+    group_review: dict[int, RecordReviewStatus | None] = field(default_factory=dict)
 
 
 @dataclass
@@ -136,6 +170,37 @@ def _statuses(request: StructureRequest) -> tuple[frozenset[RecordReviewStatus],
     return effective, profile
 
 
+def candidate_statuses(request: StructureRequest) -> frozenset[RecordReviewStatus]:
+    """What a unit's own review status may be: the caller's floor over the profile's, plus the lifted terminal statuses.
+
+    Under a read profile with a review floor ``visible_statuses`` ignores the lift: ``curated`` cannot be overridden.
+    """
+    e = request.eligibility
+    return frozenset(
+        visible_statuses(
+            min_review_status=request.min_review_status,
+            include_rejected=e.include_rejected,
+            include_deprecated=e.include_deprecated,
+        )
+    )
+
+
+def apply_filters(session: Session, calculations_of: dict[int, set[int]], filters: StructureFilters) -> set[int]:
+    """The unit ids the caller's provenance filters keep: the searches' matching, over each unit's own calculations."""
+    if not filters.active:
+        return set(calculations_of)
+    return filter_by_provenance(
+        session,
+        calculations_of,
+        method=filters.method,
+        basis=filters.basis,
+        software=filters.software,
+        software_version=filters.software_version,
+        workflow_tool=filters.workflow_tool,
+        workflow_tool_version=filters.workflow_tool_version,
+    )
+
+
 def _entry_record_type(grain: Grain) -> SubmissionRecordType:
     return (
         SubmissionRecordType.transition_state_entry
@@ -155,6 +220,8 @@ def assert_subject_visible(session: Session, grain: Grain, entry_id: int, *, pro
     row: Any = session.get(model, entry_id)
     if row is None:
         raise not_found(label, row_id=entry_id, code="handle_not_found")
+    if grain is not Grain.transition_state:
+        return  # a species entry is a scoping parent: its own review status never hides what is under it
     status = fetch_review_badges(session, record_type=_entry_record_type(grain), record_ids=[entry_id])[entry_id].status
     if status not in profile:
         raise not_found(label, ref=row.public_ref, code="handle_not_found", row_id=entry_id)
@@ -233,7 +300,11 @@ def scan_population(session: Session, *, entry_id: int, request: StructureReques
         scan = _scan_calculations(session, entry_id, request, effective, profile)
     else:
         scan = _scan_determinations(session, entry_id, request, effective, profile)
-    return scan
+    return replace(
+        scan,
+        evidence_shown=evidence_visible_statuses(),
+        evidence_usable=evidence_usable_statuses(request.min_review_status),
+    )
 
 
 def _scan_calculations(
@@ -252,8 +323,8 @@ def _scan_calculations(
     refs = {r.id: r.public_ref for r in rows}
     quality = {r.id: r.quality for r in rows}
     badges = fetch_review_badges(session, record_type=SubmissionRecordType.calculation, record_ids=ids)
-    owner_status = fetch_review_badges(session, record_type=SubmissionRecordType.species_entry, record_ids=[entry_id])[entry_id].status
     ids = [i for i in ids if badges[i].status in profile]
+    considered = len(ids)
     if request.member_refs is not None:
         wanted = set(request.member_refs)
         by_ref = {refs[i]: i for i in ids}
@@ -268,18 +339,30 @@ def _scan_calculations(
             )
         ids = [i for i in ids if refs[i] in wanted]
     status = {i: badges[i].status for i in ids}
+    kept = apply_filters(session, {i: {i} for i in ids}, request.filters)
+    own = candidate_statuses(request)
+    elig = request.eligibility
     population: list[int] = []
     excluded: list[tuple[int, RecordReviewStatus | None, str]] = []
+    terminal_excluded: dict[str, int] = {}
+    removed_by_filters = considered - len(kept)
+    removed_by_floor = 0
     for i in ids:
-        if status[i] in _TERMINAL:
+        if i not in kept:
+            continue
+        default = review_default(status[i])
+        if default is not None and not elig.lifts(default):
             excluded.append((i, status[i], REASON_TERMINAL))
-        elif status[i] not in effective:
+            terminal_excluded[default] = terminal_excluded.get(default, 0) + 1
+        elif status[i] not in own:
             excluded.append((i, status[i], REASON_BELOW_FLOOR))
-        elif owner_status in _TERMINAL or owner_status not in effective:
-            # The entry's floor applies at every grain: a calculation does not outrank the entry it belongs to.
-            excluded.append((i, owner_status, REASON_OWNER_BELOW_FLOOR))
+            removed_by_floor += 1
         elif quality[i] not in request.quality_set:
             excluded.append((i, status[i], REASON_QUALITY))
+            if quality[i] is CalculationQuality.rejected:
+                terminal_excluded[ELIGIBILITY_REJECTED_QUALITY] = terminal_excluded.get(ELIGIBILITY_REJECTED_QUALITY, 0) + 1
+            else:
+                removed_by_filters += 1  # a quality the caller did not permit is the caller's own narrowing
         else:
             population.append(i)
     check_candidates(request.bounds, len(population))
@@ -291,10 +374,16 @@ def _scan_calculations(
         effective_statuses=effective,
         profile_statuses=profile,
         unit_ids=tuple(population),
-        unit_status=status,
+        unit_status=cast(dict[int, RecordReviewStatus | None], status),
         excluded=tuple(excluded),
         total_units=len(ids),
         nested_rows=nested,
+        candidate_statuses=own,
+        gate_status=dict(status),
+        considered=considered,
+        removed_by_filters=removed_by_filters,
+        removed_by_floor=removed_by_floor,
+        terminal_excluded=terminal_excluded,
     )
 
 
@@ -332,8 +421,47 @@ def _scan_determinations(
     observation_badges = fetch_review_badges(
         session, record_type=SubmissionRecordType.conformer_observation, record_ids=observation_ids
     )
-    # A determination whose own observation the profile hides is not part of this request's world.
-    ids = [i for i in ids if observation_of[i] is None or observation_badges[observation_of[i]].status in profile]
+    # A conformer group is a gated kind: an observation hides, and is judged, with its group.
+    group_of = (
+        dict(
+            session.execute(
+                select(ConformerObservation.id, ConformerObservation.conformer_group_id).where(
+                    ConformerObservation.id.in_(observation_ids)
+                )
+            ).tuples().all()
+        )
+        if observation_ids
+        else {}
+    )
+    group_badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.conformer_group,
+        record_ids={g for g in group_of.values() if g is not None},
+    )
+
+    evidence_shown = evidence_visible_statuses()
+
+    def observation_status(observation_id: int | None) -> RecordReviewStatus | None:
+        return None if observation_id is None else observation_badges[observation_id].status
+
+    def group_status(observation_id: int | None) -> RecordReviewStatus | None:
+        group_id = group_of.get(observation_id) if observation_id is not None else None
+        return None if group_id is None else group_badges[group_id].status
+
+    def chain(observation_id: int | None) -> list[RecordReviewStatus]:
+        """The statuses a determination is judged by: its observation's and that observation's group's."""
+        return [s for s in (observation_status(observation_id), group_status(observation_id)) if s is not None]
+
+    # ADR 0023 (Q2, Q4): the basin is the record and its conformer GROUP is the record that gates it; the conformer
+    # OBSERVATION inside the group is evidence, so under ``curated`` it is used and badged unless it is rejected or deprecated.
+    # A determination whose group the profile floor hides, or whose observation is withheld as evidence, is not part of this
+    # request's world.
+    def in_world(i: int) -> bool:
+        obs, grp = observation_status(observation_of[i]), group_status(observation_of[i])
+        return (obs is None or obs in evidence_shown) and (grp is None or grp in profile)
+
+    ids = [i for i in ids if in_world(i)]
+    considered = len(ids)
     if request.member_refs is not None:
         wanted = set(request.member_refs)
         by_ref = {refs[i]: i for i in ids}
@@ -346,19 +474,72 @@ def _scan_determinations(
             )
         ids = [i for i in ids if refs[i] in wanted]
 
+    # The caller's provenance filters, over the calculations each determination pins as a source.
+    pinned_by: dict[int, set[int]] = {i: set() for i in ids}
+    if ids:
+        for determination_id, calculation_id in session.execute(
+            select(StructureDeterminationSource.determination_id, StructureDeterminationSource.calculation_id).where(
+                StructureDeterminationSource.determination_id.in_(ids)
+            )
+        ):
+            pinned_by[determination_id].add(calculation_id)
+    kept = apply_filters(session, pinned_by, request.filters)
+    own = candidate_statuses(request)
+    observation_own = evidence_usable_statuses(request.min_review_status) if current_read_profile().review_floor is not None else own
+    elig = request.eligibility
+    with_floor = current_read_profile().review_floor is not None
+
+    def below_floor(i: int, gate: RecordReviewStatus) -> bool:
+        if not with_floor:
+            return gate not in own  # exploratory: the weakest of the chain, exactly as before
+        obs, grp = observation_status(observation_of[i]), group_status(observation_of[i])
+        return (grp is not None and grp not in own) or (obs is not None and obs not in observation_own)
+
     population: list[int] = []
     excluded: list[tuple[int, RecordReviewStatus | None, str]] = []
-    unit_status: dict[int, RecordReviewStatus] = {}
+    unit_status: dict[int, RecordReviewStatus | None] = {}
+    gate_status: dict[int, RecordReviewStatus | None] = {}
+    terminal_excluded: dict[str, int] = {}
+    removed_by_filters = considered - len(kept)
+    removed_by_floor = 0
     for i in ids:
+        # A determination has no review of its own: its owners' are, the weakest of its entry's and its conformer
+        # observation's. The observation's is the one a request can lift; the entry's floor applies as before.
         owners = [owner_badge.status]
-        if observation_of[i] is not None:
-            owners.append(observation_badges[observation_of[i]].status)
-        weakest = max(owners, key=lambda s: REVIEW_FLOOR_ORDER[s])
-        unit_status[i] = weakest
-        if weakest in _TERMINAL:
-            excluded.append((i, weakest, REASON_TERMINAL))
-        elif weakest not in effective:
-            excluded.append((i, weakest, REASON_OWNER_BELOW_FLOOR))
+        links = chain(observation_of[i])
+        gate = max(links, key=lambda s: REVIEW_FLOOR_ORDER[s]) if links else None
+        if gate is not None:
+            owners.append(gate)
+        gate_status[i] = gate
+        # A species entry is a scoping parent: only a transition-state entry gates (and weakens) its determinations.
+        entry_gates = request.grain is Grain.transition_state
+        if entry_gates:
+            unit_status[i] = max(owners, key=lambda s: REVIEW_FLOOR_ORDER[s])
+        else:
+            unit_status[i] = gate  # None: no review of its own; the species entry's status is not copied onto it
+        if i not in kept:
+            continue
+        # Every terminal status among the basin's group and observation must be lifted by the request, not only the weaker
+        # one: asking for rejected records does not ask for a deprecated group. The first default not lifted decides (the
+        # weaker status first), so live selection and the replay of its manifest agree.
+        unlifted = [
+            d
+            for d in (review_default(s) for s in sorted(links, key=lambda s: -REVIEW_FLOOR_ORDER[s]))
+            if d is not None and not elig.lifts(d)
+        ]
+        default = unlifted[0] if unlifted else None
+        if default is not None:
+            excluded.append((i, gate, REASON_TERMINAL))
+            terminal_excluded[default] = terminal_excluded.get(default, 0) + 1
+        elif gate is not None and below_floor(i, gate):
+            excluded.append((i, gate, REASON_BELOW_FLOOR))
+            removed_by_floor += 1
+        elif entry_gates and owner_badge.status in _TERMINAL:
+            excluded.append((i, owner_badge.status, REASON_TERMINAL))
+            terminal_excluded[ELIGIBILITY_ENTRY_STATUS] = terminal_excluded.get(ELIGIBILITY_ENTRY_STATUS, 0) + 1
+        elif entry_gates and owner_badge.status not in effective:
+            excluded.append((i, owner_badge.status, REASON_OWNER_BELOW_FLOOR))
+            terminal_excluded[ELIGIBILITY_ENTRY_STATUS] = terminal_excluded.get(ELIGIBILITY_ENTRY_STATUS, 0) + 1
         else:
             population.append(i)
     check_candidates(request.bounds, len(population))
@@ -371,7 +552,7 @@ def _scan_determinations(
     )
     pinned_badges = fetch_review_badges(session, record_type=SubmissionRecordType.calculation, record_ids=set(pinned))
     # A pinned calculation the profile hides is not counted: it reads as absent everywhere.
-    shown = [c for c in pinned if pinned_badges[c].status in profile]
+    shown = [c for c in pinned if pinned_badges[c].status in evidence_shown]
     source_calc_ids = set(shown)
     nested = _count_nested(session, source_calc_ids, set(population), source_rows=len(shown))
     check_nested_rows(request.bounds, nested)
@@ -382,10 +563,18 @@ def _scan_determinations(
         profile_statuses=profile,
         unit_ids=tuple(population),
         unit_status=unit_status,
+        gate_status=gate_status,
+        candidate_statuses=own,
+        considered=considered,
+        removed_by_filters=removed_by_filters,
+        removed_by_floor=removed_by_floor,
+        terminal_excluded=terminal_excluded,
         excluded=tuple(excluded),
         total_units=len(ids),
         nested_rows=nested,
         observation_of=observation_of,
+        observation_review={i: observation_status(observation_of[i]) for i in ids},
+        group_review={i: group_status(observation_of[i]) for i in ids},
     )
 
 
@@ -468,46 +657,14 @@ def _level_facts(session: Session, calcs: list[Calculation]) -> dict[int, LevelF
     return out
 
 
-def _has_cycle(start: int, edges: list[tuple[int, int, str]]) -> bool:
-    """Whether the explored edges contain a directed cycle reachable from ``start``.
-
-    A *diamond* (one calculation that is the parent of two others on the path) is not a cycle: only an edge back
-    to a node still on the current path is. Iterative depth-first search with the usual three colours.
-    """
-    parents: dict[int, list[int]] = defaultdict(list)
-    for child, parent, _ in edges:
-        parents[child].append(parent)
-    on_path: set[int] = {start}
-    done: set[int] = set()
-    stack: list[tuple[int, Any]] = [(start, iter(sorted(parents.get(start, ()))))]
-    while stack:
-        node, remaining = stack[-1]
-        advanced = False
-        for parent in remaining:
-            if parent in on_path:
-                return True
-            if parent in done:
-                continue
-            on_path.add(parent)
-            stack.append((parent, iter(sorted(parents.get(parent, ())))))
-            advanced = True
-            break
-        if not advanced:
-            stack.pop()
-            on_path.discard(node)
-            done.add(node)
-    return False
-
-
 def _lineage(
     session: Session, calc_ids: set[int], *, depth_limit: int, profile: frozenset[RecordReviewStatus]
-) -> tuple[dict[int, list[tuple[int, int, str]]], set[int], set[int]]:
+) -> tuple[dict[int, list[tuple[int, int, str]]], set[int]]:
     """Typed parents of each calculation, breadth first, ``depth_limit`` hops.
 
-    Returns ``(edges_by_start, truncated_starts, cyclic_starts)`` where an edge is ``(child_id, parent_id, role)``.
-    A start whose frontier is still non-empty after ``depth_limit`` hops is *truncated*; a start whose explored
-    edges contain a real directed cycle is *cyclic* (a shared parent reached by two paths is not). Both are
-    reported, never silently cut.
+    Returns ``(edges_by_start, truncated_starts)`` where an edge is ``(child_id, parent_id, role)``.
+    A start whose frontier is still non-empty after ``depth_limit`` hops is *truncated*; that is reported, never
+    silently cut. The graph is acyclic (database trigger), and the ``seen`` set keeps the walk from revisiting a node.
 
     A parent the read profile hides is treated as absent: its edge is not recorded, it is not walked past, and it
     cannot make the traversal exceed the depth bound, so the result is the one a caller who could not see it would
@@ -515,7 +672,6 @@ def _lineage(
     """
     edges_by_start: dict[int, list[tuple[int, int, str]]] = {i: [] for i in calc_ids}
     truncated: set[int] = set()
-    cyclic: set[int] = set()
     parents_cache: dict[int, list[tuple[int, str]]] = {}
     shown: dict[int, bool] = dict.fromkeys(calc_ids, True)
 
@@ -553,9 +709,7 @@ def _lineage(
             parents_of(frontier)
             if any(parents_cache[n] for n in frontier):
                 truncated.add(start)
-        if _has_cycle(start, edges_by_start[start]):
-            cyclic.add(start)
-    return edges_by_start, truncated, cyclic
+    return edges_by_start, truncated
 
 
 def _finding_facts(
@@ -644,10 +798,9 @@ def _normalize_calculations(
     ids = {c.id for c in calcs}
     edges: dict[int, list[tuple[int, int, str]]] = {}
     truncated: set[int] = set()
-    cyclic: set[int] = set()
     ref_by_id: dict[int, str] = {c.id: c.public_ref for c in calcs}
     if with_lineage and ids:
-        edges, truncated, cyclic = _lineage(session, ids, depth_limit=request.bounds.dependency_depth, profile=profile)
+        edges, truncated = _lineage(session, ids, depth_limit=request.bounds.dependency_depth, profile=profile)
         if truncated:
             raise traversal_too_deep(request.bounds)
         parent_ids = {p for lst in edges.values() for _, p, _ in lst} | {c for lst in edges.values() for c, _, _ in lst}
@@ -730,7 +883,6 @@ def _normalize_calculations(
                 LineageEdge(ref_by_id[child], ref_by_id[parent], role) for child, parent, role in edges.get(c.id, [])
             ),
             lineage_truncated=c.id in truncated,
-            lineage_cyclic=c.id in cyclic,
             findings=_to_finding_facts(session, related, refs_for_findings),
         )
     return out
@@ -794,13 +946,13 @@ def load_population(session: Session, scan: PopulationScan, request: StructureRe
         loaded.calculations = _normalize_calculations(
             session,
             calcs,
-            scan.unit_status,
+            cast(dict[int, RecordReviewStatus], scan.unit_status),  # a calculation always has its own status
             dict.fromkeys((c.id for c in calcs), subject.entry_ref),
             request=request,
             with_lineage=False,
             findings=findings,
             geometry_refs=geometry_refs,
-            profile=scan.profile_statuses,
+            profile=scan.evidence_shown,
         )
         return loaded
     _load_determinations(session, scan, request, subject, loaded)
@@ -830,11 +982,11 @@ def _load_determinations(
     for cid in source_calc_ids:
         status = badges[cid].status
         calc = by_id[cid]
-        if status not in scan.profile_statuses:
+        if status not in scan.evidence_shown:
             usable_status[cid] = REASON_EVIDENCE_UNAVAILABLE
         elif status in _TERMINAL:
             usable_status[cid] = REASON_SOURCE_TERMINAL
-        elif status not in scan.effective_statuses:
+        elif status not in scan.evidence_usable:
             usable_status[cid] = REASON_SOURCE_BELOW_FLOOR
         elif calc.quality not in request.quality_set:
             usable_status[cid] = REASON_SOURCE_QUALITY
@@ -859,7 +1011,7 @@ def _load_determinations(
         with_lineage=True,
         findings=findings,
         geometry_refs=geometry_refs,
-        profile=scan.profile_statuses,
+        profile=scan.evidence_shown,
     )
     calc_ref = {c.id: c.public_ref for c in usable_calcs}
 
@@ -890,7 +1042,8 @@ def _load_determinations(
             )
         )
         # The calculation an evidence row reconstructs is named only when the profile shows it; a row resting on a hidden one
-        # reads exactly like an absent row (hidden == unknown), so a hidden IRC neither appears nor certifies connectivity.
+        # reads exactly like an absent row (withheld == unknown), so a withheld IRC neither appears nor certifies
+        # connectivity.
         evidence_calc_ids = {ev.reconstruction_calculation_id for ev in evidence if ev.reconstruction_calculation_id is not None}
         outside = evidence_calc_ids - calc_ref.keys()
         outside_badges = fetch_review_badges(session, record_type=SubmissionRecordType.calculation, record_ids=outside)
@@ -898,7 +1051,7 @@ def _load_determinations(
             dict(
                 session.execute(
                     select(Calculation.id, Calculation.public_ref).where(
-                        Calculation.id.in_([c for c in outside if outside_badges[c].status in scan.profile_statuses])
+                        Calculation.id.in_([c for c in outside if outside_badges[c].status in scan.evidence_shown])
                     )
                 ).tuples().all()
             )
@@ -980,6 +1133,8 @@ def _load_determinations(
             conformer_group_ref=group_refs.get(obs.conformer_group_id) if obs is not None else None,
             evaluated_geometry_ref=geometry_refs.get(d.evaluated_geometry_id) or _geometry_ref_of(session, d.evaluated_geometry_id) or "",
             review_status=scan.unit_status[d.id],
+            observation_review_status=scan.observation_review.get(d.id),
+            group_review_status=scan.group_review.get(d.id),
             created_at=d.created_at,
             id_rank=rank,
             entry_kind=subject.stationary_point_kind,

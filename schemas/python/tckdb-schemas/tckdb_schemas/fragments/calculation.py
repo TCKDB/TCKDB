@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
@@ -15,11 +15,13 @@ from tckdb_schemas.enums import (
     CompositeInputSlot,
     ConstraintKind,
     EnergyComponentKind,
+    HessianMethod,
     HessianSource,
     ImaginaryModeDisposition,
     IRCDirection,
     PathSearchMethod,
     SCFStabilityStatus,
+    StationaryPointKind,
 )
 from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
 from tckdb_schemas.fragments.calculation_origin import CalculationOriginMetadata
@@ -30,14 +32,15 @@ from tckdb_schemas.fragments.refs import (
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
+from tckdb_schemas.hessian_method_assumption import resolve_tau_with_assumption
 from tckdb_schemas.literature import LiteratureUploadRequest
 from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.stationary_point import (
     ImaginaryMode,
     StationaryPointFinding,
     TauResolution,
+    evaluate_species_entry_frequency,
     evaluate_transition_state_frequency,
-    resolve_tau_from_parameters,
 )
 from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
@@ -1042,7 +1045,7 @@ class WavefunctionDiagnosticPayload(SchemaBase):
     """Optional inline wavefunction diagnostics parsed from a calculation's output.
 
     Carries scalar coupled-cluster / multireference diagnostics — T1
-    (Lee–Taylor), D1 (Janowski), the norm of the T1 amplitude vector,
+    (Lee–Taylor), D1 (Janssen and Nielsen, 1998), the norm of the T1 amplitude vector,
     and the largest T2 amplitude. Spin-contamination ``<S^2>`` signals
     are intentionally NOT included in this first slice.
 
@@ -1052,7 +1055,7 @@ class WavefunctionDiagnosticPayload(SchemaBase):
     calculation; this payload rejects an all-null block with no note.
 
     :param t1_diagnostic: Coupled-cluster T1 diagnostic (Lee–Taylor).
-    :param d1_diagnostic: Janowski D1 diagnostic.
+    :param d1_diagnostic: D1 diagnostic of Janssen and Nielsen (1998).
     :param t1_norm: Norm of the T1 amplitude vector, when reported.
     :param largest_t2_amplitude: Largest T2 amplitude magnitude, when
         reported.
@@ -1507,6 +1510,29 @@ class CalculationWithResultsPayload(CalculationPayload):
             tau=self.tau_resolution(),
         )
 
+    def species_entry_frequency_findings(
+        self, kind: StationaryPointKind, *, location: str
+    ) -> list[StationaryPointFinding]:
+        """Judge this calculation's frequency evidence against a declared species-entry kind.
+
+        The adapter every species-entry path uses, so a declared minimum
+        is judged against the same tau (from this calculation's own
+        recorded parameters) however it was deposited.
+        """
+        if self.freq_result is None:
+            return []
+        return evaluate_species_entry_frequency(
+            kind,
+            self.freq_result.n_imag,
+            self.freq_result.imag_freq_cm1,
+            location=location,
+            imaginary_modes=self.freq_result.imaginary_modes(),
+            reaction_coordinate_mode_index=(
+                self.freq_result.reaction_coordinate_mode_index
+            ),
+            tau=self.tau_resolution(),
+        )
+
     def frequency_completeness_findings(
         self, *, location: str, fallback_xyz_text: str | None = None
     ) -> list[StationaryPointFinding]:
@@ -1539,18 +1565,51 @@ class CalculationWithResultsPayload(CalculationPayload):
             location=location,
         )
 
-    def tau_resolution(self) -> TauResolution:
-        """ADR 0012's τ for this calculation, from its own parameters.
+    #: The Hessian method this calculation's inline input deck states, set by
+    #: the bundle adapters that hold the deck (this payload has no artifacts).
+    #: Not a wire field: it carries the validation-time reading to persistence
+    #: so the stored tau is the tau the deposit was judged at.
+    _deck_hessian_method: HessianMethod | None = PrivateAttr(default=None)
 
-        Reads the ``canonical_key``/``canonical_value`` pairs the
-        producer deposited. A payload that carries no parameters — the
-        common case for a hand-written upload — resolves to the
-        conservative "protocol not recorded" row, and says so in the
-        stored reason rather than silently picking a number.
+    #: The method the calculation's inline output log REPORTS the frequency job
+    #: ran, carried the same way as ``_deck_hessian_method`` and ranked above
+    #: every request.
+    _reported_hessian_method: HessianMethod | None = PrivateAttr(default=None)
+
+    #: The method the input echoed in the calculation's inline output logs requests; ranked below the report and
+    #: above the deck.
+    _echo_hessian_method: HessianMethod | None = PrivateAttr(default=None)
+
+    #: A deck or echoed input has a bare ORCA ``NumFreq`` that reads as energies (see ``numfreq_energy_implied``).
+    _numfreq_energy_implied: bool = PrivateAttr(default=False)
+
+    def tau_resolution(self) -> TauResolution:
+        """ADR 0012's τ for this calculation: recorded, else assumed, else conservative.
+
+        A recorded ``freq.hessian_method`` (from the ``canonical_key`` /
+        ``canonical_value`` pairs the producer deposited) always wins. Failing
+        that, the payload's own software and level-of-theory method select the
+        producing program's assumed default (ADR 0012, 2026-09-04 amendment,
+        applied at validation since 2026-10-31), stored with an ``assumed_*``
+        basis. A program or method family the table does not know — or no
+        software at all — resolves to ``protocol_not_recorded``, and says so
+        rather than picking a number.
         """
-        return resolve_tau_from_parameters(
-            (observation.canonical_key, observation.canonical_value)
-            for observation in (self.parameters or ())
+        return resolve_tau_with_assumption(
+            (
+                (observation.canonical_key, observation.canonical_value)
+                for observation in (self.parameters or ())
+            ),
+            self.software_release.name if self.software_release is not None else None,
+            self.level_of_theory.method,
+            self.software_release.version if self.software_release is not None else None,
+            self._deck_hessian_method,
+            self._reported_hessian_method,
+            self._echo_hessian_method,
+            spin_treatment=getattr(self.level_of_theory, "spin_treatment", None),
+            core_treatment=getattr(self.level_of_theory, "core_treatment", None),
+            ri_approximation=getattr(self.level_of_theory, "ri_approximation", None),
+            numfreq_energy_implied=self._numfreq_energy_implied,
         )
 
     @model_validator(mode="after")

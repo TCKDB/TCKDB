@@ -5,9 +5,11 @@ See docs/specs/browse_order.md.
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from tckdb_schemas.thermo_declarations import StoredThermoProtocolDeclaration
 
 from app.db.models.common import (
@@ -16,12 +18,16 @@ from app.db.models.common import (
     PhaseKind,
     RecordReviewStatus,
     ScientificOriginKind,
+    ThermoDeclarationSource,
     ThermoTargetKind,
 )
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
+from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
+from app.schemas.reads.scientific_calculation import RoleCalculationSettings
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
-    CollapseMode,
+    CursorToken,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
     OrderEcho,
@@ -30,12 +36,14 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
     ScientificLevelsSummary,
-    SelectionPolicy,
+    ScientificResponse,
     SoftwareReleaseSummary,
     SupersessionNotice,
     TemperatureCoverage,
+    WatermarkEcho,
     WorkflowToolReleaseSummary,
 )
+from app.schemas.reads.scientific_deposit_warnings import RecordWarnings, SubmissionWarnings
 from app.services.trust.models import TrustFragment
 
 
@@ -66,39 +74,59 @@ class ThermoModelKindQuery(str, Enum):
 
 
 class ThermoReadRequest(BaseModel):
-    """Service-layer request for species-entry thermo read."""
+    """Service-layer request for species-entry thermo read.
 
-    temperature_min: float | None = None
-    temperature_max: float | None = None
+    A thermo read lists every matching record in display order; it never picks one (``collapse`` and
+    ``selection_policy`` are refused, see :mod:`app.schemas.reads.removed_parameters`). The coverage window below
+    filters nothing: it sets what each record's ``temperature_coverage`` is computed against.
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_parameters(cls, data):
+        return _REMOVED_PARAMETERS.guard_body(data)
+
+    #: The window ``temperature_coverage`` is computed against. Not a filter: records outside it are still returned.
+    coverage_temperature_min_k: float | None = None
+    coverage_temperature_max_k: float | None = None
     model_kind: ThermoModelKindQuery | None = None
+    # Matches when ANY source calculation linked to the thermo record ran at this level of theory. There is no
+    # "primary" calculation for a filter, and no role priority: a record is kept when any linked calculation matches.
     level_of_theory_id: int | None = None
     # Phase C: LoT may be supplied by ref instead of (or alongside) id.
     level_of_theory_ref: str | None = None
-    # Filters on the PRIMARY CALCULATION's software name (see
-    # `_primary_software_name` in the service) -- i.e. what ran the
-    # electronic structure, matching `ThermoProvenance.primary_calculation
-    # .software`. It does NOT filter on `ThermoProvenance.software_release`
-    # (the thermo's own software, e.g. Arkane). A client that reads
-    # `software_release: "Arkane"` off a record and re-queries
-    # `?software=Arkane` gets zero rows for population-B-shaped records,
-    # which have no calculation named "Arkane" to match. Pre-existing
-    # behavior, unchanged by issue #284's fix -- documented here because the
-    # response-field rename (`software` -> `software_release`) makes the
-    # naming collision between this filter and the old field newly visible.
+    # Matches when ANY source calculation linked to the thermo record ran in a software of this name (what ran the
+    # electronic structure; ``ThermoProvenance.primary_calculation.software`` is one of them). There is no "primary"
+    # calculation for a filter: a record is kept when any of its linked calculations matches. It does NOT filter on
+    # ``ThermoProvenance.software_release`` (the thermo's own software, e.g. Arkane): a record with no linked
+    # calculation named "Arkane" is not matched by ``?software=Arkane``.
     software: str | None = None
+
+    # Further provenance filters. ONE source calculation has to match every supplied provenance field at once
+    # (``level_of_theory_*``, ``software``, and these). ``method_family`` and ``dft_rung_*`` are a classification of the
+    # calculation's method, not a measure of accuracy (``app/schemas/reads/_method_family.py``).
+    method: str | None = None
+    basis: str | None = None
+    software_version: str | None = None
+    workflow_tool: str | None = None
+    workflow_tool_version: str | None = None
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
+    #: computed, experimental or estimated: the record's own ``scientific_origin``.
+    scientific_origin: ScientificOriginKind | None = None
 
     min_review_status: RecordReviewStatus | None = None
     include_rejected: bool = False
     include_deprecated: bool = False
 
     sort: str | None = None  # rejected non-None per v0 sort policy.
-    collapse: CollapseMode = CollapseMode.all
-    # Named, read-time policy governing which single record collapse=first
-    # selects. ``default`` keeps the standard thermo ranking.
-    selection_policy: SelectionPolicy = SelectionPolicy.default
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
+    #: Whether ``include=assessments`` compares each stored assessment's inputs with today's (opt-in; at most 10 records).
+    check_inputs: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -246,10 +274,12 @@ class ThermoTargetBlock(BaseModel):
     :param kind: ``equilibrium_ensemble`` or ``single_conformer``.
     :param conformer_group_ref: Public ref of the conformer group a
         ``single_conformer`` target names; ``null`` for an equilibrium target.
+    :param declared_by: Whose claim the target is: ``depositor`` or ``chemkin_format``.
     """
 
     kind: ThermoTargetKind
     conformer_group_ref: str | None = None
+    declared_by: ThermoDeclarationSource
 
 
 class ThermoRecord(BaseModel):
@@ -266,6 +296,9 @@ class ThermoRecord(BaseModel):
 
     thermo_id: int
     thermo_ref: str
+    #: Deposition time: when this row was created in TCKDB. The second key of the display order
+    #: (``docs/specs/browse_order.md``), shown so a client can check the order it was served.
+    created_at: datetime
     scientific_origin: ScientificOriginKind
     model_kind: ThermoModelKindQuery
     review: RecordReviewBadge
@@ -316,6 +349,12 @@ class ThermoRecord(BaseModel):
     # Group-additivity estimation breakdown; null unless the record is an
     # estimated thermo with an attached GA breakdown (DR-0035).
     group_additivity: GroupAdditivityBlock | None = None
+    #: ``include=calculation_settings``. For each of geometry / frequency / energy, the calculation this record links
+    #: for that level and the grid and SCF convergence it used, each with its evidence. A level with no linked
+    #: calculation is listed as absent. Never filled from an unlinked statmech or a sibling record.
+    calculation_settings: list[RoleCalculationSettings] | None = None
+    #: Filled by the record builder, read by ``attach_calculation_settings``; never on the wire.
+    _level_plan: Any = PrivateAttr(default=None)
     trust: TrustFragment | None = None
     assessments: PublicAssessmentSummary | None = None
 
@@ -325,24 +364,31 @@ class RequestEcho(ProfiledRequestEcho):
 
     filter: dict[str, object]
     sort: OrderEcho
-    collapse: CollapseMode
-    selection_policy: SelectionPolicy = SelectionPolicy.default
     include: list[str]
-    #: The display order that actually ordered the returned records, in the same shape as ``sort``. ``sort`` stays the
-    #: candidate-list (``collapse=all``) order; with ``collapse=first&selection_policy=latest`` this drops the review rank.
-    effective_order: OrderEcho | None = None
+    #: Whether this read compared each stored assessment's inputs with today's (``check_inputs=true``).
+    check_inputs: bool = False
 
 
-class ScientificSpeciesThermoResponse(BaseModel):
+class ScientificSpeciesThermoResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/species-entries/{id}/thermo.
 
     Phase B: ``species_entry_ref`` mirrors ``species_entry_id`` as the
     public stable handle for the response's path-parameter resource.
     """
 
+    #: The deposit-time warnings of each record this response names, with its public ref (see
+    #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    record_warnings: list[RecordWarnings] = Field(default_factory=list)
+    #: Warnings about the deposit that no one record could take, once per submission a named record belongs to
+    #: (see ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    deposit_warnings: list[SubmissionWarnings] = Field(default_factory=list)
     request: RequestEcho
     species_entry_id: int
     species_entry_ref: str
     review_summary: ReviewStatusSummary
     records: list[ThermoRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None

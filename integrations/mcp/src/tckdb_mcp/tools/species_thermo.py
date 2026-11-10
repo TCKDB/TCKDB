@@ -48,8 +48,8 @@ _DEFAULT_INCLUDE: tuple[str, ...] = ("provenance",)
 _ACCEPTED_FIELDS: frozenset[str] = frozenset(
     {
         "species_entry_ref",
-        "temperature_min",
-        "temperature_max",
+        "coverage_temperature_min_k",
+        "coverage_temperature_max_k",
         "model_kind",
         "level_of_theory_ref",
         "software",
@@ -57,9 +57,9 @@ _ACCEPTED_FIELDS: frozenset[str] = frozenset(
         "include_rejected",
         "include_deprecated",
         "offset",
+        "cursor",
         "limit",
         "include",
-        "collapse",
     }
 )
 
@@ -81,8 +81,8 @@ INPUT_SCHEMA: dict[str, Any] = {
             "minLength": 5,
             "maxLength": PUBLIC_REF_MAX_LENGTH,
         },
-        "temperature_min": {"type": "number"},
-        "temperature_max": {"type": "number"},
+        "coverage_temperature_min_k": {"type": "number"},
+        "coverage_temperature_max_k": {"type": "number"},
         "model_kind": {
             "type": "string",
             "description": (
@@ -99,6 +99,7 @@ INPUT_SCHEMA: dict[str, Any] = {
         "include_rejected": {"type": "boolean"},
         "include_deprecated": {"type": "boolean"},
         "offset": {"type": "integer", "minimum": 0},
+        "cursor": {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Stable paging: pass the previous response's next_cursor to get the next page (null on the last page). Do not combine with a non-zero offset. offset is random access and can skip or repeat records if the database changes between pages."},
         "limit": {
             "type": "integer",
             "minimum": 1,
@@ -117,11 +118,6 @@ INPUT_SCHEMA: dict[str, Any] = {
                 "Subset of legal species-entry-thermo include tokens. "
                 "'internal_ids' is not exposed. Defaults to ['provenance']."
             ),
-        },
-        "collapse": {
-            "type": "string",
-            "enum": ["all", "first"],
-            "default": "all",
         },
     },
     "additionalProperties": False,
@@ -167,15 +163,16 @@ def run(
     offset = args.get("offset", 0)
     if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
         raise invalid_input(f"offset must be a non-negative integer; got {offset!r}")
+    cursor = args.get("cursor")
+    if cursor is not None and (not isinstance(cursor, str) or not cursor):
+        raise invalid_input("cursor must be the next_cursor string of the previous page")
+    if cursor is not None and offset:
+        raise invalid_input("cursor and a non-zero offset cannot be combined; use the cursor alone")
 
     try:
         limit = config.cap_limit(args.get("limit"))
     except ValueError as exc:
         raise invalid_input(str(exc)) from exc
-
-    collapse = args.get("collapse", "all")
-    if collapse not in ("all", "first"):
-        raise invalid_input(f"collapse must be 'all' or 'first'; got {collapse!r}")
 
     if "include" in args:
         include_raw = args.get("include")
@@ -201,12 +198,12 @@ def run(
             f"Legal tokens: {sorted(LEGAL_INCLUDE_TOKENS)!r}"
         )
 
-    _validate_numeric(args.get("temperature_min"), "temperature_min")
-    _validate_numeric(args.get("temperature_max"), "temperature_max")
+    _validate_numeric(args.get("coverage_temperature_min_k"), "coverage_temperature_min_k")
+    _validate_numeric(args.get("coverage_temperature_max_k"), "coverage_temperature_max_k")
 
     params: dict[str, Any] = {
-        "temperature_min": args.get("temperature_min"),
-        "temperature_max": args.get("temperature_max"),
+        "coverage_temperature_min_k": args.get("coverage_temperature_min_k"),
+        "coverage_temperature_max_k": args.get("coverage_temperature_max_k"),
         "model_kind": args.get("model_kind"),
         "level_of_theory_ref": level_of_theory_ref,
         "software": args.get("software"),
@@ -214,9 +211,9 @@ def run(
         "include_rejected": args.get("include_rejected"),
         "include_deprecated": args.get("include_deprecated"),
         "offset": offset,
+        "cursor": cursor,
         "limit": limit,
         "include": include,
-        "collapse": collapse,
     }
 
     quoted_ref = quote(species_entry_ref, safe="")

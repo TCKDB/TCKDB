@@ -155,9 +155,11 @@ _METHOD_LEVEL_FIELDS = (
     "dispersion",
     "solvent",
     "solvent_model",
-    "keywords",
     "spin_treatment",
     "core_treatment",
+    "relativistic_hamiltonian",
+    "pno_truncation",
+    "ri_approximation",
 )
 
 

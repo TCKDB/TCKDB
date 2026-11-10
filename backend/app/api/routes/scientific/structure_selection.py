@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_snapshot_db
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.server_faults import ServerFaultRoute
 from app.schemas.reads.scientific_structure_selection import (
     CalculationSelectionRequest,
     ConformerSelectionRequest,
@@ -38,6 +39,7 @@ from app.schemas.reads.scientific_structure_selection import (
     TransitionStateEvidenceSelectionRequest,
 )
 from app.services.scientific_read.profile import stamp_read_profile
+from app.services.scientific_read.ref_guard import attach_review_statuses
 from app.services.structure_selection.public import (
     SelectionBody,
     build_response,
@@ -47,8 +49,8 @@ from app.services.structure_selection.public import (
     run_selection,
 )
 
-species_router = APIRouter(prefix="/species-entries")
-tse_router = APIRouter(prefix="/transition-state-entries")
+species_router = APIRouter(route_class=ServerFaultRoute, prefix="/species-entries")
+tse_router = APIRouter(route_class=ServerFaultRoute, prefix="/transition-state-entries")
 
 _ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
@@ -71,6 +73,7 @@ def _select(session: Session, request: Request, body: SelectionBody, entry_id: i
     selection = run_selection(session, entry_id=entry_id, body=body)
     payload = build_response(selection, entry_ref=entry_ref)
     stamp_read_profile(payload)
+    attach_review_statuses(payload)
     return payload
 
 

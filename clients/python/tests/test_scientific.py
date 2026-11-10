@@ -219,10 +219,12 @@ def test_iter_species_browse_paginates_through_browse_species():
         {
             "records": [{"species_id": 1}, {"species_id": 2}],
             "pagination": {"offset": 0, "limit": 2, "returned": 2, "total": 3},
+            "next_cursor": "c2",
         },
         {
             "records": [{"species_id": 3}],
-            "pagination": {"offset": 2, "limit": 2, "returned": 1, "total": 3},
+            "pagination": {"offset": 0, "limit": 2, "returned": 1, "total": 3},
+            "next_cursor": None,
         },
     ]
     calls: list[dict] = []
@@ -237,6 +239,8 @@ def test_iter_species_browse_paginates_through_browse_species():
 
     assert [r["species_id"] for r in records] == [1, 2, 3]
     assert len(calls) == 2
+    assert "cursor" not in calls[0]
+    assert calls[1]["cursor"] == ["c2"] or calls[1]["cursor"] == "c2"
 
 
 # ===========================================================================
@@ -280,7 +284,7 @@ def test_search_reactions_get_form_uses_repeated_query_params():
     client.search_reactions(
         reactants=["A1", "A2"],
         products=["B1"],
-        method="GET",
+        method_http="GET",
     )
 
     assert seen[0].method == "GET"
@@ -333,7 +337,7 @@ def test_get_reaction_kinetics_uses_reaction_entry_id_in_path():
     )
 
 
-def test_get_reaction_kinetics_serializes_temperature_and_collapse():
+def test_get_reaction_kinetics_serializes_the_coverage_window():
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -343,16 +347,14 @@ def test_get_reaction_kinetics_serializes_temperature_and_collapse():
     client, _ = make_client(handler)
     client.get_reaction_kinetics(
         reaction_entry_id=51,
-        temperature_min=300.0,
-        temperature_max=2000.0,
-        collapse="first",
+        coverage_temperature_min_k=300.0,
+        coverage_temperature_max_k=2000.0,
         include=["provenance", "calculations"],
     )
 
     qs = _split_qs(str(seen[0].url))
-    assert qs["temperature_min"] == ["300.0"]
-    assert qs["temperature_max"] == ["2000.0"]
-    assert qs["collapse"] == ["first"]
+    assert qs["coverage_temperature_min_k"] == ["300.0"]
+    assert qs["coverage_temperature_max_k"] == ["2000.0"]
     assert sorted(qs["include"]) == ["calculations", "provenance"]
 
 
@@ -457,15 +459,15 @@ def test_get_species_thermo_serializes_temperature_and_filters():
     client, _ = make_client(handler)
     client.get_species_thermo(
         species_entry_id=31,
-        temperature_min=300,
-        temperature_max=3000,
+        coverage_temperature_min_k=300,
+        coverage_temperature_max_k=3000,
         model_kind="nasa",
         level_of_theory_id=12,
     )
 
     qs = _split_qs(str(seen[0].url))
-    assert qs["temperature_min"] == ["300"]
-    assert qs["temperature_max"] == ["3000"]
+    assert qs["coverage_temperature_min_k"] == ["300"]
+    assert qs["coverage_temperature_max_k"] == ["3000"]
     assert qs["model_kind"] == ["nasa"]
     assert qs["level_of_theory_id"] == ["12"]
 

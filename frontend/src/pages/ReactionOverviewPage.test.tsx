@@ -2,8 +2,9 @@ import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { MemoryRouter, Route, Routes } from "react-router-dom"
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
 import ReactionOverviewPage from "./ReactionOverviewPage"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 
 const REACTION_REF = "rxn_naeqmg4l5wyqex5cl5tir2vt2y"
 const server = setupServer()
@@ -28,6 +29,8 @@ function page(ref: string) {
 
 const participant = (ref: string, formula: string, smiles: string, label?: string) => ({
     species_entry_ref: ref, formula, smiles, participant_index: 0, species_entry_label: label ?? null,
+    // The computed facets, which are what the page renders chips from.
+    species_entry_kind: "minimum", electronic_state_kind: "ground", stereo_label: label ?? null, stereo_descriptor: label ?? null,
 })
 
 function searchResponse() {
@@ -67,6 +70,7 @@ function searchResponse() {
                 availability: { has_kinetics: true, has_transition_state: false, has_path_search: false, kinetics_count: 3 },
             },
         ],
+        pagination: { offset: 0, limit: 50, returned: 2, total: 2 },
     }
 }
 
@@ -121,7 +125,7 @@ describe("ReactionOverviewPage", () => {
     // Post-review fix: every participant cell used to render ONLY the
     // formula link, dropping the ref/copy-button/stereo-label chip the
     // mock's own chooser table carried for all four facts.
-    it("each participant cell carries its own spe_ ref, a copy button, and its served stereo-label chip", async () => {
+    it("each participant cell carries its own spe_ ref, a copy button, and and its structured stereo chip", async () => {
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
         page(REACTION_REF)
         await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
@@ -149,9 +153,7 @@ describe("ReactionOverviewPage", () => {
         await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
         const rows = screen.getAllByRole("row").slice(1)
         const productsCell = rows[0].querySelector('td[data-label="Products"]')!
-        // Exactly TWO "·" characters would appear if the chip used the same
-        // separator as a genuine third participant; there must be only ONE
-        // (the real reactant/product separator), with the label parenthesised.
+        // Exactly ONE "·" (the real participant separator): the chip is parenthesised, so it cannot read as a third product.
         const dotCount = (productsCell.textContent!.match(/·/g) ?? []).length
         expect(dotCount).toBe(1)
         expect(productsCell.textContent).toContain("(Z isomer)")
@@ -191,5 +193,128 @@ describe("ReactionOverviewPage", () => {
         expect(checklist).toBeVisible()
         const dt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Total")
         expect(dt?.nextElementSibling?.textContent).toBe("4")
+    })
+})
+
+describe("ReactionOverviewPage: what the page says it chose, and paging", () => {
+    it("says the title and equation come from the first listed entry when there are several", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
+        page(REACTION_REF)
+        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        expect(screen.getByText(/The title and equation are read from rxe_tku6xu2lt3girf2rsiwl5uds4e, the first entry listed, not from every entry/)).toBeVisible()
+    })
+
+    it("says where the title comes from even for a single entry", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => {
+            const response = searchResponse()
+            return HttpResponse.json({ ...response, records: response.records.slice(0, 1), pagination: { offset: 0, limit: 50, returned: 1, total: 1 } })
+        }))
+        page(REACTION_REF)
+        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        expect(screen.getByText("The title and equation are read from the one deposited entry, rxe_tku6xu2lt3girf2rsiwl5uds4e.")).toBeVisible()
+    })
+
+    it("pages the entries: the headline count is the archive's total and Next asks for the following window", async () => {
+        const seen: string[] = []
+        server.use(http.get("/api/v1/scientific/reactions/search", ({ request }) => {
+            const params = new URL(request.url).searchParams
+            const offset = Number(params.get("offset") ?? 0)
+            const limit = Number(params.get("limit") ?? 1)
+            seen.push(`${offset}:${limit}`)
+            const response = searchResponse()
+            const records = response.records.slice(offset, offset + limit)
+            return HttpResponse.json({ ...response, records, pagination: { offset, limit, returned: records.length, total: 2 } })
+        }))
+        page(REACTION_REF)
+        expect(await screen.findByText("Showing 1\u20131 of 2 reaction entries.")).toBeVisible()
+        expect(screen.getByText(/2 separate deposits share this reaction identity/)).toBeVisible()
+        fireEvent.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText("Showing 2\u20132 of 2 reaction entries.")).toBeVisible()
+        expect(seen).toContain("1:1")
+        expect(await screen.findByRole("link", { name: "rxe_kftcgjn7zalusaouojwi23z3gy" })).toBeVisible()
+    })
+
+    it("keeps the title and its source when the reader pages to an entry that differs", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", ({ request }) => {
+            const params = new URL(request.url).searchParams
+            const offset = Number(params.get("offset") ?? 0)
+            const limit = Number(params.get("limit") ?? 1)
+            const response = searchResponse()
+            // The second entry's products are a different species, so a title taken from the page on screen would change.
+            response.records[1].products = [participant("spe_other", "CH4", "C")]
+            const records = response.records.slice(offset, offset + limit)
+            return HttpResponse.json({ ...response, records, pagination: { offset, limit, returned: records.length, total: 2 } })
+        }))
+        page(REACTION_REF)
+        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        const titleBefore = document.querySelector("h1")?.textContent
+        expect(titleBefore).toContain("N=N")
+        fireEvent.click(screen.getByRole("button", { name: "Next" }))
+        await screen.findByRole("link", { name: "rxe_kftcgjn7zalusaouojwi23z3gy" })
+        expect(document.querySelector("h1")?.textContent).toBe(titleBefore)
+        expect(screen.getByText(/read from rxe_tku6xu2lt3girf2rsiwl5uds4e, the first entry listed/)).toBeVisible()
+    })
+
+    it("returns to the first page when the reaction changes while the page stays mounted", async () => {
+        const seen: string[] = []
+        server.use(http.get("/api/v1/scientific/reactions/search", ({ request }) => {
+            const params = new URL(request.url).searchParams
+            const offset = Number(params.get("offset") ?? 0)
+            const limit = Number(params.get("limit") ?? 1)
+            seen.push(`${params.get("reaction_ref")}@${offset}`)
+            const response = searchResponse()
+            const records = response.records.slice(offset, offset + limit)
+            return HttpResponse.json({ ...response, records, pagination: { offset, limit, returned: records.length, total: 2 } })
+        }))
+        render(
+            <MemoryRouter initialEntries={[`/reactions/${REACTION_REF}`]}>
+                <Link to="/reactions/rxn_other">other reaction</Link>
+                <Routes><Route path="/reactions/:reactionRef" element={<ReactionOverviewPage />} /></Routes>
+            </MemoryRouter>,
+        )
+        await screen.findByText("Showing 1\u20131 of 2 reaction entries.")
+        fireEvent.click(screen.getByRole("button", { name: "Next" }))
+        await screen.findByText("Showing 2\u20132 of 2 reaction entries.")
+        fireEvent.click(screen.getByRole("link", { name: "other reaction" }))
+        expect(await screen.findByText("Showing 1\u20131 of 2 reaction entries.")).toBeVisible()
+        expect(seen.at(-1)).toBe("rxn_other@0")
+    })
+})
+
+describe("ReactionOverviewPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the participants' joined species labels, and builds no stereo wording from them", async () => {
+        const planted = plantSentinels(searchResponse(), ["species_entry_label"])
+        expectPlanted(planted)
+        const { value } = planted
+        setAt(value, "records.0.products.1.species_entry_label", `${ADVERSARIAL.stereoMark} ${ADVERSARIAL.smilesWord}`)
+        // No structured stereo on these participants: the typed R in the joined label must yield no stereo wording.
+        setAt(value, "records.0.products.1.stereo_label", null)
+        setAt(value, "records.0.products.1.stereo_descriptor", null)
+        setAt(value, "records.0.reactants.0.species_entry_label", ADVERSARIAL.joinedLabel)
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(value)))
+        page(REACTION_REF)
+        // The fixture reached the page: both reaction entries rendered with their participant refs.
+        expect(await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })).toBeVisible()
+        expect(screen.getAllByText("spe_cft35qrkqphdifcfqlcenqgdau").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
+    })
+})
+
+describe("ReactionOverviewPage -- electronic-state labels and term symbols", () => {
+    it("shows S1 and T1 chips beside the participants, and hides a label outside the grammar", async () => {
+        const value = searchResponse()
+        const products = value.records[0].products as Record<string, unknown>[]
+        Object.assign(products[0], { electronic_state_kind: "excited", electronic_state_label: "S1", term_symbol: "¹A₁" })
+        Object.assign(products[1], { electronic_state_kind: "excited", electronic_state_label: "R", term_symbol: "DEPOSITOR_SENTINEL_term" })
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(value)))
+        page(REACTION_REF)
+        expect(await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })).toBeVisible()
+        const text = document.body.textContent ?? ""
+        expect(text).toContain("state S1")
+        expect(text).toContain("¹A₁")
+        expect(text).not.toMatch(/state R|DEPOSITOR_SENTINEL/)
+        expectNoDepositorText()
     })
 })

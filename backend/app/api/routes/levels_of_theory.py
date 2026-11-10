@@ -8,8 +8,17 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
-from app.db.models.common import CoreTreatment
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    entity_page,
+)
+from app.db.models.common import (
+    CoreTreatment,
+    PnoTruncation,
+    RelativisticHamiltonian,
+    RiApproximation,
+)
 from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.schemas.entities.level_of_theory import LevelOfTheoryRead
 from app.services.scientific_read.handles import canonical_level_of_theory_id
@@ -20,10 +29,10 @@ from app.services.scientific_read.lot_identity_filters import (
     solvent_matches,
 )
 
-router = APIRouter()
+router = APIRouter(route_class=LegacyReadRoute)
 
 
-@router.get("", response_model=PaginatedResponse[LevelOfTheoryRead])
+@router.get("", response_model=EntityListResponse[LevelOfTheoryRead])
 def list_levels_of_theory(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
@@ -32,6 +41,9 @@ def list_levels_of_theory(
     dispersion: str | None = Query(None),
     solvent: str | None = Query(None),
     core_treatment: CoreTreatment | None = Query(None),
+    relativistic_hamiltonian: RelativisticHamiltonian | None = Query(None),
+    pno_truncation: PnoTruncation | None = Query(None),
+    ri_approximation: RiApproximation | None = Query(None),
     lot_hash: str | None = Query(None),
 ):
     # A merged row (#574) is another spelling of a listed row; it is not a
@@ -49,6 +61,12 @@ def list_levels_of_theory(
         base = base.where(solvent_matches(solvent))
     if core_treatment is not None:
         base = base.where(LevelOfTheory.core_treatment == core_treatment)
+    if relativistic_hamiltonian is not None:
+        base = base.where(LevelOfTheory.relativistic_hamiltonian == relativistic_hamiltonian)
+    if pno_truncation is not None:
+        base = base.where(LevelOfTheory.pno_truncation == pno_truncation)
+    if ri_approximation is not None:
+        base = base.where(LevelOfTheory.ri_approximation == ri_approximation)
     if lot_hash is not None:
         base = base.where(LevelOfTheory.lot_hash == lot_hash)
 
@@ -62,8 +80,8 @@ def list_levels_of_theory(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[LevelOfTheoryRead.model_validate(r) for r in rows],
+    return entity_page(
+        [LevelOfTheoryRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,

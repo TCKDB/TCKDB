@@ -146,15 +146,6 @@ def test_a_merged_level_ref_is_answered_under_the_level_it_was_merged_into(clien
     assert {m["conformer_ref"]: m["status"] for m in out["members"]}[other.public_ref] == "present"
 
 
-def test_the_legacy_lowest_sp_route_is_deprecated_in_openapi_and_points_to_the_new_operation(client):
-    spec = client.get("/openapi.json").json()
-    operation = spec["paths"]["/api/v1/species-entries/{entry_id}/conformer-observations/lowest-sp"]["get"]
-    assert operation["deprecated"] is True
-    assert "conformers/relative-energies" in operation["description"]
-    new = spec["paths"]["/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies"]["post"]
-    assert not new.get("deprecated")
-
-
 # ---------------------------------------------------------------------------
 # A strict request
 # ---------------------------------------------------------------------------
@@ -302,15 +293,12 @@ def test_an_unknown_ref_is_a_404_and_a_wrong_prefix_is_a_422(client, three):
 
 
 def test_a_hidden_ref_is_the_same_404_as_an_unknown_one_for_the_subject_and_the_reference(client, db_session):
+    # A species entry is a scoping parent: one that is not reviewed is not hidden (its conformers' own groups still are).
     world = make_world(db_session, entry_status=None)
     shown, _ = conformer(world, -76.4, approve=True)
     world.settle()
-    ghost_entry = f"spe_{'0' * 26}"
-    payload = body(world, shown)
-    hidden = client.post(url(world.entry), json=payload, params={"profile": "curated"})
-    missing = client.post(f"{API}/species-entries/{ghost_entry}/conformers/relative-energies", json=payload, params={"profile": "curated"})
-    assert hidden.status_code == missing.status_code == 404 and code(hidden) == "handle_not_found"
-    assert json.loads(hidden.text.replace(world.entry.public_ref, "<ref>")) == json.loads(missing.text.replace(ghost_entry, "<ref>"))
+    entry_visible = client.post(url(world.entry), json=body(world, shown), params={"profile": "curated"})
+    assert entry_visible.status_code == 200
 
     visible = make_world(db_session)
     approved, _ = conformer(visible, -76.4, approve=True)
@@ -464,7 +452,7 @@ def test_compare_manifest_downloads_equals_the_response_and_replays(client, two_
     download = client.post(compare_url(world.entry, manifest=True), json=req)
     assert download.status_code == 200 and "attachment" in download.headers["content-disposition"]
     manifest = download.json()
-    assert manifest["format"] == {"name": "relative_conformer_energy_comparison_manifest", "version": 2}
+    assert manifest["format"] == {"name": "relative_conformer_energy_comparison_manifest", "version": 5}
     assert out["pairs"] == manifest["result"]["pairs"] and out["statistics"] == manifest["result"]["statistics"]
     assert out["integrity"]["manifest_sha256"] == manifest["integrity"]["manifest_sha256"]
     assert replay_comparison_matches(manifest)

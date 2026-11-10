@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.api.client_version import require_supported_tckdb_client
 from app.api.deps import get_current_user, get_db, get_write_db
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole, UploadJobKind, UploadJobStatus
 from app.db.models.upload_job import UploadJob
@@ -38,7 +39,7 @@ from app.schemas.workflows.transport_upload import TransportUploadRequest
 from app.services.upload_request_warnings import request_warnings_for_job_kind
 from app.services.upload_submission import open_job_submission
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 # Per-route dependency wired onto every enqueue (POST) endpoint. The
 # status GET is intentionally left open so a client running an old

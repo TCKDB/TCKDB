@@ -174,15 +174,13 @@ def reconcile_composite_energy(
         return CompositeEnergyReconciliation(
             action=CompositeEnergyAction.method_mismatch,
             log_summary=summary,
-            warning=UploadWarning(
+            warning=UploadWarning.from_code(
                 field=field,
                 code=W_COMPOSITE_LOG_METHOD_MISMATCH,
-                message=(
-                    f"The attached output log is a {summary.method_key} run, but this calculation's "
-                    f"level of theory is {level_method!r}. The method was kept as sent and the "
-                    "deposited energies were not compared with this log. Attach the log of the run "
-                    "that produced this calculation, or correct the level of theory."
-                ),
+                context={
+                    "log_method": summary.method_key,
+                    "depositor_supplied": {"level_of_theory_method": str(level_method)},
+                },
             ),
         )
 
@@ -190,50 +188,48 @@ def reconcile_composite_energy(
         return CompositeEnergyReconciliation(
             action=CompositeEnergyAction.available,
             log_summary=summary,
-            warning=UploadWarning(
+            warning=UploadWarning.from_code(
                 field=field,
                 code=W_COMPOSITE_ENERGY_LOG_AVAILABLE,
-                message=(
-                    f"No composite energy was deposited, and the attached {summary.method_key} output "
-                    f"log states E0 = {summary.e0_hartree:.6f} Ha and a recipe ZPE of "
-                    f"{summary.recipe_zpe_hartree:.6f} Ha. Nothing was filled from the log; send these "
-                    "in composite_result (e0_hartree, recipe_zpe_hartree, and the ZPE-free "
-                    "electronic_energy_hartree) if you want them recorded."
-                ),
+                context={
+                    "log_method": summary.method_key,
+                    "e0_hartree": summary.e0_hartree,
+                    "recipe_zpe_hartree": summary.recipe_zpe_hartree,
+                },
             ),
         )
 
-    disagreements: list[str] = []
+    disagreements: list[dict[str, object]] = []
     if e0_hartree is not None and _differs(e0_hartree, summary.e0_hartree, 2):
         disagreements.append(
-            f"e0_hartree {e0_hartree:.6f} vs log {summary.e0_hartree:.6f} "
-            f"(delta {e0_hartree - summary.e0_hartree:+.2e})"
+            {"quantity": "e0_hartree", "deposited_hartree": e0_hartree, "log_hartree": summary.e0_hartree}
         )
     if recipe_zpe_hartree is not None and _differs(recipe_zpe_hartree, summary.recipe_zpe_hartree, 2):
         disagreements.append(
-            f"recipe_zpe_hartree {recipe_zpe_hartree:.6f} vs log {summary.recipe_zpe_hartree:.6f} "
-            f"(delta {recipe_zpe_hartree - summary.recipe_zpe_hartree:+.2e})"
+            {
+                "quantity": "recipe_zpe_hartree",
+                "deposited_hartree": recipe_zpe_hartree,
+                "log_hartree": summary.recipe_zpe_hartree,
+            }
         )
+    # The log-implied electronic energy is the log's 0 K energy minus its ZPE.
     implied = implied_electronic_energy_hartree(summary)
     if electronic_energy_hartree is not None and _differs(electronic_energy_hartree, implied, 3):
         disagreements.append(
-            f"electronic_energy_hartree {electronic_energy_hartree:.6f} vs log-implied "
-            f"{implied:.6f} (the log's 0 K energy minus its ZPE; delta "
-            f"{electronic_energy_hartree - implied:+.2e})"
+            {
+                "quantity": "electronic_energy_hartree",
+                "deposited_hartree": electronic_energy_hartree,
+                "log_hartree": implied,
+            }
         )
     if disagreements:
         return CompositeEnergyReconciliation(
             action=CompositeEnergyAction.mismatch,
             log_summary=summary,
-            warning=UploadWarning(
+            warning=UploadWarning.from_code(
                 field=field,
                 code=W_COMPOSITE_ENERGY_LOG_MISMATCH,
-                message=(
-                    "The deposited composite energy disagrees with the output log's "
-                    f"{summary.method_key} summary block: " + "; ".join(disagreements) + ". The "
-                    "deposited values are kept unchanged and flagged for reviewer attention; "
-                    "nothing is filled from the log."
-                ),
+                context={"log_method": summary.method_key, "disagreements": disagreements},
             ),
         )
     return CompositeEnergyReconciliation(action=CompositeEnergyAction.confirmed, log_summary=summary)

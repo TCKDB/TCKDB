@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom"
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { bySummaryText } from "../test/disclosureQueries"
 import { EntryIdentity } from "./SpeciesEntrySummary"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 afterEach(cleanup)
 
@@ -58,6 +59,47 @@ describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
         expect(screen.queryByText("Stereochemistry")).not.toBeInTheDocument()
     })
 
+    describe("stereochemistry is read from the descriptor and its resolution (DR-0038)", () => {
+        function stereoRow() {
+            const facts = screen.getByRole("list", { name: "Record facts" })
+            return within(facts).getByText("Stereochemistry").nextElementSibling
+        }
+
+        it("says 'Achiral' only for a NULL descriptor", () => {
+            renderEntry(baseEntry({ stereo_label: null, stereo_descriptor: null, stereo_resolution: null }))
+            expect(stereoRow()).toHaveTextContent("Achiral")
+        })
+
+        it("does not read the NULL display label of an unresolved entry as 'not distinguished' or 'achiral'", () => {
+            // Display `stereo_label` is NULL while nothing is resolved; the descriptor is `?`.
+            renderEntry(baseEntry({ stereo_label: null, stereo_descriptor: "?", stereo_resolution: "unresolved" }))
+            expect(stereoRow()).toHaveTextContent("Unresolved (?)")
+            expect(screen.queryByText(/achiral/i)).not.toBeInTheDocument()
+        })
+
+        it("shows a partly resolved entry as such", () => {
+            renderEntry(baseEntry({ stereo_label: "E,?", stereo_descriptor: "E,?", stereo_resolution: "partial" }))
+            expect(stereoRow()).toHaveTextContent("Partly resolved (E,?)")
+        })
+
+        it("shows a resolved entry in words, with its stereo SMILES", () => {
+            renderEntry(baseEntry({
+                stereo_label: "E", stereo_descriptor: "E", stereo_resolution: "resolved", stereo_smiles: "C/C=C/C",
+            }))
+            expect(stereoRow()).toHaveTextContent("E isomer")
+            const facts = screen.getByRole("list", { name: "Record facts" })
+            expect(within(facts).getByText("Stereo SMILES").nextElementSibling).toHaveTextContent("C/C=C/C")
+        })
+
+        it("says the ring is not represented for a small cyclic allene", () => {
+            renderEntry(baseEntry({
+                stereo_label: null, stereo_descriptor: "?", stereo_resolution: "unresolved",
+                stereo_not_represented: ["axial_small_ring"],
+            }))
+            expect(stereoRow()).toHaveTextContent("cyclic allene (ring of 5 or fewer) stereo not represented")
+        })
+    })
+
     it("renders Term symbol and Isotopologue rows only when the entry carries them", () => {
         const { rerender } = renderEntry(baseEntry())
         expect(screen.queryByText("Term symbol")).not.toBeInTheDocument()
@@ -65,11 +107,12 @@ describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
 
         rerender(
             <MemoryRouter>
-                <EntryIdentity entry={baseEntry({ term_symbol: "T1", isotope_key: "13C1" })} />
+                <EntryIdentity entry={baseEntry({ term_symbol: "3Σg-", electronic_state_label: "DEPOSITOR_SENTINEL_state", isotope_key: "13C1" })} />
             </MemoryRouter>,
         )
         const facts = screen.getByRole("list", { name: "Record facts" })
-        expect(within(facts).getByText("Term symbol").nextElementSibling).toHaveTextContent("T1")
+        expect(within(facts).getByText("Term symbol").nextElementSibling).toHaveTextContent("3Σg-")
+        expect(document.body.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
         expect(within(facts).getByText("Isotopologue").nextElementSibling).toHaveTextContent("13C1")
     })
 })
@@ -104,5 +147,42 @@ describe("EntryIdentity: own ref inline, first, never duplicated in References",
         expect(within(disclosure).getByText("spc_demo")).toBeVisible()
         // Exactly one occurrence of the entry's own ref anywhere on the page.
         expect(screen.getAllByText("spe_demo")).toHaveLength(1)
+    })
+})
+
+describe("EntryIdentity -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the typed state label, term symbol or joined label, and builds no stereo wording from them", () => {
+        const planted = plantSentinels(baseEntry({
+            electronic_state_kind: "excited", electronic_state_label: "x", term_symbol: "x", species_entry_label: "x",
+        } as Partial<SpeciesEntryProjection>), ["electronic_state_label", "term_symbol", "species_entry_label"])
+        expectPlanted(planted)
+        const entry = planted.value as unknown as Record<string, unknown>
+        entry.species_entry_label = `${ADVERSARIAL.stereoMark} ${ADVERSARIAL.smilesWord}`
+        renderEntry(entry as unknown as SpeciesEntryProjection)
+        // The fixture reached the component: the entry ref and the excited state kind rendered.
+        expect(screen.getAllByText("spe_demo").length).toBeGreaterThan(0)
+        expect(screen.getAllByText(/excited/i).length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
+    })
+})
+
+describe("EntryIdentity: electronic-state label and term symbol (grammar-valid only)", () => {
+    it("shows the state label and the canonical term symbol, the latter with a plain-words reading for a screen reader", () => {
+        renderEntry(baseEntry({ electronic_state_kind: "excited", electronic_state_label: "T1", term_symbol: "³Σg⁻" }))
+        const facts = screen.getByRole("list", { name: "Record facts" })
+        expect(within(facts).getByText("State label").nextElementSibling).toHaveTextContent("T1")
+        const term = within(facts).getByText("Term symbol").nextElementSibling as HTMLElement
+        expect(term).toHaveTextContent("³Σg⁻")
+        expect(term).toHaveAttribute("role", "img")
+        expect(term).toHaveAttribute("aria-label", "triplet sigma g minus")
+    })
+
+    it("hides a label or term symbol outside the grammar, however it reached the page (the hide-invalid path)", () => {
+        renderEntry(baseEntry({ electronic_state_label: "R", term_symbol: "DEPOSITOR_SENTINEL_term" }))
+        expect(screen.queryByText("State label")).not.toBeInTheDocument()
+        expect(screen.queryByText("Term symbol")).not.toBeInTheDocument()
+        expect(document.body.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
     })
 })

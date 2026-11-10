@@ -28,6 +28,7 @@ from app.db.models.common import SubmissionStatus, UploadJobKind, UploadJobStatu
 from app.db.models.submission import Submission
 from app.db.models.upload_job import UploadJob
 from app.schemas.upload_warning import UploadWarning
+from app.services.deposit_warnings import reset_deposit_notes, store_deposit_warnings
 from app.services.public_refs import public_refs_by_id
 from app.services.record_review import ReviewPolicy
 from app.services.submission import mark_ingestion_failed, mark_ingestion_succeeded
@@ -204,7 +205,7 @@ def _request_warnings(job: UploadJob, derive, request) -> list[UploadWarning]:
     """
     if job.request_warnings is None:
         return derive(request)
-    return [UploadWarning.model_validate(w) for w in job.request_warnings]
+    return [UploadWarning.from_stored(w) for w in job.request_warnings]
 
 
 def _run_computed_reaction(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
@@ -596,10 +597,21 @@ def run_one_job(session: Session, job: UploadJob) -> None:
         else ReviewPolicy()
     )
 
+    reset_deposit_notes(session)
     result = handler(session, job, policy)
 
     if submission is not None:
         _append_ingestion_audit(session, job, submission)
+        # The same rows the direct route writes for the same record: the handler's final warning list,
+        # stored beside the records its workflow noted for this submission.
+        store_deposit_warnings(
+            session,
+            submission.id,
+            [
+                UploadWarning.from_stored(w)
+                for w in (result.get("warnings", []) if isinstance(result, dict) else [])
+            ],
+        )
         if isinstance(result, dict):
             result = {
                 **result,
@@ -621,6 +633,33 @@ def run_one_job(session: Session, job: UploadJob) -> None:
 # ---------------------------------------------------------------------------
 # Worker loop
 # ---------------------------------------------------------------------------
+
+def _public_job_error(exc: BaseException, job_id: str) -> tuple[str, bool]:
+    """``(message, terminal)`` for a failed attempt; the message is what the client reads.
+
+    ``JobStatusResponse.error`` is returned to the depositor, so it never carries a raw exception string:
+    ``str(IntegrityError)`` includes column values and row ids. A database refusal the error contract maps is
+    reported as its code and public sentence; a coded validation refusal keeps its own (public) code and detail.
+    Both are deterministic, so they are *terminal*: retrying the same request cannot change the answer. Anything
+    else is a generic sentence naming only the exception class; the detail goes to the server log.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    from app.api.errors import public_integrity_error
+
+    if isinstance(exc, IntegrityError):
+        code, message, _context, specific = public_integrity_error(exc)
+        return f"{code}: {message}", specific
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and isinstance(exc, ValueError):
+        return f"{code}: {getattr(exc, 'detail', None) or exc}", True
+    logger.error("job %s failed with %s (detail withheld from the client)", job_id, type(exc).__name__)
+    return (
+        f"{type(exc).__name__}: the upload could not be processed. The detail is in the server log "
+        f"(quote job {job_id}).",
+        False,
+    )
+
 
 def _process_one_cycle() -> bool:
     """Claim and process one job. Returns True if a job was processed."""
@@ -666,10 +705,10 @@ def _process_one_cycle() -> bool:
                     # failure we durably record the failed attempt against it.
                     with session.begin():
                         job = session.get(UploadJob, job_id)
-                        job.error = f"{type(exc).__name__}: {exc}"
+                        job.error, terminal = _public_job_error(exc, job_id)
                         job.lease_expires_at = None
                         job.heartbeat_at = _utcnow()
-                        if job.attempts >= job.max_attempts:
+                        if terminal or job.attempts >= job.max_attempts:
                             job.status = UploadJobStatus.failed
                             job.completed_at = _utcnow()
                             submission = _submission_for_job(session, job)

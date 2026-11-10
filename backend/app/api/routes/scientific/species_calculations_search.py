@@ -6,13 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_optional_current_user
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     SEARCH_SCOPE,
     SPECIES_CALCULATIONS_SEARCH_SECTIONS,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
+from app.chemistry.method_families import MethodFamily
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     CalculationQuality,
@@ -22,7 +24,8 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
 )
-from app.schemas.reads.scientific_common import CollapseMode
+from app.schemas.reads.removed_parameters import SPECIES_CALCULATIONS as _REMOVED_PARAMETERS
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_species_calculations import (
     CalculationRanking,
     ScientificSpeciesCalculationsSearchResponse,
@@ -35,7 +38,7 @@ from app.services.scientific_read.species_calculations_search import (
     search_species_calculations,
 )
 
-router = APIRouter(prefix="/species-calculations")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species-calculations")
 
 # The router-level ``?profile=`` dependency puts these two keys on every
 # scientific operation, POSTs included, so they must be allowed through the
@@ -48,6 +51,7 @@ _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
     "/search", response_model=ScientificSpeciesCalculationsSearchResponse
 )
 def species_calculations_search_get(
+    http_request: Request,
     session: Session = Depends(get_db),
     smiles: str | None = Query(None),
     inchi: str | None = Query(None),
@@ -68,6 +72,9 @@ def species_calculations_search_get(
     basis: str | None = Query(None),
     software: str | None = Query(None),
     workflow_tool: str | None = Query(None),
+    method_family: list[MethodFamily] | None = Query(None),
+    dft_rung_min: int | None = Query(None, ge=1, le=5),
+    dft_rung_max: int | None = Query(None, ge=1, le=5),
     scientific_origin: ScientificOriginKind | None = Query(None),
     calculation_quality: CalculationQuality | None = Query(None),
     min_review_status: RecordReviewStatus | None = Query(None),
@@ -76,9 +83,9 @@ def species_calculations_search_get(
     include_rejected_quality: bool = Query(False),
     ranking: CalculationRanking = Query(CalculationRanking.default),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
     actor: AppUser | None = Depends(get_optional_current_user),
 ) -> ScientificSpeciesCalculationsSearchResponse:
@@ -96,7 +103,9 @@ def species_calculations_search_get(
 
     See ``docs/specs/species_calculation_search_api.md``.
     """
-    request = SpeciesCalculationsSearchRequest(
+    reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
+    request = caller_input(
+        SpeciesCalculationsSearchRequest,
         smiles=smiles,
         inchi=inchi,
         inchi_key=inchi_key,
@@ -116,6 +125,9 @@ def species_calculations_search_get(
         basis=basis,
         software=software,
         workflow_tool=workflow_tool,
+        method_family=method_family,
+        dft_rung_min=dft_rung_min,
+        dft_rung_max=dft_rung_max,
         scientific_origin=scientific_origin,
         calculation_quality=calculation_quality,
         min_review_status=min_review_status,
@@ -124,9 +136,9 @@ def species_calculations_search_get(
         include_rejected_quality=include_rejected_quality,
         ranking=ranking,
         sort=sort,
-        collapse=collapse,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = search_species_calculations(session, request)
@@ -149,7 +161,7 @@ def species_calculations_search_post(
 ) -> ScientificSpeciesCalculationsSearchResponse:
     """JSON-body variant for structured species-calculation queries.
 
-    All search fields, filters, includes, ranking, collapse, offset, and
+    All search fields, filters, includes, ranking, offset, and
     limit live in the body. Query-string parameters are rejected
     (Phase 4 / Phase 6 POST convention). Body field ``sort`` is rejected
     by the service layer (v0 sort policy).

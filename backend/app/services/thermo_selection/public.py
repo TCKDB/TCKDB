@@ -33,6 +33,12 @@ from app.api.error_contract import CodedValueError
 from app.db.models.common import RecordReviewStatus, ThermoTargetKind
 from app.db.models.species import ConformerGroup
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER, SelectionPolicy
+from app.schemas.reads.scientific_selection_common import (
+    ELIGIBILITY_CONFIRMED_FINDINGS,
+    ELIGIBILITY_DEPRECATED,
+    ELIGIBILITY_HARD_FAILED_EVIDENCE,
+    ELIGIBILITY_REJECTED,
+)
 from app.schemas.reads.scientific_thermo_selection import (
     QUANTITY_H298,
     REFERENCE_TEMPERATURE_K,
@@ -52,16 +58,26 @@ from app.schemas.reads.scientific_thermo_selection import (
     ThermoSelectionReview,
     ThermoSelectionTargetEcho,
 )
+from app.services.conformer_group_forwarding import forwarded_group_id
 from app.services.scientific_read.handles import (
     handle_type_mismatch_error,
     is_ref_handle,
     prefix_for,
-    resolve_conformer_group_handle,
+    resolve_selection_handle,
     resolve_species_entry_handle,
 )
 from app.services.scientific_read.profile import current_read_profile
-from app.services.thermo_selection.models import MAX_CANDIDATES, H298Request, H298Selection, Outcome
+from app.services.selection_kernel.requested import Eligibility, answer_steps
+from app.services.thermo_selection.models import MAX_CANDIDATES, H298Request, H298Selection, Outcome, ThermoFilters
 from app.services.thermo_selection.service import select_h298
+
+#: The eligibility defaults a thermo selection applies, in the order the answer lists them.
+THERMO_DEFAULTS = (
+    ELIGIBILITY_REJECTED,
+    ELIGIBILITY_DEPRECATED,
+    ELIGIBILITY_HARD_FAILED_EVIDENCE,
+    ELIGIBILITY_CONFIRMED_FINDINGS,
+)
 
 #: ``Session.info`` key a TEST harness sets, explicitly, to be read under whatever isolation it already has.
 SNAPSHOT_OPT_OUT = "tckdb_read_snapshot_opt_out"
@@ -92,7 +108,12 @@ def resolve_species_entry_ref(session: Session, ref: str) -> int:
 
 def resolve_group_ref(session: Session, ref: str) -> int:
     return ref_only_handle(
-        session, ConformerGroup, ref, kind_label="conformer_group", resolver=resolve_conformer_group_handle
+        session,
+        ConformerGroup,
+        ref,
+        kind_label="conformer_group",
+        # A select names the group it selects over: the approved record floor decides, as for a list (ADR 0023).
+        resolver=lambda s, handle: resolve_selection_handle(s, ConformerGroup, handle, kind_label="conformer_group"),
     )
 
 
@@ -103,7 +124,8 @@ def _admin_policy(policy: ThermoSelectionPolicy) -> SelectionPolicy:
 def run_selection(
     session: Session, *, species_entry_id: int, body: ThermoSelectionRequest
 ) -> tuple[H298Selection, str | None]:
-    """Run the service for a public request. Returns the selection and the conformer-group ref, if any.
+    """Run the service for a public request. Returns the selection and, when the requested basin was forwarded to the
+    group that took its members, the ref that was asked for (otherwise ``None``).
 
     Every policy is administrative: it orders by review status and deposition time exactly as the browse
     endpoints do. The population cap is the service's fixed 500; it is not a request field.
@@ -114,12 +136,26 @@ def run_selection(
     read as it is; that exists for the test harness, which holds one outer transaction that cannot become a
     snapshot, and nothing in the application sets it.
     """
-    group_id = resolve_group_ref(session, body.target.conformer_group_ref) if body.target.conformer_group_ref else None
+    requested_ref = body.target.conformer_group_ref
+    group_id = resolve_group_ref(session, requested_ref) if requested_ref else None
+    # A basin emptied by a merge is forwarded to the group that took its members, the same as for a write; the
+    # response says so (``forwarded_from_conformer_group_ref``) and the decision is made on the survivor.
+    forwarded_from: str | None = None
+    if group_id is not None:
+        survivor = forwarded_group_id(session, group_id)
+        if survivor != group_id:
+            group_id, forwarded_from = survivor, requested_ref
     request = H298Request(
         target_kind=body.target.kind,
         conformer_group_id=group_id,
+        forwarded_from_conformer_group_ref=forwarded_from,
         min_review_status=body.min_review_status,
         admin_policy=_admin_policy(body.policy),
+        filters=ThermoFilters(
+            model_kind=body.filters.model_kind.value if body.filters.model_kind is not None else None,
+            **body.filters.source_filter_values(),
+        ),
+        eligibility=Eligibility.from_request(body.eligibility),
     )
     selection = select_h298(
         session,
@@ -137,7 +173,7 @@ def run_selection(
             "nothing was assessed. Narrow the population with min_review_status or the curated profile.",
             context={"limit": MAX_CANDIDATES, "visible_candidates": visible},
         )
-    return selection, body.target.conformer_group_ref
+    return selection, forwarded_from
 
 
 def profile_has_floor() -> bool:
@@ -210,11 +246,14 @@ def build_response(
             phase=c["phase"],
             enthalpy_reference_kind=c["enthalpy_reference_kind"],
             target_kind=c["target_kind"],
+            target_declared_by=c.get("target_declared_by"),
             target_group_ref=c["target_group_ref"],
             protocol_state=c["protocol_state"],
             protocol=c["protocol"],
             linked_recipe_keys=c["linked_recipe_keys"],
             applicability=c["assessment"]["applicability"],
+            blocked_by=c["eligibility"]["blocked_by"],
+            passed_only_by_override=c["eligibility"]["passed_only_by_override"],
             reasons=[ThermoSelectionReason(**r) for r in c["assessment"]["reasons"]],
             answer_representation=c["assessment"]["answer_representation"],
             value_kj_mol=c["assessment"]["value_kj_mol"],
@@ -238,6 +277,8 @@ def build_response(
             policy=body.policy,
             result_mode=body.result_mode,
             min_review_status=body.min_review_status,
+            filters=manifest["request"]["filters"],
+            eligibility=body.eligibility,
         ),
         review=ThermoSelectionReview(effective_floor=floor, effective_statuses=statuses),
         policy=ThermoSelectionPolicyInfo(
@@ -250,6 +291,13 @@ def build_response(
         fronts=[] if decision is None else decision["fronts"],
         administrative_order=[] if decision is None else decision["administrative_order"],
         candidates=candidates,
+        **answer_steps(
+            request_filters=manifest["request"]["filters"],
+            eligibility_record=manifest["request"]["eligibility"],
+            funnel_record=population["funnel"],
+            names=THERMO_DEFAULTS,
+            profile_floor=profile_has_floor(),
+        ),
         disclosures=ThermoSelectionDisclosures(
             unresolved_refs=disclosures.get("unresolved_refs", []),
             unsupported_refs=disclosures.get("unsupported_refs", []),

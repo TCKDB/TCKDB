@@ -33,6 +33,7 @@ from tckdb_schemas.network_declarations import (
 )
 
 from app.api.error_contract import CodedValueError
+from app.api.server_faults import caller_input
 from app.db.models.network_pdep import (
     NetworkChannel,
     NetworkKinetics,
@@ -223,7 +224,7 @@ def _stored_target(
             pinned.append((determination.public_ref, list(member["representation_keys"])))
         product_set["membership_version"] = NETWORK_PRODUCT_SET_MEMBERSHIP_VERSION
         product_set["content_hash"] = network_product_set_content_hash(pinned)
-    stored = StoredNetworkTargetDeclaration.model_validate(body)
+    stored = caller_input(StoredNetworkTargetDeclaration.model_validate, body)
     return stored.model_dump(mode="json", exclude_none=True)
 
 

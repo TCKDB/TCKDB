@@ -182,17 +182,30 @@ def _count(db_session, call):
 
 
 @pytest.mark.parametrize("status", list(RecordReviewStatus), ids=lambda s: s.value)
-def test_a_calculation_is_hidden_unless_approved_and_a_missing_row_is_not_reviewed(client, db_session, status):
-    """Kills: reading a missing review row as visible; treating under_review/rejected/deprecated as visible."""
+def test_the_two_sets_answer_for_every_status_and_a_missing_row_is_not_reviewed(client, db_session, status):
+    """The record floor and the evidence set are different questions (ADR 0023).
+
+    Kills: reading a missing review row as visible; treating under_review as withheld; treating rejected/deprecated as
+    shown evidence; the two sets collapsing into one.
+    """
     entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("RGR")))
     with_row = make_calculation(db_session, type=CalculationType.opt, species_entry_id=entry.id)
     no_row = make_calculation(db_session, type=CalculationType.opt, species_entry_id=entry.id)
     set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=with_row.id, status=status)
     refs = [with_row.public_ref, no_row.public_ref]
-    hidden = ref_guard.hidden_refs(db_session, refs, profile=CURATED)
-    assert (with_row.public_ref in hidden) == (status is not RecordReviewStatus.approved)
-    assert no_row.public_ref in hidden
-    assert ref_guard.hidden_refs(db_session, refs, profile=EXPLORATORY) == set()
+
+    below = ref_guard.below_floor_refs(db_session, refs, profile=CURATED)
+    assert (with_row.public_ref in below) == (status is not RecordReviewStatus.approved)
+    assert no_row.public_ref in below  # a missing row reads as not_reviewed: below the floor
+
+    withheld = ref_guard.withheld_evidence_refs(db_session, refs, profile=CURATED)
+    assert (with_row.public_ref in withheld) == (
+        status in {RecordReviewStatus.rejected, RecordReviewStatus.deprecated}
+    )
+    assert no_row.public_ref not in withheld  # a missing row is visible evidence, badged not_reviewed
+
+    for check in (ref_guard.below_floor_refs, ref_guard.withheld_evidence_refs):
+        assert check(db_session, refs, profile=EXPLORATORY) == set()
 
 
 def test_every_gated_type_is_resolved_in_one_statement_and_exploratory_costs_none(client, db_session):
@@ -202,29 +215,42 @@ def test_every_gated_type_is_resolved_in_one_statement_and_exploratory_costs_non
     hidden_refs = {row.public_ref for row in world.hidden.values()}
     visible_refs = {row.public_ref for row in world.visible.values()}
     assert len({world.kind_of(k) for k in world.hidden}) == len(ref_guard.GATED_TYPES)
+    everything = hidden_refs | visible_refs
 
-    hidden, statements = _count(
-        db_session, lambda: ref_guard.hidden_refs(db_session, hidden_refs | visible_refs, profile=CURATED)
+    # As built the hidden records are unlisted: below the floor, not withheld.
+    below, statements = _count(db_session, lambda: ref_guard.below_floor_refs(db_session, everything, profile=CURATED))
+    assert below == hidden_refs
+    assert statements == 1
+    unlisted, statements = _count(
+        db_session, lambda: ref_guard.withheld_evidence_refs(db_session, everything, profile=CURATED)
     )
-    assert hidden == hidden_refs
+    assert unlisted == set()
     assert statements == 1
 
-    none, statements = _count(
-        db_session, lambda: ref_guard.hidden_refs(db_session, hidden_refs | visible_refs, profile=EXPLORATORY)
+    # Turned rejected / deprecated they are withheld as evidence too.
+    world.withhold_hidden(db_session)
+    withheld, statements = _count(
+        db_session, lambda: ref_guard.withheld_evidence_refs(db_session, everything, profile=CURATED)
     )
-    assert none == set() and statements == 0
+    assert withheld == hidden_refs
+    assert statements == 1
 
-    nothing, statements = _count(db_session, lambda: ref_guard.hidden_refs(db_session, [], profile=CURATED))
-    assert nothing == set() and statements == 0
+    for check in (ref_guard.below_floor_refs, ref_guard.withheld_evidence_refs):
+        none, statements = _count(db_session, lambda check=check: check(db_session, everything, profile=EXPLORATORY))
+        assert none == set() and statements == 0
+        nothing, statements = _count(db_session, lambda check=check: check(db_session, [], profile=CURATED))
+        assert nothing == set() and statements == 0
 
 
 def test_a_network_kinetics_fit_follows_its_solve(client, db_session):
     """Kills: reading nkin's own (absent) review row, which would call every fit hidden, or every fit visible."""
     world = build_sweep_world(db_session)
     nkin_h, nkin_v = world.hidden["nkin_h"], world.visible["nkin_v"]
-    assert ref_guard.hidden_refs(db_session, [nkin_h.public_ref, nkin_v.public_ref], profile=CURATED) == {
-        nkin_h.public_ref
-    }
+    refs = [nkin_h.public_ref, nkin_v.public_ref]
+    assert ref_guard.below_floor_refs(db_session, refs, profile=CURATED) == {nkin_h.public_ref}
+    assert ref_guard.withheld_evidence_refs(db_session, refs, profile=CURATED) == set()  # its solve is unlisted
+    world.withhold_hidden(db_session)
+    assert ref_guard.withheld_evidence_refs(db_session, refs, profile=CURATED) == {nkin_h.public_ref}
 
 
 # ---------------------------------------------------------------------------

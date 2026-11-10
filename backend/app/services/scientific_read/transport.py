@@ -51,8 +51,10 @@ from app.schemas.reads.scientific_transport import (
     TransportSourceCalculationSummary,
     TransportSpeciesContext,
 )
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    ids_withheld_as_evidence,
     review_summary,
     validate_includes,
 )
@@ -64,6 +66,9 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
+    STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
 from app.services.scientific_read.supersession import fetch_supersession_notices
@@ -188,6 +193,9 @@ def get_transport(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([badge]),
         record=record,
+        **deposit_warning_envelope(
+            session, SubmissionRecordType.transport, {tr.id: tr.public_ref}
+        ),
     )
 
 
@@ -211,6 +219,14 @@ def build_transport_record(
     """
     species_context = _build_species_context(session, tr.species_entry_id)
     source_rows = _load_source_rows(session, tr.id)
+    # The count and flag follow the list: a source calculation the evidence rule withholds is not listed (the ref guard
+    # removes it), so it is not counted either (ADR 0023).
+    withheld_calc_ids = ids_withheld_as_evidence(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids={r.calculation_id for r in source_rows},
+    )
+    source_rows = [r for r in source_rows if r.calculation_id not in withheld_calc_ids]
 
     has_lj = tr.sigma_angstrom is not None and tr.epsilon_over_k_k is not None
     has_dipole = tr.dipole_debye is not None
@@ -345,11 +361,12 @@ def _build_species_context(
             # entry of the species this record belongs to. Selected here
             # under their own names because species_entry_label_for()
             # reads them by attribute.
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         )
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.id == species_entry_id)
@@ -362,6 +379,7 @@ def _build_species_context(
         species_entry_id=row.entry_id,
         species_entry_ref=row.entry_ref,
         species_entry_label=species_entry_label_for(row),
+        **entry_facets_of(row),
         canonical_smiles=row.smiles,
         inchi_key=row.inchi_key,
         charge=row.charge,
@@ -434,8 +452,10 @@ def _build_literature_summary(
         id=lit.id,
         literature_ref=lit.public_ref,
         title=getattr(lit, "title", None),
+        title_source=getattr(lit, "title_source", None),
         year=getattr(lit, "year", None),
         doi=getattr(lit, "doi", None),
+        isbn=getattr(lit, "isbn", None),
     )
 
 
@@ -528,6 +548,9 @@ def _bulk_lot_summaries(
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
             core_treatment=lot.core_treatment,
+            relativistic_hamiltonian=lot.relativistic_hamiltonian,
+            pno_truncation=lot.pno_truncation,
+            ri_approximation=lot.ri_approximation,
             aux_basis=lot.aux_basis,
             cabs_basis=lot.cabs_basis,
             solvent_model=lot.solvent_model,

@@ -129,6 +129,10 @@ from dataclasses import dataclass
 from enum import Enum
 
 import numpy as np
+from tckdb_schemas.frequency_completeness import (
+    W_FREQ_LIST_INCOMPLETE,
+    evaluate_frequency_list_completeness,
+)
 
 from app.chemistry.geometry import parse_xyz
 from app.schemas.fragments.geometry import GeometryPayload
@@ -328,33 +332,16 @@ def _bent_count_for_linear_geometry(
     looking past.
     """
 
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=location,
         code=W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY,
-        message=(
-            f"{location}: the frequency list carries {n_modes} modes, "
-            f"which is 3N-6 for this {n_atoms}-atom geometry -- the "
-            f"vibrational count of a *bent* molecule "
-            f"({W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY}). This "
-            f"geometry is linear: its atoms spread across their long axis "
-            f"by only {ratio:.2g} of their spread along it, against a "
-            f"threshold of {COLLINEAR_MAX_TRANSVERSE_RATIO:g} for calling "
-            f"a geometry linear (exactly collinear is 0). A linear "
-            f"{n_atoms}-atom molecule has 3N-5 = {linear_count} "
-            f"vibrations, so one mode is missing from this list. The "
-            f"usual cause is a degenerate bending pair reported once: a "
-            f"linear molecule's bends are doubly degenerate -- CO2's four "
-            f"vibrations are two stretches and one bend counted twice -- "
-            f"so a parser or script that de-duplicates equal frequencies "
-            f"drops one component and lands exactly here. A genuinely "
-            f"partial or frozen-atom Hessian would also produce a short "
-            f"list, honestly. The record is accepted and flagged, not "
-            f"refused: the boundary between linear and bent is a "
-            f"tolerance rather than a definition, and near-linear "
-            f"geometries are deliberately left unreported. Deposit every "
-            f"mode the job printed, including both components of each "
-            f"degenerate pair."
-        ),
+        context={
+            "n_modes": n_modes,
+            "n_atoms": n_atoms,
+            "linear_count": linear_count,
+            "transverse_ratio": ratio,
+            "collinear_max_transverse_ratio": COLLINEAR_MAX_TRANSVERSE_RATIO,
+        },
     )
 
 
@@ -427,29 +414,16 @@ def evaluate_frequency_list_linearity(
         return []
 
     return [
-        UploadWarning(
+        UploadWarning.from_code(
             field=location,
             code=W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY,
-            message=(
-                f"{location}: the frequency list carries {n_modes} modes, "
-                f"which is 3N-5 for this {n_atoms}-atom geometry -- the "
-                f"vibrational count of a *linear* molecule "
-                f"({W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY}). This "
-                f"geometry is not linear: its atoms spread across their long "
-                f"axis by {ratio:.2g} of their spread along it, against a "
-                f"threshold of {BENT_MIN_TRANSVERSE_RATIO:g} for calling a "
-                f"geometry bent (exactly collinear is 0). A non-linear "
-                f"{n_atoms}-atom molecule has 3N-6 = {bent_count} "
-                f"vibrations, so one mode here is either spurious or is a "
-                f"rigid-body translation/rotation left in the list -- the "
-                f"usual cause being a frequency job, or a script reading "
-                f"one, that treated the molecule as linear. The record is "
-                f"accepted and flagged, not refused: the boundary between "
-                f"linear and bent is a tolerance rather than a definition, "
-                f"and near-linear geometries are deliberately left "
-                f"unreported. Deposit every mode the job printed, or the "
-                f"geometry the job actually ran on."
-            ),
+            context={
+                "n_modes": n_modes,
+                "n_atoms": n_atoms,
+                "bent_count": bent_count,
+                "transverse_ratio": ratio,
+                "bent_min_transverse_ratio": BENT_MIN_TRANSVERSE_RATIO,
+            },
         )
     ]
 
@@ -575,8 +549,8 @@ def computed_species_linearity_warnings(request: object) -> list[UploadWarning]:
                 calculation_linearity_warnings(
                     calc,
                     location=(
-                        f"conformers['{conformer.key}'].calculations"
-                        f"['{calc.key}'].freq_result.modes"
+                        f"conformers[{conformer.key!r}].calculations"
+                        f"[{calc.key!r}].freq_result.modes"
                     ),
                     fallback_xyz_text=conformer.geometry.xyz_text,
                 )
@@ -605,8 +579,8 @@ def computed_reaction_linearity_warnings(request: object) -> list[UploadWarning]
                 calculation_in_linearity_warnings(
                     conformer.calculation,
                     location=(
-                        f"species['{species.key}'].conformers"
-                        f"['{conformer.key}'].calculation"
+                        f"species[{species.key!r}].conformers"
+                        f"[{conformer.key!r}].calculation"
                         f".freq_frequencies_cm1"
                     ),
                     xyz_text=conformer.geometry.xyz_text,
@@ -617,8 +591,8 @@ def computed_reaction_linearity_warnings(request: object) -> list[UploadWarning]
                 calculation_in_linearity_warnings(
                     calc,
                     location=(
-                        f"species['{species.key}'].calculations"
-                        f"['{calc.key}'].freq_frequencies_cm1"
+                        f"species[{species.key!r}].calculations"
+                        f"[{calc.key!r}].freq_frequencies_cm1"
                     ),
                     xyz_text=xyz_by_geometry_key.get(calc.geometry_key or ""),
                 )
@@ -631,7 +605,7 @@ def computed_reaction_linearity_warnings(request: object) -> list[UploadWarning]
                 calculation_in_linearity_warnings(
                     calc,
                     location=(
-                        f"transition_state.calculations['{calc.key}']"
+                        f"transition_state.calculations[{calc.key!r}]"
                         f".freq_frequencies_cm1"
                     ),
                     xyz_text=transition_state.geometry.xyz_text,
@@ -681,7 +655,7 @@ def inline_calculation_linearity_warnings(
         warnings.extend(
             calculation_linearity_warnings(
                 item.calculation,
-                location=f"calculations['{item.key}'].freq_result.modes",
+                location=f"calculations[{item.key!r}].freq_result.modes",
             )
         )
     return warnings
@@ -701,9 +675,9 @@ def network_pdep_linearity_warnings(request: object) -> list[UploadWarning]:
                 calculation_in_linearity_warnings(
                     conformer.calculation,
                     location=(
-                        f"species['{species.key}'].conformers"
-                        f"['{conformer.key}'].calculation"
-                        f"['{conformer.calculation.key}'].freq_frequencies_cm1"
+                        f"species[{species.key!r}].conformers"
+                        f"[{conformer.key!r}].calculation"
+                        f"[{conformer.calculation.key!r}].freq_frequencies_cm1"
                     ),
                     xyz_text=conformer.geometry.xyz_text,
                 )
@@ -713,8 +687,8 @@ def network_pdep_linearity_warnings(request: object) -> list[UploadWarning]:
                 calculation_in_linearity_warnings(
                     calc,
                     location=(
-                        f"species['{species.key}'].calculations"
-                        f"['{calc.key}'].freq_frequencies_cm1"
+                        f"species[{species.key!r}].calculations"
+                        f"[{calc.key!r}].freq_frequencies_cm1"
                     ),
                     xyz_text=xyz_by_geometry_key.get(calc.geometry_key or ""),
                 )
@@ -725,8 +699,8 @@ def network_pdep_linearity_warnings(request: object) -> list[UploadWarning]:
                 calculation_in_linearity_warnings(
                     calc,
                     location=(
-                        f"transition_states['{transition_state.key}']"
-                        f".calculations['{calc.key}'].freq_frequencies_cm1"
+                        f"transition_states[{transition_state.key!r}]"
+                        f".calculations[{calc.key!r}].freq_frequencies_cm1"
                     ),
                     xyz_text=transition_state.geometry.xyz_text,
                 )
@@ -740,6 +714,7 @@ CHECK_FREQ_LIST_MODE_COUNT_MATCHES_GEOMETRY_SHAPE = ScientificCheck(
     code=(
         W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY,
         W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY,
+        W_FREQ_LIST_INCOMPLETE,
     ),
     asserts=(
         "A frequency list's mode count should match the shape of the "
@@ -774,6 +749,20 @@ CHECK_FREQ_LIST_MODE_COUNT_MATCHES_GEOMETRY_SHAPE = ScientificCheck(
     ),
     adr="0008",
     enforced_by=(
+        PythonCheck(
+            evaluate_frequency_list_completeness,
+            note=(
+                "The floor, ``freq_list_incomplete_for_geometry``: fewer modes "
+                "than an atom count alone proves a harmonic analysis of the "
+                "geometry produces (below ``3N - 6``, with a structural flag "
+                "for the unambiguous case). It is the same claim as the two "
+                "linearity codes, the list's mode count against the geometry's "
+                "shape, at the strength an atom count can prove. The ceiling "
+                "(entry 21) is a different claim: ``3N`` is a definition, "
+                "the floor is an expectation. Partial, frozen-atom and ONIOM Hessians remove modes honestly, which "
+                "is why the floor warns and never refuses."
+            ),
+        ),
         PythonCheck(
             evaluate_frequency_list_linearity,
             note=(

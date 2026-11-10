@@ -11,10 +11,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.db.models.common import (
     RecordReviewStatus,
+    ScientificOriginKind,
     StatmechTreatmentKind,
 )
 from app.schemas.reads._field_bounds import (
@@ -32,14 +33,16 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
+from app.schemas.reads.scientific_assessment import refuse_check_inputs_in_body
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
+    CursorToken,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
     ReviewVisibilityEcho,
-    SelectionPolicy,
+    ScientificResponse,
+    WatermarkEcho,
 )
 from app.schemas.reads.scientific_statmech import (
     ScientificStatmechRecord,
@@ -56,6 +59,12 @@ class StatmechSearchRequest(BaseModel):
     A key the model does not declare is a 422 (``extra_forbidden``), never
     ignored: a misspelled filter would otherwise quietly widen the result.
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_check_inputs(cls, data):
+        return refuse_check_inputs_in_body(data)
+
 
     model_config = ConfigDict(extra="forbid")
 
@@ -88,6 +97,8 @@ class StatmechSearchRequest(BaseModel):
 
     # --- statmech scalar filters -----------------------------------------
     model_kind: StatmechTreatmentKind | None = None
+    #: computed, experimental or estimated: the record's own ``scientific_origin``.
+    scientific_origin: ScientificOriginKind | None = None
 
     # --- evidence filters ------------------------------------------------
     has_source_calculations: bool | None = None
@@ -116,40 +127,34 @@ class StatmechSearchRequest(BaseModel):
     sort: str | None = None  # rejected non-None per v0 sort policy
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
 
 class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope.
 
-    ``collapse`` / ``selection_policy`` are populated by the per-species
-    subresource read (which supports an explicit named single-record policy)
-    and left ``null`` by broad search, which always returns all candidates.
+    Both the broad search and the per-species read return every matching record in ``sort`` order; neither picks one.
     """
 
     filter: dict[str, Any]
     sort: OrderEcho
     include: list[str] = Field(default_factory=list)
-    collapse: CollapseMode | None = None
-    selection_policy: SelectionPolicy | None = None
-    #: The display order that actually ordered the returned records, in the same shape as ``sort``.
-    #: ``sort`` stays the candidate-list (``collapse=all``) order.
-    effective_order: OrderEcho | None = None
-    #: ``true`` only when ``collapse=first`` (the policy chose the record);
-    #: ``false`` on ``collapse=all`` (the policy is echoed but orders nothing);
-    #: ``null`` on broad search, which has no policy.
-    selection_policy_applied: bool | None = None
     #: Review statuses this read showed and excluded, as computed.
     review_visibility: ReviewVisibilityEcho | None = None
 
 
-class ScientificStatmechSearchResponse(BaseModel):
+class ScientificStatmechSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/statmech/search."""
 
     request: RequestEcho
     review_summary: ReviewStatusSummary
     records: list[ScientificStatmechRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [

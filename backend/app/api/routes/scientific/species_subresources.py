@@ -21,7 +21,7 @@ that table at all (grep-verified: no ``molecular_property`` hit anywhere
 under ``app/api``). Unlike its two siblings above, it is not a candidate
 *product* with review-rank-selection semantics — it is a raw external
 observation — so it carries no ``include=trust`` / ``include=assessments``
-and no ``collapse`` / ``selection_policy`` knob. It still shares the same
+and no pick-one knob. It still shares the same
 review-badge, pagination and disclosure-envelope machinery (see
 ``app/services/scientific_read/observations.py``).
 
@@ -34,11 +34,11 @@ template name is kept). See
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     SEARCH_SCOPE,
     STATMECH_RECORD_SECTIONS,
@@ -46,9 +46,13 @@ from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
     omit_unrequested_sections,
     prepare_assessment_response,
+    refuse_check_inputs,
 )
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.common import RecordReviewStatus
-from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
+from app.schemas.reads.removed_parameters import STATMECH as _STATMECH_REMOVED
+from app.schemas.reads.removed_parameters import TRANSPORT as _TRANSPORT_REMOVED
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_observation import (
     ScientificSpeciesObservationsResponse,
 )
@@ -72,24 +76,25 @@ from app.services.scientific_read.species_transport import (
     get_species_transport,
 )
 
-router = APIRouter(prefix="/species-entries")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species-entries")
 
 
 @router.get(
     "/{species_entry_id}/statmech",
     response_model=ScientificStatmechSearchResponse,
+    dependencies=[Depends(refuse_check_inputs)],
 )
 def species_statmech(
+    http_request: Request,
     species_entry_id: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_db),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
-    selection_policy: SelectionPolicy = Query(SelectionPolicy.default),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Return statmech records for a species entry.
@@ -103,12 +108,13 @@ def species_statmech(
     record's computed statmech rubric fragment per record; ``include=all`` does
     not include trust.
 
-    Statmech records are candidate products for the resolved form;
-    ``collapse=first`` returns the single record selected under the explicit
-    named ``selection_policy`` (default ``default``). ``collapse=all`` (the
-    default) returns every candidate. See
+    Every statmech record for the entry is returned in display order (review
+    status, then newest deposition, then id). The read never picks one:
+    ``collapse`` and ``selection_policy`` are refused (422), and
+    ``POST /statmech/select`` answers "give me one". See
     ``backend/docs/specs/scientific_product_candidacy.md``.
     """
+    reject_removed_query_params(http_request, _STATMECH_REMOVED)
     resolved_species_entry_id = resolve_species_entry_handle(
         session, species_entry_id
     )
@@ -120,9 +126,8 @@ def species_statmech(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
-        collapse=collapse,
-        selection_policy=selection_policy,
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     visibility = prepare_assessment_response(
@@ -140,18 +145,19 @@ def species_statmech(
 @router.get(
     "/{species_entry_id}/transport",
     response_model=ScientificTransportSearchResponse,
+    dependencies=[Depends(refuse_check_inputs)],
 )
 def species_transport(
+    http_request: Request,
     species_entry_id: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_db),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
-    selection_policy: SelectionPolicy = Query(SelectionPolicy.default),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Return transport records for a species entry.
@@ -165,12 +171,13 @@ def species_transport(
     ``computed_transport`` fragment per record; ``include=all`` does
     not include trust.
 
-    Transport records are candidate products for the resolved form;
-    ``collapse=first`` returns the single record selected under the explicit
-    named ``selection_policy`` (default ``default``). ``collapse=all`` (the
-    default) returns every candidate. See
+    Every transport record for the entry is returned in display order (review
+    status, then newest deposition, then id). The read never picks one:
+    ``collapse`` and ``selection_policy`` are refused (422). There is no
+    transport select endpoint yet. See
     ``backend/docs/specs/scientific_product_candidacy.md``.
     """
+    reject_removed_query_params(http_request, _TRANSPORT_REMOVED)
     resolved_species_entry_id = resolve_species_entry_handle(
         session, species_entry_id
     )
@@ -182,9 +189,8 @@ def species_transport(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
-        collapse=collapse,
-        selection_policy=selection_policy,
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     visibility = prepare_assessment_response(
@@ -212,7 +218,8 @@ def species_observations(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Return molecular-property observations for a species entry.
@@ -247,6 +254,7 @@ def species_observations(
         include_deprecated=include_deprecated,
         sort=sort,
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     return apply_internal_ids_visibility(payload)

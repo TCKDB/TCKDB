@@ -2,22 +2,24 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     ANYWHERE_SCOPE,
     SPECIES_SEARCH_SECTIONS,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
     StationaryPointKind,
 )
-from app.schemas.reads.scientific_common import CollapseMode
+from app.schemas.reads.removed_parameters import SPECIES as _REMOVED_PARAMETERS
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_species import (
     ScientificSpeciesSearchResponse,
     SpeciesSearchRequest,
@@ -27,11 +29,12 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.species import search_species
 
-router = APIRouter(prefix="/species")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species")
 
 
 @router.get("/search", response_model=ScientificSpeciesSearchResponse)
 def species_search(
+    http_request: Request,
     session: Session = Depends(get_db),
     smiles: str | None = Query(None),
     inchi: str | None = Query(None),
@@ -47,9 +50,9 @@ def species_search(
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ) -> ScientificSpeciesSearchResponse:
     """Discover species by chemical identity with per-entry trust + availability.
@@ -59,7 +62,9 @@ def species_search(
     with 422 (``client_sort_not_supported``). See ``docs/specs/browse_order.md``
     §Endpoint 1 for the contract.
     """
-    request = SpeciesSearchRequest(
+    reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
+    request = caller_input(
+        SpeciesSearchRequest,
         smiles=smiles,
         inchi=inchi,
         inchi_key=inchi_key,
@@ -74,9 +79,9 @@ def species_search(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
-        collapse=collapse,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = search_species(session, request)

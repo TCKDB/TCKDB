@@ -3,7 +3,9 @@ import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import type { SpeciesIdentity } from "../domain/recordIdentity"
 import { words } from "../domain/provenanceFormat"
-import { stereoChip } from "../domain/recordFacets"
+import { stereoDescription } from "../domain/recordFacets"
+import { termSymbolSpoken } from "../domain/electronicState"
+import { publicElectronicStateLabel, publicTermSymbol } from "../domain/publicText"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { Formula } from "./Formula"
 import { RecordIdentityHeader } from "./RecordIdentityHeader"
@@ -57,9 +59,13 @@ function availabilityText(entry: SpeciesEntryProjection) {
  * deleted facts a reader could see nowhere else (the owner caught this on
  * `spe_n5nt4fz3ztsfh2otwlyyvvl2je`: "why ... does it not show ... E isomer
  * like it does for Review etc."). Each of the three is rendered only when
- * the entry actually carries it -- an absent stereo label means this entry
- * is not stereochemically distinguished, not "unknown", so it gets no row
- * at all rather than a "not recorded" placeholder.
+ * the entry actually carries it. The Stereochemistry row is read from the
+ * descriptor and its resolution (DR-0038), never from the display
+ * `stereo_label` alone: that label is NULL for an entry whose stereo is
+ * wholly unknown, so a missing label is NOT "not stereochemically
+ * distinguished". "Achiral" is said only for a NULL descriptor; partial and
+ * unresolved entries say so; an allene axis says "axial stereo not
+ * represented".
  */
 export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
     // No `speciesEntryRef`/`speciesEntryLabel` here -- unlike every other
@@ -75,6 +81,9 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
         charge: entry.charge,
         multiplicity: entry.multiplicity,
     }
+    // Says "Achiral" only for a NULL descriptor; an entry whose stereo is partial or unresolved
+    // (display `stereo_label` NULL) is shown as that, not as "not distinguished".
+    const stereo = stereoDescription(entry)
     return <header className="entry-hero">
         {/* Deliberately NOT SMILES-leads-formula-in-brackets (owner
             ruling, applied everywhere else a species is shown): this h1
@@ -98,9 +107,17 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
         <ul className="entry-facts" aria-label="Record facts">
             <FactItem label="Entry kind / state" value={`${displayToken(entry.species_entry_kind)} / ${displayToken(entry.electronic_state_kind)}`} />
             <FactItem label="Archive availability" value={availabilityText(entry)} />
-            {entry.electronic_state_label && <FactItem label="Electronic state label" value={entry.electronic_state_label} />}
-            {entry.term_symbol && <FactItem label="Term symbol" value={entry.term_symbol} />}
-            {entry.stereo_label && <FactItem label="Stereochemistry" value={stereoChip(entry.stereo_label)} />}
+            {/* The state label and term symbol only when they are in the grammar the API enforces on write
+                (`electronicState.ts`); anything else is a legacy free-text value and stays hidden (house rule,
+                owner decision 2026-11-03). The term symbol carries a plain-words reading for a screen reader. */}
+            {publicElectronicStateLabel(entry.electronic_state_label) && (
+                <FactItem label="State label" value={publicElectronicStateLabel(entry.electronic_state_label)!} />
+            )}
+            {publicTermSymbol(entry.term_symbol) && (
+                <FactItem label="Term symbol" value={publicTermSymbol(entry.term_symbol)!} spoken={termSymbolSpoken(entry.term_symbol)} />
+            )}
+            {stereo && <FactItem label="Stereochemistry" value={stereo} />}
+            {entry.stereo_smiles && <FactItem label="Stereo SMILES" value={entry.stereo_smiles} />}
             {entry.isotope_key && <FactItem label="Isotopologue" value={entry.isotope_key} />}
         </ul>
         {/* BLOCKING-1 (species-entry/browse/chrome residuals re-review):
@@ -133,6 +150,7 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
     </header>
 }
 
-function FactItem({ label, value }: { label: string; value: string }) {
-    return <li><span>{label}</span><strong>{value}</strong></li>
+function FactItem({ label, value, spoken }: { label: string; value: string; spoken?: string | null }) {
+    // `spoken` is the value in words for a screen reader (`²Π` is "doublet pi"); the printed symbol stays as stored.
+    return <li><span>{label}</span><strong role={spoken ? "img" : undefined} aria-label={spoken ?? undefined}>{value}</strong></li>
 }

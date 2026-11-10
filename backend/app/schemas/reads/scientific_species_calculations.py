@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.db.models.common import (
     CalculationGeometryRole,
@@ -53,12 +53,14 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
+from app.schemas.reads.removed_parameters import SPECIES_CALCULATIONS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_calculation import (
     CalculationFreqModeSummary,
     CalculationFreqResultSummary,
 )
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
+    CursorToken,
     LevelOfTheorySummary,
     OrderEcho,
     Pagination,
@@ -66,8 +68,10 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
     SCFStabilitySummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     ValidationSummary,
+    WatermarkEcho,
     WorkflowToolReleaseSummary,
 )
 
@@ -102,7 +106,14 @@ class SpeciesCalculationsSearchRequest(BaseModel):
     is required. Multiple identifiers AND-combine; inconsistent identifiers
     return an empty result set. ``species_entry_id`` (when supplied) is a
     handle path — 404 if the entry does not exist.
+
+    Every matching calculation is returned in display order; ``collapse`` and ``selection_policy`` are refused (422).
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_parameters(cls, data):
+        return _REMOVED_PARAMETERS.guard_body(data)
 
     # Chemistry-first species identity filters
     smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
@@ -133,6 +144,10 @@ class SpeciesCalculationsSearchRequest(BaseModel):
     workflow_tool: str | None = Field(
         default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH
     )
+    #: A classification of the calculation's method (not a measure of accuracy); see ``app/schemas/reads/_method_family.py``.
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
     scientific_origin: ScientificOriginKind | None = None
     calculation_quality: CalculationQuality | None = None
 
@@ -143,12 +158,13 @@ class SpeciesCalculationsSearchRequest(BaseModel):
     # Orthogonal to review's ``rejected`` — opts in CalculationQuality.rejected.
     include_rejected_quality: bool = False
 
-    # Sort / collapse / pagination
+    # Sort / pagination. ``ranking`` is an explicit request for another display order; it is echoed as
+    # ``request.sort.requested_by``.
     ranking: CalculationRanking = CalculationRanking.default
     sort: str | None = None  # rejected non-None per v0 sort policy
-    collapse: CollapseMode = CollapseMode.all
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
 
@@ -378,14 +394,17 @@ class SpeciesCalculationsSearchRecord(BaseModel):
     #: thing.
     #:
     #: Two of ADR 0012's four persisted fields are transition-state
-    #: business (``reaction_coordinate_mode_index``,
-    #: ``imaginary_mode_structural_flag``) and read ``null`` on every
-    #: record this surface returns, because ``StationaryPointKind`` has
-    #: no saddle-point member: a species entry is a ``minimum`` or a
-    #: ``vdw_complex``, never a TS. They are kept anyway rather than
-    #: trimmed into a species-only variant, because ``null`` there is the
-    #: honest answer ("no reaction coordinate was designated"), and
-    #: because the other two are *not* TS-specific at all.
+    #: business. ``reaction_coordinate_mode_index`` reads ``null`` on
+    #: every record this surface returns, because ``StationaryPointKind``
+    #: has no saddle-point member (a species entry is a ``minimum`` or a
+    #: ``vdw_complex``, never a TS) and a minimum that designates one is
+    #: refused. ``imaginary_mode_structural_flag`` reads ``null`` unless
+    #: the frequency result was judged under the minimum rule (ADR 0012's
+    #: 2026-10-29 note): then it is ``false`` -- every imaginary mode below
+    #: tau, accepted with a warning, judged and not flagged -- and never
+    #: ``true`` here. They are kept rather than trimmed into a
+    #: species-only variant, because ``null`` is the honest answer ("never
+    #: judged"), and because the other two are *not* TS-specific at all.
     #: ``imaginary_mode_tau_cm1`` / ``imaginary_mode_tau_basis`` are
     #: recorded for every frequency upload taken since ADR 0012 shipped,
     #: minima included; nothing was backfilled, so a record older than
@@ -419,14 +438,17 @@ class RequestEcho(ProfiledRequestEcho):
     filter: dict[str, object]
     ranking: CalculationRanking
     sort: OrderEcho
-    collapse: CollapseMode
     include: list[str]
 
 
-class ScientificSpeciesCalculationsSearchResponse(BaseModel):
+class ScientificSpeciesCalculationsSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/species-calculations/search."""
 
     request: RequestEcho
     review_summary: ReviewStatusSummary
     records: list[SpeciesCalculationsSearchRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None

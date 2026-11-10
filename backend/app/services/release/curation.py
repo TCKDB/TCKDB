@@ -35,6 +35,7 @@ from app.db.models.dataset_release import (
     ReleaseSelection,
 )
 from app.db.models.record_review import RecordReview
+from app.db.models.species import SpeciesEntry
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.services.release.artifacts import release_record_universe
 from app.services.release.record_rights import linked_rights
@@ -46,6 +47,7 @@ from app.services.release.records import (
 )
 from app.services.rights import licenses_match
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
+from app.services.species_merge import canonical_id
 
 
 class ReleaseCurationError(ValueError):
@@ -387,6 +389,35 @@ def record_doi(session: Session, release: DatasetRelease, *, doi: str) -> Datase
 # ---------------------------------------------------------------------------
 
 
+def canonical_subject_id(
+    session: Session, subject_type: SubmissionRecordType, subject_id: int
+) -> int:
+    """The subject a selection about ``subject_id`` is a selection for.
+
+    A species entry merged into another is kept (its selections are append-only history and stay as written), and
+    everything it held, results included, moved to the survivor. A selection whose subject merged into S therefore
+    counts as a selection for S (DR-0038); the rows themselves are never rewritten.
+    """
+    if subject_type is not SubmissionRecordType.species_entry:
+        return subject_id
+    return canonical_id(session, SpeciesEntry, subject_id)
+
+
+def subject_ids_standing_for(
+    session: Session, subject_type: SubmissionRecordType, subject_id: int
+) -> list[int]:
+    """The subject and every merged-away row that forwards to it, whose selections all count for the subject."""
+    canonical = canonical_subject_id(session, subject_type, subject_id)
+    ids = [canonical]
+    if subject_type is SubmissionRecordType.species_entry:
+        ids.extend(
+            session.scalars(
+                select(SpeciesEntry.id).where(SpeciesEntry.merged_into_species_entry_id == canonical)
+            )
+        )
+    return ids
+
+
 def _assert_record_exists(
     session: Session, *, record_type: SubmissionRecordType, record_id: int
 ) -> None:
@@ -425,7 +456,7 @@ def _assert_subject_matches(
     actual = session.scalars(
         select(getattr(owner.model, owner.fk_attr)).where(owner.model.id == record_id)
     ).first()
-    if actual != subject_id:
+    if actual != canonical_subject_id(session, subject_type, subject_id):
         raise ReleaseCurationError(
             "record_subject_mismatch: the selected record does not belong to "
             "the stated subject."
@@ -706,6 +737,8 @@ def add_selection(
         subject_type=subject_type,
         subject_id=subject_id,
     )
+    # A new decision is about the row that holds the results.
+    subject_id = canonical_subject_id(session, subject_type, subject_id)
 
     standing = current_selection(
         session,
@@ -795,7 +828,7 @@ def supersede_selection(
         record_type=superseded.record_type,
         record_id=record_id,
         subject_type=superseded.subject_type,
-        subject_id=superseded.subject_id,
+        subject_id=canonical_subject_id(session, superseded.subject_type, superseded.subject_id),
         action=ReleaseSelectionAction.supersede,
         supersedes_selection_id=superseded.id,
         rationale=rationale,
@@ -832,7 +865,7 @@ def withdraw_selection(
         # would read as a selection while acting as a removal.
         record_id=superseded.record_id,
         subject_type=superseded.subject_type,
-        subject_id=superseded.subject_id,
+        subject_id=canonical_subject_id(session, superseded.subject_type, superseded.subject_id),
         action=ReleaseSelectionAction.withdraw,
         supersedes_selection_id=superseded.id,
         rationale=rationale,
@@ -862,7 +895,7 @@ def current_selection(
             .where(
                 ReleaseSelection.dataset_release_id == release.id,
                 ReleaseSelection.subject_type == subject_type,
-                ReleaseSelection.subject_id == subject_id,
+                ReleaseSelection.subject_id.in_(subject_ids_standing_for(session, subject_type, subject_id)),
                 ReleaseSelection.record_type == record_type,
             )
             .order_by(ReleaseSelection.id)
@@ -910,12 +943,14 @@ __all__ = [
     "ReleaseStateConflict",
     "ResolvedCandidate",
     "add_selection",
+    "canonical_subject_id",
     "create_release",
     "current_selection",
     "publish_release",
     "record_doi",
     "resolve_curation_policy",
     "resolve_selectable_record",
+    "subject_ids_standing_for",
     "supersede_selection",
     "withdraw_release",
     "withdraw_selection",

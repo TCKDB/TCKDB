@@ -193,6 +193,30 @@ def test_a_reference_to_a_hidden_solve_is_withheld_from_the_served_declaration(d
         finally:
             reset_current_read_profile(token)
         entry = served.validation.entries[0]
+        # ADR 0023 (step 3): the reference solve is evidence of the entry; merely unreviewed, it is served.
+        assert entry.reference_solve_ref == cited.public_ref and entry.reference_withheld is False
+
+        from app.db.models.app_user import AppUser
+
+        rejecter = AppUser(username="reads-rejecter", role=AppUserRole.curator)
+        session.add(rejecter)
+        session.flush()
+        ensure_record_review(session, record_type=SubmissionRecordType.network_solve, record_id=cited.id)
+        set_record_review_status(
+            session,
+            record_type=SubmissionRecordType.network_solve,
+            record_id=cited.id,
+            status=RecordReviewStatus.rejected,
+            actor=rejecter,
+        )
+        token = set_current_read_profile(
+            ResolvedReadProfile(profile=ReadProfile.curated, recommendation=ProfileRecommendation.approved_floor_only)
+        )
+        try:
+            served = get_network_solve(session, network_solve_handle=citing.public_ref).record.network_solve
+        finally:
+            reset_current_read_profile(token)
+        entry = served.validation.entries[0]
         assert entry.reference_solve_ref is None and entry.reference_withheld is False
         assert cited.public_ref not in served.model_dump_json()  # nowhere in the served record
         assert served.validation.entries[1].reference_withheld is False  # an entry with no reference is untouched

@@ -56,6 +56,7 @@ from app.db.models.structure_determination import StructureDetermination
 from app.db.models.workflow import WorkflowToolRelease
 from app.schemas.upload_warning import UploadWarning
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
+from app.services.conformer_group_forwarding import forwarded_group_id
 from app.services.energy_correction_resolution import resolve_or_create_freq_scale_factor_ref
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_calculation_key
@@ -121,7 +122,9 @@ def _group_by_ref(session: Session, ref: str, *, field: str) -> ConformerGroup:
             ref=ref,
             remedy="Deposit the conformer first, or state the basin of this upload.",
         )
-    return group
+    # A basin emptied by a merge is forwarded to the group that took its members.
+    forwarded = forwarded_group_id(session, group.id)
+    return group if forwarded == group.id else session.get(ConformerGroup, forwarded)
 
 
 def _calculation_for(
@@ -203,6 +206,7 @@ def recompute_content_hash(session: Session, row: StatmechModelDeclaration) -> s
             "multiplicity": m.counting_multiplicity,
             "relative_energy_kj_mol": m.relative_energy_kj_mol,
             "region_key": m.region_key,
+            **({"relative_energy_convention": m.relative_energy_convention.value} if m.relative_energy_convention else {}),
         }
         for m in row.members
     ]
@@ -349,6 +353,7 @@ def persist_statmech_model_declaration(
                 conformer_group_id=member_group_id,
                 counting_multiplicity=member.counting_multiplicity,
                 relative_energy_kj_mol=member.relative_energy_kj_mol,
+                relative_energy_convention=member.relative_energy_convention,
                 region_key=member.region_key,
             )
         )
@@ -360,6 +365,12 @@ def persist_statmech_model_declaration(
                 "multiplicity": member.counting_multiplicity,
                 "relative_energy_kj_mol": member.relative_energy_kj_mol,
                 "region_key": member.region_key,
+                # Only when stated, so a member without an energy hashes exactly as it did before the field existed.
+                **(
+                    {"relative_energy_convention": member.relative_energy_convention.value}
+                    if member.relative_energy_convention
+                    else {}
+                ),
             }
         )
 

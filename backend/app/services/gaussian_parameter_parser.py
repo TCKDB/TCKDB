@@ -7,9 +7,24 @@ the CalculationParameter model.  No DB dependency.
 from __future__ import annotations
 
 import re
+from itertools import pairwise
 from pathlib import Path
 
+from tckdb_schemas.hessian_method_detection import (  # noqa: F401  (re-exported: the route readers live in tckdb-schemas)
+    _IOP_RE,
+    _ROUTE_DELIM,
+    GAUSSIAN_FREQ_HESSIAN_OPTIONS,
+    _echo_text,
+    _extract_route_line_fallback,
+    _extract_route_line_from_log_echo,
+    _extract_route_line_from_raw_input,
+    _tokenize_route,
+    extract_gaussian_route_text,
+    gaussian_freq_hessian_option,
+)
+
 from app.parser_registry import PARSERS
+from app.services.parameter_closed_values import CLOSED_VALUES, canonical_or_none, normalise_solvent
 
 # ---------------------------------------------------------------------------
 # Canonical key mapping — initial seed (core + secondary tier)
@@ -44,12 +59,38 @@ _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
     # the key absent, which resolves to the conservative tau rather than
     # being read as "analytic". Assuming the default would be a guess
     # dressed as provenance.
-    ("freq", "numer"): ("freq.hessian_method", "finite_difference_gradient"),
-    ("freq", "numerical"): ("freq.hessian_method", "finite_difference_gradient"),
-    ("freq", "enonly"): ("freq.hessian_method", "finite_difference_energy"),
-    # integral section
+    # The option table is shared with upload validation
+    # (``tckdb_schemas.hessian_method_detection``): one owner.
+    **{
+        ("freq", option): ("freq.hessian_method", method.value)
+        for option, method in GAUSSIAN_FREQ_HESSIAN_OPTIONS.items()
+    },
+    # integral section. ``Int=UltraFine``, ``Int=(Grid=UltraFine)`` and ``Integral=UltraFineGrid`` state the
+    # same grid, so the bare names and the ``Grid=`` value land on one canonical value (see
+    # :func:`_grid_value`, which also reads ``Grid=<digits>``).
     ("integral", "grid"): ("grid.quality", None),
     ("integral", "acc2e"): ("integral.accuracy", None),
+    **{
+        ("integral", name): ("grid.quality", value)
+        for name, value in {
+            "coarse": "coarse", "coarsegrid": "coarse",
+            "sg1": "sg1", "sg1grid": "sg1",
+            "fine": "fine", "finegrid": "fine",
+            "ultrafine": "ultrafine", "ultrafinegrid": "ultrafine",
+            "superfine": "superfine", "superfinegrid": "superfine",
+            "pass0grid": "pass0grid",
+        }.items()
+    },
+    # Gaussian's ``Integral`` relativistic options (G09 manual, Integral, "Relativistic calculations"):
+    # DKH, DKH2 and DouglasKrollHess are synonyms; NoDKH and NonRelativistic request the default Hamiltonian.
+    **{
+        ("integral", name): ("relativistic.hamiltonian", value)
+        for name, value in {
+            "dkh": "dkh2", "dkh2": "dkh2", "douglaskrollhess": "dkh2",
+            "dkh0": "dkh0", "dkhso": "dkhso", "resc": "resc",
+            "nodkh": "none", "nonrelativistic": "none",
+        }.items()
+    },
     # general section
     ("general", "guess"): ("guess.strategy", None),
     # symmetry section
@@ -79,32 +120,8 @@ def _lookup_canonical(
 # Route-line extraction
 # ---------------------------------------------------------------------------
 
-_ROUTE_DELIM = re.compile(r"^[\s-]{60,}$")
 
 
-def extract_gaussian_route_text(text: str) -> str | None:
-    """Return the Gaussian route section from a log echo or raw input file.
-
-    Tries the log-echo dash-delimited block first. If that yields nothing
-    (e.g. raw ``.gjf`` / ``.com`` input), falls back to scanning for the
-    first non-empty line whose stripped form starts with ``#``, then
-    collects continuation lines until the first blank line.
-
-    The two modes use different join strategies:
-
-    * Log echoes: Gaussian hard-wraps at column width; concatenating with
-      no separator preserves tokens like ``def2tzvp`` that were split mid-
-      identifier.
-    * Raw input: lines are human-edited, so wrapping is logical not
-      physical; joining with spaces preserves token boundaries.
-
-    Returns ``None`` if no route could be identified.
-    """
-
-    log_route = _extract_route_line_from_log_echo(text)
-    if log_route:
-        return log_route
-    return _extract_route_line_from_raw_input(text)
 
 
 def _extract_route_line(text: str) -> str:
@@ -119,87 +136,10 @@ def _extract_route_line(text: str) -> str:
     return route or ""
 
 
-def _extract_route_line_from_log_echo(text: str) -> str:
-    """Extract the route line from a Gaussian log echo.
-
-    The route line sits between two rows of dashes (``------``) in the
-    early part of the output.  It may span multiple physical lines, but
-    Gaussian wraps at column width with no internal spaces, so the
-    parts must be concatenated with no separator.
-    """
-
-    lines = text.splitlines()
-    in_route = False
-    route_parts: list[str] = []
-
-    for line in lines:
-        stripped = line.strip()
-        if _ROUTE_DELIM.match(stripped):
-            if in_route:
-                # second delimiter — we're done
-                break
-            in_route = True
-            continue
-        if in_route:
-            route_parts.append(stripped)
-
-    raw = "".join(route_parts)
-    if raw.startswith("#"):
-        return raw
-    # First dash block might be the warning/copyright block; try the
-    # next one.
-    return _extract_route_line_fallback(text)
 
 
-def _extract_route_line_fallback(text: str) -> str:
-    """Fallback: scan dash-delimited blocks for one starting with ``#``."""
-    lines = text.splitlines()
-    dash_positions = [
-        i for i, line in enumerate(lines) if _ROUTE_DELIM.match(line.strip())
-    ]
-    for i in range(len(dash_positions) - 1):
-        start = dash_positions[i] + 1
-        end = dash_positions[i + 1]
-        block = "".join(lines[j].strip() for j in range(start, end))
-        if block.startswith("#"):
-            return block
-    return ""
 
 
-def _extract_route_line_from_raw_input(text: str) -> str | None:
-    """Extract the route from a raw Gaussian input (``.gjf`` / ``.com``).
-
-    Rules:
-
-    1. Find the first non-empty line whose stripped form starts with ``#``.
-    2. Collect that line plus every subsequent non-empty line.
-    3. Stop at the first blank line — that terminates the route section
-       and starts the title block.
-    4. Join with single spaces. Raw input is human-authored and wrapping
-       is logical, so token boundaries land on the line breaks.
-
-    Returns ``None`` if no ``#`` line was found.
-    """
-
-    lines = text.splitlines()
-    in_route = False
-    route_parts: list[str] = []
-
-    for line in lines:
-        stripped = line.strip()
-        if not in_route:
-            if stripped.startswith("#"):
-                in_route = True
-                route_parts.append(stripped)
-            continue
-        # in_route
-        if stripped == "":
-            break
-        route_parts.append(stripped)
-
-    if not route_parts:
-        return None
-    return " ".join(route_parts)
 
 
 # ---------------------------------------------------------------------------
@@ -229,14 +169,16 @@ def _extract_link0(text: str) -> list[dict]:
             value = m.group(2).strip()
             ck, cv = _lookup_canonical("resource", directive)
             params.append(
-                {
-                    "raw_key": directive,
-                    "canonical_key": ck,
-                    "raw_value": value,
-                    "canonical_value": cv,
-                    "section": "resource",
-                    "value_type": _guess_value_type(value),
-                }
+                _mirror_free_form_value(
+                    {
+                        "raw_key": directive,
+                        "canonical_key": ck,
+                        "raw_value": value,
+                        "canonical_value": cv,
+                        "section": "resource",
+                        "value_type": _guess_value_type(value),
+                    }
+                )
             )
     return params
 
@@ -245,7 +187,6 @@ def _extract_link0(text: str) -> list[dict]:
 # Route-line tokenizer and parser
 # ---------------------------------------------------------------------------
 
-_IOP_RE = re.compile(r"IOp\(([^)]+)\)", re.IGNORECASE)
 
 
 def _emit_scf_convergence_failure_ignored(iop_value: str) -> list[dict]:
@@ -299,6 +240,213 @@ _IOP_TRUST_FLAG_EMITTERS: dict[str, callable] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Keywords that carry options: Int/Integral, SCF, Opt, EmpiricalDispersion, SCRF, Stable
+# ---------------------------------------------------------------------------
+
+#: ``keyword`` spellings whose options are read into a section. ``Int`` is Gaussian's short form of ``Integral``.
+_SECTIONED_KEYWORDS = {"int": "integral", "integral": "integral", "scf": "scf", "opt": "opt"}
+
+_KEYWORD_SPLIT = re.compile(r"^([A-Za-z][A-Za-z0-9]*)(?:=(.*)|(\(.*\)))?$", re.DOTALL)
+
+#: A named grid (``UltraFine``, ``FineGrid``) is a *pruned* grid; ``Grid=mmmnnn`` is an *unpruned* mmm x nnn grid
+#: (G09 Integral manual, "Integration grid selection option"). They are different grids, so a numeric grid is never
+#: mapped to a named one: it keeps its digits (``99590``) as its canonical value. The tight-grid test of the
+#: imaginary-mode tolerance (``stationary_point._TIGHT_GRID_VALUES``) lists the digits ``99590`` beside the names and
+#: is unchanged.
+_GRID_NAMES = {
+    name: value
+    for (section, name), (key, value) in _CANONICAL_MAP.items()
+    if section == "integral" and key == "grid.quality" and value is not None
+}
+
+_DISPERSION_VALUES = {"gd2": "d2", "gd3": "d3_zero", "gd3bj": "d3_bj", "none": "none"}
+_SCRF_MODELS = {"smd": "smd", "cpcm": "cpcm", "pcm": "iefpcm", "iefpcm": "iefpcm"}
+#: Every SCRF option that is a flag rather than a solvent name, so a solvent name that itself contains a comma
+#: (``n,n-dimethylformamide``) can be rejoined.
+_SCRF_FLAGS = frozenset({
+    "smd", "cpcm", "pcm", "iefpcm", "ipcm", "scipcm", "dipole", "onsager", "read", "check", "iterative", "externaliteration",
+    "nodis", "dis", "norep", "rep", "nocav", "cav", "nocavity", "cavity", "dipolem", "solute", "volume", "tabulated",
+})
+_CORE_OPTIONS = {"full": "all_electron", "fc": "frozen_core", "frozencore": "frozen_core", "window": "window"}
+#: Correlated methods whose route option can carry the frozen-core choice. Not ``Pop=(Full)``, which means something else.
+_CORE_METHOD_PREFIXES = (
+    "mp2", "mp3", "mp4", "mp5", "ccsd", "ccd", "cid", "cisd", "qcisd", "bd", "eomccsd", "ci",
+    "ump2", "ump3", "ump4", "rmp2", "ccsdt",
+)
+_FUNCTION_TYPES = {
+    "5d": ("basis.d_function_type", "spherical"),
+    "6d": ("basis.d_function_type", "cartesian"),
+    "7f": ("basis.f_function_type", "spherical"),
+    "10f": ("basis.f_function_type", "cartesian"),
+}
+
+
+def _method_part(token: str) -> str | None:
+    """The method of a ``method/basis`` token, or ``None`` when the token is not one.
+
+    The first ``/`` outside parentheses splits them, and an ``=`` outside parentheses before it means the token
+    is a keyword with a value, not a method (``CIS(NStates=5,Full)/6-31G`` is a method: its ``=`` is inside).
+    """
+    depth = 0
+    for index, char in enumerate(token):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif depth == 0 and char == "=":
+            return None
+        elif depth == 0 and char == "/":
+            return token[:index]
+    return None
+
+
+def _grid_value(raw: str) -> str | None:
+    """The canonical grid for ``Grid=<raw>``: a documented grid name, or the digits of a numeric grid; else ``None``.
+
+    A name Gaussian does not document stays a raw row with no canonical key.
+    """
+    cleaned = raw.strip().lower().lstrip("+")
+    if cleaned in _GRID_NAMES:
+        return _GRID_NAMES[cleaned]
+    return cleaned if cleaned.lstrip("-").isdigit() else None
+
+
+def _split_keyword(token: str) -> tuple[str, str, str] | None:
+    """``(keyword as written, lower-cased keyword, option text)`` for ``Key``, ``Key=value``, ``Key=(..)``, ``Key(..)``."""
+    match = _KEYWORD_SPLIT.match(token)
+    if match is None:
+        return None
+    written = match.group(1)
+    body = match.group(2) if match.group(2) is not None else match.group(3)
+    body = (body or "").strip()
+    if body.startswith("(") and body.endswith(")"):
+        body = body[1:-1].strip()
+    return written, written.lower(), body
+
+
+def _split_options(body: str) -> list[tuple[str, str | None]]:
+    """Top-level options of ``body`` as ``(name, value or None)``; commas and spaces separate, parentheses group."""
+    pieces: list[str] = []
+    current: list[str] = []
+    depth = 0
+    for char in body:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        if depth == 0 and char in ", \t":
+            if current:
+                pieces.append("".join(current))
+                current = []
+        else:
+            current.append(char)
+    if current:
+        pieces.append("".join(current))
+
+    options: list[tuple[str, str | None]] = []
+    for piece in pieces:
+        if "=" in piece:
+            name, value = piece.split("=", 1)
+            options.append((name.strip(), value.strip()))
+        elif options and options[-1][0].lower() == "solvent" and piece.lower() not in _SCRF_FLAGS:
+            options[-1] = (options[-1][0], f"{options[-1][1]},{piece}")
+        else:
+            options.append((piece.strip(), None))
+    return options
+
+
+def _row(raw_key: str, raw_value: str, ck: str | None, cv: str | None, section: str, value_type: str | None = None) -> dict:
+    """One parameter row, its canonical key kept only when the value is in the key's closed set."""
+    ck, cv = canonical_or_none(ck, cv)
+    return {
+        "raw_key": raw_key,
+        "canonical_key": ck,
+        "raw_value": raw_value,
+        "canonical_value": cv,
+        "section": section,
+        "value_type": value_type or _guess_value_type(raw_value),
+    }
+
+
+def _emit_keyword_options(written: str, key: str, body: str) -> list[dict]:
+    """Rows for a keyword whose options are parameters (``SCF=Tight``, ``Int=(Grid=UltraFine)``, ``Opt(TS)``, ...)."""
+    options = _split_options(body)
+    rows: list[dict] = []
+
+    if key in _SECTIONED_KEYWORDS:
+        section = _SECTIONED_KEYWORDS[key]
+        for name, value in options:
+            ck, cv = _lookup_canonical(section, name)
+            if ck == "grid.quality" and name.lower() == "grid" and value is not None:
+                cv = _grid_value(value)
+                if cv is None:
+                    ck = None
+            rows.append(_row(name, value if value is not None else "true", ck, cv, section, None if value else "bool"))
+        return rows
+
+    if key == "empiricaldispersion":
+        if options:
+            name, value = options[0]
+            text = value if value is not None else name
+            rows.append(_row(written, text, "dispersion.correction", _DISPERSION_VALUES.get(text.lower()), "general", "enum"))
+        return rows
+
+    if key == "scrf":
+        for name, value in options:
+            lowered = name.lower()
+            if lowered == "solvent" and value is not None:
+                rows.append(_row(name, value, "solvation.solvent", normalise_solvent(value), "scrf", "string"))
+            elif lowered in _SCRF_MODELS and value is None:
+                rows.append(_row(name, "true", "solvation.model", _SCRF_MODELS[lowered], "scrf", "bool"))
+            else:
+                rows.append(_row(name, value if value is not None else "true", None, None, "scrf"))
+        return rows
+
+    if key == "stable":
+        wants_optimisation = any(name.lower() == "opt" for name, _ in options)
+        rows.append(
+            _row(written, body or "true", "scf.stability_analysis", "optimize" if wants_optimisation else "check_only", "stability", "enum")
+        )
+        return rows
+
+    return rows
+
+
+def _emit_core_options(method_part: str) -> list[dict]:
+    """Frozen-core rows for a correlated method written with route options (``MP2(Full)``, ``CCSD(T,FC)``)."""
+    split = _split_keyword(method_part)
+    if split is None or not split[1].startswith(_CORE_METHOD_PREFIXES):
+        return []
+    rows: list[dict] = []
+    for name, value in _split_options(split[2]):
+        core = _CORE_OPTIONS.get(name.lower())
+        if core is not None:
+            rows.append(_row(name, value if value is not None else "true", "core.frozen", core, "method_options", "enum"))
+    return rows
+
+
+def _mirror_free_form_value(row: dict) -> dict:
+    """Give a canonical row with no mapped value its raw value, as the ORCA parser does.
+
+    ``MaxCycle=512`` has a canonical key and no enumeration to map to; leaving ``canonical_value`` empty made the
+    row unreadable to anything that reads canonical values only. ``IOp`` rows are excluded: their raw key carries
+    the coordinate, so one canonical value would stand for many different options.
+    """
+    if (
+        row.get("canonical_key") is not None
+        and row.get("canonical_value") is None
+        and row["canonical_key"] != "internal_option.iop"
+        and row["canonical_key"] not in CLOSED_VALUES
+    ):
+        value = row["raw_value"]
+        # Case carries no meaning in a setting's value (``Guess=Read``, ``Grid=Pass0Grid``), and the comparison
+        # with a typed value is exact, so the canonical form is lower case; a memory request or a processor count
+        # is left as written.
+        row["canonical_value"] = value if row["canonical_key"].startswith(("memory.", "parallel.")) else value.lower()
+    return row
+
+
 def _parse_route_tokens(route: str) -> list[dict]:
     """Parse the Gaussian route line into parameter dicts.
 
@@ -310,6 +458,7 @@ def _parse_route_tokens(route: str) -> list[dict]:
       - IOp(o/k=v)     (IOp(2/9=2000))
     """
     params: list[dict] = []
+    original_route = route
 
     # Strip the # prefix
     route = route.strip()
@@ -368,6 +517,10 @@ def _parse_route_tokens(route: str) -> list[dict]:
     # Remove IOp(...) from route for further parsing
     route = _IOP_RE.sub("", route).strip()
 
+    # ``keyword (options)`` and ``keyword = value`` are one token each.
+    route = re.sub(r"\s*=\s*", "=", route)
+    route = re.sub(r"(?<=[\w)])\s+\(", "(", route)
+
     # Now tokenize the remaining route.
     # Tokens are separated by spaces, but parenthesized groups must be kept together.
     tokens = _tokenize_route(route)
@@ -377,9 +530,25 @@ def _parse_route_tokens(route: str) -> list[dict]:
         if not token:
             continue
 
-        # method/basis pattern: word/word (no = sign, contains /)
-        if "/" in token and "=" not in token and "(" not in token:
-            # This is level-of-theory, not a parameter — skip (belongs in LoT)
+        # method/basis pattern: ``method/basis``. The method and basis are level-of-theory, not parameters,
+        # but the method can carry the frozen-core choice (``CCSD(T,Full)/cc-pVTZ``), which is.
+        method_part = _method_part(token)
+        if method_part is not None:
+            params.extend(_emit_core_options(method_part))
+            continue
+
+        split = _split_keyword(token)
+        if split is not None:
+            written, keyword, body = split
+            if keyword in _SECTIONED_KEYWORDS or keyword in ("empiricaldispersion", "scrf", "stable"):
+                params.extend(_emit_keyword_options(written, keyword, body))
+                continue
+            if keyword.startswith(_CORE_METHOD_PREFIXES):
+                params.extend(_emit_core_options(token))
+                continue
+        if token.lower() in _FUNCTION_TYPES:
+            key, value = _FUNCTION_TYPES[token.lower()]
+            params.append(_row(token, "true", key, value, "basis", "enum"))
             continue
 
         # key=(sub-options) pattern
@@ -490,30 +659,41 @@ def _parse_route_tokens(route: str) -> list[dict]:
                     }
                 )
 
-    return params
-
-
-def _tokenize_route(route: str) -> list[str]:
-    """Split route line into tokens, respecting parenthesized groups."""
-    tokens: list[str] = []
-    current: list[str] = []
-    depth = 0
-    for char in route:
-        if char == "(":
-            depth += 1
-            current.append(char)
-        elif char == ")":
-            depth -= 1
-            current.append(char)
-        elif char == " " and depth == 0:
-            if current:
-                tokens.append("".join(current))
-                current = []
+    # The Hessian method is read once, by the reader shared with upload
+    # validation (every spelling of ``Freq``, ``EnOnly`` over ``Numer``), so the
+    # stored row is the one validation judged. Rows stay exactly as the deck
+    # wrote them (``raw_key`` keeps its case, the freq section keeps every
+    # option); only the winning option's row keeps the canonical key and value,
+    # so no row's raw text contradicts its canonical value.
+    shared = gaussian_freq_hessian_option(original_route)
+    winner_seen = False
+    for p in params:
+        if p.get("canonical_key") != "freq.hessian_method":
+            continue
+        if shared is not None and not winner_seen and str(p["raw_key"]).lower() == shared[0].lower():
+            p["canonical_value"] = shared[1].value
+            winner_seen = True
         else:
-            current.append(char)
-    if current:
-        tokens.append("".join(current))
-    return tokens
+            p["canonical_key"] = None
+            p["canonical_value"] = None
+    if shared is not None and not winner_seen:
+        # A spelling the generic branches above do not emit a row for
+        # (``Freq(Numer)``, ``Freq (Numer)``, ``Freq = Numer``, ``Frequency=..``).
+        option, method = shared
+        params.append(
+            {
+                "raw_key": option,
+                "canonical_key": "freq.hessian_method",
+                "raw_value": "true",
+                "canonical_value": method.value,
+                "section": "freq",
+                "value_type": "bool",
+            }
+        )
+
+    return [_mirror_free_form_value(p) for p in params]
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -577,7 +757,9 @@ def parse_all_charge_multiplicity(text: str) -> list[tuple[int, int]]:
 # Method / basis extraction from route line
 # ---------------------------------------------------------------------------
 
-_METHOD_BASIS_RE = re.compile(r"(?:^|\s)(u?\w+)/(\S+)", re.IGNORECASE)
+#: ``method/basis``: the method starts with a letter and may carry hyphens (``CAM-B3LYP``, ``wB97X-D``) and one
+#: parenthesised group (``CCSD(T)``, ``CCSD(T,Full)``, ``MP2(Full)``). An ``IOp(2/9=2000)`` is not one.
+_METHOD_BASIS_RE = re.compile(r"(?:^|\s)([A-Za-z][\w\-+*]*(?:\([^)\s]*\))?)/(\S+)")
 
 
 def parse_method_basis(route: str) -> dict | None:
@@ -586,6 +768,63 @@ def parse_method_basis(route: str) -> dict | None:
     if m:
         return {"method": m.group(1), "basis": m.group(2)}
     return None
+
+
+_LINK1 = re.compile(r"^\s*--link1--\s*$", re.IGNORECASE | re.MULTILINE)
+
+
+def all_route_texts(text: str) -> list[str]:
+    """The route of every job in the file: each echoed route block of a log, else each ``--Link1--`` part of a deck."""
+    lines = text.splitlines()
+    dashes = [i for i, line in enumerate(lines) if _ROUTE_DELIM.match(line.strip())]
+    echoed = []
+    for first, second in pairwise(dashes):
+        block = "".join(_echo_text(lines[j]) for j in range(first + 1, second))
+        if block.startswith("#"):
+            echoed.append(block)
+    if echoed:
+        return echoed
+    routes = []
+    for part in _LINK1.split(text):
+        route = extract_gaussian_route_text(part)
+        if route:
+            routes.append(route)
+    return routes
+
+
+def parse_method_basis_jobs(text: str) -> list[dict]:
+    """``{"methods": [method], "basis": basis}`` for every job whose route states a ``method/basis``."""
+    jobs = []
+    for route in all_route_texts(text):
+        found = parse_method_basis(route)
+        if found:
+            jobs.append({"methods": [found["method"]], "basis": found["basis"]})
+    return jobs
+
+
+def parse_qualifier_jobs(text: str) -> list[dict]:
+    """One entry per job route of the text: its method, basis and the canonical settings its route states.
+
+    ``{"methods": [method], "basis": basis, "route": route, "pairs": {(canonical_key, canonical_value), ...}}``.
+    Lets a check that compares a declared setting read one job's settings and not another's.
+    """
+    jobs = []
+    for route in all_route_texts(text):
+        found = parse_method_basis(route)
+        pairs = {
+            (p["canonical_key"], p["canonical_value"])
+            for p in _parse_route_tokens(route)
+            if p.get("canonical_key") is not None and p.get("canonical_value") is not None
+        }
+        jobs.append(
+            {
+                "methods": [found["method"]] if found else [],
+                "basis": found["basis"] if found else None,
+                "route": route,
+                "pairs": pairs,
+            }
+        )
+    return jobs
 
 
 # ---------------------------------------------------------------------------

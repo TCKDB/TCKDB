@@ -126,7 +126,9 @@ cabs_basis        — e.g. "cc-pvtz-f12-cabs"
 dispersion        — e.g. "d3bj"
 solvent           — e.g. "water"
 solvent_model     — e.g. "smd"
-keywords          — free-text keywords/flags
+spin_treatment    — e.g. "unrestricted" (always part of the identity)
+core_treatment, relativistic_hamiltonian, pno_truncation, ri_approximation
+                  — typed method qualifiers, part of the identity only when stated
 ```
 
 The model also already stores `lot_hash: CHAR(64)` — a canonical hash
@@ -193,8 +195,9 @@ object with at minimum:
 The `label` is a display-only slash-joined summary of the populated
 identity fields. The four fields (`method`, `basis`, `dispersion`,
 `solvent`) are the most-used identity components and are surfaced by
-default; the remaining four (`aux_basis`, `cabs_basis`, `solvent_model`,
-`keywords`) are present when populated, omitted otherwise.
+default; the remaining ones (`aux_basis`, `cabs_basis`, `solvent_model`, and the
+typed method qualifiers) are present when populated, omitted otherwise. A level of
+theory has no free-text keywords.
 
 ### LoT in queries
 

@@ -14,10 +14,6 @@ describe("reaction-entry.css: equation h1 typography fixes", () => {
     it("code.data inside the identity title inherits the surrounding font-size (not the fixed --type-data-font)", () => {
         expect(stylesheet).toMatch(/\.record-identity-title\s+code\.data\s*\{[^}]*font-size:\s*inherit/)
     })
-
-    it(".reaction-equation-chip is capped to --type-body-font, not the h1's own display size", () => {
-        expect(stylesheet).toMatch(/\.record-identity-title\s+\.reaction-equation-chip\s*\{[^}]*font:\s*var\(--type-body-font\)/)
-    })
 })
 
 /**

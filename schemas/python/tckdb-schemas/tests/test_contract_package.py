@@ -132,6 +132,16 @@ def test_the_refusal_code_reference_ships_beside_the_contract() -> None:
     assert "](REFUSAL_CODES.md#c-" in contract.markdown()
 
 
+def test_the_warning_code_reference_ships_beside_the_contract() -> None:
+    codes = contract.warning_codes_path()
+    assert codes.is_file()
+    assert codes.name == contract.WARNING_CODES_FILENAME == "WARNING_CODES.md"
+    assert codes.parent == contract.path().parent
+    text = contract.warning_codes_markdown()
+    assert text.startswith("# TCKDB warning code reference\n")
+    assert text.count('<a id="w-') > 80
+
+
 def _run(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "tckdb_schemas.contract", *args],
@@ -205,6 +215,7 @@ def test_the_wheel_ships_the_contract(tmp_path: pathlib.Path) -> None:
     assert "tckdb_schemas/contract/PRODUCER_CONTRACT.md" in names
     assert "tckdb_schemas/contract/CHANGELOG.md" in names
     assert "tckdb_schemas/contract/REFUSAL_CODES.md" in names
+    assert "tckdb_schemas/contract/WARNING_CODES.md" in names
     shipped_schemas = {name for name in names if name.startswith("tckdb_schemas/contract/schemas/")}
     expected = {f"tckdb_schemas/contract/schemas/{name}.schema.json" for name in contract.schema_names()}
     assert shipped_schemas == expected

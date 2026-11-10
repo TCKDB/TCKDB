@@ -254,7 +254,7 @@ def test_non_ground_state_target_refuses(
         _url(obs.public_ref), json={"species_entry_ref": excited_entry.public_ref}
     )
     assert resp.status_code == 422, resp.text
-    assert "observation_identity_target_not_ground_state_minimum" in resp.text
+    assert resp.json()["code"] == "observation_identity_target_not_ground_state_minimum"
 
 
 def test_single_excited_state_entry_species_refuses(
@@ -290,7 +290,7 @@ def test_single_excited_state_entry_species_refuses(
         _url(obs.public_ref), json={"species_entry_ref": excited_entry.public_ref}
     )
     assert resp.status_code == 422, resp.text
-    assert "observation_identity_target_not_ground_state_minimum" in resp.text
+    assert resp.json()["code"] == "observation_identity_target_not_ground_state_minimum"
 
 
 def test_attach_refuses_an_observation_linked_to_no_submission(
@@ -380,7 +380,7 @@ def test_hint_different_skeleton_refuses(
         _url(obs.public_ref), json={"species_entry_ref": entry.public_ref}
     )
     assert resp.status_code == 422, resp.text
-    assert "observation_identity_hint_conflict" in resp.text
+    assert resp.json()["code"] == "observation_identity_hint_conflict"
 
     db_session.refresh(obs)
     assert obs.species_entry_id is None

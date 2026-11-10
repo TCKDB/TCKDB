@@ -31,12 +31,10 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.orm import Session
-from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
-from app.services.calculation_resolution import _level_of_theory_hash, resolve_level_of_theory_ref
 from app.services.composite_scheme_resolution import named_method_definition_hash
 from app.services.public_refs import make_content_ref
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 from tests.db._migration_chain import revision_under_test
 from tests.db.test_level_of_theory_basis_identity_migration import _Harness
 
@@ -84,7 +82,7 @@ def harness():
 def _seed(conn) -> dict[str, int]:
     ids: dict[str, int] = {}
     for key, (method, basis, stale) in _SEED.items():
-        lot_hash = stale or _level_of_theory_hash(LevelOfTheoryRef(method=method, basis=basis))
+        lot_hash = stale or frozen_level_of_theory_hash(method=method, basis=basis)
         ids[key] = conn.scalar(
             text(
                 "INSERT INTO level_of_theory (method, basis, lot_hash, public_ref) "
@@ -101,6 +99,24 @@ def _seed(conn) -> dict[str, int]:
         {"a": ids["internal_b3lyp_cbsb7"], "b": ids["internal_kept"]},
     )
     return ids
+
+
+def _rehash_to_current_formula(engine) -> None:
+    """Give every seeded level the hash the application computes today, except the deliberately stale one.
+
+    The revision under test leaves the seeded rows with the pre-Stage-2 formula's hashes, which the merge script
+    (it groups by the current formula and keeps the row that holds it) cannot use. This stands in for a reseed.
+    """
+    from tckdb_schemas.fragments.refs import LevelOfTheoryRef
+
+    from app.services.calculation_resolution import _level_of_theory_hash
+
+    with engine.begin() as conn:
+        for row in conn.execute(text("SELECT id, method, basis, lot_hash FROM level_of_theory")).all():
+            if row.lot_hash == "f" * 64:
+                continue
+            h = _level_of_theory_hash(LevelOfTheoryRef(method=row.method, basis=row.basis))
+            conn.execute(text("UPDATE level_of_theory SET lot_hash = :h WHERE id = :i"), {"h": h, "i": row.id})
 
 
 def _levels(engine) -> dict[int, tuple]:
@@ -202,29 +218,14 @@ def test_upgrade_binds_catalogued_levels_and_leaves_the_rest(harness):
     created = set(after) - set(before)
     assert {after[i][2:] for i in created} == {("B3LYP", "6-31G(2df,p)")}
     for i in created:
-        assert after[i][1] == _level_of_theory_hash(LevelOfTheoryRef(method="B3LYP", basis="6-31G(2df,p)"))
+        assert after[i][1] == frozen_level_of_theory_hash(method="B3LYP", basis="6-31G(2df,p)")
         assert i not in bindings
 
-    # The upload path finds the very rows the backfill used: it creates nothing.
-    # The resolver is application code and reads the current ``level_of_theory``
-    # columns, which ``e5b2d8a4c613`` extended; bring the scratch database to the
-    # head schema before asking it a question (the revision under test has
-    # already been applied and checked above).
-    harness.run("upgrade", "head")
-    with Session(harness.engine) as session:
-        for method, basis in (("CBS-QB3", None), ("B3LYP", "CBSB7"), ("B3LYP", "6-31G(2df,p)"), ("G4(MP2)", None)):
-            resolve_level_of_theory_ref(session, LevelOfTheoryRef(method=method, basis=basis))
-        session.rollback()
-    assert _levels(harness.engine) == after
-    assert _bindings(harness.engine) == bindings
-
-    # ``alembic check`` compares the live schema with the models, which describe
-    # head, so the scratch database is brought to head first: this revision's
-    # tables must be what the models say once every later revision has run too.
-    harness.run("upgrade", "head")
-    checked = _alembic_check(harness)
-    assert checked.returncode == 0, checked.stderr[-3000:] + checked.stdout[-3000:]
-    assert "No new upgrade operations detected" in checked.stdout + checked.stderr
+    # Stage 2 (keywords decision): the upload path is not asked here whether it finds the rows the backfill used,
+    # and the scratch database is not taken to head or ``alembic check``-ed. The application's hash formula no
+    # longer has the ``keywords`` key these rows were hashed with, and ``d5f2b8c1a704`` refuses to run over rows;
+    # the instance is reseeded, not re-keyed. A fresh head is checked against the models in
+    # tests/db/test_level_of_theory_method_qualifiers_migration.py.
 
 
 def test_downgrade_drops_the_tables_and_enums_and_upgrade_again_converges(harness):
@@ -270,7 +271,7 @@ def test_levels_with_no_catalogued_method_are_left_alone(harness):
     harness.run("upgrade", _MIGRATION.parent)
     with harness.engine.begin() as conn:
         for method, basis in (("B3LYP", "def2-tzvp"), ("wb97xd", "def2-tzvp"), ("W2-2", None)):
-            h = _level_of_theory_hash(LevelOfTheoryRef(method=method, basis=basis))
+            h = frozen_level_of_theory_hash(method=method, basis=basis)
             conn.execute(
                 text("INSERT INTO level_of_theory (method, basis, lot_hash, public_ref) VALUES (:m, :b, :h, :r)"),
                 {"m": method, "b": basis, "h": h, "r": make_content_ref("lot", h)},
@@ -301,6 +302,7 @@ def test_merge_script_gives_the_holder_the_duplicates_binding_when_only_the_dupl
     with harness.engine.begin() as conn:
         ids = _seed(conn)
     harness.run("upgrade", _MIGRATION.revision)
+    _rehash_to_current_formula(harness.engine)
     with harness.engine.begin() as conn:
         conn.execute(
             text("DELETE FROM level_of_theory_composite WHERE level_of_theory_id = :h"), {"h": ids["cbs_qb3"]}
@@ -322,6 +324,7 @@ def test_merge_script_blocks_a_group_whose_levels_are_bound_to_different_schemes
     with harness.engine.begin() as conn:
         ids = _seed(conn)
     harness.run("upgrade", _MIGRATION.revision)
+    _rehash_to_current_formula(harness.engine)
     with harness.engine.begin() as conn:
         conn.execute(
             text(
@@ -347,6 +350,7 @@ def test_merge_script_moves_a_duplicates_binding_to_the_holder(harness):
     with harness.engine.begin() as conn:
         ids = _seed(conn)
     harness.run("upgrade", _MIGRATION.revision)
+    _rehash_to_current_formula(harness.engine)
     assert ids["cbs_qb3"] in _bindings(harness.engine) and ids["cbsqb3_stale"] in _bindings(harness.engine)
 
     for args in ((), ("--commit",)):

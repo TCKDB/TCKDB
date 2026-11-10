@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session
 from sqlalchemy.sql import ColumnElement
 from tckdb_schemas.coded_error import CodedValidationError
+from tckdb_schemas.enums import StationaryPointKind
 from tckdb_schemas.fragments.calculation import (
     CALCULATION_SOFTWARE_RELEASE_REQUIRED,
     assert_assembled_not_primary,
@@ -18,7 +19,10 @@ from tckdb_schemas.fragments.calculation import (
 )
 from tckdb_schemas.fragments.version import ParserStamp
 from tckdb_schemas.sp_energy_components import check_sp_energy_components
-from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
+from tckdb_schemas.stationary_point import (
+    W_MINIMUM_IMAGINARY_MODES_BELOW_TAU,
+    has_structural_flag,
+)
 from tckdb_schemas.structure_declarations import (
     W_STRUCTURE_DECLARATION_INVALID,
     ActualProtocolDeclaration,
@@ -52,6 +56,7 @@ from app.db.models.calculation import (
     CalculationWavefunctionDiagnostic,
 )
 from app.db.models.common import (
+    ArtifactKind,
     CalculationDependencyRole,
     CalculationGeometryRole,
     CalculationRecordKind,
@@ -59,7 +64,9 @@ from app.db.models.common import (
     CompositeAssembly,
     IRCDirection,
     ParameterSource,
+    ParameterStatementKind,
     SoftwareReconciliationStatus,
+    SubmissionRecordType,
 )
 from app.db.models.execution_environment import ExecutionEnvironmentManifest
 from app.db.models.geometry import Geometry
@@ -91,9 +98,9 @@ from app.services.calculation_levels import geometries_are_one_structure
 from app.services.calculation_scan_resolution import persist_calculation_scan
 from app.services.composite_result_resolution import persist_composite_result
 from app.services.composite_scheme_resolution import ensure_named_method_binding, resolve_declared_scheme_level
+from app.services.deposit_warnings import note_warning_subject
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
-from app.services.hessian_method_inference import infer_hessian_method
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.software_reconciliation import (
     SoftwareReconciliationResult,
@@ -158,7 +165,8 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
     curated aliases (``gd3bj``, ``EmpiricalDispersion=GD3BJ``), and a
     recognised dispersion folded into the method (``b3lyp-d3bj``) moves into
     the dispersion key (issue #630, :func:`~app.chemistry.dispersion_names.level_identity_keys`).
-    The row still stores every name verbatim. ``keywords`` is free-form text and is hashed as written.
+    The row still stores every name verbatim. There is no free-text ``keywords`` in the identity: the four method
+    qualifiers (core treatment, relativistic Hamiltonian, PNO truncation, RI approximation) join it only when stated.
 
     A user-built composite scheme has no hash here: its hash is over the
     scheme's definition, which needs the input levels resolved
@@ -175,6 +183,10 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
+
+
+#: Typed method qualifiers that join the hash only when stated (``core_treatment`` is handled beside them).
+_METHOD_QUALIFIERS = ("relativistic_hamiltonian", "pno_truncation", "ri_approximation")
 
 
 def _level_of_theory_payload(ref: LevelOfTheoryRef) -> dict[str, object]:
@@ -199,7 +211,6 @@ def _level_of_theory_payload(ref: LevelOfTheoryRef) -> dict[str, object]:
         "dispersion": dispersion_key,
         "solvent": component_identity_key(ref.solvent),
         "solvent_model": component_identity_key(ref.solvent_model),
-        "keywords": ref.keywords,
         # DR-0034: spin treatment is part of LOT identity. NULL folds to
         # "unknown" in the hash so a row that omits it and a row that says
         # "unknown" are the same level of theory.
@@ -215,6 +226,24 @@ def _level_of_theory_payload(ref: LevelOfTheoryRef) -> dict[str, object]:
     core_treatment = getattr(ref.core_treatment, "value", ref.core_treatment)
     if core_treatment is not None:
         payload["core_treatment"] = core_treatment
+    # The other method qualifiers follow the same rule: a stated value is identity, NULL adds no key.
+    for name in _METHOD_QUALIFIERS:
+        value = getattr(getattr(ref, name), "value", getattr(ref, name))
+        if value is not None:
+            payload[name] = value
+    return payload
+
+
+def spin_agnostic_level_key(ref: LevelOfTheoryRef | LevelOfTheory) -> dict[str, object]:
+    """The level-of-theory identity payload without ``spin_treatment``.
+
+    Derived from :func:`_level_of_theory_payload`, so a field added to the hash is compared
+    automatically. Used to compare a kinetics record's declared energy level with its linked
+    energies, where the spin treatment is per species.
+    """
+
+    payload = _level_of_theory_payload(ref)
+    payload.pop("spin_treatment")
     return payload
 
 
@@ -311,9 +340,11 @@ def resolve_level_of_theory_ref(
                     dispersion=ref.dispersion,
                     solvent=ref.solvent,
                     solvent_model=ref.solvent_model,
-                    keywords=ref.keywords,
                     spin_treatment=ref.spin_treatment,
                     core_treatment=ref.core_treatment,
+                    relativistic_hamiltonian=ref.relativistic_hamiltonian,
+                    pno_truncation=ref.pno_truncation,
+                    ri_approximation=ref.ri_approximation,
                     lot_hash=lot_hash,
                 )
                 session.add(level_of_theory)
@@ -672,17 +703,13 @@ def software_reconciliation_warning(
     if "name" not in result.mismatches:
         return None
     declared_name, observed_name = result.mismatches["name"]
-    return UploadWarning(
+    return UploadWarning.from_code(
         field="software_release",
         code=W_SOFTWARE_IDENTITY_CORRECTED_FROM_ARTIFACT,
-        message=(
-            f"The declared software name ({declared_name!r}) disagreed with "
-            f"the program identified in the uploaded artifact "
-            f"({observed_name!r}). The artifact is the observed fact, so "
-            f"this calculation's software_release now points at "
-            f"{observed_name!r}. The originally declared value is preserved "
-            "on declared_software_banner."
-        ),
+        context={
+            "observed_software": observed_name,
+            "depositor_supplied": {"declared_software": declared_name},
+        },
     )
 
 
@@ -942,31 +969,6 @@ def _load_calc_ids_with_artifacts(
     return {row[0] for row in rows}
 
 
-def _converged_opt_energy_warning_message(
-    *, has_energy: bool, has_artifact: bool
-) -> str:
-    if not has_energy:
-        missing = (
-            "reports no final_energy_hartree of its own, and no artifact "
-            "backs one either"
-            if not has_artifact
-            else "reports no final_energy_hartree of its own"
-        )
-    else:
-        missing = "reports a final_energy_hartree but no artifact backs it"
-    return (
-        "This optimisation is recorded as converged, which is itself a "
-        "claim about the energy -- an optimiser declares convergence when "
-        "the energy change between steps falls below a threshold. No "
-        "single-point calculation was found for the same owner (any level "
-        "of theory would satisfy this; none was required at the "
-        f"optimisation's own level), and this optimisation {missing}. "
-        "Deposit a single-point calculation for this species or "
-        "transition state, or supply this optimisation's own "
-        "final_energy_hartree together with an artifact backing it."
-    )
-
-
 def collect_converged_opt_energy_warnings(
     session: Session,
     calculation_ids: Iterable[int],
@@ -1032,8 +1034,8 @@ def collect_converged_opt_energy_warnings(
             CalculationRecordKind.transition_state: ts_ids,
         },
     )
-    energy_calc_ids = [r.id for r in rows if r.final_energy_hartree is not None]
-    artifact_calc_ids = _load_calc_ids_with_artifacts(session, energy_calc_ids)
+    # Looked up for every row so the warning's ``has_artifact`` is accurate.
+    artifact_calc_ids = _load_calc_ids_with_artifacts(session, [r.id for r in rows])
 
     warnings: list[UploadWarning] = []
     for r in rows:
@@ -1049,15 +1051,13 @@ def collect_converged_opt_energy_warnings(
         has_artifact = r.id in artifact_calc_ids
         if has_energy and has_artifact:
             continue  # (b): evidenced own energy stands in for an sp.
-        warnings.append(
-            UploadWarning(
-                field="opt_result",
-                code=W_CONVERGED_OPT_NO_USABLE_ENERGY,
-                message=_converged_opt_energy_warning_message(
-                    has_energy=has_energy, has_artifact=has_artifact
-                ),
-            )
+        warning = UploadWarning.from_code(
+            field="opt_result",
+            code=W_CONVERGED_OPT_NO_USABLE_ENERGY,
+            context={"has_energy": has_energy, "has_artifact": has_artifact},
         )
+        note_warning_subject(session, warning, SubmissionRecordType.calculation, r.id)
+        warnings.append(warning)
     return warnings
 
 
@@ -1328,36 +1328,14 @@ def persist_calculation_result(
         # the payload long before persistence.
         tau = calc_upload.tau_resolution()
 
-        # ADR 0012's 2026-09-04 amendment: when the frequency job's
-        # Hessian method was not recorded, assume the producing
-        # program's documented default for the level-of-theory's method
-        # family, rather than leaving every such record at the
-        # conservative "protocol not recorded" row. Measured 2026-09-04:
-        # 0 of 132 stored frequency results carry `freq.hessian_method`,
-        # so this fires on effectively every deposit whose method family
-        # this build has been taught -- see
-        # `app.services.hessian_method_inference` for the table and
-        # `TauBasis` for why the assumed bases are separate tokens.
-        #
-        # A recorded method always wins: this only ever runs on
-        # `tau_resolution()`'s conservative fallback, never after a real
-        # `freq.hessian_method` observation resolved the basis, so a
-        # depositor who states the method is never overridden by a
-        # guess. tau's magnitude is unchanged either way -- an assumed
-        # basis carries the same tau as its recorded counterpart -- only
-        # which basis is credited, and whether one is, moves.
-        if tau.basis is TauBasis.protocol_not_recorded:
-            software_name = (
-                calculation.software_release.software.name
-                if calculation.software_release is not None
-                else None
-            )
-            lot_method = (
-                calculation.lot.method if calculation.lot is not None else None
-            )
-            assumed = infer_hessian_method(software_name, lot_method)
-            if assumed is not None:
-                tau = assumed
+        # `tau_resolution()` is the one resolution validation judged
+        # with: a recorded `freq.hessian_method` first, then ADR 0012's
+        # 2026-09-04 assumed program default from the payload's own
+        # software and level-of-theory method (owner decision 2026-10-31:
+        # applied at validation, not after it), then
+        # `protocol_not_recorded`. So the tau and basis stored here are
+        # exactly the ones that decided acceptance and the structural
+        # flag; nothing is swapped in afterwards.
 
         designated = calc_upload.freq_result.reaction_coordinate_mode_index
 
@@ -1374,6 +1352,27 @@ def persist_calculation_result(
                     location="freq_result"
                 )
             )
+
+        # A species entry declared a minimum whose imaginary modes were
+        # all below tau was accepted on the strength of that tau, which
+        # is the tau stored above. The flag is stored as false: judged
+        # under the minimum rule and not flagged, which is a different
+        # fact from NULL (never judged). A minimum with no imaginary
+        # mode, or a van der Waals complex (which has its own warning
+        # path), keeps NULL.
+        entry = calculation.species_entry
+        if (
+            designated is None
+            and entry is not None
+            and entry.kind.value == StationaryPointKind.minimum.value
+            and any(
+                finding.code == W_MINIMUM_IMAGINARY_MODES_BELOW_TAU
+                for finding in calc_upload.species_entry_frequency_findings(
+                    StationaryPointKind.minimum, location="freq_result"
+                )
+            )
+        ):
+            structural_flag = False
 
         session.add(
             CalculationFreqResult(
@@ -1595,6 +1594,8 @@ def persist_calculation_parameters(
     parameters_extracted_at: datetime | None = None,
     source: ParameterSource = ParameterSource.upload,
     parser: ParserStamp | None = None,
+    artifact_kind: ArtifactKind = ArtifactKind.input,
+    replace: bool = True,
 ) -> list[CalculationParameter]:
     """Persist parsed execution-control parameters for a calculation.
 
@@ -1629,6 +1630,11 @@ def persist_calculation_parameters(
     :param source: Provenance applied to every newly inserted row.
     :param parser: Per-row parser stamp, used only when
         ``source=parser``.
+    :param artifact_kind: With ``source=parser``, the kind of artifact the rows were read from (``input`` or
+        ``output_log``). Replace-all is scoped to it, so an input deck and an output log never erase each
+        other's rows. Ignored for ``upload`` and ``curated`` rows, which carry no artifact kind.
+    :param replace: With ``source=parser``, replace the calculation's rows of this ``artifact_kind`` (the default).
+        An output log is appended instead (``False``): the first statement of a setting stands.
     :returns: Newly created parameter rows in the order they were supplied.
     """
 
@@ -1642,8 +1648,8 @@ def persist_calculation_parameters(
 
     # Replace-all is bound to source=parser. Run the delete before the
     # early-return guard so an empty re-parse still clears stale rows.
-    if source is ParameterSource.parser:
-        _delete_parser_parameter_rows(session, calculation.id)
+    if source is ParameterSource.parser and replace:
+        _delete_parser_parameter_rows(session, calculation.id, artifact_kind)
 
     if not observations:
         return []
@@ -1678,6 +1684,12 @@ def persist_calculation_parameters(
             source=source,
             parser_name=row_parser.name if row_parser is not None else None,
             parser_version=row_parser.version if row_parser is not None else None,
+            artifact_kind=artifact_kind if source is ParameterSource.parser else None,
+            statement_kind=(
+                getattr(obs, "statement_kind", None) or ParameterStatementKind.requested
+                if source is ParameterSource.parser
+                else None
+            ),
         )
         session.add(row)
         rows.append(row)
@@ -1685,8 +1697,13 @@ def persist_calculation_parameters(
     return rows
 
 
-def _delete_parser_parameter_rows(session: Session, calculation_id: int) -> None:
-    """Drop every parser-derived parameter row on this calculation.
+def _delete_parser_parameter_rows(
+    session: Session, calculation_id: int, artifact_kind: ArtifactKind = ArtifactKind.input
+) -> None:
+    """Drop the parser-derived parameter rows of one artifact kind on this calculation.
+
+    Scoped to ``artifact_kind`` so that re-reading the input deck leaves the rows read from the output log
+    alone, and the other way round.
 
     Pending in-session parser rows on this same calc are also expunged so
     a caller that re-parses twice in one transaction does not get a flush
@@ -1698,12 +1715,14 @@ def _delete_parser_parameter_rows(session: Session, calculation_id: int) -> None
             isinstance(obj, CalculationParameter)
             and obj.calculation_id == calculation_id
             and obj.source is ParameterSource.parser
+            and obj.artifact_kind == artifact_kind
         ):
             session.expunge(obj)
 
     session.query(CalculationParameter).filter(
         CalculationParameter.calculation_id == calculation_id,
         CalculationParameter.source == ParameterSource.parser,
+        CalculationParameter.artifact_kind == artifact_kind,
     ).delete(synchronize_session=False)
 
 
@@ -2478,19 +2497,18 @@ def persist_additional_calculations(
                 )
             elif warnings is not None:
                 expected = _DEPENDENCY_ROLE_TO_PARENT_TYPE[dep_role]
-                warnings.append(
-                    UploadWarning(
-                        field=f"additional_calculations[{position}]",
-                        code=W_DEPENDENCY_EDGE_NOT_INFERRED,
-                        message=(
-                            f"{upload_label} was stored but not linked to the "
-                            f"primary calculation: role '{dep_role.value}' "
-                            f"needs a parent of type '{expected.value}' and "
-                            f"the primary calculation is type "
-                            f"'{primary_calc.type.value}'."
-                        ),
-                    )
+                edge_warning = UploadWarning.from_code(
+                    field=f"additional_calculations[{position}]",
+                    code=W_DEPENDENCY_EDGE_NOT_INFERRED,
+                    context={
+                        "dependency_role": dep_role.value,
+                        "expected_parent_type": expected.value,
+                        "primary_type": primary_calc.type.value,
+                        "calculation_type": calc_upload.type.value,
+                    },
                 )
+                note_warning_subject(session, edge_warning, SubmissionRecordType.calculation, child_calc.id)
+                warnings.append(edge_warning)
 
         # Inverted-edge case: path_search is a TS-guess generator, so the
         # primary opt is ``optimized_from`` the path search rather than the

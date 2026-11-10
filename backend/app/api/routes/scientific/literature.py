@@ -18,12 +18,13 @@ from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     LITERATURE_RECORDS_SECTIONS,
     SEARCH_SCOPE,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.schemas.reads.scientific_literature import (
     ScientificLiteratureDetailResponse,
 )
@@ -39,7 +40,7 @@ from app.services.scientific_read.literature_records import (
     get_literature_records,
 )
 
-router = APIRouter(prefix="/literature")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/literature")
 
 
 @router.get(
@@ -54,7 +55,8 @@ def scientific_literature_records(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Inverse records: list scientific records citing this literature.
@@ -64,13 +66,15 @@ def scientific_literature_records(
     target. Clients follow each item's ``endpoint`` for the full
     record.
     """
-    request_obj = LiteratureRecordsRequest(
+    request_obj = caller_input(
+        LiteratureRecordsRequest,
         record_type=record_type,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = get_literature_records(

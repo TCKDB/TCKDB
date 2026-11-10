@@ -13,11 +13,12 @@ Responsibilities (spec §4):
 2. **Closure** — pull in every participant ``species_entry`` of every
    selected reaction entry, so a mechanism is never emitted with a
    dangling species.
-3. **Singular selection** — for each record kind (thermo, transport,
-   kinetics) apply the same read-time selection policy the scientific
-   read API uses (``collapse=first`` → one value; ``collapse=all`` →
-   every qualifying candidate), reusing the shared trust/visibility and
-   ``simple_selection_sort_key`` helpers rather than reinventing them.
+3. **No silent pick** — for each record kind (thermo, transport,
+   kinetics) every qualifying record is exported, in display order (review
+   status, newest deposition, id). A format that holds exactly one record per
+   species or reaction (CHEMKIN) never picks: :func:`resolve_single_records`
+   takes the records the request names, and refuses with a structured 422 when
+   more than one candidate remains.
 4. **Trust filter + gaps** — drop records below ``min_review_status``
    (default: approved-class). A species/reaction left with no qualifying
    value is recorded as a *gap*, never silently dropped, so a consumer
@@ -37,7 +38,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.error_contract import CodedValueError
@@ -56,7 +57,7 @@ from app.db.models.common import (
     ThermoModelKind,
 )
 from app.db.models.geometry import Geometry
-from app.db.models.kinetics import Kinetics, KineticsThirdBodyEfficiency
+from app.db.models.kinetics import Kinetics, KineticsBathGas, KineticsThirdBodyEfficiency
 from app.db.models.reaction import (
     ChemReaction,
     ReactionEntry,
@@ -73,11 +74,7 @@ from app.db.models.thermo import (
     ThermoWilhoit,
 )
 from app.db.models.transport import Transport, TransportSourceCalculation
-from app.schemas.reads.scientific_common import (
-    CollapseMode,
-    SelectionPolicy,
-    simple_selection_sort_key,
-)
+from app.schemas.reads.scientific_common import REVIEW_RANK
 from app.services.document_formats import ARCHIVE, DATASET_RELEASE, EXPORT, current_header
 from app.services.frequency_geometry_linearity import (
     GeometryLinearity,
@@ -85,7 +82,7 @@ from app.services.frequency_geometry_linearity import (
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
-    review_floor_predicate,
+    linked_evidence_predicate,
     visible_statuses,
     where_visible,
 )
@@ -354,6 +351,7 @@ class SelectedKinetics:
             "chebyshev": self._chebyshev(),
             "falloff": self._falloff(),
             "third_body_efficiencies": self._third_body_efficiencies(),
+            "bath_gas": self._bath_gas(),
         }
 
     def _multi_arrhenius(self) -> list[dict] | None:
@@ -444,6 +442,18 @@ class SelectedKinetics:
             for tb in tbes
         ]
         blocks.sort(key=lambda b: b["collider_ref"])
+        return blocks
+
+    def _bath_gas(self) -> list[dict] | None:
+        """The stated bath gas (mirrors read ``KineticsBathGasBlock``), sorted by entry ref."""
+        components = self.kinetics.bath_gases
+        if not components:
+            return None
+        blocks = [
+            {"species_entry_ref": bg.species_entry.public_ref, "mole_fraction": bg.mole_fraction}
+            for bg in components
+        ]
+        blocks.sort(key=lambda b: b["species_entry_ref"])
         return blocks
 
 
@@ -545,13 +555,13 @@ class ReactionExportRecord:
 class ExportRecordSet:
     seed: SeedSelection
     min_review_status: RecordReviewStatus | None
-    collapse: CollapseMode
-    selection_policy: SelectionPolicy
     generated_at: datetime
     read_profile: ResolvedReadProfile | None = None
     species_records: list[SpeciesExportRecord] = field(default_factory=list)
     reaction_records: list[ReactionExportRecord] = field(default_factory=list)
     gaps: list[ExportGap] = field(default_factory=list)
+    #: ``all_matching`` (every qualifying record is present) or ``named`` (a single-record format: the request named them).
+    records_mode: str = "all_matching"
 
     def manifest(self) -> dict:
         # The resolved read profile is captured eagerly at build time rather
@@ -571,8 +581,7 @@ class ExportRecordSet:
             "profile_release_ref": resolved.release_ref,
             "generated_at": self.generated_at.isoformat(),
             "seed": self.seed.to_manifest(),
-            "collapse": self.collapse.value,
-            "selection_policy": self.selection_policy.value,
+            "records": self.records_mode,
             "min_review_status": (
                 self.min_review_status.value
                 if self.min_review_status is not None
@@ -634,7 +643,9 @@ def resolve_seed(
             reaction_entry_ids.add(re_id)
             continue
         cr_id = session.scalar(
-            select(ChemReaction.id).where(ChemReaction.public_ref == ref)
+            select(func.coalesce(ChemReaction.merged_into_chem_reaction_id, ChemReaction.id)).where(
+                ChemReaction.public_ref == ref  # a merged-away reaction stands for the one it was merged into
+            )
         )
         if cr_id is not None:
             entry_ids = session.scalars(
@@ -652,12 +663,16 @@ def resolve_seed(
                 ReactionFamily,
                 ReactionFamily.id == ChemReaction.reaction_family_id,
             )
-            .where(ReactionFamily.name == seed.reaction_family)
+            .where(ReactionFamily.name == seed.reaction_family, ChemReaction.merged_into_chem_reaction_id.is_(None))
         ).all()
         reaction_entry_ids.update(family_entry_ids)
 
     if seed.all_reactions:
-        all_ids = session.scalars(select(ReactionEntry.id)).all()
+        all_ids = session.scalars(
+            select(ReactionEntry.id)
+            .join(ChemReaction, ChemReaction.id == ReactionEntry.reaction_id)
+            .where(ChemReaction.merged_into_chem_reaction_id.is_(None))
+        ).all()
         if len(all_ids) > all_cap:
             # A relationship code as of 2026-08-18, published cap-only.
             #
@@ -694,7 +709,9 @@ def resolve_seed(
 
     for ref in seed.species_refs or []:
         se_id = session.scalar(
-            select(SpeciesEntry.id).where(SpeciesEntry.public_ref == ref)
+            select(func.coalesce(SpeciesEntry.merged_into_species_entry_id, SpeciesEntry.id)).where(
+                SpeciesEntry.public_ref == ref  # a merged-away entry stands for the one it was merged into
+            )
         )
         if se_id is None:
             raise ValueError(
@@ -749,21 +766,18 @@ def select_candidate_ids(
     parent_id: int,
     record_type: SubmissionRecordType,
     min_review_status: RecordReviewStatus | None,
-    collapse: CollapseMode,
-    selection_policy: SelectionPolicy,
     profile: ResolvedReadProfile | None = None,
 ) -> tuple[list[int], dict[int, RecordReviewStatus]]:
-    """Return the ranked, trust-filtered candidate ids for one parent.
+    """Return every trust-filtered candidate id for one parent, in display order.
 
     ``profile`` is the read profile whose review floor applies. Callers that run inside a streaming generator pass
     the one they captured while the request was alive: the context variable cannot be trusted there. ``None`` reads
     the request's profile (fine for eager callers).
 
     Mirrors ``species_transport.get_species_transport``: fetch candidate
-    ids + created_at, filter by visibility, rank with
-    ``simple_selection_sort_key``, then keep one (``collapse=first``) or
-    all (``collapse=all``). The default trust posture never surfaces
-    rejected/deprecated here — export is a clean-by-default artifact.
+    ids + created_at, filter by visibility, order by review rank, newest
+    deposition, id. Nothing is picked here. The default trust posture never
+    surfaces rejected/deprecated here — export is a clean-by-default artifact.
     """
     rows = session.execute(
         select(model.id, model.created_at).where(parent_column == parent_id)
@@ -790,15 +804,9 @@ def select_candidate_ids(
     review_by = {i: badges[i].status for i in visible_ids}
     ranked = sorted(
         visible_ids,
-        key=lambda i: simple_selection_sort_key(
-            i,
-            policy=selection_policy,
-            review_status_by_id=review_by,
-            created_at_by_id=created_at,
-        ),
+        key=lambda i: (REVIEW_RANK[review_by[i]], -created_at[i].timestamp(), -i),
     )
-    chosen = ranked[:1] if collapse is CollapseMode.first else ranked
-    return chosen, {i: badges[i].status for i in chosen}
+    return ranked, {i: badges[i].status for i in ranked}
 
 
 #: Stored ``thermo.model_kind`` → export ``model_kind`` vocab. Like the read
@@ -971,19 +979,20 @@ def _transport_linearity_witness(
     statmech record the transport does not link to. Returns ``(None, None)``
     when neither source states it.
 
-    **Hidden records are not witnesses.** The answer names its source, and the
-    source can be a calculation or statmech record the profile hides (its own
-    route answers 404). Such a record is left out before anything is derived
-    from it, so neither its ref nor the linearity it states reaches the export:
-    hidden equals unknown. ``profile`` is the read profile whose floor applies
-    (a streaming caller passes the one it captured); ``None`` reads the
-    request's. Under the exploratory profile nothing is left out.
+    **Withheld records are not witnesses.** The answer names its source, and the
+    source can be a calculation or statmech record the evidence rule withholds
+    (ADR 0023: rejected or deprecated under ``curated``). Such a record is left
+    out before anything is derived from it, so neither its ref nor the linearity
+    it states reaches the export. A source that is merely unreviewed is linked
+    evidence of the transport and is a witness. ``profile`` is the read profile
+    whose rule applies (a streaming caller passes the one it captured); ``None``
+    reads the request's. Under the exploratory profile nothing is left out.
     """
     floor_profile = profile if profile is not None else current_read_profile()
-    # The floor is a subquery of the statements that read the sources, never a statement of its own (a lookup per
+    # The rule is a subquery of the statements that read the sources, never a statement of its own (a lookup per
     # transport would be one visibility statement per record, outside the batch). No floor: ``None``, nothing added.
-    calc_shown = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=floor_profile)
-    statmech_shown = review_floor_predicate(Statmech.id, SubmissionRecordType.statmech, profile=floor_profile)
+    calc_shown = linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation, profile=floor_profile)
+    statmech_shown = linked_evidence_predicate(Statmech.id, SubmissionRecordType.statmech, profile=floor_profile)
     calc_rows = session.execute(
         where_visible(
             select(Calculation.id, Calculation.public_ref, Calculation.type)
@@ -1060,8 +1069,6 @@ def _build_species_record(
     species_entry_id: int,
     *,
     min_review_status: RecordReviewStatus | None,
-    collapse: CollapseMode,
-    selection_policy: SelectionPolicy,
     profile: ResolvedReadProfile,
 ) -> tuple[SpeciesExportRecord | None, list[ExportGap]]:
     entry = session.get(SpeciesEntry, species_entry_id)
@@ -1080,8 +1087,6 @@ def _build_species_record(
         parent_id=species_entry_id,
         record_type=SubmissionRecordType.thermo,
         min_review_status=min_review_status,
-        collapse=collapse,
-        selection_policy=selection_policy,
         profile=profile,
     )
     thermos = _load_selected_thermos(session, thermo_ids, thermo_status)
@@ -1101,8 +1106,6 @@ def _build_species_record(
         parent_id=species_entry_id,
         record_type=SubmissionRecordType.transport,
         min_review_status=min_review_status,
-        collapse=collapse,
-        selection_policy=selection_policy,
         profile=profile,
     )
     transports = [
@@ -1138,8 +1141,6 @@ def _build_reaction_record(
     participants: list[ReactionEntryStructureParticipant],
     *,
     min_review_status: RecordReviewStatus | None,
-    collapse: CollapseMode,
-    selection_policy: SelectionPolicy,
     species_entry_ref_by_id: dict[int, str],
     profile: ResolvedReadProfile,
 ) -> tuple[ReactionExportRecord | None, list[ExportGap]]:
@@ -1174,15 +1175,13 @@ def _build_reaction_record(
         parent_id=reaction_entry_id,
         record_type=SubmissionRecordType.kinetics,
         min_review_status=min_review_status,
-        collapse=collapse,
-        selection_policy=selection_policy,
         profile=profile,
     )
     # Batch-load the chosen kinetics rows WITH their pressure-dependent /
     # third-body children (and collider species) eager-loaded, so the
     # session-less ``SelectedKinetics.to_dict`` never triggers a lazy load
     # (DetachedInstanceError) or an N+1. Re-map by id into the ``kin_ids``
-    # sequence to preserve collapse/selection ordering.
+    # sequence to preserve the display order.
     kinetics: list[SelectedKinetics] = []
     if kin_ids:
         loaded = session.scalars(
@@ -1196,6 +1195,7 @@ def _build_reaction_record(
                 selectinload(Kinetics.third_body_efficiencies).selectinload(
                     KineticsThirdBodyEfficiency.collider_species
                 ),
+                selectinload(Kinetics.bath_gases).selectinload(KineticsBathGas.species_entry),
             )
         ).all()
         by_id = {k.id: k for k in loaded}
@@ -1236,8 +1236,6 @@ def build_export_record_set(
     *,
     seed: SeedSelection,
     min_review_status: RecordReviewStatus | None = DEFAULT_MIN_REVIEW_STATUS,
-    collapse: CollapseMode = CollapseMode.first,
-    selection_policy: SelectionPolicy = SelectionPolicy.default,
     all_cap: int = DEFAULT_ALL_CAP,
 ) -> ExportRecordSet:
     """Build the full in-memory export record set (M1).
@@ -1274,8 +1272,6 @@ def build_export_record_set(
     record_set = ExportRecordSet(
         seed=seed,
         min_review_status=min_review_status,
-        collapse=collapse,
-        selection_policy=selection_policy,
         generated_at=datetime.now(timezone.utc),
         read_profile=profile,
     )
@@ -1285,8 +1281,6 @@ def build_export_record_set(
             session,
             se_id,
             min_review_status=min_review_status,
-            collapse=collapse,
-            selection_policy=selection_policy,
             profile=profile,
         )
         if record is not None:
@@ -1299,8 +1293,6 @@ def build_export_record_set(
             re_id,
             participants_by_entry.get(re_id, []),
             min_review_status=min_review_status,
-            collapse=collapse,
-            selection_policy=selection_policy,
             species_entry_ref_by_id=species_entry_ref_by_id,
             profile=profile,
         )
@@ -1311,13 +1303,116 @@ def build_export_record_set(
     return record_set
 
 
+_SELECT_ENDPOINTS: dict[str, str | None] = {
+    "thermo": "POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select",
+    "transport": None,  # there is no transport select endpoint yet
+    "kinetics": "POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select",
+}
+
+
+def resolve_single_records(
+    record_set: ExportRecordSet,
+    *,
+    thermo_refs: list[str] | None = None,
+    transport_refs: list[str] | None = None,
+    kinetics_refs: list[str] | None = None,
+    include_transport: bool = True,
+) -> None:
+    """Reduce a record set to at most one thermo, transport and kinetics record per subject, WITHOUT picking.
+
+    For a format that holds exactly one record per species or reaction (CHEMKIN). A subject with one candidate keeps
+    it. A subject with several keeps the one the request names in ``*_refs``; if none (or more than one) of its
+    candidates is named, the subject is ambiguous. Every ambiguous subject, and every named ref that is a candidate of
+    nothing in the set, is collected and refused together in ONE structured 422, so the caller can resolve all of it in
+    one round trip. A named ref that matches nothing is refused because a typo must not look like a successful pick.
+
+    ``include_transport=False`` leaves transport out entirely: the transport file is not written, so transport
+    candidates are neither resolved nor can they make the export refuse (and named transport refs are not checked).
+
+    :raises CodedValueError: 422 ``export_selection_ambiguous`` (also carries any unmatched refs) or, when nothing is
+        ambiguous, ``export_ref_unmatched``.
+    """
+    named = {
+        "thermo": set(thermo_refs or []),
+        "transport": set(transport_refs or []) if include_transport else set(),
+        "kinetics": set(kinetics_refs or []),
+    }
+    used: dict[str, set[str]] = {"thermo": set(), "transport": set(), "kinetics": set()}
+    ambiguous: list[dict] = []
+
+    def reduce(kind: str, subject_ref: str, subject_kind: str, items: list, ref_of) -> list:
+        if not items:
+            return items
+        refs = [ref_of(i) for i in items]
+        picked = [i for i, r in zip(items, refs, strict=True) if r in named[kind]]
+        used[kind].update(r for r in refs if r in named[kind])
+        if len(items) == 1:
+            return items
+        if len(picked) == 1:
+            return picked
+        ambiguous.append(
+            {
+                "subject_kind": subject_kind,
+                "subject_ref": subject_ref,
+                "record_kind": kind,
+                "candidate_refs": refs,
+                "named_refs": [r for r in refs if r in named[kind]],
+                "select_endpoint": _SELECT_ENDPOINTS[kind],
+            }
+        )
+        return items
+
+    for sr in record_set.species_records:
+        ref = sr.species_entry.public_ref
+        sr.thermos = reduce("thermo", ref, "species_entry", sr.thermos, lambda t: t.thermo.public_ref)
+        if include_transport:
+            sr.transports = reduce(
+                "transport", ref, "species_entry", sr.transports, lambda t: t.transport.public_ref
+            )
+    for rr in record_set.reaction_records:
+        rr.kinetics = reduce(
+            "kinetics", rr.reaction_entry.public_ref, "reaction_entry", rr.kinetics, lambda k: k.kinetics.public_ref
+        )
+
+    unmatched = sorted(
+        (kind, ref) for kind, refs in named.items() for ref in refs if ref not in used[kind]
+    )
+    unmatched_context = [{"record_kind": k, "ref": r} for k, r in unmatched]
+    unmatched_sentence = (
+        "Named record ref(s) are not candidates of any species or reaction in this export: "
+        + ", ".join(f"{kind} {ref}" for kind, ref in unmatched)
+        + ". "
+        if unmatched
+        else ""
+    )
+    if ambiguous:
+        raise CodedValueError(
+            "export_selection_ambiguous",
+            f"{len(ambiguous)} species/reaction record kind(s) have more than one candidate and this format holds "
+            "one. Resolve each by calling its select endpoint (thermo and kinetics have one; the context names it "
+            "per subject) or by naming the record in thermo_refs / transport_refs / kinetics_refs. Transport has no "
+            "select endpoint: name transport records in transport_refs. The exporter does not pick one. "
+            + unmatched_sentence.strip(),
+            context={
+                "ambiguous": ambiguous,
+                "unmatched": unmatched_context,
+                "resolve_with": ["select_endpoint", "explicit_refs"],
+            },
+        )
+    if unmatched:
+        raise CodedValueError(
+            "export_ref_unmatched",
+            unmatched_sentence.strip(),
+            context={"ambiguous": [], "unmatched": unmatched_context},
+        )
+    record_set.records_mode = "named"
+
+
 def iter_export_ndjson(
     session: Session,
     *,
     seed: SeedSelection,
     min_review_status: RecordReviewStatus | None = DEFAULT_MIN_REVIEW_STATUS,
-    collapse: CollapseMode = CollapseMode.first,
-    selection_policy: SelectionPolicy = SelectionPolicy.default,
     all_cap: int = DEFAULT_ALL_CAP,
 ) -> Iterator[str]:
     """Stream an NDJSON export (M2) without materializing the whole set.
@@ -1363,8 +1458,6 @@ def iter_export_ndjson(
         species_entry_ref_by_id=species_entry_ref_by_id,
         seed=seed,
         min_review_status=min_review_status,
-        collapse=collapse,
-        selection_policy=selection_policy,
     )
 
 
@@ -1378,8 +1471,6 @@ def _stream_ndjson(
     species_entry_ref_by_id: dict[int, str],
     seed: SeedSelection,
     min_review_status: RecordReviewStatus | None,
-    collapse: CollapseMode,
-    selection_policy: SelectionPolicy,
 ) -> Iterator[str]:
     generated_at = datetime.now(timezone.utc)
     header = {
@@ -1393,8 +1484,7 @@ def _stream_ndjson(
         "profile_release_ref": read_profile.release_ref,
         "generated_at": generated_at.isoformat(),
         "seed": seed.to_manifest(),
-        "collapse": collapse.value,
-        "selection_policy": selection_policy.value,
+        "records": "all_matching",
         "min_review_status": (
             min_review_status.value if min_review_status is not None else None
         ),
@@ -1412,8 +1502,6 @@ def _stream_ndjson(
             session,
             se_id,
             min_review_status=min_review_status,
-            collapse=collapse,
-            selection_policy=selection_policy,
             profile=read_profile,
         )
         gaps.extend(rec_gaps)
@@ -1427,8 +1515,6 @@ def _stream_ndjson(
             re_id,
             participants_by_entry.get(re_id, []),
             min_review_status=min_review_status,
-            collapse=collapse,
-            selection_policy=selection_policy,
             species_entry_ref_by_id=species_entry_ref_by_id,
             profile=read_profile,
         )
@@ -1468,5 +1554,6 @@ __all__ = [
     "build_export_record_set",
     "iter_export_ndjson",
     "resolve_seed",
+    "resolve_single_records",
     "select_candidate_ids",
 ]

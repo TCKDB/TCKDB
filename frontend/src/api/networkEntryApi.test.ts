@@ -78,7 +78,7 @@ function thermoListPayload(entryRef: string, count: number) {
             model_kind: "nasa",
             review: { status: "not_reviewed" },
         })),
-        pagination: { offset: 0, limit: 50, returned: count, total: count, post_collapse_total: count },
+        pagination: { offset: 0, limit: 50, returned: count, total: count },
     }
 }
 

@@ -1,5 +1,8 @@
 import { z } from "zod"
 import { levelOfTheorySchema, productLevelsSchema } from "./scientificSchemas"
+import { roleCalculationSettingsSchema } from "./effectiveSettingsSchema"
+import { listRequestEchoSchema, paginationSchema } from "./listEnvelope"
+import { pageQuery, parsePagedRef, type PageRequest } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 // ---------------------------------------------------------------------------
@@ -16,7 +19,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 //   `record.species.species_entry_ref` instead, because this is the same
 //   envelope shape `/statmech/search` uses.
 //
-// - Six public include tokens gate real sections, read off
+// - Seven public include tokens gate real sections (`calculation_settings` is the seventh: the settings behind each level), read off
 //   `STATMECH_RECORD_SECTIONS` in `_response.py` and cross-checked against
 //   `_LEGAL_INCLUDE_TOKENS` in `services/scientific_read/statmech.py`:
 //   `source_calculations`, `torsions`, `electronic_levels`, `frequencies`,
@@ -55,6 +58,7 @@ export const STATMECH_SECTION_TOKENS = [
     "frequencies",
     "conformers",
     "review",
+    "calculation_settings",
 ] as const
 export type StatmechSectionToken = typeof STATMECH_SECTION_TOKENS[number]
 
@@ -111,8 +115,10 @@ const workflowToolReleaseSchema = z.object({
 const literatureSchema = z.object({
     literature_ref: z.string(),
     title: z.string().nullable().optional(),
+    title_source: z.string().nullable().optional(),
     year: z.number().nullable().optional(),
     doi: z.string().nullable().optional(),
+    isbn: z.string().nullable().optional(),
 }).passthrough()
 
 const frequencyScaleFactorSummarySchema = z.object({
@@ -251,6 +257,9 @@ const statmechRecordSchema = z.object({
     frequencies: frequenciesSummarySchema.nullable().optional(),
     conformers: z.array(conformerContextItemSchema).nullable().optional(),
     review_history: z.array(reviewEntrySchema).nullable().optional(),
+    // `include=calculation_settings`: the source calculation this record links for its geometry, frequency and
+    // energy, with the grid and SCF convergence each used.
+    calculation_settings: z.array(roleCalculationSettingsSchema).nullable().optional(),
 }).passthrough()
 
 const reviewStatusSummarySchema = z.object({
@@ -262,18 +271,11 @@ const reviewStatusSummarySchema = z.object({
     total: z.number(),
 }).passthrough()
 
-const paginationSchema = z.object({
-    offset: z.number(),
-    limit: z.number(),
-    returned: z.number(),
-    total: z.number(),
-    post_collapse_total: z.number(),
-}).passthrough()
-
 const statmechListResponseSchema = z.object({
     review_summary: reviewStatusSummarySchema,
     records: z.array(statmechRecordSchema),
     pagination: paginationSchema,
+    request: listRequestEchoSchema.optional(),
 }).passthrough()
 
 export type StatmechRecord = z.infer<typeof statmechRecordSchema>
@@ -281,12 +283,11 @@ export type StatmechSupersession = z.infer<typeof supersessionSchema>
 export type StatmechAvailableSections = z.infer<typeof availableSectionsSchema>
 export type StatmechListResponse = z.infer<typeof statmechListResponseSchema>
 
-function buildEndpoint(entryRef: string, tokens: readonly string[]): string {
+function buildEndpoint(entryRef: string, tokens: readonly string[], request?: PageRequest | null): string {
     const base = `/api/v1/scientific/species-entries/${encodeURIComponent(entryRef)}/statmech`
-    if (tokens.length === 0) return base
-    const query = new URLSearchParams()
+    const query = request ? pageQuery(request) : new URLSearchParams()
     for (const token of tokens) query.append("include", token)
-    return `${base}?${query}`
+    return query.size === 0 ? base : `${base}?${query}`
 }
 
 /**
@@ -300,7 +301,10 @@ export async function loadEntryStatmech(
     signal?: AbortSignal,
     onRateLimited?: (retryAfterSeconds: number) => void,
 ): Promise<StatmechListResponse> {
-    const payload = await requestScientificJson(buildEndpoint(entryRef, []), signal, onRateLimited)
+    // `entryRef` may be a paged ref (`entryRef#offset:limit`, see `domain/paging.ts`) naming one page of the list;
+    // a plain ref names the first page.
+    const { ref, request } = parsePagedRef(entryRef)
+    const payload = await requestScientificJson(buildEndpoint(ref, [], request), signal, onRateLimited)
     return parseScientificResponse(statmechListResponseSchema, payload, "statmech")
 }
 
@@ -317,7 +321,8 @@ export async function loadEntryStatmech(
 export async function loadEntryStatmechSection(
     entryRef: string, token: StatmechSectionToken, signal?: AbortSignal,
 ): Promise<StatmechRecord[]> {
-    const payload = await requestScientificJson(buildEndpoint(entryRef, [token]), signal)
+    const { ref, request } = parsePagedRef(entryRef)
+    const payload = await requestScientificJson(buildEndpoint(ref, [token], request), signal)
     return parseScientificResponse(statmechListResponseSchema, payload, "statmech").records
 }
 

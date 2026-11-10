@@ -10,8 +10,9 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from sqlalchemy.exc import DBAPIError, IntegrityError, NoResultFound, OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -21,6 +22,7 @@ from app.api.error_contract import (
     validation_detail_code,
     validation_detail_context,
 )
+from app.api.server_faults import ServerFaultError, classify_validation_error
 from app.services.artifact_storage import (
     ArtifactIntegrityError,
     ArtifactStorageUnavailable,
@@ -33,6 +35,26 @@ from app.services.idempotency import (
 from app.workflows.rehearsal import RehearsalContended
 
 logger = logging.getLogger(__name__)
+
+#: Constraint name the ``calculation_dependency`` acyclicity trigger reports
+#: (revision ``e2f2b3fb6725``). A trigger is not in the scientific check
+#: register's constraint table, so it is keyed here, as the idempotency
+#: constraint is.
+CALCULATION_DEPENDENCY_CYCLE_CONSTRAINT = "calculation_dependency_acyclic"
+
+
+def _cycle_refs(orig: Any) -> dict[str, str]:
+    """Public references the trigger put in ``DETAIL`` (``parent=...;child=...``).
+
+    Only ``public_ref`` values travel; the trigger never selects a row id.
+    """
+    detail = getattr(getattr(orig, "diag", None), "message_detail", None) or ""
+    pairs = dict(part.split("=", 1) for part in detail.split(";") if "=" in part)
+    return {
+        key: pairs[wire]
+        for key, wire in (("parent_calculation", "parent"), ("child_calculation", "child"))
+        if pairs.get(wire)
+    }
 
 
 class DomainError(Exception):
@@ -50,6 +72,22 @@ class RecordReviewConflict(DomainError):
     def __init__(self, message: str, *, context: dict[str, Any] | None = None) -> None:
         super().__init__(message)
         self.context = dict(context or {})
+
+
+class SelfApprovalForbidden(DomainError):
+    """A refusal (403) of an actor approving what they deposited; ``context`` holds refs only."""
+
+    def __init__(self, message: str, *, context: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.context = dict(context or {})
+
+
+class RecordSelfApprovalForbidden(SelfApprovalForbidden):
+    """``record_self_approval``: the actor deposited this record."""
+
+
+class SubmissionSelfApprovalForbidden(SelfApprovalForbidden):
+    """``submission_self_approval``: the actor uploaded this submission."""
 
 
 class NotFoundError(Exception):
@@ -131,6 +169,18 @@ class DataIntegrityError(Exception):
     """
 
 
+def _detail_without_input(exc: ValueError, errors: object) -> str:
+    """``str(exc)`` rebuilt from each error's loc, msg and type, without pydantic's ``input_value``."""
+    if not (isinstance(errors, list) and errors and all(isinstance(e, dict) for e in errors)):
+        return str(exc)
+    lines = [f"{len(errors)} validation error{'s' if len(errors) != 1 else ''}"]
+    for error in errors:
+        loc = ".".join(str(part) for part in error.get("loc", ()))
+        lines.append(loc or "(root)")
+        lines.append(f"  {error.get('msg', '')} [type={error.get('type', '')}]")
+    return "\n".join(lines)
+
+
 def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
     # ``CodedValueError`` is the backend subclass; a wire-schema check raises
     # the base directly, because ``tckdb_schemas`` may not import ``app``.
@@ -146,7 +196,7 @@ def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
             exc.errors() if callable(getattr(exc, "errors", None)) else str(exc)
         )
         content = error_envelope(
-            str(exc),
+            _detail_without_input(exc, validation_detail),
             code=validation_detail_code(
                 validation_detail, fallback="validation_error"
             ),
@@ -159,7 +209,11 @@ def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
 def _request_validation_error_handler(
     _request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    details = exc.errors()
+    # Drop pydantic's echo of the caller's value; ``loc`` says where the problem is.
+    details = [
+        {key: value for key, value in error.items() if key != "input"}
+        for error in exc.errors()
+    ]
     return JSONResponse(
         status_code=422,
         content=jsonable_encoder(
@@ -199,6 +253,54 @@ def _data_integrity_error_handler(
     )
 
 
+#: Most validation errors a server fault logs; the total is always logged.
+_LOGGED_VALIDATION_ERRORS = 20
+
+
+def _response_validation_error_handler(
+    request: Request, exc: ResponseValidationError | ServerFaultError
+) -> JSONResponse:
+    """500 ``server_response_invalid``: the server failed its own response model.
+
+    Two sources lead here, and neither is the caller's fault.
+    ``ResponseValidationError`` is raised when what a route *returned* does
+    not fit its ``response_model``; before this it reached the client as
+    ``text/plain``. :class:`ServerFaultError` is raised by
+    :class:`app.api.server_faults.ServerFaultRoute` when a pydantic
+    ``ValidationError`` escapes an endpoint (a read model built from a row
+    that does not fit it); before this it was a ``ValueError`` and read as a
+    422 that blamed the caller. Errors can carry ORM object reprs and response
+    values, so the body is fixed text. The log gets the errors without their
+    ``input`` (a secret in a response does not reach the log), capped, with the
+    total, the method and the route path; ``request_id`` ties it to the response.
+    """
+    route = request.scope.get("route")
+    errors = [
+        {key: value for key, value in error.items() if key not in {"input", "url", "ctx"}}
+        for error in exc.errors()
+    ]
+    model = getattr(exc, "model", None)
+    logger.error(
+        "response model validation failed on %s %s%s: %d error(s), first %d: %s",
+        request.method,
+        getattr(route, "path", request.url.path),
+        f" ({model})" if model else "",
+        len(errors),
+        _LOGGED_VALIDATION_ERRORS,
+        errors[:_LOGGED_VALIDATION_ERRORS],
+        exc_info=exc,
+    )
+    return JSONResponse(
+        status_code=500,
+        content=error_envelope(
+            "The server could not build a valid response for this request. "
+            "Nothing in the request was wrong; report it to the operator.",
+            code="server_response_invalid",
+            fallback_code="server_response_invalid",
+        ),
+    )
+
+
 def _domain_error_handler(_request: Request, exc: DomainError) -> JSONResponse:
     return JSONResponse(
         status_code=400,
@@ -211,6 +313,17 @@ def _record_review_conflict_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=409,
+        content=error_envelope(
+            str(exc), context=exc.context, fallback_code="domain_error"
+        ),
+    )
+
+
+def _self_approval_forbidden_handler(
+    _request: Request, exc: SelfApprovalForbidden
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=403,
         content=error_envelope(
             str(exc), context=exc.context, fallback_code="domain_error"
         ),
@@ -361,20 +474,19 @@ def _classify_integrity_error(exc: IntegrityError) -> tuple[str, str]:
     return _FALLBACK
 
 
-def _integrity_error_handler(
-    request: Request, exc: IntegrityError
-) -> JSONResponse:
-    code, message = _classify_integrity_error(exc)
+def public_integrity_error(exc: IntegrityError) -> tuple[str, str, dict[str, Any], bool]:
+    """``(code, public message, context, specific)`` for an IntegrityError.
 
-    diag: dict[str, Any] = {}
+    ``specific`` is True when a named rule fired (a registered constraint or the
+    dependency-cycle trigger) rather than a SQLSTATE bucket: such a refusal is
+    deterministic, so retrying the same request cannot succeed. No row id is ever
+    returned; the raw driver text stays in the log.
+    """
+    code, message = _classify_integrity_error(exc)
     orig = getattr(exc, "orig", None)
-    sqlstate = getattr(orig, "sqlstate", None)
-    if sqlstate is not None:
-        diag["sqlstate"] = sqlstate
     constraint = getattr(getattr(orig, "diag", None), "constraint_name", None)
-    if constraint:
-        diag["constraint"] = constraint
     context: dict[str, Any] = {}
+    specific = False
     # Named before classified. A constraint that encodes chemistry is a
     # stronger guarantee than any Python check -- no write path can get
     # around it -- and until the register began naming these constraints
@@ -413,11 +525,42 @@ def _integrity_error_handler(
     rejection = _constraint_rejections().get(constraint) if constraint else None
     if rejection is not None:
         code, message = rejection
+        specific = True
+    elif constraint == CALCULATION_DEPENDENCY_CYCLE_CONSTRAINT:
+        code = "calculation_dependency_cycle"
+        specific = True
+        context = _cycle_refs(orig)
+        message = (
+            "This dependency would make a calculation depend on itself through a chain of "
+            "other calculations. The calculation dependency graph must stay acyclic; "
+            "drop or reverse the dependency that points back"
+            + (
+                f" (parent {context['parent_calculation']}, child {context['child_calculation']})."
+                if len(context) == 2
+                else "."
+            )
+        )
     elif constraint == IDEMPOTENCY_UNIQUE_CONSTRAINT:
         code = "idempotency_conflict"
         message = (
             "Idempotency key was used concurrently for a different request."
         )
+    return code, message, context, specific
+
+
+def _integrity_error_handler(
+    request: Request, exc: IntegrityError
+) -> JSONResponse:
+    code, message, context, _specific = public_integrity_error(exc)
+
+    diag: dict[str, Any] = {}
+    orig = getattr(exc, "orig", None)
+    sqlstate = getattr(orig, "sqlstate", None)
+    if sqlstate is not None:
+        diag["sqlstate"] = sqlstate
+    constraint = getattr(getattr(orig, "diag", None), "constraint_name", None)
+    if constraint:
+        diag["constraint"] = constraint
     logger.warning(
         "IntegrityError on %s %s: code=%s diag=%s orig=%r",
         request.method,
@@ -818,6 +961,9 @@ def render_handled_exception(
     would give, and rendering it through the same handler is what keeps the
     code and the sentence identical rather than similar.
     """
+    if isinstance(exc, ValidationError):
+        # Classify exactly as ServerFaultRoute would, so dry-run and submit agree.
+        exc = classify_validation_error(exc, request.app)
     handlers = request.app.exception_handlers
     handler = next(
         (handlers[cls] for cls in type(exc).__mro__ if cls in handlers), None
@@ -834,9 +980,12 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Attach all custom exception handlers to *app*."""
     app.add_exception_handler(StarletteHTTPException, _http_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, _request_validation_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(ResponseValidationError, _response_validation_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(ServerFaultError, _response_validation_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ValueError, _value_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DomainError, _domain_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RecordReviewConflict, _record_review_conflict_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(SelfApprovalForbidden, _self_approval_forbidden_handler)  # type: ignore[arg-type]
     app.add_exception_handler(NotFoundError, _not_found_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DataIntegrityError, _data_integrity_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(NoResultFound, _no_result_found_handler)  # type: ignore[arg-type]

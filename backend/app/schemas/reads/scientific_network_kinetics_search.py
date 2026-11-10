@@ -50,10 +50,13 @@ from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
 from app.schemas.reads.scientific_common import (
+    CursorToken,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
+    WatermarkEcho,
 )
 from app.schemas.reads.scientific_network_kinetics import (
     ScientificNetworkKineticsRecord,
@@ -131,6 +134,7 @@ class NetworkKineticsSearchRequest(BaseModel):
     sort: str | None = None  # rejected non-None per v0 sort policy
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
     @field_validator("source_species_entry_refs", "sink_species_entry_refs")
@@ -154,11 +158,15 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificNetworkKineticsSearchResponse(BaseModel):
+class ScientificNetworkKineticsSearchResponse(ScientificResponse):
     request: RequestEcho
     review_summary: ReviewStatusSummary
     records: list[ScientificNetworkKineticsRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [

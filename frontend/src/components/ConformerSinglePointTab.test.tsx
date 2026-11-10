@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { SpeciesCalculationEnergyRecord } from "../api/speciesCalculationsApi"
+import type { SinglePointsState } from "../hooks/useSpeciesSinglePoints"
 import { ConformerSinglePointTab } from "./ConformerSinglePointTab"
 
 afterEach(() => cleanup())
@@ -20,10 +21,10 @@ function conformer(observations: ConformerProjection["observations"]): Conformer
     } as unknown as ConformerProjection
 }
 
-function page(observations: ConformerProjection["observations"], spEnergies: SpeciesCalculationEnergyRecord[] = []) {
+function page(observations: ConformerProjection["observations"], spEnergies: SpeciesCalculationEnergyRecord[] = [], state?: SinglePointsState) {
     return render(
         <MemoryRouter>
-            <ConformerSinglePointTab conformer={conformer(observations)} spEnergies={spEnergies} />
+            <ConformerSinglePointTab conformer={conformer(observations)} spEnergies={state ?? { status: "ready", records: spEnergies, capped: false }} />
         </MemoryRouter>,
     )
 }
@@ -144,5 +145,26 @@ describe("ConformerSinglePointTab", () => {
         expect(screen.queryByText(/Always stored in hartree/)).not.toBeInTheDocument()
         // The unit still carries on the displayed value regardless.
         expect(screen.getByText(/-76\.500000 hartree/)).toBeVisible()
+    })
+
+    const oneObservation = [{
+        conformer_observation: { conformer_observation_ref: "co_1" },
+        calculations: [{ calculation_ref: "calc_sp_1", type: "sp", level_of_theory: { method: "b3lyp", basis: "def2tzvp" }, software_release: { software: "Gaussian" } }],
+    }] as unknown as ConformerProjection["observations"]
+
+    it("says the energies are still being read while they load, so 'not recorded' is not shown as a finding", () => {
+        page(oneObservation, [], { status: "loading" })
+        expect(screen.getByText(/still being read from the archive/)).toBeVisible()
+    })
+
+    it("says so when the walk hit its page cap, so an unread energy is not presented as missing from the archive", () => {
+        page(oneObservation, [], { status: "ready", records: [], capped: true })
+        expect(screen.getByText(/more single-point energies than this page reads/)).toBeVisible()
+    })
+
+    it("makes neither statement when every energy was read", () => {
+        page(oneObservation, [])
+        expect(screen.queryByText(/still being read/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/more single-point energies than this page reads/)).not.toBeInTheDocument()
     })
 })

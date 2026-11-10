@@ -2469,9 +2469,9 @@ def test_detail_imaginary_mode_projections_no_hessian_still_carries_the_tau_judg
         False,
     ]
     assert tau["protocol_parameters"] == [
-        {"canonical_key": "freq.hessian_method", "canonical_value": "analytic"},
-        {"canonical_key": "grid.quality", "canonical_value": None},
-        {"canonical_key": "opt.convergence", "canonical_value": None},
+        {"canonical_key": "freq.hessian_method", "canonical_value": "analytic", "statement_kind": None},
+        {"canonical_key": "grid.quality", "canonical_value": None, "statement_kind": None},
+        {"canonical_key": "opt.convergence", "canonical_value": None, "statement_kind": None},
     ]
     assert "spurious" in tau["interpretation_limit"]
 
@@ -2870,6 +2870,21 @@ def test_detail_include_parameters_returns_summaries(client, db_session):
     assert row["parameter_index"] == 1
     # Phase D default: integer parameter_id stripped.
     assert "parameter_id" not in row
+
+
+def test_detail_include_parameters_says_where_each_row_came_from(client, db_session):
+    _, _, calc = _make_species_owned_calc(db_session)
+    _attach_calc_parameter(db_session, calculation=calc, raw_key="typed", raw_value="1")
+    db_session.add(
+        CalculationParameter(
+            calculation_id=calc.id, raw_key="read", raw_value="2", source=ParameterSource.parser
+        )
+    )
+    db_session.flush()
+    rows = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}?include=parameters"
+    ).json()["record"]["parameters"]
+    assert {row["raw_key"]: row["source"] for row in rows} == {"typed": "upload", "read": "parser"}
 
 
 def test_detail_include_parameters_returns_empty_list_when_none(
@@ -4783,3 +4798,33 @@ def test_detail_include_all_equivalent_to_full_enumeration(client, db_session):
     # Records are byte-identical except possibly for the request echo
     # — which we already compared explicitly above.
     assert body_all["record"] == body_explicit["record"]
+
+
+def test_detail_include_parameters_carries_effective_settings_and_the_statement_kind(client, db_session):
+    """`effective_settings` rides on `include=parameters`; a reported row is tagged, and it decides the state."""
+    from app.db.models.common import ArtifactKind, ParameterStatementKind
+
+    _, _, calc = _make_species_owned_calc(db_session, calc_type=CalculationType.opt)
+    _ensure_param_vocab_local(db_session, "grid.angular_max")
+    row = CalculationParameter(
+        calculation_id=calc.id,
+        raw_key="AngularGrid",
+        raw_value="4 (Lebedev-302)",
+        canonical_key="grid.angular_max",
+        canonical_value="302",
+        source=ParameterSource.parser,
+        artifact_kind=ArtifactKind.output_log,
+        statement_kind=ParameterStatementKind.reported,
+    )
+    db_session.add(row)
+    db_session.flush()
+
+    record = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}?include=parameters").json()["record"]
+    [parameter] = record["parameters"]
+    assert (parameter["artifact_kind"], parameter["statement_kind"]) == ("output_log", "reported")
+    settings = {s["setting"]: s for s in record["effective_settings"]}
+    assert settings["grid"]["state"] == "reported"
+    assert settings["grid"]["reported"] == [{"key": "grid.angular_max", "value": "302"}]
+    assert settings["scf_convergence"]["state"] == "not_stated"  # no SCF default is documented
+    plain = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}").json()["record"]
+    assert "effective_settings" not in plain

@@ -24,15 +24,20 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from app.db.models.common import ReadProfile
+from app.db.models.common import ReadProfile, RecordReviewStatus
 from app.services.scientific_read import ref_guard
 from app.services.scientific_read.profile import ResolvedReadProfile
 from tests.api.scientific._curated_sweep_analysis import (
+    RELAXED_UNLISTED,
     fmt,
     id_leaks,
     order_independent,
     parse_body,
     ref_leaks,
+    refs_outside_floored_rows,
+    route_subject_identities,
+    subject_leaks,
+    subject_rows,
     withholding_violations,
 )
 from tests.api.scientific._curated_sweep_crawl import enumerate_routes, missing_providers
@@ -234,6 +239,62 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
 }
 
 
+#: Why a route still leaves out an unlisted record that exploratory names (ADR 0023): it is a list, a search, a browse or a
+#: population (an export, a comparison), and the record floor decides which records those return. Since step 7 no detail
+#: read is here: a served detail shows what it embeds unless rejected or deprecated.
+SERVICE_FLOOR = (
+    "a search service applies the record floor to a RECORD it lists or counts (a network solve, a kinetics record, "
+    "a transition state or entry: ADR 0023 Q3/Q5), or to a matching filter (step 4)"
+)
+DERIVED = (
+    "a reference row's search result counts and its usage-eligibility filter preview the RECORD list of what cites it (a "
+    "calculation, a statmech) and keep the record floor; a correction scheme's or scale factor's calculation kind is lost "
+    "only when it rides with an application to a transition-state entry below the floor"
+)
+EXPORTED_RECORDS = (
+    "an export lists a RECORD (a thermo, kinetics or transport row, or a reaction's transition state or entry) and the "
+    "record floor decides which records it lists; the linked evidence of a listed record already follows the evidence rule"
+)
+ML_ENERGY_ROWS = (
+    "owner decision Q7 (ADR 0023), a named exception: the ML export's ENERGY ROWS are its calculations, and an energy row "
+    "is a record of the dataset, so the calculations stay approved-only (``ml_dataset.ml_energy_row_floor``); "
+    "the dataset's other nested evidence (conformer observations, linearity witnesses) follows the evidence rule. The "
+    "records it lists are under EXPORTED_RECORDS"
+)
+COMPARED_RECORDS = (
+    "a relative-energy request compares conformer GROUPS, which are records, so the record floor decides the compared set; "
+    "the observations and calculations inside a group are evidence and follow the evidence rule (step 5)"
+)
+
+#: Per route, the KINDS of unlisted record (the prefix of the world's key: ``calc``, ``tse``, ...) that exploratory names as
+#: evidence and curated still leaves out, with the reason. Every other route, and every other kind on a listed route, must
+#: show everything exploratory shows, so a guard that blanks evidence again fails the sweep wherever it was already moved.
+#: What a returned ROW that is itself below the floor holds is not evidence (the floor drops the whole row) and is excluded
+#: by the row's actual status. A kind that is now shown is stale and fails: the list can only shrink.
+KEEPS_THE_RECORD_FLOOR: dict[tuple[str, str], tuple[set[str], str]] = {
+    ("GET", "/api/v1/scientific/energy-correction-schemes/search"): ({'calc', 'tse'}, DERIVED),
+    ("GET", "/api/v1/scientific/export/ml/reactions.ndjson"): ({'calc', 'kin', 'ts', 'tse'}, ML_ENERGY_ROWS),
+    ("GET", "/api/v1/scientific/export/ml/species.ndjson"): ({'calc', 'thm'}, ML_ENERGY_ROWS),
+    ("GET", "/api/v1/scientific/export/ndjson"): ({'kin', 'thm', 'trn'}, EXPORTED_RECORDS),
+    ("GET", "/api/v1/scientific/frequency-scale-factors/search"): ({'sm', 'tse'}, DERIVED),
+    ("GET", "/api/v1/scientific/level-of-theories/browse"): ({'calc'}, DERIVED),
+    ("GET", "/api/v1/scientific/level-of-theories/search"): ({'calc'}, DERIVED),
+    ("GET", "/api/v1/scientific/networks/browse"): ({'nsolve'}, SERVICE_FLOOR),
+    ("GET", "/api/v1/scientific/network-solves/search"): ({'tse'}, SERVICE_FLOOR),
+    ("GET", "/api/v1/scientific/networks/search"): ({'calc', 'nsolve', 'tse'}, SERVICE_FLOOR),
+    ("POST", "/api/v1/scientific/energy-correction-schemes/search"): ({'calc', 'tse'}, DERIVED),
+    ("POST", "/api/v1/scientific/frequency-scale-factors/search"): ({'sm', 'tse'}, DERIVED),
+    ("POST", "/api/v1/scientific/level-of-theories/search"): ({'calc'}, DERIVED),
+    ("POST", "/api/v1/scientific/networks/{network_ref_or_id}/kinetics/evaluate"): ({'nkin', 'nsolve'}, SERVICE_FLOOR),
+    ("POST", "/api/v1/scientific/network-solves/search"): ({'tse'}, SERVICE_FLOOR),
+    ("POST", "/api/v1/scientific/networks/search"): ({'calc', 'nsolve', 'tse'}, SERVICE_FLOOR),
+    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies"): ({'cg'}, COMPARED_RECORDS),
+    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare"): ({'cg'}, COMPARED_RECORDS),
+    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare/manifest"): ({'cg'}, COMPARED_RECORDS),
+    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/manifest"): ({'cg'}, COMPARED_RECORDS),
+}
+
+
 def _hidden_world_refs(world):
     return world.hidden_refs()
 
@@ -297,10 +358,20 @@ def test_the_world_has_a_hidden_instance_of_every_gated_type(client, db_session)
     curated = ResolvedReadProfile(profile=ReadProfile.curated, recommendation=_approved_floor_only())
     assert {world.kind_of(k) for k in world.hidden} == set(ref_guard.GATED_TYPES)
     assert set(GATED_KINDS) == set(ref_guard.GATED_TYPES)
-    hidden = ref_guard.hidden_refs(db_session, [r.public_ref for r in world.hidden.values()], profile=curated)
-    assert hidden == {r.public_ref for r in world.hidden.values()}
-    visible = ref_guard.hidden_refs(db_session, [r.public_ref for r in world.visible.values()], profile=curated)
-    assert visible == set()
+    hidden_refs = {r.public_ref for r in world.hidden.values()}
+    # Unlisted: every hidden record is below the record floor and none is withheld as evidence.
+    assert ref_guard.below_floor_refs(db_session, hidden_refs, profile=curated) == hidden_refs
+    assert ref_guard.withheld_evidence_refs(db_session, hidden_refs, profile=curated) == set()
+    visible_refs = [r.public_ref for r in world.visible.values()]
+    assert ref_guard.below_floor_refs(db_session, visible_refs, profile=curated) == set()
+    assert ref_guard.withheld_evidence_refs(db_session, visible_refs, profile=curated) == set()
+
+    # Withheld twins: the same records turned rejected / deprecated are withheld as evidence, and both statuses are used.
+    statuses = world.withhold_hidden(db_session)
+    assert set(statuses.values()) == {RecordReviewStatus.rejected, RecordReviewStatus.deprecated}
+    assert ref_guard.withheld_evidence_refs(db_session, hidden_refs, profile=curated) == hidden_refs
+    assert ref_guard.below_floor_refs(db_session, hidden_refs, profile=curated) == hidden_refs
+    assert ref_guard.withheld_evidence_refs(db_session, visible_refs, profile=curated) == set()
 
 
 def _approved_floor_only():
@@ -310,10 +381,18 @@ def _approved_floor_only():
 
 
 def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypatch):
-    """The sweep proper: positive control, coverage, no leak, withholding-only, guard-reached.
+    """The sweep proper, in two states of the same world (ADR 0023).
+
+    **Unlisted** (the world as built: not_reviewed / under_review): a record below the approved floor may be named NESTED
+    with its badge, but is never a LISTED answer: not a row of ``records``, not a candidate (the record floor). The ``record`` of
+    a detail read is served, badged (step 7). Curated must still be a withholding of exploratory (no substitution).
+
+    **Withheld** (the same records turned rejected / deprecated): linked evidence at these statuses is withheld, so under
+    curated they appear NOWHERE, by ref or by id, and curated is still a withholding of the exploratory crawl taken
+    before the change (exploratory withholds nothing as evidence, so that crawl is the superset).
 
     Kills (see each block): an empty world or crawl, a skipped route, a substitution, a route that bypasses the guard,
-    a leak, a substitution.
+    an unlisted record served as an answer, a withheld record named anywhere.
     """
     from app.api.config import settings
 
@@ -322,18 +401,37 @@ def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypa
     specs = enumerate_routes(client.app)
     spy = install_spy(monkeypatch)
     hidden = _hidden_world_refs(world)
+    identities = route_subject_identities(client.app)
 
     exploratory = run_pass(client, db_session, specs, world, spy, profile="exploratory")
     curated = run_pass(client, db_session, specs, world, spy, profile="curated")
     monkeypatch.setattr(settings, "allow_public_internal_ids", True)
-    curated_ids = run_pass(client, db_session, specs, world, spy, profile="curated", with_ids=True)
     exploratory_ids = run_pass(client, db_session, specs, world, spy, profile="exploratory", with_ids=True)
+    monkeypatch.setattr(settings, "allow_public_internal_ids", False)
+
+    # Which returned rows are below the floor, by their status now (before the world is flipped to withheld).
+    floored_rows: dict[tuple[tuple[str, str], str], set[str]] = {}
+    for (route, label), e in exploratory.items():
+        refs = {ref for ref, _ in subject_rows(e.text, identities.get(route)) if ref}
+        statuses = ref_guard._review_statuses(db_session, refs) if refs else {}
+        floored_rows[(route, label)] = {ref for ref, status in statuses.items() if status.value != "approved"}
+
+    # The same world, its hidden records now rejected / deprecated.
+    world.withhold_hidden(db_session)
+    withheld = run_pass(client, db_session, specs, world, spy, profile="curated")
+    monkeypatch.setattr(settings, "allow_public_internal_ids", True)
+    withheld_ids = run_pass(client, db_session, specs, world, spy, profile="curated", with_ids=True)
     monkeypatch.setattr(settings, "allow_public_internal_ids", False)
 
     failures: list[str] = []
 
     # -- every crawled request answered 200: a crawl full of 422/404 verifies nothing ------------------------------
-    for name, results in (("exploratory", exploratory), ("curated", curated), ("curated+ids", curated_ids)):
+    for name, results in (
+        ("exploratory", exploratory),
+        ("curated (unlisted)", curated),
+        ("curated (withheld)", withheld),
+        ("curated+ids (withheld)", withheld_ids),
+    ):
         assert results, f"{name} pass crawled nothing"
         for (route, label), r in results.items():
             expected = 200
@@ -356,10 +454,53 @@ def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypa
             failures.append(f"positive control: {key} is not named by exploratory {route_path}")
 
     # -- the curated crawl is not empty: every visible record still shows up somewhere --------------------------------
-    curated_text = "\n".join(r.text for r in {**curated, **curated_ids}.values())
-    for key, row in world.visible.items():
-        if row.public_ref not in curated_text:
-            failures.append(f"curated crawl never names visible record {key}: the pass may be vacuous")
+    for name, results in (("unlisted", curated), ("withheld", {**withheld, **withheld_ids})):
+        curated_text = "\n".join(r.text for r in results.values())
+        for key, row in world.visible.items():
+            if row.public_ref not in curated_text:
+                failures.append(f"curated crawl ({name}) never names visible record {key}: the pass may be vacuous")
+
+    # -- unlisted records are linked evidence: PER ROUTE, curated names every nested hidden ref that exploratory names -------
+    # Two things exploratory names are the floor's, not evidence: a record it returns as the answer, and anything nested
+    # inside a returned ROW that is itself below the floor (the whole row is dropped by curated). Both are judged by the
+    # row's ACTUAL review status in the database, not by membership of the tracked hidden records. What a route still leaves
+    # out is the record floor's (a list, a search, a population) and is listed in KEEPS_THE_RECORD_FLOOR (by route and ref kind).
+    missing: dict[tuple[str, str], set[str]] = defaultdict(set)
+    shown_routes = 0
+    for (route, label), e in exploratory.items():
+        c = curated[(route, label)]
+        if route in SELECTION_DOCUMENT_ROUTES or route in EXPECTED_CURATED_STATUS:
+            continue
+        identity = identities.get(route)
+        as_answer = {k for k, _ in subject_leaks(e.text, hidden, identity)}
+        floored = floored_rows[(route, label)]
+        if parse_body(e.text)[0] == "json":
+            outside = refs_outside_floored_rows(e.text, identity, floored)
+            named = [k for k, ref in hidden.items() if k not in as_answer and ref in outside]
+        else:  # an NDJSON or zip body has no subject rows to exclude: judged by text
+            named = [k for k, ref in hidden.items() if ref in e.text]
+        if not named:
+            continue
+        gone = {k for k in named if hidden[k] not in c.text}
+        if gone:
+            missing[route] |= {k.split("_", 1)[0] for k in gone}
+        else:
+            shown_routes += 1
+    for route, kinds in sorted(missing.items()):
+        allowed = KEEPS_THE_RECORD_FLOOR.get(route, (None, ""))[0]
+        if allowed is None:
+            failures.append(
+                fmt(route, f"exploratory names unlisted {sorted(kinds)} records that curated leaves out (evidence must be shown)")
+            )
+        elif kinds - set(allowed):
+            failures.append(fmt(route, f"{sorted(kinds - set(allowed))} are newly left out beside the listed {sorted(allowed)}"))
+    for route, (allowed, reason) in sorted(KEEPS_THE_RECORD_FLOOR.items()):
+        assert reason and allowed, route
+        stale = set(allowed) - missing.get(route, set())
+        if stale:
+            failures.append(fmt(route, f"now shows {sorted(stale)}: remove them from KEEPS_THE_RECORD_FLOOR"))
+    if shown_routes < 15:
+        failures.append(f"only {shown_routes} request variants show unlisted evidence in full: the evidence rule is not exercised")
 
     # -- 6. guard reached: every crawled route passes the boundary, or is listed as bypassing it ---------------------
     reached_by_route = {route: any(r.reached for _, r in rs) for route, rs in _by_route(curated).items()}
@@ -371,43 +512,56 @@ def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypa
     for route, reason in KNOWN_UNGUARDED.items():
         assert reason, route
 
-    # -- 4. no hidden ref anywhere ---------------------------------------------------------------------
+    # -- 4a. unlisted: never a listed answer. Withheld: named nowhere, by ref or by id -------------------------------------
+    subject_found: set[str] = set()
+    for (route, _label), r in curated.items():
+        for key, path in subject_leaks(r.text, hidden, identities.get(route)):
+            subject_found.add(fmt(route, f"{key} @ {path}"))
     ref_found: set[str] = set()
-    for (route, label), r in curated.items():
+    for (route, label), r in withheld.items():
         spec_request = _request_text(specs, route, label, world, ids=False)
         for key, path in ref_leaks(r.text, hidden, spec_request):
             ref_found.add(fmt(route, f"{key} @ {path}"))
     id_found: set[str] = set()
-    for (route, _label), r in curated_ids.items():
+    for (route, _label), r in withheld_ids.items():
         for key, path in id_leaks(r.text, world):
             id_found.add(fmt(route, f"{key} @ {path}"))
 
-    # -- 5. curated is a withholding of exploratory (no substitution) -----------------------------------------------
+    # -- 5. curated is a withholding of exploratory (no substitution), in both states ---------------------------------
     substituted: set[str] = set()
-    for (route, label), c in curated.items():
-        if route in EXPECTED_CURATED_STATUS:
-            continue  # the curated answer is a different status by design; its leak is in the ref check
-        if route in SELECTION_DOCUMENT_ROUTES:
-            continue  # see SELECTION_DOCUMENT_ROUTES: the substitution check for these is made at the engine
-        e = exploratory[(route, label)]
-        ekind, eobj = parse_body(e.text)
-        ckind, cobj = parse_body(c.text)
-        if ekind != "json" or ckind != "json":
-            continue
-        for path in withholding_violations(order_independent(route[1], eobj), order_independent(route[1], cobj)):
-            if route in RELATIVE_ENERGY_ROUTES and path.split("<", 1)[0] in RELATIVE_ENERGY_POPULATION_PATHS:
+    for state, crawl in (("unlisted", curated), ("withheld", withheld)):
+        for (route, label), c in crawl.items():
+            if route in EXPECTED_CURATED_STATUS:
+                continue  # the curated answer is a different status by design; its leak is in the ref check
+            if route in SELECTION_DOCUMENT_ROUTES:
+                continue  # see SELECTION_DOCUMENT_ROUTES: the substitution check for these is made at the engine
+            e = exploratory[(route, label)]
+            ekind, eobj = parse_body(e.text)
+            ckind, cobj = parse_body(c.text)
+            if ekind != "json" or ckind != "json":
                 continue
-            if (
-                route in RELATIVE_ENERGY_COMPARE_ROUTES
-                and path.split("<", 1)[0] in RELATIVE_ENERGY_COMPARE_POPULATION_PATHS
+            mode = "equal" if state == "unlisted" else "le"
+            for path in withholding_violations(
+                order_independent(route[1], eobj),
+                order_independent(route[1], cobj),
+                mode=mode,
+                relaxed=frozenset(RELAXED_UNLISTED.get(route[1], {})) if state == "unlisted" else frozenset(),
             ):
-                continue
-            substituted.add(fmt(route, path))
+                if route in RELATIVE_ENERGY_ROUTES and path.split("<", 1)[0] in RELATIVE_ENERGY_POPULATION_PATHS:
+                    continue
+                if (
+                    route in RELATIVE_ENERGY_COMPARE_ROUTES
+                    and path.split("<", 1)[0] in RELATIVE_ENERGY_COMPARE_POPULATION_PATHS
+                ):
+                    continue
+                substituted.add(f"[{state}] " + fmt(route, path))
 
+    for entry in sorted(subject_found):
+        failures.append(f"unlisted record listed as an answer: {entry}")
     for entry in sorted(ref_found):
-        failures.append(f"hidden ref leak: {entry}")
+        failures.append(f"withheld ref leak: {entry}")
     for entry in sorted(id_found):
-        failures.append(f"hidden id leak: {entry}")
+        failures.append(f"withheld id leak: {entry}")
     for entry in sorted(substituted):
         failures.append(f"not a withholding of exploratory: {entry}")
 

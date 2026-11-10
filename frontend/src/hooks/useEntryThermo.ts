@@ -1,13 +1,11 @@
-import { loadEntryThermo, type ThermoListResponse } from "../api/thermoApi"
-import { useScientificRecord, type ScientificRecordState } from "./useScientificRecord"
-
-export type EntryThermoState = ScientificRecordState<ThermoListResponse>
+import { loadEntryThermo } from "../api/thermoApi"
+import { usePagedList } from "./usePagedList"
 
 /**
- * Loads every thermo record deposited for one species entry. No include
+ * Loads one page of the thermo records deposited for one species entry (the first, until `goTo` moves; the list is paged, never silently cut). No include
  * tokens: see the module docstring on `api/thermoApi.ts` — nothing on this
  * surface is include-gated.
  */
-export function useEntryThermo(entryRef: string): EntryThermoState {
-    return useScientificRecord(entryRef, loadEntryThermo)
+export function useEntryThermo(entryRef: string) {
+    return usePagedList(entryRef, loadEntryThermo)
 }

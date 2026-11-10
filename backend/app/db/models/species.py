@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     CHAR,
     BigInteger,
+    Boolean,
     CheckConstraint,
+    DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -13,6 +17,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
@@ -29,6 +34,7 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
     StereoKind,
+    StereoResolution,
 )
 from app.db.types import RDKitMol
 
@@ -60,9 +66,23 @@ class Species(Base, TimestampMixin, PublicRefMixin):
         nullable=False,
     )
 
+    #: The species this row was merged into, or ``NULL`` for a live row (DR-0038).
+    #: A species keyed on stereo marks (``C/C=C/C``, ``CC=CC``) and another keyed on
+    #: the constitution are one species; the rows that lose are KEPT, with their
+    #: public ref and their own curation history, and forward one hop to the survivor.
+    #: Results (entries, reaction participants, third-body colliders) were moved to
+    #: the survivor. Never set by the application; written by migration
+    #: ``c7e2a9f4d138`` and refused to chain by ``trg_species_merge_marker``.
+    merged_into_species_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("species.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+    )
+
     entries: Mapped[list["SpeciesEntry"]] = relationship(
         back_populates="species",
         cascade="save-update, merge",
+        foreign_keys="SpeciesEntry.species_id",
     )
 
     reaction_participants: Mapped[list["ReactionParticipant"]] = relationship(
@@ -74,13 +94,25 @@ class Species(Base, TimestampMixin, PublicRefMixin):
         # Canonical SMILES distinguishes tautomers that standard InChIKey
         # merges; multiplicity distinguishes spin states that SMILES/InChI
         # cannot encode (singlet vs triplet CH2, O2 states).
-        UniqueConstraint(
-            "smiles", "charge", "multiplicity", name="uq_species_identity"
+        # Unique over LIVE rows only: a merged-away row keeps the SMILES it had and
+        # forwards to its survivor (DR-0038).
+        Index(
+            "uq_species_identity",
+            "smiles",
+            "charge",
+            "multiplicity",
+            unique=True,
+            postgresql_where=text("merged_into_species_id IS NULL"),
         ),
         # inchi_key stays for cross-notation / external-DB lookup but is
         # non-unique: one InChIKey may map to several species.
         Index("ix_species_inchi_key", "inchi_key"),
+        Index("ix_species_merged_into_species_id", "merged_into_species_id"),
         CheckConstraint("multiplicity >= 1", name="multiplicity_ge_1"),
+        CheckConstraint(
+            "merged_into_species_id IS NULL OR merged_into_species_id <> id",
+            name="not_merged_into_itself",
+        ),
     )
 
     @property
@@ -103,6 +135,14 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
     The resolved identity tuple is unique, with nullable identity components
     deduped in PostgreSQL using `NULLS NOT DISTINCT`.
+
+    * ``stereo_descriptor`` is the stereo key (DR-0038): one comma-separated token per potential
+      stereo element, ordered by canonical atom rank. Tokens: ``R`` ``S`` (centre), ``r`` ``s``
+      (pseudo-asymmetric centre), ``E`` ``Z`` (double bond, or an odd cumulene), ``e`` ``z`` (pseudo-asymmetric
+      double bond), ``Ra`` ``Sa`` (the axis of an allene or any even cumulene; ``Ra`` is IUPAC ``M``, a negative
+      torsion between the two CIP-higher substituents, and ``Sa`` is ``P``), ``-`` (not stereogenic in this
+      configuration) and ``?`` (unknown, or not representable). An allene's token is read from geometry or from
+      the chirality mark in the SMILES; an odd cumulene's from geometry only; ``NULL`` only for an achiral species.
     """
 
     __tablename__ = "species_entry"
@@ -125,7 +165,41 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     mol: Mapped[Optional[str]] = mapped_column(RDKitMol(), nullable=True)
     unmapped_smiles: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    stereo_label: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    #: Derived display text for the configuration (DR-0038): the descriptor,
+    #: or ``NULL`` when the entry has no stereo element or none is resolved.
+    #: Not part of identity and never accepted as a key.
+    stereo_label: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    #: Canonical stereo descriptor -- the entry's stereo key (DR-0038): one
+    #: token per potential stereo element (``R S r s E Z e z Ra Sa - ?``; see
+    #: :mod:`app.chemistry.stereo` for the vocabulary), ordered by
+    #: canonical atom rank of the stereo-stripped constitution.
+    #: ``NULL`` only when the species is achiral (no stereo element). Partial and
+    #: unknown configurations are their own entries (``E,?`` is not ``E,E``).
+    stereo_descriptor: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    #: Derived: ``resolved`` / ``partial`` / ``unresolved`` from the descriptor's
+    #: ``?`` tokens; ``NULL`` iff ``stereo_descriptor`` is.
+    stereo_resolution: Mapped[Optional[StereoResolution]] = mapped_column(
+        SAEnum(StereoResolution, name="stereo_resolution"),
+        nullable=True,
+    )
+
+    #: Derived search/display text: canonical isomeric SMILES (isotopes
+    #: stripped) of a fully resolved configuration, where one can be written. A
+    #: sigma-vinyl radical's E/Z cannot be, so this is NULL there. Not the key.
+    stereo_smiles: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    #: The entry this row was merged into, or ``NULL`` for a live row (DR-0038).
+    #: Two entries that name one configuration of one species are one entry. The
+    #: row that loses is KEPT -- public ref, reviews, machine reviews, release
+    #: selections, supersession edges stay on it -- and forwards one hop to the
+    #: survivor, which holds the results (thermo, statmech, calculations, ...).
+    merged_into_species_entry_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("species_entry.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+    )
 
     electronic_state_kind: Mapped[SpeciesEntryStateKind] = mapped_column(
         SAEnum(SpeciesEntryStateKind, name="species_entry_state_kind"),
@@ -203,21 +277,47 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
     __table_args__ = (
         Index("ix_species_entry_species_id", "species_id"),
-        UniqueConstraint(
+        Index("ix_species_entry_stereo_smiles", "stereo_smiles"),
+        CheckConstraint(
+            "stereo_descriptor IS NULL OR stereo_descriptor ~ '^(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*$'",
+            name="stereo_descriptor_vocabulary",
+        ),
+        CheckConstraint(
+            "(stereo_descriptor IS NULL) = (stereo_resolution IS NULL)",
+            name="stereo_resolution_iff_descriptor",
+        ),
+        # Unique over LIVE entries; a merged-away entry keeps its key and forwards.
+        Index(
+            "uq_species_entry_species_id",
             "species_id",
-            "stereo_label",
+            "stereo_descriptor",
             "electronic_state_kind",
             "electronic_state_label",
             "term_symbol",
             "isotope_key",
-            name="uq_species_entry_species_id",
+            unique=True,
             postgresql_nulls_not_distinct=True,
+            postgresql_where=text("merged_into_species_entry_id IS NULL"),
+        ),
+        Index("ix_species_entry_merged_into_species_entry_id", "merged_into_species_entry_id"),
+        CheckConstraint(
+            "merged_into_species_entry_id IS NULL OR merged_into_species_entry_id <> id",
+            name="not_merged_into_itself",
         ),
     )
 
 
 class ConformerGroup(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
-    """Store one deduplicated conformational-basin identity for a species entry."""
+    """Store one deduplicated conformational-basin identity for a species entry.
+
+    A basin is a connected component of the entry's *defining* observations (converged optimisations): two are
+    linked when the matcher says they share a basin, and the group is everything the links reach. Identity is
+    geometric only. ``representative_*`` is derived, never identity: the most central defining member (the
+    medoid), kept so reads can show a basin's own torsions. It is not what an upload is matched against.
+
+    A group a merge emptied keeps its row (a cited ``cg_`` ref must resolve) with no representative and
+    ``merged_into_conformer_group_id`` naming the group that took its members.
+    """
 
     __tablename__ = "conformer_group"
 
@@ -237,14 +337,57 @@ class ConformerGroup(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     representative_coords_json: Mapped[Optional[list]] = mapped_column(
         JSONB, nullable=True
     )
+    #: The observation the two ``representative_*`` columns were taken from: the defining member that minimises
+    #: the summed best-mapping torsion distance to the other defining members (ties: lowest id). For a group with
+    #: no defining member (a provisional basin of partly optimised structures) it is the first member filed.
+    representative_observation_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "conformer_observation.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_conformer_group_representative_observation_id",
+            # conformer_group <-> conformer_observation reference each other; the FK from the group is added after
+            # both tables exist, so metadata can be sorted and created.
+            use_alter=True,
+        ),
+        nullable=True,
+    )
+    #: Set on a group emptied by a merge: the group that took its members.
+    merged_into_conformer_group_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "conformer_group.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_conformer_group_merged_into_conformer_group_id",
+        ),
+        nullable=True,
+    )
+    #: Whether every pair of defining members matches (a clique). ``False`` is a *wide basin*: a chain of
+    #: structures each linked to the next, whose ends are further apart than the tolerance. It is reported, never
+    #: split. ``NULL`` when the group has no defining member.
+    basin_is_clique: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    #: The largest per-rotor torsion difference between any two defining members under the best mapping, in degrees.
+    basin_span_deg: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    #: Per defining member (observation id as a string), the summed best-mapping distance to the other defining
+    #: members: what the medoid minimises. Derived and kept so that a new member updates the representative and the
+    #: shape in O(k) comparisons rather than O(k^2). Valid only while its keys are exactly the group's defining
+    #: members; a reader that finds them different rebuilds it.
+    basin_distance_sums_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     species_entry: Mapped["SpeciesEntry"] = relationship(
         back_populates="conformer_groups"
     )
 
+    merged_into: Mapped[Optional["ConformerGroup"]] = relationship(
+        foreign_keys=[merged_into_conformer_group_id], remote_side="ConformerGroup.id"
+    )
+
     observations: Mapped[list["ConformerObservation"]] = relationship(
         back_populates="conformer_group",
         cascade="save-update, merge",
+        foreign_keys="ConformerObservation.conformer_group_id",
     )
 
     selections: Mapped[list["ConformerSelection"]] = relationship(
@@ -254,6 +397,12 @@ class ConformerGroup(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
     __table_args__ = (
         Index("ix_conformer_group_species_entry_id", "species_entry_id"),
+        # the wide-basin listing: a handful of rows among all groups
+        Index(
+            "ix_conformer_group_wide_basin",
+            "id",
+            postgresql_where="basin_is_clique IS FALSE",
+        ),
         UniqueConstraint(
             "species_entry_id",
             "label",
@@ -297,9 +446,13 @@ class ConformerObservation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
     torsion_fingerprint_json: Mapped[Optional[dict]] = mapped_column(
         JSONB, nullable=True
     )
+    #: The structure in the species' canonical atom order (the coordinates basin matching compares), so an upload
+    #: does not have to re-read ``geometry_atom`` and re-map every member. Derived from the geometry; not the
+    #: stored fingerprint's ``raw_torsions_deg``, which is a display value.
+    mapped_coords_json: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     conformer_group: Mapped["ConformerGroup"] = relationship(
-        back_populates="observations"
+        back_populates="observations", foreign_keys=[conformer_group_id]
     )
     calculations: Mapped[list["Calculation"]] = relationship(
         back_populates="conformer_observation",
@@ -311,6 +464,100 @@ class ConformerObservation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
 
     __table_args__ = (
         Index("ix_conformer_observation_conformer_group_id", "conformer_group_id"),
+    )
+
+
+class ConformerGroupMergePending(Base, TimestampMixin):
+    """Work a live upload decided on but could not carry out, in two kinds.
+
+    **A merge owed** (``kept_conformer_group_id`` set): two conformer groups the upload linked, whose younger one
+    cannot be emptied by this role.
+
+    **A re-file owed** (``kept_conformer_group_id`` NULL): a structure that defines no basin and now belongs in a basin
+    other than the group it sits in, which this role may not move (it was approved, or a thermo/statmech record cites
+    it as evidence). There is no target group yet, and none is created until the owner role completes the re-file.
+
+    The merge, in detail:
+
+    An upload that links two groups (a structure within tolerance of a defining member of each) merges the younger
+    into the older. When approved records point at the younger group -- an approved observation, thermo target,
+    statmech declaration or member -- only a declared repair may move them, and the API role cannot declare one. The
+    new observation is filed under the older group and this row records the merge still owed. The owner-role
+    reassignment (``reassign_conformer_groups`` over the entries listed here) completes it through
+    ``accepted_science_repair`` and stamps ``completed_at``. Rows are never deleted.
+    """
+
+    __tablename__ = "conformer_group_merge_pending"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+
+    species_entry_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("species_entry.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+    #: The older group, which keeps its row. ``NULL`` for the other kind of owed work: an observation that must be
+    #: re-filed into a basin that has no group yet (``absorbed_conformer_group_id`` is then the group it sits in now,
+    #: and the owner-role reassignment creates the target row when it completes the re-file).
+    kept_conformer_group_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "conformer_group.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_conformer_group_merge_pending_kept_group",
+        ),
+        nullable=True,
+    )
+    #: The younger group, to be emptied (and kept, with ``merged_into_conformer_group_id`` set).
+    absorbed_conformer_group_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "conformer_group.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_conformer_group_merge_pending_absorbed_group",
+        ),
+        nullable=False,
+    )
+    #: The upload whose structure linked the two groups.
+    conformer_observation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "conformer_observation.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_conformer_group_merge_pending_observation",
+        ),
+        nullable=False,
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False), nullable=True)
+    completed_by_revision: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "kept_conformer_group_id IS NULL OR kept_conformer_group_id <> absorbed_conformer_group_id",
+            name="kept_differs_from_absorbed",
+        ),
+        UniqueConstraint(
+            "kept_conformer_group_id",
+            "absorbed_conformer_group_id",
+            "conformer_observation_id",
+            name="uq_conformer_group_merge_pending_merge",
+        ),
+        # One OPEN re-file per observation, however many uploads follow; a later upload updates it.
+        Index(
+            "uq_conformer_group_merge_pending_open_refile",
+            "conformer_observation_id",
+            unique=True,
+            postgresql_where="kept_conformer_group_id IS NULL AND completed_at IS NULL",
+        ),
+        Index(
+            "ix_conformer_group_merge_pending_open",
+            "species_entry_id",
+            postgresql_where="completed_at IS NULL",
+        ),
     )
 
 

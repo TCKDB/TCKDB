@@ -94,9 +94,10 @@ describe("buildSpeciesBrowseQuery: an incomplete integer never reaches the wire"
         expect(query.get("max_heavy_atoms")).toBe("10")
     })
 
-    it("sends collapse=all explicitly rather than relying on the server default", () => {
+    it("never sends collapse: the server refuses it, and a browse never picks one record", () => {
         const query = buildSpeciesBrowseQuery("species", EMPTY_BROWSE_FILTERS, 0, 20)
-        expect(query.get("collapse")).toBe("all")
+        expect(query.has("collapse")).toBe(false)
+        expect(query.has("selection_policy")).toBe(false)
     })
 })
 

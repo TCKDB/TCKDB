@@ -64,6 +64,8 @@ def _collect_violations(settings: Settings) -> list[str]:
         violations.append("ALLOW_PUBLIC_INTERNAL_IDS must be false")
     if not settings.rate_limit_enabled:
         violations.append("RATE_LIMIT_ENABLED must be true")
+    if not settings.paging_cursor_key or len(settings.paging_cursor_key) < 32:
+        violations.append("PAGING_CURSOR_KEY must be set to a secret of at least 32 characters (it seals paging cursors)")
 
     # CORS rules diverge between the two hosted modes. shared_private
     # may run curl/HPC-only with no browser clients (empty allow-list

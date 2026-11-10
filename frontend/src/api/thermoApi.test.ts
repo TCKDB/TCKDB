@@ -31,7 +31,7 @@ function mockResponse(records: unknown[]) {
         species_entry_ref: entryRef,
         review_summary: { approved: 0, under_review: 0, not_reviewed: records.length, deprecated: 0, rejected: 0, total: records.length },
         records,
-        pagination: { offset: 0, limit: 50, returned: records.length, total: records.length, post_collapse_total: records.length },
+        pagination: { offset: 0, limit: 50, returned: records.length, total: records.length },
     }
 }
 

@@ -152,9 +152,9 @@ export default function AdminPage() {
                         <table className="data-table" aria-label="Accounts and roles">
                             <thead>
                                 <tr>
-                                    <th scope="col">Username</th>
-                                    <th scope="col">Name</th>
-                                    <th scope="col">Affiliation</th>
+                                    <th scope="col">Username (as typed)</th>
+                                    <th scope="col">Name (as typed)</th>
+                                    <th scope="col">Affiliation (as typed)</th>
                                     <th scope="col">Joined</th>
                                     <th scope="col">Role</th>
                                 </tr>
@@ -162,7 +162,7 @@ export default function AdminPage() {
                             <tbody>
                                 {usersState.users.map((user) => (
                                     <tr key={user.id}>
-                                        <th scope="row">
+                                        <th scope="row" id={`admin-user-${user.id}`}>
                                             {user.username}
                                             {user.id === signedInUserId && <span className="admin-you"> (you)</span>}
                                             {!user.is_active && <span className="admin-inactive"> deactivated</span>}
@@ -179,7 +179,7 @@ export default function AdminPage() {
                                                 header alone is not enough -- every row's
                                                 select would announce as "Role". */}
                                             <select
-                                                aria-label={`Role for ${user.username}`}
+                                                aria-labelledby={`admin-user-${user.id}`}
                                                 className="admin-role-select"
                                                 value={user.role}
                                                 disabled={pendingId === user.id}

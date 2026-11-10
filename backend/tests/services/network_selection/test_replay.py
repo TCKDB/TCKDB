@@ -362,9 +362,27 @@ def test_a_curated_manifest_may_only_have_approved_effective_statuses(db_session
     manifest = _with_unreviewed_solve(db_session, world)
     forged = copy.deepcopy(manifest)
     forged["visibility"]["read_profile"] = "curated"  # effective statuses still include not_reviewed
+    forged["visibility"]["linked_evidence_withheld"] = ["deprecated", "rejected"]  # the rule a curated profile applies
     reseal(forged)
     with pytest.raises(ReplayError, match="curated manifest's effective review statuses are approved only"):
         replay_network(forged)
+
+
+def test_the_recorded_linked_evidence_rule_must_be_the_one_the_read_profile_applies(db_session, world):
+    """ADR 0023: a manifest relabelled curated without the evidence rule curated applies (or the reverse) is refused, not
+    read as the rule it does not record."""
+    manifest = _with_unreviewed_solve(db_session, world)
+    assert manifest["visibility"]["linked_evidence_withheld"] == []
+    relabelled = copy.deepcopy(manifest)
+    relabelled["visibility"]["read_profile"] = "curated"
+    reseal(relabelled)
+    with pytest.raises(ReplayError, match="linked-evidence rule"):
+        replay_network(relabelled)
+    invented = copy.deepcopy(manifest)
+    invented["visibility"]["linked_evidence_withheld"] = ["rejected"]
+    reseal(invented)
+    with pytest.raises(ReplayError, match="linked-evidence rule"):
+        replay_network(invented)
 
 
 def test_the_visibility_profile_must_be_the_profile_the_request_was_made_under(db_session, world):

@@ -43,19 +43,23 @@ from app.schemas.reads.scientific_network_selection import (
     NetworkSelectionResponse,
     NetworkSelectionReview,
     NetworkSelectionScope,
+    NetworkSelectionSolve,
 )
+from app.schemas.reads.scientific_selection_common import ELIGIBILITY_DEPRECATED, ELIGIBILITY_REJECTED
 from app.services.network_selection.manifest import manifest_digest
 from app.services.network_selection.models import (
     BathRequest,
+    NetworkFilters,
     NetworkRequest,
     OutputRequest,
     PartitionRequest,
     Scope,
 )
 from app.services.network_selection.selection import NetworkSelection, select_network
-from app.services.scientific_read.handles import is_ref_handle, resolve_path_handle
+from app.services.scientific_read.handles import is_ref_handle, resolve_selection_handle
 from app.services.scientific_read.profile import current_read_profile
 from app.services.selection_kernel import Outcome
+from app.services.selection_kernel.requested import OFFER_REVIEW, Eligibility, answer_steps, review_default
 
 #: ``Session.info`` key a TEST harness sets, explicitly, to be read under whatever isolation it already has.
 SNAPSHOT_OPT_OUT = "tckdb_read_snapshot_opt_out"
@@ -65,7 +69,7 @@ def _ref_only(session: Session, model_cls: type, handle: str, *, kind_label: str
     """Resolve a public ref to a row id, refusing an integer id outright (``invalid_handle``)."""
     if not is_ref_handle(handle):
         raise ValueError(f"invalid_handle: {handle!r} is not a <prefix>_<body> public ref")
-    return resolve_path_handle(session, model_cls, handle, kind_label=kind_label)
+    return resolve_selection_handle(session, model_cls, handle, kind_label=kind_label)
 
 
 def resolve_network_ref(session: Session, ref: str) -> int:
@@ -76,6 +80,19 @@ def check_request_refs(session: Session, body: NetworkSelectionRequest) -> None:
     """Every species ref the request names must exist and be visible to the caller (404 otherwise)."""
     for component in body.bath.components:
         _ref_only(session, SpeciesEntry, component.species_ref, kind_label="species_entry")
+
+
+#: The eligibility defaults a network selection applies, in the order the answer lists them: a solve's review status.
+NETWORK_DEFAULTS = (ELIGIBILITY_REJECTED, ELIGIBILITY_DEPRECATED)
+
+
+def _passed_only_by_override(manifest: dict[str, Any]) -> dict[str, list[str]]:
+    """Per solve ref, the review defaults the solve would fail but the request lifted."""
+    out: dict[str, list[str]] = {}
+    for solve in manifest["solves"]:
+        default = review_default(RecordReviewStatus(solve["review_status"]))
+        out[solve["solve_ref"]] = [default] if default is not None else []
+    return out
 
 
 def _admin_policy(policy: NetworkSelectionPolicy) -> SelectionPolicy:
@@ -114,6 +131,16 @@ def to_service_request(body: NetworkSelectionRequest, *, network_ref: str) -> Ne
         min_review_status=body.min_review_status,
         admin_policy=_admin_policy(body.policy),
         first_only=body.mode is NetworkSelectionMode.first,
+        filters=NetworkFilters(
+            model_kind=body.filters.model_kind.value if body.filters.model_kind is not None else None,
+            method=body.filters.method,
+            basis=body.filters.basis,
+            software=body.filters.software,
+            software_version=body.filters.software_version,
+            workflow_tool=body.filters.workflow_tool,
+            workflow_tool_version=body.filters.workflow_tool_version,
+        ),
+        eligibility=Eligibility.from_request(body.eligibility, OFFER_REVIEW),
     )
 
 
@@ -218,7 +245,9 @@ def build_response(
     floor, statuses = _effective_floor(manifest, body.min_review_status)
     population = manifest["population"]
     disclosures = manifest.get("disclosures", {})
+    lifted = _passed_only_by_override(manifest)
     return NetworkSelectionResponse(
+        # Stored, server-built: a ValidationError here is a server fault (ServerFaultRoute -> 500), not a 422.
         request=NetworkSelectionRequestEcho.model_validate(manifest["request"]),
         review=NetworkSelectionReview(effective_floor=floor, effective_statuses=statuses),
         policy=NetworkSelectionPolicyInfo(
@@ -233,7 +262,20 @@ def build_response(
         administrative_order=decision["administrative_order"],
         determinations=manifest["assessments"]["determinations"],
         bundles=manifest["assessments"]["bundles"],
+        solves=[
+            NetworkSelectionSolve(solve_ref=ref, review_status=status, passed_only_by_override=lifted[ref])
+            for ref, status in sorted(
+                ((s["solve_ref"], s["review_status"]) for s in manifest["solves"]), key=lambda item: item[0]
+            )
+        ],
         representations=decision["representations"],
+        **answer_steps(
+            request_filters=manifest["request"]["filters"],
+            eligibility_record=manifest["request"]["eligibility"],
+            funnel_record=population["funnel"],
+            names=NETWORK_DEFAULTS,
+            profile_floor=profile_has_floor(),
+        ),
         disclosures=NetworkSelectionDisclosures(
             unresolved_refs=disclosures.get("unresolved_refs", []),
             unsupported_refs=disclosures.get("unsupported_refs", []),

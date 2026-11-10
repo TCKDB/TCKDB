@@ -27,7 +27,6 @@ def _make_client(handler) -> TCKDBHttpClient:
 
 def _stub_response(records: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     return {
-        "request": {"offset": 0, "limit": 25, "collapse": "all", "include": []},
         "pagination": {"offset": 0, "limit": 25, "returned": 0, "total": 0},
         "records": records or [],
         "review_summary": {
@@ -377,26 +376,6 @@ def test_rejects_negative_offset() -> None:
     client = _make_client(_ok_handler([]))
     with pytest.raises(MCPToolError):
         reactions_tool.run(client, _cfg(), {"reactants": ["[OH]"], "offset": -1})
-    client.close()
-
-
-@pytest.mark.parametrize("collapse", ["all", "first"])
-def test_legal_collapse_values_forwarded(collapse: str) -> None:
-    captured: list[dict[str, Any]] = []
-    client = _make_client(_ok_handler(captured))
-    reactions_tool.run(
-        client, _cfg(), {"reactants": ["[OH]"], "collapse": collapse}
-    )
-    assert captured[0]["body"]["collapse"] == collapse
-    client.close()
-
-
-def test_rejects_unknown_collapse_value() -> None:
-    client = _make_client(_ok_handler([]))
-    with pytest.raises(MCPToolError):
-        reactions_tool.run(
-            client, _cfg(), {"reactants": ["[OH]"], "collapse": "every"}
-        )
     client.close()
 
 

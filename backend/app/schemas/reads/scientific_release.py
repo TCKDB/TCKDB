@@ -28,6 +28,7 @@ from app.schemas.reads.scientific_common import (
     Pagination,
     ProfiledRequestEcho,
     SupersessionNotice,
+    WatermarkEcho,
 )
 
 
@@ -190,6 +191,10 @@ class ScientificReleaseListResponse(BaseModel):
     request: RequestEcho
     records: list[DatasetReleaseSummary]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 class ScientificReleaseDetailResponse(BaseModel):
@@ -219,6 +224,10 @@ class ScientificReleaseSelectionsResponse(BaseModel):
     tag: str
     records: list[ReleaseSelectionRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [

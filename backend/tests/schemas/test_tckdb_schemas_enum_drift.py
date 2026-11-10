@@ -21,6 +21,7 @@ from app.db.models import common as db_enums
 ENUM_PAIRS: list[tuple[type[Enum], type[Enum]]] = [
     (db_enums.EnthalpyReferenceKind, wire_enums.EnthalpyReferenceKind),
     (db_enums.ThermoTargetKind, wire_enums.ThermoTargetKind),
+    (db_enums.ThermoDeclarationSource, wire_enums.ThermoDeclarationSource),
     (db_enums.ActivationEnergyUnits, wire_enums.ActivationEnergyUnits),
     (db_enums.AppliedCorrectionComponentKind, wire_enums.AppliedCorrectionComponentKind),
     (db_enums.ArrheniusAUnits, wire_enums.ArrheniusAUnits),
@@ -39,6 +40,9 @@ ENUM_PAIRS: list[tuple[type[Enum], type[Enum]]] = [
     (db_enums.ConstraintKind, wire_enums.ConstraintKind),
     (db_enums.CoordinateUnit, wire_enums.CoordinateUnit),
     (db_enums.CoreTreatment, wire_enums.CoreTreatment),
+    (db_enums.PnoTruncation, wire_enums.PnoTruncation),
+    (db_enums.RelativisticHamiltonian, wire_enums.RelativisticHamiltonian),
+    (db_enums.RiApproximation, wire_enums.RiApproximation),
     (db_enums.EnergyComponentKind, wire_enums.EnergyComponentKind),
     (db_enums.EnergyCorrectionApplicationRole, wire_enums.EnergyCorrectionApplicationRole),
     (db_enums.EnergyCorrectionConvention, wire_enums.EnergyCorrectionConvention),

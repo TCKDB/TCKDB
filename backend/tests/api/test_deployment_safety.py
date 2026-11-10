@@ -31,6 +31,7 @@ def _safe_settings(mode: str) -> Settings:
         session_cookie_secure=True,
         allow_public_internal_ids=False,
         rate_limit_enabled=True,
+        paging_cursor_key="k" * 40,
         cors_allow_origins=[],
         db_statement_timeout_ms=30_000,
     )
@@ -73,6 +74,8 @@ class _UnsafeCase:
         _UnsafeCase({"session_cookie_secure": False}, "SESSION_COOKIE_SECURE must be true"),
         _UnsafeCase({"allow_public_internal_ids": True}, "ALLOW_PUBLIC_INTERNAL_IDS must be false"),
         _UnsafeCase({"rate_limit_enabled": False}, "RATE_LIMIT_ENABLED must be true"),
+        _UnsafeCase({"paging_cursor_key": None}, "PAGING_CURSOR_KEY must be set"),
+        _UnsafeCase({"paging_cursor_key": "too-short"}, "PAGING_CURSOR_KEY must be set"),
     ],
     ids=lambda c: next(iter(c.overrides)),
 )
@@ -104,6 +107,8 @@ def test_shared_private_accepts_safe_settings():
         _UnsafeCase({"session_cookie_secure": False}, "SESSION_COOKIE_SECURE must be true"),
         _UnsafeCase({"allow_public_internal_ids": True}, "ALLOW_PUBLIC_INTERNAL_IDS must be false"),
         _UnsafeCase({"rate_limit_enabled": False}, "RATE_LIMIT_ENABLED must be true"),
+        _UnsafeCase({"paging_cursor_key": None}, "PAGING_CURSOR_KEY must be set"),
+        _UnsafeCase({"paging_cursor_key": "too-short"}, "PAGING_CURSOR_KEY must be set"),
     ],
     ids=lambda c: next(iter(c.overrides)),
 )

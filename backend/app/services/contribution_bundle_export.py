@@ -754,7 +754,10 @@ def _add_declarations(payload: dict[str, Any], thermo: Thermo) -> list[str]:
     notes: list[str] = []
     kind = thermo.thermodynamic_target_kind
     if kind is ThermoTargetKind.equilibrium_ensemble:
-        payload["thermodynamic_target"] = {"kind": ThermoTargetKind.equilibrium_ensemble.value}
+        payload["thermodynamic_target"] = {
+            "kind": ThermoTargetKind.equilibrium_ensemble.value,
+            "declared_by": thermo.thermodynamic_target_declared_by.value,
+        }
     elif kind is ThermoTargetKind.single_conformer:
         notes.append(
             "Its single_conformer target names a conformer group of this database, which a "
@@ -905,6 +908,13 @@ def _kinetics_to_upload(
         if kinetics.ea_uncertainty_kj_mol is not None:
             payload["d_reported_ea"] = kinetics.ea_uncertainty_kj_mol
 
+    # The bath gas the record states, as species content (absent when none was stated).
+    if kinetics.bath_gases:
+        payload["bath_gas"] = [
+            {"species_entry": _species_entry_payload(bg.species_entry), "mole_fraction": bg.mole_fraction}
+            for bg in kinetics.bath_gases
+        ]
+
     literature = _literature_payload(kinetics.literature)
     if literature is not None:
         payload["literature"] = literature
@@ -953,7 +963,7 @@ def _add_declared_energy_level(payload: dict[str, Any], kinetics: Kinetics) -> l
             "portable bundle cannot carry, so it was left out."
         ]
     declared: dict[str, Any] = {"method": lot.method}
-    for name in ("basis", "aux_basis", "cabs_basis", "dispersion", "solvent", "solvent_model", "keywords"):
+    for name in ("basis", "aux_basis", "cabs_basis", "dispersion", "solvent", "solvent_model"):
         value = getattr(lot, name)
         if value is not None:
             declared[name] = value
@@ -961,6 +971,10 @@ def _add_declared_energy_level(payload: dict[str, Any], kinetics: Kinetics) -> l
         declared["spin_treatment"] = lot.spin_treatment.value
     if lot.core_treatment is not None:
         declared["core_treatment"] = lot.core_treatment.value
+    for name in ("relativistic_hamiltonian", "pno_truncation", "ri_approximation"):
+        value = getattr(lot, name)
+        if value is not None:
+            declared[name] = value.value
     payload["energy_level_of_theory"] = declared
     return []
 
@@ -1151,8 +1165,10 @@ def _species_entry_payload(species_entry: SpeciesEntry) -> dict[str, Any]:
     }
     if species_entry.unmapped_smiles is not None:
         payload["unmapped_smiles"] = species_entry.unmapped_smiles
-    if species_entry.stereo_label is not None:
-        payload["stereo_label"] = species_entry.stereo_label
+    # The entry's stereo key (DR-0038), never the display label: a re-import must land on the same entry, and the
+    # descriptor is the one string every deposit accepts as a label. ``?`` per element exports as ``?``.
+    if species_entry.stereo_descriptor is not None:
+        payload["stereo_label"] = species_entry.stereo_descriptor
     if species_entry.electronic_state_label is not None:
         payload["electronic_state_label"] = species_entry.electronic_state_label
     if species_entry.term_symbol_raw is not None:

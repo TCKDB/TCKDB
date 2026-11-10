@@ -35,6 +35,7 @@ from app.db.models.common import (
     NetworkStateKind,
     SpeciesEntryStateKind,
     StationaryPointKind,
+    StereoResolution,
 )
 from app.db.models.species import SpeciesEntry
 from tests.services.scientific_read._factories import (
@@ -66,6 +67,8 @@ def _entry(db_session, species, *, stereo_label: str | None) -> SpeciesEntry:
         species_id=species.id,
         kind=StationaryPointKind.minimum,
         stereo_label=stereo_label,
+        stereo_descriptor=stereo_label,
+        stereo_resolution=StereoResolution.resolved if stereo_label else None,
         electronic_state_kind=SpeciesEntryStateKind.ground,
     )
     db_session.add(row)
@@ -129,7 +132,7 @@ def _hydrazine_network(db_session) -> dict:
     for source, sink, kind in (
         (well, states["e"], NetworkChannelKind.dissociation),
         (well, states["z"], NetworkChannelKind.dissociation),
-        (states["e"], states["z"], NetworkChannelKind.isomerization),
+        (states["e"], states["z"], NetworkChannelKind.exchange),
     ):
         channel = make_network_channel(
             db_session,
@@ -258,3 +261,30 @@ def test_an_unambiguous_participant_carries_no_discriminator(client, db_session)
         for p in participants
         if p["canonical_smiles"] == "N=N"
     } == {"E", "Z"}
+
+
+def test_participants_serve_the_computed_facets_that_tell_e_from_z(client, db_session):
+    """The two diazene entries differ in served structured fields, not only in the joined label."""
+    fx = _hydrazine_network(db_session)
+    body = client.get(
+        "/api/v1/scientific/network-kinetics/search"
+        f"?network_ref={fx['network'].public_ref}&limit=50"
+    ).json()
+    participants = [
+        p
+        for record in body["records"]
+        for state in (
+            record["network_channel"]["source_state"],
+            record["network_channel"]["sink_state"],
+        )
+        for p in state["participants"]
+    ]
+    diazene = [p for p in participants if p["canonical_smiles"] == "N=N"]
+    assert {p["stereo_label"] for p in diazene} == {"E", "Z"}
+    assert {p["stereo_descriptor"] for p in diazene} == {"E", "Z"}
+    for p in participants:
+        assert p["species_entry_kind"] == "minimum"
+        assert p["electronic_state_kind"] == "ground"
+        # No state label or term symbol was deposited, so the two grammar-validated facets read None.
+        assert p["electronic_state_label"] is None
+        assert p["term_symbol"] is None

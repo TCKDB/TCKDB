@@ -9,24 +9,32 @@ recomputes the coordinate from the point's own stored Cartesian geometry and
 compares, **without ever reading ``start_value``/``end_value``**, which ADR
 0020 fixes as requested-grid metadata rather than an anchor to add back.
 
-**Nothing is written and nothing is refused.** This mirrors
-:mod:`app.services.scientific_read.imaginary_mode_projection`: a session is
-opened, geometry rows are read, and a verdict is returned. There is no table
-to persist it to, and under ADR 0008 the tier is ``warn`` regardless -- ADR
-0020 is explicit that a mis-stated axis and a mis-attached geometry present
-identically to this comparison, so a disagreement is evidence that
-*something* is wrong without saying which thing, and refusing a deposit over
-that ambiguity would discard correct energies. The check is not wired into
-any upload or read path; it is run standalone by
-``backend/scripts/validation/scan_coordinate_conformance_report.py`` as the
-diagnostic ADR 0020 asks for ahead of the corrective migration it defers to a
-separate, later change.
+**Nothing is refused.** A deposit whose scan values disagree with their own geometries is accepted as sent
+and earns :data:`W_SCAN_POINT_COORDINATE_DISAGREES_WITH_GEOMETRY` (one warning per disagreeing coordinate series,
+:func:`collect_scan_coordinate_warnings`), run once the request's calculations are flushed. Under ADR 0008 the
+tier is ``warn``: ADR 0020 is explicit that a mis-stated axis and a mis-attached geometry present identically to
+this comparison, so a disagreement is evidence that *something* is wrong without saying which thing, and refusing
+a deposit over that ambiguity would discard correct energies. The verdict is not stored: there is no table for it,
+and the report script (``backend/scripts/validation/scan_coordinate_conformance_report.py``) recomputes it from
+stored rows.
 
-**The deposited corpus is expected to fail this.** All 46 series deposited
-before ADR 0020 hold ADR 0019's superseded relative-sweep convention, and
-this check reports every one of them as non-conforming. That is the intended
-finding, not a bug to chase: it is exactly what the follow-up migration needs
-to know, one series at a time.
+**Payloads in the superseded convention still fail this, correctly.** The 46 series
+deposited before ADR 0020 held ADR 0019's superseded relative-sweep convention;
+the corrective migration (``a4f7c2e9d651``) converted only the stored series
+whose own geometry proves the conversion, not every one. Output written in
+that convention and deposited now (the real payloads under
+``tests/fixtures/arc_runs`` are kept in it, and 34 of their 36 series are
+reported as ``consistent_with_legacy_relative_axis``, one as ``small_constant_offset`` because its start value is
+0.023 degrees short of a full turn (a wrap coincidence), and one has no geometry) is still accepted and,
+where it has geometry, earns the warning. That is the check doing its job, not a defect to quiet.
+
+**Rounded values are not disagreement.** The tolerance is widened to half a
+step of the decimals the stored values were written at (see
+``stored_precision_decimals``) unless the stored values are an evenly spaced
+grid (a grid is a label, not a rounded measurement), and a constant offset no
+larger than the tolerance ceiling is classified ``small_constant_offset``: it
+names no cause, because a relative sweep whose start lies within the ceiling
+of zero (mod 360 for an angle) looks the same.
 
 Recomputable coordinate kinds
 ------------------------------
@@ -96,14 +104,21 @@ import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
+from itertools import pairwise
 
 import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
-from app.db.models.common import CalculationType, CoordinateUnit, ScanCoordinateKind
+from app.db.models.common import (
+    CalculationType,
+    CoordinateUnit,
+    ScanCoordinateKind,
+    SubmissionRecordType,
+)
 from app.db.models.geometry import GeometryAtom
+from app.schemas.upload_warning import UploadWarning
 from app.scientific_checks import (
     CheckTier,
     CodeChannel,
@@ -111,6 +126,7 @@ from app.scientific_checks import (
     PythonCheck,
     ScientificCheck,
 )
+from app.services.deposit_warnings import note_warning_subject
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -379,16 +395,7 @@ def infer_precision_decimals(
     if len(values) < _MIN_SAMPLE_SIZE_TO_TRUST:
         return fallback
 
-    needed = 0
-    for value in values:
-        for n in range(0, max_decimals + 1):
-            if abs(round(value, n) - value) < 1e-9:
-                needed = max(needed, n)
-                break
-        else:
-            needed = max(needed, max_decimals)
-
-    return needed
+    return _decimals_needed(values, max_decimals=max_decimals)
 
 
 # ---------------------------------------------------------------------------
@@ -443,11 +450,19 @@ def evaluate_point_coordinate_conformance(
     atom_indices: tuple[int, ...],
     precision_decimals: int,
     point_index: int,
+    stored_precision_decimals: int | None = None,
 ) -> PointCoordinateConformance:
     """Compare one stored coordinate value against its own geometry.
 
     Never reads ``calc_scan_coordinate.start_value``/``end_value`` -- ADR
     0020 fixes those as grid metadata, not an anchor for the expected value.
+
+    :param precision_decimals: Decimal places of the *geometry's* Cartesian coordinates.
+    :param stored_precision_decimals: Decimal places the stored ``coordinate_value`` series was written at, when it
+        is known. A value rounded to ``d`` places can differ from the exact coordinate by up to ``0.5 * 10**-d``,
+        so the tolerance is widened to that half-step plus the geometry's own derived allowance; a series
+        rounded that coarsely is not disagreeing with its geometry. If the widened window passes the same ceiling
+        the geometry-derived one is held to, the point is ``not_checkable``.
     """
     expected_unit = _RECOMPUTABLE_UNIT_FOR_KIND.get(kind)
     if expected_unit is None:
@@ -579,6 +594,25 @@ def evaluate_point_coordinate_conformance(
             )
         residual = _wrap_deg(stored_value - expected)
 
+    if stored_precision_decimals is not None:
+        widened = 0.5 * 10.0**-stored_precision_decimals + 10.0 * sigma_pred
+        if widened > tolerance:
+            is_bond = kind is ScanCoordinateKind.bond
+            ceiling = TOLERANCE_CEILING_ANGSTROM if is_bond else TOLERANCE_CEILING_DEGREES
+            if widened > ceiling:
+                return PointCoordinateConformance(
+                    point_index=point_index,
+                    status=PointStatus.not_checkable,
+                    sigma_pred=sigma_pred,
+                    reason=(
+                        f"the stored values are rounded to {stored_precision_decimals} decimal place(s), a "
+                        f"half-step of {0.5 * 10.0**-stored_precision_decimals:.3g} that, with the geometry's "
+                        f"allowance, exceeds the {ceiling:g} ceiling -- too coarse to tell a real error from "
+                        "rounding."
+                    ),
+                )
+            tolerance = widened
+
     status = PointStatus.conforms if abs(residual) <= tolerance else PointStatus.deviates
     return PointCoordinateConformance(
         point_index=point_index,
@@ -607,6 +641,11 @@ class SeriesClassification(str, Enum):
     #: though this classifier reaches the number empirically and never
     #: reads ``start_value`` to get there.
     consistent_with_legacy_relative_axis = "consistent_with_legacy_relative_axis"
+    #: Every checkable point is off by the same constant, no larger than the
+    #: module's tolerance ceiling (1 degree, 0.1 Angstrom). A relative sweep
+    #: whose start lies within the ceiling of zero (mod 360 for an angle) lands
+    #: here, as does any other small systematic difference; no cause is named.
+    small_constant_offset = "small_constant_offset"
     #: Residual grows roughly linearly with point index: a direction or
     #: step-size disagreement between the stored axis and the point order.
     linear_ramp = "linear_ramp"
@@ -803,6 +842,18 @@ def classify_series(
                             "on point/geometry off-by-one specifically."
                         ),
                     )
+            ceiling = TOLERANCE_CEILING_DEGREES if is_periodic else TOLERANCE_CEILING_ANGSTROM
+            if abs(constant) <= ceiling:
+                return SeriesClassificationResult(
+                    classification=SeriesClassification.small_constant_offset,
+                    implied_constant=constant,
+                    detail=(
+                        f"every checkable point's residual is the same small constant ({constant:.6g}, spread "
+                        f"{spread:.3g}), no larger than the {ceiling:g} ceiling. Values measured from a scan "
+                        "start that lies within the ceiling of zero (or of a full turn) look like this too, so "
+                        "this check does not name a cause."
+                    ),
+                )
             return SeriesClassificationResult(
                 classification=SeriesClassification.consistent_with_legacy_relative_axis,
                 implied_constant=constant,
@@ -932,6 +983,106 @@ class CoordinateSeriesConformance:
     n_not_checkable: int
 
 
+#: A value is on a declared grid when it is this close (in the coordinate's unit) to ``base + k * step``.
+_GRID_TOLERANCE = 1e-6
+
+#: The common step of the distinct stored values must be at least this many units of their last decimal for the
+#: series to count as a grid (5 degrees for whole-degree values, 0.5 for one-decimal values ...).
+_GRID_MIN_STEP_UNITS = 5
+
+
+def _decimals_needed(values: Sequence[float], *, max_decimals: int = 12) -> int:
+    """Decimal places needed to write every value exactly (to float noise), at most ``max_decimals``."""
+    needed = 0
+    for value in values:
+        for n in range(max_decimals + 1):
+            if abs(round(value, n) - value) < 1e-9:
+                needed = max(needed, n)
+                break
+        else:
+            needed = max_decimals
+    return needed
+
+
+def _gcd_step_units(distinct: Sequence[float], *, periodic: bool) -> int:
+    """The greatest common divisor of the gaps between the distinct values, as an integer number of units of their
+    last decimal. A periodic coordinate is judged from the start of its arc (the value after the largest circular
+    gap), like a non-periodic one, so a partial arc 0/7/14/21/28 has step 7 and not the divisor it shares with 360."""
+    scale = 10 ** _decimals_needed(distinct)
+    ints = sorted(round(v * scale) for v in distinct)
+    if periodic:
+        turn = 360 * scale
+        gaps = [b - a for a, b in pairwise(ints)] + [ints[0] + turn - ints[-1]]
+        start = ints[(max(range(len(gaps)), key=gaps.__getitem__) + 1) % len(ints)]
+        ints = sorted((x - start) % turn for x in ints)
+    step = 0
+    for a, b in pairwise(ints):
+        step = math.gcd(step, b - a)
+    return step
+
+
+def _fits_declared_step(distinct: Sequence[float], *, periodic: bool, step_size: float | None) -> bool:
+    """Whether the distinct values all sit on the coordinate's declared ``step_size`` lattice, with at most half of
+    the slots between the smallest and the largest missing. Evidence only: it can add a grid, never remove one."""
+    if step_size is None or step_size == 0:
+        return False
+    step_size = abs(step_size)  # a descending scan declares a negative step
+    if periodic:
+        gaps = [b - a for a, b in pairwise(distinct)] + [distinct[0] + 360.0 - distinct[-1]]
+        cut = max(range(len(gaps)), key=gaps.__getitem__)
+        start = distinct[(cut + 1) % len(distinct)]
+        offsets = sorted((v - start) % 360.0 for v in distinct)
+    else:
+        offsets = [v - distinct[0] for v in distinct]
+    for offset in offsets:
+        if abs(offset - round(offset / step_size) * step_size) > _GRID_TOLERANCE:
+            return False
+    slots = round(offsets[-1] / step_size) + 1
+    if periodic:
+        around = 360.0 / step_size
+        if abs(around - round(around)) * step_size <= _GRID_TOLERANCE:
+            slots = min(slots, round(around))
+    return 2 * len(distinct) >= slots
+
+
+def _is_even_grid(values: Sequence[float], *, periodic: bool, step_size: float | None = None) -> bool:
+    """Whether the stored coordinate values are labels on an evenly spaced grid, gaps allowed.
+
+    A grid is a label the producer chose (60, 75, 105, 120 ...), not a measurement, so its decimals say nothing about
+    rounding: ``60`` is not evidence the producer rounded to whole degrees.
+
+    **The rule.** Take the **distinct** values (a 2-D scan repeats each label; a periodic coordinate is taken mod 360,
+    so ``0`` and ``360`` are one label), write them as integers in units of their last decimal, and take the greatest
+    common divisor of the gaps between them (for a periodic coordinate, measured from the start of the arc, the value
+    after the largest circular gap, so the gap that closes the circle is left out). The series is
+    a grid when that step is at least :data:`_GRID_MIN_STEP_UNITS` units: 0/10/20/30/40 and 0/5/10/15/20/30/60/90
+    are grids; 60/83/121 (step 1) and 60.3/74.8/90.2 (step 1 unit of 0.1) are not. The coordinate's declared
+    ``step_size`` is additional evidence only: values that all sit on its lattice, with at most half the slots between
+    the smallest and the largest missing, are also a grid (this is what recognises 1.0/1.1/1.3/1.4 angstrom, whose
+    step is one unit of the last decimal), but a declared step that does not fit never makes a series less of a grid.
+
+    **Accepted cost.** A short irregular series of whole numbers has a common divisor of 5 or more by chance more
+    often than under a smallest-gap rule (about 12% at three values and 1.8% at four, against about 3.6% and 0.15%).
+    A series wrongly taken for a grid is judged at the tight tolerance, so the error is loud (a warning), the safe
+    direction.
+
+    Fewer than three stored values is never a grid here. That series is still judged tightly, because
+    :func:`infer_precision_decimals` falls back to 6 decimals for fewer than three values; both facts are relied on.
+    One or two distinct labels repeated over three or more values (a coordinate held fixed) count as a grid.
+    """
+    if len(values) < 3:
+        return False
+    if periodic:
+        distinct = sorted({round(v, 9) % 360.0 for v in values})
+    else:
+        distinct = sorted({round(v, 9) for v in values})
+    if len(distinct) <= 2:
+        return True
+    if _gcd_step_units(distinct, periodic=periodic) >= _GRID_MIN_STEP_UNITS:
+        return True
+    return _fits_declared_step(distinct, periodic=periodic, step_size=step_size)
+
+
 def build_scan_coordinate_conformance_report(
     session: Session, calculation_id: int
 ) -> tuple[CoordinateSeriesConformance, ...]:
@@ -966,6 +1117,10 @@ def build_scan_coordinate_conformance_report(
             sample_components.extend([row.x, row.y, row.z])
 
     precision_decimals = infer_precision_decimals(sample_components)
+    stored_values_by_coordinate: dict[int, list[float]] = {}
+    for point in points:  # ``points`` is in point_index order
+        for value in point.coordinate_values:
+            stored_values_by_coordinate.setdefault(value.coordinate_index, []).append(value.coordinate_value)
 
     reports: list[CoordinateSeriesConformance] = []
     for coordinate in coordinates:
@@ -978,6 +1133,20 @@ def build_scan_coordinate_conformance_report(
                 coordinate.atom4_index,
             )
             if idx is not None
+        )
+
+        # Decimals the stored values were written at: a 2-decimal dihedral is exact to half a hundredth, no more.
+        # Not when the values are an evenly spaced grid: those are labels, and 60/90/120 would otherwise read as
+        # "rounded to whole degrees" and hide a real half-degree disagreement.
+        stored_values = stored_values_by_coordinate.get(coordinate.coordinate_index, [])
+        stored_precision = (
+            None
+            if _is_even_grid(
+                stored_values,
+                periodic=coordinate.coordinate_kind is not ScanCoordinateKind.bond,
+                step_size=coordinate.step_size,
+            )
+            else infer_precision_decimals(stored_values)
         )
 
         point_results: list[PointCoordinateConformance] = []
@@ -1021,6 +1190,7 @@ def build_scan_coordinate_conformance_report(
                 atom_indices=atom_indices,
                 precision_decimals=precision_decimals,
                 point_index=point.point_index,
+                stored_precision_decimals=stored_precision,
             )
             if result.status is PointStatus.not_applicable:
                 n_not_applicable += 1
@@ -1067,6 +1237,7 @@ __all__ = [
     "TOLERANCE_CEILING_DEGREES",
     "TOLERANCE_FLOOR_ANGSTROM",
     "TOLERANCE_FLOOR_DEGREES",
+    "W_SCAN_POINT_COORDINATE_DISAGREES_WITH_GEOMETRY",
     "CoordinateSeriesConformance",
     "PointCoordinateConformance",
     "PointStatus",
@@ -1077,10 +1248,66 @@ __all__ = [
     "bond_length_angstrom",
     "build_scan_coordinate_conformance_report",
     "classify_series",
+    "collect_scan_coordinate_warnings",
     "dihedral_deg",
     "evaluate_point_coordinate_conformance",
     "infer_precision_decimals",
 ]
+
+
+#: The warning a scan series earns when a stored coordinate value disagrees with its own point's geometry.
+W_SCAN_POINT_COORDINATE_DISAGREES_WITH_GEOMETRY = "scan_point_coordinate_disagrees_with_geometry"
+
+
+def collect_scan_coordinate_warnings(
+    session: Session,
+    calculation_ids: Iterable[int],
+) -> list[UploadWarning]:
+    """Warn once per scan coordinate series whose stored values disagree with the series' own geometries.
+
+    Runs once a request's calculations are flushed (the check reads the stored scan points and geometries), over every
+    calculation id the request persisted; other types are filtered out by
+    :func:`build_scan_coordinate_conformance_report`. **Never refuses**: ADR 0020 and ADR 0008 (see
+    :data:`CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY`). A series is reported when at least one point is judged
+    ``deviates``; points that are not applicable or not checkable are never reported.
+
+    :param session: Active SQLAlchemy session.
+    :param calculation_ids: Every calculation id the request persisted (or reused).
+    :returns: One warning per disagreeing coordinate series, in the request's calculation order then coordinate
+        order. ``context.scan_number`` counts all of the request's scan calculations (with or without a result) from 1 in that order, which is how a
+        warning says which scan it is about without the payload path (each route has its own).
+    """
+    warnings: list[UploadWarning] = []
+    scan_number = 0
+    # In the order the request persisted them, so the number names the same scan on the direct route and in a job.
+    for calculation_id in dict.fromkeys(calculation_ids):
+        calculation = session.get(Calculation, calculation_id)
+        if calculation is None or calculation.type is not CalculationType.scan:
+            continue
+        scan_number += 1  # every scan calculation counts, with or without a scan_result
+        report = build_scan_coordinate_conformance_report(session, calculation_id)
+        for series in report:
+            judged = [p for p in series.points if p.status in (PointStatus.conforms, PointStatus.deviates)]
+            deviating = [p for p in judged if p.status is PointStatus.deviates]
+            if not deviating:
+                continue
+            warning = UploadWarning.from_code(
+                field="scan_result",
+                code=W_SCAN_POINT_COORDINATE_DISAGREES_WITH_GEOMETRY,
+                context={
+                    "scan_number": scan_number,
+                    "coordinate_index": series.coordinate_index,
+                    "coordinate_kind": series.kind.value,
+                    "pattern": series.classification.value,
+                    "n_points_disagreeing": len(deviating),
+                    "n_points_checked": len(judged),
+                    "max_residual": round(max(abs(p.residual) for p in deviating), 6),
+                    "tolerance": round(max(p.tolerance for p in deviating), 6),
+                },
+            )
+            note_warning_subject(session, warning, SubmissionRecordType.calculation, calculation_id)
+            warnings.append(warning)
+    return warnings
 
 
 # ---------------------------------------------------------------------------
@@ -1090,7 +1317,7 @@ __all__ = [
 CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
     group="Scan coordinates",
     sort_key=1,
-    code=None,
+    code=W_SCAN_POINT_COORDINATE_DISAGREES_WITH_GEOMETRY,
     asserts=(
         "A scan point's stored coordinate_value is the internal coordinate "
         "at that point's own sampled geometry, in that coordinate's own "
@@ -1098,7 +1325,7 @@ CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
         "against start_value as an anchor."
     ),
     tier=CheckTier.warn,
-    channel=CodeChannel.none,
+    channel=CodeChannel.upload_warning,
     tier_rationale=(
         "ADR 0020 is explicit that a disagreement here cannot say which of "
         "two things is wrong: a mis-stated axis and a mis-attached geometry "
@@ -1106,19 +1333,44 @@ CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
         "number and the recomputed one. Refusing the deposit would discard "
         "correct energies over an ambiguity this check cannot resolve on "
         "its own, which is the ADR 0008 argument for warn rather than "
-        "block. It cannot become a blocking definition for a second, "
-        "independent reason: every scan series deposited so far fails it "
-        "-- all 46 hold ADR 0019's superseded relative-sweep convention -- "
-        "and ADR 0008 reserves block for a record no correct calculation "
-        "could produce, not for a corpus TCKDB itself has not yet "
-        "corrected. No code or channel is declared because the check is "
-        "not wired into any upload or read path: it runs standalone, from "
-        "backend/scripts/validation/scan_coordinate_conformance_report.py, "
-        "as the diagnostic ADR 0020 asks for ahead of the corrective "
-        "migration it explicitly defers to a separate PR."
+        "block. It also cannot be a blocking definition for a second "
+        "reason: ADR 0008 reserves block for a record no correct "
+        "calculation could produce, and the producers that deposited the "
+        "superseded relative-sweep convention (ADR 0019) did so in good "
+        "faith. It was held back as a standalone report until the "
+        "corrective migration (``a4f7c2e9d651``, #302) had converted the "
+        "stored series whose own geometry proves the conversion; with that "
+        "done, a new deposit written in the superseded convention is exactly "
+        "what the warning targets, so it is wired into the "
+        "write path of every route that persists a scan, once per "
+        "disagreeing coordinate series, and placed on the scan "
+        "calculation's own record."
     ),
     adr="0020, 0008",
     enforced_by=(
+        PythonCheck(
+            collect_scan_coordinate_warnings,
+            note=(
+                "The write path: run once a request's calculations are "
+                "flushed, over every calculation the request persisted, by "
+                "every workflow whose calculations can carry a scan result (conformer, "
+                "transition state, computed species, computed reaction, "
+                "thermo, statmech, transport). One warning per "
+                "coordinate series with at least one point judged `deviates`; "
+                "its context carries the scan's number in the request, the series' "
+                "pattern (`classify_series`), the number of points that "
+                "disagree, the largest residual and the tolerance. The "
+                "tolerance is widened to half a step of the decimals the "
+                "stored values were written at, so rounded measurements are "
+                "not a disagreement, unless the stored values are an evenly "
+                "spaced grid (gaps allowed): grid values are labels, not "
+                "rounded measurements, and are judged at the tight "
+                "tolerance. Declare step_size for a grid whose step is finer "
+                "than 5 units of its last decimal; otherwise it is judged as "
+                "rounded values. The warning targets output written in the "
+                "superseded convention."
+            ),
+        ),
         PythonCheck(
             evaluate_point_coordinate_conformance,
             note=(
@@ -1145,10 +1397,13 @@ CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
         ),
     ),
     escape_hatch=(
-        "None needed -- the check never refuses, at any tier. Its cost "
-        "runs the other way: today it reports every one of the 46 "
-        "deposited scan series as non-conforming, which ADR 0020 records "
-        "as the correct, intended finding rather than a defect to quiet."
+        "None needed -- the check never refuses, at any tier. Send each "
+        "point's coordinate_value as the internal coordinate measured on "
+        "that point's own geometry (not as an offset from the scan's start), "
+        "or attach the geometry the value was measured on. An `improper` "
+        "coordinate is never compared, and a near-collinear dihedral quartet "
+        "or a deposit too coarse to judge is reported as not checkable "
+        "rather than as a disagreement."
     ),
     thresholds=(
         ConstantThreshold(

@@ -33,6 +33,12 @@ from urllib.parse import quote
 from ..config import Config
 from ..errors import invalid_input
 from ..http_client import TCKDBHttpClient
+from ._select_steps import (
+    ELIGIBILITY_REVIEW,
+    MODEL_PROVENANCE_FILTERS,
+    forward_steps,
+    step_properties,
+)
 from ._path_handles import PUBLIC_REF_MAX_LENGTH, validate_path_handle
 
 TOOL_NAME = "tckdb_select_network_kinetics"
@@ -60,7 +66,7 @@ _ACCEPTED_FIELDS: frozenset[str] = frozenset(
         "network_ref", "quantity", "phase", "scope", "channel_key", "observable", "outputs", "coefficient_basis",
         "degeneracy_applied", "temperature_min_k", "temperature_max_k", "pressure_min_bar", "pressure_max_bar",
         "bath", "partition", "boundaries", "regime", "source_composition_hash", "sink_composition_hash",
-        "policy", "mode", "min_review_status", "profile",
+        "policy", "mode", "min_review_status", "profile", "filters", "eligibility",
     }
 )
 _REJECTED_INTEGER_FIELDS: frozenset[str] = frozenset(
@@ -177,6 +183,7 @@ INPUT_SCHEMA: dict[str, Any] = {
         "mode": {"type": "string", "enum": list(MODES), "default": "all"},
         "min_review_status": {"type": "string", "description": "Optional review floor, on top of the profile's floor."},
         "profile": {"type": "string", "enum": list(PROFILES), "default": "exploratory"},
+        **step_properties(MODEL_PROVENANCE_FILTERS, ELIGIBILITY_REVIEW),
     },
     "additionalProperties": False,
 }
@@ -233,6 +240,8 @@ def run(client: TCKDBHttpClient, config: Config, arguments: dict[str, Any] | Non
         body["boundaries"] = _validate_boundaries(args["boundaries"])
     if "regime" in args:
         body["regime"] = _validate_regime(args["regime"])
+
+    forward_steps(args, body, filters=MODEL_PROVENANCE_FILTERS, eligibility=ELIGIBILITY_REVIEW)
 
     profile = args.get("profile")
     if profile is not None and profile not in PROFILES:

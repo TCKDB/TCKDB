@@ -94,12 +94,29 @@ def test_full_and_detail_carry_the_same_warning(client, db_session):
     assert embedded == detail
 
 
-def test_curated_ignores_a_hidden_result_with_several_modes(client, db_session):
-    """Kills: the runner fed the unfiltered graph / the curated floor bypassed (hidden must equal absent)."""
+def test_curated_reads_an_unreviewed_result_with_several_modes(client, db_session):
+    """ADR 0023 (Q6, step 5): the checklist reads the entry's linked calculations by the evidence rule, so an unreviewed
+    result is read and its undesignated modes warn, as they do under exploratory.
+
+    Kills: the checklist keeping the record floor (the warning absent, as for a result that does not exist).
+    """
+    _, ts, tse, (shown, unreviewed) = _ts_with_freqs(
+        db_session, "UDW7", [[-300.0, 500.0], [-300.0, -200.0, -100.0, 500.0]]
+    )
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=shown.id, status=RecordReviewStatus.approved)
+    set_review(db_session, record_type=SubmissionRecordType.transition_state_entry, record_id=tse.id, status=RecordReviewStatus.approved)
+    set_review(db_session, record_type=SubmissionRecordType.transition_state, record_id=ts.id, status=RecordReviewStatus.approved)
+    assert _trust(client, tse)["evidence"]["checks"][WARNING] == "warning"
+    assert _trust(client, tse, profile="curated")["evidence"]["checks"][WARNING] == "warning"
+
+
+def test_curated_ignores_a_withheld_result_with_several_modes(client, db_session):
+    """Kills: the runner fed the unfiltered graph / the evidence rule bypassed (withheld must equal absent)."""
     _, ts, tse, (shown, hidden) = _ts_with_freqs(
         db_session, "UDW5", [[-300.0, 500.0], [-300.0, -200.0, -100.0, 500.0]]
     )
     set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=shown.id, status=RecordReviewStatus.approved)
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=hidden.id, status=RecordReviewStatus.rejected)
     set_review(db_session, record_type=SubmissionRecordType.transition_state_entry, record_id=tse.id, status=RecordReviewStatus.approved)
     set_review(db_session, record_type=SubmissionRecordType.transition_state, record_id=ts.id, status=RecordReviewStatus.approved)
 
@@ -108,9 +125,10 @@ def test_curated_ignores_a_hidden_result_with_several_modes(client, db_session):
     assert WARNING not in _trust(client, tse, profile="curated")["evidence"]["checks"]
 
 
-def test_curated_with_only_a_hidden_result_has_nothing_to_warn_about(client, db_session):
-    """Kills: a hidden result's count leaking through as 'passed'/'warning' instead of not_applicable."""
+def test_curated_with_only_a_withheld_result_has_nothing_to_warn_about(client, db_session):
+    """Kills: a withheld result's count leaking through as 'passed'/'warning' instead of not_applicable."""
     _, ts, tse, (hidden,) = _ts_with_freqs(db_session, "UDW6", [[-300.0, -200.0, 500.0]])
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=hidden.id, status=RecordReviewStatus.rejected)
     set_review(db_session, record_type=SubmissionRecordType.transition_state_entry, record_id=tse.id, status=RecordReviewStatus.approved)
     set_review(db_session, record_type=SubmissionRecordType.transition_state, record_id=ts.id, status=RecordReviewStatus.approved)
     assert _trust(client, tse, profile="curated")["evidence"]["checks"][WARNING] == "not_applicable"

@@ -126,7 +126,13 @@ class NetworkStateParticipant(Base):
 
 
 class NetworkChannel(Base):
-    """A directed phenomenological channel between two network states."""
+    """A directed phenomenological channel between two network states.
+
+    * ``kind`` is derived from the kinds of the source and sink states and stored: well to well is
+      ``isomerization``, bimolecular or termolecular to well ``association``, well to bimolecular or
+      termolecular ``dissociation``, and bimolecular or termolecular to bimolecular or termolecular
+      ``exchange``. An upload may omit it; one that supplies it must agree.
+    """
 
     __tablename__ = "network_channel"
 

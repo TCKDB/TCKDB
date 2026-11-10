@@ -42,7 +42,12 @@ def test_a_declared_energy_level_does_not_change_the_thermo_inputs(db_session) -
     assert "energy_level_of_theory_id" not in thermo_inputs(thermo)
 
 
-DECLARATIONS = {"thermodynamic_target_kind", "target_conformer_group_id", "protocol_declaration"}
+DECLARATIONS = {
+    "thermodynamic_target_kind",
+    "thermodynamic_target_declared_by",
+    "target_conformer_group_id",
+    "protocol_declaration",
+}
 
 
 def test_only_depositor_declarations_are_excluded_and_everything_else_is_hashed(db_session) -> None:

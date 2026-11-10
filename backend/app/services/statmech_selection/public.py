@@ -14,14 +14,15 @@ else, goes through. It does four things:
 4. builds the response from the decision manifest, so the response and the downloadable manifest cannot disagree.
 
 Visibility of ``excluded_by_review``. Records that fail the effective review floor are listed (and counted) only when
-the read profile has no floor of its own (``exploratory``). Under ``curated`` a record below the floor is one the
-caller could not have reached through any other curated read, so naming or counting it would be a leak. The redaction
-is made *before* the manifest's checksum is computed (see ``manifest.build_manifest``), so the downloaded manifest
+the read profile has no floor of its own (``exploratory``). Under ``curated`` a record below the floor is one no
+curated list or select returns, so listing it would put a record that the record floor keeps out of lists into the
+answer, and a count of such records has no switch that lifts it. The redaction is made *before* the manifest's checksum is computed (see ``manifest.build_manifest``), so the downloaded manifest
 still verifies and replays.
 """
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -35,6 +36,12 @@ from app.db.models.statmech import Statmech
 from app.db.models.statmech_declaration import StatmechModelDeclaration
 from app.db.models.structure_determination import StructureDetermination
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
+from app.schemas.reads.scientific_selection_common import (
+    ELIGIBILITY_CONFIRMED_FINDINGS,
+    ELIGIBILITY_DEPRECATED,
+    ELIGIBILITY_ENTRY_STATUS,
+    ELIGIBILITY_REJECTED,
+)
 from app.schemas.reads.scientific_statmech_selection import (
     StatmechSelectionCandidate,
     StatmechSelectionIntegrity,
@@ -46,7 +53,9 @@ from app.schemas.reads.scientific_statmech_selection import (
     StatmechSelectionReview,
     StatmechSelectionSelection,
 )
+from app.services.conformer_group_forwarding import forwarded_group_id
 from app.services.scientific_read.common import fetch_review_badges
+from app.services.selection_kernel.requested import answer_steps
 from app.services.statmech_selection.loader import _statuses as statuses_for
 from app.services.statmech_selection.loader import assert_subject_visible, entry_visible
 from app.services.statmech_selection.manifest import MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION, canonical
@@ -167,7 +176,32 @@ def check_request_refs(
         )
 
 
-def run_selection(session: Session, *, body: StatmechSelectionRequest) -> StatmechSelection:
+def forward_emptied_basin(session: Session, body: StatmechSelectionRequest) -> tuple[StatmechSelectionRequest, str | None]:
+    """A basin scope that names a conformer group a merge emptied is forwarded to the group that took its members.
+
+    Returns the request to run and, when it was forwarded, the ref that was asked for (otherwise ``None``). A ref that
+    names nothing, or that the profile hides, is the 404 it always was.
+    """
+    scope = body.target.scope
+    ref = getattr(scope, "conformer_group_ref", None)
+    if ref is None:
+        return body, None
+    # Through the visibility guard first, so a basin the read profile hides is the same 404 as an unknown one and
+    # is never forwarded to a survivor the caller may see (hidden is unknown).
+    group_id = _ref_only(session, ConformerGroup, ref, kind_label="conformer_group")
+    survivor_id = forwarded_group_id(session, group_id)
+    if survivor_id == group_id:
+        return body, None
+    survivor = session.get(ConformerGroup, survivor_id)
+    assert survivor is not None  # forwarded_group_id only returns an existing group
+    forwarded_scope = scope.model_copy(update={"conformer_group_ref": survivor.public_ref})
+    forwarded_target = body.target.model_copy(update={"scope": forwarded_scope})
+    return body.model_copy(update={"target": forwarded_target}), ref
+
+
+def run_selection(
+    session: Session, *, body: StatmechSelectionRequest, forwarded_from: str | None = None
+) -> StatmechSelection:
     """Run the service for a public request.
 
     The session must be a read-only snapshot (see ``get_snapshot_db``), and this insists on it: a session that is not
@@ -176,6 +210,8 @@ def run_selection(session: Session, *, body: StatmechSelectionRequest) -> Statme
     cannot become a snapshot); nothing in the application sets it.
     """
     request = body.service_request()
+    if forwarded_from is not None:
+        request = dataclasses.replace(request, forwarded_from_conformer_group_ref=forwarded_from)
     owner_id = resolve_target(session, request)
     _, profile = statuses_for(request)
     # The target first: a target the profile hides is the same 404 as an unknown one, and every other ref is judged
@@ -190,8 +226,19 @@ def run_selection(session: Session, *, body: StatmechSelectionRequest) -> Statme
     )
 
 
-def _candidate(facts: dict[str, Any], assessment: dict[str, Any]) -> StatmechSelectionCandidate:
+#: The eligibility defaults a statmech selection applies, in the order the answer lists them.
+STATMECH_DEFAULTS = (ELIGIBILITY_REJECTED, ELIGIBILITY_DEPRECATED, ELIGIBILITY_CONFIRMED_FINDINGS)
+
+
+def statmech_defaults(owner_kind: str) -> tuple[str, ...]:
+    """A species entry is a scoping parent; a transition-state entry still gates its candidates."""
+    return (*STATMECH_DEFAULTS, ELIGIBILITY_ENTRY_STATUS) if owner_kind == OwnerKind.transition_state_entry.value else STATMECH_DEFAULTS
+
+
+def _candidate(facts: dict[str, Any], assessment: dict[str, Any], verdict: dict[str, Any]) -> StatmechSelectionCandidate:
     return StatmechSelectionCandidate(
+        blocked_by=verdict["blocked_by"],
+        passed_only_by_override=verdict["passed_only_by_override"],
         candidate_ref=assessment["candidate_ref"],
         kind=assessment["kind"],
         owner_ref=facts["owner_ref"],
@@ -217,10 +264,28 @@ def build_response(selection: StatmechSelection) -> StatmechSelectionResponse:
     statuses = sorted((RecordReviewStatus(v) for v in manifest["effective_review_statuses"]), key=lambda s: REVIEW_FLOOR_ORDER[s])
     floor = statuses[-1] if statuses else RecordReviewStatus.approved
     facts = {c["candidate_ref"]: c for c in manifest["candidates"]}
-    candidates = [_candidate(facts[a["candidate_ref"]], a) for a in manifest["assessments"]]
+    candidates = [_candidate(facts[a["candidate_ref"]], a, manifest["verdicts"][a["candidate_ref"]]) for a in manifest["assessments"]]
     return StatmechSelectionResponse(
         request=StatmechSelectionRequestEcho(**manifest["request"]),
-        review=StatmechSelectionReview(effective_floor=floor, effective_statuses=statuses),
+        review=StatmechSelectionReview(
+            effective_floor=floor,
+            effective_statuses=statuses,
+            candidate_statuses=sorted(
+                (RecordReviewStatus(v) for v in manifest["candidate_review_statuses"]), key=lambda s: REVIEW_FLOOR_ORDER[s]
+            ),
+        ),
+        **answer_steps(
+            request_filters=manifest["request"]["filters"],
+            eligibility_record=manifest["request"]["eligibility"],
+            funnel_record=population["funnel"],
+            names=statmech_defaults(manifest["request"]["target"]["kind"]),
+            profile_floor=manifest["read_profile"]["review_floor"] is not None,
+            extra_applied=(
+                {"population": manifest["request"]["population"]}
+                if manifest["request"]["population"]["kind"] == "model_revisions"
+                else None
+            ),
+        ),
         versions=manifest["versions"],
         outcome=Outcome(manifest["outcome"]),
         basis=decision["basis"],

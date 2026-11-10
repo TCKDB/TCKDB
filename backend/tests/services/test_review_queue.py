@@ -151,6 +151,18 @@ class TestSubjectChemistry:
         assert subject.chemistry.formula == "H2O"
         assert subject.chemistry.multiplicity == 1
         assert subject.chemistry.stereo_label == "R"
+        assert subject.chemistry.stereo_descriptor == "R"
+
+    def test_an_unresolved_entry_subject_carries_its_descriptor_not_just_a_null_label(self, db_session):
+        species = make_species(db_session, smiles="CC=CC")
+        entry = make_species_entry(db_session, species, stereo_label="?")
+        thermo = make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=1.0)
+        _review(db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id)
+
+        result = list_review_queue(db_session, status=RecordReviewStatus.not_reviewed, limit=50, offset=0)
+        subject = next(s for s in result.subjects if s.subject_ref == entry.public_ref)
+        assert subject.chemistry.stereo_descriptor == "?"
+        assert subject.chemistry.stereo_resolution.value == "unresolved"
 
     def test_transition_state_entry_subject_uses_its_own_unmapped_smiles(
         self, db_session
