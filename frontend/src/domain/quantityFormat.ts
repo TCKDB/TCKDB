@@ -122,7 +122,9 @@ export function deposited(value: number | null | undefined, unit?: string | null
     // A very small or very large number would print as `1e-7`; plain digits are used while they stay readable and exact.
     const plain = Number(value).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 20 })
     const readable = Number(plain) === Number(value) && plain.replace(/[-.]/g, "").length <= 15
-    return { value: readable ? plain : text.replace("e-", "e−").replace("e+", "e"), unit: unit ?? null }
+    if (readable) return { value: plain, unit: unit ?? null }
+    const [mantissa, exponent] = Number(value).toExponential().split("e")
+    return { value: mantissa, exponent: exponent.startsWith("-") ? `${MINUS}${exponent.slice(1)}` : exponent.replace("+", ""), unit: unit ?? null }
 }
 
 /**
