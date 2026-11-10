@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, select
+from sqlalchemy.orm import Session, aliased
 
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType, ThermoTargetKind
 from app.db.models.kinetics import Kinetics, KineticsInterpretationAssignment
@@ -19,6 +19,11 @@ from app.schemas.reads.scientific_conformer_usage import (
     ConformerUsageThermo,
 )
 from app.services.scientific_read.common import visible_statuses
+from app.services.scientific_read.hidden_by_default import (
+    forwarded_ref,
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 
 
 def _with_review(stmt, record_type: SubmissionRecordType, id_column):
@@ -28,9 +33,23 @@ def _with_review(stmt, record_type: SubmissionRecordType, id_column):
     )
 
 
-def get_conformer_usage(session: Session, *, species_entry_id: int, species_entry_ref: str) -> ConformerUsageResponse:
-    """Declared thermo targets and kinetics conformer selections of one entry, under the lists' visibility rule."""
-    visible = visible_statuses(min_review_status=None, include_rejected=False, include_deprecated=False)
+def get_conformer_usage(
+    session: Session,
+    *,
+    species_entry_id: int,
+    species_entry_ref: str,
+    include_rejected: bool = False,
+    include_deprecated: bool = False,
+    min_review_status: RecordReviewStatus | None = None,
+) -> ConformerUsageResponse:
+    """Declared thermo targets and kinetics conformer selections of one entry, under the lists' visibility rule.
+
+    ``species_entry_ref`` is the ref the caller named; the answer is for the entry it resolved to (its survivor when merged).
+    """
+    visible = visible_statuses(
+        min_review_status=min_review_status, include_rejected=include_rejected, include_deprecated=include_deprecated
+    )
+    merged_into = aliased(ConformerGroup)
 
     thermo_stmt = _with_review(
         select(
@@ -38,8 +57,16 @@ def get_conformer_usage(session: Session, *, species_entry_id: int, species_entr
             Thermo.thermodynamic_target_kind,
             Thermo.thermodynamic_target_declared_by,
             ConformerGroup.public_ref,
+            merged_into.public_ref,
         )
-        .outerjoin(ConformerGroup, ConformerGroup.id == Thermo.target_conformer_group_id)
+        .outerjoin(
+            ConformerGroup,
+            and_(
+                ConformerGroup.id == Thermo.target_conformer_group_id,
+                ConformerGroup.species_entry_id == species_entry_id,
+            ),
+        )
+        .outerjoin(merged_into, merged_into.id == ConformerGroup.merged_into_conformer_group_id)
         .where(Thermo.species_entry_id == species_entry_id, Thermo.thermodynamic_target_kind.is_not(None)),
         SubmissionRecordType.thermo,
         Thermo.id,
@@ -53,12 +80,14 @@ def get_conformer_usage(session: Session, *, species_entry_id: int, species_entr
             ConformerSelection.selection_kind,
             KineticsInterpretationAssignment.ensemble_policy,
             ConformerGroup.public_ref,
+            merged_into.public_ref,
         )
         .select_from(KineticsInterpretationAssignment)
         .join(Kinetics, Kinetics.id == KineticsInterpretationAssignment.kinetics_id)
         .join(ReactionEntry, ReactionEntry.id == Kinetics.reaction_entry_id)
         .join(ConformerSelection, ConformerSelection.id == KineticsInterpretationAssignment.conformer_selection_id)
         .join(ConformerGroup, ConformerGroup.id == ConformerSelection.conformer_group_id)
+        .outerjoin(merged_into, merged_into.id == ConformerGroup.merged_into_conformer_group_id)
         .where(ConformerGroup.species_entry_id == species_entry_id),
         SubmissionRecordType.kinetics,
         Kinetics.id,
@@ -67,21 +96,34 @@ def get_conformer_usage(session: Session, *, species_entry_id: int, species_entr
     def shown(status: RecordReviewStatus | None) -> bool:
         return (status or RecordReviewStatus.not_reviewed) in visible
 
+    def status_of(status: RecordReviewStatus | None) -> RecordReviewStatus:
+        return status or RecordReviewStatus.not_reviewed
+
+    merged_of: dict[str, str | None] = {}
     thermo_by_group: dict[str, list[ConformerUsageThermo]] = {}
     ensemble: list[str] = []
-    for ref, kind, declared_by, group_ref, status in session.execute(thermo_stmt).all():
-        if not shown(status):
+    candidate_statuses: list[RecordReviewStatus] = []
+    for ref, kind, declared_by, group_ref, merged_ref, status in session.execute(thermo_stmt).all():
+        is_ensemble = kind is ThermoTargetKind.equilibrium_ensemble
+        if not is_ensemble and group_ref is None:
             continue
-        if kind is ThermoTargetKind.equilibrium_ensemble:
+        candidate_statuses.append(status_of(status))
+        if status_of(status) not in visible:
+            continue
+        if is_ensemble:
             ensemble.append(ref)
-        elif group_ref is not None:
+        else:
+            merged_of[group_ref] = merged_ref
             thermo_by_group.setdefault(group_ref, []).append(ConformerUsageThermo(thermo_ref=ref, declared_by=declared_by))
 
     kinetics_by_group: dict[str, list[ConformerUsageKinetics]] = {}
-    for ref, reaction_entry_ref, role, subject_key, selection_kind, policy, group_ref, status in session.execute(
+    kinetics_status: dict[str, RecordReviewStatus] = {}
+    for ref, reaction_entry_ref, role, subject_key, selection_kind, policy, group_ref, merged_ref, status in session.execute(
         kinetics_stmt
     ).all():
-        if shown(status):
+        kinetics_status[ref] = status_of(status)
+        if status_of(status) in visible:
+            merged_of[group_ref] = merged_ref
             kinetics_by_group.setdefault(group_ref, []).append(
                 ConformerUsageKinetics(
                     kinetics_ref=ref,
@@ -92,18 +134,34 @@ def get_conformer_usage(session: Session, *, species_entry_id: int, species_entr
                     ensemble_policy=policy,
                 )
             )
+    candidate_statuses.extend(kinetics_status.values())
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            candidate_statuses,
+            include_rejected=include_rejected,
+            include_deprecated=include_deprecated,
+            min_review_status=min_review_status,
+        ),
+        scope=("conformer_usage", species_entry_id),
+    )
 
     groups = [
         ConformerUsageGroup(
             conformer_group_ref=ref,
+            merged_into_conformer_group_ref=merged_of.get(ref),
             thermo=sorted(thermo_by_group.get(ref, []), key=lambda t: t.thermo_ref),
             kinetics=sorted(kinetics_by_group.get(ref, []), key=lambda k: (k.kinetics_ref, k.subject_key)),
         )
         for ref in sorted(thermo_by_group.keys() | kinetics_by_group.keys())
     ]
     return ConformerUsageResponse(
-        request=ConformerUsageRequestEcho(species_entry_ref=species_entry_ref),
-        species_entry_ref=species_entry_ref,
+        request=ConformerUsageRequestEcho(
+            species_entry_ref=species_entry_ref,
+            include_rejected=include_rejected,
+            include_deprecated=include_deprecated,
+            min_review_status=min_review_status,
+        ),
+        species_entry_ref=forwarded_ref(species_entry_ref),
         groups=groups,
         ensemble_thermo_refs=sorted(ensemble),
     )

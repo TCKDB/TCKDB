@@ -760,6 +760,7 @@
    "tests/api/scientific/test_api_calculation_submission_ref_auth.py": 2,
    "tests/api/scientific/test_api_composite_scheme.py": 1,
    "tests/api/scientific/test_api_composite_scheme_coefficients.py": 1,
+   "tests/api/scientific/test_api_conformer_usage.py": 2,
    "tests/api/scientific/test_api_curated_hidden_is_unknown.py": 2,
    "tests/api/scientific/test_api_curated_remaining_surfaces.py": 2,
    "tests/api/scientific/test_api_freq_result_adr0012_fields.py": 1,

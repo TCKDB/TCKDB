@@ -11,13 +11,18 @@ from pydantic import BaseModel, Field
 from app.db.models.common import (
     ConformerSelectionKind,
     KineticsEnsemblePolicy,
+    RecordReviewStatus,
     ThermoDeclarationSource,
 )
 from app.schemas.reads.scientific_common import ProfiledRequestEcho, ScientificResponse
 
 
 class ConformerUsageRequestEcho(ProfiledRequestEcho):
+    #: The ref the caller named; the response's ``species_entry_ref`` is the entry it was answered for.
     species_entry_ref: str
+    include_rejected: bool = False
+    include_deprecated: bool = False
+    min_review_status: RecordReviewStatus | None = None
 
 
 class ConformerUsageThermo(BaseModel):
@@ -39,7 +44,10 @@ class ConformerUsageKinetics(BaseModel):
 
 
 class ConformerUsageGroup(BaseModel):
+    """Usage of one group. A group a merge emptied names its survivor; its usage is listed here, never forwarded."""
+
     conformer_group_ref: str
+    merged_into_conformer_group_ref: str | None = None
     thermo: list[ConformerUsageThermo] = Field(default_factory=list)
     kinetics: list[ConformerUsageKinetics] = Field(default_factory=list)
 

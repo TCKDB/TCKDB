@@ -15650,6 +15650,7 @@
         "type": "object"
       },
       "ConformerUsageGroup": {
+        "description": "Usage of one group. A group a merge emptied names its survivor; its usage is listed here, never forwarded.",
         "properties": {
           "conformer_group_ref": {
             "title": "Conformer Group Ref",
@@ -15661,6 +15662,17 @@
             },
             "title": "Kinetics",
             "type": "array"
+          },
+          "merged_into_conformer_group_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged Into Conformer Group Ref"
           },
           "thermo": {
             "items": {
@@ -15725,12 +15737,32 @@
               }
             ]
           },
+          "include_deprecated": {
+            "default": false,
+            "title": "Include Deprecated",
+            "type": "boolean"
+          },
+          "include_rejected": {
+            "default": false,
+            "title": "Include Rejected",
+            "type": "boolean"
+          },
           "merged_refs": {
             "additionalProperties": {
               "type": "string"
             },
             "title": "Merged Refs",
             "type": "object"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "profile": {
             "$ref": "#/components/schemas/ReadProfile",
@@ -107821,7 +107853,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_ref}/conformer-usage": {
       "get": {
-        "description": "Thermo records declared on one conformer group, kinetics assignments that select one, and ensemble thermo.\n\nOnly declared links are listed; a record with no declared target appears nowhere. Groups nothing uses are omitted.\nLists are ordered by ref and carry no rank. Records hidden by the read profile or the default review visibility\nare not listed.",
+        "description": "Thermo records declared on one conformer group, kinetics assignments that select one, and ensemble thermo.\n\nOnly declared links are listed; a record with no declared target appears nowhere. Groups nothing uses are omitted.\nLists are ordered by ref and carry no rank. Rejected and deprecated records are hidden by default and counted in\n``request.hidden_by_default``; ``include_rejected`` / ``include_deprecated`` / ``min_review_status`` work as on the\nthermo list, and the curated profile floor still applies. A group a merge emptied lists its own usage and names the\ngroup it was merged into; nothing is forwarded.",
         "operationId": "species_entry_conformer_usage_api_v1_scientific_species_entries__species_entry_ref__conformer_usage_get",
         "parameters": [
           {
@@ -107833,6 +107865,42 @@
               "minLength": 1,
               "title": "Species Entry Ref",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Deprecated",
+              "type": "boolean"
             }
           },
           {

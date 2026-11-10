@@ -176,6 +176,63 @@ def test_a_rejected_group_is_not_named_under_curated(client, world, db_session):
     assert world["thermo_a"].public_ref not in response.text
 
 
+def test_rejected_records_are_counted_and_include_rejected_lists_them(client, world, db_session):
+    # A second assignment on the rejected kinetics must not count it twice.
+    statmech = make_statmech(db_session, species_entry=world["entry"])
+    selection = attach_conformer_selection(db_session, conformer_group=world["group_b"])
+    _assign(db_session, world["kinetics_rejected"], statmech, selection, subject_key="reactant:2")
+
+    default = client.get(url(world["entry"])).json()
+    assert default["request"]["hidden_by_default"]["counts"] == {"rejected": 2, "deprecated": 0}
+    assert default["request"]["hidden_by_default"]["include_with"]["rejected"] == "include_rejected=true"
+
+    shown = client.get(url(world["entry"]), params={"include_rejected": "true"})
+    body = shown.json()
+    assert body["request"]["hidden_by_default"]["counts"] == {"deprecated": 0}
+    assert world["thermo_rejected"].public_ref in shown.text
+    assert world["kinetics_rejected"].public_ref in shown.text
+    assert client.get(url(world["entry"]), params={"min_review_status": "approved"}).json()["groups"] == []
+
+
+def test_a_thermo_pointed_at_another_entrys_group_is_not_listed(client, world, db_session):
+    stray = make_thermo_scalar(db_session, species_entry=world["entry"])
+    _target(stray, ThermoTargetKind.single_conformer, world["group_other"])
+    db_session.flush()
+    text = client.get(url(world["entry"])).text
+    assert stray.public_ref not in text and world["group_other"].public_ref not in text
+    assert client.get(url(world["other"])).status_code == 200
+    assert stray.public_ref not in client.get(url(world["other"])).text
+
+
+def test_an_emptied_group_lists_its_own_usage_and_names_its_survivor(client, world, db_session):
+    world["group_a"].merged_into_conformer_group_id = world["group_b"].id
+    db_session.flush()
+    by_ref = {g["conformer_group_ref"]: g for g in client.get(url(world["entry"])).json()["groups"]}
+    emptied = by_ref[world["group_a"].public_ref]
+    assert emptied["merged_into_conformer_group_ref"] == world["group_b"].public_ref
+    assert [t["thermo_ref"] for t in emptied["thermo"]] == [world["thermo_a"].public_ref]
+    survivor = by_ref[world["group_b"].public_ref]
+    assert survivor["merged_into_conformer_group_ref"] is None
+    assert world["thermo_a"].public_ref not in [t["thermo_ref"] for t in survivor["thermo"]]
+
+
+def test_a_merged_away_entry_ref_is_answered_for_the_survivor(client, db_session):
+    from tests.api.test_api_species_merge_forwarding import _merged_pair
+
+    survivor, loser, _ = _merged_pair(db_session)
+    group = make_conformer_group(db_session, survivor)
+    thermo = make_thermo_scalar(db_session, species_entry=survivor)
+    _target(thermo, ThermoTargetKind.single_conformer, group)
+    db_session.flush()
+
+    body = client.get(url(loser)).json()
+    assert body["species_entry_ref"] == survivor.public_ref
+    assert body["request"]["species_entry_ref"] == loser.public_ref
+    assert body["request"]["merged_refs"] == {loser.public_ref: survivor.public_ref}
+    assert [t["thermo_ref"] for g in body["groups"] for t in g["thermo"]] == [thermo.public_ref]
+    assert client.get(url(survivor)).json()["request"]["merged_refs"] == {}
+
+
 def test_lists_are_ordered_by_ref(client, db_session):
     entry = _entry(db_session, "CUR")
     group = make_conformer_group(db_session, entry)
