@@ -39,6 +39,7 @@
 .entry-numbers-scroll:focus-visible,
 .entry-numbers .section-intro a:focus-visible,
 .entry-numbers-describes a:focus-visible,
+.entry-numbers-version a:focus-visible,
 .entry-versions a:focus-visible {
     outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
@@ -107,6 +108,12 @@
     margin-top: var(--s-2);
 }
 
+.entry-numbers-version {
+    display: block;
+    margin-top: var(--s-1);
+    overflow-wrap: anywhere;
+}
+
 .entry-numbers-levels {
     margin: var(--s-3) 0 0;
     color: var(--ink-2);
@@ -139,6 +146,7 @@
 
 .entry-numbers .section-intro a,
 .entry-numbers-describes a,
+.entry-numbers-version a,
 .entry-versions a {
     color: var(--accent);
     text-decoration: underline;
@@ -189,6 +197,18 @@
 
 /* On a phone the record sits above its values and each label above its value, so nothing needs sideways scrolling. */
 @media (max-width: 40rem) {
+    .entry-versions-title a,
+    .entry-numbers-version a,
+    .entry-numbers .order-note a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+    }
+
+    .entry-numbers-toggle {
+        min-height: 44px;
+    }
+
     .entry-numbers-table {
         min-width: 0;
     }

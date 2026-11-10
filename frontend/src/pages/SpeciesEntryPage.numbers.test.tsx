@@ -409,6 +409,22 @@ describe("molecule page: numbers for this entry", () => {
         expect(within(items[1] as HTMLElement).getByRole("link")).toHaveAttribute("href", `/species-entries/${otherEntryRef}`)
     })
 
+    it("says how many versions were not listed, as versions, in the singular for one", async () => {
+        const species = (counts: Record<string, number>) => ({
+            records: [{
+                species_ref: speciesRef, canonical_smiles: "[CH3]", inchi_key: "WCYWZMWISLQXQU-UHFFFAOYSA-N", formula: "CH3", charge: 0, multiplicity: 2,
+                entries: [entrySummary(entryRef, "ground", 10), entrySummary(otherEntryRef, "excited", 4)],
+            }],
+            request: { hidden_by_default: { counts, include_with: {}, counted: "species_entries" } },
+        })
+        await open({ species: species({ rejected: 2, deprecated: 1 }) })
+        expect(await screen.findByText("Not listed by default: 2 rejected and 1 deprecated versions.")).toBeVisible()
+        cleanup()
+        resetAllRequestCaches()
+        await open({ species: species({ rejected: 1 }) })
+        expect(await screen.findByText("Not listed by default: 1 rejected version.")).toBeVisible()
+    })
+
     it("marks this version even when the listing leaves it out, and pluralises", async () => {
         await open({ listing: [entrySummary(otherEntryRef, "excited", 4)] })
         const section = (await screen.findByRole("heading", { name: "Other versions of this molecule" })).closest("section") as HTMLElement

@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Molecule page: versions and all values (Unreleased)
+
+- **Behaviour:** the molecule page (`/species/:ref`) opens with breadcrumbs, a lede built from codes and a map of its versions. "Versions of this molecule" lists every version with what it holds and its review status. "All values for this molecule" lists every thermochemistry and statistical mechanics record across all versions, each naming its version, with its values, levels of theory, programs and review status, in the order the archive served the lists (stated on the page). Links and buttons on the numbers tables are at least 44px high on phones.
+- **Schema and migration:** none. No new environment variable.
+
 ## Molecule page lists every number and every version (2026-11-10)
 
 - **Behaviour:** the species entry page is titled "Molecule" and opens with breadcrumbs, a lede built from codes and the review status. A "Numbers for this entry" section lists every thermochemistry, statistical mechanics and transport record with all its single values, the levels of theory and programs behind them, and its review status, in the order the archive served each list (stated on the page). Thermochemistry rows say what they describe (all shapes together, one shape, not stated, or implied by the CHEMKIN format). A "Group by level of theory" toggle appears when the records span more than one level and keeps the order inside each group. "Other versions of this molecule" lists every version with its label, what it holds and its review status. A link from another page to a thermochemistry, statistical mechanics or transport record lands on that record's row in the numbers table.
