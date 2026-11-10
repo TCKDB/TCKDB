@@ -1,9 +1,10 @@
 import type { HiddenByDefault, OrderEcho, Pagination } from "./listEnvelope"
 import { dedupedFetch, type Subscription } from "./requestCache"
+import { ScientificApiError } from "./scientificTransport"
 import { loadEntryStatmech, type StatmechRecord } from "./statmechApi"
 import { loadEntryThermo, type ThermoRecord } from "./thermoApi"
 import { loadEntryTransportWithSources, type TransportRecord } from "./transportApi"
-import { MAX_PAGES } from "../domain/entryNumbers"
+import { LATER_PAGE_LIMIT, MAX_RECORDS } from "../domain/entryNumbers"
 import { nextPageRequest, pagedRef, type PageRequest } from "../domain/paging"
 
 /** Every record of one list the cap allowed, and what the archive said about the list. */
@@ -19,34 +20,49 @@ export type AllPages<T> = {
 type Page<T> = { records: T[]; pagination: Pagination; request?: { sort?: OrderEcho | null; hidden_by_default?: HiddenByDefault | null } | null }
 type Loader<T> = (ref: string, signal?: AbortSignal, onRateLimited?: (retryAfterSeconds: number) => void) => Promise<Page<T>>
 
-/** What a walk hands back to its caller so it can show a wait and let go of its requests. */
+/** What a walk hands back to its caller so it can show a wait, stop early and let go of its requests. */
 export type WalkControl = {
     onWaiting: (retryAfterSeconds: number) => void
     subscriptions: Subscription<unknown>[]
+    /** True once the caller has gone; checked before each page is asked for. */
+    abandoned: () => boolean
 }
 
 /**
- * Walks one list page by page. The first page is asked for by the plain ref, and later pages by the window the server
- * advertised, which is exactly how the tabs ask, so a page a tab already holds is not fetched twice.
+ * Walks one list. The first page is asked for by the plain ref, exactly as the tabs ask, so a page a tab already holds
+ * is not fetched twice. Later pages ask for `LATER_PAGE_LIMIT` records at a time, or for the first page's own window
+ * when the server refuses that size, so 1000 records cost 1 + 5 requests.
  */
 async function walk<T>(entryRef: string, load: Loader<T>, control: WalkControl): Promise<AllPages<T>> {
     const records: T[] = []
     let request: PageRequest | null = null
     let first: Page<T> | null = null
     let total = 0
-    let pages = 0
+    let limit = LATER_PAGE_LIMIT
     do {
+        if (control.abandoned()) throw new DOMException("The numbers were no longer wanted.", "AbortError")
         const key: string = request ? pagedRef(entryRef, request) : entryRef
         const subscription = dedupedFetch(load, key, (signal, onRateLimited) => load(key, signal, onRateLimited))
         control.subscriptions.push(subscription as Subscription<unknown>)
         subscription.onWaiting(control.onWaiting)
-        const page: Page<T> = await subscription.promise
+        let page: Page<T>
+        try {
+            page = await subscription.promise
+        } catch (error) {
+            const ownLimit = first?.pagination.limit
+            if (request && ownLimit !== undefined && limit !== ownLimit && error instanceof ScientificApiError && error.status === 422) {
+                limit = ownLimit
+                request = { offset: request.offset, limit }
+                continue
+            }
+            throw error
+        }
         first ??= page
         records.push(...page.records)
         total = page.pagination.total
-        pages += 1
-        request = nextPageRequest(page.pagination)
-    } while (request && pages < MAX_PAGES)
+        const next = nextPageRequest(page.pagination)
+        request = next ? { offset: next.offset, limit } : null
+    } while (request && records.length < MAX_RECORDS)
     return {
         records,
         total,

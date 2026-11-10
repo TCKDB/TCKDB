@@ -21,6 +21,16 @@ function holds(entry: ScientificSpeciesEntrySummary): string {
     return kinds.length > 0 ? `${calculations}; ${kinds.join(", ")}` : `${calculations}; no deposited results`
 }
 
+/** How many versions are listed, not counting this page's own when the listing left it out. */
+function countSentence(listed: number, currentAdded: boolean): string {
+    if (currentAdded) {
+        if (listed === 0) return "This is the only version listed for this molecule."
+        return `This molecule has ${listed} other ${listed === 1 ? "version" : "versions"} listed, plus this one.`
+    }
+    if (listed === 1) return "This is the only version listed for this molecule."
+    return `This molecule has ${listed} versions listed; this page shows one of them.`
+}
+
 /** Every version (entry) of this entry's molecule, this one marked even when the listing leaves it out. Labels come from codes. */
 export function OtherVersions({ entry }: { entry: SpeciesEntryProjection }) {
     const state = useSpeciesOverview(entry.speciesRef)
@@ -38,9 +48,7 @@ export function OtherVersions({ entry }: { entry: SpeciesEntryProjection }) {
             {species && (
                 <>
                     <p className="note">
-                        {versions.length === 1
-                            ? "This is the only version listed for this molecule."
-                            : `This molecule has ${versions.length} versions listed; this page shows one of them.`}
+                        {countSentence(listed.length, versions.length > listed.length)}
                         {" "}<Link to={`/species/${species.species_ref}`}>Open the molecule page</Link>
                     </p>
                     {hidden && <p className="note" role="note">{hidden}</p>}

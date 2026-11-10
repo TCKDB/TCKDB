@@ -36,7 +36,10 @@
 }
 
 .entry-numbers-toggle:focus-visible,
-.entry-numbers-scroll:focus-visible {
+.entry-numbers-scroll:focus-visible,
+.entry-numbers .section-intro a:focus-visible,
+.entry-numbers-describes a:focus-visible,
+.entry-versions a:focus-visible {
     outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
 }
@@ -134,6 +137,7 @@
     color: var(--muted);
 }
 
+.entry-numbers .section-intro a,
 .entry-numbers-describes a,
 .entry-versions a {
     color: var(--accent);
@@ -171,4 +175,45 @@
 .entry-versions-meta {
     margin: 0;
     color: var(--ink-2);
+}
+
+/* On a phone the record sits above its values and each label above its value, so nothing needs sideways scrolling. */
+@media (max-width: 40rem) {
+    .entry-numbers-table {
+        min-width: 0;
+    }
+
+    .entry-numbers-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+    }
+
+    .entry-numbers-table tbody,
+    .entry-numbers-table tr,
+    .entry-numbers-table th,
+    .entry-numbers-table td {
+        display: block;
+    }
+
+    .entry-numbers-table tbody th[scope="row"],
+    .entry-numbers-table tbody td {
+        padding: var(--s-2) var(--s-3);
+        border-bottom: 0;
+    }
+
+    .entry-numbers-table tbody tr {
+        border-bottom: 1px solid var(--line-2);
+    }
+
+    .entry-numbers-values {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+    .entry-numbers-values dd {
+        margin: 0 0 var(--s-2);
+    }
 }

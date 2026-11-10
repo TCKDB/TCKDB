@@ -5,7 +5,7 @@ import type { EntryNumbers } from "../api/entryNumbersApi"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel } from "../domain/conformerEvidence"
 import {
-    distinctLevelCount, evidenceIds, groupByLevel, levelParts, NO_LEVEL_KEY, numberAnchor, numbersOrderSentence,
+    distinctLevelCount, groupByLevel, levelParts, NO_LEVEL_KEY, numberAnchor, numbersOrderSentence,
     pointGroupParts, statmechRow, thermoRow, transportRow,
     type Describes, type NumberKind, type NumberRow, type NumberValue,
 } from "../domain/entryNumbers"
@@ -54,10 +54,9 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers }
     const rows = useMemo(() => (data
         ? [...data.thermo.records.map(thermoRow), ...data.statmech.records.map(statmechRow), ...data.transport.records.map(transportRow)]
         : []), [data])
-    const evidence = useMemo(() => (data ? evidenceIds(data.thermo.records, data.statmech.records) : new Map<string, string>()), [data])
     const groups = useMemo(() => (grouped ? groupByLevel(rows) : [{ key: null, rows }]), [grouped, rows])
     const groupLabels = useMemo(() => new Map(conformers.map((conformer) => [conformer.conformer_group.conformer_group_ref, conformerLabel(conformer)])), [conformers])
-    const levelCount = new Set(rows.map((row) => row.levelKey).filter((key) => key !== NO_LEVEL_KEY)).size
+    const levelCount = new Set(rows.flatMap((row) => row.levels.map((level) => level.label))).size
     const tabPath = (kind: NumberKind) => `${entryPath.replace(/\/(geometry|sp|statmech|thermo|transport)$/, "")}/${kind}`
     const tabLink = (kind: "thermo" | "statmech") => `${tabPath(kind)}${conformerQuery}`
     return (
@@ -118,7 +117,7 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers }
                                     )}
                                     {group.rows.map((row) => {
                                         const query = row.conformerGroupRef ? `?conformer=${encodeURIComponent(row.conformerGroupRef)}` : conformerQuery
-                                        const to = `${tabPath(row.kind)}${query}#${evidence.get(numberAnchor(row.kind, row.ref)) ?? `${row.kind}-heading-${row.ref}`}`
+                                        const to = `${tabPath(row.kind)}${query}#${row.kind}-heading-${row.ref}`
                                         return <NumberRowView key={`${row.kind}-${row.ref}`} row={row} entryPath={entryPath} to={to} groupLabels={groupLabels} />
                                     })}
                                 </tbody>

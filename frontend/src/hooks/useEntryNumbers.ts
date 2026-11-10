@@ -14,6 +14,7 @@ export function useEntryNumbers(ref: string): EntryNumbersState {
         let mounted = true
         const control: WalkControl = {
             subscriptions: [],
+            abandoned: () => !mounted,
             onWaiting: (retryAfterSeconds) => {
                 if (mounted) setState({ ref, status: "retrying", retryAfterSeconds })
             },

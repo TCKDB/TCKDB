@@ -4,11 +4,10 @@ import type { StatmechRecord } from "../api/statmechApi"
 import type { ThermoRecord } from "../api/thermoApi"
 import type { TransportRecord } from "../api/transportApi"
 import type { SourceLevel } from "../components/ValueSource"
-import { groupByFingerprint, statmechRecordFingerprint, thermoRecordFingerprint } from "./identicalRecordGroups"
-import { modelKindLabel } from "./networkKtpChartLayout"
 import { orderWords } from "./paging"
 import { formatQuantity, type QuantitySpecKey } from "./quantityFormat"
 import { resolveProductLevels, type ProductLevels } from "./productLevels"
+import { THERMO_MODEL_KIND_WORDS } from "./thermoModelKind"
 import { softwareLabel, toolReleaseLabel, words } from "./provenanceFormat"
 import { publicPointGroup } from "./publicText"
 
@@ -52,8 +51,9 @@ export type NumberRow = {
 
 export const NO_LEVEL_KEY = "No level of theory recorded"
 
-/** Pages read per list; the first is the server's own default page, the rest follow its advertised window. */
-export const MAX_PAGES = 20
+/** Records read per list at most; the first page is the server's own default window, later pages ask for this many. */
+export const MAX_RECORDS = 1000
+export const LATER_PAGE_LIMIT = 200
 
 /** The id a row carries, so a link from this or another page can name one record. */
 export function numberAnchor(kind: NumberKind, ref: string): string {
@@ -185,7 +185,7 @@ export function thermoRow(record: ThermoRecord): NumberRow {
             quantity("Reference pressure", "thermo_reference_pressure_bar", record.reference_pressure_bar),
             { label: "Temperature range covered", kind: "number", value: range, unit: range ? "K" : null },
             wordOrCode("Phase", record.phase, PHASE_WORDS),
-            { label: "Form of the model", kind: "text", value: modelKindLabel(record.model_kind), unit: null },
+            wordOrCode("Form of the model", record.model_kind, THERMO_MODEL_KIND_WORDS),
         ],
         levels: shown,
         levelKey: levelKeyOf(shown),
@@ -295,20 +295,4 @@ export function numbersOrderSentence(lists: { kind: NumberKind; sort: OrderEcho 
         : `${together[0]} first, then ${together.slice(1).map((name) => name.toLowerCase()).join(", then ")}`
     if (first && named.every((list) => list.words === first)) return `${sequence}; inside each, ${first}.`
     return `${sequence}. ${named.map((list) => `${list.name}: ${list.words ?? "the archive did not state an order"}.`).join(" ")}`
-}
-
-/** The id of the card a record is shown in on its tab: its own, or the shared card of the identical-values group it was folded into. */
-export function evidenceIds(thermo: readonly ThermoRecord[], statmech: readonly StatmechRecord[]): Map<string, string> {
-    const ids = new Map<string, string>()
-    for (const group of groupByFingerprint([...thermo], thermoRecordFingerprint)) {
-        for (const record of group.records) {
-            ids.set(numberAnchor("thermo", record.thermo_ref), `thermo-heading-${group.records[0].thermo_ref}${group.records.length > 1 ? "-group" : ""}`)
-        }
-    }
-    for (const group of groupByFingerprint([...statmech], statmechRecordFingerprint)) {
-        for (const record of group.records) {
-            ids.set(numberAnchor("statmech", record.statmech.statmech_ref), `statmech-heading-${group.records[0].statmech.statmech_ref}${group.records.length > 1 ? "-group" : ""}`)
-        }
-    }
-    return ids
 }

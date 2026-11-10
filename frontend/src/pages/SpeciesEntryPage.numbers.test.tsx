@@ -25,10 +25,10 @@ const sortEcho = {
     },
 }
 
-function thermo(ref: string, lot: typeof lotA | null, h298: number | null, target: unknown, review = "not_reviewed") {
+function thermo(ref: string, lot: typeof lotA | null, h298: number | null, target: unknown, review = "not_reviewed", group: string | null = null, kind = "nasa7") {
     return {
         thermo_ref: ref,
-        scientific_origin: "computed", model_kind: "nasa",
+        scientific_origin: "computed", model_kind: kind,
         review: { status: review },
         h298_kj_mol: h298, s298_j_mol_k: h298 === null ? null : 200.5,
         enthalpy_reference_kind: "formation_298k",
@@ -38,7 +38,7 @@ function thermo(ref: string, lot: typeof lotA | null, h298: number | null, targe
         levels: lot ? { geometry: lot, frequency: lot, energy: lot, energy_source: "opt" } : null,
         provenance: {
             software_release: { software_release_ref: "srel", software: "Arkane", version: "1.1.0" },
-            conformer_group_ref: null,
+            conformer_group_ref: group,
         },
         note: "typed by the depositor",
     }
@@ -98,7 +98,7 @@ type Options = {
     statmechRecords?: unknown[]
     transportRecords?: unknown[]
     species?: unknown
-    counts?: { thermo: number; statmech: number }
+    counts?: { thermo: number; statmech: number; transport: number; thermoLimits?: string[] }
 }
 
 function entrySummary(ref: string, state: string, calculations: number) {
@@ -131,9 +131,13 @@ function handlers(options: Options = {}) {
         }] })),
         http.get(`/api/v1/scientific/species-entries/${entryRef}/thermo`, ({ request }) => {
             if (options.counts) options.counts.thermo += 1
-            const offset = Number(new URL(request.url).searchParams.get("offset") ?? 0)
+            const query = new URL(request.url).searchParams
+            const offset = Number(query.get("offset") ?? 0)
             if (options.endless) {
-                return HttpResponse.json({ species_entry_ref: entryRef, review_summary: summary, records: [thermo(`thm_${offset}`, lotA, offset, ensemble)], pagination: { offset, limit: 1, returned: 1, total: 5000 } })
+                const size = Number(query.get("limit") ?? 50)
+                const page = Array.from({ length: size }, (_, index) => thermo(`thm_${offset + index}`, lotA, offset + index, ensemble))
+                options.counts?.thermoLimits?.push(String(size))
+                return HttpResponse.json({ species_entry_ref: entryRef, review_summary: summary, records: page, pagination: { offset, limit: size, returned: size, total: 5000 } })
             }
             const size = options.thermoPages ? 2 : 50
             const page = all.slice(offset, offset + size)
@@ -155,6 +159,7 @@ function handlers(options: Options = {}) {
         http.get(`/api/v1/scientific/species-entries/${entryRef}/transport`, ({ request }) => {
             // The numbers table asks for the source calculations so it can show the levels the record ran at.
             const withSources = new URL(request.url).searchParams.getAll("include").includes("source_calculations")
+            if (options.counts) options.counts.transport += 1
             return HttpResponse.json({
                 review_summary: summary,
                 records: transport.map((record) => ({ ...(record as object), ...(withSources ? {} : { source_calculations: null }) })),
@@ -236,7 +241,7 @@ describe("molecule page: numbers for this entry", () => {
         const user = userEvent.setup()
         const region = await open()
         await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
-        expect(screen.getByText("These values were computed at 3 levels of theory.")).toBeVisible()
+        expect(screen.getByText("These values were computed at 2 levels of theory.")).toBeVisible()
         await user.click(screen.getByRole("button", { name: "Group by level of theory" }))
         expect(screen.getByRole("button", { name: "Group by level of theory" })).toHaveAttribute("aria-pressed", "true")
         const groups = Array.from(region.querySelectorAll("tbody")).map((body) => ({
@@ -317,7 +322,7 @@ describe("molecule page: numbers for this entry", () => {
         await waitFor(() => expect(rowRefs(region)).toContain("transport-trn_1"))
         const statmechRow = region.querySelector("#statmech-stm_1") as HTMLElement
         expect(within(statmechRow).getByText("Rotational constant A").nextElementSibling).toHaveTextContent("9.5 cm⁻¹")
-        expect(within(statmechRow).getByText("Rotational constant B").nextElementSibling).toHaveTextContent("1.230 × 10−3 cm⁻¹")
+        expect(within(statmechRow).getByText("Rotational constant B").nextElementSibling).toHaveTextContent("1.23 × 10−3 cm⁻¹")
         const transportRow = region.querySelector("#transport-trn_1") as HTMLElement
         expect(within(transportRow).getByText("Polarizability").nextElementSibling).toHaveTextContent("2.6 Å³")
         expect(within(transportRow).getByText("Rotational relaxation").nextElementSibling).toHaveTextContent("1.5")
@@ -345,28 +350,45 @@ describe("molecule page: numbers for this entry", () => {
         expect(region.querySelector("#transport-trn_1 .value-source")).toHaveTextContent("Source trn_1")
     })
 
-    it("points records folded into an identical-values group at the group's card", async () => {
-        const region = await open({ thermoRecords: [thermo("thm_p", lotA, 1, ensemble), thermo("thm_q", lotA, 1, ensemble)] })
+    it("links each record to its own card, including two identical records on different shapes", async () => {
+        const user = userEvent.setup()
+        const region = await open({ thermoRecords: [thermo("thm_p", lotA, 1, ensemble, "not_reviewed", "cg_1"), thermo("thm_q", lotA, 1, ensemble, "not_reviewed", "cg_2")] })
         await waitFor(() => expect(region.querySelector("#thermo-thm_q")).not.toBeNull())
-        expect(region.querySelector("#thermo-thm_q .value-link")).toHaveAttribute("href", expect.stringContaining("#thermo-heading-thm_p-group"))
+        expect(region.querySelector("#thermo-thm_p .value-link")).toHaveAttribute("href", `/species-entries/${entryRef}/thermo?conformer=cg_1#thermo-heading-thm_p`)
+        expect(region.querySelector("#thermo-thm_q .value-link")).toHaveAttribute("href", `/species-entries/${entryRef}/thermo?conformer=cg_2#thermo-heading-thm_q`)
+        await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
+        const panel = await screen.findByRole("tabpanel")
+        await waitFor(() => expect(panel.querySelector("#thermo-heading-thm_q")).not.toBeNull())
+        expect(panel.querySelector("#thermo-heading-thm_p")).not.toBeNull()
     })
 
-    it("says when a list was longer than the cap", async () => {
-        await open({ endless: true })
-        expect(await screen.findByText(/Showing the first 20 of 5000 thermochemistry records\. The Thermochemistry tab below pages through all of them\./)).toBeVisible()
+    it("words the model form and shows a code it has no wording for as a code", async () => {
+        const region = await open({ thermoRecords: [thermo("thm_w", lotA, 1, ensemble, "not_reviewed", null, "wilhoit"), thermo("thm_z", lotA, 1, ensemble, "not_reviewed", null, "mystery_form")] })
+        await waitFor(() => expect(region.querySelector("#thermo-thm_z")).not.toBeNull())
+        expect(within(region.querySelector("#thermo-thm_w") as HTMLElement).getByText("Form of the model").nextElementSibling).toHaveTextContent("Wilhoit polynomial")
+        expect(within(region.querySelector("#thermo-thm_z") as HTMLElement).getByText("mystery_form").tagName).toBe("CODE")
+    })
+
+    it("stops at the cap, asking for 200 at a time after the shared first page", async () => {
+        const counts = { thermo: 0, statmech: 0, transport: 0, thermoLimits: [] as string[] }
+        await open({ endless: true, counts })
+        expect(await screen.findByText(/Showing the first 1050 of 5000 thermochemistry records\. The Thermochemistry tab below pages through all of them\./)).toBeVisible()
+        expect(counts.thermoLimits).toEqual(["50", "200", "200", "200", "200", "200"])
     })
 
     it("does not fetch the lists again when a tab opens", async () => {
         const user = userEvent.setup()
-        const counts = { thermo: 0, statmech: 0 }
-        const region = await open({ counts })
-        await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
-        expect(counts).toEqual({ thermo: 1, statmech: 1 })
+        const counts = { thermo: 0, statmech: 0, transport: 0 }
+        const region = await open({ counts, transportRecords: [transportRecord] })
+        await waitFor(() => expect(rowRefs(region)).toHaveLength(5))
+        expect(counts).toEqual({ thermo: 1, statmech: 1, transport: 1 })
         await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
         await within(await screen.findByRole("tabpanel")).findByText("thm_a1")
         await user.click(screen.getByRole("tab", { name: "Statistical mechanics" }))
         await within(await screen.findByRole("tabpanel")).findAllByText("stm_1")
-        expect(counts).toEqual({ thermo: 1, statmech: 1 })
+        await user.click(screen.getByRole("tab", { name: "Transport" }))
+        await within(await screen.findByRole("tabpanel")).findAllByText("trn_1")
+        expect(counts).toEqual({ thermo: 1, statmech: 1, transport: 1 })
     })
 
     it("lists the versions of the molecule, marking this one, with charge in words", async () => {
@@ -386,7 +408,8 @@ describe("molecule page: numbers for this entry", () => {
     it("marks this version even when the listing leaves it out, and pluralises", async () => {
         await open({ listing: [entrySummary(otherEntryRef, "excited", 4)] })
         const section = (await screen.findByRole("heading", { name: "Other versions of this molecule" })).closest("section") as HTMLElement
-        expect(await within(section).findByText("This molecule has 2 versions listed; this page shows one of them.")).toBeVisible()
+        expect(await within(section).findByText("This molecule has 1 other version listed, plus this one.")).toBeVisible()
+        expect(section.querySelectorAll(".entry-versions-item")).toHaveLength(2)
         expect(section.querySelector(".entry-versions-item[aria-current='true']")).toHaveTextContent("(this page)")
         cleanup()
         resetAllRequestCaches()

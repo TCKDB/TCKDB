@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { ABSENT, fillValue, fixed, formatQuantity, QUANTITY_SPECS, scientific } from "./quantityFormat"
+import { ABSENT, DEPOSITED_SPEC_KEYS, fillValue, fixed, formatQuantity, QUANTITY_SPECS, scientific, type QuantitySpec } from "./quantityFormat"
 
 describe("fixed", () => {
     it("rounds to the requested number of digits", () => {
@@ -159,11 +159,36 @@ describe("formatQuantity / QUANTITY_SPECS", () => {
         expect(formatQuantity("kinetics_n", 2.5)).toEqual({ value: "2.5", unit: null })
     })
 
-    it("every spec key has a positive digit count", () => {
-        for (const [key, spec] of Object.entries(QUANTITY_SPECS)) {
-            // A "deposited" spec prints the stored number as it is and rounds to no digit count.
-            if (spec.kind === "deposited") continue
-            expect(spec.digits, key).toBeGreaterThan(0)
+    it("every spec other than the named deposited ones has a positive digit count", () => {
+        const deposited: readonly string[] = DEPOSITED_SPEC_KEYS
+        for (const [key, spec] of Object.entries(QUANTITY_SPECS) as [string, QuantitySpec][]) {
+            if (deposited.includes(key)) {
+                expect(spec.kind, key).toBe("deposited")
+            } else {
+                expect(spec.kind, key).not.toBe("deposited")
+                expect("digits" in spec && spec.digits, key).toBeGreaterThan(0)
+            }
         }
+    })
+
+    it("formats the 0 K enthalpy and its uncertainty to 2 decimals", () => {
+        expect(formatQuantity("thermo_enthalpy_formation_0k_kj_mol", -12.345)).toEqual({ value: "-12.35", unit: "kJ/mol" })
+        expect(formatQuantity("thermo_enthalpy_formation_0k_uncertainty_kj_mol", 1.2)).toEqual({ value: "1.20", unit: "kJ/mol" })
+    })
+
+    it("formats rotational constants to 4 significant figures without adding a digit", () => {
+        expect(formatQuantity("statmech_rotational_constant_cm1", 9.5)).toEqual({ value: "9.5", unit: "cm⁻¹" })
+        expect(formatQuantity("statmech_rotational_constant_cm1", 0.00123)).toEqual({ value: "1.23", exponent: "−3", unit: "cm⁻¹" })
+        expect(formatQuantity("statmech_rotational_constant_cm1", 0.001234567)).toEqual({ value: "1.235", exponent: "−3", unit: "cm⁻¹" })
+        expect(formatQuantity("statmech_rotational_constant_cm1", 20000)).toEqual({ value: "2", exponent: "4", unit: "cm⁻¹" })
+    })
+
+    it("prints deposited quantities exactly as stored, in plain digits", () => {
+        expect(formatQuantity("thermo_reference_pressure_bar", 1)).toEqual({ value: "1", unit: "bar" })
+        expect(formatQuantity("thermo_temperature_k", 298.15)).toEqual({ value: "298.15", unit: "K" })
+        expect(formatQuantity("transport_polarizability_angstrom3", 2.6)).toEqual({ value: "2.6", unit: "Å³" })
+        expect(formatQuantity("transport_rotational_relaxation", 1e-7)).toEqual({ value: "0.0000001", unit: null })
+        expect(formatQuantity("transport_rotational_relaxation", 1.5e21)).toEqual({ value: "1500000000000000000000", unit: null })
+        expect(formatQuantity("transport_rotational_relaxation", null)).toBeNull()
     })
 })
