@@ -113,7 +113,7 @@ export function pointGroupValue(raw: string | null | undefined): NumberValue {
 export function pointGroupParts(value: string): { symbol: string; subscript: string } {
     const match = /^([A-Z])(.*)$/.exec(value)
     if (!match) return { symbol: value, subscript: "" }
-    return { symbol: match[1], subscript: match[2].replace(/^inf|\*/, "∞") }
+    return { symbol: match[1], subscript: match[2].replace(/^(?:inf|\*)/, "∞") }
 }
 
 function levelsOf(levels: ProductLevels): SourceLevel[] {

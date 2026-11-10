@@ -15,6 +15,15 @@ describe("pointGroupParts", () => {
         expect(pointGroupParts("Cinfv")).toEqual({ symbol: "C", subscript: "∞v" })
         expect(pointGroupParts("C∞v")).toEqual({ symbol: "C", subscript: "∞v" })
         expect(pointGroupParts("Td")).toEqual({ symbol: "T", subscript: "d" })
+        expect(pointGroupParts("D*h")).toEqual({ symbol: "D", subscript: "∞h" })
+        expect(pointGroupParts("Dinfh")).toEqual({ symbol: "D", subscript: "∞h" })
+    })
+
+    it("replaces the infinity marker only at the start of the subscript", () => {
+        // `publicPointGroup` never lets such a string through; the split itself still must not rewrite it.
+        expect(pointGroupParts("C2*v")).toEqual({ symbol: "C", subscript: "2*v" })
+        expect(pointGroupParts("C2infv")).toEqual({ symbol: "C", subscript: "2infv" })
+        expect(pointGroupParts("C**v")).toEqual({ symbol: "C", subscript: "∞*v" })
     })
 })
 
