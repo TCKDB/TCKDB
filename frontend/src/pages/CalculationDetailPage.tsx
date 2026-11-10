@@ -61,6 +61,7 @@ import { hessianMethodLabel, isAssumedTauBasis, tauBasisNote } from "../domain/t
 import { useCalculation } from "../hooks/useCalculation"
 import { useCalculationSection, type CalculationSectionState } from "../hooks/useCalculationSection"
 import { LiteratureCitation } from "../components/LiteratureCitation"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 // ---------------------------------------------------------------------------
 // Section-loading design (see the brief's "design problem" — recorded here
@@ -349,6 +350,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
         : null
     const stageWords = stage && stage.kind !== "unknown" ? OPTIMISATION_STAGE_WORDS[stage.kind] : null
     const titleTypeLabel = stageWords ? stageWords.label : typeLabel(core.type)
+    useDocumentTitle("Calculation", titleTypeLabel)
     const kickerText = `${typeLabel(core.type)} calculation · ${stageWords ? stageWords.kickerSuffix : OPTIMISATION_STAGE_UNKNOWN_KICKER_SUFFIX}`
     // `provenance.submission_ref` is `string | null | undefined` on the
     // wire: `undefined` means the KEY ITSELF was omitted (an anonymous

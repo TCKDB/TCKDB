@@ -127,7 +127,7 @@
 }
 
 .dep-graph-node-subject-link:focus-visible {
-    outline: 3px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
 }
 
@@ -165,7 +165,7 @@
    change alone, which review found too subtle to count as "focus
    visible" on a box already drawn with a 1.5px `--line` stroke. */
 .dep-graph-node-link:focus-visible {
-    outline: 3px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
 }
 
@@ -228,6 +228,6 @@
 }
 
 .dep-graph-sentences a:focus-visible {
-    outline: 3px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
 }

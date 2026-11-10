@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { GeometryViewer } from "./GeometryViewer"
 
 /**
@@ -408,6 +409,19 @@ describe("GeometryViewer", () => {
             expect(status).toHaveAttribute("role", "status")
             const container = document.querySelector(".viewer-canvas")
             expect(container).toHaveAttribute("data-viewer-status", "unavailable")
+        })
+
+        it("still offers the keyboard atom picker, and it measures", async () => {
+            createViewerShouldThrow = true
+            const user = userEvent.setup()
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            await screen.findByText(/could not be initialised/)
+            const form = screen.getByRole("group", { name: "Measure with the keyboard" })
+            await user.selectOptions(within(form).getByLabelText("Atom 1"), "0")
+            await user.selectOptions(within(form).getByLabelText("Atom 2"), "1")
+            await user.click(within(form).getByRole("button", { name: "Measure" }))
+            expect(await screen.findByText(/Distance C1–H2/)).toBeInTheDocument()
+            expect(screen.queryByText(/Click atoms in the 3D view/)).toBeNull()
         })
     })
 

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react"
+import { useAnnounce } from "../hooks/useAnnounce"
 import { isotopeLabel } from "../domain/isotopeLabel"
 import type { GeometryAtom } from "../api/geometryApi"
 import { angstromToBohr, buildXyzBlock, hydrogenSymbolsForViewer, type CoordinateUnitMode } from "../domain/geometryXyz"
@@ -908,6 +909,17 @@ export function GeometryViewer({
         })
     }, [])
 
+    // The keyboard path: appends one finished measurement of the same shape a click sequence builds, and selects its atoms.
+    const measureAtoms = useCallback((list: GeometryAtom[]) => {
+        const kind = measurementKindForCount(list.length)
+        if (!kind) return
+        activeMeasurementIdRef.current = null
+        const id = `measurement-${++measurementSeqRef.current}`
+        setMeasurements((prev) => [...prev, { id, kind, atoms: list }])
+        setMeasureSelection(list)
+        setMeasureAnnouncement(`${MEASUREMENT_KIND_LABEL[kind]} measured.`)
+    }, [])
+
     function clearMeasurements() {
         setMeasureSelection([])
         setMeasurements([])
@@ -1215,9 +1227,12 @@ export function GeometryViewer({
                     </p>
                 )}
             </div>
-            {status === "ready" && (
+            {(status === "ready" || status === "unavailable") && (
                 <MeasurementsPanel
                     formula={formula}
+                    atoms={atoms}
+                    canvasReady={status === "ready"}
+                    onMeasureAtoms={measureAtoms}
                     measureSelection={measureSelection}
                     measurements={measurements}
                     coordinateUnitMode={coordinateUnitMode}
@@ -1236,8 +1251,11 @@ export function GeometryViewer({
  * readability: it is pure presentation over props `GeometryViewer`
  * already computed, with no state or effects of its own.
  */
-function MeasurementsPanel({ formula, measureSelection, measurements, coordinateUnitMode, announcement, onClear }: {
+function MeasurementsPanel({ formula, atoms, canvasReady, onMeasureAtoms, measureSelection, measurements, coordinateUnitMode, announcement, onClear }: {
     formula: string
+    atoms: GeometryAtom[]
+    canvasReady: boolean
+    onMeasureAtoms: (list: GeometryAtom[]) => void
     measureSelection: GeometryAtom[]
     measurements: Measurement[]
     coordinateUnitMode: CoordinateUnitMode
@@ -1270,8 +1288,10 @@ function MeasurementsPanel({ formula, measureSelection, measurements, coordinate
             )}
             {measurements.length === 0 ? (
                 <p className="viewer-measure-hint">
-                    Click atoms in the 3D view of {formula || "this geometry"} above to measure: 2 atoms for a
-                    distance, 3 for an angle, 4 for a dihedral. Measurements stay listed here until you clear them.
+                    {canvasReady
+                        ? `Click atoms in the 3D view of ${formula || "this geometry"} above to measure: 2 atoms for a distance, 3 for an angle, 4 for a dihedral. `
+                        : "Choose 2 atoms for a distance, 3 for an angle, 4 for a dihedral. "}
+                    Measurements stay listed here until you clear them.
                 </p>
             ) : (
                 <ol className="measurement-list">
@@ -1292,6 +1312,84 @@ function MeasurementsPanel({ formula, measureSelection, measurements, coordinate
                     ))}
                 </ol>
             )}
+            <KeyboardMeasureForm atoms={atoms} onMeasure={onMeasureAtoms} />
         </section>
+    )
+}
+
+const ATOM_SLOTS = [1, 2, 3, 4] as const
+
+function atomOptionLabel(atom: GeometryAtom): string {
+    return `${atom.atom_index} · ${isotopeLabel(atom)}`
+}
+
+/** Returns an error sentence for a bad atom choice, or null when `picks` (one string per slot) can be measured. */
+function measureChoiceError(picks: string[]): string | null {
+    const chosen = picks.map((value) => (value === "" ? null : Number(value)))
+    if (chosen[0] === null || chosen[1] === null) return "Choose Atom 1 and Atom 2 to measure a distance."
+    if (chosen[2] === null && chosen[3] !== null) return "Choose Atom 3 before Atom 4."
+    for (let i = 1; i < chosen.length; i++) {
+        if (chosen[i] === null) continue
+        const earlier = chosen.slice(0, i).indexOf(chosen[i])
+        if (earlier !== -1) return `Atom ${i + 1} repeats Atom ${earlier + 1}. Choose a different atom for each slot.`
+    }
+    return null
+}
+
+/** Atom pickers that feed the same measurement list the canvas clicks do, for keyboard and no-WebGL use. */
+function KeyboardMeasureForm({ atoms, onMeasure }: { atoms: GeometryAtom[]; onMeasure: (list: GeometryAtom[]) => void }) {
+    const announce = useAnnounce()
+    const baseId = useId()
+    const errorId = `${baseId}-error`
+    const [picks, setPicks] = useState<string[]>(["", "", "", ""])
+    const [error, setError] = useState<string | null>(null)
+
+    function setPick(slot: number, value: string) {
+        setPicks((prev) => prev.map((existing, index) => (index === slot ? value : existing)))
+        setError(null)
+    }
+
+    function submit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        const problem = measureChoiceError(picks)
+        setError(problem)
+        if (problem) {
+            announce(problem)
+            return
+        }
+        const list = picks.filter((value) => value !== "").map((value) => atoms[Number(value)])
+        onMeasure(list)
+    }
+
+    return (
+        <form className="measure-keyboard" onSubmit={submit} noValidate>
+            <fieldset>
+                <legend>Measure with the keyboard</legend>
+                <p className="viewer-measure-hint">
+                    Atoms 1 and 2 give a distance, adding Atom 3 an angle, adding Atom 4 a dihedral.
+                </p>
+                <div className="measure-keyboard-fields">
+                    {ATOM_SLOTS.map((slot, index) => (
+                        <label key={slot}>
+                            {`Atom ${slot}${slot > 2 ? " (optional)" : ""}`}
+                            <select
+                                value={picks[index]}
+                                required={slot <= 2}
+                                aria-invalid={error ? true : undefined}
+                                aria-describedby={error ? errorId : undefined}
+                                onChange={(event) => setPick(index, event.target.value)}
+                            >
+                                <option value="">Choose an atom</option>
+                                {atoms.map((atom, atomPosition) => (
+                                    <option key={atomPosition} value={String(atomPosition)}>{atomOptionLabel(atom)}</option>
+                                ))}
+                            </select>
+                        </label>
+                    ))}
+                </div>
+                {error && <p id={errorId} className="measure-keyboard-error">{error}</p>}
+                <button type="submit" className="measure-keyboard-submit">Measure</button>
+            </fieldset>
+        </form>
     )
 }

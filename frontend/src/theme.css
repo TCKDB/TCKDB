@@ -14,9 +14,7 @@
  * about what it is.
  *
  * Three states, in cascade order:
- *   1. Bare `:root`         — the complete LIGHT palette (the default —
- *                              matches this app's colours before this
- *                              file existed, unchanged, byte for byte).
+ *   1. Bare `:root`         — the complete LIGHT palette (the default).
  *   2. `@media (prefers-color-scheme: dark)`, guarded by
  *      `:root:not([data-theme="light"])` — the OS asked for dark, and the
  *      reader has not explicitly chosen light. Redefines token VALUES
@@ -37,161 +35,74 @@
  * light. Every name below is declared in all three blocks for exactly
  * this reason.
  */
-
 :root {
     /* Native widgets (scrollbars, form controls) follow the theme. */
     color-scheme: light;
 
     /* ---- Text ---- */
-    --ink: #16202c;         /* primary body text, headings */
-    --ink-2: #3c4856;       /* secondary text: intros, descriptions */
-    --muted: #536578;       /* tertiary labels, captions, dt/eyebrow text
-                                (merges the near-identical #526171 — 7 uses
-                                across species-overview.css/index.css that
-                                measured within 4-7 units per channel of
-                                #536578's 29 uses elsewhere; one accidental-
-                                drift grey, not two intended ones) */
-    --muted-2: #586471;     /* SpeciesEntryPage's own secondary-label grey.
-                                Kept a DISTINCT name from --muted rather than
-                                merged into it: at a glance the two read as
-                                the same "quiet label" role, but side by side
-                                they are visibly different greys used on two
-                                different pages — merging them would have
-                                silently shifted one page's already-shipped
-                                colour.
-                                Darkened from the original #6b7888 (accessibility
-                                pass, finding 10): that value cleared 4.5:1 on
-                                plain white (4.499 — already borderline) but
-                                fell to 4.216 on --page-bg and 3.95 on
-                                --accent-50 (the tint a selected `.conformer-
-                                card` gets, which COPY-button labels and the
-                                conformer-card coverage line sit on directly).
-                                #586471 clears 4.5:1 against EVERY background
-                                this token actually renders on — white 6.04,
-                                page-bg 5.66, surface-sunken 5.89, accent-50
-                                5.30 (the worst case; measured against the
-                                built CSS, see theme.css.test.ts) — with
-                                margin to spare, not a value that just
-                                scrapes past the threshold. */
-    --faint: #5f6b78;       /* barely-there tertiary text: ref-item labels,
-                                the missing-formula fallback, linkage
-                                connectors.
-                                Darkened from the original #9aa6b3 (accessibility
-                                pass, finding 10): that value read 2.48:1 on
-                                white and as low as 2.17:1 on --accent-50 —
-                                nowhere near AA on any background it actually
-                                sits on, at font sizes as small as 9-10px.
-                                #5f6b78 clears 4.5:1 everywhere --muted-2 does
-                                (white 5.44, page-bg 5.10, surface-sunken 5.30,
-                                accent-50 4.78 worst-case) while staying the
-                                lighter/quieter of the pair — --muted-2 still
-                                reads a shade darker at every one of the same
-                                backgrounds, preserving which token is "more
-                                there" even though AA now pulls both much
-                                closer together than the original #6b7888 vs
-                                #9aa6b3 spread. That convergence is real and
-                                deliberate, not a merge-by-accident like the
-                                ones documented elsewhere in this file: a
-                                token that must individually clear the same
-                                4.5:1 floor on the same worst-case background
-                                (--accent-50) has nowhere left to sit but
-                                close to the other one that also must. */
+    --ink: #0e2a33;         /* body text, headings */
+    --ink-2: #34505a;       /* secondary text: intros, descriptions */
+    --muted: #4f666e;       /* tertiary labels, captions */
+    --muted-2: #526a72;     /* secondary-label grey */
+    --faint: #526a72;       /* quiet tertiary text; same value as --muted-2 */
 
     /* ---- Hairlines & borders ---- */
-    --line: #dbe2ea;            /* the app's one hairline: card borders,
-                                    dividers, table rules */
-    --line-2: #eaeef3;          /* a second, even quieter hairline (nested
-                                    rows, disclosure bodies) — merges
-                                    #edf1f5 and #eef1f5, both within 4 units
-                                    of #eaeef3 per channel: three near-
-                                    identical greys from three files that
-                                    never coordinated, not three deliberate
-                                    ones */
-    --control-border: #b8c4d1;  /* geometry viewer buttons/select — kept
-                                    distinct from --line on purpose: it is a
-                                    clickable control's outline, not a
-                                    passive divider, and was visibly
-                                    stronger before this pass */
-    --divider: #cdd9e5;         /* species-overview.css .entry-state-disclosure
-                                    border — single use, kept apart from
-                                    --divider-strong rather than force-merged;
-                                    the two differ by ~20 units per channel,
-                                    outside the drift band the --line-2 merge
-                                    above sits in */
-    --divider-strong: #b8cbe0;  /* species-overview.css .entry-state-group
-                                    border-top — see --divider */
+    --line: #d3dddd;            /* card borders, dividers, table rules */
+    --line-2: #e4ebea;          /* quieter hairline: nested rows, disclosure bodies */
+    --control-border: #6b7f87;  /* a clickable control's outline; at least 3:1 on every surface */
+    --divider: #c9d6d6;
+    --divider-strong: #b3c6c7;
 
     /* ---- Surfaces ---- */
-    --surface: #fff;              /* cards, panels (merges the one literal
-                                      #ffffff use — exact duplicate, not a
-                                      near-miss) */
-    --surface-sunken: #fbfcfe;     /* recessed panels: refs-disclosure,
-                                      evidence-linkage, empty-projection
-                                      backgrounds (merges #f8fbfe and
-                                      #f5f7fa — both within 3-6 units per
-                                      channel, the same "barely off-white
-                                      recess" role in three different
-                                      files) */
-    --page-bg: #f4f8fc;            /* whole-page backdrop, set once on
-                                      `body`. Kept separate from
-                                      --surface-sunken even though the two
-                                      are close in value: a page backdrop
-                                      and a recessed panel inside a white
-                                      card are different roles that happen
-                                      to sit near each other in light mode
-                                      — they diverge sharply in dark mode
-                                      (see below), which is the real test
-                                      of whether two "close" colours were
-                                      actually one role. */
+    --surface: #fff;               /* cards, panels */
+    --surface-sunken: #f5f8f7;     /* recessed panels */
+    --page-bg: #eef2f1;            /* whole-page backdrop, set once on `body` */
 
-    /* ---- Accent (the house blue) ---- */
-    --accent: #205493;             /* links, active states, the one accent
-                                       used everywhere */
-    --accent-700: #173f6e;         /* hover/pressed emphasis — a darker
-                                       shade of --accent */
-    --accent-50: #eaf1f8;          /* pale accent tint: chip backgrounds,
-                                       selected-state fills */
-    --accent-300: #7ea7cf;         /* mid-strength accent: focus outlines,
-                                       hover borders */
-    --accent-underline: #a8c4dc;   /* text-decoration-color under accent
-                                       links, quieter than the link text
-                                       itself */
-    --tint-text: #40566d;          /* .observation-geometries text — a
-                                       desaturated navy, distinct from both
-                                       --ink-2 and --accent-700 */
+    /* ---- Accent ---- */
+    --accent: #0a6a68;             /* links, active states */
+    --accent-700: #084f4d;         /* hover/pressed emphasis */
+    --accent-50: #dcf1ee;          /* selection tint, chip backgrounds */
+    --accent-300: #6fb3ae;         /* mid-strength accent for hover borders; never a focus ring */
+    --accent-underline: #9fcfca;   /* text-decoration-color under accent links */
+    --tint-text: #3d5a62;          /* desaturated teal-navy text */
+    --focus-ring: #0b5cd6;         /* focus outline; at least 3:1 on every surface */
 
-    /* ---- Semantic states (two DIFFERENT ambers — do not merge) ---- */
-    --warning: #a15c00;            /* clipboard-denied state on CopyButton.
-                                       A failure register. */
-    --notice-border: #c9a227;      /* supersession/correction notice — a
-                                       distinct, calmer amber-gold: "this
-                                       record was corrected", not a
-                                       failure. Kept apart from --warning
-                                       even though both read as "amber" at
-                                       a glance; they mean different
-                                       things and must be able to move
-                                       independently. */
+    /* ---- Record kinds: graphic tone, text tone, tint ---- */
+    --kind-species: #0b7a75;
+    --kind-species-ink: #096560;
+    --kind-species-bg: #dcf1ee;
+    --kind-reaction: #3b4ba8;
+    --kind-reaction-ink: #3b4ba8;
+    --kind-reaction-bg: #e3e6f8;
+    --kind-ts: #a85a06;            /* graphic tone only; never used for text */
+    --kind-ts-ink: #8a4a04;
+    --kind-ts-bg: #fbebd5;
+    --kind-network: #85398a;
+    --kind-network-ink: #85398a;
+    --kind-network-bg: #f3e1f4;
+    --status-ok-ink: #17683a;
+    --status-ok-bg: #dff3e6;
+
+    /* ---- Molecule drawings ---- */
+    --atom-C: #53666c;
+    --atom-H: #f4f7f7;
+    --atom-O: #d1453b;
+    --atom-N: #3a5fcd;
+    --atom-other: #7a5aa6;
+    --bond: #8aa0a6;
+
+    /* ---- Semantic states (two different ambers; do not merge) ---- */
+    --warning: #a15c00;            /* failure register, e.g. clipboard denied */
+    --notice-border: #c9a227;      /* supersession/correction notice: calmer than a failure */
     --notice-bg: #fdf6e3;
     --notice-text: #6b5209;
 
     /* ---- Shadow ---- */
-    --shadow-color: rgba(22, 32, 44, .2); /* the search box / destination
-                                              card box-shadow colour, used
-                                              identically in three places
-                                              in index.css */
+    --shadow-color: rgba(14, 42, 51, .2);
 
     /* ---- Chart series (Cp-vs-T, ThermoCpChart.tsx) ----
-       One categorical hue per overlaid thermo record/conformer — colour is
-       the ONLY thing that carries series identity (raw markers and the
-       fitted line for the same record share the same hue; line-vs-marker
-       shape is what separates measured from fitted, not colour). Eight
-       hand-picked hues, chosen to stay visually distinct from each other
-       AND from --accent/--warning/--notice-* (so a selected-series
-       highlight or an error state never gets mistaken for "just another
-       series"). Grid lines and axis text reuse existing structural
-       tokens (--line-2, --muted, --divider) — deliberately not new
-       tokens, so the chart still retints correctly from a single
-       theme.css edit like everything else. */
+       One categorical hue per overlaid record; colour alone carries series
+       identity. Kept distinct from --accent, --warning and --notice-*. */
     --chart-series-1: #1b6ec2;
     --chart-series-2: #d9730d;
     --chart-series-3: #1a7f5a;
@@ -209,63 +120,51 @@
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
         color-scheme: dark;
-        --ink: #e6ecf2;
-        --ink-2: #b7c2ce;
-        --muted: #99a7b8;
-        --muted-2: #8595a8;     /* accessibility pass, finding 10: darkened
-                                   (i.e. brightened, this is dark mode) from
-                                   #7c8a9a — that value read 4.67:1 on
-                                   --surface but only 3.95:1 on --accent-50's
-                                   dark equivalent (a selected `.conformer-
-                                   card`'s tint, #16283a). #8595a8 clears
-                                   4.5:1 on every background this token
-                                   renders on: surface 5.37, page-bg 6.19,
-                                   surface-sunken 5.77, accent-50 4.91
-                                   worst-case. */
-        --faint: #8393a5;       /* accessibility pass, finding 10: brightened
-                                   from #5f6d7e — that value read 3.11:1 on
-                                   --surface and as low as 2.84:1 on dark
-                                   --accent-50 (measured: the review's
-                                   "labels 2.84-3.34" range). #8393a5 clears
-                                   4.5:1 everywhere: surface 5.23, page-bg
-                                   6.03, surface-sunken 5.62, accent-50 4.78
-                                   worst-case — see the light-block comment
-                                   above for why this sits so close to the
-                                   new --muted-2. */
+        --ink: #e4eeee;
+        --ink-2: #b4c9cd;
+        --muted: #8aa5ab;
+        --muted-2: #8aa5ab;
+        --faint: #8aa5ab;
 
-        --line: #253241;
-        /* SHOULD-FIX-15 ("record-page residuals" re-review): nudged one
-           step lighter, #1c2732 -> #212d3a -- MEASURED near-invisible
-           inside table bodies and around the refs box (a hairline that
-           quiet is fine as a section divider, not fine as a row/box
-           boundary a reader actually needs to see). Contrast ratio
-           against the two backgrounds this token actually renders on
-           (`--surface-sunken`, `--surface`), computed from the live
-           values in this file the same way `theme.css.test.ts`'s own
-           `--faint`/`--muted-2` check does: 1.165:1 -> 1.262:1 vs
-           `--surface-sunken`, 1.085:1 -> 1.175:1 vs `--surface` (both
-           +8.3%). This is a NON-TEXT hairline, not body copy -- WCAG's
-           4.5:1 text floor does not apply, and a bigger jump toward
-           `--line`'s own 1.262:1-vs-`--surface` would have erased the
-           "second, even quieter hairline" role this token exists for
-           (see this file's own comment on `--line-2` above). Text
-           tokens (`--ink`/`--ink-2`/`--muted`/`--muted-2`/`--faint`) are
-           untouched. */
-        --line-2: #212d3a;
-        --control-border: #435265;
-        --divider: #2c3a49;
-        --divider-strong: #3c4d60;
+        --line: #244048;
+        --line-2: #1a343b;
+        --control-border: #6a8a93;
+        --divider: #2c4850;
+        --divider-strong: #3b5a63;
 
-        --surface: #16202c;
-        --surface-sunken: #111925;
-        --page-bg: #0b1119;
+        --surface: #10262c;
+        --surface-sunken: #0d2025;
+        --page-bg: #0a1a1f;
 
-        --accent: #6ba3dd;
-        --accent-700: #9dc4ec;
-        --accent-50: #16283a;
-        --accent-300: #4d7aa8;
-        --accent-underline: #3c6690;
-        --tint-text: #9fb7cc;
+        --accent: #4fd1c5;
+        --accent-700: #8fe3da;
+        --accent-50: #12373a;
+        --accent-300: #2f7f7a;
+        --accent-underline: #2a6a66;
+        --tint-text: #9fc3c8;
+        --focus-ring: #7db4ff;
+
+        --kind-species: #4fd1c5;
+        --kind-species-ink: #4fd1c5;
+        --kind-species-bg: #12373a;
+        --kind-reaction: #9aa6ff;
+        --kind-reaction-ink: #9aa6ff;
+        --kind-reaction-bg: #1c2250;
+        --kind-ts: #f2a24b;
+        --kind-ts-ink: #f2a24b;
+        --kind-ts-bg: #3b2810;
+        --kind-network: #d98fde;
+        --kind-network-ink: #d98fde;
+        --kind-network-bg: #35183a;
+        --status-ok-ink: #6fdc9a;
+        --status-ok-bg: #12351f;
+
+        --atom-C: #9db3b9;
+        --atom-H: #eaf2f2;
+        --atom-O: #ff7a6d;
+        --atom-N: #7f9dff;
+        --atom-other: #c9a0e8;
+        --bond: #587780;
 
         --warning: #e2a33e;
         --notice-border: #b8922a;
@@ -285,45 +184,54 @@
     }
 }
 
+/* Must declare the same values as the `prefers-color-scheme` block above. */
 :root[data-theme="dark"] {
     color-scheme: dark;
-    --ink: #e6ecf2;
-    --ink-2: #b7c2ce;
-    --muted: #99a7b8;
-    --muted-2: #8595a8;     /* accessibility pass, finding 10 -- see the
-                               `@media (prefers-color-scheme: dark)` block
-                               above for the full rationale; this explicit
-                               block must carry the identical value (the
-                               "three blocks define the same set of token
-                               names" test doesn't check VALUES match
-                               across blocks, but a diverging one here
-                               would mean the in-app Dark toggle and an OS
-                               dark preference render this token
-                               differently, which is its own bug). */
-    --faint: #8393a5;
+    --ink: #e4eeee;
+    --ink-2: #b4c9cd;
+    --muted: #8aa5ab;
+    --muted-2: #8aa5ab;
+    --faint: #8aa5ab;
 
-    --line: #253241;
-    /* Must match the `@media (prefers-color-scheme: dark)` block's value
-       exactly -- see that block's own comment (SHOULD-FIX-15) for the
-       full contrast-ratio rationale. Diverging here would mean the
-       in-app Dark toggle and an OS dark preference render this hairline
-       differently, the same invariant this file's own header comment
-       already holds `--muted-2` to. */
-    --line-2: #212d3a;
-    --control-border: #435265;
-    --divider: #2c3a49;
-    --divider-strong: #3c4d60;
+    --line: #244048;
+    --line-2: #1a343b;
+    --control-border: #6a8a93;
+    --divider: #2c4850;
+    --divider-strong: #3b5a63;
 
-    --surface: #16202c;
-    --surface-sunken: #111925;
-    --page-bg: #0b1119;
+    --surface: #10262c;
+    --surface-sunken: #0d2025;
+    --page-bg: #0a1a1f;
 
-    --accent: #6ba3dd;
-    --accent-700: #9dc4ec;
-    --accent-50: #16283a;
-    --accent-300: #4d7aa8;
-    --accent-underline: #3c6690;
-    --tint-text: #9fb7cc;
+    --accent: #4fd1c5;
+    --accent-700: #8fe3da;
+    --accent-50: #12373a;
+    --accent-300: #2f7f7a;
+    --accent-underline: #2a6a66;
+    --tint-text: #9fc3c8;
+    --focus-ring: #7db4ff;
+
+    --kind-species: #4fd1c5;
+    --kind-species-ink: #4fd1c5;
+    --kind-species-bg: #12373a;
+    --kind-reaction: #9aa6ff;
+    --kind-reaction-ink: #9aa6ff;
+    --kind-reaction-bg: #1c2250;
+    --kind-ts: #f2a24b;
+    --kind-ts-ink: #f2a24b;
+    --kind-ts-bg: #3b2810;
+    --kind-network: #d98fde;
+    --kind-network-ink: #d98fde;
+    --kind-network-bg: #35183a;
+    --status-ok-ink: #6fdc9a;
+    --status-ok-bg: #12351f;
+
+    --atom-C: #9db3b9;
+    --atom-H: #eaf2f2;
+    --atom-O: #ff7a6d;
+    --atom-N: #7f9dff;
+    --atom-other: #c9a0e8;
+    --bond: #587780;
 
     --warning: #e2a33e;
     --notice-border: #b8922a;

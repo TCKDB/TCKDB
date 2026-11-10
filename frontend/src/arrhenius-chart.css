@@ -75,7 +75,7 @@
     align-items: center;
     gap: .45rem;
     padding: .3rem .55rem .3rem .75rem;
-    border: 1px solid var(--line);
+    border: 1px solid var(--control-border);
     border-radius: 999px;
     background: var(--surface);
 }
@@ -104,7 +104,7 @@
 }
 
 .arrhenius-chart-control-select:focus-visible {
-    outline: 2px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
     border-radius: .2rem;
 }
@@ -179,7 +179,7 @@
 }
 
 .arrhenius-chart-unit-reason:focus-visible {
-    outline: 3px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
 }
 

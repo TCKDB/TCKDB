@@ -20,6 +20,7 @@ import {
     atomicNumberForSymbol,
     type CoordinateUnitMode,
 } from "../domain/geometryXyz"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 type ElementDisplayMode = "symbol" | "number"
 
@@ -155,6 +156,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
     const isotopeLabelled = hasIsotopeLabel(atoms)
     const displayFormula = isotopeLabelled ? isotopeHillFormula(atoms) : (servedFormula ?? clientFormula)
     const formulaIsFallback = !isotopeLabelled && servedFormula === null && clientFormula !== ""
+    useDocumentTitle("Geometry", displayFormula)
 
     // Lifted out of `CoordinateTableSection` (where it lived alone until
     // now) so `GeometryViewer`'s atom-picking measurements can follow the

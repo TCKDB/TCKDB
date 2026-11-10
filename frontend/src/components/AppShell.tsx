@@ -1,6 +1,8 @@
 import { NavLink, Outlet } from "react-router-dom"
 import { ThemeToggle } from "./ThemeToggle"
 import { AuthStatus } from "./AuthStatus"
+import { Announcer } from "./Announcer"
+import { RouteFocus } from "./RouteFocus"
 import "../auth.css"
 
 const links = [
@@ -24,7 +26,9 @@ export function AppShell() {
                 <AuthStatus />
             </div>
         </header>
-        <main id="main-content"><Outlet /></main>
+        <RouteFocus />
+        <Announcer />
+        <main id="main-content" tabIndex={-1}><Outlet /></main>
         <footer className="archive-footer"><span>TCKDB · Theoretical Chemical Kinetics Database</span><span>Public scientific records</span></footer>
     </div>
 }

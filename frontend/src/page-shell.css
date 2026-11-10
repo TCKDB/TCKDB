@@ -110,7 +110,7 @@
 }
 
 .page-toc a:focus-visible {
-    outline: 2px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
 }
 

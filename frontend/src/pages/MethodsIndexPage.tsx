@@ -19,6 +19,7 @@ import {
 } from "../domain/levelOfTheoryFilter"
 import type { PageRequest } from "../domain/paging"
 import { words } from "../domain/provenanceFormat"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 type LoadState<T> = { status: "loading" } | { status: "error" } | { status: "ready"; data: T }
 
@@ -56,6 +57,7 @@ function useLoad<T>(load: (signal: AbortSignal) => Promise<T>, key = ""): LoadSt
  * (§4.2's real record page, not a thin anchor).
  */
 export default function MethodsIndexPage() {
+    useDocumentTitle("Methods")
     const [lotFilter, setLotFilter] = useState<LevelOfTheoryFilter>(EMPTY_LOT_FILTER)
     // The core-treatment choice is the API's own `core_treatment` filter, so
     // changing it re-queries; the other facets narrow what is already here.

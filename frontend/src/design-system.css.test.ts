@@ -38,18 +38,18 @@ function customProperty(css: string, name: string): string {
  */
 describe("type scale: every step declares the exact font/tracking/transform", () => {
     const STEPS: Record<string, { font: string; tracking: string; transform: string }> = {
-        "display-1": { font: "600 clamp(2.75rem, 5vw, 4rem)/1.0 var(--serif)", tracking: "-.03em", transform: "none" },
-        "display-2": { font: "600 2.25rem/1.15 var(--serif)", tracking: "-.02em", transform: "none" },
-        "heading-1": { font: "600 1.75rem/1.2 var(--serif)", tracking: "-.02em", transform: "none" },
-        "heading-2": { font: "600 1.25rem/1.3 var(--serif)", tracking: "0em", transform: "none" },
+        "display-1": { font: "600 clamp(2.75rem, 5vw, 4rem)/1.0 var(--display)", tracking: "-.03em", transform: "none" },
+        "display-2": { font: "600 2.25rem/1.15 var(--display)", tracking: "-.02em", transform: "none" },
+        "heading-1": { font: "600 1.75rem/1.2 var(--display)", tracking: "-.02em", transform: "none" },
+        "heading-2": { font: "600 1.25rem/1.3 var(--display)", tracking: "0em", transform: "none" },
         "heading-3": { font: "600 .875rem/1.4 var(--sans)", tracking: "0em", transform: "none" },
-        "kicker": { font: "400 .72rem/1.3 var(--mono)", tracking: ".10em", transform: "uppercase" },
-        "label": { font: "400 .72rem/1.3 var(--mono)", tracking: ".06em", transform: "uppercase" },
+        "kicker": { font: "400 .8125rem/1.3 var(--sans)", tracking: "0em", transform: "none" },
+        "label": { font: "400 .8125rem/1.3 var(--sans)", tracking: "0em", transform: "none" },
         // Post-review addition: the label step at weight 600, for a
         // table header that must stand out from the surrounding
         // label-weight dt/th text -- see design-system.css's own
         // comment above --type-label-strong-font.
-        "label-strong": { font: "600 .72rem/1.3 var(--mono)", tracking: ".06em", transform: "uppercase" },
+        "label-strong": { font: "600 .8125rem/1.3 var(--sans)", tracking: "0em", transform: "none" },
         "body": { font: "400 1rem/1.6 var(--sans)", tracking: "0em", transform: "none" },
         // Post-review addition (species-entry/browse/chrome residuals
         // re-review, item 14): a named step for a page LEDE -- serif,

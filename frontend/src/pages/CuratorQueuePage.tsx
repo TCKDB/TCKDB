@@ -23,6 +23,7 @@ import {
     type CuratorTask,
     type CuratorTaskState,
 } from "../types/curatorTask"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 /**
  * Machine findings: machine-review findings waiting on a person.
@@ -194,6 +195,7 @@ function RecordCell({ location }: { location: RecordLocation }) {
 }
 
 export default function CuratorQueuePage() {
+    useDocumentTitle("Machine findings")
     const { state } = useAuth()
     const [filter, setFilter] = useState<CuratorTaskState | "open" | "all">("open")
     const [load, setLoad] = useState<LoadState>({ status: "loading" })

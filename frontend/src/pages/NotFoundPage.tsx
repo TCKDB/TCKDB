@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 /**
  * Catch-all for any path this router does not recognise -- see
@@ -21,6 +22,7 @@ import { Link, useLocation } from "react-router-dom"
  * `App.tsx`'s own comment on that route.)
  */
 export default function NotFoundPage() {
+    useDocumentTitle("Page not found")
     const location = useLocation()
     const attemptedPath = `${location.pathname}${location.search}${location.hash}`
 

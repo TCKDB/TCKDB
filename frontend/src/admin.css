@@ -45,7 +45,7 @@
 }
 
 .admin-lede a:focus-visible {
-    outline: 3px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
 }
 
@@ -89,8 +89,8 @@
 }
 
 .admin-role-select:focus-visible {
-    outline: 2px solid var(--accent-300);
-    outline-offset: 1px;
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
 }
 
 /* Marks the signed-in admin's own row. Not decoration: the one refusal

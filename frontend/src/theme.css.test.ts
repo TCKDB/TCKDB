@@ -335,3 +335,105 @@ describe("color-scheme follows the theme (native scrollbars and controls)", () =
         expect(schemeIn('\n:root[data-theme="dark"] {')).toBe("dark")
     })
 })
+
+/**
+ * Focus ring, control borders, kind colours and the text tokens, measured from the live token values in all three blocks.
+ */
+describe("focus, control, kind and text tokens clear their contrast floors in every theme block", () => {
+    function hexOf(block: string, name: string): [number, number, number] {
+        const match = new RegExp(`(?<!\\()--${name}:\\s*#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\\b`).exec(block)
+        if (!match) throw new Error(`--${name} not found as a #rgb/#rrggbb declaration`)
+        const hex = match[1].length === 3 ? match[1].split("").map((c) => c + c).join("") : match[1]
+        return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)]
+    }
+    function relativeLuminance([r, g, b]: [number, number, number]): number {
+        const channel = (c: number) => {
+            const s = c / 255
+            return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+        }
+        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+    }
+    function contrastRatio(a: [number, number, number], b: [number, number, number]): number {
+        const [lighter, darker] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    const mediaBlock = extractBlock(themeCss, /^@media \(prefers-color-scheme: dark\) \{/m)
+    const BLOCKS: Record<string, string> = {
+        light: extractBlock(themeCss, /^:root \{/m),
+        "dark (prefers-color-scheme)": extractBlock(mediaBlock, /:root:not\(\[data-theme="light"]\) \{/),
+        "dark (data-theme)": extractBlock(themeCss, /^:root\[data-theme="dark"] \{/m),
+    }
+    const SURFACES = ["page-bg", "surface", "surface-sunken", "accent-50"]
+    const KINDS = ["species", "reaction", "ts", "network"]
+    const KIND_TINTS = KINDS.map((kind) => `kind-${kind}-bg`)
+
+    function worst(block: string, foreground: string, backgrounds: string[]): { ratio: number; against: string } {
+        const fg = hexOf(block, foreground)
+        let result = { ratio: Infinity, against: "" }
+        for (const bg of backgrounds) {
+            const ratio = contrastRatio(fg, hexOf(block, bg))
+            if (ratio < result.ratio) result = { ratio, against: bg }
+        }
+        return result
+    }
+
+    for (const [blockName, block] of Object.entries(BLOCKS)) {
+        for (const token of ["focus-ring", "control-border"]) {
+            it(`${blockName}: --${token} is at least 3:1 on every surface`, () => {
+                const { ratio, against } = worst(block, token, SURFACES)
+                expect(ratio, `--${token} vs --${against} (${ratio.toFixed(2)}:1)`).toBeGreaterThanOrEqual(3)
+            })
+        }
+
+        for (const token of ["muted", "ink-2", "ink", "accent"]) {
+            it(`${blockName}: --${token} is at least 4.5:1 on the surfaces and kind tints`, () => {
+                const { ratio, against } = worst(block, token, [...SURFACES, ...KIND_TINTS])
+                expect(ratio, `--${token} vs --${against} (${ratio.toFixed(2)}:1)`).toBeGreaterThanOrEqual(4.5)
+            })
+        }
+
+        for (const kind of KINDS) {
+            it(`${blockName}: --kind-${kind}-ink is at least 4.5:1 on its own tint and the surfaces`, () => {
+                const { ratio, against } = worst(block, `kind-${kind}-ink`, [`kind-${kind}-bg`, ...SURFACES])
+                expect(ratio, `--kind-${kind}-ink vs --${against} (${ratio.toFixed(2)}:1)`).toBeGreaterThanOrEqual(4.5)
+            })
+            it(`${blockName}: --kind-${kind} graphic tone is at least 3:1 on the surfaces`, () => {
+                const { ratio, against } = worst(block, `kind-${kind}`, SURFACES)
+                expect(ratio, `--kind-${kind} vs --${against} (${ratio.toFixed(2)}:1)`).toBeGreaterThanOrEqual(3)
+            })
+        }
+
+        it(`${blockName}: --status-ok-ink is at least 4.5:1 on its tint`, () => {
+            const { ratio } = worst(block, "status-ok-ink", ["status-ok-bg"])
+            expect(ratio).toBeGreaterThanOrEqual(4.5)
+        })
+    }
+})
+
+describe("the two dark blocks declare identical values for every token", () => {
+    const mediaBlock = extractBlock(themeCss, /^@media \(prefers-color-scheme: dark\) \{/m)
+    const declarations = (block: string) => {
+        const out = new Map<string, string>()
+        for (const match of stripComments(block).matchAll(/(?<!\()--([a-zA-Z0-9-]+)\s*:\s*([^;]+);/g)) out.set(match[1], match[2].trim())
+        return out
+    }
+    const fromMedia = declarations(extractBlock(mediaBlock, /:root:not\(\[data-theme="light"]\) \{/))
+    const fromAttribute = declarations(extractBlock(themeCss, /^:root\[data-theme="dark"] \{/m))
+
+    it("declares a non-trivial token set", () => {
+        expect(fromMedia.size).toBeGreaterThan(40)
+    })
+
+    it("has the same value for each name", () => {
+        expect(Object.fromEntries(fromMedia)).toEqual(Object.fromEntries(fromAttribute))
+    })
+})
+
+describe("no stylesheet draws a focus outline with --accent-300", () => {
+    for (const [name, css] of Object.entries(NON_TOKEN_STYLESHEETS)) {
+        it(`${name} focus outlines use --focus-ring`, () => {
+            expect(stripComments(css)).not.toMatch(/outline\s*:[^;{}]*var\(--accent-300\)/)
+        })
+    }
+})

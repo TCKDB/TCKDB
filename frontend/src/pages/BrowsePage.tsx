@@ -23,6 +23,7 @@ import { archiveEmptyMessage, filteredEmptyMessage, pagedPastEndMessage } from "
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import type { BrowseState } from "../hooks/useBrowse"
 import { useBrowse } from "../hooks/useBrowse"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 const PAGE_SIZE = 20
 
@@ -109,6 +110,7 @@ export default function BrowsePage() {
 
     const state = useBrowse(kind, filters, offset, PAGE_SIZE)
     const content = BROWSE_KIND_CONTENT[kind]
+    useDocumentTitle(content.breadcrumbLabel)
 
     return (
         <section className="browse-page">

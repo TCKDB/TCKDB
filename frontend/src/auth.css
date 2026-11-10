@@ -59,7 +59,7 @@
     align-items: center;
     gap: .45rem;
     max-width: 14rem;
-    border: 1px solid var(--line);
+    border: 1px solid var(--control-border);
     border-radius: .4rem;
     padding: .3rem .6rem;
     background: var(--surface-sunken);
@@ -165,7 +165,7 @@
 .account-menu-item:focus-visible {
     background: var(--accent-50);
     color: var(--accent-700);
-    outline: 3px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: -2px;
 }
 
@@ -205,7 +205,7 @@
     gap: .2rem;
     margin: 0 0 1.75rem;
     padding: .2rem;
-    border: 1px solid var(--line);
+    border: 1px solid var(--control-border);
     border-radius: .5rem;
     background: var(--surface-sunken);
 }
@@ -229,7 +229,7 @@
     box-shadow: 0 1px 3px var(--shadow-color);
 }
 
-.auth-mode-option:focus-visible { outline: 2px solid var(--accent-300); outline-offset: 2px; }
+.auth-mode-option:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 
 .auth-form {
     display: flex;
@@ -265,8 +265,8 @@
 }
 
 .auth-field input:focus-visible {
-    outline: 2px solid var(--accent-300);
-    outline-offset: 1px;
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
 }
 
 .auth-field-hint {
@@ -356,7 +356,7 @@
 .api-key-create .auth-submit { align-self: auto; }
 
 .api-key-revoke {
-    border: 1px solid var(--line);
+    border: 1px solid var(--control-border);
     border-radius: .35rem;
     padding: .25rem .6rem;
     background: var(--surface);

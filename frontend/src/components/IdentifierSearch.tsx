@@ -13,6 +13,7 @@ import { classifyIdentifier, looksLikeReferenceAttempt, resultPath, type Identif
 import { classifyReactionQuery, type ReactionQueryClassification } from "../domain/reactionQuery"
 import { chargeDisplay, entryCountDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
+import { useAnnounce } from "../hooks/useAnnounce"
 import { Formula, SpeciesFace } from "./Formula"
 import { ReactionEquation } from "./ReactionEquation"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
@@ -46,6 +47,12 @@ const PLACEHOLDER: Record<SearchMode, string> = {
 const HELP: Record<SearchMode, string> = {
     species: "Exact only · no common-name or external resolver lookup",
     reactions: "Exact only · searches both directions · empty is a real result, not an error",
+}
+
+const NO_MATCH_ANNOUNCEMENT = "No exact match"
+
+function matchCountAnnouncement(count: number): string {
+    return `${count} ${count === 1 ? "match" : "matches"}`
 }
 
 /**
@@ -142,6 +149,7 @@ export function IdentifierSearch() {
     const [reactionResult, setReactionResult] = useState<ReactionResultState | null>(null)
     const [isSearching, setIsSearching] = useState(false)
     const activeRequest = useRef<AbortController | null>(null)
+    const announce = useAnnounce()
 
     useEffect(() => () => { activeRequest.current?.abort(); activeRequest.current = null }, [])
 
@@ -182,10 +190,12 @@ export function IdentifierSearch() {
             if (activeRequest.current !== controller || controller.signal.aborted) return
             if (found.length === 0) {
                 setMessage(`No exact ${classified.label} record was found.`)
+                announce(NO_MATCH_ANNOUNCEMENT)
             } else if (classified.identifier.kind === "species-ref" || classified.identifier.kind === "species-entry-ref") {
                 navigate(resultPath(found[0]))
             } else {
                 setMatches(found)
+                announce(matchCountAnnouncement(found.length))
                 if (isStructureQueryKind(classified.identifier.kind)) {
                     const smilesValues = [...new Set(found.map((match) => match.smiles).filter((value): value is string => Boolean(value)))]
                     if (smilesValues.length > 0) {
@@ -225,8 +235,13 @@ export function IdentifierSearch() {
                 : { reactants: classified.smiles, products: [] as string[] }
             const { matches: found, total } = await searchReactionEquation({ reactants, products }, controller.signal)
             if (activeRequest.current !== controller || controller.signal.aborted) return
-            if (found.length === 0) setMessage(reactionEmptyMessage(classified))
-            else setReactionResult({ matches: found, total, query: classified })
+            if (found.length === 0) {
+                setMessage(reactionEmptyMessage(classified))
+                announce(NO_MATCH_ANNOUNCEMENT)
+            } else {
+                setReactionResult({ matches: found, total, query: classified })
+                announce(matchCountAnnouncement(total))
+            }
         } catch (error) {
             if (activeRequest.current !== controller || controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return
             if (error instanceof ScientificRateLimitError) {

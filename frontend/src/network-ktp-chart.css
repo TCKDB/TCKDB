@@ -59,7 +59,7 @@
     align-items: center;
     gap: .4rem;
     padding: .3rem .6rem;
-    border: 1px solid var(--line);
+    border: 1px solid var(--control-border);
     border-radius: 999px;
     background: var(--surface-sunken);
     font: var(--type-data-font);

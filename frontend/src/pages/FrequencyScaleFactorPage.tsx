@@ -10,6 +10,7 @@ import { CopyButton } from "../components/RefsDisclosure"
 import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
 import { useFrequencyScaleFactor } from "../hooks/useFrequencyScaleFactor"
 import type { FrequencyScaleFactorRecord, FrequencyScaleFactorUsage } from "../api/methodsApi"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
@@ -40,6 +41,7 @@ export default function FrequencyScaleFactorPage() {
 }
 
 function FrequencyScaleFactorDetail({ record }: { record: FrequencyScaleFactorRecord }) {
+    useDocumentTitle("Frequency scale factor", String(record.frequency_scale_factor.value))
     const fsf = record.frequency_scale_factor
     const usage = record.used_by ?? []
 

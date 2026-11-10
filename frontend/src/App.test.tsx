@@ -2,7 +2,7 @@ import { StrictMode } from "react"
 import { delay, http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import App from "./App"
@@ -345,6 +345,15 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     // dedicated test below instead of a row in this table.
 ]
 
+const EXPECTED_TITLES: Record<string, string> = {
+    "/species": "Species · TCKDB",
+    "/species/spc_abcde234567abcde234567abcd": "H2O · Species · TCKDB",
+    "/conformer-groups/cfg_abc": "Conformer · TCKDB",
+    "/conformer-observations/cfo_abc": "Conformer observation · TCKDB",
+    "/calculations/calc_abc": "Single-point · Calculation · TCKDB",
+    "/geometries/geom_abc": "Geometry · TCKDB",
+}
+
 describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
     it("renders the declared public route deterministically", async () => {
         if (path === "/species") {
@@ -456,6 +465,9 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
         }
         window.history.replaceState({}, "", path); render(<App />)
         expect(await screen.findByRole("heading", { name: heading })).toBeVisible()
+        // One h1 per route, and a title that names the page.
+        expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
+        await waitFor(() => expect(document.title).toBe(EXPECTED_TITLES[path]))
         // Route ordering (item 1 of the per-kind browse paths): a heading
         // match alone does not prove the URL actually resolved to THIS
         // route rather than some other one that happens to render the same
@@ -551,6 +563,49 @@ describe("/methods renders the real methods index, not RecordPlaceholderPage", (
         // but with no `<code>` ref and none of the vocabulary content this
         // page fetches -- confirming the three fetched rows above render is
         // what proves this is genuinely `MethodsIndexPage`.
+    })
+})
+
+describe("page title and focus on navigation", () => {
+    function browseHandlers() {
+        server.use(
+            ...emptyVocabHandlers(),
+            http.get("/api/v1/scientific/species/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+            http.get("/api/v1/scientific/reactions/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+        )
+    }
+
+    it("sets the default title on the home page", async () => {
+        render(<App />)
+        expect(await screen.findByRole("heading", { name: "TCKDB" })).toBeVisible()
+        await waitFor(() => expect(document.title).toBe("Home · TCKDB"))
+    })
+
+    it("changes the title and moves focus to the new h1 when a nav link is followed", async () => {
+        browseHandlers()
+        const user = userEvent.setup()
+        window.history.replaceState({}, "", "/species")
+        render(<App />)
+        await screen.findByText(/have been deposited in this archive yet/)
+        expect(document.title).toBe("Species · TCKDB")
+        // First load does not steal focus.
+        expect(document.body).toHaveFocus()
+        await user.click(screen.getByRole("link", { name: "Reactions" }))
+        const heading = await screen.findByRole("heading", { name: "Browse reactions" })
+        await waitFor(() => expect(heading).toHaveFocus())
+        expect(document.title).toBe("Reactions · TCKDB")
+    })
+
+    it("keeps the skip link, pointing at a main element that can take focus", async () => {
+        const user = userEvent.setup()
+        render(<App />)
+        await screen.findByRole("heading", { name: "TCKDB" })
+        await user.tab()
+        const skip = screen.getByText("Skip to content")
+        expect(skip).toHaveFocus()
+        expect(skip).toHaveAttribute("href", "#main-content")
+        // jsdom does not follow fragment links, so the focus move itself is checked in a real browser.
+        expect(document.getElementById("main-content")).toHaveAttribute("tabindex", "-1")
     })
 })
 

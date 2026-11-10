@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildEquationSides, type EquationParticipantInput } from "./reactionEquation"
+import { buildEquationSides, equationText, type EquationParticipantInput } from "./reactionEquation"
 
 function participant(overrides: Partial<EquationParticipantInput> & Pick<EquationParticipantInput, "species_entry_ref" | "smiles" | "participant_index">): EquationParticipantInput {
     return { stoichiometry: 1, ...overrides }
@@ -98,5 +98,17 @@ describe("buildEquationSides", () => {
         )
         expect(sides.reactants[0].chips).toEqual(["R enantiomer"])
         expect(sides.reactants[1].chips).toEqual([])
+    })
+})
+
+describe("equationText", () => {
+    it("writes formulas with coefficients, falling back to SMILES, and the arrow for reversibility", () => {
+        const reactants = [
+            participant({ species_entry_ref: "spe_a", smiles: "[NH2]", formula: "NH2", participant_index: 0 }),
+            participant({ species_entry_ref: "spe_a", smiles: "[NH2]", formula: "NH2", participant_index: 1 }),
+        ]
+        const products = [participant({ species_entry_ref: "spe_b", smiles: "NN", participant_index: 0 })]
+        expect(equationText(reactants, products, true)).toBe("2 NH2 ⇌ NN")
+        expect(equationText(reactants, products, false)).toBe("2 NH2 → NN")
     })
 })

@@ -72,3 +72,16 @@ export function buildEquationSides(
 ): EquationSides {
     return { reactants: collapseSide(reactants), products: collapseSide(products) }
 }
+
+/** The equation as plain text for a page title: "CH4 + OH → CH3 + H2O". */
+export function equationText(
+    reactants: EquationParticipantInput[],
+    products: EquationParticipantInput[],
+    reversible: boolean,
+): string {
+    const sides = buildEquationSides(reactants, products)
+    const side = (participants: EquationParticipant[]) => participants
+        .map((p) => `${p.coefficient > 1 ? `${p.coefficient} ` : ""}${p.formula ?? p.smiles}`)
+        .join(" + ")
+    return `${side(sides.reactants)} ${reversible ? "⇌" : "→"} ${side(sides.products)}`
+}

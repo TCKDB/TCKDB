@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { GeometryViewer } from "./GeometryViewer"
 import { NAMED_DIHEDRAL_ORACLE_CASES } from "../domain/dihedralOracle.fixture"
 
@@ -512,5 +513,77 @@ describe("GeometryViewer — isotope labels (#685)", () => {
         click(onPick, 1)
         const list = await screen.findByRole("list")
         expect(within(list).getByText(/Distance O1–²H2/)).toBeInTheDocument()
+    })
+})
+
+describe("GeometryViewer — keyboard atom picker", () => {
+    async function measureByKeyboard(user: ReturnType<typeof userEvent.setup>, serials: number[], atoms = CH3_ATOMS) {
+        const form = screen.getByRole("group", { name: "Measure with the keyboard" })
+        for (const [slot, serial] of serials.entries()) {
+            const select = within(form).getByLabelText(new RegExp(`^Atom ${slot + 1}`))
+            await user.selectOptions(select, String(serial))
+        }
+        await user.click(within(form).getByRole("button", { name: "Measure" }))
+        return atoms
+    }
+
+    it("measures a distance from two chosen atoms, the same entry a click sequence builds", async () => {
+        const user = userEvent.setup()
+        await renderReady()
+        await measureByKeyboard(user, [0, 1])
+        const list = await screen.findByRole("list")
+        expect(within(list).getAllByRole("listitem")).toHaveLength(1)
+        expect(within(list).getByText(/Distance C1–H2/).parentElement).toHaveTextContent("1.0790 Å")
+        expect(screen.getByText("Distance measured.")).toHaveAttribute("role", "status")
+    })
+
+    it("gives the same text as picking the same four atoms on the canvas", async () => {
+        const user = userEvent.setup()
+        await renderReady({ atoms: NONPLANAR_ATOMS, formula: "C4", xyzText: null })
+        await measureByKeyboard(user, [0, 1, 2, 3], NONPLANAR_ATOMS)
+        const keyboardText = (await screen.findByRole("list")).textContent
+        expect(keyboardText).toMatch(/Dihedral C1–C2–C3–C4/)
+        cleanup()
+        resetCalls()
+
+        const onPick = await renderReady({ atoms: NONPLANAR_ATOMS, formula: "C4", xyzText: null })
+        for (const serial of [0, 1, 2, 3]) click(onPick, serial)
+        expect((await screen.findByRole("list")).textContent).toBe(keyboardText)
+    })
+
+    it("selects the measured atoms so the canvas highlights them", async () => {
+        const user = userEvent.setup()
+        await renderReady()
+        await measureByKeyboard(user, [1, 0, 2])
+        await waitFor(() => expect(calls.addSphere.length).toBeGreaterThanOrEqual(3))
+        expect(await screen.findByText(/Angle H2–C1–H3/)).toBeInTheDocument()
+    })
+
+    it("refuses a repeated atom with an inline error linked from the selects", async () => {
+        const user = userEvent.setup()
+        await renderReady()
+        await measureByKeyboard(user, [0, 0])
+        const error = await screen.findByText(/Atom 2 repeats Atom 1/)
+        expect(screen.queryByRole("list")).toBeNull()
+        const select = screen.getByLabelText("Atom 2")
+        expect(select).toHaveAttribute("aria-invalid", "true")
+        expect(select.getAttribute("aria-describedby")).toBe(error.id)
+    })
+
+    it("asks for Atom 3 before Atom 4", async () => {
+        const user = userEvent.setup()
+        await renderReady()
+        const form = screen.getByRole("group", { name: "Measure with the keyboard" })
+        await user.selectOptions(within(form).getByLabelText("Atom 1"), "0")
+        await user.selectOptions(within(form).getByLabelText("Atom 2"), "1")
+        await user.selectOptions(within(form).getByLabelText(/^Atom 4/), "2")
+        await user.click(within(form).getByRole("button", { name: "Measure" }))
+        expect(await screen.findByText("Choose Atom 3 before Atom 4.")).toBeInTheDocument()
+    })
+
+    it("labels options with the atom number and symbol", async () => {
+        await renderReady()
+        const select = screen.getByLabelText("Atom 1")
+        expect(within(select).getByRole("option", { name: "2 · H" })).toBeInTheDocument()
     })
 })

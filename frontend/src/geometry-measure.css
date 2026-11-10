@@ -142,6 +142,81 @@
     font-variant-numeric: tabular-nums;
 }
 
+.measure-keyboard {
+    margin: 1rem 0 0;
+    padding-top: .9rem;
+    border-top: 1px solid var(--line-2);
+}
+
+.measure-keyboard fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.measure-keyboard legend {
+    padding: 0;
+    color: var(--ink);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+}
+
+.measure-keyboard-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: .6rem .9rem;
+    margin: .75rem 0 0;
+}
+
+.measure-keyboard-fields label {
+    display: grid;
+    gap: .3rem;
+    min-width: 0;
+    color: var(--ink-2);
+    font: var(--type-note-font);
+    letter-spacing: var(--type-note-tracking);
+}
+
+.measure-keyboard-fields select {
+    width: 100%;
+    min-width: 0;
+    padding: .4rem .5rem;
+    border: 1px solid var(--control-border);
+    border-radius: .3rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: var(--type-value-font);
+}
+
+.measure-keyboard-fields select[aria-invalid="true"] {
+    border-color: var(--warning);
+}
+
+.measure-keyboard-error {
+    margin: .6rem 0 0;
+    color: var(--warning);
+    font: var(--type-note-font);
+    letter-spacing: var(--type-note-tracking);
+}
+
+.measure-keyboard-submit {
+    margin: .75rem 0 0;
+    padding: .4rem .9rem;
+    border: 1px solid var(--control-border);
+    border-radius: .3rem;
+    background: var(--surface);
+    color: var(--accent);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    cursor: pointer;
+}
+
+.measure-keyboard-submit:hover {
+    border-color: var(--accent);
+    background: var(--accent-50);
+}
+
 @media (max-width: 680px) {
     .viewer-measurements { padding: .9rem 1rem 1.2rem; }
     .measurement-list li { flex-direction: column; align-items: flex-start; }

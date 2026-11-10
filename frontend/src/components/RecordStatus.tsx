@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import type { ScientificRecordState } from "../hooks/useScientificRecord"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { RetryCountdown } from "./RetryCountdown"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 /**
  * Shared non-ready rendering for every `/scientific/*` detail page built
@@ -30,6 +31,7 @@ export function RecordStatus({ state, ref, kind, loadingDetail }: {
     loadingDetail: string
 }) {
     const Kind = kind.charAt(0).toUpperCase() + kind.slice(1)
+    useDocumentTitle(Kind)
 
     if (state.status === "loading") {
         return <Notice title={`Loading ${kind}…`} busy message={loadingDetail} />

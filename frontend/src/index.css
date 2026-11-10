@@ -1,11 +1,11 @@
 @import "./design-system.css";
 @font-face { font-family: "IBM Plex Serif"; src: url("/fonts/ibm-plex/IBMPlexSerif-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "IBM Plex Serif"; src: url("/fonts/ibm-plex/IBMPlexSerif-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
-@font-face { font-family: "IBM Plex Sans"; src: url("/fonts/ibm-plex/IBMPlexSans-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
-@font-face { font-family: "IBM Plex Sans"; src: url("/fonts/ibm-plex/IBMPlexSans-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Instrument Sans"; src: url("/fonts/instrument-sans/InstrumentSans-latin.woff2") format("woff2"); font-weight: 400 600; font-display: swap; }
+@font-face { font-family: "Bricolage Grotesque"; src: url("/fonts/bricolage-grotesque/BricolageGrotesque-latin.woff2") format("woff2"); font-weight: 600; font-display: swap; }
 @font-face { font-family: "IBM Plex Mono"; src: url("/fonts/ibm-plex/IBMPlexMono-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "IBM Plex Mono"; src: url("/fonts/ibm-plex/IBMPlexMono-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
-:root { --serif: "IBM Plex Serif", Georgia, serif; --sans: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, monospace;
+:root { --serif: "IBM Plex Serif", Georgia, serif; --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; --sans: "Instrument Sans", "Segoe UI", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, monospace;
     /* Layout measures. Non-colour and theme-invariant, like the font
        tokens above: short instructions and section headings must not wrap
        while the page still has room beside them (92rem fits the longest,
@@ -35,6 +35,7 @@ code, pre, kbd, samp { font-family: var(--mono); }
    value either way -- this only changes elements that never set one. */
 h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 .skip-link { position: fixed; z-index: 3; top: -4rem; left: 1rem; padding: .65rem .9rem; background: var(--surface); color: var(--accent-700); border: 1px solid var(--accent); } .skip-link:focus { top: 1rem; }
+.skip-link:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 
 /* `.value-pill` / `.value-pill--muted` moved to `design-system.css`
    (post-review, PR D): both must live in ONE file, in the right order, for
@@ -69,6 +70,8 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
  */
 .archive-shell { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
 .archive-shell > main { flex: 1; }
+/* Focus moved here by `RouteFocus` is a landing point, not a control; no ring. */
+main:focus, main h1[tabindex="-1"]:focus { outline: none; }
 .utility-bar { height: 48px; padding: 0 clamp(1rem, 4vw, 2.5rem); display: flex; align-items: center; justify-content: space-between; background: var(--surface); border-bottom: 1px solid var(--line); }
 /* SHOULD-FIX-10 (species-entry/browse/chrome residuals re-review): `.brand`
    was `600 .76rem var(--mono)` (12.16px) and its icon square `600 .85rem
@@ -86,7 +89,7 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
    role already matches everywhere else "a short, weighted UI control
    label" appears (tab strips, disclosure summaries). */
 .utility-bar nav a { padding: .3rem 0; color: var(--ink-2); font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); }
-.utility-bar nav a[aria-current="page"], .utility-bar nav a:hover { color: var(--accent); }.utility-bar a:focus-visible, button:focus-visible, input:focus-visible, .search-results a:focus-visible { outline: 3px solid var(--accent-300); outline-offset: 3px; }
+.utility-bar nav a[aria-current="page"], .utility-bar nav a:hover { color: var(--accent); }.utility-bar a:focus-visible, button:focus-visible, input:focus-visible, .search-results a:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 .archive-hero { max-width: 53rem; margin: 0 auto; padding: clamp(4rem, 11vw, 7rem) 1.25rem 4rem; text-align: center; }
 /* `.eyebrow` -- the site's standalone kicker (as opposed to `.t-label`'s
    repeated dt/th/legend role). Was its own one-off .72rem/.19em pair;
@@ -152,9 +155,9 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
     color: var(--accent-700);
     box-shadow: 0 1px 2px var(--shadow-color);
 }
-.identifier-search-mode-option:focus-visible { outline: 2px solid var(--accent-300); outline-offset: 2px; }
-.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--line); border-radius: .75rem; background: var(--surface); box-shadow: 0 8px 28px -12px var(--shadow-color); }
-.search-row:focus-within { border-color: var(--accent-300); box-shadow: 0 0 0 4px var(--accent-50), 0 8px 28px -12px var(--shadow-color); }
+.identifier-search-mode-option:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--control-border); border-radius: .75rem; background: var(--surface); box-shadow: 0 8px 28px -12px var(--shadow-color); }
+.search-row:focus-within { border-color: var(--focus-ring); box-shadow: 0 0 0 4px var(--accent-50), 0 8px 28px -12px var(--shadow-color); }
 /* The search-icon glyph ("⌕") -- a decorative symbol sized to sit
    comfortably inside the input row, not text carrying a type-scale role
    (the same "icon glyph, not prose" call `.linkage-connector`'s arrow
@@ -194,7 +197,7 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
     display: flex;
     gap: .2rem;
     padding: .2rem;
-    border: 1px solid var(--line);
+    border: 1px solid var(--control-border);
     border-radius: .4rem;
     background: var(--surface-sunken);
 }
@@ -397,7 +400,7 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 
 .record-breadcrumbs a:focus-visible,
 .entry-card h4 a:focus-visible {
-    outline: 3px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
 }
 /*
