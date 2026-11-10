@@ -68,6 +68,10 @@ type HandlerOptions = {
     // calc_sp_3 (the second shape's energy) was run with ORCA, the reference's with Gaussian.
     twoPrograms?: boolean
     optFails?: boolean
+    // The single-point read succeeds but leaves out calc_sp_1b.
+    omitSp1b?: boolean
+    // Only the (slow) optimisation read carries a second level of theory.
+    optSecondLevel?: boolean
     usageFails?: boolean
     // Planted into the second group's typed label.
     typedLabel?: string
@@ -384,13 +388,14 @@ function handlers(options: HandlerOptions = {}) {
         // it fetched (see the design brief's recurring-defect list: "a
         // fixture where every row was identical let a records[0] bug
         // survive").
-        http.get("/api/v1/scientific/species-calculations/search", ({ request }) => {
+        http.get("/api/v1/scientific/species-calculations/search", async ({ request }) => {
             const type = new URL(request.url).searchParams.get("calculation_type")
             if (type === "opt") {
+                if (options.optSecondLevel) await new Promise((resolve) => setTimeout(resolve, 400))
                 if (options.optFails) return HttpResponse.json({ detail: "archive unavailable" }, { status: 503 })
                 const opt = (ref: string, hartree: number) => ({
                     calculation: { calculation_ref: ref, calculation_type: "opt" }, energy: { energy_hartree: hartree, energy_kind: "final_energy" },
-                    level_of_theory: lot, software_release: gaussian,
+                    level_of_theory: options.optSecondLevel && ref === "calc_opt_3" ? lotB : lot, software_release: gaussian,
                 })
                 return HttpResponse.json({ records: [opt("calc_opt_1a", -75.9), opt("calc_opt_1b", -75.8), opt("calc_opt_2", -75.95), opt("calc_opt_3", -76.0)] })
             }
@@ -398,7 +403,7 @@ function handlers(options: HandlerOptions = {}) {
             return HttpResponse.json({
                 records: [
                     { calculation: { calculation_ref: "calc_sp_1", calculation_type: "sp" }, energy: { energy_hartree: -76.111111, energy_kind: "electronic_energy" }, level_of_theory: lot, software_release: gaussian },
-                    { calculation: { calculation_ref: "calc_sp_1b", calculation_type: "sp" }, energy: { energy_hartree: -76.222222, energy_kind: "electronic_energy" }, level_of_theory: options.twoLevels ? lotB : lot, software_release: gaussian },
+                    ...(options.omitSp1b ? [] : [{ calculation: { calculation_ref: "calc_sp_1b", calculation_type: "sp" }, energy: { energy_hartree: -76.222222, energy_kind: "electronic_energy" }, level_of_theory: options.twoLevels ? lotB : lot, software_release: gaussian }]),
                     { calculation: { calculation_ref: "calc_sp_3", calculation_type: "sp" }, energy: { energy_hartree: -76.333333, energy_kind: "electronic_energy" }, level_of_theory: lot, software_release: options.twoPrograms ? orca : gaussian },
                 ],
             })
@@ -437,6 +442,7 @@ function handlers(options: HandlerOptions = {}) {
                         : options.energyAnswer === "disagree"
                             ? member({
                                 status: "unresolved", relative_energy_kj_mol: null, value_hartree: null, absent_reason: "repeat_values_disagree",
+                                energy_calculation_refs: [], determination_refs: ["d1", "d2"],
                                 alternates: [{ determination_ref: "d1", value_hartree: -76.1 }, { determination_ref: "d2", value_hartree: -76.2 }],
                             })
                             : member({})
@@ -944,13 +950,29 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         await waitFor(() => expect(screen.queryByText(/still being read from the archive/)).not.toBeInTheDocument())
     })
 
-    it("renders 'not recorded' for an sp calculation with no matching energy record, rather than dropping its row", async () => {
+    it("says could not be read in the energy cell, not not recorded, when the single-point read fails", async () => {
         server.use(...handlers({ spEnergiesFail: true }))
         window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
         render(<App />)
         expect((await screen.findAllByRole("link", { name: "calc_sp_1" })).length).toBeGreaterThan(0)
         await waitFor(() => expect(screen.queryByText(/still being read from the archive/)).not.toBeInTheDocument())
-        expect(screen.getAllByText("not recorded").length).toBeGreaterThan(0)
+        const table = screen.getByRole("table", { name: "Single-point energies" })
+        const cells = () => Array.from(table.querySelectorAll('td[data-label="Energy"]')).map((cell) => cell.textContent)
+        expect(cells()).toContain("could not be read")
+        expect(cells()).not.toContain("not recorded")
+        expect(screen.getAllByText("The single-point energies could not be read.").length).toBeGreaterThan(0)
+    })
+
+    it("renders 'not recorded' for a calculation the successful read leaves out, rather than dropping its row", async () => {
+        server.use(...handlers({ omitSp1b: true }))
+        window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
+        render(<App />)
+        expect((await screen.findAllByRole("link", { name: "calc_sp_1b" })).length).toBeGreaterThan(0)
+        await waitFor(() => expect(screen.queryByText(/still being read from the archive/)).not.toBeInTheDocument())
+        const table = screen.getByRole("table", { name: "Single-point energies" })
+        const cells = Array.from(table.querySelectorAll('td[data-label="Energy"]')).map((cell) => cell.textContent)
+        expect(cells.filter((text) => text === "not recorded")).toHaveLength(1)
+        expect(cells).not.toContain("could not be read")
     })
 
     it("shows how many optimization calculations each observation has, on the Geometry tab", async () => {
@@ -1580,8 +1602,9 @@ describe("species-entry page: relative energies on the shape cards", () => {
         await openEntry({ energyAnswer: "disagree" })
         const card = cardFor("Conformer Group 2")
         expect(await within(card).findByText(/Records disagree\./)).toBeVisible()
-        expect(within(card).getByText(/\u221276\.100000, \u221276\.200000 hartree/)).toBeVisible()
-        expect(within(card).getByRole("link", { name: "calc_sp_3" })).toBeVisible()
+        expect(card).toHaveTextContent(/Stored values: \u221276\.100000 hartree \(d1\), \u221276\.200000 hartree \(d2\)\./)
+        // The determinations have no page of their own, so they are plain refs, not links.
+        expect(within(card).queryByRole("link", { name: "d1" })).not.toBeInTheDocument()
     })
 
     it("explains an unavailable reference instead of showing differences", async () => {
@@ -1730,6 +1753,17 @@ describe("species-entry page: failed energy reads, pictures and announcements", 
         expect(await screen.findByRole("combobox", { name: "Level of theory" })).toHaveValue("lot_a")
     })
 
+    it("waits for the energy reads before offering levels, so a level that only the slow read adds is not missed", async () => {
+        await openEntry({ optSecondLevel: true })
+        expect(screen.getByText("Reading the energies on this entry.")).toBeVisible()
+        expect(relativeEnergyBodies).toHaveLength(0)
+        const picker = await screen.findByRole("combobox", { name: "Level of theory" })
+        expect(picker).toHaveValue("")
+        expect(within(picker).getByRole("option", { name: "Choose a level" })).toBeInTheDocument()
+        expect(within(picker).getAllByRole("option")).toHaveLength(3)
+        expect(relativeEnergyBodies).toHaveLength(0)
+    })
+
     it("announces a selection politely", async () => {
         const user = userEvent.setup()
         await openEntry()
@@ -1794,7 +1828,9 @@ describe("species-entry page: pictures read geometries only when asked or near",
         await waitFor(() => expect(new Set(geometryReads).size).toBe(12))
         const asks = screen.getAllByRole("button", { name: "Show picture" })
         expect(asks).toHaveLength(8)
+        const askedCard = asks[0].closest(".conformer-card") as HTMLElement
         await user.click(asks[0])
+        expect(document.activeElement).toBe(within(askedCard).getAllByRole("button")[0])
         await waitFor(() => expect(new Set(geometryReads).size).toBe(13))
     })
 
@@ -1812,8 +1848,10 @@ describe("species-entry page: pictures read geometries only when asked or near",
         await screen.findByRole("heading", { name: "Its 3D shapes" })
         act(() => intersectAll())
         const retry = await screen.findByRole("button", { name: "Try the picture again" }, { timeout: 8000 })
+        expect(within(cardFor("Conformer Group 2")).getByText("Picture not loaded yet")).toBeInTheDocument()
         allow = true
         await user.click(retry)
+        expect(document.activeElement).toBe(within(cardFor("Conformer Group 2")).getByRole("button", { name: /Conformer Group 2/ }))
         await waitFor(() => expect(within(cardFor("Conformer Group 2")).queryByRole("button", { name: "Try the picture again" })).not.toBeInTheDocument(), { timeout: 8000 })
         await waitFor(() => expect(cardFor("Conformer Group 2").querySelector("svg.mol-poster")).not.toBeNull())
     })

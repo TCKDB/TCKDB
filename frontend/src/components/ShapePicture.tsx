@@ -8,7 +8,7 @@ import { MolPoster } from "./MolPoster"
  * The selectable top of a shape card: picture, label and counts in one button. `auto` cards read their geometry once
  * they are near the viewport; the others wait for the reader to ask, so a long list does not spend the read budget on
  * pictures nobody scrolled to. After a rate-limit wait the reader can ask again. The ask is its own button beside the
- * select button, never inside it.
+ * select button, never inside it; asking returns focus to the select button.
  */
 export function ShapeCardHead({ geometryRef, formula, auto, selected, label, counts, onSelect }: {
     geometryRef: string | null
@@ -20,6 +20,7 @@ export function ShapeCardHead({ geometryRef, formula, auto, selected, label, cou
     onSelect: () => void
 }) {
     const ref = useRef<HTMLSpanElement | null>(null)
+    const selectRef = useRef<HTMLButtonElement | null>(null)
     const near = useNearViewport(ref)
     const [asked, setAsked] = useState(0)
     const wanted = geometryRef !== null && ((auto && near) || asked > 0)
@@ -29,11 +30,11 @@ export function ShapeCardHead({ geometryRef, formula, auto, selected, label, cou
     const canAsk = geometryRef !== null && atoms.length === 0 && ((state.status === "idle" && !auto) || state.status === "rate-limited")
     return (
         <>
-            <button type="button" className="conformer-card-select" aria-pressed={selected} onClick={onSelect}>
+            <button type="button" className="conformer-card-select" ref={selectRef} aria-pressed={selected} onClick={onSelect}>
                 <span className="shape-picture" ref={ref} aria-hidden="true">
                     {atoms.length > 0
                         ? <MolPoster atoms={atoms} formula={formula} />
-                        : <span className="shape-picture-empty">{missing ? "No picture" : state.status === "loading" || auto ? "Loading picture" : "Picture not shown yet"}</span>}
+                        : <span className="shape-picture-empty">{missing ? "No picture" : state.status === "rate-limited" ? "Picture not loaded yet" : state.status === "loading" || auto ? "Loading picture" : "Picture not shown yet"}</span>}
                 </span>
                 <span className="conformer-card-label">{label}</span>
                 <span className="conformer-card-meta">{counts}</span>
@@ -41,7 +42,7 @@ export function ShapeCardHead({ geometryRef, formula, auto, selected, label, cou
             {canAsk && (
                 <p className="shape-picture-ask">
                     {state.status === "rate-limited" && "The archive is busy. "}
-                    <button type="button" onClick={() => setAsked(asked + 1)}>{state.status === "rate-limited" ? "Try the picture again" : "Show picture"}</button>
+                    <button type="button" onClick={() => { setAsked(asked + 1); selectRef.current?.focus() }}>{state.status === "rate-limited" ? "Try the picture again" : "Show picture"}</button>
                 </p>
             )}
         </>

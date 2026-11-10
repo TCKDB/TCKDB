@@ -44,8 +44,15 @@ describe("cardEnergy", () => {
             kind: "note",
             text: "Computed with ORCA 6.0; the reference with Gaussian 16. Energies from different programs are not compared.",
         })
+        const unknownText = {
+            kind: "note",
+            text: "The program of this value or of the reference is not known to this page, so no difference is shown. Energies from different programs are not compared.",
+        }
         const unknown = cardEnergy(answer({ status: "present", relative_energy_kj_mol: 1.5, energy_calculation_refs: ["calc_none"] }), "cg_m", programs)
-        expect(unknown.kind).toBe("note")
+        expect(unknown).toEqual(unknownText)
+        // One calculation with a known program and one without: no number.
+        const partlyKnown = cardEnergy(answer({ status: "present", relative_energy_kj_mol: 1.5, energy_calculation_refs: ["calc_g", "calc_none"] }), "cg_m", programs)
+        expect(partlyKnown).toEqual(unknownText)
         const mixed = cardEnergy(answer({ status: "present", relative_energy_kj_mol: 1.5, energy_calculation_refs: ["calc_g", "calc_o"] }), "cg_m", programs)
         expect(mixed.kind).toBe("note")
         const noReferenceProgram = cardEnergy(answer({ status: "present", relative_energy_kj_mol: 1.5, energy_calculation_refs: ["calc_g"] }, ["calc_none"]), "cg_m", programs)
@@ -54,7 +61,7 @@ describe("cardEnergy", () => {
 
     it("reports disagreement only for repeat_values_disagree", () => {
         const disagree = cardEnergy(answer({ status: "unresolved", absent_reason: "repeat_values_disagree", alternates: [{ determination_ref: "d", value_hartree: -1 }] }), "cg_m", programs)
-        expect(disagree.kind).toBe("disagree")
+        expect(disagree).toEqual({ kind: "disagree", values: [{ hartree: -1, determinationRef: "d" }] })
         const recipes = cardEnergy(answer({ status: "unresolved", absent_reason: "multiple_recipes_at_level" }), "cg_m", programs)
         expect(recipes).toEqual({ kind: "note", text: "More than one recipe at this level; not compared." })
     })

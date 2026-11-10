@@ -132,11 +132,15 @@
 
 .more-menu-panel > a[aria-current="page"] { color: var(--accent); }
 
-@media (max-width: 680px) {
+/* Between the phone bar and a full-width bar the single row is too wide: search goes on its own row. */
+@media (max-width: 60rem) {
     .site-bar { flex-wrap: wrap; gap: .5rem .75rem; }
     .site-bar-end { display: contents; }
     .site-search { order: 3; flex: 1 0 100%; }
     .site-search input { width: 100%; }
+}
+
+@media (max-width: 680px) {
     .site-search input,
     .site-bar .auth-status-link,
     .more-menu-panel .theme-toggle-option {

@@ -167,6 +167,7 @@ describe("calculations table and page-wide guards", () => {
         expect(extractRule(css, ".shape-calculations-table thead th")).toMatch(/overflow-wrap:\s*normal/)
         expect(extractRule(css, ".shape-calculations-table thead th")).toMatch(/white-space:\s*nowrap/)
         expect(extractRule(css, ".shape-calculations-table tbody th")).toMatch(/min-width:\s*8rem/)
+        expect(extractRule(css, ".shape-calculations-table tbody th")).not.toMatch(/(^|[\s;])width:/)
         expect(css).toMatch(/\.shape-calculations-table td \{ overflow-wrap: anywhere; \}/)
     })
 

@@ -121,7 +121,7 @@ export type CardEnergy =
     | { kind: "unread" }
     | { kind: "reference"; calculationRefs: string[]; program: string | null }
     | { kind: "value"; kjMol: number; calculationRefs: string[]; program: string }
-    | { kind: "disagree"; valuesHartree: number[]; calculationRefs: string[] }
+    | { kind: "disagree"; values: { hartree: number; determinationRef: string }[] }
     | { kind: "note"; text: string }
 
 /** Every reason code the archive can give for a shape with no usable value, in plain words. */
@@ -164,10 +164,10 @@ export function cardEnergy(energies: RelativeEnergies, groupRef: string, program
         return { kind: "reference", calculationRefs: member.energy_calculation_refs, program: own?.length === 1 ? own[0] : null }
     }
     if (member.status === "unresolved" && member.absent_reason === "repeat_values_disagree") {
+        // The archive names these values by determination, an internal record with no page of its own: shown as plain refs.
         return {
             kind: "disagree",
-            valuesHartree: member.alternates.map((alternate) => alternate.value_hartree),
-            calculationRefs: member.energy_calculation_refs,
+            values: member.alternates.map((alternate) => ({ hartree: alternate.value_hartree, determinationRef: alternate.determination_ref })),
         }
     }
     if (member.status === "present") {
@@ -181,7 +181,7 @@ export function cardEnergy(energies: RelativeEnergies, groupRef: string, program
         if (own && base) {
             return { kind: "note", text: `Computed with ${joinWords(own)}; the reference with ${joinWords(base)}. Energies from different programs are not compared.` }
         }
-        return { kind: "note", text: "The program of this value or of the reference is not recorded, so no difference is shown. Energies from different programs are not compared." }
+        return { kind: "note", text: "The program of this value or of the reference is not known to this page, so no difference is shown. Energies from different programs are not compared." }
     }
     return { kind: "note", text: reasonWords(member.absent_reason) }
 }

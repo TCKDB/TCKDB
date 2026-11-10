@@ -67,8 +67,15 @@ function EnergyText({ energy }: { energy: CardEnergy }) {
             return (
                 <span className="shape-energy-absent">
                     Records disagree.
-                    {energy.valuesHartree.length > 0 && ` Stored values: ${energy.valuesHartree.map(formatHartree).join(", ")} hartree.`}
-                    {energy.calculationRefs.length > 0 && <>{" "}From <CalculationLinks refs={energy.calculationRefs} />.</>}
+                    {energy.values.length > 0 && (
+                        <>
+                            {" "}Stored values:{" "}
+                            {energy.values.map((value, index) => (
+                                <span key={value.determinationRef}>{index > 0 && ", "}{formatHartree(value.hartree)} <span className="u t-preserve-case">hartree</span> (<code className="t-preserve-case">{value.determinationRef}</code>)</span>
+                            ))}
+                            .
+                        </>
+                    )}
                 </span>
             )
         case "note":
