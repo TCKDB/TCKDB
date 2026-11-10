@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Picture first on the geometry page (2026-11-10)
+
+- **Behaviour:** the geometry page shows a ball-and-stick picture drawn from the stored coordinates, with a "Show in 3D" button that opens the interactive viewer; the viewer's rotate and zoom buttons are always visible. Only one interactive viewer is open per page, and if the browser cannot start WebGL the picture stays with one sentence saying so. Page shells can carry an optional side column, and a relationship map component (connected records as links plus a text list) is available for record pages to adopt.
+- **Schema and migration:** none. No new environment variable.
+
 ## Record page building blocks (2026-11-10)
 
 - **Behaviour:** record page headers (species entry, transition state entry, calculation) show the record kind's glyph and the review status as a word beside a filled mark (approved) or an outline mark (every other status), with a "What review status means" explanation. Pages that never have a contents list (the Molecules and Reactions lists, the species overview, the frequency scale factor page) use the full width instead of leaving an empty left column; record pages keep their column. The "Also see" link on the list pages is blue and underlined like other links. Glossary popovers that are closed no longer widen the page on phones. A link to `/guide#order` lands on the ordering note instead of the top of the page.

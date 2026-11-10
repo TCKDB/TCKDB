@@ -397,33 +397,30 @@ describe("GeometryDetailPage", () => {
         expect(within(xyzSection).getByText(/H 0\.110000 0\.220000 0\.330000/)).toBeVisible()
     })
 
-    it("renders the WebGL viewer container in place of the old SVG projection, with the bond-inference disclosure intact", async () => {
-        // This page does not mock "3dmol" (that mock lives in
-        // GeometryViewer.test.tsx, split out for the same reason
-        // GeometryDetailPage.errorBoundary.test.tsx is split out), and
-        // jsdom has neither real WebGL nor real layout — see the
-        // size-check comment in GeometryViewer.tsx — so the viewer
-        // mounted here will genuinely settle into its "unavailable"
-        // status, exactly as it would in a real browser with no WebGL
-        // and a not-yet-laid-out container. What this test pins is the
-        // page-level wiring: the structure section renders the new
-        // `.viewer-canvas` element (never an SVG projection any more)
-        // and keeps the disclosure paragraph next to it.
+    it("shows a picture and a Show in 3D button first, with the bond-inference disclosure beside the picture", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
         const viewerSection = screen.getByRole("heading", { name: "Structure view" }).closest("section") as HTMLElement
-        expect(viewerSection.querySelector("svg")).toBeNull()
-        expect(viewerSection.querySelector(".viewer-canvas")).not.toBeNull()
-        // A distinct sentence from the "interactive 3D view" framing
-        // sentence in the same paragraph, so a mutation that deletes only
-        // the bond-inference disclaimer must not be able to hide behind
-        // an assertion that only matches the framing sentence next to it.
-        // See also the isolated component-level test in
-        // `GeometryViewer.test.tsx`.
+        expect(within(viewerSection).getByRole("img", { name: "Ball-and-stick picture of CH4" })).toBeVisible()
+        expect(within(viewerSection).getByRole("button", { name: "Show in 3D" })).toBeVisible()
+        expect(viewerSection.querySelector(".viewer-canvas")).toBeNull()
         expect(within(viewerSection).getByText(
             /Bonds shown are inferred from interatomic distance for legibility only; they are not part of the deposited record\./,
         )).toBeVisible()
+    })
+
+    it("keeps the picture and says so in one sentence when the live viewer cannot start", async () => {
+        // jsdom has no WebGL or layout, so the viewer settles into its unavailable status, as in a browser without WebGL.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: "CH4 geometry" })
+        const viewerSection = screen.getByRole("heading", { name: "Structure view" }).closest("section") as HTMLElement
+        fireEvent.click(within(viewerSection).getByRole("button", { name: "Show in 3D" }))
+        expect(await within(viewerSection).findByText(/The 3D view could not start in this browser/)).toBeVisible()
+        expect(within(viewerSection).getByRole("img", { name: "Ball-and-stick picture of CH4" })).toBeVisible()
+        expect(within(viewerSection).queryByRole("button", { name: "Show in 3D" })).toBeNull()
+        expect(viewerSection.querySelector(".viewer-canvas")).toBeNull()
     })
 
     it("renders this geometry's own xyz_text verbatim in the Raw XYZ block", async () => {
@@ -959,7 +956,7 @@ describe("GeometryDetailPage", () => {
             // optional `intro` prop uses for every in-page section on
             // these five record pages.
             const prose = container.querySelector(".section-intro") as HTMLElement
-            const viewer = container.querySelector(".geometry-viewer") as HTMLElement
+            const viewer = container.querySelector(".viewer-poster-stage") as HTMLElement
             // `.stage-table` retired from this page's own tables in favour
             // of the shared `.data-table` primitive (item 7).
             const table = container.querySelector(".data-table") as HTMLElement

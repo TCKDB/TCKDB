@@ -1,0 +1,44 @@
+/* Poster-first stage for the 3D viewer: picture and one action, or the live viewer in its place. */
+.viewer-poster-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .9rem;
+    min-width: 0;
+}
+
+.viewer-poster-frame {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 17rem;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.viewer-poster-note {
+    max-width: 46rem;
+    margin: 0;
+}
+
+.viewer-poster-action {
+    padding: .4rem .75rem;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--accent);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    cursor: pointer;
+}
+
+.viewer-poster-action:hover {
+    border-color: var(--accent);
+    background: var(--accent-50);
+}
+
+.viewer-poster-action:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
