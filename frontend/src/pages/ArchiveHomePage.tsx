@@ -91,7 +91,7 @@ function ArchiveHomePage() {
             <div className="home-read-body">
                 <ol className="home-read-steps">
                     <li><span className="home-callout" aria-hidden="true">1</span> The number, its uncertainty and its unit, and whether it was computed, measured or estimated.</li>
-                    <li><span className="home-callout" aria-hidden="true">2</span> The calculation it came from. Follow the link to its input, output files and settings.</li>
+                    <li><span className="home-callout" aria-hidden="true">2</span> Where it came from (the calculation, for a computed value). Follow the link to its inputs, outputs and settings.</li>
                     <li><span className="home-callout" aria-hidden="true">3</span> The level of theory: the method and basis set the calculation used. The same molecule can have values at several.</li>
                     <li><span className="home-callout" aria-hidden="true">4</span> The review status. “Not reviewed” means no curator has checked the value yet, not that it is wrong.</li>
                 </ol>

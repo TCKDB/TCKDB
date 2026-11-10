@@ -25,7 +25,7 @@ dataset must never require a code release.
 ## Home page with counts, browse cards and an example record (2026-11-11)
 
 - **Behaviour:** the home page has a headline and one-line description, the exact-identifier search with "Try" links that run it, a "See an example" link, a strip of counts read from the archive (molecules, reaction entries, levels of theory; a count whose read fails is left out), three browse cards, a "How to read a value" box, and an example record. The example is the record named by the operator's `/site-config.json` (`{"homeExampleRef": "spe_..."}`, a molecule or reaction entry ref), read at run time; a molecule shows a compact numbers table. When the file is missing, malformed, or names a record the archive does not return under the current profile, a "Browse molecules" link is shown instead.
-- **Operator file:** `site-config.json` is an optional file the operator mounts, not a build variable; `tckdb_frontend_deploy.sh` mounts it read-only when `TCKDB_FRONTEND_SITE_CONFIG` names a file. The image never contains it, and the server answers 404 when it is absent.
+- **Operator file:** `site-config.json` is an optional file the operator mounts, not a build variable; `tckdb_frontend_deploy.sh` mounts it read-only from `TCKDB_FRONTEND_SITE_CONFIG`, else a gitignored `.site-config.json` in the checkout when present; edits need a redeploy or `docker restart`. The image never contains it, and the server answers 404 when it is absent.
 - **Schema and migration:** none.
 
 ## Molecule page lists every number and every version (2026-11-10)

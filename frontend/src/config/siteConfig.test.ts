@@ -63,6 +63,7 @@ describe("loadHomeExample", () => {
         ["a 500", () => new HttpResponse("{}", { status: 500, ...json })],
         ["an HTML page with status 200 (the SPA entry point)", () => new HttpResponse("<div id=\"root\"></div>", { headers: { "content-type": "text/html" } })],
         ["JSON with the wrong content type", () => new HttpResponse(JSON.stringify({ homeExampleRef: SPE }), { headers: { "content-type": "text/plain" } })],
+        ["a failed status with JSON content type and a valid body", () => HttpResponse.json({ homeExampleRef: SPE }, { status: 500 })],
         ["bad JSON", () => new HttpResponse("{nope", json)],
         ["JSON that is not an object", () => new HttpResponse("[1]", json)],
         ["an object without the ref", () => HttpResponse.json({ homeExample: SPE })],

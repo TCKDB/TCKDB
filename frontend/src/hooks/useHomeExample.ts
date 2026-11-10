@@ -7,6 +7,8 @@ import { useLoaded } from "./useLoaded"
 const moleculeRowSchema = z.object({
     canonical_smiles: z.string().nullish(),
     formula: z.string().nullish(),
+    // A hidden entry comes back as its parent species with no entries, so the entry itself must be listed.
+    entries: z.array(z.object({ species_entry_ref: z.string() }).passthrough()),
 }).passthrough()
 
 /** What the home page knows about its example: still reading, none to show, or the record's light identity. */
@@ -32,9 +34,8 @@ export function useHomeExample(): HomeExampleState {
         if (molecule.status === "idle" || molecule.status === "loading") return { status: "loading" }
         if (molecule.status !== "ready" || molecule.data.row === null) return { status: "none" }
         const row = moleculeRowSchema.safeParse(molecule.data.row)
-        return row.success
-            ? { status: "molecule", ref: example.ref, smiles: row.data.canonical_smiles ?? null, formula: row.data.formula ?? null }
-            : { status: "none" }
+        if (!row.success || !row.data.entries.some((entry) => entry.species_entry_ref === example.ref)) return { status: "none" }
+        return { status: "molecule", ref: example.ref, smiles: row.data.canonical_smiles ?? null, formula: row.data.formula ?? null }
     }
     if (reaction.status === "idle" || reaction.status === "loading") return { status: "loading" }
     if (reaction.status !== "ready") return { status: "none" }

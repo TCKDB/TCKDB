@@ -363,6 +363,33 @@ describe("ArchiveHomePage: the example record", () => {
         expect(await screen.findByRole("link", { name: "Browse molecules" })).toBeInTheDocument()
     })
 
+    it("falls back when the archive returns the parent species with no entries (the hidden shape)", async () => {
+        server.use(
+            configJson(ENTRY),
+            ...countHandlers(),
+            http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [{
+                species_ref: "spc_numbers", canonical_smiles: "[CH3]", inchi_key: "WCYWZMWISLQXQU-UHFFFAOYSA-N", formula: "CH3", charge: 0, multiplicity: 2, entries: [],
+            }] })),
+        )
+        page()
+        expect(await screen.findByRole("link", { name: "Browse molecules" })).toBeInTheDocument()
+        expect(screen.queryByText(COPY)).not.toBeInTheDocument()
+        expect(screen.queryByRole("link", { name: /See an example/ })).not.toBeInTheDocument()
+    })
+
+    it("falls back when the species returned lists only other entries", async () => {
+        server.use(
+            configJson(ENTRY),
+            ...countHandlers(),
+            http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [{
+                species_ref: "spc_numbers", canonical_smiles: "[CH3]", formula: "CH3", entries: [{ species_entry_ref: "spe_other" }],
+            }] })),
+        )
+        page()
+        expect(await screen.findByRole("link", { name: "Browse molecules" })).toBeInTheDocument()
+        expect(screen.queryByText(COPY)).not.toBeInTheDocument()
+    })
+
     it("falls back when the read fails, and never picks a latest record", async () => {
         const sorts: string[] = []
         server.use(

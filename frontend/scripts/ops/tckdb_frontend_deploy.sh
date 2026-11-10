@@ -12,10 +12,15 @@
 #   tckdb_frontend_deploy.sh sha-<40-char-commit>
 #   tckdb_frontend_deploy.sh --check
 #
-# Optional site config: if TCKDB_FRONTEND_SITE_CONFIG names a regular file, it is
-# mounted read-only as /usr/share/nginx/html/site-config.json (for example
-# {"homeExampleRef": "spe_..."}). Its contents are never printed. When unset, the
-# site serves no such file and the home page shows no example record.
+# Optional site config: a JSON file such as {"homeExampleRef": "spe_..."}, bind
+# mounted read-only as /usr/share/nginx/html/site-config.json. The path is
+# TCKDB_FRONTEND_SITE_CONFIG, else <repo checkout>/.site-config.json (gitignored)
+# when that file exists, so a routine redeploy keeps the example. With neither,
+# the site serves no such file and the home page shows no example record.
+# The file must be a regular file readable by others (nginx runs as uid 101) and
+# its homeExampleRef must be a spe_ or rxe_ ref. It is validated on the host
+# before deploying and again as served after the health check; its contents are
+# never printed. Edits to the file need a redeploy or `docker restart`.
 #
 # Only sha tags are accepted because they identify the exact frontend source
 # revision. This avoids a UI deployment that cannot answer which bundle it
@@ -30,7 +35,11 @@ PORT="${TCKDB_FRONTEND_PORT:-8011}"
 LOCK_FILE="${TCKDB_FRONTEND_LOCK_FILE:-/tmp/tckdb-frontend-deploy.lock}"
 # Health wait: probe about once a second for ~30 s while the container starts.
 HEALTH_ATTEMPTS="${TCKDB_FRONTEND_HEALTH_ATTEMPTS:-30}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SITE_CONFIG="${TCKDB_FRONTEND_SITE_CONFIG:-}"
+if [[ -z "$SITE_CONFIG" && -f "$REPO_ROOT/.site-config.json" ]]; then
+    SITE_CONFIG="$REPO_ROOT/.site-config.json"
+fi
 HAS_PREVIOUS=false
 PREVIOUS_CONTAINER=""
 INCUMBENT_ID=""
@@ -42,12 +51,30 @@ die() { echo "error: $*" >&2; exit 1; }
 [[ "$HEALTH_ATTEMPTS" =~ ^[1-9][0-9]{0,2}$ ]] \
     || die "TCKDB_FRONTEND_HEALTH_ATTEMPTS must be an integer 1-999"
 
-# A set path must be a regular file (not a directory, which Docker would create
-# and mount as a directory, and not a symlink to somewhere else).
+# Reads a site config on stdin; succeeds only for an object whose homeExampleRef is a spe_ or rxe_ ref.
+# Prints nothing.
+valid_site_config() {
+    if command -v jq >/dev/null 2>&1; then
+        jq -e '(.homeExampleRef | type == "string") and (.homeExampleRef | test("^(spe|rxe)_[a-z2-7]{26}$"))' >/dev/null 2>&1
+    else
+        python3 -c 'import json,re,sys
+d=json.load(sys.stdin)
+sys.exit(0 if isinstance(d,dict) and isinstance(d.get("homeExampleRef"),str) and re.fullmatch(r"(spe|rxe)_[a-z2-7]{26}",d["homeExampleRef"]) else 1)' >/dev/null 2>&1
+    fi
+}
+
+# A path must be a regular file (not a directory, which Docker would create and mount as a
+# directory, and not a symlink), absolute, free of characters that split a mount option,
+# readable by others, and valid. Checked before anything mutates.
 if [[ -n "$SITE_CONFIG" ]]; then
-    [[ -f "$SITE_CONFIG" && ! -L "$SITE_CONFIG" ]] \
-        || die "TCKDB_FRONTEND_SITE_CONFIG must name a regular file that exists"
-    [[ "$SITE_CONFIG" = /* ]] || die "TCKDB_FRONTEND_SITE_CONFIG must be an absolute path"
+    [[ "$SITE_CONFIG" = /* ]] || die "the site config path must be absolute"
+    [[ "$SITE_CONFIG" != *[,:]* ]] || die "the site config path must not contain ',' or ':'"
+    [[ -f "$SITE_CONFIG" && ! -L "$SITE_CONFIG" ]] || die "the site config must be a regular file that exists"
+    mode="$(stat -c '%a' "$SITE_CONFIG")"
+    (( (8#$mode & 8#004) != 0 )) \
+        || die "the site config is not readable by others (mode $mode); nginx runs as uid 101. Run: chmod o+r <file>"
+    valid_site_config < "$SITE_CONFIG" \
+        || die 'the site config must be JSON with a "homeExampleRef" that is a spe_ or rxe_ ref'
 fi
 
 running_image() {
@@ -125,7 +152,9 @@ rollback_after_interruption() {
 # kept in LAST_FAILURE and reported only if the whole wait window is exhausted.
 verify_frontend() {
     local body rc path
-    for path in / /species/CH3 /api/v1/status; do
+    local paths=(/ /species/CH3 /api/v1/status)
+    [[ -n "$SITE_CONFIG" ]] && paths+=(/site-config.json)
+    for path in "${paths[@]}"; do
         # Bounded: a container that accepts the connection but never answers
         # must not hang the loop, or the ~30 s window is not a real bound.
         rc=0
@@ -138,6 +167,10 @@ verify_frontend() {
             /api/v1/status)
                 jq -e '.status == "ok" and (.degraded | type == "array") and .degraded == []' <<<"$body" >/dev/null \
                     || { LAST_FAILURE="GET ${path} answered but was not status=ok with nothing degraded"; return 1; }
+                ;;
+            /site-config.json)
+                printf '%s' "$body" | valid_site_config \
+                    || { LAST_FAILURE="GET ${path} did not serve a valid site config"; return 1; }
                 ;;
             *)
                 grep -q '<div id="root">' <<<"$body" \
@@ -215,7 +248,7 @@ DEPLOY_PHASE="candidate_starting"
 
 RUN_ARGS=(--network "$NETWORK" -p "127.0.0.1:${PORT}:8080" --restart unless-stopped)
 if [[ -n "$SITE_CONFIG" ]]; then
-    RUN_ARGS+=(-v "${SITE_CONFIG}:/usr/share/nginx/html/site-config.json:ro")
+    RUN_ARGS+=(--mount "type=bind,source=${SITE_CONFIG},target=/usr/share/nginx/html/site-config.json,readonly")
     echo "    site config: mounted read-only"
 fi
 

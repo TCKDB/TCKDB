@@ -334,3 +334,4 @@ timer.dat
 
 # Local example-record setting for the front end dev server (operators mount their own in production).
 frontend/public/site-config.json
+/.site-config.json
