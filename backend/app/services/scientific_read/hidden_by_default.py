@@ -97,6 +97,12 @@ def record_forwarded_ref(ref: str, into_ref: str) -> None:
         holder.forwarded[ref] = into_ref
 
 
+def forwarded_ref(ref: str) -> str:
+    """The ref ``ref`` was answered with (its survivor when it was merged away), else ``ref`` itself."""
+    holder = _HOLDER.get()
+    return holder.forwarded.get(ref, ref) if holder is not None else ref
+
+
 def stamp_hidden_by_default(payload: object) -> None:
     """Write the recorded block into a response envelope's ``request`` echo (when that echo has the field)."""
     holder = _HOLDER.get()

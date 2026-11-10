@@ -24,6 +24,7 @@ Sub-routers:
                             → /scientific/transition-state-entries/{ref}/evidence/select (+ /manifest)
     relative_conformer_energy.router
                             → /scientific/species-entries/{ref}/conformers/relative-energies (+ /manifest)
+    conformer_usage.router  → /scientific/species-entries/{ref}/conformer-usage
     statmech_selection.router
                             → /scientific/statmech/select (+ /manifest)
     species_subresources.router
@@ -66,6 +67,7 @@ from app.api.routes.scientific import (
     calculation_paths,
     calculations,
     composite_schemes,
+    conformer_usage,
     conformers,
     corrections,
     export,
@@ -145,6 +147,8 @@ scientific_router.include_router(structure_selection.tse_router)
 # Relative conformer energies against a named reference conformer: a sibling of the conformer basin selection,
 # same prefix, a distinct deeper path (a read, not a selection: no rank, no winner).
 scientific_router.include_router(relative_conformer_energy.router)
+# Which thermo and kinetics records use each conformer group of an entry; a declared-links read, no rank.
+scientific_router.include_router(conformer_usage.router)
 # Statmech selection (qualify supplied statistical models, listed in display order; none is ranked): one typed target
 # union under /statmech, sibling of the statmech search and detail reads (POST /select, GET /{ref}).
 scientific_router.include_router(statmech_selection.router)

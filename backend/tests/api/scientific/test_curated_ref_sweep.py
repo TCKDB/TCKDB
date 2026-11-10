@@ -177,6 +177,7 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     "ts_h_x": {_X_MLR},
     "cg_h": {
         _X_MLS,
+        f"{BASE}/species-entries/{{species_entry_ref}}/conformer-usage",
         f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies",
         f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/manifest",
         f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/compare",

@@ -12,9 +12,9 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 | Classification | Operations |
 |---|---|
 | typed | 127 |
-| raw_only | 106 |
+| raw_only | 107 |
 | not_applicable | 47 |
-| **total** | **280** |
+| **total** | **281** |
 
 ## Typed coverage
 
@@ -295,6 +295,12 @@ Deliberately reachable only through the generic request helpers. Each group stat
 | Operation | raw HTTP | typed client | iterator | example | contract test |
 |---|---|---|---|---|---|
 | `GET /api/v1/scientific/species-entries/{species_entry_id}/transport` | yes | — | — | — | — |
+
+> Which thermo and kinetics records use each conformer group of an entry; a page-level read with no typed wrapper yet. Reachable via get_json().
+
+| Operation | raw HTTP | typed client | iterator | example | contract test |
+|---|---|---|---|---|---|
+| `GET /api/v1/scientific/species-entries/{species_entry_ref}/conformer-usage` | yes | — | — | — | — |
 
 > Single-record read of a row already returned in full by search_statmech(statmech_ref=...). Reachable via get_json() when only the ref is known.
 

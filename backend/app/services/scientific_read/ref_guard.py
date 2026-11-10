@@ -116,6 +116,11 @@ from app.schemas.reads.scientific_conformer import (
     ConformerObservationGroupSummary,
     ConformerObservationSiblingSummary,
 )
+from app.schemas.reads.scientific_conformer_usage import (
+    ConformerUsageGroup,
+    ConformerUsageKinetics,
+    ConformerUsageThermo,
+)
 from app.schemas.reads.scientific_deposit_warnings import DepositWarningItem, RecordWarnings
 from app.schemas.reads.scientific_frequency_scale_factor import FrequencyScaleFactorUsageSummary
 from app.schemas.reads.scientific_geometry import (
@@ -354,6 +359,10 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         NetworkSolveStateEnergySourceSummary,
         NetworkKineticsBatchFitEvaluation,
         FrequencyScaleFactorUsageSummary,
+        # Conformer usage: each group, and each record listed under one, is a block about the linked record.
+        ConformerUsageGroup,
+        ConformerUsageKinetics,
+        ConformerUsageThermo,
     }
 )
 
