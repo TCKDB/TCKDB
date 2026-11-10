@@ -1,12 +1,13 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, render, screen, within, waitFor } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import CompositeSchemePage from "./CompositeSchemePage"
 import { resetAllRequestCaches } from "../api/requestCache"
 import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 import "../design-system.css"
+import { titleHasKind } from "../test/routeTitleKinds"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -78,6 +79,7 @@ describe("CompositeSchemePage", () => {
     it("titles a user-built recipe from its kind, never the long server label, in the heading and the breadcrumb", async () => {
         const h1 = await load({ composite_scheme: core(), terms: EXTRAPOLATION_TERMS, linear_in_energies: true })
         expect(h1).toHaveTextContent("Basis-set extrapolation recipe")
+        await waitFor(() => expect(titleHasKind(document.title, "/methods/composite-schemes/:ref")).toBe(true))
         expect(h1.textContent).not.toContain("CBS[")
         const crumb = screen.getByRole("navigation", { name: "Breadcrumb" })
         expect(crumb.querySelector("[aria-current='page']")?.textContent).toBe("Basis-set extrapolation recipe")

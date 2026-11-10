@@ -1,10 +1,11 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, render, screen, within, waitFor } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import FrequencyScaleFactorPage from "./FrequencyScaleFactorPage"
 import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { titleHasKind } from "../test/routeTitleKinds"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -60,6 +61,7 @@ describe("FrequencyScaleFactorPage: the standalone scale-factor page", () => {
         page()
         await screen.findByText("fundamental")
         expect(screen.getByText("0.999")).toBeVisible()
+        await waitFor(() => expect(titleHasKind(document.title, "/methods/frequency-scale-factors/:ref")).toBe(true))
         const lotLink = screen.getByRole("link", { name: "b3lyp/def2tzvp" })
         expect(lotLink).toHaveAttribute("href", "/methods/lot_b3lyp")
         expect(screen.getByText("ARC 1.1.0")).toBeVisible()

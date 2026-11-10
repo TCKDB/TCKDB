@@ -33,6 +33,8 @@ import { buildEquationSides, type EquationParticipant } from "../domain/reaction
 import { participantChips } from "../domain/participantFacets"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
+import { equationText } from "../domain/reactionEquation"
 
 /**
  * Reaction entry -- the record page for one deposited `rxe_...` (plan §2).
@@ -117,6 +119,7 @@ function useReactionEntryNetworks(reactionEntryRef: string, served: NetworkMembe
 function EntryDetail({ record }: { record: ReactionFullRecord }) {
     const entry = record.reaction_entry
     const species = record.species ?? { reactants: [], products: [] }
+    useDocumentTitle("Reaction entry", equationText(species.reactants, species.products, entry.reversible))
     const kinetics = record.kinetics ?? []
     const transitionStates = record.transition_states ?? []
     const networksState = useReactionEntryNetworks(entry.reaction_entry_ref, record.networks)

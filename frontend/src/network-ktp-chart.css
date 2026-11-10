@@ -36,7 +36,7 @@
     margin: 0 0 1.25rem;
     padding: .9rem 1rem;
     border: 1px solid var(--line);
-    border-radius: .5rem;
+    border-radius: var(--radius);
     background: var(--surface);
 }
 
@@ -59,8 +59,8 @@
     align-items: center;
     gap: .4rem;
     padding: .3rem .6rem;
-    border: 1px solid var(--line);
-    border-radius: 999px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
     background: var(--surface-sunken);
     font: var(--type-data-font);
     color: var(--ink-2);

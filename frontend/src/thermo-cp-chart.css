@@ -94,7 +94,7 @@
     gap: .4rem;
     padding: .3rem .6rem;
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: var(--surface);
     font: var(--type-data-font);
     color: var(--ink-2);

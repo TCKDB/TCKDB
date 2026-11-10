@@ -23,6 +23,7 @@ import { computeSpeciesEnergyCoverage, solveEnergySourceSentence, STATE_ENERGY_O
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 import { LiteratureCitation } from "../components/LiteratureCitation"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 /**
  * `/networks/:networkRef` -- PR 2 (§3: identity, evidence incl. the
@@ -61,6 +62,7 @@ function softwareText(release: { software: string; version?: string | null } | n
 }
 
 function EntryDetail({ record }: { record: NetworkFullRecord }) {
+    useDocumentTitle("Pressure-dependent network")
     const { network } = record
     const solves = record.solves
     // A fact of "the" solve is stated per solve when there are several, never read off the first one.

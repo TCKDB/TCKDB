@@ -23,12 +23,15 @@ import { useConformerByRef, useConformerLabelIndex } from "../hooks/useConformer
 import { useConformerPages } from "../hooks/useConformerPages"
 import { useSpeciesEntry } from "../hooks/useSpeciesEntry"
 import type { ListMeta } from "../api/listEnvelope"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 export default function SpeciesEntryPage() {
     const { entryRef = "", section } = useParams<{ entryRef: string; section?: string }>()
     const location = useLocation()
     const navigate = useNavigate()
     const state = useSpeciesEntry(entryRef)
+    const titleName = state && !("status" in state) && state.entryRef === entryRef ? (state.entry.formula ?? state.entry.canonicalSmiles) : null
+    useDocumentTitle("Species entry", titleName)
 
     // Canonicalize a known legacy section alias (e.g. a stale
     // `/calculations` link from the earlier chapter-nav design --

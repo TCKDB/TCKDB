@@ -110,7 +110,7 @@
 }
 
 .page-toc a:focus-visible {
-    outline: 2px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
 }
 
@@ -248,14 +248,9 @@
         display: block;
         margin: 0 0 .5rem;
         color: var(--muted);
-        /* Was its own one-off 600 .6875rem/.08em mono -- now the shared
-           `--type-label` step (mono 400 .72rem, tracking .06em), the
-           same face/size every other repeated dt/th/legend label in the
-           app uses. .72rem (11.52px) still clears the accessibility-pass
-           11px floor the previous .6875rem value was hand-tuned to. */
-        font: var(--type-label-font);
-        text-transform: var(--type-label-transform);
-        letter-spacing: var(--type-label-tracking);
+        font: var(--type-label-strong-font);
+        letter-spacing: .1em;
+        text-transform: uppercase;
     }
 
     /* Was `display: grid; grid-auto-flow: column`, which never wraps --
@@ -280,13 +275,13 @@
     .page-toc a {
         padding: .3rem .7rem;
         border: 1px solid var(--line);
-        border-radius: 999px;
+        border-radius: var(--radius-sm);
         background: var(--surface-sunken);
         white-space: nowrap;
     }
 
     .page-toc a.page-toc-active {
         border-color: var(--accent);
-        border-radius: 999px;
+        border-radius: var(--radius-sm);
     }
 }

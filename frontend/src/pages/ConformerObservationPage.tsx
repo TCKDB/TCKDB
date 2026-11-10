@@ -12,6 +12,7 @@ import { CopyButton } from "../components/RefsDisclosure"
 import { SpeciesEntryLink } from "../components/SpeciesEntryLink"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useConformerObservation } from "../hooks/useConformerObservation"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
@@ -56,6 +57,7 @@ export default function ConformerObservationPage() {
 }
 
 function ObservationDetail({ observation }: { observation: ConformerObservation }) {
+    useDocumentTitle("Conformer observation", observation.species?.formula)
     const {
         conformer_observation: core,
         conformer_group: group,

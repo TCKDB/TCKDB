@@ -1,10 +1,12 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { IdentifierSearch } from "./IdentifierSearch"
+import { Announcer } from "./Announcer"
+import { announce } from "../hooks/useAnnounce"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -25,7 +27,7 @@ function page() {
     return render(
         <MemoryRouter initialEntries={["/"]}>
             <Routes>
-                <Route path="/" element={<IdentifierSearch />} />
+                <Route path="/" element={<><IdentifierSearch /><Announcer /></>} />
                 <Route path="/reactions/:ref" element={<div>landed on reaction record</div>} />
                 <Route path="/reaction-entries/:ref" element={<div>landed on reaction-entry record</div>} />
                 <Route path="/species/:ref" element={<div>landed on species record</div>} />
@@ -294,6 +296,29 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
         const message = await screen.findByText(/No exact SMILES record was found/i)
         expect(message).toBeVisible()
         expect(screen.queryByText(/could not be parsed/i)).not.toBeInTheDocument()
+    })
+
+    it("leaves a no-match result to the existing status message, with no second announcement", async () => {
+        server.use(http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({ records: [] })))
+        announce("")
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        const user = userEvent.setup(); page()
+        await searchSpecies(user, "smiles:CCO")
+        expect(await screen.findByRole("status")).toHaveTextContent(/No exact SMILES record was found/)
+        await new Promise((resolve) => setTimeout(resolve, 150))
+        expect(document.querySelector(".announcer")).toBeEmptyDOMElement()
+    })
+
+    it("announces the number of matches through the live region", async () => {
+        server.use(http.get("/api/v1/scientific/species/structure-search", () =>
+            HttpResponse.json({ records: [
+                { species_ref: "spc_ethanol0000000000000000000", species_entry_ref: "spe_ethanol0000000000000000000", smiles: "CCO", charge: 0, multiplicity: 1 },
+                { species_ref: "spc_ethanol0000000000000000001", species_entry_ref: "spe_ethanol0000000000000000001", smiles: "OCC", charge: 0, multiplicity: 1 },
+            ] })
+        ))
+        const user = userEvent.setup(); page()
+        await searchSpecies(user, "smiles:CCO")
+        await waitFor(() => expect(document.querySelector(".announcer")).toHaveTextContent("2 matches"))
     })
 })
 

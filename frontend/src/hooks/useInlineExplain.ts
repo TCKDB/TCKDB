@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react"
+import { useEffect, useState, type KeyboardEvent } from "react"
 
 /**
  * State for a single `InlineExplain.tsx` disclosure. Split into its own
@@ -17,6 +17,15 @@ import { useState, type KeyboardEvent } from "react"
  */
 export function useInlineExplain() {
     const [isOpen, setIsOpen] = useState(false)
+    // Esc dismisses an open note wherever focus is, including after a hover-only open.
+    useEffect(() => {
+        if (!isOpen) return
+        function onKeyDown(event: globalThis.KeyboardEvent) {
+            if (event.key === "Escape") setIsOpen(false)
+        }
+        document.addEventListener("keydown", onKeyDown)
+        return () => document.removeEventListener("keydown", onKeyDown)
+    }, [isOpen])
     return {
         isOpen,
         open: () => setIsOpen(true),

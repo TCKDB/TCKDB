@@ -1,10 +1,11 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
 import ReactionOverviewPage from "./ReactionOverviewPage"
 import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
+import { titleHasKind } from "../test/routeTitleKinds"
 
 const REACTION_REF = "rxn_naeqmg4l5wyqex5cl5tir2vt2y"
 const server = setupServer()
@@ -89,6 +90,7 @@ describe("ReactionOverviewPage", () => {
 
         expect(await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" }))
             .toHaveAttribute("href", "/reaction-entries/rxe_tku6xu2lt3girf2rsiwl5uds4e")
+        await waitFor(() => expect(titleHasKind(document.title, "/reactions/:ref")).toBe(true))
         expect(screen.getByRole("link", { name: "rxe_kftcgjn7zalusaouojwi23z3gy" }))
             .toHaveAttribute("href", "/reaction-entries/rxe_kftcgjn7zalusaouojwi23z3gy")
 

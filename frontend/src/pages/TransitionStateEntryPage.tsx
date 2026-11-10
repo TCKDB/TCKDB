@@ -22,6 +22,7 @@ import type { TransitionStateIdentity } from "../domain/recordIdentity"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 import { useTransitionStateSiblings } from "../hooks/useTransitionStateSiblings"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
@@ -163,6 +164,7 @@ export default function TransitionStateEntryPage() {
 }
 
 function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
+    useDocumentTitle("Transition state entry", record.reaction.equation)
     const {
         transition_state_entry: entry,
         transition_state: ts,

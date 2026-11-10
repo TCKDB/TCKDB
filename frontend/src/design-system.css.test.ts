@@ -38,19 +38,19 @@ function customProperty(css: string, name: string): string {
  */
 describe("type scale: every step declares the exact font/tracking/transform", () => {
     const STEPS: Record<string, { font: string; tracking: string; transform: string }> = {
-        "display-1": { font: "600 clamp(2.75rem, 5vw, 4rem)/1.0 var(--serif)", tracking: "-.03em", transform: "none" },
-        "display-2": { font: "600 2.25rem/1.15 var(--serif)", tracking: "-.02em", transform: "none" },
-        "heading-1": { font: "600 1.75rem/1.2 var(--serif)", tracking: "-.02em", transform: "none" },
-        "heading-2": { font: "600 1.25rem/1.3 var(--serif)", tracking: "0em", transform: "none" },
+        "display-1": { font: "600 clamp(2.75rem, 5vw, 4rem)/1.0 var(--display)", tracking: "-.03em", transform: "none" },
+        "display-2": { font: "600 2.25rem/1.15 var(--display)", tracking: "-.02em", transform: "none" },
+        "heading-1": { font: "600 1.75rem/1.2 var(--display)", tracking: "-.02em", transform: "none" },
+        "heading-2": { font: "600 1.25rem/1.3 var(--display)", tracking: "0em", transform: "none" },
         "heading-3": { font: "600 .875rem/1.4 var(--sans)", tracking: "0em", transform: "none" },
-        "kicker": { font: "400 .72rem/1.3 var(--mono)", tracking: ".10em", transform: "uppercase" },
-        "label": { font: "400 .72rem/1.3 var(--mono)", tracking: ".06em", transform: "uppercase" },
+        "kicker": { font: "400 .8125rem/1.3 var(--sans)", tracking: "0em", transform: "none" },
+        "label": { font: "400 .8125rem/1.3 var(--sans)", tracking: "0em", transform: "none" },
         // Post-review addition: the label step at weight 600, for a
         // table header that must stand out from the surrounding
         // label-weight dt/th text -- see design-system.css's own
         // comment above --type-label-strong-font.
-        "label-strong": { font: "600 .72rem/1.3 var(--mono)", tracking: ".06em", transform: "uppercase" },
-        "body": { font: "400 1rem/1.6 var(--sans)", tracking: "0em", transform: "none" },
+        "label-strong": { font: "600 .8125rem/1.3 var(--sans)", tracking: "0em", transform: "none" },
+        "body": { font: "400 1.0625rem/1.55 var(--sans)", tracking: "0em", transform: "none" },
         // Post-review addition (species-entry/browse/chrome residuals
         // re-review, item 14): a named step for a page LEDE -- serif,
         // one size up from --type-body and a touch tighter in line-height
@@ -58,7 +58,7 @@ describe("type scale: every step declares the exact font/tracking/transform", ()
         // copy) -- see design-system.css's own comment above
         // --type-lede-font for the three bespoke serif declarations this
         // replaces.
-        "lede": { font: "400 1.15rem/1.5 var(--serif)", tracking: "0em", transform: "none" },
+        "lede": { font: "400 1.15rem/1.5 var(--sans)", tracking: "0em", transform: "none" },
         "value": { font: "400 .9375rem/1.45 var(--sans)", tracking: "0em", transform: "none" },
         "data": { font: "400 .8125rem/1.5 var(--mono)", tracking: "0em", transform: "none" },
         "note": { font: "400 .8125rem/1.5 var(--sans)", tracking: "0em", transform: "none" },
@@ -153,20 +153,42 @@ function stripComments(source: string): string {
     return source.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 
-describe("no font-weight: 700 or 500 literal anywhere in src/**/*.css", () => {
-    // MEASURED (the finding this guards): every font-weight: 700 in the
-    // live site was browser-synthesised, because only Plex 400/600 ship
-    // as font files -- a literal 700 or 500 anywhere renders as a FAKE
-    // bold/medium the browser fabricates, never the real typeface. Scans
-    // every discovered stylesheet, not a hand-picked subset (see the
-    // "discovered, not assumed" describe block above).
-    const WEIGHT_LITERAL = /font(?:-weight)?\s*:\s*(?:[^;]*\s)?(700|500)\b/g
+describe("font weights are 400, 600 or 700 only, in every stylesheet", () => {
+    const ALLOWED = new Set(["400", "600", "700"])
+    const SIZE = /(?:\d*\.?\d+(?:px|rem|em|%|pt)|clamp\()/
+
+    /** Every numeric weight in the text before the size of a `font` shorthand value (`italic 500 1rem ...`). */
+    function shorthandWeights(value: string): string[] {
+        const size = SIZE.exec(value)
+        const head = size ? value.slice(0, size.index) : value
+        return head.split(/\s+/).filter((token) => /^\d{3}$/.test(token))
+    }
+
+    /** Every weight a stylesheet's rules declare. `@font-face` ranges declare what a file ships, not a use. */
+    function weightsDeclared(css: string): string[] {
+        const body = stripComments(css).replace(/@font-face\s*\{[^}]*\}/g, "")
+        const out: string[] = []
+        for (const match of body.matchAll(/(?<![\w-])font-weight\s*:\s*([^;}]+)/g)) {
+            out.push(...match[1].trim().split(/\s+/).filter((token) => /^\d+$/.test(token) || /^(lighter|bolder)$/.test(token)))
+        }
+        for (const match of body.matchAll(/(?<![\w-])font\s*:\s*([^;}]+)/g)) out.push(...shorthandWeights(match[1]))
+        for (const match of body.matchAll(/--type-[\w-]+-font\s*:\s*([^;}]+)/g)) out.push(...shorthandWeights(match[1]))
+        return out
+    }
 
     for (const [name, css] of Object.entries(ALL_STYLESHEETS)) {
-        it(`${name} contains no font-weight: 700 or 500`, () => {
-            expect(stripComments(css).match(WEIGHT_LITERAL)).toBeNull()
+        it(`${name} declares only weights 400, 600 and 700`, () => {
+            expect(weightsDeclared(css).filter((weight) => !ALLOWED.has(weight))).toEqual([])
         })
     }
+
+    it("finds declared weights and rejects others (the scan is not vacuous)", () => {
+        const all = Object.values(ALL_STYLESHEETS).flatMap(weightsDeclared)
+        expect(all.length).toBeGreaterThan(30)
+        expect(weightsDeclared(".a { font-weight: 500; } .b { font: 300 1rem var(--sans); } .c { font-weight: 600; }")).toEqual(["500", "600", "300"])
+        expect(weightsDeclared(".a { font: italic 500 1rem var(--sans); }")).toEqual(["500"])
+        expect(weightsDeclared(".a { font: 700 1rem var(--sans); }")).toEqual(["700"])
+    })
 })
 
 describe("exactly one .kv-list dt size rule across src/**/*.css", () => {
@@ -467,3 +489,59 @@ describe(".data inside .data-table stays unbreakable", () => {
     })
 })
 
+
+describe("every font family in a rule resolves to a font token", () => {
+    // `index.css` declares the tokens and the @font-face faces themselves; everything else must use them.
+    const OWN_DECLARATIONS = /@font-face\s*\{[^}]*\}|:root\s*\{[^}]*\}/g
+    const TOKEN_FAMILY = /^(var\(--(mono|sans|display)(\s*,[^)]*)?\)|inherit)$/
+
+    /** The family list of a `font:` shorthand value: everything after the size (and optional line height). */
+    function shorthandFamily(value: string): string | null {
+        if (/^(inherit|initial|unset)$/.test(value) || /^var\(--type-[\w-]+-font\)$/.test(value)) return null
+        const match = /(?:^|\s)(?:\d*\.?\d+(?:px|rem|em|%|pt)|clamp\([^)]*\)|(?:x-)?(?:small|medium|large))(?:\/[\d.]+(?:px|rem|em|%)?)?\s+(.+)$/.exec(value)
+        return match ? match[1].trim() : value
+    }
+
+    /** Every family list declared by `font-family` or `font` in the CSS that is outside the token declarations. */
+    function familyLists(css: string): string[] {
+        const body = stripComments(css).replace(OWN_DECLARATIONS, "")
+        const lists = [...body.matchAll(/(?<![\w-])font-family\s*:\s*([^;}]+)/g)].map((m) => m[1].trim())
+        for (const m of body.matchAll(/(?<![\w-])font\s*:\s*([^;}]+)/g)) {
+            const family = shorthandFamily(m[1].trim())
+            if (family !== null) lists.push(family)
+        }
+        return lists
+    }
+
+    for (const [name, css] of Object.entries(ALL_STYLESHEETS)) {
+        it(`${name} sets font-family and the font shorthand only through var(--mono), var(--sans), var(--display) or inherit`, () => {
+            expect(familyLists(css).filter((value) => !TOKEN_FAMILY.test(value))).toEqual([])
+        })
+    }
+
+    it("catches a literal family in either form (the scan is not vacuous)", () => {
+        expect(familyLists(".a { font: 400 1rem/1.4 Georgia, serif; }")).toEqual(["Georgia, serif"])
+        expect(familyLists(".a { font-family: Georgia, serif; }")).toEqual(["Georgia, serif"])
+        expect(familyLists(".a { font: 600 .8rem var(--mono); font: var(--type-ui-font); }")).toEqual(["var(--mono)"])
+        expect(familyLists(".a { font: .74rem var(--mono, ui-monospace, monospace); }").filter((v) => !TOKEN_FAMILY.test(v))).toEqual([])
+    })
+})
+
+describe("the self-hosted font families are exactly the reviewed set", () => {
+    const FAMILIES = [...indexCss.matchAll(/@font-face\s*\{\s*font-family:\s*"([^"]+)"/g)].map((m) => m[1])
+    it("declares Source Sans 3, Source Code Pro and the Noto Sans Math symbols face, once or twice each, nothing else", () => {
+        expect([...new Set(FAMILIES)].sort()).toEqual(["Noto Sans Math Symbols", "Source Code Pro", "Source Sans 3"])
+    })
+    it("gives Source Sans 3 and Source Code Pro an italic face, so italics are never synthesised", () => {
+        for (const family of ["Source Sans 3", "Source Code Pro"]) {
+            const faces = [...indexCss.matchAll(/@font-face\s*\{[^}]*\}/g)].map((m) => m[0]).filter((face) => face.includes(`"${family}"`))
+            expect(faces.some((face) => /font-style:\s*italic/.test(face)), family).toBe(true)
+            expect(faces.some((face) => /font-style:\s*normal/.test(face)), family).toBe(true)
+        }
+    })
+    it("points every face at a file under /fonts/", () => {
+        const urls = [...indexCss.matchAll(/@font-face[^}]*?url\("([^"]+)"\)/g)].map((m) => m[1])
+        expect(urls.length).toBe(FAMILIES.length)
+        for (const url of urls) expect(url.startsWith("/fonts/")).toBe(true)
+    })
+})

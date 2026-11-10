@@ -114,7 +114,7 @@
 
 .copy-button {
     flex: none;
-    border: 1px solid var(--line);
+    border: 1px solid var(--control-border);
     border-radius: .3rem;
     background: var(--surface);
     color: var(--muted-2);

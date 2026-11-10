@@ -74,7 +74,7 @@
     stroke: var(--ink-2);
 }
 .net-pes-level-link:focus-visible {
-    outline: 3px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
 }
 
@@ -153,8 +153,8 @@
     stroke-width: 3.25;
 }
 .net-pes-saddle-link:focus-visible {
-    outline: 2px solid var(--accent-300);
-    outline-offset: 1px;
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
 }
 /* The TS bar itself -- a short horizontal level, same visual family as a
    state's own `.net-pes-level`, coloured by `channel.kind` (same
@@ -232,7 +232,7 @@
    plot rather than inside the legend that describes the encoding. */
 .net-pes-layout-fieldset {
     border: 1px solid var(--line);
-    border-radius: .5rem;
+    border-radius: var(--radius);
     background: var(--surface);
     padding: .5rem .9rem .7rem;
     margin: 0 0 1rem;
@@ -279,7 +279,7 @@
     margin: 0 0 1rem;
     padding: .5rem .9rem .7rem;
     border: 1px solid var(--line);
-    border-radius: .5rem;
+    border-radius: var(--radius);
     background: var(--surface);
 }
 
@@ -302,8 +302,8 @@
     align-items: center;
     gap: .4rem;
     padding: .3rem .6rem;
-    border: 1px solid var(--line);
-    border-radius: 999px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
     background: var(--surface-sunken);
     font: var(--type-data-font);
     color: var(--ink-2);

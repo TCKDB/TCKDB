@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { fetchMachineReviewInspection } from "../api/machineReviewInspection"
 import { AuthApiError } from "../api/authApi"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 import {
     buildCuratorTasksForSubmission,
     CuratorTaskResponseError,
@@ -590,6 +591,7 @@ function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
 }
 
 function MachineReviewInspectionPage() {
+    useDocumentTitle("Machine review inspection")
     const [inputValue, setInputValue] = useState("")
     const [submissionId, setSubmissionId] = useState<number | null>(null)
     const [showRaw, setShowRaw] = useState(false)

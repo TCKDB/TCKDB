@@ -75,8 +75,8 @@
     align-items: center;
     gap: .45rem;
     padding: .3rem .55rem .3rem .75rem;
-    border: 1px solid var(--line);
-    border-radius: 999px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
     background: var(--surface);
 }
 
@@ -104,7 +104,7 @@
 }
 
 .arrhenius-chart-control-select:focus-visible {
-    outline: 2px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
     border-radius: .2rem;
 }
@@ -164,7 +164,7 @@
     height: 1.1rem;
     padding: 0;
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: var(--surface-sunken);
     color: var(--muted);
     font: var(--type-label-font);
@@ -179,7 +179,7 @@
 }
 
 .arrhenius-chart-unit-reason:focus-visible {
-    outline: 3px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
 }
 
@@ -228,7 +228,7 @@
     gap: .4rem;
     padding: .3rem .6rem;
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: var(--surface);
     font: var(--type-data-font);
     color: var(--ink-2);

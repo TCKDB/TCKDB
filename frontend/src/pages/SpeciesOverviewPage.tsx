@@ -11,6 +11,7 @@ import { hiddenByDefaultNote } from "../domain/paging"
 import { facetChips } from "../domain/recordFacets"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { useSpeciesOverview } from "../hooks/useSpeciesOverview"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 function token(value: string) {
     return value.replaceAll("_", " ")
@@ -35,6 +36,7 @@ function groupEntriesByState(entries: ScientificSpeciesEntrySummary[]) {
 export default function SpeciesOverviewPage() {
     const { speciesRef = "" } = useParams<{ speciesRef: string }>()
     const state = useSpeciesOverview(speciesRef)
+    useDocumentTitle("Species", state.status === "ready" && state.speciesRef === speciesRef ? (state.species.formula ?? state.species.canonical_smiles) : null)
 
     if (state.speciesRef !== speciesRef || state.status === "loading") {
         return <State title="Loading species record…" busy />

@@ -13,6 +13,7 @@ import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceForm
 import { useCorrectionScheme } from "../hooks/useCorrectionScheme"
 import type { EnergyCorrectionSchemeRecord, EnergyCorrectionSchemeUsage } from "../api/methodsApi"
 import { LiteratureCitation } from "../components/LiteratureCitation"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
@@ -59,6 +60,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
     // (`domain/correctionSchemeFormat.ts`) so the two pages can never label
     // the same scheme kind two different ways.
     const title = schemeKindLabel(scheme.scheme_kind)
+    useDocumentTitle("Energy-correction scheme", title)
 
     return (
         <section className="conformer-page methods-page">

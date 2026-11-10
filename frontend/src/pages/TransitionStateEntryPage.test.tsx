@@ -1,12 +1,13 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, render, screen, within, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
 import TransitionStateEntryPage from "./TransitionStateEntryPage"
 import { bySummaryText } from "../test/disclosureQueries"
 import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { titleHasKind } from "../test/routeTitleKinds"
 
 const ENTRY_REF = "tse_aq5ktxlu27nvul3hmdwpuyuz4e"
 
@@ -136,6 +137,7 @@ describe("TransitionStateEntryPage", () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: mockRecord() })))
         page()
         await screen.findByRole("heading", { name: "C1=C[C]2C=CCC2C=C1 <=> C1=Cc2ccccc2C1 + [H]" })
+        await waitFor(() => expect(titleHasKind(document.title, "/transition-state-entries/:ref")).toBe(true))
 
         const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" })
         expect(within(breadcrumb).getByRole("link", { name: "Browse" })).toHaveAttribute("href", "/transition-states")

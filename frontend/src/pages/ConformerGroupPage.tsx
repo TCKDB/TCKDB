@@ -12,6 +12,7 @@ import { CopyButton } from "../components/RefsDisclosure"
 import { SpeciesEntryLink } from "../components/SpeciesEntryLink"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useConformerGroup } from "../hooks/useConformerGroup"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 type Observation = NonNullable<ConformerGroup["observations"]>[number]
@@ -54,6 +55,7 @@ export default function ConformerGroupPage() {
 }
 
 function Ledger({ group }: { group: ConformerGroup }) {
+    useDocumentTitle("Conformer basin", group.species?.formula)
     const {
         conformer_group: basin,
         species,

@@ -23,6 +23,7 @@ import {
 import { words } from "../domain/provenanceFormat"
 import { useCompositeScheme } from "../hooks/useCompositeScheme"
 import type { CompositeSchemeRecord, CompositeSchemeTerm } from "../api/methodsApi"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
@@ -57,6 +58,7 @@ export default function CompositeSchemePage() {
 function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
     const scheme = record.composite_scheme
     const title = schemeTitle(scheme)
+    useDocumentTitle("Composite scheme", title)
     return (
         <section className="conformer-page methods-page">
             <nav className="record-breadcrumbs" aria-label="Breadcrumb">

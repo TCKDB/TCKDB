@@ -29,6 +29,7 @@ import {
     type ReviewQueueReactionEquation,
     type ReviewQueueSubject,
 } from "../types/recordReview"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 /**
  * Record review: every record, and whether a person has judged it.
@@ -489,6 +490,7 @@ function RecordOwnLink({ row, subject }: { row: RecordReview; subject: ReviewQue
 }
 
 export default function ReviewQueuePage() {
+    useDocumentTitle("Record review")
     const { state } = useAuth()
     const [statusFilter, setStatusFilter] = useState<RecordReviewStatus | "all">(
         "not_reviewed",

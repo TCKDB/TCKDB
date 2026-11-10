@@ -1,0 +1,12 @@
+.record-glyph {
+    flex: none;
+    vertical-align: -.15em;
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 1.6;
+}
+
+.record-glyph--species { color: var(--kind-species); }
+.record-glyph--reaction { color: var(--kind-reaction); }
+.record-glyph--ts { color: var(--kind-ts); }
+.record-glyph--network { color: var(--kind-network); }

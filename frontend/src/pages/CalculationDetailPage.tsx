@@ -61,6 +61,7 @@ import { hessianMethodLabel, isAssumedTauBasis, tauBasisNote } from "../domain/t
 import { useCalculation } from "../hooks/useCalculation"
 import { useCalculationSection, type CalculationSectionState } from "../hooks/useCalculationSection"
 import { LiteratureCitation } from "../components/LiteratureCitation"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 // ---------------------------------------------------------------------------
 // Section-loading design (see the brief's "design problem" — recorded here
@@ -349,6 +350,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
         : null
     const stageWords = stage && stage.kind !== "unknown" ? OPTIMISATION_STAGE_WORDS[stage.kind] : null
     const titleTypeLabel = stageWords ? stageWords.label : typeLabel(core.type)
+    useDocumentTitle("Calculation", titleTypeLabel)
     const kickerText = `${typeLabel(core.type)} calculation · ${stageWords ? stageWords.kickerSuffix : OPTIMISATION_STAGE_UNKNOWN_KICKER_SUFFIX}`
     // `provenance.submission_ref` is `string | null | undefined` on the
     // wire: `undefined` means the KEY ITSELF was omitted (an anonymous
@@ -1629,13 +1631,7 @@ function FreqModesSection({ calculationRef, available, applicable }: { calculati
             {(rows) => (rows?.length ? (
                 <div className="table-scroll">
                     <table className="data-table" aria-label="Vibrational modes">
-                        {/* SCIENTIFIC ERROR fixed here (sweep finding, same class
-                            as the Cp chart's y-axis title): `.data-table th`
-                            (design-system.css) uppercases every header via
-                            `--type-label-strong-transform` -- "cm-1" (wavenumber,
-                            lower-case "cm" for centimetre) read "CM-1".
-                            `.t-preserve-case` (design-system.css) is the shared
-                            fix. */}
+                        {/* `.t-preserve-case` keeps these symbols and units in their own case. */}
                         <thead><tr><th scope="col">Mode</th><th className="t-preserve-case" scope="col">Frequency (cm-1)</th><th scope="col">Imaginary</th></tr></thead>
                         <tbody>
                             {rows.map((row) => (

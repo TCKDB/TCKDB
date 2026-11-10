@@ -1,0 +1,47 @@
+.term-wrap {
+    position: relative;
+    display: inline-block;
+}
+
+.term {
+    appearance: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-bottom: 1.5px dotted var(--accent);
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: help;
+}
+
+.term:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+.term-popover {
+    position: absolute;
+    z-index: 5;
+    top: calc(100% + .4rem);
+    left: 0;
+    width: min(20rem, calc(100vw - 2rem));
+    padding: .65rem .8rem;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: 0 2px 8px var(--shadow-color);
+    color: var(--ink);
+    font: var(--type-note-font);
+    letter-spacing: var(--type-note-tracking);
+    text-align: left;
+    visibility: hidden;
+}
+
+.term-popover[data-open="true"] {
+    visibility: visible;
+}

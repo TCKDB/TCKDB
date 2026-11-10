@@ -131,8 +131,6 @@
     display: block;
     margin-bottom: .3rem;
     font: 600 .72rem var(--mono);
-    letter-spacing: .06em;
-    text-transform: uppercase;
 }
 
 /* `.model-block-heading` is a real `<h4>` at every call site — the
@@ -253,7 +251,7 @@
 .entry-page .empty-projection {
     padding: 1.05rem 1.2rem;
     border: 1px dashed var(--line);
-    border-radius: .4rem;
+    border-radius: var(--radius);
     background: var(--surface-sunken);
     color: var(--muted-2);
 }
@@ -261,7 +259,7 @@
 .entry-page .science-record-heading h3 { color: var(--ink); }
 
 .entry-page .supersession-notice {
-    border-radius: .4rem;
+    border-radius: var(--radius);
 }
 
 /* BLOCKING-2 (species-entry/browse/chrome residuals re-review): the second

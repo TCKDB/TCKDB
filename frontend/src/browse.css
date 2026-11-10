@@ -19,11 +19,7 @@
     letter-spacing: var(--type-display-2-tracking);
 }
 
-/* SHOULD-FIX-14 (species-entry/browse/chrome residuals re-review): was a
-   bespoke `1rem/1.6 var(--serif)` -- one of three near-identical serif
-   "lede" declarations across the site (`.tagline`, index.css;
-   `.evidence-linkage-story`, species-entry.css). Now the named
-   `--type-lede` step (design-system.css). */
+/* The intro uses the named `--type-lede` step (design-system.css). */
 .browse-intro {
     max-width: var(--measure-prose);
     margin: 1rem 0 0;
@@ -37,7 +33,7 @@
     margin: 1.5rem 0 0;
     padding: 1.1rem 1.2rem;
     border: 1px solid var(--line);
-    border-radius: .6rem;
+    border-radius: var(--radius);
     background: var(--surface-sunken);
 }
 
@@ -91,7 +87,7 @@
 }
 
 .browse-filter-field-label--explain:focus-visible {
-    outline: 2px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
     border-radius: .15rem;
 }
@@ -123,8 +119,8 @@
 
 .browse-filter-field input:focus-visible,
 .browse-filter-field select:focus-visible {
-    outline: 2px solid var(--accent-300);
-    outline-offset: 1px;
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
 }
 
 .browse-filter-field select:disabled {
@@ -217,7 +213,7 @@
     margin: 2rem 0;
     padding: 1.1rem 1.2rem;
     border: 1px solid var(--line);
-    border-radius: .5rem;
+    border-radius: var(--radius);
     background: var(--surface-sunken);
     color: var(--ink-2);
     font: var(--type-note-font);
@@ -588,7 +584,7 @@ span.browse-row-title {
 .browse-pagination button {
     padding: .45rem 1rem;
     border: 1px solid var(--control-border);
-    border-radius: .4rem;
+    border-radius: var(--radius);
     background: var(--surface);
     color: var(--ink);
     font: var(--type-ui-font);

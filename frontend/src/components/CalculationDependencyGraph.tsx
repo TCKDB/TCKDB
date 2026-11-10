@@ -308,7 +308,7 @@ function DependencyGraphNode({ node, centreLinked, centreSubject }: {
                     y={pillY}
                     width={pill.width}
                     height={pill.height}
-                    rx={999}
+                    rx={4}
                     className="dep-graph-node-pill-bg"
                 />
                 <text x={node.x} y={pillY + pill.height / 2} className="dep-graph-node-pill-text" textAnchor="middle" dominantBaseline="middle">

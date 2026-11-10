@@ -8,6 +8,7 @@ import { StorageCapacityPanel } from "../components/StorageCapacityPanel"
 import { useAuth } from "../hooks/useAuth"
 import type { AdminUser } from "../types/admin"
 import { AppUserRoleSchema, type AppUserRole } from "../types/auth"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 const ROLES: readonly AppUserRole[] = AppUserRoleSchema.options
 
@@ -37,6 +38,7 @@ type UsersState =
  * actually refuses. Nothing here should ever become the only check.
  */
 export default function AdminPage() {
+    useDocumentTitle("Administration")
     const { state } = useAuth()
     const [usersState, setUsersState] = useState<UsersState>({ status: "loading" })
     const [pendingId, setPendingId] = useState<number | null>(null)

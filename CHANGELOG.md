@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Pages are titled and focus follows navigation; keyboard atom measuring; new colours and type (2026-11-10)
+
+- **Behaviour:** each page sets its own browser-tab title ("CH3 · Species entry · TCKDB") and, after a link navigation, focus moves to the page's main heading. A filter, hash or species-entry tab change leaves focus where it is. The geometry viewer gains a "Measure with the keyboard" form (two to four atom selects) that adds to the same measurement list as clicking atoms, and it stays available when WebGL is not. Search announces "N matches" or "No exact match" in a polite live region. The focus ring is blue and the control borders darker, both measured at 3:1 or more on every surface. Colours, type (self-hosted Source Sans 3 and Source Code Pro) and shapes are refreshed: corner radius at most 6px, no soft shadows or pill shapes, labels in sentence case.
+- **Schema and migration:** none. No new environment variable.
+- **Also added:** `RecordGlyph`, `Term` (glossary button) and `Announcer` components, and `frontend/scripts/a11y/shoot.mjs`, which screenshots routes at true 1440, 390 and 320 widths and reports horizontal overflow.
+
 ## An over-limit body gets a coded 413; a 422 does not echo the body (2026-11-09)
 
 - **Behaviour:** the frontend nginx answers a body over its cap (100 MiB on `/api/v1/uploads/`, `/api/v1/jobs/` and `/api/v1/calculations/<ref>/artifacts`, 10 MiB on other `/api/` routes) with `413 request_body_too_large` as JSON in the API's error envelope (`context.max_bytes` is the cap), instead of a bare HTML page. A request-validation 422 no longer carries the caller's value under each error's `input` or in its message. `tckdb-client` explains a 413 that carries no TCKDB code.

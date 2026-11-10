@@ -21,6 +21,8 @@ import { listMetaOf } from "../api/listEnvelope"
 import { chooserHeaderSourceNote } from "../domain/reactionChooser"
 import { usePagedList } from "../hooks/usePagedList"
 import { useScientificRecord } from "../hooks/useScientificRecord"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
+import { equationText } from "../domain/reactionEquation"
 
 function statusLabel(status: string): string {
     return status.replaceAll("_", " ")
@@ -101,6 +103,7 @@ function ChooserDocument({ reactionRef, headerRecord, total, records, pageStatus
     reviewSummary: { approved: number; under_review: number; not_reviewed: number; deprecated: number; rejected: number; total: number }
 }) {
     const first = headerRecord
+    useDocumentTitle("Reaction", equationText(first.reactants, first.products, first.reversible))
     return (
         <section className="conformer-page">
             <nav className="record-breadcrumbs" aria-label="Breadcrumb">

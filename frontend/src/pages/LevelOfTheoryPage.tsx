@@ -24,6 +24,7 @@ import type {
     LevelOfTheoryWorkflowToolUsage,
 } from "../api/methodsApi"
 import { publicCitationText } from "../domain/literatureCitation"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
@@ -64,6 +65,7 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
     // all-electron and frozen-core pages of one method and basis are told apart in the heading and
     // the breadcrumb. Older payloads have none: they keep `method/basis`.
     const title = lot.label ?? (lot.basis ? `${lot.method}/${lot.basis}` : lot.method)
+    useDocumentTitle("Level of theory", title)
 
     return (
         <section className="conformer-page methods-page">

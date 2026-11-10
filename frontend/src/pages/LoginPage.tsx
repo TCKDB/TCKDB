@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom"
 import "../auth.css"
 import { AuthApiError } from "../api/authApi"
 import { useAuth } from "../hooks/useAuth"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 type Mode = "sign-in" | "register"
 
@@ -33,6 +34,7 @@ export default function LoginPage() {
     const navigate = useNavigate()
     const location = useLocation()
     const [mode, setMode] = useState<Mode>("sign-in")
+    useDocumentTitle(mode === "sign-in" ? "Sign in" : "Create an account")
     const [username, setUsername] = useState("")
     const [password, setPassword] = useState("")
     const [email, setEmail] = useState("")

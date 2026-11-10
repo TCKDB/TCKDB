@@ -1,11 +1,11 @@
 @import "./design-system.css";
-@font-face { font-family: "IBM Plex Serif"; src: url("/fonts/ibm-plex/IBMPlexSerif-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
-@font-face { font-family: "IBM Plex Serif"; src: url("/fonts/ibm-plex/IBMPlexSerif-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
-@font-face { font-family: "IBM Plex Sans"; src: url("/fonts/ibm-plex/IBMPlexSans-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
-@font-face { font-family: "IBM Plex Sans"; src: url("/fonts/ibm-plex/IBMPlexSans-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
-@font-face { font-family: "IBM Plex Mono"; src: url("/fonts/ibm-plex/IBMPlexMono-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
-@font-face { font-family: "IBM Plex Mono"; src: url("/fonts/ibm-plex/IBMPlexMono-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
-:root { --serif: "IBM Plex Serif", Georgia, serif; --sans: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, monospace;
+@font-face { font-family: "Source Sans 3"; src: url("/fonts/source-sans-3/SourceSans3VF-Upright.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Source Sans 3"; src: url("/fonts/source-sans-3/SourceSans3VF-Italic.woff2") format("woff2"); font-weight: 200 900; font-style: italic; font-display: swap; }
+@font-face { font-family: "Source Code Pro"; src: url("/fonts/source-code-pro/SourceCodeVF-Upright.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Source Code Pro"; src: url("/fonts/source-code-pro/SourceCodeVF-Italic.woff2") format("woff2"); font-weight: 200 900; font-style: italic; font-display: swap; }
+/* The one glyph neither Source family has (⇌). Swap this face and `--font-symbols` to change the fallback. */
+@font-face { font-family: "Noto Sans Math Symbols"; src: url("/fonts/noto-sans-math/NotoSansMath-arrows-relations.woff2") format("woff2"); font-weight: 400; font-display: swap; unicode-range: U+21CC; }
+:root { --radius: 6px; --radius-sm: 4px; --font-symbols: "Noto Sans Math Symbols"; --display: "Source Sans 3", var(--font-symbols), system-ui, sans-serif; --sans: "Source Sans 3", var(--font-symbols), system-ui, sans-serif; --mono: "Source Code Pro", "Source Sans 3", var(--font-symbols), ui-monospace, monospace;
     /* Layout measures. Non-colour and theme-invariant, like the font
        tokens above: short instructions and section headings must not wrap
        while the page still has room beside them (92rem fits the longest,
@@ -16,25 +16,13 @@
     --measure-prose: 40rem; }
 * { box-sizing: border-box; } body { margin: 0; min-width: 320px; background: var(--page-bg); } a { color: inherit; text-decoration: none; } button, input { font: inherit; }
 
-/* Kills the UA `monospace` fallback: MEASURED ~100 `<code>` elements
-   across 6 pages with no global `code` rule of their own, rendering
-   whatever generic monospace face the OS/browser substitutes rather
-   than the loaded Plex Mono every other mono run on the site uses.
-   `pre`/`kbd`/`samp` get the same face for the same reason -- none of
-   the four has a page-level rule setting `font-family` today. */
+/* `code`, `pre`, `kbd` and `samp` use the mono face rather than the UA monospace fallback. */
 code, pre, kbd, samp { font-family: var(--mono); }
 
-/* Every `font-weight: 700` measured across the live site was browser-
-   SYNTHESISED, not real: only Plex 400/600 are loaded (the @font-face
-   block above), so an `<h1>`-`<h4>`/`<th>`/`<strong>`/`<b>` that never
-   set its own weight rendered the UA default `bold` (700) as a faux-
-   bold the browser fabricated on the fly, never the actual typeface.
-   This sets the honest weight this app actually ships a font file for.
-   Any page rule that already sets its own weight (`font: 600 …` or a
-   bare `font-weight:`) still wins the cascade for that property, same
-   value either way -- this only changes elements that never set one. */
+/* Headings, `th` and `strong` that set no weight of their own use 600. */
 h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 .skip-link { position: fixed; z-index: 3; top: -4rem; left: 1rem; padding: .65rem .9rem; background: var(--surface); color: var(--accent-700); border: 1px solid var(--accent); } .skip-link:focus { top: 1rem; }
+.skip-link:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 
 /* `.value-pill` / `.value-pill--muted` moved to `design-system.css`
    (post-review, PR D): both must live in ONE file, in the right order, for
@@ -69,15 +57,11 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
  */
 .archive-shell { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
 .archive-shell > main { flex: 1; }
+/* Focus moved here by `RouteFocus` is a landing point, not a control; no ring. */
+main:focus, main h1[tabindex="-1"]:focus { outline: none; }
 .utility-bar { height: 48px; padding: 0 clamp(1rem, 4vw, 2.5rem); display: flex; align-items: center; justify-content: space-between; background: var(--surface); border-bottom: 1px solid var(--line); }
-/* SHOULD-FIX-10 (species-entry/browse/chrome residuals re-review): `.brand`
-   was `600 .76rem var(--mono)` (12.16px) and its icon square `600 .85rem
-   var(--serif)` (13.6px) -- two more off-scale sizes on the one piece of
-   chrome every route renders. `--type-label-strong` (mono, uppercase,
-   .72rem/600) is the named step for a short, all-caps UI label -- both the
-   wordmark text ("TCKDB", already uppercase, so the transform is a no-op
-   there) and the icon glyph ("T") take it now. */
-.brand { display: flex; gap: .55rem; align-items: center; font: var(--type-label-strong-font); letter-spacing: var(--type-label-strong-tracking); text-transform: var(--type-label-strong-transform); color: var(--ink-2); }
+/* The wordmark and its icon square use the `--type-label-strong` step. */
+.brand { display: flex; gap: .55rem; align-items: center; font: var(--type-label-strong-font); letter-spacing: var(--type-label-strong-tracking); text-transform: var(--type-label-strong-transform); color: var(--accent); }
 .brand span { display: grid; width: 1.25rem; height: 1.25rem; place-items: center; border-radius: .25rem; background: var(--accent); color: var(--surface); font: var(--type-label-strong-font); letter-spacing: var(--type-label-strong-tracking); text-transform: var(--type-label-strong-transform); }
 .utility-bar-end { display: flex; align-items: center; gap: clamp(.75rem, 2.5vw, 1.5rem); }
 .utility-bar nav { display: flex; gap: clamp(.75rem, 2.5vw, 1.5rem); }
@@ -86,7 +70,7 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
    role already matches everywhere else "a short, weighted UI control
    label" appears (tab strips, disclosure summaries). */
 .utility-bar nav a { padding: .3rem 0; color: var(--ink-2); font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); }
-.utility-bar nav a[aria-current="page"], .utility-bar nav a:hover { color: var(--accent); }.utility-bar a:focus-visible, button:focus-visible, input:focus-visible, .search-results a:focus-visible { outline: 3px solid var(--accent-300); outline-offset: 3px; }
+.utility-bar nav a[aria-current="page"], .utility-bar nav a:hover { color: var(--accent); }.utility-bar a:focus-visible, button:focus-visible, input:focus-visible, .search-results a:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 .archive-hero { max-width: 53rem; margin: 0 auto; padding: clamp(4rem, 11vw, 7rem) 1.25rem 4rem; text-align: center; }
 /* `.eyebrow` -- the site's standalone kicker (as opposed to `.t-label`'s
    repeated dt/th/legend role). Was its own one-off .72rem/.19em pair;
@@ -104,19 +88,8 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
    step to `--type-display-2` -- the same step `.browse-header h1` uses. */
 .archive-hero h1 { margin: 0; font: var(--type-display-1-font); letter-spacing: var(--type-display-1-tracking); }
 .record-placeholder h1 { margin: 0; font: var(--type-display-2-font); letter-spacing: var(--type-display-2-tracking); }
-/* The one editorial intro on the site: `--type-body`'s size/weight/line-
-   height, serif rather than the step's own sans -- an explicit, named
-   exception (not a new one-off size) because this sentence is read as
-   prose, not UI copy.
-
-   SHOULD-FIX-14 (species-entry/browse/chrome residuals re-review): now
-   uses the named `--type-lede` step (design-system.css) instead of
-   `--type-body` plus a local `font-family: var(--serif)` override -- this
-   sentence, `.browse-intro`, and `.evidence-linkage-story`
-   (species-entry.css) were three separate bespoke "serif body copy" spots
-   with the same intent; one named step for the role now, one size up
-   from body copy so a lede reads as visually distinct on purpose, not
-   merely re-fonted. */
+/* The one editorial intro on the site, set in the named `--type-lede` step (design-system.css):
+   one size up from body copy so it reads as the sentence the eye lands on first. */
 .tagline { max-width: var(--measure-prose); margin: 1.4rem auto 0; color: var(--ink-2); font: var(--type-lede-font); letter-spacing: var(--type-lede-tracking); }.tagline em { color: var(--accent-700); }.accession-rail { display: flex; justify-content: center; align-items: center; gap: .65rem; margin: 2rem 0 .65rem; color: var(--muted-2); font: var(--type-label-font); letter-spacing: var(--type-label-tracking); text-transform: var(--type-label-transform); }.accession-rail i { width: 1.9rem; height: 1px; background: var(--accent-300); }
 .identifier-search { margin: 0 auto; max-width: 45rem; text-align: left; }
 /* SHOULD-FIX-13 (species-entry/browse/chrome residuals re-review): was
@@ -134,7 +107,7 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
  * `<select>`-based facets). Centered above the search row, with a little
  * breathing room below it before the field it governs.
  */
-.identifier-search-mode { display: inline-flex; gap: .2rem; margin: 0 0 .85rem; padding: .2rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--surface-sunken); }
+.identifier-search-mode { display: inline-flex; gap: .2rem; margin: 0 0 .85rem; padding: .2rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-sunken); }
 .identifier-search-mode-option {
     border: 0;
     border-radius: .35rem;
@@ -150,11 +123,11 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 .identifier-search-mode-option[data-active="true"] {
     background: var(--surface);
     color: var(--accent-700);
-    box-shadow: 0 1px 2px var(--shadow-color);
+    box-shadow: inset 0 0 0 1px var(--control-border);
 }
-.identifier-search-mode-option:focus-visible { outline: 2px solid var(--accent-300); outline-offset: 2px; }
-.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--line); border-radius: .75rem; background: var(--surface); box-shadow: 0 8px 28px -12px var(--shadow-color); }
-.search-row:focus-within { border-color: var(--accent-300); box-shadow: 0 0 0 4px var(--accent-50), 0 8px 28px -12px var(--shadow-color); }
+.identifier-search-mode-option:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--control-border); border-radius: var(--radius); background: var(--surface); }
+.search-row:focus-within { border-color: var(--focus-ring); outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 /* The search-icon glyph ("⌕") -- a decorative symbol sized to sit
    comfortably inside the input row, not text carrying a type-scale role
    (the same "icon glyph, not prose" call `.linkage-connector`'s arrow
@@ -194,8 +167,8 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
     display: flex;
     gap: .2rem;
     padding: .2rem;
-    border: 1px solid var(--line);
-    border-radius: .4rem;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius);
     background: var(--surface-sunken);
 }
 
@@ -227,7 +200,7 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 .theme-toggle-option[data-active="true"] {
     background: var(--surface);
     color: var(--accent-700);
-    box-shadow: 0 1px 2px var(--shadow-color);
+    box-shadow: inset 0 0 0 1px var(--control-border);
 }
 
 /*
@@ -271,7 +244,7 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 }
 /* The parenthesised formula that follows the leading SMILES
    (`species-face-formula`, from `SpeciesFace`) -- demoted from this
-   block's old primary/bold-serif treatment now that SMILES leads. Also
+   block's primary treatment now that SMILES leads. Also
    the style for the rare no-SMILES fallback headline (`.search-result-
    formula`, used directly there since there is no `SpeciesFace` wrapper
    to scope into), where the formula is all there is. */
@@ -329,11 +302,8 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
    primitive now (`.destination card` in `ArchiveHomePage.tsx`); this rule
    keeps only the flex layout and hover motion a destination card needs on
    top of it. */
-.destination-grid { display: grid; max-width: 65rem; margin: 0 auto; padding: 1.4rem 1.25rem 4.5rem; grid-template-columns: repeat(3,1fr); gap: 1rem; }.destination { display: flex; min-height: 12rem; flex-direction: column; align-items: flex-start; transition: transform .15s, box-shadow .15s, border-color .15s; }.destination:hover { transform: translateY(-2px); border-color: var(--accent-300); box-shadow: 0 8px 28px -12px var(--shadow-color); }.destination-icon { display: grid; width: 2.1rem; height: 2.1rem; place-items: center; border-radius: .55rem; background: var(--accent-50); color: var(--accent); }
-/* `--type-heading-2`, serif -- these titles sit beside the eyebrow/hero's
-   own serif voice (`.species-header h1`, `.entry-card h4`), so a card
-   naming one of three top-level destinations reads as a heading in the
-   same house style, not a smaller sans UI label. */
+.destination-grid { display: grid; max-width: 65rem; margin: 0 auto; padding: 1.4rem 1.25rem 4.5rem; grid-template-columns: repeat(3,1fr); gap: 1rem; }.destination { display: flex; min-height: 12rem; flex-direction: column; align-items: flex-start; transition: border-color .15s; }.destination:hover { border-color: var(--accent-300); }.destination-icon { display: grid; width: 2.1rem; height: 2.1rem; place-items: center; border-radius: var(--radius); background: var(--accent-50); color: var(--accent); }
+/* `--type-heading-2`: a card naming one of three top-level destinations reads as a heading, not a small UI label. */
 /* SHOULD-FIX-13 (species-entry/browse/chrome residuals re-review): item
    13 asks this file to decide the destination-card title step and say
    why, since a page's OWN section `<h2>` (`SectionHeading`, e.g.
@@ -397,7 +367,7 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 
 .record-breadcrumbs a:focus-visible,
 .entry-card h4 a:focus-visible {
-    outline: 3px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
 }
 /*

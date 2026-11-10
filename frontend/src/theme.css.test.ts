@@ -335,3 +335,176 @@ describe("color-scheme follows the theme (native scrollbars and controls)", () =
         expect(schemeIn('\n:root[data-theme="dark"] {')).toBe("dark")
     })
 })
+
+/**
+ * Focus ring, control borders, kind colours and the text tokens, measured from the live token values in all three blocks.
+ */
+describe("focus, control, kind and text tokens clear their contrast floors in every theme block", () => {
+    function hexOf(block: string, name: string): [number, number, number] {
+        const match = new RegExp(`(?<!\\()--${name}:\\s*#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\\b`).exec(block)
+        if (!match) throw new Error(`--${name} not found as a #rgb/#rrggbb declaration`)
+        const hex = match[1].length === 3 ? match[1].split("").map((c) => c + c).join("") : match[1]
+        return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)]
+    }
+    function relativeLuminance([r, g, b]: [number, number, number]): number {
+        const channel = (c: number) => {
+            const s = c / 255
+            return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+        }
+        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+    }
+    function contrastRatio(a: [number, number, number], b: [number, number, number]): number {
+        const [lighter, darker] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    const mediaBlock = extractBlock(themeCss, /^@media \(prefers-color-scheme: dark\) \{/m)
+    const BLOCKS: Record<string, string> = {
+        light: extractBlock(themeCss, /^:root \{/m),
+        "dark (prefers-color-scheme)": extractBlock(mediaBlock, /:root:not\(\[data-theme="light"]\) \{/),
+        "dark (data-theme)": extractBlock(themeCss, /^:root\[data-theme="dark"] \{/m),
+    }
+    const SURFACES = ["page-bg", "surface", "surface-sunken", "accent-50"]
+    const KINDS = ["species", "reaction", "ts", "network"]
+    const KIND_TINTS = KINDS.map((kind) => `kind-${kind}-bg`)
+
+    function worst(block: string, foreground: string, backgrounds: string[]): { ratio: number; against: string } {
+        const fg = hexOf(block, foreground)
+        let result = { ratio: Infinity, against: "" }
+        for (const bg of backgrounds) {
+            const ratio = contrastRatio(fg, hexOf(block, bg))
+            if (ratio < result.ratio) result = { ratio, against: bg }
+        }
+        return result
+    }
+
+    for (const [blockName, block] of Object.entries(BLOCKS)) {
+        for (const token of ["focus-ring", "control-border"]) {
+            // Nothing outside theme.css uses a kind tint as a background (see the scan below), so no control sits on one.
+            const backgrounds = token === "control-border" ? [...SURFACES, "status-ok-bg", "notice-bg"] : SURFACES
+            it(`${blockName}: --${token} is at least 3:1 on every surface${token === "control-border" ? " and status tint" : ""}`, () => {
+                const { ratio, against } = worst(block, token, backgrounds)
+                expect(ratio, `--${token} vs --${against} (${ratio.toFixed(2)}:1)`).toBeGreaterThanOrEqual(3)
+            })
+        }
+
+        for (const token of ["muted", "ink-2", "ink", "accent"]) {
+            it(`${blockName}: --${token} is at least 4.5:1 on the surfaces and kind tints`, () => {
+                const { ratio, against } = worst(block, token, [...SURFACES, ...KIND_TINTS])
+                expect(ratio, `--${token} vs --${against} (${ratio.toFixed(2)}:1)`).toBeGreaterThanOrEqual(4.5)
+            })
+        }
+
+        for (const kind of KINDS) {
+            it(`${blockName}: --kind-${kind}-ink is at least 4.5:1 on its own tint and the surfaces`, () => {
+                const { ratio, against } = worst(block, `kind-${kind}-ink`, [`kind-${kind}-bg`, ...SURFACES])
+                expect(ratio, `--kind-${kind}-ink vs --${against} (${ratio.toFixed(2)}:1)`).toBeGreaterThanOrEqual(4.5)
+            })
+            it(`${blockName}: --kind-${kind} graphic tone is at least 3:1 on the surfaces`, () => {
+                const { ratio, against } = worst(block, `kind-${kind}`, SURFACES)
+                expect(ratio, `--kind-${kind} vs --${against} (${ratio.toFixed(2)}:1)`).toBeGreaterThanOrEqual(3)
+            })
+        }
+
+        it(`${blockName}: --status-ok-ink is at least 4.5:1 on its tint`, () => {
+            const { ratio } = worst(block, "status-ok-ink", ["status-ok-bg"])
+            expect(ratio).toBeGreaterThanOrEqual(4.5)
+        })
+    }
+})
+
+describe("the two dark blocks declare identical values for every token", () => {
+    const mediaBlock = extractBlock(themeCss, /^@media \(prefers-color-scheme: dark\) \{/m)
+    const declarations = (block: string) => {
+        const out = new Map<string, string>()
+        for (const match of stripComments(block).matchAll(/(?<!\()--([a-zA-Z0-9-]+)\s*:\s*([^;]+);/g)) out.set(match[1], match[2].trim())
+        return out
+    }
+    const fromMedia = declarations(extractBlock(mediaBlock, /:root:not\(\[data-theme="light"]\) \{/))
+    const fromAttribute = declarations(extractBlock(themeCss, /^:root\[data-theme="dark"] \{/m))
+
+    it("declares a non-trivial token set", () => {
+        expect(fromMedia.size).toBeGreaterThan(40)
+    })
+
+    it("has the same value for each name", () => {
+        expect(Object.fromEntries(fromMedia)).toEqual(Object.fromEntries(fromAttribute))
+    })
+})
+
+describe("every focus outline is drawn with --focus-ring", () => {
+    // Programmatic landing points (`RouteFocus` targets) are not controls and draw no ring.
+    const LANDING_POINT_SELECTORS = new Set(["main:focus, main h1[tabindex=\"-1\"]:focus"])
+
+    function focusRules(css: string): { selector: string; declarations: string[] }[] {
+        const rules: { selector: string; declarations: string[] }[] = []
+        for (const match of stripComments(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+            const selector = match[1].trim().replace(/\s+/g, " ")
+            if (!/:focus(-visible|-within)?\b/.test(selector)) continue
+            const declarations = [...match[2].matchAll(/(?:^|;|\s)(outline(?:-color)?)\s*:\s*([^;]+)/g)].map((m) => `${m[1]}: ${m[2].trim()}`)
+            rules.push({ selector, declarations })
+        }
+        return rules
+    }
+
+    it("finds focus rules (the scan is not vacuous)", () => {
+        const total = Object.values(NON_TOKEN_STYLESHEETS).reduce((n, css) => n + focusRules(css).filter((r) => r.declarations.length > 0).length, 0)
+        expect(total).toBeGreaterThan(20)
+    })
+
+    for (const [name, css] of Object.entries(NON_TOKEN_STYLESHEETS)) {
+        it(`${name}: a :focus rule that sets an outline colour uses var(--focus-ring)`, () => {
+            const offenders: string[] = []
+            for (const rule of focusRules(css)) {
+                if (LANDING_POINT_SELECTORS.has(rule.selector)) continue
+                for (const declaration of rule.declarations) {
+                    if (!declaration.includes("var(--focus-ring)")) offenders.push(`${rule.selector} { ${declaration} }`)
+                }
+            }
+            expect(offenders).toEqual([])
+        })
+    }
+})
+
+describe("nothing outside theme.css uses a kind tint as a background", () => {
+    // A container on a kind tint puts its buttons on the tint without the button rule naming it, so any use fails.
+    const ALLOWED_USES: string[] = []
+    const TSX_SOURCES = Object.fromEntries(
+        Object.entries(import.meta.glob("./**/*.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>)
+            .filter(([path]) => !path.endsWith(".test.tsx")),
+    )
+    const CSS_USE = /background(?:-color)?\s*:[^;}]*var\(--kind-[a-z-]+-bg\)/g
+    const TSX_USE = /background(?:Color)?["']?\s*:\s*[^,}\n]*var\(--kind-[a-z-]+-bg\)/g
+
+    function tintBackgrounds(source: string, pattern: RegExp): string[] {
+        return [...stripComments(source).matchAll(pattern)].map((m) => m[0].trim())
+    }
+
+    for (const [name, css] of Object.entries(NON_TOKEN_STYLESHEETS)) {
+        it(`${name} uses no kind tint as a background`, () => {
+            expect(tintBackgrounds(css, CSS_USE).filter((use) => !ALLOWED_USES.includes(use))).toEqual([])
+        })
+    }
+
+    it("no component or page sets a kind tint as an inline background", () => {
+        const offenders = Object.entries(TSX_SOURCES).flatMap(([path, source]) => tintBackgrounds(source, TSX_USE).map((use) => `${path}: ${use}`))
+        expect(offenders).toEqual([])
+        expect(Object.keys(TSX_SOURCES).length).toBeGreaterThan(50)
+    })
+
+    it("flags a tint used by a container, a control or an inline style (the scan is not vacuous)", () => {
+        expect(tintBackgrounds(".panel { background: var(--kind-ts-bg); }", CSS_USE)).toHaveLength(1)
+        expect(tintBackgrounds(".x-button { background-color: var(--kind-network-bg); }", CSS_USE)).toHaveLength(1)
+        expect(tintBackgrounds(".chip { color: var(--kind-ts-ink); }", CSS_USE)).toHaveLength(0)
+        expect(tintBackgrounds("<div style={{ background: \"var(--kind-species-bg)\" }} />", TSX_USE)).toHaveLength(1)
+        expect(tintBackgrounds("<div style={{ backgroundColor: 'var(--kind-species-bg)' }} />", TSX_USE)).toHaveLength(1)
+    })
+})
+
+describe("a control that drops its outline keeps a focus-within ring", () => {
+    it(".search-row hides its input's outline and draws the 3px --focus-ring on the row", () => {
+        const css = stripComments(NON_TOKEN_STYLESHEETS["index.css"])
+        expect(css).toMatch(/\.search-row input\s*\{[^}]*outline:\s*0/)
+        expect(css).toMatch(/\.search-row:focus-within\s*\{[^}]*outline:\s*3px solid var\(--focus-ring\)/)
+    })
+})

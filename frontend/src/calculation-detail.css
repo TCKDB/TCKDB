@@ -43,7 +43,7 @@
    TS fallback in the h1 (`CalculationDetailPage.tsx`'s `titleSubject`,
    `<code className="data calc-headline-ref">`) was rendering at
    `.data`'s own `--type-data-font` size (13px mono) sitting on the
-   baseline of the surrounding `--type-display-1` h1 (52px serif) --
+   baseline of the surrounding `--type-display-1` h1 (52px display face) --
    MEASURED, a mismatched-scale ref inside a display headline. `.data`'s
    face/weight (mono, 400) is still correct here -- only the size should
    track the heading around it, not the shared data-run default. */
@@ -226,8 +226,8 @@
 .artifact-download:disabled { opacity: .7; cursor: wait; }
 
 .artifact-download:focus-visible {
-    outline: 2px solid var(--accent-300);
-    outline-offset: 1px;
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
 }
 
 /* Shown instead of the button to a signed-out reader. Raw artifact bytes

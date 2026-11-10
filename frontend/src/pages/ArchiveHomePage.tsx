@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom"
 import { IdentifierSearch } from "../components/IdentifierSearch"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 // Each card's action text is the honest label for what clicking through
 // actually finds, so the difference between a working index and a
@@ -18,6 +19,7 @@ const destinations = [
 ] as const
 
 function ArchiveHomePage() {
+    useDocumentTitle("Home")
     return <>
         <section className="archive-hero">
             <p className="eyebrow">Theoretical Chemical Kinetics Database</p>

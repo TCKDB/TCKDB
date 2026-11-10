@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within, waitFor } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
 // at the top -- the real app loads `index.css` once, globally, in
@@ -17,6 +17,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 import "../design-system.css"
 import ReactionEntryPage from "./ReactionEntryPage"
 import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
+import { titleHasKind } from "../test/routeTitleKinds"
 
 const ENTRY_REF = "rxe_test1"
 const server = setupServer()
@@ -174,6 +175,7 @@ describe("ReactionEntryPage -- DOM-vs-payload identity", () => {
         handleFull(mockFull())
         const { container } = page()
         await screen.findByText("kin_test1")
+        await waitFor(() => expect(titleHasKind(document.title, "/reaction-entries/:ref")).toBe(true))
 
         for (const ref of ["spe_water", "spe_ch3", "spe_ch4", "spe_oh"]) {
             expect(occurrencesOutsideRefs(container, ref), `${ref} should appear exactly once outside References`).toBe(1)

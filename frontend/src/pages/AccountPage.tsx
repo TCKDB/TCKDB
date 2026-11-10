@@ -7,6 +7,7 @@ import { CopyButton } from "../components/RefsDisclosure"
 import "../refs-disclosure.css"
 import { useAuth } from "../hooks/useAuth"
 import type { ApiKeyCreateResponse, ApiKeyMetadata } from "../types/auth"
+import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "never")
 
@@ -46,6 +47,7 @@ type KeysState =
  * the value ever reaches the array the table renders from.
  */
 export default function AccountPage() {
+    useDocumentTitle("Account")
     const { state } = useAuth()
     const [keysState, setKeysState] = useState<KeysState>({ status: "loading" })
     const [revealedKey, setRevealedKey] = useState<ApiKeyCreateResponse | null>(null)

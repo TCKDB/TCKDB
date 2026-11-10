@@ -94,8 +94,8 @@
     align-items: center;
     gap: .45rem;
     padding: .3rem .55rem .3rem .75rem;
-    border: 1px solid var(--line);
-    border-radius: 999px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
     background: var(--surface);
 }
 
@@ -122,7 +122,7 @@
 }
 
 .correction-scheme-select-input:focus-visible {
-    outline: 2px solid var(--accent-300);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
     border-radius: .2rem;
 }
