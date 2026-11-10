@@ -99,7 +99,7 @@ import { dirname, extname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 import ts from "typescript"
 
-const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "dist")
+const DIST = process.env.CHECK_DIST_DIR ?? join(dirname(fileURLToPath(import.meta.url)), "..", "dist")
 const INVENTORY = process.argv.includes("--inventory")
 
 /**
@@ -378,6 +378,132 @@ function isDiscardedUrlParse(templatePiece, urlIsShadowed) {
     )
 }
 
+/**
+ * A template whose only use is `URL.canParse(template)`, directly or through
+ * a parse-only helper (zod's IPv6 check): only a boolean comes back, so the
+ * host it names is never fetched or kept.
+ */
+function isCanParseArgument(templatePiece, urlIsShadowed, sf) {
+    const template = templatePiece.parent
+    const call = template?.parent
+    if (urlIsShadowed || !ts.isTemplateExpression(template) || !ts.isCallExpression(call)) return false
+    if (call.arguments.length !== 1 || call.arguments[0] !== template) return false
+    if (isUrlCanParse(call.expression)) return true
+    return ts.isIdentifier(call.expression) && isParseOnlyHelper(sf, call.expression.text)
+}
+
+function isUrlCanParse(expression) {
+    return (
+        ts.isPropertyAccessExpression(expression) &&
+        ts.isIdentifier(expression.expression) &&
+        expression.expression.text === "URL" &&
+        expression.name.text === "canParse"
+    )
+}
+
+/** Every binding site and assignment target in the file that carries this name. */
+function sitesNamed(sf, name) {
+    const sites = []
+    const isMutation = (parent) =>
+        (ts.isBinaryExpression(parent) &&
+            parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+            parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment) ||
+        ((ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent)) &&
+            (parent.operator === ts.SyntaxKind.PlusPlusToken || parent.operator === ts.SyntaxKind.MinusMinusToken))
+    const visit = (node) => {
+        const parent = node.parent
+        if (ts.isIdentifier(node) && node.text === name && parent) {
+            if (parent.name === node && BINDING_PARENTS.some((is) => is(parent))) sites.push(parent)
+            else if (ts.isShorthandPropertyAssignment(parent) || isMutation(parent)) sites.push(parent)
+        }
+        ts.forEachChild(node, visit)
+    }
+    visit(sf)
+    return sites
+}
+
+const isBooleanLiteral = (node) =>
+    node.kind === ts.SyntaxKind.TrueKeyword ||
+    node.kind === ts.SyntaxKind.FalseKeyword ||
+    (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.ExclamationToken && ts.isNumericLiteral(node.operand))
+
+/** `new URL(param)` evaluated for its throw only. */
+function isParseOfParam(node, param) {
+    if (ts.isParenthesizedExpression(node)) return isParseOfParam(node.expression, param)
+    return (
+        ts.isNewExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "URL" &&
+        node.arguments?.length === 1 &&
+        ts.isIdentifier(node.arguments[0]) &&
+        node.arguments[0].text === param
+    )
+}
+
+/** A returned value that can only be a boolean: `URL.canParse(param)`, `!0`/`!1`/`true`/`false`, or a choice among them. */
+function isBooleanReturn(node, param) {
+    if (ts.isParenthesizedExpression(node)) return isBooleanReturn(node.expression, param)
+    if (isBooleanLiteral(node)) return true
+    if (ts.isCallExpression(node)) {
+        return (
+            isUrlCanParse(node.expression) &&
+            node.arguments.length === 1 &&
+            ts.isIdentifier(node.arguments[0]) &&
+            node.arguments[0].text === param
+        )
+    }
+    if (ts.isConditionalExpression(node)) return isBooleanReturn(node.whenTrue, param) && isBooleanReturn(node.whenFalse, param)
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.CommaToken) {
+        return isParseOfParam(node.left, param) && isBooleanReturn(node.right, param)
+    }
+    return false
+}
+
+/**
+ * A function declared once in the file, with one plain parameter, whose only
+ * outcome is a boolean from `URL.canParse(param)`: the parameter is read
+ * nowhere else, and nothing else is called, constructed, thrown or assigned.
+ */
+function isParseOnlyHelper(sf, name) {
+    const sites = sitesNamed(sf, name)
+    const fn = sites[0]
+    if (sites.length !== 1 || !ts.isFunctionDeclaration(fn) || !fn.body || fn.parameters.length !== 1) return false
+    const [parameter] = fn.parameters
+    if (!ts.isIdentifier(parameter.name) || parameter.initializer || parameter.dotDotDotToken) return false
+    const param = parameter.name.text
+    let ok = true
+    let sawCanParse = false
+    const visit = (node) => {
+        if (!ok) return
+        if (ts.isReturnStatement(node)) {
+            if (!node.expression || !isBooleanReturn(node.expression, param)) ok = false
+        } else if (
+            ts.isFunctionLike(node) || ts.isClassLike(node) || ts.isThrowStatement(node) ||
+            ts.isAwaitExpression(node) || ts.isYieldExpression(node) || ts.isTaggedTemplateExpression(node)
+        ) {
+            ok = false
+        } else if (ts.isCallExpression(node)) {
+            if (isUrlCanParse(node.expression) && node.arguments.length === 1 && ts.isIdentifier(node.arguments[0]) && node.arguments[0].text === param) {
+                sawCanParse = true
+            } else ok = false
+        } else if (ts.isNewExpression(node)) {
+            if (!isParseOfParam(node, param)) ok = false
+        } else if (ts.isIdentifier(node) && node.text === param) {
+            const p = node.parent
+            if (!((ts.isCallExpression(p) || ts.isNewExpression(p)) && p.arguments?.[0] === node)) ok = false
+        } else if (
+            ts.isBinaryExpression(node) &&
+            node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+            node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+        ) {
+            ok = false
+        }
+        ts.forEachChild(node, visit)
+    }
+    for (const statement of fn.body.statements) visit(statement)
+    return ok && sawCanParse
+}
+
 const BINDING_PARENTS = [
     ts.isVariableDeclaration, ts.isParameter, ts.isFunctionDeclaration, ts.isFunctionExpression,
     ts.isClassDeclaration, ts.isClassExpression, ts.isBindingElement, ts.isImportSpecifier,
@@ -471,7 +597,7 @@ function checkScript(file, source, { inline }) {
             const text = node.text ?? node.rawText ?? ""
             const openEnd = !ts.isTemplateTail(node) && OPEN_AUTHORITY.test(text)
             inventory(file, text, { atStart: ts.isTemplateHead(node), onFound, openEnd })
-            if (openEnd && !isDiscardedUrlParse(node, urlIsShadowed)) {
+            if (openEnd && !isDiscardedUrlParse(node, urlIsShadowed) && !isCanParseArgument(node, urlIsShadowed, sf)) {
                 fail(file, `(d) template builds a host at run time: ${JSON.stringify(`${text}\${...}`)}`)
             } else if (openEnd) {
                 counts.discardedUrlParses += 1
