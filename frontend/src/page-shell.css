@@ -6,7 +6,7 @@
  * separately to 126rem -- see `species-entry.css`'s own comment for why)
  * stay in each page's own stylesheet, unchanged in spirit from before
  * this file existed -- this one only lays out what sits INSIDE that
- * width: an optional sticky side rail next to the content column.
+ * width: an optional sticky contents column left of the content.
  *
  * Smooth anchor scrolling is opted into globally here (`:root`) rather
  * than only for ToC links, since it is the right default for any
@@ -32,78 +32,64 @@
     flex: 1 1 0;
 }
 
+
 /*
- * `.page-toc` is the RESERVED COLUMN, always present in `.page-shell-layout`
- * regardless of how many sections are registered -- `TableOfContents.tsx`
- * renders this element unconditionally and only puts a `<nav>` inside it
- * once 2+ sections exist. That is what keeps a tab switch (Geometry, 1
- * section -> Statistical Mechanics, usually 4+) from ever resizing
- * `.page-shell-content`: the flex-basis below never changes, whether the
- * column holds a real list or nothing at all.
- *
- * `order: 1` is the ONE line that puts this column on the right of
- * `.page-shell-content` (which stays unordered, i.e. `order: 0`) --
- * deliberately NOT achieved by DOM order (`PageShell.tsx` renders content
- * first, ToC second, for keyboard/screen-reader order, which is a
- * SEPARATE decision from where it sits visually). The owner hedged on the
- * side ("I want ToC on the right I think"), so flipping it back to the
- * left later is exactly one edit: `order: -1`.
+ * `.page-toc` is the reserved left column: `TableOfContents.tsx` always renders it and
+ * only fills it once two or more sections are mounted, so a tab switch never shifts the content.
+ * It comes first in the markup. Entries are numbered with CSS counters, so the link text stays the heading text.
  */
 .page-toc {
-    order: 1;
     position: sticky;
     top: 1.5rem;
     flex: 0 0 14rem;
     max-height: calc(100vh - 3rem);
     overflow-y: auto;
-    border-left: 2px solid var(--line);
-    padding-left: 1rem;
 }
 
-/* No section list to show (fewer than `MIN_SECTIONS_FOR_LIST` registered)
-   -- `TableOfContents.tsx` renders this element with nothing inside it
-   rather than not rendering it at all, so the reserved width above never
-   changes. Visually silent when empty: no divider line, no padding
-   sitting next to the content for no reason. The reserved WIDTH stays
-   (nothing here touches `flex-basis`), which is the entire point. */
-.page-toc:empty {
-    border-left-color: transparent;
-    padding-left: 0;
+.page-toc nav::before {
+    content: "On this page";
+    display: block;
+    margin: 0 0 .75rem;
+    color: var(--muted);
+    font: var(--type-label-strong-font);
+    letter-spacing: .1em;
+    text-transform: uppercase;
 }
 
-.page-toc ul {
-    display: grid;
-    gap: .5rem;
+.page-toc ol {
     margin: 0;
     padding: 0;
     list-style: none;
+    counter-reset: toc-section toc-sub;
 }
 
-/* Was its own one-off mono .74rem/1.4 -- one more page-specific label
-   style in the same "58% of all text carries mono" measurement this pass
-   exists to correct. A section-jump link is UI chrome, not a piece of
-   scientific data, so it takes `--type-ui` (sans .8125rem) rather than a
-   data-band size.
+.page-toc li[data-level="1"] { counter-increment: toc-section; counter-reset: toc-sub; }
+.page-toc li[data-level="2"] { counter-increment: toc-sub; }
 
-   `--type-ui-font` bakes in weight 600 (the step's own default), but an
-   INACTIVE link must not start at 600 -- post-review fix: it did, which
-   made `.page-toc-active`'s own `font-weight: 600` below a no-op and
-   left every link on the page, active or not, rendering at the same
-   weight (MEASURED 600/600 across four ToC pages, vs main's 400/600).
-   `font-weight: 400` after the shorthand keeps the shared face/size but
-   overrides the step's weight back down for the resting state, so the
-   active link's bold is a real, visible step up again. Site-wide, single
-   component (`TableOfContents.tsx`), no page restructuring. */
 .page-toc a {
-    display: block;
+    display: flex;
+    gap: .6rem;
     padding: .3rem .5rem;
-    border-left: 2px solid transparent;
-    color: var(--muted);
+    border-left: 3px solid transparent;
+    color: var(--ink-2);
     font: var(--type-ui-font);
     font-weight: 400;
     letter-spacing: var(--type-ui-tracking);
     text-decoration: none;
 }
+
+.page-toc a::before {
+    flex: none;
+    min-width: 1.8em;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: .85em;
+    padding-top: .1em;
+}
+
+.page-toc li[data-level="1"] a::before { content: counter(toc-section) "."; }
+.page-toc li[data-level="2"] a::before { content: counter(toc-section) "." counter(toc-sub); }
+.page-toc li[data-level="2"] a { padding-left: 1.6rem; }
 
 .page-toc a:hover {
     color: var(--accent-700);
@@ -118,75 +104,22 @@
     border-left-color: var(--accent);
     color: var(--accent-700);
     font-weight: 600;
-    /* Accessibility pass (dark-mode ToC finding): in dark mode the active
-       colour (--accent-700) and the inactive-item colour (--muted) are
-       both light, pale blues fairly close to each other in luminance --
-       the border-left and bold weight above still mark the active item,
-       but the colour step alone reads as much weaker than light mode's
-       jump from --muted to a near-black navy. A background wash fixes
-       that in BOTH themes at once, using a token already fully defined
-       per-theme (no new token needed): the same accent-tint treatment
-       `.conformer-card[data-selected="true"]` already uses for "this one
-       is picked" elsewhere in the app, not a one-off. */
-    background: var(--accent-50);
-    border-radius: 0 .3rem .3rem 0;
 }
 
-/* Below this width the side rail has no room to sit beside the content
-   column without squeezing it -- collapse to a wrapping row of chips above
-   the content instead of stacking a full vertical list above it (which
-   would push every page's content down by a whole ToC's height on every
-   load, the opposite of "find info quickly"). Unlike the wide layout,
-   nothing is RESERVED here: a `.page-toc` with no list inside it collapses
-   out of the flow entirely (`display: none` below) rather than reserving
-   a blank strip's worth of vertical space above the content, since there
-   is no fixed-width column to protect a tab switch from resizing in a
-   column layout in the first place.
+.page-toc-disclosure summary {
+    cursor: pointer;
+    padding: .6rem .8rem;
+    font: var(--type-ui-font);
+    color: var(--ink);
+}
 
-   Review finding: `flex: 0 0 14rem` (set above, for the wide layout's
-   HORIZONTAL basis) was never reset here, so in this block's column
-   `flex-direction` the same 14rem became the strip's HEIGHT instead --
-   a blank ~224px band above the content on every shell page at this
-   width, "populated" `.page-toc` or not. `flex: none` below is what
-   actually makes this row size to its own wrapped content. */
+/* Below this width the column becomes a "Contents" disclosure above the content. */
 @media (max-width: 62rem) {
     .page-shell-layout {
         flex-direction: column;
     }
 
-    /* Review finding (blocking, PR 366): `.page-shell-layout`'s base
-       `align-items: flex-start` (set above, for the wide row layout) was
-       never reset here -- in THIS block's column flex-direction, the
-       same declaration controls the CROSS axis, which is now horizontal.
-       `flex-start` on the cross axis means "size to content, don't
-       stretch," so `.page-shell-content` (base rule: `flex: 1 1 0;
-       min-width: 0` -- both properties meaningful only on the MAIN axis)
-       shrank to its own max-content width instead of filling the
-       viewport the moment any child had unconstrained intrinsic width.
-       `.data-table` (design-system.css) sets no width of its own -- unlike
-       the retired `.stage-table`, whose `width: calc(100% - 2.2rem)`
-       happened to mask this (a percentage width contributes NOTHING to
-       max-content sizing, so the flex item's shrink-to-fit calculation
-       never saw the table's real width) -- so a wide `.data-table` now
-       pushed `.page-shell-content`, and with it the whole page body,
-       wider than the viewport instead of staying put and letting its own
-       `.table-scroll` wrapper scroll. MEASURED at 680px on this branch
-       before this fix: `document.documentElement.scrollWidth` was 809px
-       (single-record `/thermo`), 848px (`/statmech`), 1176px (`/thermo`,
-       NASA-9's 12-column table) against every route's `.table-scroll`
-       itself reporting `scrollWidth == clientWidth` -- proof the PAGE was
-       widening around the table, not the table scrolling inside a fixed-
-       width page, the opposite of what `.table-scroll` exists for.
-       `align-self: stretch` here overrides the inherited `flex-start` for
-       this one item; `width: 100%` is the belt-and-braces companion
-       `align-self: stretch` alone does not reliably give a flex item in
-       every engine version, and `min-width: 0` is repeated (already on
-       the base rule, restated here for the same reason the row-layout
-       version needed it: a flex item's default `min-width: auto` would
-       otherwise still let its content's intrinsic width win over the
-       100% this rule now asks for). `.page-toc` needs no equivalent fix:
-       it already sets its own explicit `width: 100%; flex: none;` inside
-       this same media query, unaffected by `align-items` either way. */
+    /* A column flex container's cross axis is horizontal: stretch the content so a wide table scrolls inside its own wrapper instead of widening the page. */
     .page-shell-content {
         align-self: stretch;
         width: 100%;
@@ -194,94 +127,33 @@
     }
 
     .page-toc {
-        /* Review finding: `order: 1` (set above, for the wide two-column
-           layout) left the chip strip AFTER the last section in this
-           column layout too, off the bottom of a long page with its
-           overflow clipped by the viewport -- a reader had to scroll PAST
-           the whole page to find navigation meant to jump them around it.
-           `order: -1` puts it first in the column instead, ahead of the
-           content, matching where a sighted reader actually needs it at
-           this width. This is a DELIBERATE departure from the wide-layout
-           "content, then ToC" DOM-order rationale above -- that reasoning
-           was about visual placement beside a sighted user's already-
-           visible content; here, in a stacked column, "after the content"
-           means "off-screen below it" instead. */
         position: static;
-        order: -1;
         flex: none;
         width: 100%;
         max-height: none;
-        overflow-y: visible;
-        overflow-x: auto;
-        border-left: 0;
-        border-bottom: 1px solid var(--line);
-        padding: 0 0 .6rem;
+        overflow: visible;
     }
 
     .page-toc:empty {
         display: none;
-        border-bottom: 0;
-        padding: 0;
     }
 
-    /* Visual-review finding: below this width the collapsed strip was a
-       bare row of plain monospace words with nothing marking it as a
-       table of contents at all -- no heading, no list affordance, easy to
-       mistake for a stray line of body text. `<nav aria-label="Sections on
-       this page">` (`TableOfContents.tsx`) already gives it a real
-       accessible name for assistive tech; what it lacked was anything a
-       SIGHTED reader could see. Chose to keep it and label it (over
-       hiding it below the breakpoint): the jump list is real navigational
-       value on a page whose sections can run long, and hiding it would
-       trade a readability nit for a functionality loss. `content` on
-       `::before` supplies the visible label without touching
-       `TableOfContents.tsx` -- this file only labels the RAIL, it does
-       not duplicate the nav's own accessible name (a screen reader gets
-       "Sections on this page" from the `aria-label`, a sighted reader
-       gets "On this page" printed above the row; two labels for two
-       audiences, not a mismatch). Only paints when a `<nav>` is actually
-       present, so an empty `.page-toc` (`:empty` above) stays exactly as
-       silent as before -- nothing for `nav::before` to attach to when
-       there is no `<nav>`. */
-    .page-toc nav::before {
-        content: "On this page";
-        display: block;
-        margin: 0 0 .5rem;
-        color: var(--muted);
-        font: var(--type-label-strong-font);
-        letter-spacing: .1em;
-        text-transform: uppercase;
-    }
-
-    /* Was `display: grid; grid-auto-flow: column`, which never wraps --
-       past a handful of chips the row ran off the right edge with its
-       overflow clipped (review finding, same root cause as the ordering
-       fix above: nothing below this width was letting the strip grow
-       taller instead of wider). `flex-wrap` lets a page with many
-       sections wrap onto a second row instead of hiding its later
-       entries. */
-    .page-toc ul {
-        display: flex;
-        flex-wrap: wrap;
-        gap: .6rem;
-    }
-
-    /* Bare underlined words (the old `border-bottom: 2px solid
-       transparent`) read as plain text until hovered or active -- chips
-       (a border + a filled pill, the same idiom `.value-pill` and
-       `.browse-entry-kind-pill` already use elsewhere for "this is a
-       discrete, clickable thing") give every item a visible boundary at
-       rest, not only on interaction. */
-    .page-toc a {
-        padding: .3rem .7rem;
+    .page-toc-disclosure {
         border: 1px solid var(--line);
-        border-radius: var(--radius-sm);
-        background: var(--surface-sunken);
-        white-space: nowrap;
+        border-radius: var(--radius);
     }
 
-    .page-toc a.page-toc-active {
-        border-color: var(--accent);
-        border-radius: var(--radius-sm);
+    .page-toc-disclosure nav::before {
+        content: none;
+    }
+
+    .page-toc-disclosure nav {
+        border-top: 1px solid var(--line);
+        padding: .4rem 0 .6rem;
+    }
+
+    .page-toc a {
+        min-height: 2.75rem;
+        align-items: center;
     }
 }

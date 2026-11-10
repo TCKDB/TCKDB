@@ -1,6 +1,6 @@
 import type { FormEvent, KeyboardEvent } from "react"
 import { useEffect, useRef, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import {
     ScientificApiError,
     ScientificRateLimitError,
@@ -148,6 +148,21 @@ export function IdentifierSearch() {
     const [isSearching, setIsSearching] = useState(false)
     const activeRequest = useRef<AbortController | null>(null)
     const announce = useAnnounce()
+    const formRef = useRef<HTMLFormElement>(null)
+    const [searchParams, setSearchParams] = useSearchParams()
+    const incoming = searchParams.get("q")
+    const [autoSubmitTick, setAutoSubmitTick] = useState(0)
+
+    // A `?q=` from the site bar fills the field and runs the search once.
+    useEffect(() => {
+        if (!incoming) return
+        setQuery(incoming)
+        setAutoSubmitTick((tick) => tick + 1)
+        setSearchParams({}, { replace: true })
+    }, [incoming, setSearchParams])
+    useEffect(() => {
+        if (autoSubmitTick > 0) formRef.current?.requestSubmit()
+    }, [autoSubmitTick])
 
     useEffect(() => () => { activeRequest.current?.abort(); activeRequest.current = null }, [])
 
@@ -313,7 +328,7 @@ export function IdentifierSearch() {
         void runReactionSearch(classified)
     }
 
-    return <form className="identifier-search" onSubmit={submit} noValidate>
+    return <form className="identifier-search" ref={formRef} onSubmit={submit} noValidate>
         <SearchModeToggle mode={mode} onSelect={selectMode} />
         <label htmlFor="identifier">{FIELD_LABEL[mode]}</label>
         <div className="search-row">

@@ -6,16 +6,9 @@ import { SectionHeading } from "./PageSections"
 
 afterEach(cleanup)
 
-/**
- * The ToC's visual side ("I want ToC on the right I think") is a CSS
- * `order` value, not testable through jsdom's layout-free DOM -- but the
- * markup order underneath it is real and a11y-load-bearing regardless of
- * which side the CSS puts it on: a keyboard/screen-reader user must reach
- * this page's own content before the navigation rail that follows it, the
- * same order a footnote reads in relative to the prose that cites it.
- */
-describe("PageShell: content precedes the ToC in document order", () => {
-    it("renders the content pane before the .page-toc column in the DOM, regardless of the ToC's visual (CSS) side", () => {
+/** The contents column is first in the markup: it is the left column, and on phones it sits above the content. */
+describe("PageShell: the ToC precedes the content in document order", () => {
+    it("renders the .page-toc column before the content pane in the DOM", () => {
         const { container } = render(
             <MemoryRouter>
                 <PageShell>
@@ -35,7 +28,7 @@ describe("PageShell: content precedes the ToC in document order", () => {
         // which would pass even if either element were nested deeper (this
         // is exactly that shape: `.page-toc` is `TableOfContents`'s own
         // rendered root, `.page-shell-content` wraps the page's children).
-        expect(content.compareDocumentPosition(toc) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        expect(content.compareDocumentPosition(toc) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
     })
 })
 

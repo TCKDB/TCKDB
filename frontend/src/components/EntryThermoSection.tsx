@@ -339,7 +339,7 @@ function ThermoList({ response, meta, onPage, conformer, conformers }: {
  * valid, always-in-the-same-order hook call rather than a conditional one.
  */
 function ThermoRecordCard({ record, sectionLabel }: { record: ThermoRecord; sectionLabel: string | null }) {
-    useRegisteredSection(sectionLabel ? `thermo-heading-${record.thermo_ref}` : null, sectionLabel ?? "")
+    useRegisteredSection(sectionLabel ? `thermo-heading-${record.thermo_ref}` : null, sectionLabel ?? "", 2)
     return (
         <article className="science-record card" aria-labelledby={`thermo-heading-${record.thermo_ref}`}>
             <div className="science-record-heading">
@@ -480,7 +480,7 @@ const GROUP_ID_SUFFIX = "-group"
 function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: ThermoRecord[]; sectionLabel: string | null }) {
     const representative = records[0]
     const anchorId = `thermo-heading-${representative.thermo_ref}${GROUP_ID_SUFFIX}`
-    useRegisteredSection(sectionLabel ? anchorId : null, sectionLabel ?? "")
+    useRegisteredSection(sectionLabel ? anchorId : null, sectionLabel ?? "", 2)
     return (
         <article className="science-record identical-record-group card" aria-labelledby={anchorId}>
             <div className="science-record-heading">

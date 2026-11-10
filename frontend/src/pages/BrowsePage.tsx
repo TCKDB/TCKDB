@@ -27,6 +27,14 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 const PAGE_SIZE = 20
 
+// Each listing links to the listing it is paired with; neither has a place in the site bar.
+const RELATED_KIND: Record<BrowseKind, BrowseKind> = {
+    species: "vdw",
+    vdw: "species",
+    reaction: "transition_state",
+    transition_state: "reaction",
+}
+
 /**
  * The archive index: /species/browse and /transition-states/browse have
  * always existed on the backend (composition filters included) with no UI
@@ -110,6 +118,7 @@ export default function BrowsePage() {
 
     const state = useBrowse(kind, filters, offset, PAGE_SIZE)
     const content = BROWSE_KIND_CONTENT[kind]
+    const related = RELATED_KIND[kind]
     useDocumentTitle(content.breadcrumbLabel)
 
     return (
@@ -139,6 +148,9 @@ export default function BrowsePage() {
                 <p className="eyebrow">{content.eyebrow}</p>
                 <h1>{content.heading}</h1>
                 <p className="browse-intro">{content.intro}</p>
+                <p className="browse-related">
+                    Related listing: <Link to={BROWSE_KIND_PATHS[related]}>{BROWSE_KIND_CONTENT[related].breadcrumbLabel}</Link>
+                </p>
             </header>
 
             <BrowseFilterForm filters={filters} kind={kind} onChange={updateFilters} />

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { PageSectionsProvider, SectionHeading } from "./PageSections"
 import { TableOfContents, MIN_SECTIONS_FOR_LIST, SCROLL_SETTLE_MS } from "./TableOfContents"
@@ -522,5 +523,44 @@ describe("TableOfContents: active-section marking", () => {
         } finally {
             vi.useRealTimers()
         }
+    })
+})
+
+describe("TableOfContents: numbered list and phone disclosure", () => {
+    afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia })
+
+    it("lists sections in an ordered list, and a subsection as a level-2 entry", () => {
+        render(
+            <MemoryRouter>
+                <PageSectionsProvider>
+                    <TableOfContents />
+                    <SectionHeading id="a">Alpha</SectionHeading>
+                    <SectionHeading id="a1" subsection>Alpha detail</SectionHeading>
+                    <SectionHeading id="b">Beta</SectionHeading>
+                </PageSectionsProvider>
+            </MemoryRouter>,
+        )
+        const items = screen.getAllByRole("listitem")
+        expect(items.map((li) => li.getAttribute("data-level"))).toEqual(["1", "2", "1"])
+        expect(screen.getAllByRole("link").map((a) => a.textContent)).toEqual(["Alpha", "Alpha detail", "Beta"])
+    })
+
+    it("collapses into a Contents disclosure on a narrow screen, closed until opened", async () => {
+        window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+            matches: query.includes("62rem"), media: query, addEventListener: () => {}, removeEventListener: () => {},
+        })) as unknown as typeof window.matchMedia
+        const user = userEvent.setup()
+        const { container } = render(<Harness count={3} />)
+        const details = container.querySelector("details.page-toc-disclosure") as HTMLDetailsElement
+        expect(details).not.toBeNull()
+        expect(details.open).toBe(false)
+        await user.click(screen.getByText("Contents"))
+        expect(details.open).toBe(true)
+        expect(screen.getAllByRole("link")).toHaveLength(3)
+    })
+
+    it("is a plain list, with no disclosure, on a wide screen", () => {
+        const { container } = render(<Harness count={3} />)
+        expect(container.querySelector("details")).toBeNull()
     })
 })

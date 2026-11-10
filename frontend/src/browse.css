@@ -27,6 +27,12 @@
     font: var(--type-lede-font);
 }
 
+.browse-related {
+    margin: .75rem 0 0;
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
 
 
 .browse-filters {

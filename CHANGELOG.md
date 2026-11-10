@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Site bar, numbered contents list and a guide page (2026-11-10)
+
+- **Behaviour:** the site bar links Molecules, Reactions, Methods and Guide, with a search box (it runs the home page's exact-identifier search), the theme control and sign in. Van der Waals complexes and Transition states leave the bar and are linked from the Molecules and Reactions lists (and back). Below 680px the links move to a bottom tab bar, and the theme control and Guide sit under a "More" button (Enter opens, Esc closes and returns focus). The active link carries `aria-current="page"`. Record pages show a left "On this page" list with numbered entries (3.1 for subsections) and the current section marked; on phones it is a "Contents" disclosure above the page. A new `/guide` page explains the eight kinds of record in plain words and notes that records are listed in deposit order, not ranked.
+- **Schema and migration:** none. No new environment variable.
+
 ## Pages are titled and focus follows navigation; keyboard atom measuring; new colours and type (2026-11-10)
 
 - **Behaviour:** each page sets its own browser-tab title ("CH3 · Species entry · TCKDB") and, after a link navigation, focus moves to the page's main heading. A filter, hash or species-entry tab change leaves focus where it is. The geometry viewer gains a "Measure with the keyboard" form (two to four atom selects) that adds to the same measurement list as clicking atoms, and it stays available when WebGL is not. Search announces "N matches" or "No exact match" in a polite live region. The focus ring is blue and the control borders darker, both measured at 3:1 or more on every surface. Colours, type (self-hosted Source Sans 3 and Source Code Pro) and shapes are refreshed: corner radius at most 6px, no soft shadows or pill shapes, labels in sentence case.

@@ -68,7 +68,7 @@ describe("public archive shell", () => {
         expect(await screen.findByRole("heading", { name: "TCKDB" })).toBeVisible()
         await user.tab(); expect(screen.getByText("Skip to content")).toHaveFocus()
         await user.tab(); expect(screen.getByRole("link", { name: "TCKDB home" })).toHaveFocus()
-        await user.tab(); expect(screen.getByRole("link", { name: "Species" })).toHaveFocus()
+        await user.tab(); expect(screen.getByRole("link", { name: "Molecules" })).toHaveFocus()
         expect(screen.queryByText(/Machine-Review Inspection/)).not.toBeInTheDocument()
     })
 
@@ -640,7 +640,7 @@ describe("site nav: the Reactions link is a real page, not a dead end", () => {
     // `/transition-states` have none, and must not make an unrelated link
     // fire).
     it.each([
-        ["/species", "Species"],
+        ["/species", "Molecules"],
         ["/reactions", "Reactions"],
     ])("on %s, the %s nav link (and only that one) is marked aria-current", async (path, activeLabel) => {
         server.use(
@@ -659,14 +659,14 @@ describe("site nav: the Reactions link is a real page, not a dead end", () => {
         // would find two and throw.
         const primaryNav = screen.getByRole("navigation", { name: "Primary navigation" })
         expect(within(primaryNav).getByRole("link", { name: activeLabel })).toHaveAttribute("aria-current", "page")
-        for (const [label, href] of [["Species", "/species"], ["Reactions", "/reactions"], ["Methods", "/methods"]] as const) {
+        for (const [label, href] of [["Molecules", "/species"], ["Reactions", "/reactions"], ["Methods", "/methods"], ["Guide", "/guide"]] as const) {
             if (label === activeLabel) continue
             expect(within(primaryNav).getByRole("link", { name: label })).not.toHaveAttribute("aria-current")
             expect(within(primaryNav).getByRole("link", { name: label })).toHaveAttribute("href", href)
         }
     })
 
-    it.each(["/vdw-complexes", "/transition-states"])("on %s (no dedicated nav link), Species is NOT spuriously marked active", async (path) => {
+    it.each(["/vdw-complexes", "/transition-states"])("on %s (no dedicated nav link), Molecules is NOT spuriously marked active", async (path) => {
         server.use(
             ...emptyVocabHandlers(),
             http.get("/api/v1/scientific/species/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
@@ -680,7 +680,7 @@ describe("site nav: the Reactions link is a real page, not a dead end", () => {
         // renders a "Species" link on these paths, species being one of
         // the OTHER kinds from vdw/transition_state).
         const primaryNav = screen.getByRole("navigation", { name: "Primary navigation" })
-        expect(within(primaryNav).getByRole("link", { name: "Species" })).not.toHaveAttribute("aria-current")
+        expect(within(primaryNav).getByRole("link", { name: "Molecules" })).not.toHaveAttribute("aria-current")
         expect(within(primaryNav).getByRole("link", { name: "Reactions" })).not.toHaveAttribute("aria-current")
     })
 })
@@ -985,6 +985,7 @@ describe("every route sets a title and renders exactly one h1", () => {
         ["/transition-states", "Transition states · TCKDB"],
         ["/vdw-complexes", "Van der Waals complexes · TCKDB"],
         ["/methods", "Methods · TCKDB"],
+        ["/guide", "Guide · TCKDB"],
         ["/login", "Sign in · TCKDB"],
         ["/account", "Sign in · TCKDB"],
         ["/admin", "Administration · TCKDB"],
@@ -1031,5 +1032,26 @@ describe("every route sets a title and renders exactly one h1", () => {
         render(<App />)
         await waitFor(() => expect(titleHasKind(document.title, key)).toBe(true))
         await waitFor(() => expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1))
+    })
+})
+
+describe("listings left out of the site bar stay reachable from their list pages", () => {
+    it.each([
+        ["/species", "Van der Waals complexes", "/vdw-complexes"],
+        ["/reactions", "Transition states", "/transition-states"],
+        ["/vdw-complexes", "Species", "/species"],
+        ["/transition-states", "Reactions", "/reactions"],
+    ])("%s links to %s", async (path, label, href) => {
+        server.use(
+            ...emptyVocabHandlers(),
+            http.get("/api/v1/scientific/species/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+            http.get("/api/v1/scientific/reactions/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+            http.get("/api/v1/scientific/transition-states/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+            http.get("/api/v1/scientific/vdw-complexes/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+        )
+        window.history.replaceState({}, "", path)
+        render(<App />)
+        const related = (await screen.findByText(/Related listing:/)).closest("p") as HTMLElement
+        expect(within(related).getByRole("link", { name: label })).toHaveAttribute("href", href)
     })
 })

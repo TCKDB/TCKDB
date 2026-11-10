@@ -295,14 +295,16 @@ describe("seedFiltersFromUrl: reads the initial URL into filter state, per kind"
     })
 })
 
-// Kind navigation lives in the TOP NAV now, not in a per-page switcher --
-// the owner did not want kind buttons repeated on every browse page. The nav
-// carries Species, Reactions and Transition states; /vdw-complexes has no nav
-// link (it holds zero records) and is reached by URL, so tests wanting that
-// kind render at the path directly rather than clicking.
-async function clickKindLink(user: ReturnType<typeof userEvent.setup>, name: string) {
-    const nav = screen.getByRole("navigation", { name: "Primary navigation" })
-    await user.click(within(nav).getByRole("link", { name }))
+// Moves to another listing the way following a link does: the router keeps the page mounted, so filter
+// state carries across. The site bar links Molecules and Reactions; the other two listings are linked
+// from their paired pages, so this goes by path rather than by whichever link the current page shows.
+async function clickKindLink(_user: ReturnType<typeof userEvent.setup>, name: string) {
+    const path = { Species: "/species", Reactions: "/reactions", "Transition states": "/transition-states" }[name]
+    if (!path) throw new Error(`No listing path for ${name}`)
+    await act(async () => {
+        window.history.pushState({}, "", path)
+        window.dispatchEvent(new PopStateEvent("popstate"))
+    })
 }
 
 describe("browse page: kind selection queries the right endpoint with the right parameters", () => {
