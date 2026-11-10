@@ -4,9 +4,9 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
 import "../guide.css"
 
 // The eight concepts in the order a record builds on the one before it.
-const CONCEPTS: { key: GlossaryKey; glyph?: RecordKind }[] = [
-    { key: "species", glyph: "species" },
-    { key: "species-entry", glyph: "species-entry" },
+const CONCEPTS: { key: GlossaryKey; glyph?: RecordKind; heading?: string }[] = [
+    { key: "species", glyph: "species", heading: "Molecule (species)" },
+    { key: "species-entry", glyph: "species-entry", heading: "Molecule version (species entry)" },
     { key: "conformer", glyph: "conformer-group" },
     { key: "calculation", glyph: "calculation" },
     { key: "level-of-theory" },
@@ -21,20 +21,20 @@ function GuidePage() {
         <h1>Guide</h1>
         <p className="guide-lede">
             TCKDB stores the results of computer calculations on molecules and reactions, and keeps the calculation behind every number.
-            These are the eight kinds of record you will meet, from the smallest to the largest.
+            These are the eight kinds of record you will meet; each builds on the one before.
         </p>
         <ol className="guide-concepts">
-            {CONCEPTS.map(({ key, glyph }) => (
+            {CONCEPTS.map(({ key, glyph, heading }) => (
                 <li key={key} id={key}>
                     <h2>
                         {glyph && <RecordGlyph kind={glyph} size={18} />}
-                        <dfn>{GLOSSARY[key].term}</dfn>
+                        <dfn>{heading ?? GLOSSARY[key].term}</dfn>
                     </h2>
                     <p>{GLOSSARY[key].definition}</p>
                 </li>
             ))}
         </ol>
-        <p className="guide-order" id="order">Records are listed in deposit order. The order is not a recommendation.</p>
+        <p className="guide-order" id="order">A list's order is never a recommendation. Each list says how it is ordered.</p>
     </article>
 }
 

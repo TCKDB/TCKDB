@@ -12,6 +12,7 @@ import {
 import { classifyIdentifier, looksLikeReferenceAttempt, resultPath, type IdentifierClassification } from "../domain/recordModel"
 import { classifyReactionQuery, type ReactionQueryClassification } from "../domain/reactionQuery"
 import { chargeDisplay, entryCountDisplay, spinDisplay } from "../domain/chemistryFormat"
+import { MAX_SEARCH_LENGTH } from "../domain/searchLimits"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { useAnnounce } from "../hooks/useAnnounce"
 import { Formula, SpeciesFace } from "./Formula"
@@ -153,12 +154,17 @@ export function IdentifierSearch() {
     const incoming = searchParams.get("q")
     const [autoSubmitTick, setAutoSubmitTick] = useState(0)
 
-    // A `?q=` from the site bar fills the field and runs the search once.
+    // A `?q=` from the site bar fills the field and runs the search once. An equation is searched as a
+    // reaction and anything else as a molecule; text over the length limit is dropped without a search.
     useEffect(() => {
-        if (!incoming) return
+        if (incoming === null) return
+        setSearchParams({}, { replace: true })
+        const text = incoming.trim()
+        if (!text || incoming.length > MAX_SEARCH_LENGTH) return
+        const parsed = classifyReactionQuery(text)
+        setMode(parsed.valid && parsed.kind === "equation" ? "reactions" : "species")
         setQuery(incoming)
         setAutoSubmitTick((tick) => tick + 1)
-        setSearchParams({}, { replace: true })
     }, [incoming, setSearchParams])
     useEffect(() => {
         if (autoSubmitTick > 0) formRef.current?.requestSubmit()
@@ -333,7 +339,7 @@ export function IdentifierSearch() {
         <label htmlFor="identifier">{FIELD_LABEL[mode]}</label>
         <div className="search-row">
             <span aria-hidden="true">⌕</span>
-            <input id="identifier" value={query} onChange={(event) => {
+            <input id="identifier" maxLength={MAX_SEARCH_LENGTH} value={query} onChange={(event) => {
                 setQuery(event.target.value); setMessage(null); setAmbiguousInput(null)
             }}
                 placeholder={PLACEHOLDER[mode]} autoComplete="off" aria-describedby="identifier-search-help" />

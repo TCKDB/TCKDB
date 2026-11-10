@@ -5,6 +5,7 @@ import {
     BROWSE_KIND_CONTENT,
     BROWSE_KIND_LABELS,
     BROWSE_KIND_PATHS,
+    RELATED_BROWSE_KIND,
     DEFAULT_BROWSE_KIND,
     EMPTY_BROWSE_FILTERS,
     browseKindForPath,
@@ -26,14 +27,6 @@ import { useBrowse } from "../hooks/useBrowse"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 const PAGE_SIZE = 20
-
-// Each listing links to the listing it is paired with; neither has a place in the site bar.
-const RELATED_KIND: Record<BrowseKind, BrowseKind> = {
-    species: "vdw",
-    vdw: "species",
-    reaction: "transition_state",
-    transition_state: "reaction",
-}
 
 /**
  * The archive index: /species/browse and /transition-states/browse have
@@ -118,7 +111,7 @@ export default function BrowsePage() {
 
     const state = useBrowse(kind, filters, offset, PAGE_SIZE)
     const content = BROWSE_KIND_CONTENT[kind]
-    const related = RELATED_KIND[kind]
+    const related = RELATED_BROWSE_KIND[kind]
     useDocumentTitle(content.breadcrumbLabel)
 
     return (
@@ -149,7 +142,7 @@ export default function BrowsePage() {
                 <h1>{content.heading}</h1>
                 <p className="browse-intro">{content.intro}</p>
                 <p className="browse-related">
-                    Related listing: <Link to={BROWSE_KIND_PATHS[related]}>{BROWSE_KIND_CONTENT[related].breadcrumbLabel}</Link>
+                    Also see: <Link to={BROWSE_KIND_PATHS[related]}>{BROWSE_KIND_CONTENT[related].breadcrumbLabel}</Link>
                 </p>
             </header>
 

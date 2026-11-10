@@ -310,7 +310,7 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     // `api/browseApi.ts`) -- was the SAME "Browse the archive" on all four
     // kind paths, the owner's own repeated complaint ("Why is the browse
     // reactions with the species/transition/vanderwaals browsing page?").
-    ["/species", "Browse species", undefined],
+    ["/species", "Browse molecules", undefined],
     ["/species/spc_abcde234567abcde234567abcd", "H2O", speciesRef],
     // The h1 states what the record IS ("Conformer basin"), not the
     // producer's own deposited label -- see `ConformerGroupPage.tsx`'s own
@@ -347,7 +347,7 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
 ]
 
 const EXPECTED_TITLES: Record<string, string> = {
-    "/species": "Species · TCKDB",
+    "/species": "Molecules · TCKDB",
     "/species/spc_abcde234567abcde234567abcd": "H2O · Species · TCKDB",
     "/conformer-groups/cfg_abc": "Conformer basin · TCKDB",
     "/conformer-observations/cfo_abc": "Conformer observation · TCKDB",
@@ -588,7 +588,7 @@ describe("page title and focus on navigation", () => {
         window.history.replaceState({}, "", "/species")
         render(<App />)
         await screen.findByText(/have been deposited in this archive yet/)
-        expect(document.title).toBe("Species · TCKDB")
+        expect(document.title).toBe("Molecules · TCKDB")
         // First load does not steal focus.
         expect(document.body).toHaveFocus()
         await user.click(screen.getByRole("link", { name: "Reactions" }))
@@ -980,7 +980,7 @@ describe("every route sets a title and renders exactly one h1", () => {
 
     const NON_RECORD_ROUTES: Array<[path: string, title: string]> = [
         ["/", "Home · TCKDB"],
-        ["/species", "Species · TCKDB"],
+        ["/species", "Molecules · TCKDB"],
         ["/reactions", "Reactions · TCKDB"],
         ["/transition-states", "Transition states · TCKDB"],
         ["/vdw-complexes", "Van der Waals complexes · TCKDB"],
@@ -1039,7 +1039,7 @@ describe("listings left out of the site bar stay reachable from their list pages
     it.each([
         ["/species", "Van der Waals complexes", "/vdw-complexes"],
         ["/reactions", "Transition states", "/transition-states"],
-        ["/vdw-complexes", "Species", "/species"],
+        ["/vdw-complexes", "Molecules", "/species"],
         ["/transition-states", "Reactions", "/reactions"],
     ])("%s links to %s", async (path, label, href) => {
         server.use(
@@ -1051,7 +1051,82 @@ describe("listings left out of the site bar stay reachable from their list pages
         )
         window.history.replaceState({}, "", path)
         render(<App />)
-        const related = (await screen.findByText(/Related listing:/)).closest("p") as HTMLElement
+        const related = (await screen.findByText(/Also see:/)).closest("p") as HTMLElement
         expect(within(related).getByRole("link", { name: label })).toHaveAttribute("href", href)
+    })
+})
+
+describe("site bar search hands its text to the home page search", () => {
+    function searchHandlers() {
+        const calls = { species: 0, reactions: 0 }
+        server.use(
+            http.get("/api/v1/scientific/species/search", () => {
+                calls.species += 1
+                return HttpResponse.json({ records: [] })
+            }),
+            http.get("/api/v1/scientific/reactions/browse", () => {
+                calls.reactions += 1
+                return HttpResponse.json(emptyBrowseEnvelope())
+            }),
+            http.get("/api/v1/scientific/reactions/search", () => {
+                calls.reactions += 1
+                return HttpResponse.json({ records: [], pagination: { offset: 0, limit: 20, returned: 0, total: 0 } })
+            }),
+        )
+        return calls
+    }
+    const barInput = () => screen.findByRole("searchbox", { name: "Search molecules and reactions" })
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 150))
+
+    it("replaces ?q= with the home page, fills the field and sends one request, also after Back and Forward", async () => {
+        const calls = searchHandlers()
+        const user = userEvent.setup()
+        render(<App />)
+        await user.type(await barInput(), "H2O{Enter}")
+        await waitFor(() => expect(calls.species).toBe(1))
+        expect(window.location.pathname).toBe("/")
+        expect(window.location.search).toBe("")
+        expect(document.getElementById("identifier")).toHaveValue("H2O")
+        window.history.back()
+        await settle()
+        window.history.forward()
+        await settle()
+        expect(calls.species).toBe(1)
+        expect(calls.reactions).toBe(0)
+    })
+
+    it("does not navigate for whitespace-only text", async () => {
+        const calls = searchHandlers()
+        const user = userEvent.setup()
+        render(<App />)
+        await user.type(await barInput(), "   {Enter}")
+        await settle()
+        expect(window.location.search).toBe("")
+        expect(calls.species + calls.reactions).toBe(0)
+    })
+
+    it("searches an equation as a reaction and a structure as a molecule", async () => {
+        const calls = searchHandlers()
+        const user = userEvent.setup()
+        render(<App />)
+        await user.type(await barInput(), "CC <> C{Enter}")
+        await waitFor(() => expect(calls.reactions).toBe(1))
+        expect(calls.species).toBe(0)
+        expect(screen.getByRole("radio", { name: "Reactions" })).toHaveAttribute("aria-checked", "true")
+        await user.clear(await barInput())
+        await user.type(await barInput(), "H2O{Enter}")
+        await waitFor(() => expect(calls.species).toBe(1))
+        expect(screen.getByRole("radio", { name: "Species" })).toHaveAttribute("aria-checked", "true")
+    })
+
+    it("ignores a ?q= longer than 1024 characters: empty field, no request", async () => {
+        const calls = searchHandlers()
+        window.history.replaceState({}, "", `/?q=${"C".repeat(1025)}`)
+        render(<App />)
+        await screen.findByLabelText("Exact species identifier")
+        await settle()
+        expect(document.getElementById("identifier")).toHaveValue("")
+        expect(window.location.search).toBe("")
+        expect(calls.species + calls.reactions).toBe(0)
     })
 })

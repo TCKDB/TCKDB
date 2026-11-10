@@ -36,9 +36,10 @@
 /*
  * `.page-toc` is the reserved left column: `TableOfContents.tsx` always renders it and
  * only fills it once two or more sections are mounted, so a tab switch never shifts the content.
- * It comes first in the markup. Entries are numbered with CSS counters, so the link text stays the heading text.
+ * It follows the content in the markup and `order: -1` puts it on the left. Entries are numbered with CSS counters, so the link text stays the heading text.
  */
 .page-toc {
+    order: -1;
     position: sticky;
     top: 1.5rem;
     flex: 0 0 14rem;
@@ -52,7 +53,7 @@
     margin: 0 0 .75rem;
     color: var(--muted);
     font: var(--type-label-strong-font);
-    letter-spacing: .1em;
+    letter-spacing: var(--tracking-label);
     text-transform: uppercase;
 }
 

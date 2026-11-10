@@ -33,6 +33,11 @@
     font: var(--type-note-font);
 }
 
+.browse-related a:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 3px;
+}
+
 
 
 .browse-filters {

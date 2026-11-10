@@ -4,8 +4,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
+import { BROWSE_KINDS, BROWSE_KIND_PATHS, RELATED_BROWSE_KIND, type BrowseKind } from "../api/browseApi"
 import { AppShell } from "./AppShell"
 import { AuthProvider } from "./AuthProvider"
+import { PageShell } from "./PageShell"
+import { SectionHeading } from "./PageSections"
 
 // `AppShell` now renders `AuthStatus`, which reads `useAuth()` -- it must
 // be mounted beneath an `AuthProvider`, which in turn probes `GET
@@ -98,5 +101,68 @@ describe("site search", () => {
     it("is a labelled search landmark", () => {
         renderShell()
         expect(screen.getByRole("search")).toBeInTheDocument()
+    })
+})
+
+describe("phone More menu focus", () => {
+    it("closes when Tab moves focus outside the menu", async () => {
+        mockPhone(true)
+        const user = userEvent.setup()
+        renderShell()
+        const button = screen.getByRole("button", { name: "More" })
+        await user.click(button)
+        expect(button).toHaveAttribute("aria-expanded", "true")
+        // Shift+Tab from the button lands on the Methods tab, outside the menu.
+        button.focus()
+        await user.tab({ shift: true })
+        expect(screen.getByRole("link", { name: "Methods" })).toHaveFocus()
+        expect(button).toHaveAttribute("aria-expanded", "false")
+    })
+})
+
+describe("site search input", () => {
+    it("limits its text to 1024 characters", () => {
+        renderShell()
+        expect(screen.getByRole("searchbox", { name: "Search molecules and reactions" })).toHaveAttribute("maxlength", "1024")
+    })
+})
+
+describe("skip link", () => {
+    it("is followed, once main has focus, by the page content and not by the contents list", async () => {
+        const user = userEvent.setup()
+        render(<AuthProvider><MemoryRouter initialEntries={["/record"]}>
+            <Routes><Route element={<AppShell />}><Route path="*" element={
+                <PageShell identity={<a href="#top">first content link</a>}>
+                    <SectionHeading id="one">One</SectionHeading>
+                    <SectionHeading id="two">Two</SectionHeading>
+                </PageShell>
+            } /></Route></Routes>
+        </MemoryRouter></AuthProvider>)
+        // Following the skip link puts focus on main; the next Tab stop is the first thing inside it.
+        screen.getByRole("main").focus()
+        await user.tab()
+        expect(screen.getByRole("link", { name: "first content link" })).toHaveFocus()
+        expect(screen.getByRole("navigation", { name: "Sections on this page" })).not.toContainElement(document.activeElement as HTMLElement)
+    })
+})
+
+/**
+ * Every browse index must be reachable by clicking: from the site bar, or from a list page that is.
+ * Derived from `BROWSE_KINDS`, so a new browse kind fails here until it is given a way in.
+ */
+describe("every browse index is reachable from the site bar or a list page", () => {
+    it("reaches each browse kind's path", () => {
+        renderShell()
+        const nav = within(screen.getByRole("navigation", { name: "Primary navigation" }))
+        const barHrefs = nav.getAllByRole("link").map((a) => a.getAttribute("href"))
+        const reached = new Set<BrowseKind>(BROWSE_KINDS.filter((kind) => barHrefs.includes(BROWSE_KIND_PATHS[kind])))
+        for (let changed = true; changed;) {
+            changed = false
+            for (const kind of [...reached]) {
+                const next = RELATED_BROWSE_KIND[kind]
+                if (!reached.has(next)) { reached.add(next); changed = true }
+            }
+        }
+        expect([...reached].sort()).toEqual([...BROWSE_KINDS].sort())
     })
 })

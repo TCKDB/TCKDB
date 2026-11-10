@@ -298,7 +298,7 @@ describe("seedFiltersFromUrl: reads the initial URL into filter state, per kind"
 // Moves to another listing the way following a link does: the router keeps the page mounted, so filter
 // state carries across. The site bar links Molecules and Reactions; the other two listings are linked
 // from their paired pages, so this goes by path rather than by whichever link the current page shows.
-async function clickKindLink(_user: ReturnType<typeof userEvent.setup>, name: string) {
+async function clickKindLink(name: string) {
     const path = { Species: "/species", Reactions: "/reactions", "Transition states": "/transition-states" }[name]
     if (!path) throw new Error(`No listing path for ${name}`)
     await act(async () => {
@@ -317,7 +317,7 @@ describe("browse page: kind selection queries the right endpoint with the right 
         expect(window.location.pathname).toBe("/species")
         // The page's own heading is the honest way to assert which kind is
         // showing (`BROWSE_KIND_CONTENT`, `api/browseApi.ts`).
-        expect(screen.getByRole("heading", { name: "Browse species" })).toBeVisible()
+        expect(screen.getByRole("heading", { name: "Browse molecules" })).toBeVisible()
         // MUTATION GUARD: no per-page kind switcher may come back. The owner
         // asked three times for kind buttons not to be repeated on every
         // browse page; navigation between kinds lives in the top nav only.
@@ -344,14 +344,13 @@ describe("browse page: kind selection queries the right endpoint with the right 
     })
 
     it("selecting 'Transition state' NAVIGATES to /transition-states and queries /transition-states/browse, never /species/browse again", async () => {
-        const user = userEvent.setup()
         let tsCalls = 0
         let speciesCallsAfterSwitch = 0
         server.use(...handlers({ captureTsUrl: () => { tsCalls += 1 } }))
         renderAt("/species")
         await screen.findByText(/records · showing/)
         server.use(http.get("/api/v1/scientific/species/browse", () => { speciesCallsAfterSwitch += 1; return HttpResponse.json(speciesEnvelope(0, 20, twoSpecies)) }))
-        await clickKindLink(user, "Transition states")
+        await clickKindLink("Transition states")
         expect(await screen.findByText("A <=> B")).toBeVisible()
         await waitFor(() => expect(tsCalls).toBeGreaterThan(0))
         expect(speciesCallsAfterSwitch).toBe(0)
@@ -389,7 +388,7 @@ describe("browse page: kind selection queries the right endpoint with the right 
         server.use(...handlers())
         renderAt("/species?kind=nonsense")
         await screen.findByText(/records · showing/)
-        expect(screen.getByRole("heading", { name: "Browse species" })).toBeVisible()
+        expect(screen.getByRole("heading", { name: "Browse molecules" })).toBeVisible()
         expect(window.location.pathname).toBe("/species")
     })
 
@@ -424,11 +423,10 @@ describe("browse page: kind selection queries the right endpoint with the right 
     })
 
     it("does NOT seed participant_smiles when the initial kind is species (the param is transition-state-only)", async () => {
-        const user = userEvent.setup()
         server.use(...handlers())
         renderAt("/species?participant_smiles=CCO")
         await screen.findByText(/records · showing/)
-        await clickKindLink(user, "Transition states")
+        await clickKindLink("Transition states")
         expect(await screen.findByText("A <=> B")).toBeVisible()
         // Switching to transition_state AFTER mount does not retroactively
         // apply a species-kind URL's participant_smiles -- the seed is
@@ -533,7 +531,7 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
         await waitFor(() => expect(lastSpeciesUrl?.searchParams.get("formula")).toBe("C6H6"))
         expect(lastSpeciesUrl?.searchParams.get("charge")).toBe("0")
 
-        await clickKindLink(user, "Transition states")
+        await clickKindLink("Transition states")
         await waitFor(() => expect(lastTsUrl).toBeDefined())
         expect(lastTsUrl?.searchParams.get("charge")).toBe("0") // shared filter carried over
         expect(lastTsUrl?.searchParams.has("formula")).toBe(false) // inapplicable filter dropped from the request
@@ -555,7 +553,7 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
         await user.selectOptions(screen.getByLabelText("Status"), "optimized")
         await waitFor(() => expect(screen.getByLabelText("Status")).toHaveValue("optimized"))
 
-        await clickKindLink(user, "Species")
+        await clickKindLink("Species")
         await waitFor(() => expect(lastSpeciesUrl?.searchParams.has("species_entry_kind")).toBe(true))
         expect(lastSpeciesUrl?.searchParams.has("status")).toBe(false)
         expect(screen.queryByLabelText("Status")).not.toBeInTheDocument()
@@ -584,11 +582,11 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
         await user.selectOptions(screen.getByLabelText("Method"), "b3lyp")
         await waitFor(() => expect(lastTsUrl?.searchParams.get("method")).toBe("b3lyp"))
 
-        await clickKindLink(user, "Species")
+        await clickKindLink("Species")
         await waitFor(() => expect(lastSpeciesUrl?.searchParams.get("method")).toBe("b3lyp"))
         expect(screen.getByLabelText("Method")).toHaveValue("b3lyp")
 
-        await clickKindLink(user, "Transition states")
+        await clickKindLink("Transition states")
         await waitFor(() => expect(lastTsUrl?.searchParams.get("method")).toBe("b3lyp"))
         expect(screen.getByLabelText("Method")).toHaveValue("b3lyp")
     })
@@ -620,7 +618,7 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
         expect(lastTsUrl?.searchParams.get("include_rejected")).toBe("true")
 
         // TS -> species direction: every shared value above must survive too.
-        await clickKindLink(user, "Species")
+        await clickKindLink("Species")
         await waitFor(() => expect(lastSpeciesUrl?.searchParams.get("include_deprecated")).toBe("true"))
         expect(lastSpeciesUrl?.searchParams.get("charge")).toBe("0")
         expect(lastSpeciesUrl?.searchParams.get("multiplicity")).toBe("2")
@@ -884,11 +882,10 @@ describe("browse page: a species row and a TS row each render their OWN fields",
     })
 
     it("renders both TS rows with their own distinct equation/family/charge-spin/evidence -- not the first row's data repeated, and no flag labels swapped between rows", async () => {
-        const user = userEvent.setup()
         server.use(...handlers())
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await clickKindLink(user, "Transition states")
+        await clickKindLink("Transition states")
         await screen.findByText("A <=> B")
         const rows = document.querySelectorAll(".ts-browse-row")
         expect(rows).toHaveLength(2)
@@ -912,13 +909,12 @@ describe("browse page: a species row and a TS row each render their OWN fields",
     })
 
     it("renders 'family not recorded' and 'Equation not recorded' fallbacks -- the live archive has 16/34 TS records with family: null", async () => {
-        const user = userEvent.setup()
         const nullFamily = tsRecord({ tsEntryRef: "tse_nullfamily", reactionRef: "rxn_nullfamily", equation: "E <=> F", family: null, label: "TS2", hasIrc: false })
         const nullEquation = tsRecord({ tsEntryRef: "tse_nullequation", reactionRef: "rxn_nullequation", equation: null, family: "Disproportionation", label: "TS3", hasIrc: false })
         server.use(...handlers({ tsRecords: [nullFamily, nullEquation] }))
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await clickKindLink(user, "Transition states")
+        await clickKindLink("Transition states")
         await screen.findByText("E <=> F")
         const rows = document.querySelectorAll(".ts-browse-row")
         expect(rows).toHaveLength(2)
@@ -1162,7 +1158,6 @@ function reactionFamilyVocabHandler() {
 
 describe("browse page: the 'reaction' kind, end to end", () => {
     it("selecting 'Reaction' NAVIGATES to /reactions and queries /reactions/browse, never /species/browse or /transition-states/browse again", async () => {
-        const user = userEvent.setup()
         let speciesCalls = 0
         let tsCalls = 0
         let reactionCalls = 0
@@ -1175,7 +1170,7 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         await screen.findByText(/records · showing/)
         const speciesCallsBeforeSwitch = speciesCalls
 
-        await clickKindLink(user, "Reactions")
+        await clickKindLink("Reactions")
         await waitFor(() => expect(reactionCalls).toBeGreaterThan(0))
         expect(speciesCalls).toBe(speciesCallsBeforeSwitch) // no further species calls after the switch
         expect(tsCalls).toBe(0)

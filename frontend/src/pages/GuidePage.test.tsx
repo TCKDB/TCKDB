@@ -11,15 +11,15 @@ describe("GuidePage", () => {
         expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
         const headings = screen.getAllByRole("heading", { level: 2 })
         expect(headings.map((h) => h.textContent)).toEqual([
-            "Species", "Species entry", "Conformer", "Calculation", "Level of theory", "Reaction", "Transition state", "Network",
+            "Molecule (species)", "Molecule version (species entry)", "Conformer", "Calculation", "Level of theory", "Reaction", "Transition state", "Network",
         ])
         expect(container.querySelectorAll("dfn")).toHaveLength(8)
         expect(container.querySelectorAll(".guide-concepts li p")).toHaveLength(8)
     })
 
-    it("states the deposit-order note under #order", () => {
+    it("states the ordering note under #order", () => {
         render(<MemoryRouter><GuidePage /></MemoryRouter>)
-        expect(document.getElementById("order")).toHaveTextContent("Records are listed in deposit order. The order is not a recommendation.")
+        expect(document.getElementById("order")).toHaveTextContent("A list's order is never a recommendation. Each list says how it is ordered.")
     })
 
     it("sets the page title", () => {

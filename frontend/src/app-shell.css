@@ -35,6 +35,15 @@
     color: var(--accent);
 }
 
+.brand:focus-visible,
+.site-nav a:focus-visible,
+.tab-bar-item:focus-visible,
+.more-menu-panel a:focus-visible,
+.auth-status-link:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 3px;
+}
+
 .site-bar-end {
     display: flex;
     align-items: center;
@@ -128,6 +137,15 @@
     .site-bar-end { display: contents; }
     .site-search { order: 3; flex: 1 0 100%; }
     .site-search input { width: 100%; }
+    .site-search input,
+    .site-bar .auth-status-link,
+    .more-menu-panel .theme-toggle-option {
+        min-height: 2.75rem;
+    }
+    .site-bar .auth-status-link {
+        display: inline-flex;
+        align-items: center;
+    }
     .site-bar .auth-status-link,
     .site-bar .account-menu { margin-left: auto; }
 }

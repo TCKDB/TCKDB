@@ -1,10 +1,11 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
+import { useEffect, useId, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent } from "react"
 import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { ThemeToggle } from "./ThemeToggle"
 import { AuthStatus } from "./AuthStatus"
 import { Announcer } from "./Announcer"
 import { RouteFocus } from "./RouteFocus"
 import { RecordGlyph, type RecordKind } from "./RecordGlyph"
+import { MAX_SEARCH_LENGTH } from "../domain/searchLimits"
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery"
 import "../auth.css"
 import "../app-shell.css"
@@ -38,6 +39,7 @@ function SiteSearch() {
     return <form className="site-search" role="search" onSubmit={submit}>
         <input
             type="search"
+            maxLength={MAX_SEARCH_LENGTH}
             aria-label="Search molecules and reactions"
             placeholder="Search by SMILES, formula, InChI"
             autoComplete="off"
@@ -72,7 +74,13 @@ function MoreMenu() {
         buttonRef.current?.focus()
     }
 
-    return <div className="more-menu" onKeyDown={onKeyDown}>
+    function onBlur(event: FocusEvent<HTMLElement>) {
+        if (!open) return
+        const next = event.relatedTarget as Node | null
+        if (next && !event.currentTarget.contains(next)) setOpen(false)
+    }
+
+    return <div className="more-menu" onKeyDown={onKeyDown} onBlur={onBlur}>
         <button
             ref={buttonRef}
             type="button"
