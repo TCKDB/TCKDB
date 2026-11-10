@@ -95,6 +95,11 @@
     color: var(--status-ok-ink);
 }
 
+/* A closed popover is out of layout, so it cannot widen the page; it stays in the DOM for aria-describedby. */
+.review-chip-wrap .term-popover[data-open="false"] {
+    display: none;
+}
+
 .review-chip-wrap .term {
     color: var(--ink-2);
     font: var(--type-note-font);
