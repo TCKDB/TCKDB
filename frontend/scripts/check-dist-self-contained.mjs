@@ -49,11 +49,13 @@
  *       below: ALLOWED_RUNTIME_HOSTS (one 3Dmol.js loader); a bare
  *       `new URL(template);` statement whose result is thrown away; or a
  *       template passed only to `URL.canParse(...)`, directly or via a
- *       top-level ES-module function whose body is allowlisted nodes ending
- *       in a boolean from `URL.canParse(param)` and whose name is only ever
- *       called (zod's IPv6 check). The last two need `URL` and `canParse`
- *       unbound, unwritten and not redefined in every JS file of the build
- *       (aliased globals such as `var g = globalThis` are not tracked). An
+ *       top-level ES-module function whose body is allowlisted statements,
+ *       every return boolean-valued (`new URL(param)` only as a discarded
+ *       comma operand), and whose name is only ever called (zod's IPv6
+ *       check). The last two need `URL` and `canParse` unbound, unwritten
+ *       and not redefined in every JS file, inline script and event handler
+ *       of the build (aliases such as `var g = globalThis` or `const U = URL`
+ *       are not tracked). An
  *       allow-list entry that no longer matches anything fails, so the lists
  *       cannot rot wider.
  *
@@ -411,42 +413,71 @@ function isUrlCanParse(expression) {
 
 const isIdentNamed = (node, name) => ts.isIdentifier(node) && node.text === name
 
-const HELPER_BINARY_OPS = new Set([
-    ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.CommaToken,
+const COMPARE_OPS = new Set([
     ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.EqualsEqualsEqualsToken,
     ts.SyntaxKind.ExclamationEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken,
     ts.SyntaxKind.LessThanToken, ts.SyntaxKind.GreaterThanToken,
     ts.SyntaxKind.LessThanEqualsToken, ts.SyntaxKind.GreaterThanEqualsToken,
 ])
 
-/** Allowlist of the node kinds a parse-only helper body may contain; anything else is rejected. */
-function helperNodeOk(node, param, seen) {
-    const all = (nodes) => nodes.every((n) => helperNodeOk(n, param, seen))
-    if (ts.isBlock(node)) return all(node.statements)
-    if (ts.isTryStatement(node)) {
-        const { catchClause, finallyBlock } = node
-        return !finallyBlock && helperNodeOk(node.tryBlock, param, seen) &&
-            (!catchClause || (!catchClause.variableDeclaration && helperNodeOk(catchClause.block, param, seen)))
-    }
-    if (ts.isReturnStatement(node)) return !!node.expression && helperNodeOk(node.expression, param, seen)
-    if (ts.isConditionalExpression(node)) return all([node.condition, node.whenTrue, node.whenFalse])
-    if (ts.isParenthesizedExpression(node)) return helperNodeOk(node.expression, param, seen)
-    if (ts.isTypeOfExpression(node)) {
-        const e = node.expression
-        return isIdentNamed(e, "URL") || isUrlCanParse(e)
-    }
-    if (ts.isPrefixUnaryExpression(node)) return node.operator === ts.SyntaxKind.ExclamationToken && helperNodeOk(node.operand, param, seen)
-    if (ts.isBinaryExpression(node)) return HELPER_BINARY_OPS.has(node.operatorToken.kind) && all([node.left, node.right])
-    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isNumericLiteral(node)) return true
+const isLiteralValue = (node) =>
+    ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isNumericLiteral(node) ||
+    node.kind === ts.SyntaxKind.TrueKeyword || node.kind === ts.SyntaxKind.FalseKeyword
+
+/** A value that is never a URL: a literal, a `typeof` test, or a boolean expression. */
+function isPlainValue(node, param, seen) {
+    if (ts.isParenthesizedExpression(node)) return isPlainValue(node.expression, param, seen)
+    if (isLiteralValue(node)) return true
+    if (ts.isTypeOfExpression(node)) return isIdentNamed(node.expression, "URL") || isUrlCanParse(node.expression)
+    return isBooleanExpr(node, param, seen)
+}
+
+/** An expression that can only evaluate to a boolean; `new URL(param)` is allowed only as a discarded comma operand. */
+function isBooleanExpr(node, param, seen) {
+    if (ts.isParenthesizedExpression(node)) return isBooleanExpr(node.expression, param, seen)
     if (node.kind === ts.SyntaxKind.TrueKeyword || node.kind === ts.SyntaxKind.FalseKeyword) return true
     if (ts.isCallExpression(node)) {
         const ok = isUrlCanParse(node.expression) && node.arguments.length === 1 && isIdentNamed(node.arguments[0], param)
         if (ok) seen.canParse = true
         return ok
     }
-    if (ts.isNewExpression(node)) {
-        return isIdentNamed(node.expression, "URL") && node.arguments?.length === 1 && isIdentNamed(node.arguments[0], param)
+    if (ts.isPrefixUnaryExpression(node)) {
+        return node.operator === ts.SyntaxKind.ExclamationToken && isPlainValue(node.operand, param, seen)
     }
+    if (ts.isConditionalExpression(node)) {
+        return isBooleanExpr(node.condition, param, seen) && isBooleanExpr(node.whenTrue, param, seen) && isBooleanExpr(node.whenFalse, param, seen)
+    }
+    if (ts.isBinaryExpression(node)) {
+        const op = node.operatorToken.kind
+        if (COMPARE_OPS.has(op)) return isPlainValue(node.left, param, seen) && isPlainValue(node.right, param, seen)
+        if (op === ts.SyntaxKind.AmpersandAmpersandToken || op === ts.SyntaxKind.BarBarToken) {
+            return isBooleanExpr(node.left, param, seen) && isBooleanExpr(node.right, param, seen)
+        }
+        if (op === ts.SyntaxKind.CommaToken) return isParseOfParam(node.left, param) && isBooleanExpr(node.right, param, seen)
+    }
+    return false
+}
+
+/** `new URL(param)` evaluated for its throw only. */
+function isParseOfParam(node, param) {
+    if (ts.isParenthesizedExpression(node)) return isParseOfParam(node.expression, param)
+    return (
+        ts.isNewExpression(node) &&
+        isIdentNamed(node.expression, "URL") &&
+        node.arguments?.length === 1 &&
+        isIdentNamed(node.arguments[0], param)
+    )
+}
+
+/** Allowlist of statements a parse-only helper body may contain; every return is boolean-valued. */
+function helperNodeOk(node, param, seen) {
+    if (ts.isBlock(node)) return node.statements.every((s) => helperNodeOk(s, param, seen))
+    if (ts.isTryStatement(node)) {
+        const { catchClause, finallyBlock } = node
+        return !finallyBlock && helperNodeOk(node.tryBlock, param, seen) &&
+            (!catchClause || (!catchClause.variableDeclaration && helperNodeOk(catchClause.block, param, seen)))
+    }
+    if (ts.isReturnStatement(node)) return !!node.expression && isBooleanExpr(node.expression, param, seen)
     return false
 }
 
@@ -570,8 +601,13 @@ function tampersUrl(sf) {
                 if (!allowed) found = true
             }
         }
-        if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && (node.text === "URL" || node.text === "canParse") && parent && ts.isElementAccessExpression(parent)) {
-            found = true
+        if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+            const keyed = parent && (ts.isElementAccessExpression(parent) || (ts.isCallExpression(parent) && parent.arguments[0] !== node))
+            if (node.text === "canParse" || (node.text === "URL" && keyed)) found = true
+        }
+        if (ts.isElementAccessExpression(node) && !isLiteralValue(node.argumentExpression) && isWriteTarget(node)) {
+            const base = ts.isPropertyAccessExpression(node.expression) ? node.expression.name : node.expression
+            if (ts.isIdentifier(base) && GLOBAL_OBJECTS.has(base.text)) found = true
         }
         if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && REDEFINERS.has(node.expression.name.text)) {
             const target = node.arguments[0]
@@ -725,6 +761,21 @@ function stripComments(html) {
     }
 }
 
+/** Whether inline scripts or `on*=` handlers in markup could change what `URL` or `URL.canParse` means. */
+function markupTampersUrl(html) {
+    for (const m of html.matchAll(RAW_TEXT)) {
+        const body = m[3].replace(/^\s*<!\[CDATA\[|\]\]>\s*$/g, "")
+        if (m[1].toLowerCase() === "style" || body.trim() === "") continue
+        const sf = ts.createSourceFile("inline.js", body, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+        if (sf.parseDiagnostics.length > 0 || tampersUrl(sf)) return true
+    }
+    const markup = stripComments(html.replace(RAW_TEXT, (m, tag, attrs) => `<${tag}${attrs}></${tag}>`))
+    for (const m of markup.matchAll(TAG)) {
+        if (attributes(m[2], () => {}).some(([name]) => /^on/i.test(name))) return true
+    }
+    return false
+}
+
 function checkMarkup(file, html) {
     const onUnknownEntity = (entity) => fail(file, `(a) unrecognised character reference ${entity} in markup`)
 
@@ -815,10 +866,11 @@ const allFiles = walk(DIST)
 
 for (const path of allFiles) {
     const ext = extname(path).toLowerCase()
-    if (TEXT_KINDS.get(ext) !== "js" && TEXT_KINDS.get(ext) !== "html") continue
+    const kind = TEXT_KINDS.get(ext)
+    if (kind !== "js" && kind !== "html" && kind !== "svg") continue
     const text = readFileSync(path, "utf8")
-    if (TEXT_KINDS.get(ext) === "html") {
-        if (text.includes("canParse")) urlTamperedAnywhere = true
+    if (kind !== "js") {
+        if (markupTampersUrl(text)) urlTamperedAnywhere = true
         continue
     }
     const sf = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)

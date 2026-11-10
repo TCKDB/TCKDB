@@ -13,11 +13,12 @@ afterAll(() => {
 })
 
 /** Runs the dist check on a small build; only the (d) template verdict is read. */
-function templateFlagged(js, { module = true, extra = null } = {}) {
+function templateFlagged(js, { module = true, extra = null, body = "", svg = null } = {}) {
     const root = mkdtempSync(join(tmpdir(), "check-dist-"))
     roots.push(root)
     mkdirSync(join(root, "assets"))
-    writeFileSync(join(root, "index.html"), "<!doctype html><html><body></body></html>")
+    writeFileSync(join(root, "index.html"), `<!doctype html><html><body>${body}</body></html>`)
+    if (svg) writeFileSync(join(root, "assets", "x.svg"), svg)
     writeFileSync(join(root, "assets", "schemas-test.js"), module ? `export{};${js}` : js)
     if (extra) writeFileSync(join(root, "assets", "other.js"), `export{};${extra}`)
     const run = spawnSync("node", [SCRIPT], { env: { ...process.env, CHECK_DIST_DIR: root }, encoding: "utf8" })
@@ -87,6 +88,40 @@ describe("dist check: URL.canParse host templates", () => {
 
         it("helper in a file that is not an ES module", () => {
             expect(templateFlagged(`${SIMPLE}var a=xn(\`http://[\${h}]\`)`, { module: false })).toBe(true)
+        })
+
+        const leaks = {
+            "helper returns new URL after canParse": "function xn(e){return URL.canParse(e)&&new URL(e)}export const a=fetch(xn(`http://[${h}]`))",
+            "helper returns new URL from a branch": "function xn(e){return URL.canParse(e)?new URL(e):!1}export const a=fetch(xn(`http://[${h}]`))",
+            "helper returns new URL as comma right operand": "function xn(e){return URL.canParse(e),new URL(e)}export const a=fetch(xn(`http://[${h}]`))",
+        }
+        for (const [name, js] of Object.entries(leaks)) {
+            it(name, () => expect(templateFlagged(js)).toBe(true))
+        }
+
+        it("write under a computed key", () => {
+            expect(templateFlagged(`${SIMPLE}${CALL}`, { extra: "const k='can'+'Parse';URL[k]=fetch" })).toBe(true)
+        })
+
+        it("computed-key write on a global object", () => {
+            expect(templateFlagged(`${SIMPLE}${CALL}`, { extra: "const k='U'+'RL';globalThis[k]=Object" })).toBe(true)
+        })
+
+        it("escaped key given to defineProperty through an alias", () => {
+            expect(templateFlagged(`${SIMPLE}${CALL}`, { extra: "const U=URL;Object.defineProperty(U,\"can\\x50arse\",{value:fetch})" })).toBe(true)
+        })
+
+        it("tamper in an inline script", () => {
+            expect(templateFlagged(`${SIMPLE}${CALL}`, { body: "<script>Object.defineProperty(URL,'canParse',{value:fetch})</script>" })).toBe(true)
+        })
+
+        it("tamper in an onerror handler with an entity-escaped key", () => {
+            expect(templateFlagged(`${SIMPLE}${CALL}`, { body: "<img src=\"x.png\" onerror=\"URL.can&#80;arse=fetch\">" })).toBe(true)
+        })
+
+        it("tamper in an SVG script", () => {
+            const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>URL.canParse=fetch</script></svg>"
+            expect(templateFlagged(`${SIMPLE}${CALL}`, { svg })).toBe(true)
         })
 
         it("tamper in another chunk flags the helper form", () => {
