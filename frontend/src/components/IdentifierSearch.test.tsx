@@ -72,7 +72,7 @@ async function switchToReactions(user: ReturnType<typeof userEvent.setup>) {
 }
 
 async function searchSpecies(user: ReturnType<typeof userEvent.setup>, value: string) {
-    await user.type(await screen.findByLabelText("Exact species identifier"), value)
+    await user.type(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), value)
     await user.click(screen.getByRole("button", { name: "Search" }))
 }
 
@@ -86,7 +86,7 @@ async function searchSpecies(user: ReturnType<typeof userEvent.setup>, value: st
  */
 async function searchReactions(user: ReturnType<typeof userEvent.setup>, value: string) {
     await switchToReactions(user)
-    fireEvent.change(await screen.findByLabelText("Exact reaction equation"), { target: { value } })
+    fireEvent.change(await screen.findByLabelText("Reaction: exact equation, SMILES or TCKDB ref"), { target: { value } })
     await user.click(screen.getByRole("button", { name: "Search" }))
 }
 
@@ -120,10 +120,10 @@ function reactionsBrowseHandler(records: unknown[] = [], total = records.length)
 describe("Species mode is the default and is labelled/placeholder-ed for species only", () => {
     it("shows the species-only label, placeholder, and help text by default", async () => {
         page()
-        const input = await screen.findByLabelText("Exact species identifier")
+        const input = await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")
         expect(input.getAttribute("placeholder")).toContain("spc_/spe_ ref")
         expect(input.getAttribute("placeholder")).not.toMatch(/rxn_|rxe_/)
-        expect(screen.getByText(/Exact only/)).toBeVisible()
+        expect(screen.getByText(/Names such as "water" are not searched/)).toBeVisible()
     })
 })
 
@@ -271,7 +271,7 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
             HttpResponse.json({ code: "rate_limited" }, { status: 429, headers: { "Retry-After": "20" } })
         )))
         page()
-        fireEvent.change(await screen.findByLabelText("Exact species identifier"), { target: { value: "CH3" } })
+        fireEvent.change(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), { target: { value: "CH3" } })
         fireEvent.click(screen.getByRole("button", { name: "Search" }))
 
         vi.useFakeTimers()
@@ -369,7 +369,7 @@ describe("species mode no longer auto-searches reactions -- a cross-link replace
         await user.click(link)
 
         // Switched to reaction mode -- the label proves it, not just the result.
-        expect(await screen.findByLabelText("Exact reaction equation")).toBeInTheDocument()
+        expect(await screen.findByLabelText("Reaction: exact equation, SMILES or TCKDB ref")).toBeInTheDocument()
         expect(screen.getByRole("radio", { name: "Reactions" })).toHaveAttribute("aria-checked", "true")
         const region = await screen.findByRole("region", { name: "Reactions found" })
         expect(within(region).getByText("rxe_a0000000000000000000000001")).toBeVisible()
@@ -408,7 +408,7 @@ describe("recognized public references route directly, regardless of which mode 
         // endpoint (instead of navigating directly, as an `rxe_` reference
         // always should) would fail here for that reason alone.
         const user = userEvent.setup(); page()
-        expect(screen.getByRole("radio", { name: "Species" })).toHaveAttribute("aria-checked", "true")
+        expect(screen.getByRole("radio", { name: "Molecules" })).toHaveAttribute("aria-checked", "true")
         await searchSpecies(user, "rxe_aaaaaaaaaaaaaaaaaaaaaaaaaa")
 
         expect(await screen.findByText("landed on reaction-entry record")).toBeVisible()
@@ -443,7 +443,7 @@ describe("identifier option ordering (species mode)", () => {
 
     it("names SMILES ahead of formula in the input placeholder", async () => {
         page()
-        const placeholder = (await screen.findByLabelText("Exact species identifier"))
+        const placeholder = (await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"))
             .getAttribute("placeholder") ?? ""
         expect(placeholder).toContain("SMILES")
         expect(placeholder.indexOf("SMILES")).toBeLessThan(placeholder.indexOf("formula"))
@@ -463,17 +463,17 @@ describe("identifier option ordering (species mode)", () => {
 describe("reaction mode: label, placeholder, and help text are reaction-specific", () => {
     it("updates the accessible label, placeholder, and help text the moment reaction mode is selected", async () => {
         const user = userEvent.setup(); page()
-        expect(screen.getByLabelText("Exact species identifier")).toBeInTheDocument()
+        expect(screen.getByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")).toBeInTheDocument()
 
         await switchToReactions(user)
 
         // Mutation-table item (b): the label must not stay on the species
         // wording once reaction mode is active.
-        expect(screen.queryByLabelText("Exact species identifier")).not.toBeInTheDocument()
-        const input = screen.getByLabelText("Exact reaction equation")
+        expect(screen.queryByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")).not.toBeInTheDocument()
+        const input = screen.getByLabelText("Reaction: exact equation, SMILES or TCKDB ref")
         expect(input.getAttribute("placeholder")).toMatch(/rxn_|rxe_/)
         expect(input.getAttribute("placeholder")).not.toContain("formula")
-        expect(screen.getByText(/searches both directions/i)).toBeVisible()
+        expect(screen.getByText(/Both directions are searched/)).toBeVisible()
         // The help text no longer explains arrow semantics at all -- every
         // arrow means the same thing now (owner correction), so there is
         // no per-arrow behaviour left to document here.
@@ -718,7 +718,7 @@ describe("reaction mode: rate limiting and generic failures are reported plainly
         )))
         const user = userEvent.setup(); page()
         await switchToReactions(user)
-        fireEvent.change(screen.getByLabelText("Exact reaction equation"), { target: { value: "NN" } })
+        fireEvent.change(screen.getByLabelText("Reaction: exact equation, SMILES or TCKDB ref"), { target: { value: "NN" } })
         fireEvent.click(screen.getByRole("button", { name: "Search" }))
 
         vi.useFakeTimers()

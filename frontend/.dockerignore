@@ -3,3 +3,7 @@ dist
 .git
 .DS_Store
 npm-debug.log*
+.env
+.env.*
+!.env.example
+public/site-config.json

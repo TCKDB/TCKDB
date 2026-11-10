@@ -87,6 +87,8 @@ jobs:
             sleep 1
           done
           curl -fsS http://127.0.0.1:18080/species/CH3 | grep -q '<div id="root">'
+          # The optional operator file is not in the image: absent means a real 404, not the SPA entry point.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/site-config.json)" = 404
           api_old_status() {
             curl -fsS -H 'X-Real-IP: 203.0.113.9' -H 'X-Forwarded-Proto: https' \
               http://127.0.0.1:18080/api/v1/status \
