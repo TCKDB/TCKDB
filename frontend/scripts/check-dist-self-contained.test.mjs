@@ -119,6 +119,21 @@ describe("dist check: URL.canParse host templates", () => {
             expect(templateFlagged(`${SIMPLE}${CALL}`, { body: "<img src=\"x.png\" onerror=\"URL.can&#80;arse=fetch\">" })).toBe(true)
         })
 
+        const markupCases = {
+            "iframe srcdoc": "<iframe srcdoc=\"&lt;script&gt;parent.URL.canParse=fetch&lt;/script&gt;\"></iframe>",
+            "a href javascript:": "<a href=\"javascript:URL.can%50arse=fetch\">x</a>",
+            "a href javascript: with a tab and entity": "<a href=\" java&#9;script:URL.canParse=fetch\">x</a>",
+            "form action javascript:": "<form action=\"javascript:URL.canParse=fetch\"></form>",
+        }
+        for (const [name, body] of Object.entries(markupCases)) {
+            it(name, () => expect(templateFlagged(`${SIMPLE}${CALL}`, { body })).toBe(true))
+        }
+
+        it("SVG set to javascript:", () => {
+            const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><a><set attributeName=\"href\" to=\"javascript:URL.canParse=fetch\"/></a></svg>"
+            expect(templateFlagged(`${SIMPLE}${CALL}`, { svg })).toBe(true)
+        })
+
         it("tamper in an SVG script", () => {
             const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>URL.canParse=fetch</script></svg>"
             expect(templateFlagged(`${SIMPLE}${CALL}`, { svg })).toBe(true)

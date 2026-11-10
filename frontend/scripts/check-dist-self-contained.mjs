@@ -53,9 +53,9 @@
  *       every return boolean-valued (`new URL(param)` only as a discarded
  *       comma operand), and whose name is only ever called (zod's IPv6
  *       check). The last two need `URL` and `canParse` unbound, unwritten
- *       and not redefined in every JS file, inline script and event handler
- *       of the build (aliases such as `var g = globalThis` or `const U = URL`
- *       are not tracked). An
+ *       and not redefined in every JS file, inline script, `on*` handler,
+ *       `srcdoc` and `javascript:` attribute of the build (aliases such as
+ *       `var g = globalThis` or `const U = URL` are not tracked). An
  *       allow-list entry that no longer matches anything fails, so the lists
  *       cannot rot wider.
  *
@@ -771,7 +771,9 @@ function markupTampersUrl(html) {
     }
     const markup = stripComments(html.replace(RAW_TEXT, (m, tag, attrs) => `<${tag}${attrs}></${tag}>`))
     for (const m of markup.matchAll(TAG)) {
-        if (attributes(m[2], () => {}).some(([name]) => /^on/i.test(name))) return true
+        const runsScript = ([name, value]) =>
+            /^on/i.test(name) || name === "srcdoc" || /^javascript:/i.test(value.replace(/[\t\r\n]/g, "").trim())
+        if (attributes(m[2], () => {}).some(runsScript)) return true
     }
     return false
 }
