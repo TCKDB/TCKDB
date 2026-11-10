@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Relative conformer energy POSTs count as public reads (2026-11-10)
+
+- **Behaviour:** anonymous `POST .../species-entries/{ref}/conformers/relative-energies` (and its `/manifest`, `/compare` and `/compare/manifest` variants) use the `anon_read` rate-limit bucket instead of `anon_other`; with a credential they use `auth_read` instead of `auth_write`. Other POSTs under `/scientific/` are unchanged, and the anonymous body-size cap still applies.
+- **Schema and migration:** none. No new environment variable.
+
 ## Site bar, numbered contents list and a guide page (2026-11-10)
 
 - **Behaviour:** the site bar links Molecules, Reactions, Methods and Guide, with a search box (it runs the home page's exact-identifier search), the theme control and sign in. Van der Waals complexes and Transition states leave the bar; each list page has an "Also see" link to its paired listing (Molecules and Van der Waals complexes, Reactions and Transition states). The Species list is now titled Molecules. Below 680px the links move to a bottom tab bar, and the theme control and Guide sit under a "More" button (Enter opens, Esc closes and returns focus). The active link carries `aria-current="page"`. Record pages show a left "On this page" list with numbered entries (3.1 for subsections) and the current section marked; on phones it is a "Contents" disclosure above the page. A new `/guide` page explains the eight kinds of record in plain words and notes that a list's order is never a recommendation.

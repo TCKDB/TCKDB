@@ -45,6 +45,7 @@ Tests reset the store between test runs and can flip
 from __future__ import annotations
 
 import hashlib
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -229,6 +230,12 @@ _PUBLIC_READ_GET_PREFIXES: tuple[str, ...] = (
     "/api/v1/workflow-tool-releases",
 )
 
+# Read-only POSTs (snapshot session, no write): exact shapes only.
+_READ_ONLY_POST_RE = re.compile(
+    r"/api/v1/scientific/species-entries/[A-Za-z0-9_]{1,64}"
+    r"/conformers/relative-energies(?:/manifest|/compare|/compare/manifest)?"
+)
+
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
@@ -265,7 +272,9 @@ def _is_public_read_path(method: str, path: str) -> bool:
     if method == "GET":
         return any(path.startswith(p) for p in _PUBLIC_READ_GET_PREFIXES)
     if method == "POST":
-        return path.startswith("/api/v1/scientific/") and path.endswith("/search")
+        return (
+            path.startswith("/api/v1/scientific/") and path.endswith("/search")
+        ) or _READ_ONLY_POST_RE.fullmatch(path) is not None
     return False
 
 

@@ -298,3 +298,73 @@ def test_default_budgets_match_spec():
     assert fresh.rate_limit_anon_other_per_minute == 20
     assert fresh.rate_limit_auth_login_per_minute == 10
     assert fresh.rate_limit_register_per_hour == 10
+
+
+# ---------------------------------------------------------------------------
+# Read-only conformer relative-energy POSTs
+# ---------------------------------------------------------------------------
+
+_REL_BASE = "/api/v1/scientific/species-entries/se_abc123/conformers/relative-energies"
+_REL_READ_PATHS = [
+    _REL_BASE,
+    _REL_BASE + "/manifest",
+    _REL_BASE + "/compare",
+    _REL_BASE + "/compare/manifest",
+]
+
+
+def _bucket(method: str, path: str, *, api_key: str | None = None, query: bytes = b"") -> str:
+    from starlette.requests import Request
+
+    from app.api.rate_limit import _classify
+
+    headers = [(b"x-api-key", api_key.encode())] if api_key else []
+    scope = {
+        "type": "http",
+        "method": method,
+        "path": path,
+        "raw_path": path.encode(),
+        "query_string": query,
+        "headers": headers,
+        "client": ("203.0.113.9", 1234),
+    }
+    return _classify(Request(scope))[0]
+
+
+@pytest.mark.parametrize("path", _REL_READ_PATHS)
+def test_anonymous_relative_energy_post_uses_anon_read(path):
+    assert _bucket("POST", path) == "anon_read"
+    assert _bucket("POST", path, query=b"x=1") == "anon_read"
+
+
+@pytest.mark.parametrize("path", _REL_READ_PATHS)
+def test_authenticated_relative_energy_post_uses_auth_read(path):
+    assert _bucket("POST", path, api_key="k") == "auth_read"
+
+
+def test_other_scientific_post_stays_anon_other():
+    assert _bucket("POST", "/api/v1/scientific/species-entries/se_abc123/calculations/select") == "anon_other"
+    assert _bucket("POST", "/api/v1/scientific/species-entries/se_abc123/anything") == "anon_other"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        _REL_BASE + "/extra",
+        _REL_BASE + "/compare/extra",
+        _REL_BASE + "/manifest/extra",
+        _REL_BASE + "/",
+        _REL_BASE + "/compare/",
+        "/api/v1/scientific/species-entries/se_abc/x/conformers/relative-energies",
+        "/api/v1/scientific/species-entries/se_abc/../x/conformers/relative-energies",
+        "/api/v1/scientific/species-entries/%2e%2e/conformers/relative-energies",
+        "/api/v1/scientific/species-entries/a%2Fb/conformers/relative-energies",
+        "/api/v1/scientific/species-entries//conformers/relative-energies",
+        "/api/v2/scientific/species-entries/se_abc/conformers/relative-energies",
+        "/api/v1/other/species-entries/se_abc/conformers/relative-energies",
+        "/api/v1/scientific/species-entries/se_abc/conformers/relative-energies-x",
+        "/api/v1/scientific/species-entries/" + "a" * 65 + "/conformers/relative-energies",
+    ],
+)
+def test_relative_energy_near_misses_stay_anon_other(path):
+    assert _bucket("POST", path) == "anon_other"
