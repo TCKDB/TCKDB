@@ -1,4 +1,5 @@
-export type RegisteredSection = { id: string; label: string }
+/** `level` 2 is a subsection of the nearest earlier level 1 section. */
+export type RegisteredSection = { id: string; label: string; level: 1 | 2 }
 
 /**
  * Orders sections the way they appear on the page, not the way they
@@ -75,9 +76,9 @@ export class SectionRegistry {
     // position read here reflects reality, not a stale or empty DOM.
     private snapshot: RegisteredSection[] = []
 
-    register = (id: string, label: string): (() => void) => {
+    register = (id: string, label: string, level: 1 | 2 = 1): (() => void) => {
         if (!this.sections.has(id)) this.order.push(id)
-        this.sections.set(id, { id, label })
+        this.sections.set(id, { id, label, level })
         this.refresh()
         return () => {
             this.sections.delete(id)

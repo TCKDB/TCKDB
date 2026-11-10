@@ -65,11 +65,11 @@ export const BROWSE_KIND_LABELS: Record<BrowseKind, string> = {
  */
 export const BROWSE_KIND_CONTENT: Record<BrowseKind, { eyebrow: string; heading: string; intro: string; breadcrumbLabel: string }> = {
     species: {
-        eyebrow: "Species index",
-        heading: "Browse species",
-        intro: "Every stable minimum deposited in the archive. Narrow by formula, structure, charge, or review "
-            + "status — van der Waals complexes are catalogued on their own page.",
-        breadcrumbLabel: "Species",
+        eyebrow: "Molecule index",
+        heading: "Browse molecules",
+        intro: "Every stable molecule deposited in the archive (a species in TCKDB terms). Narrow by formula, "
+            + "structure, charge, or review status. Van der Waals complexes are catalogued on their own page.",
+        breadcrumbLabel: "Molecules",
     },
     vdw: {
         eyebrow: "Van der Waals index",
@@ -113,6 +113,14 @@ export const BROWSE_KIND_PATHS: Record<BrowseKind, string> = {
     vdw: "/vdw-complexes",
     transition_state: "/transition-states",
     reaction: "/reactions",
+}
+
+/** Each listing links to the listing it is paired with; the vdw and transition-state listings have no place in the site bar. */
+export const RELATED_BROWSE_KIND: Record<BrowseKind, BrowseKind> = {
+    species: "vdw",
+    vdw: "species",
+    reaction: "transition_state",
+    transition_state: "reaction",
 }
 
 const PATH_TO_BROWSE_KIND: Record<string, BrowseKind> = Object.fromEntries(

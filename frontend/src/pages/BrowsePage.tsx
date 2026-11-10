@@ -5,6 +5,7 @@ import {
     BROWSE_KIND_CONTENT,
     BROWSE_KIND_LABELS,
     BROWSE_KIND_PATHS,
+    RELATED_BROWSE_KIND,
     DEFAULT_BROWSE_KIND,
     EMPTY_BROWSE_FILTERS,
     browseKindForPath,
@@ -110,6 +111,7 @@ export default function BrowsePage() {
 
     const state = useBrowse(kind, filters, offset, PAGE_SIZE)
     const content = BROWSE_KIND_CONTENT[kind]
+    const related = RELATED_BROWSE_KIND[kind]
     useDocumentTitle(content.breadcrumbLabel)
 
     return (
@@ -139,6 +141,9 @@ export default function BrowsePage() {
                 <p className="eyebrow">{content.eyebrow}</p>
                 <h1>{content.heading}</h1>
                 <p className="browse-intro">{content.intro}</p>
+                <p className="browse-related">
+                    Also see: <Link to={BROWSE_KIND_PATHS[related]}>{BROWSE_KIND_CONTENT[related].breadcrumbLabel}</Link>
+                </p>
             </header>
 
             <BrowseFilterForm filters={filters} kind={kind} onChange={updateFilters} />

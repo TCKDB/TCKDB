@@ -132,6 +132,7 @@
        `.stage-table` migration) reaches for this step rather than
        reinventing its own override. */
     --type-label-strong-font: 600 .8125rem/1.3 var(--sans);
+    --tracking-label: .1em; /* wide tracking for the one uppercase label ("On this page") */
     --type-label-strong-tracking: 0em;
     --type-label-strong-transform: none;
 

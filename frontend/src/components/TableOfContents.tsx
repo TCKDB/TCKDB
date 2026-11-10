@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from "react"
 import { useLocation } from "react-router-dom"
 import "../page-shell.css"
 import { usePageSections } from "../hooks/usePageSections"
+import { NARROW_QUERY, useMediaQuery } from "../hooks/useMediaQuery"
 
 // Below this many REGISTERED sections there is nothing worth a jump list
 // -- a 1-section page (a single tab body registering one heading) does not
@@ -230,54 +231,47 @@ export function TableOfContents() {
         resolvedHash.current = hash
     }, [location.hash, sections])
 
+    const narrow = useMediaQuery(NARROW_QUERY)
+    // A subsection with no section above it is listed as a section.
+    let seenSection = false
+    const entries = sections.map((section) => {
+        const level = section.level === 2 && seenSection ? 2 : 1
+        if (level === 1) seenSection = true
+        return { section, level }
+    })
+
+    const list = (
+        <nav aria-label="Sections on this page">
+            <ol>
+                {entries.map(({ section, level }) => {
+                    const isActive = section.id === activeId
+                    return (
+                        <li key={section.id} data-level={level}>
+                            <a
+                                aria-current={isActive ? "location" : undefined}
+                                className={isActive ? "page-toc-active" : undefined}
+                                href={`#${section.id}`}
+                                onClick={() => {
+                                    // An explicit click is the reader's choice: keep it current through the scroll it starts.
+                                    setActiveId(section.id)
+                                    resolvedHash.current = section.id
+                                    beginScrollSuppression(suppressScrollSpyRef, settleTimeoutIdRef)
+                                }}
+                            >
+                                {section.label}
+                            </a>
+                        </li>
+                    )
+                })}
+            </ol>
+        </nav>
+    )
+
     return (
         <div className="page-toc">
-            {showList && (
-                <nav aria-label="Sections on this page">
-                    <ul>
-                        {sections.map((section) => {
-                            const isActive = section.id === activeId
-                            return (
-                                <li key={section.id}>
-                                    <a
-                                        aria-current={isActive ? "location" : undefined}
-                                        className={isActive ? "page-toc-active" : undefined}
-                                        href={`#${section.id}`}
-                                        onClick={() => {
-                                            // Land on the clicked section
-                                            // immediately rather than
-                                            // waiting for a scroll event to
-                                            // "correct" the active marker
-                                            // -- the fix for the reported
-                                            // bug where clicking a section
-                                            // near the end of a short page
-                                            // left an earlier section
-                                            // underlined, because the page
-                                            // had nowhere left to scroll to
-                                            // ever cross the offset for the
-                                            // clicked one. Suppressed for
-                                            // the browser's own anchor-jump
-                                            // scroll burst that follows,
-                                            // for its full duration -- see
-                                            // `beginScrollSuppression` --
-                                            // so nothing in that burst
-                                            // overwrites this with whatever
-                                            // section the geometry reads at
-                                            // an intermediate scroll
-                                            // position on the way there.
-                                            setActiveId(section.id)
-                                            resolvedHash.current = section.id
-                                            beginScrollSuppression(suppressScrollSpyRef, settleTimeoutIdRef)
-                                        }}
-                                    >
-                                        {section.label}
-                                    </a>
-                                </li>
-                            )
-                        })}
-                    </ul>
-                </nav>
-            )}
+            {showList && (narrow
+                ? <details className="page-toc-disclosure"><summary>Contents</summary>{list}</details>
+                : list)}
         </div>
     )
 }

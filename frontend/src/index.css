@@ -59,18 +59,10 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 .archive-shell > main { flex: 1; }
 /* Focus moved here by `RouteFocus` is a landing point, not a control; no ring. */
 main:focus, main h1[tabindex="-1"]:focus { outline: none; }
-.utility-bar { height: 48px; padding: 0 clamp(1rem, 4vw, 2.5rem); display: flex; align-items: center; justify-content: space-between; background: var(--surface); border-bottom: 1px solid var(--line); }
 /* The wordmark and its icon square use the `--type-label-strong` step. */
 .brand { display: flex; gap: .55rem; align-items: center; font: var(--type-label-strong-font); letter-spacing: var(--type-label-strong-tracking); text-transform: var(--type-label-strong-transform); color: var(--accent); }
 .brand span { display: grid; width: 1.25rem; height: 1.25rem; place-items: center; border-radius: .25rem; background: var(--accent); color: var(--surface); font: var(--type-label-strong-font); letter-spacing: var(--type-label-strong-tracking); text-transform: var(--type-label-strong-transform); }
-.utility-bar-end { display: flex; align-items: center; gap: clamp(.75rem, 2.5vw, 1.5rem); }
-.utility-bar nav { display: flex; gap: clamp(.75rem, 2.5vw, 1.5rem); }
-/* Was `font-size: .82rem; font-weight: 600` (13.12px) -- `--type-ui` (sans
-   600 .8125rem/1.3, 13px) is the named step this primary-nav link's own
-   role already matches everywhere else "a short, weighted UI control
-   label" appears (tab strips, disclosure summaries). */
-.utility-bar nav a { padding: .3rem 0; color: var(--ink-2); font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); }
-.utility-bar nav a[aria-current="page"], .utility-bar nav a:hover { color: var(--accent); }.utility-bar a:focus-visible, button:focus-visible, input:focus-visible, .search-results a:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+button:focus-visible, input:focus-visible, .search-results a:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 .archive-hero { max-width: 53rem; margin: 0 auto; padding: clamp(4rem, 11vw, 7rem) 1.25rem 4rem; text-align: center; }
 /* `.eyebrow` -- the site's standalone kicker (as opposed to `.t-label`'s
    repeated dt/th/legend role). Was its own one-off .72rem/.19em pair;
@@ -157,7 +149,7 @@ main:focus, main h1[tabindex="-1"]:focus { outline: none; }
 /*
  * Theme toggle (`components/ThemeToggle.tsx`) — Light/Dark/System, a
  * `role="radiogroup"` of three `role="radio"` buttons rendered in
- * `.utility-bar-end` next to primary navigation. Same visual weight as
+ * `.site-bar-end` next to primary navigation. Same visual weight as
  * the nav links beside it (same mono label size, same hover/active
  * colour) rather than a novel control style, since this is one more
  * piece of chrome a reader glances at once and then ignores, not a
@@ -408,7 +400,7 @@ main:focus, main h1[tabindex="-1"]:focus { outline: none; }
     font-size: inherit;
 }
 
-@media (max-width: 680px) { .utility-bar { height: auto; min-height: 48px; gap: .8rem; padding-block: .65rem; align-items: flex-start; }.utility-bar-end { flex-wrap: wrap; justify-content: flex-end; gap: .5rem .8rem; }.utility-bar nav { flex-wrap: wrap; justify-content: flex-end; gap: .35rem .8rem; }.archive-hero { padding-top: 4rem; }.search-row { flex-wrap: wrap; }.search-row input { flex: 1 1 13rem; }.search-row button { padding: .85rem 1.15rem; }.destination-grid { grid-template-columns: 1fr; }.archive-footer { flex-direction: column; } } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+@media (max-width: 680px) { .archive-hero { padding-top: 4rem; }.search-row { flex-wrap: wrap; }.search-row input { flex: 1 1 13rem; }.search-row button { padding: .85rem 1.15rem; }.destination-grid { grid-template-columns: 1fr; }.archive-footer { flex-direction: column; } } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
 
 /*
  * Accessibility pass, finding 10 -- font-size floor override, RETIRED

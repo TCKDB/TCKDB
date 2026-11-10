@@ -17,6 +17,7 @@ const ConformerObservationPage = lazy(() => import("./pages/ConformerObservation
 const CorrectionSchemePage = lazy(() => import("./pages/CorrectionSchemePage"))
 const CompositeSchemePage = lazy(() => import("./pages/CompositeSchemePage"))
 const CuratorQueuePage = lazy(() => import("./pages/CuratorQueuePage"))
+const GuidePage = lazy(() => import("./pages/GuidePage"))
 const FrequencyScaleFactorPage = lazy(() => import("./pages/FrequencyScaleFactorPage"))
 const GeometryDetailPage = lazy(() => import("./pages/GeometryDetailPage"))
 const LevelOfTheoryPage = lazy(() => import("./pages/LevelOfTheoryPage"))
@@ -159,6 +160,7 @@ function App() {
                 to `/login` on its own when there isn't one -- see its own
                 component for why that is not "gating an existing page"
                 (it is a brand-new one). */}
+            <Route path="/guide" element={<GuidePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/account" element={<AccountPage />} />
             {/* Role-gated inside the page, not by the router: the component

@@ -46,10 +46,10 @@ export function usePageSections(): RegisteredSection[] {
  * to jump to. Passing `null` when there WAS a previous non-null id still
  * unregisters that id, the same as unmounting would.
  */
-export function useRegisteredSection(id: string | null, label: string): void {
+export function useRegisteredSection(id: string | null, label: string, level: 1 | 2 = 1): void {
     const registry = useContext(SectionRegistryContext)
     useEffect(() => {
         if (!registry || id === null) return
-        return registry.register(id, label)
-    }, [registry, id, label])
+        return registry.register(id, label, level)
+    }, [registry, id, label, level])
 }

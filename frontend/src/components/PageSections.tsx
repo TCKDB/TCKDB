@@ -71,16 +71,18 @@ export function PageSectionsProvider({ children }: { children: ReactNode }) {
  * caller that still passes a redundant kicker (today or in the future)
  * renders correctly regardless.
  */
-export function SectionHeading({ id, children, label, className, kicker, intro }: {
+export function SectionHeading({ id, children, label, className, kicker, intro, subsection }: {
     id: string
     children: ReactNode
     label?: string
     className?: string
     kicker?: ReactNode
     intro?: ReactNode
+    /** An `<h3>` listed under the section above it, numbered 3.1 in the contents list. */
+    subsection?: boolean
 }) {
     const resolvedLabel = label ?? (typeof children === "string" ? children : id)
-    useRegisteredSection(id, resolvedLabel)
+    useRegisteredSection(id, resolvedLabel, subsection ? 2 : 1)
     const titleText = typeof children === "string" ? children : undefined
     const kickerIsRedundant = typeof kicker === "string" && titleText !== undefined
         && titleText.trim().toLowerCase().startsWith(kicker.trim().toLowerCase())
@@ -88,7 +90,9 @@ export function SectionHeading({ id, children, label, className, kicker, intro }
     return (
         <>
             {showKicker && <p className="t-kicker section-kicker">{kicker}</p>}
-            <h2 className={className ? `t-heading-1 ${className}` : "t-heading-1"} id={id}>{children}</h2>
+            {subsection
+                ? <h3 className={className ? `t-heading-2 ${className}` : "t-heading-2"} id={id}>{children}</h3>
+                : <h2 className={className ? `t-heading-1 ${className}` : "t-heading-1"} id={id}>{children}</h2>}
             {intro && <p className="t-body section-intro">{intro}</p>}
         </>
     )

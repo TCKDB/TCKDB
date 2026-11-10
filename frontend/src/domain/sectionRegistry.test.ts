@@ -15,7 +15,7 @@ describe("SectionRegistry", () => {
         const listener = vi.fn()
         registry.subscribe(listener)
         registry.register("thermo-heading", "Thermochemistry")
-        expect(registry.getSnapshot()).toEqual([{ id: "thermo-heading", label: "Thermochemistry" }])
+        expect(registry.getSnapshot()).toEqual([{ id: "thermo-heading", label: "Thermochemistry", level: 1 }])
         expect(listener).toHaveBeenCalledTimes(1)
     })
 
@@ -32,6 +32,13 @@ describe("SectionRegistry", () => {
         expect(registry.getSnapshot().map((section) => section.id)).toEqual(["b", "a"])
     })
 
+    it("registers a level 2 section as a subsection", () => {
+        const registry = new SectionRegistry()
+        registry.register("a", "A")
+        registry.register("a1", "A detail", 2)
+        expect(registry.getSnapshot().map((section) => section.level)).toEqual([1, 2])
+    })
+
     it("unregisters on the returned cleanup, and notifies again", () => {
         const registry = new SectionRegistry()
         const listener = vi.fn()
@@ -46,7 +53,7 @@ describe("SectionRegistry", () => {
         const registry = new SectionRegistry()
         registry.register("thermo-heading", "Thermochemistry")
         registry.register("thermo-heading", "Thermochemistry (renamed)")
-        expect(registry.getSnapshot()).toEqual([{ id: "thermo-heading", label: "Thermochemistry (renamed)" }])
+        expect(registry.getSnapshot()).toEqual([{ id: "thermo-heading", label: "Thermochemistry (renamed)", level: 1 }])
     })
 
     it("returns a referentially stable snapshot when nothing has changed", () => {

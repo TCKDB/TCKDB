@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest"
 // `css: true` vitest config, and why `node:fs` is not an option for a file
 // under `src/` (no `"node"` entry in `tsconfig.app.json`'s `types`).
 import css from "./index.css?raw"
+import shellCss from "./app-shell.css?raw"
 
 /**
  * `.archive-shell` (the top-level wrapper in `AppShell.tsx`, around
@@ -186,8 +187,8 @@ describe(".record-placeholder p:last-child -- body copy under the shared prose m
 // blocks.
 // ---------------------------------------------------------------------------
 describe("site chrome maps onto the named type scale, not bespoke sizes (item 10)", () => {
-    it(".utility-bar nav a uses --type-ui, not a bare .82rem/600", () => {
-        const rule = extractRule(css, ".utility-bar nav a")
+    it(".site-nav a uses --type-ui, not a bare .82rem/600", () => {
+        const rule = extractRule(shellCss, ".site-nav a")
         expect(rule).toMatch(/font:\s*var\(--type-ui-font\)/)
         expect(rule).not.toMatch(/font-size:\s*\.82rem/)
     })

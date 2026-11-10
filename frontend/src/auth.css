@@ -49,7 +49,7 @@
  * ------------------------------------------------------------------- */
 .account-menu {
     /* The popup is positioned against this, not against the header, so
-       it stays pinned to the trigger when `.utility-bar-end` wraps onto a
+       it stays pinned to the trigger when `.site-bar-end` wraps onto a
        second line below 680px. */
     position: relative;
 }
