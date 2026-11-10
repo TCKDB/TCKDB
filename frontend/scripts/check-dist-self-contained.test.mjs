@@ -123,6 +123,7 @@ describe("dist check: URL.canParse host templates", () => {
             "iframe srcdoc": "<iframe srcdoc=\"&lt;script&gt;parent.URL.canParse=fetch&lt;/script&gt;\"></iframe>",
             "a href javascript:": "<a href=\"javascript:URL.can%50arse=fetch\">x</a>",
             "a href javascript: with a tab and entity": "<a href=\" java&#9;script:URL.canParse=fetch\">x</a>",
+            "a href javascript: after a control character": "<a href=\"&#1;javascript:URL.canParse=fetch\">x</a>",
             "form action javascript:": "<form action=\"javascript:URL.canParse=fetch\"></form>",
         }
         for (const [name, body] of Object.entries(markupCases)) {

@@ -761,6 +761,13 @@ function stripComments(html) {
     }
 }
 
+/** Drops leading C0 controls and spaces (U+0000-U+0020), as a browser does before parsing a URL. */
+function stripLeadingC0(value) {
+    let i = 0
+    while (i < value.length && value.charCodeAt(i) <= 0x20) i += 1
+    return value.slice(i)
+}
+
 /** Whether inline scripts or `on*=` handlers in markup could change what `URL` or `URL.canParse` means. */
 function markupTampersUrl(html) {
     for (const m of html.matchAll(RAW_TEXT)) {
@@ -772,7 +779,7 @@ function markupTampersUrl(html) {
     const markup = stripComments(html.replace(RAW_TEXT, (m, tag, attrs) => `<${tag}${attrs}></${tag}>`))
     for (const m of markup.matchAll(TAG)) {
         const runsScript = ([name, value]) =>
-            /^on/i.test(name) || name === "srcdoc" || /^javascript:/i.test(value.replace(/[\t\r\n]/g, "").trim())
+            /^on/i.test(name) || name === "srcdoc" || /^javascript:/i.test(stripLeadingC0(value.replace(/[\t\r\n]/g, "")))
         if (attributes(m[2], () => {}).some(runsScript)) return true
     }
     return false
