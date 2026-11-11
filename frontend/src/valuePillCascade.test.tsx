@@ -96,7 +96,7 @@ describe("source-level guards for the fix (belt-and-suspenders with the rendered
         // a bare, single-class `.value-pill--muted { ... }` rule would be
         // equal-specificity with `.value-pill` again, back to depending on
         // source order alone, which is exactly what broke here twice.
-        const ruleSelectors = [...designSystemCssRaw.matchAll(/([.\w-]+(?:\.[.\w-]+)*)\s*\{/g)].map((m) => m[1])
+        const ruleSelectors = [...designSystemCssRaw.matchAll(/([.\w-]+)\s*\{/g)].map((m) => m[1])
         const mutedSelectors = ruleSelectors.filter((selector) => selector.includes("value-pill--muted"))
         expect(mutedSelectors).toEqual([".value-pill.value-pill--muted"])
     })
