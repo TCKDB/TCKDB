@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Compare a reaction's rate records (Unreleased)
+
+- **Behaviour:** `/reactions/:ref/compare` lists every rate record of a reaction, one column per record, grouped by energy level of theory and program with its version (records that state neither are their own group). Rows: origin, model kind, A with its unit, n, Ea, fitted temperature range, tunnelling model, and k at 300, 500, 1000, 1500 and 2000 K where two or more records cover the temperature, each computed from the record's own parameters and shown only inside that record's own fitted range ("Outside this fit's range" otherwise). A group of exactly two records closes with a difference column (second minus first, in Ea and n); no difference is formed across groups. A banner says groups differ in method and program when there are two or more. Each group has its own energy profile from its own level and program, never overlaid. A list view has one row per record with sort buttons. The reaction page and reaction entry page link to it from two rate records.
+- **Schema and migration:** none. No new environment variable.
+
 ## Reaction pages with the energy profile (Unreleased)
 
 - **Behaviour:** the reaction entry page has breadcrumbs, a review word, a lede, a scheme row and an "Energy profile" section: reactants, transition state and products as bars in kJ/mol relative to the reactants, a profile picker when there are several (the first in response order is shown), a table of the same points linked to their calculations, unavailable reasons in words, and the energies rate records cite in a separate table. "Numbers for this entry" states its order and gives each record a source line. Each transition state has a picture with an on-request 3D view. The reaction page says "Reaction · all deposited versions".
