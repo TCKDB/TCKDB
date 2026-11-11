@@ -446,9 +446,7 @@ class RefResolver:
         otherwise the target's declared natural key. A target with neither is
         omitted, and its FK is dropped as before — that is correct for
         ``created_by`` (a user primary key must never reach a public artifact).
-        ``calculation_artifact`` used to fall into this dropped bucket too
-        (see the public-ref backfill in ``backend/docs/deployment/migrations.md``);
-        now that it carries a ``public_ref``, FKs to it (e.g.
+        ``calculation_artifact`` carries a ``public_ref``, so FKs to it (e.g.
         ``kinetics_tunneling_application.result_artifact_id``) resolve like
         any other ref-bearing target instead of being dropped.
         """

@@ -12,68 +12,51 @@ the payload is resolved through it.
 
 Why the lookup is a function and not a subscript
 ------------------------------------------------
-It was a subscript, twenty-one times: nineteen across the three bundle
-workflows and one each in the standalone thermo and transport product
-workflows. A key naming nothing was a ``KeyError``: an unhandled 500
-with nothing in it saying which key was wrong, where the honest answer
-is a 422 naming the key and the keys that *are* declared.
+A raw subscript on the key map turns a key naming nothing into a ``KeyError``:
+an unhandled 500 with nothing in it saying which key was wrong, where the
+honest answer is a 422 naming the key and the keys that *are* declared.
 
-The usual defence was that the request schema already refuses an
-undeclared key before the workflow runs. That defence was true of most
-sites and *false* of two, and it was false in the way this arrangement
-always fails: the guard lives in ``tckdb_schemas`` — a different
-distributable package from the workflow it protects — so the two drift
-without anything going red. ``NetworkPDepUploadRequest`` narrows a
-**species** statmech's source and torsion keys to that species's own
-calculations and does not do the same for a **transition state**'s, so a
-PDep TS statmech naming a key nothing declared reached
-``_persist_statmech_block`` and raised ``KeyError`` out of the route.
-That is not a hypothetical: ``tests/api/test_api_pdep_ts_statmech_
+The usual defence is that the request schema already refuses an
+undeclared key before the workflow runs. That defence does not hold
+everywhere: the guard lives in ``tckdb_schemas`` — a different
+distributable package from the workflow it protects — so the two can drift
+without anything going red, and some schema guards are conditional on a
+branch. ``NetworkPDepUploadRequest`` narrows a **species** statmech's
+source and torsion keys to that species's own calculations and does not do
+the same for a **transition state**'s, so a PDep TS statmech naming a key
+nothing declared would reach ``_persist_statmech_block`` and raise
+``KeyError`` out of the route. ``tests/api/test_api_pdep_ts_statmech_
 undeclared_key.py`` provokes it on the wire.
 
 Keeping the schema checks is deliberate. They refuse one layer earlier,
 they run in a client that never talks to a server, and a duplicated
-check costs nothing while a missing one costs a 500. What changes here is
-that the workflow no longer *depends* on them being right.
+check costs nothing while a missing one costs a 500. The workflow does
+not *depend* on them being right.
 
-The other six namespaces, and what measuring them found
---------------------------------------------------------
-Calculation keys were done first and the work deliberately stopped
-there, because a species key and a channel key are different keys with
-different remedies. Six more namespaces were then measured across
-``computed_reaction`` and ``network_pdep`` — species, network state,
-network channel, micro reaction, transition state, geometry — for 27
-cross-reference reads. The expectation going in was that the schema
-coverage would be uneven. It was, and worse than the calculation-key
-pass found:
+The other namespaces
+--------------------
+Species, network state, network channel, micro reaction, transition state
+and geometry keys are resolved the same way:
 
-* ``computed_reaction`` was clean. Every one of its cross-references is
-  narrowed by ``ComputedReactionUploadRequest.validate_species_key_refs``
-  before the workflow runs.
-* ``network_pdep`` had **five** wire-reachable 500s, in five of the six
-  namespaces. Four of them — a solve's ``state_energies[].state_key``
-  and its ``channel_barriers[]`` channel, micro-reaction and
-  transition-state keys — are guarded only inside the
-  ``kind == 'computed'`` branch of
+* ``computed_reaction``: every cross-reference is narrowed by
+  ``ComputedReactionUploadRequest.validate_species_key_refs`` before the
+  workflow runs.
+* ``network_pdep``: a solve's ``state_energies[].state_key`` and its
+  ``channel_barriers[]`` channel, micro-reaction and transition-state keys
+  are guarded by the schema only inside the ``kind == 'computed'`` branch of
   ``validate_mechanistic_channel_evidence``, so a ``reported`` solve
-  (k(T,P) transcribed from a paper, holding none of the
-  master-equation inputs) must still point those keys at a real path.
-* The fifth is the #218 asymmetry again, on a different field.
-  ``NetworkSpeciesIn`` narrows a species calculation's ``geometry_key``
+  (k(T,P) transcribed from a paper, holding none of the master-equation
+  inputs) reaches the workflow's subscripts unchecked: an undeclared key
+  raises ``KeyError``, which becomes a 500.
+* ``NetworkSpeciesIn`` narrows a species calculation's ``geometry_key``
   to that species's own conformer geometries; ``TransitionStateIn`` has
   no such validator, and ``validate_key_references`` checks TS
   calculations against the *global* geometry namespace. So a transition
   state's calculation could legally name a later transition state's
-  geometry, which the workflow had not resolved yet. The same shape of
-  gap, found the same way: by asking whether the guard covers *both*
-  branches rather than assuming that one implies the other.
+  geometry, which the workflow has not resolved yet.
 
-The lesson the calculation-key pass drew — that a guard in a different
-distributable package drifts silently — is only half of it. Four of these
-five gaps are in ``backend/app/schemas``, the *same* package as the
-workflow. What they have in common is not distance but conditionality:
-a guard that runs for one member of an enum and not the other, and a
-workflow that runs for both.
+A guard that runs for one member of an enum and not the other, in a
+workflow that runs for both, is the shape of each of these gaps.
 
 What the refusal carries
 ------------------------

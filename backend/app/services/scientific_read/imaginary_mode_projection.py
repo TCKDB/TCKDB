@@ -38,11 +38,11 @@ rigid-body curvature says the geometry is not the frame the matrix was
 computed in reads ``rigid_body_curvature_too_large``. None of them reads
 as a clean bill of health.
 
-**And none of them is the end of what TCKDB knows.** Every one of those
-records was judged at upload by magnitude, against a tau resolved
-from the protocol that produced them, and the tau, the row of
-the protocol table it came from and the resulting structural flag were
-persisted on ``calc_freq_result``. Where a projection cannot be taken, that judgement
+**And none of them is the end of what TCKDB knows.** A record judged at
+upload by magnitude, against a tau resolved from the protocol that produced
+it, has the tau, the row of the protocol table it came from and the
+resulting structural flag persisted on ``calc_freq_result``. Where a
+projection cannot be taken, that judgement, if it was made,
 is returned beside the refusal -- see :class:`TauContext` -- so that a
 reader gets "cannot be determined from stored data, and here is what the
 magnitude judgement said" rather than an unqualified shrug. It is not

@@ -360,7 +360,7 @@ def group_dependents_need_declared_repair(session: Session, group_id: int) -> bo
 def observation_is_evidence_of_a_frozen_dependent(session: Session, observation_id: int, group_id: int) -> bool:
     """Whether a statmech declaration or member, or an approved thermo, filed on this group rests on this observation.
 
-    By D5 a dependent follows the observation its own calculations came from, so a recompute that finds the observation
+    A dependent follows the observation its own calculations came from, so a recompute that finds the observation
     elsewhere moves the dependent with it. A statmech record is frozen in every state and an approved thermo is an
     accepted root, so the API role cannot move them; an UNAPPROVED thermo it can.
     """
@@ -415,7 +415,7 @@ def live_move_refused(session: Session, observation_id: int, group_id: int, *, o
     """Why this role may not move a structure that defines nothing out of its group now, or ``None`` if it may.
 
     The same principle as for a merge: a move is owed only when a write it makes would be refused by a trigger. It writes
-    the observation's group (refused once the observation was ever approved) and, by D5, whatever rests on it moves with
+    the observation's group (refused once the observation was ever approved) and whatever rests on it moves with
     it: statmech records (frozen in every state) and approved thermo targets (accepted roots). An unapproved thermo
     target and a selection are moved here, the way an inline merge moves them. What follows the observation is what rests
     on it as evidence, and, when the observation is the group's representative, everything with no evidence of its own.
@@ -564,7 +564,7 @@ def refile_non_defining(
         moved += 1
     if not moved:
         return 0
-    # What pointed at a group the moved structures left follows by D5, exactly as the recompute moves it: each record
+    # What pointed at a group the moved structures left follows, exactly as the recompute moves it: each record
     # goes to the group holding the observation its own calculations came from, else with the group's representative
     # (so a selection on an emptied group goes where the representative went).
     fallback = {g.id: (new_group_of[old_rep(g.id)] if old_rep(g.id) in new_group_of else g.id) for g in groups}

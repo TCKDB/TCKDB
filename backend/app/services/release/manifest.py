@@ -263,7 +263,7 @@ def _render(snapshot: ManifestSnapshot) -> dict[str, Any]:
             "description": snapshot.description,
             # Status and DOI *as at publication*. Later annotations are
             # reported on the release resource, never inside the frozen
-            # document — moving the document is how the digest used to break.
+            # document — moving the document would change the digest.
             "status_at_publication": snapshot.status,
             "published_at": snapshot.published_at,
             "doi_at_publication": snapshot.doi,

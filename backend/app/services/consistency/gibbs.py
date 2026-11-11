@@ -1,4 +1,4 @@
-"""D4: a thermo record's stored Gibbs values against its own H and S.
+"""A thermo record's stored Gibbs values against its own H and S.
 
 ``ThermoPoint.g_kj_mol`` is defined (model docstring) as ``H(T) - T*S(T)``
 on the record's enthalpy zero. Under the only declared basis,
@@ -49,7 +49,7 @@ NONFINITE_STORED_VALUE = "nonfinite_stored_value"
 _FLOAT_PRECISION_ULPS = 16
 _EPSILON = sys.float_info.epsilon
 
-#: D4's own pressure exemption. g, h and s of one
+#: This check's own pressure exemption. g, h and s of one
 #: record share one standard state by construction, so the recorded
 #: reference pressure -- whatever it is, even null or invalid -- cannot
 #: change r_G, and it never gates this check. G itself does depend on

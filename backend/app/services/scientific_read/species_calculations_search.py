@@ -6,7 +6,7 @@ species identity, energy (when applicable), level of theory, software,
 optional conformer context, geometry IDs, validation, review state, and
 provenance.
 
-Composition strategy (additive on top of Phase 6):
+Composition strategy (additive on top of ``search_species``):
 
 1. Resolve species/species_entries via :func:`search_species`. If
    ``species_entry_id`` was supplied as a handle, validate it exists

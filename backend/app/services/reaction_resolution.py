@@ -1039,7 +1039,8 @@ def _transition_state_element_counts(
     which refuses correct chemistry over a string — a failure a blocking check
     must not have. Ingestion canonicalises the case, which makes ``CL`` and
     ``c`` rare here rather than absent; ``D`` and ``T`` can be present in rows
-    that stored them verbatim, and are resolved here for those. Both halves of the resolution therefore stay.
+    that stored them verbatim, and are resolved here for those. Both halves of
+    the resolution therefore stay.
     """
 
     if transition_state_geometry_id is not None:

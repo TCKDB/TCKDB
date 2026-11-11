@@ -125,7 +125,7 @@ class ReproducibilityRubric:
         return VersionRef(name=self.name, version=self.version)
 
 
-#: The rubric for every record, and for species-owned statmech.
+#: The rubric for every record except transition-state-owned statmech.
 SHARED = ReproducibilityRubric("tckdb_reproducibility", 1)
 #: The same rubric with one question changed for a transition-state-owned statmech: "is it attached to a
 #: transition-state entry?" in place of "is it attached to a species entry?". Nothing else differs.

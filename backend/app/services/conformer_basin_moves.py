@@ -1,8 +1,8 @@
 """What moves when a conformer basin changes, and how: shared by the live upload path and the recompute.
 
 A basin row is pointed at by observations, thermo targets, statmech basin declarations and ensemble members, and
-conformer selections. When a basin is merged into another (a bridging upload, a recompute) or split, these follow by
-D5: each goes to the basin holding the observation its own calculations came from, else to the basin holding the old
+conformer selections. When a basin is merged into another (a bridging upload, a recompute) or split, these follow the
+observation: each goes to the basin holding the observation its own calculations came from, else to the basin holding the old
 group's representative. Review of every group whose membership changed is reset to ``not_reviewed`` with an event.
 
 Frozen rows

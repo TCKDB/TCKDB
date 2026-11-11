@@ -220,8 +220,8 @@ def _level_of_theory_payload(ref: LevelOfTheoryRef) -> dict[str, object]:
         ),
     }
     # Core treatment (frozen-core vs all-electron) is identity only
-    # when stated. A NULL adds no key, so every level that exists today keeps
-    # the exact hash it has. Do not fold NULL to a placeholder the way
+    # when stated. A NULL adds no key, so a level that does not state it keeps
+    # its hash. Do not fold NULL to a placeholder the way
     # spin_treatment does: that would re-key every row.
     core_treatment = getattr(ref.core_treatment, "value", ref.core_treatment)
     if core_treatment is not None:
@@ -456,10 +456,6 @@ def refuse_workflow_tool_as_calculation_software(
     repair: the program that actually ran is simply absent. ARC (which
     orchestrates the jobs) and RMG (which generates mechanisms) are refused
     for the same reason (see ``software_resolution.WORKFLOW_TOOLS_NOT_ESS``).
-    Accepting it is
-    what lets ``Arkane`` sit in the ``software`` registry beside Gaussian,
-    Molpro and ORCA and surface in the software vocabulary (issue #305,
-    item 1).
 
     Refused rather than routed. Moving it to the calculation's
     ``workflow_tool_release`` would still leave the calculation naming no
@@ -849,11 +845,10 @@ def banner_supplies_missing_version(
 # declares it when the energy change between steps falls below a
 # threshold. A ``calc_opt_result`` row claiming ``converged = true`` while
 # reporting no usable energy anywhere is claiming a result was reached
-# without reporting it. 52 records on the deployed archive did exactly
-# this (single depositor): ``converged = true``,
-# ``final_energy_hartree`` NULL, ``n_steps`` NULL, no artifact -- and every
-# one of them turned out to have a real ``sp`` calculation for the same
-# owner, so the energy was recoverable, just not from this row.
+# without reporting it: ``converged = true``,
+# ``final_energy_hartree`` NULL, ``n_steps`` NULL, no artifact. The energy
+# may still be recoverable from a real ``sp`` calculation for the same
+# owner, just not from this row.
 #
 # The rule is a disjunction, checked in
 # this order:
@@ -2332,11 +2327,11 @@ def resolve_and_persist_calculation_with_results(
         except CodedValidationError as exc:
             raise CodedValueError(exc.code, exc.detail, context=exc.context, message_prefix=False) from exc
 
-    # Every wire rule that ties the block, the level and the software together
-    # Software required unless an assembled composite, and an
-    # assembled composite's scheme inline with its inputs filling every slot. The
-    # models ran it on parse; a payload built with ``model_copy`` skipped it, and
-    # this is the one seam every calculation passes through.
+    # Every wire rule that ties the block, the level and the software together:
+    # software required unless an assembled composite, and an assembled
+    # composite's scheme inline with its inputs filling every slot. The models
+    # run it on parse; a payload built with ``model_copy`` skips it, and this is
+    # the one seam every calculation passes through.
     assert_composite_calculation_shape(
         calc_upload.type,
         calc_upload.composite_result,

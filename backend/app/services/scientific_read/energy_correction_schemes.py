@@ -466,12 +466,11 @@ def _build_lot_summary(
 def _build_software_release_summary(
     session: Session, software_release_id: int | None
 ) -> SoftwareReleaseSummary | None:
-    """ECS stores ``software_release_id`` (correction-scheme-provenance
-    plan v2 §3) -- a real FK to ``software_release``. Build the summary
+    """ECS stores ``software_release_id`` -- a real FK to
+    ``software_release``. Build the summary
     from an actual release→software join; never fabricate one.
 
-    ``FrequencyScaleFactor`` gained the same release grain in its own
-    sibling revision (correction-scheme-provenance plan v2 §6), and
+    ``FrequencyScaleFactor`` has the same release grain, and
     ``app.services.scientific_read.frequency_scale_factors`` has a
     same-named function of the same shape -- kept as a distinct helper
     rather than merged, since the two surfaces share no base module.

@@ -42,7 +42,7 @@ How a withheld ref is removed (:func:`withhold_in_model`)
    what was removed would show), and text whose percent-encoding does not settle is blanked too, never refused.
    Exploratory text is untouched. A required field whose WHOLE value is a bare hidden ref is not free text: it is
    a ref in the wrong place (most likely a pointer the registry missed), so it raises :class:`RefGuardUnplaceable`
-   and the registry gets fixed (D4).
+   and the registry gets fixed.
 
 Selection documents
 -------------------
@@ -1481,7 +1481,7 @@ def refuse_hidden_refs_in_text(session: Session, texts: Mapping[str, str], *, pr
         try:
             refs = _refs_in_text(text)
         except ValueError as exc:
-            # Percent-encoding that never settles: the text cannot be read, so it is refused, never kept (D4).
+            # Percent-encoding that never settles: the text cannot be read, so it is refused, never kept.
             logger.error("ref_guard_unplaceable_text file=%s prefix=unsettled", name)
             raise RefGuardUnplaceable("text", f"{name}<unsettled encoding>", "text") from exc
         for ref in refs:

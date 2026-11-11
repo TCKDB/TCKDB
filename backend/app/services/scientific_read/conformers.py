@@ -5,7 +5,6 @@ Two detail surfaces:
 - ``GET /scientific/conformer-groups/{ref_or_id}`` — basin identity.
 - ``GET /scientific/conformer-observations/{ref_or_id}`` — provenance row.
 
-Search ships in a later slice (Phase 2 of the spec).
 ``conformer_group`` is the deduplicated basin under one species_entry;
 ``conformer_observation`` is the provenance-bearing row anchored to a
 group; ``conformer_selection`` is curation metadata keyed by
@@ -274,7 +273,7 @@ def build_group_record(
         .where(ConformerObservation.conformer_group_id == cg.id)
         .order_by(ConformerObservation.id.asc())
     ).all()
-    # An observation is evidence of its group (Q2): the page lists those the evidence rule leaves visible, so it counts
+    # An observation is evidence of its group: the page lists those the evidence rule leaves visible, so it counts
     # those (the ref guard removes the rejected and deprecated ones from the list).
     withheld_obs_ids = ids_withheld_as_evidence(
         session,
@@ -893,7 +892,7 @@ def _build_observations_summary(
 #: row with ``dependency_role = 'optimized_from'`` names it as the parent of
 #: another calculation anchored to the **same** conformer observation. That
 #: is an earlier stage of a staged geometry optimisation -- a coarse
-#: pre-optimisation, or (as on every deployed pair, measured) a
+#: pre-optimisation, or a
 #: restart at the same level of theory. It belongs to the basin, but the
 #: refinement it fed is what the basin actually got, so counting both
 #: reports one optimisation as two pieces of evidence.
@@ -912,15 +911,12 @@ def _build_observations_summary(
 #: a frequency job on an optimised geometry is genuinely different evidence
 #: from the optimisation that produced the geometry -- folding those
 #: together would be a scientific error, not a tidier number. Same for
-#: ``scan_parent``. On the deployed database (measured) there
-#: are 63 both-anchored ``freq_on`` pairs, 65 ``single_point_on`` and 46
-#: ``scan_parent``; every one of them must keep counting twice.
+#: ``scan_parent``: every one of those pairs must keep counting twice.
 #:
 #: *It is correct for a chain of any length.* The test is local -- "does
 #: this row feed a refinement?" -- so in a coarse-medium-fine chain both
 #: coarse and medium answer yes and only ``fine`` survives. Nothing here
-#: assumes two stages. (The deployed database has no chain longer than two
-#: nodes today; the code does not depend on that staying true.)
+#: assumes two stages.
 #:
 #: *It does not collapse across observations.* The child must be anchored
 #: to the same observation as the parent. A chain whose two ends sit on two

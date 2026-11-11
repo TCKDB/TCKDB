@@ -1,4 +1,4 @@
-"""Vocabulary / discovery reads for the scientific API (DR none; Phase 7).
+"""Vocabulary / discovery reads for the scientific API.
 
 Exact-string filters (method, basis, reaction family, software) are only
 usable if a client can discover which values actually exist in the

@@ -5,7 +5,7 @@ Centralizes:
   pagination bounds, include-token validation, temperature-range coherence)
 - review-rank lookup
 - review summary construction from a ``RecordReview`` set
-- temperature coverage computation per spec D8
+- temperature coverage computation
 - review-status filtering
 
 Each service module imports from here so the rules are defined once.
@@ -401,8 +401,8 @@ def visible_statuses(
 ) -> set[RecordReviewStatus]:
     """Compute the set of review statuses visible per the request.
 
-    Combines the default-trust posture (D5) with an optional ``min_review_status``
-    threshold (D7, shallow). Rejected and deprecated statuses are excluded
+    Combines the default-trust posture with an optional ``min_review_status``
+    threshold (shallow). Rejected and deprecated statuses are excluded
     unless their respective opt-in flag is set; ``min_review_status`` further
     restricts the set to statuses at or above the threshold.
 
@@ -537,7 +537,7 @@ def build_pagination(
 
 
 # ---------------------------------------------------------------------------
-# Temperature coverage (D8)
+# Temperature coverage
 # ---------------------------------------------------------------------------
 
 
@@ -548,7 +548,7 @@ def temperature_coverage(
     record_min: float | None,
     record_max: float | None,
 ) -> TemperatureCoverage:
-    """Compute the TemperatureCoverage fragment per D8.
+    """Compute the TemperatureCoverage fragment.
 
     - If ``requested_min`` is supplied, full coverage requires record_min <= requested_min.
     - If ``requested_max`` is supplied, full coverage requires record_max >= requested_max.
@@ -643,7 +643,7 @@ def ids_below_review_floor(
 ) -> set[int]:
     """Which of ``record_ids`` the active read profile's review floor hides from a LIST.
 
-    The record floor only: the detail-by-ref gate (``handles.py``) no longer mirrors it, and answers
+    The record floor only: the detail-by-ref gate (``handles.py``) does not mirror it, and answers
     404 for the withheld set alone. For the RECORD floor on a count or a matching filter: a count of
     records must not include a record the profile hides. A count or level of a returned record's linked EVIDENCE uses the
     evidence rule instead (``ids_withheld_as_evidence``). It is not a ref rule: refs are withheld at the

@@ -968,7 +968,7 @@ def _compute_availability(
         session.scalars(
             where_visible(
                 select(ReactionAtomMap.reaction_entry_id).where(ReactionAtomMap.reaction_entry_id.in_(entry_ids)),
-                # A map of a transition-state entry the floor hides is not counted (D5).
+                # A map of a transition-state entry the floor hides is not counted.
                 review_floor_predicate(
                     ReactionAtomMap.transition_state_entry_id, SubmissionRecordType.transition_state_entry
                 ),

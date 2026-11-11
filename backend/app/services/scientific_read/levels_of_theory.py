@@ -6,12 +6,11 @@ sat two levels down, one calculation at a time, behind ``include=calculations``.
 
 Why a map of lists rather than one field
 ----------------------------------------
-Measured on the deployed corpus, 12 of 34 transition-state
-entries carry **two** distinct levels of theory. They are not inconsistent
-records — they are the standard composite workflow: optimise and take
+A transition-state entry can carry **two** distinct levels of theory. That is not an inconsistent
+record — they are the standard composite workflow: optimise and take
 frequencies at a cheap functional, then one high-level single point at that
 geometry. So "the level of theory of this record" does not exist as a single
-value on roughly a third of the corpus, and any field collapsing it to one
+value for such an entry, and any field collapsing it to one
 fabricates an answer there.
 
 The map is keyed by *calculation type* because that is the axis the

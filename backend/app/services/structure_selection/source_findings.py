@@ -177,9 +177,9 @@ def _determinations_the_profile_shows(session: Session, rows) -> set[int]:
 
     A determination the profile hides is no evidence about its source calculation: a live finding on it must not block a
     visible record that merely shares that calculation. A determination belongs to its conformer observation (a basin)
-    or its transition-state entry (a saddle). The conformer group the observation sits in is the record that gates a basin (Q4)
+    or its transition-state entry (a saddle). The conformer group the observation sits in is the record that gates a basin
     and keeps the record floor. The observation is linked evidence, so it hides the
-    determination only when it is withheld (rejected or deprecated); the transition-state entry is a record (Q3) and still
+    determination only when it is withheld (rejected or deprecated); the transition-state entry is a record and still
     gates its own evidence, so an entry below the profile's record floor hides it. Without a review floor every
     determination is shown (nothing is queried).
     """
@@ -200,7 +200,7 @@ def _determinations_the_profile_shows(session: Session, rows) -> set[int]:
         if entries
         else {}
     )
-    # The observation's conformer group is the record that gates a basin (Q4), so it keeps the record floor, as in the
+    # The observation's conformer group is the record that gates a basin, so it keeps the record floor, as in the
     # structure loader's ``in_world``: a basin whose group is below the floor is not returned by the structure selection and
     # is no witness about a source either.
     group_of = (

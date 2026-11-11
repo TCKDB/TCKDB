@@ -319,8 +319,8 @@ def _build_lot_summary(
 def _build_software_release_summary(
     session: Session, software_release_id: int | None
 ) -> SoftwareReleaseSummary | None:
-    """FSF stores ``software_release_id`` (correction-scheme-provenance
-    plan v2 §6) -- a real FK to ``software_release``. Build the summary
+    """FSF stores ``software_release_id`` -- a real FK to
+    ``software_release``. Build the summary
     from an actual release->software join; never fabricate one.
 
     Same shape as

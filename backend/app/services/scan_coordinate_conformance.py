@@ -19,9 +19,9 @@ stored rows.
 
 **Payloads in a relative-sweep convention (values offset from ``start_value``) still fail this, correctly.**
 Output written in that convention is still accepted and, where it has
-geometry, earns the warning (the real payloads under
-``tests/fixtures/arc_runs`` are in it, and are reported as
-``consistent_with_legacy_relative_axis`` or ``small_constant_offset``). That is the check doing its job, not a defect to quiet.
+geometry, earns the warning (classified as
+``consistent_with_legacy_relative_axis`` or ``small_constant_offset``).
+That is the check doing its job, not a defect to quiet.
 
 **Rounded values are not disagreement.** The tolerance is widened to half a
 step of the decimals the stored values were written at (see
@@ -149,8 +149,8 @@ FALLBACK_PRECISION_DECIMALS = 6
 #: genuinely coarse sample is trusted rather than overridden.
 _MIN_SAMPLE_SIZE_TO_TRUST = 3
 
-#: "where a quartet is near-collinear the dihedral is not a usable
-#: coordinate at all". Below this, on either flanking bond angle, the point
+#: Where a quartet is near-collinear the dihedral is not a usable
+#: coordinate at all. Below this, on either flanking bond angle, the point
 #: is reported ``not_checkable``.
 DIHEDRAL_NOT_CHECKABLE_MIN_SIN_THETA = 0.05
 
@@ -661,7 +661,7 @@ class SeriesClassificationResult:
         can act on directly. For ``consistent_with_legacy_relative_axis``
         and ``uniform_one_step_offset`` this is the constant residual
         (``stored - expected``) shared by every checkable point -- to
-        recover the ADR-0020-conforming value, compute
+        recover the conforming value, compute
         ``expected = stored - implied_constant``. For ``linear_ramp`` it is
         the fitted slope, in the coordinate's unit per unit of point index.
         ``None`` for every other classification.

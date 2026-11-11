@@ -766,17 +766,15 @@ def _extract_safe(
 
     ``extract_and_store_calculation_parameters`` is parse-first /
     write-second, and ``ParameterExtractionError`` is raised only by the parse
-    half, where no ``calculation_parameter`` rows have been written yet. That
-    is why catching it alone is not sufficient.
-
-    The write half does real work — ``persist_calculation_parameters``
-    issues a ``DELETE`` of the previous parser rows and then ``INSERT``s the new
+    half, where no ``calculation_parameter`` rows have been written yet.
+    Catching it alone therefore does not make the step best-effort: the write
+    half does real work — ``persist_calculation_parameters`` issues a
+    ``DELETE`` of the previous parser rows and then ``INSERT``s the new
     batch — and a database error there is not a ``ParameterExtractionError``.
-    It escaped this guard entirely and aborted the artifact upload, despite the
-    calling route declaring the whole step "best-effort (never abort the
-    upload)". The guard existed; it just did not cover the writes.
+    It would abort the artifact upload, although the calling route declares
+    the whole step "best-effort (never abort the upload)".
 
-    :func:`isolated_best_effort` now covers both halves: the artifact rows the
+    :func:`isolated_best_effort` covers both halves: the artifact rows the
     route already persisted are flushed outside the savepoint, the extraction
     runs and flushes inside it, and any failure rolls back to the savepoint
     with the upload intact and the session still usable for the artifacts that

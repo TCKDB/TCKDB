@@ -393,7 +393,7 @@ def _canonical_conformer_assignment_scheme(obj: Any) -> str:
 def _canonical_frequency_scale_factor(obj: Any) -> str:
     """FrequencyScaleFactor identity matches the table's natural uniqueness.
 
-    Per the model (correction-scheme-provenance plan v2 §6), the natural
+    Per the model, the natural
     identity is the full tuple ``(level_of_theory_id,
     software_release_id, scale_kind, value, source_literature_id,
     workflow_tool_release_id)`` -- ``software_release_id`` replaced the

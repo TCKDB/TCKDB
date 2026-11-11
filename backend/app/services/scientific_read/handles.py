@@ -298,8 +298,8 @@ def _gated_status(
 ) -> RecordReviewStatus | None:
     """The review status that keeps this record out of the answer under the active profile, or ``None`` if it is served.
 
-    ``floor=False`` (a detail read): the withheld set, ``rejected`` and ``deprecated`` under a profile with a review floor
-    A ``not_reviewed`` or ``under_review`` record (or one with no review row) is served, badged.
+    ``floor=False`` (a detail read): the withheld set, ``rejected`` and ``deprecated`` under a profile with a review floor;
+    a ``not_reviewed`` or ``under_review`` record (or one with no review row) is served, badged.
     ``floor=True`` (a select target, a candidate population): the approved record floor, as for a list. No floor, or an
     ungated type, answers ``None`` and issues no review query.
     """
@@ -334,7 +334,7 @@ def _enforce_handle_gate(
     detail-by-ref read passes through, so the rule cannot be forgotten by an endpoint. Records whose review state lives on
     a parent are judged by that parent, see :data:`_PARENT_DERIVED_HANDLE_TYPES`.
 
-    the detail of a record that is merely ``not_reviewed`` or
+    The detail of a record that is merely ``not_reviewed`` or
     ``under_review`` is served, and the response carries its review badge; only the withheld set answers 404. Lists,
     searches, browses and selects keep the approved floor: a select resolves the records it selects over (``floor=True``,
     :func:`resolve_selection_handle`) as a list does.

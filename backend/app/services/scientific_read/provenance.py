@@ -166,7 +166,7 @@ def get_reaction_full(
     do not remove the parent reaction_entry.
 
     Non-TS-backed kinetics are returned in ``kinetics`` with null TS-chain
-    provenance fields per Phase 2.2; the ``transition_states`` sub-array
+    provenance fields; the ``transition_states`` sub-array
     contains only TS rows actually associated with the reaction entry.
 
     :raises NotFoundError: 404 when ``reaction_entry_id`` is unknown.
@@ -1511,7 +1511,7 @@ def _format_ts_deps(
     field is named ``role`` for client ergonomics. Earlier versions
     accessed ``d.role`` directly which would have raised
     ``AttributeError`` the first time a TS calculation graph existed for
-    a queried reaction — see Phase 7.1.
+    a queried reaction.
     """
     return [
         TransitionStateDependency(

@@ -387,8 +387,8 @@ def get_species_thermo(
         record_ids=[t.id for t, _ in classified],
     )
 
-    # Pre-fetch validation/SCF data for ALL relevant source calcs. Phase 2
-    # audit: include the linked statmechs' source calcs in the lookup set so
+    # Pre-fetch validation/SCF data for ALL relevant source calcs: include the linked
+    # statmechs' source calcs in the lookup set so
     # the statmech-derived roles inside ``_build_provenance`` / ``_evidence_breakdown`` can
     # render LoT, software, geom-validation, and SCF stability for them.
     all_source_calc_ids = {
@@ -1276,7 +1276,7 @@ def _build_provenance(
 ) -> ThermoProvenance:
     """Build a ``ThermoProvenance`` block for one thermo record.
 
-    Phase 2 audit (thermo provenance / geometry): when the thermo's own
+    When the thermo's own
     ``ThermoSourceCalculation`` rows are empty or do not cover a role,
     fall back to the record's resolved statmech ``StatmechSourceCalculation``
     rows for that role. Explicit thermo sources always win. This makes
@@ -1627,7 +1627,7 @@ def _evidence_breakdown(
 ) -> EvidenceCompletenessBreakdown:
     """Thermo L1 checklist, max=8.
 
-    Phase 2 audit (thermo provenance / geometry): for computed thermo
+    For computed thermo
     that derives from a statmech without denormalized thermo-source
     rows, count the statmech's freq / SP / opt source calculations
     toward the checklist. Direct thermo source-calculation rows still

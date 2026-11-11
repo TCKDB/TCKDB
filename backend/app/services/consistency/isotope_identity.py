@@ -1,8 +1,8 @@
-"""D7: a protium species entry's calculation geometries against their own isotope declarations.
+"""A protium species entry's calculation geometries against their own isotope declarations.
 
 A ``D``/``T`` element token is an isotope
 declaration, and an upload that files such a geometry under a protium species
-entry is refused. Rows deposited **earlier** are not: they hold
+entry is refused. Rows stored before that rule are not covered by it: they hold
 ``D``/``T`` in ``geometry_atom.element`` with a NULL ``isotope_mass_number``,
 sit under whatever entry they were deposited with, and cannot be rewritten
 (``trg_as_geometry_atom``). Where such a row is attached to a protium entry the

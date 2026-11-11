@@ -766,25 +766,19 @@ def browse_species(
     :class:`SpeciesBrowseRequest` to read one from), so with every
     optional filter absent it is every species in the corpus.
 
-    **#277 (and its follow-up).** A candidate species that has *some*
+    A candidate species that has *some*
     ``species_entry`` rows but none currently visible is not a useful
     catalogue listing under any circumstance, so both ``pagination.total``
     (:func:`_browse_visible_species_total`) and the page itself
     (:func:`_rank_and_slice_species` with ``require_visible_entries=True``)
-    drop it unconditionally. Making it conditional on whether the
-    caller typed one of five specific request fields
-    (min_review_status / include_rejected / include_deprecated /
-    electronic_state_kind / species_entry_kind) — a check that missed the
-    read-profile floor :func:`app.services.scientific_read.common.visible_statuses`
-    also applies (``profile=curated`` narrows visibility to ``approved``
-    with no request field set at all, so ``?profile=curated`` would reproduce
-    the bug), and that would invert itself for
-    ``include_rejected``/``include_deprecated``: those only ever *widen*
-    visibility, so treating them as a trigger could drop an entry-less
-    species that a plainer request kept. Applying the rule unconditionally
-    removes the whole class rather than patching the two known instances —
-    a third way to narrow visibility reintroduces the bug with a
-    field-name-keyed trigger in place, and cannot with a structural one.
+    drop it unconditionally, whatever request fields are set. A trigger keyed
+    on request fields would miss the read-profile floor
+    :func:`app.services.scientific_read.common.visible_statuses` also applies
+    (``profile=curated`` narrows visibility to ``approved`` with no request
+    field set at all), and ``include_rejected``/``include_deprecated`` only
+    ever *widen* visibility, so treating them as a trigger could drop an
+    entry-less species that a plainer request kept. Applying the rule
+    unconditionally covers every way of narrowing visibility.
     :func:`_has_any_entry_expr` is what keeps this safe for a species with
     *zero* ``species_entry`` rows: such a species is never dropped, under
     any filter, narrowed or not — it is still a valid (empty) catalogue

@@ -1048,8 +1048,7 @@ def _check_thermo_uncertainty_present(thermo: Thermo) -> EvidenceOutcome:
 
 # Kinds whose parameters are the output of a program's own build-level
 # numerics (integration grid, SCF thresholds, basis-set definition) and are
-# therefore release-specific (correction-scheme-provenance plan v2 §3.1,
-# §7). ``atom_hf`` / ``atom_thermal`` / ``soc`` are physical or reference
+# therefore release-specific. ``atom_hf`` / ``atom_thermal`` / ``soc`` are physical or reference
 # constants -- not a program's output -- so the software axis does not
 # apply to them, and neither does ``isodesmic`` / ``other``, which this
 # rubric does not attempt to classify.
@@ -1070,8 +1069,7 @@ def _thermo_cited_correction_schemes(thermo: Thermo) -> list[EnergyCorrectionSch
     ``applied_energy_correction`` targets a species entry
     (``target_species_entry_id``), not a specific thermo row -- a
     correction is applied at the species level and every thermo record for
-    that species entry shares it (correction-scheme-provenance plan v2
-    §7). Rows sourced from a frequency scale factor rather than a
+    that species entry shares it. Rows sourced from a frequency scale factor rather than a
     correction scheme (``scheme_id IS NULL``) are excluded: this rubric
     axis is about scheme self-documentation, not frequency scaling.
     """
@@ -1102,8 +1100,7 @@ def _check_correction_scheme_software_release_present(
     A different axis from the existing source-calculation checks above:
     those ask whether a correction was *applied* to the record at all;
     this asks whether the *cited scheme itself* documents which program
-    release computed its parameters (correction-scheme-provenance plan v2
-    §7). ``not_applicable`` -- never a vacuous pass -- when the record
+    release computed its parameters. ``not_applicable`` -- never a vacuous pass -- when the record
     cites no scheme, or cites only constant-kind schemes for which the
     software axis does not apply.
     """
@@ -2570,7 +2567,7 @@ the PARENT (reached via ``calc.child_dependencies[*].parent_calculation``)
 should be pulled into the source set: ``optimized_from`` (a ``path_search``
 (NEB/GSM/...) that produced the TS guess which the TS opt was then optimized
 from) and ``composite_input`` (the single points an assembled composite at the
-TS was built from, ADR 0021: they are the evidence for its energy)."""
+TS was built from: they are the evidence for its energy)."""
 
 _TS_CALC_IS_PARENT_ROLES: frozenset[CalculationDependencyRole] = frozenset(
     {
@@ -3168,7 +3165,7 @@ def _check_ts_review_not_rejected_or_deprecated_if_applicable(
 
 
 # Contract of the baseline version. A transition state's representative frequency result is
-# not asked to have exactly one imaginary mode (the upload-time rule owns that): the required check is ``reaction_coordinate_designated_for_ts``, which cites the persisted
+# not asked to have exactly one imaginary mode, and that count is not re-derived here: the required check is ``reaction_coordinate_designated_for_ts``, which cites the persisted
 # designation instead of recounting, beside the advisory check that surfaces the recorded structural flag. Two zero-weight
 # warnings report on the frequency result, ``no_frequency_result_lacks_an_imaginary_mode`` and
 # ``no_frequency_result_has_undesignated_imaginary_modes``. The scoped structure assessment is brought into the

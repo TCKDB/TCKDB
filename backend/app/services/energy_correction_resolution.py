@@ -162,9 +162,8 @@ def resolve_or_create_scheme(
     * **No data revision**: ``(kind, name, level_of_theory_id,
       source_literature_id, software_release_id, workflow_tool_release_id)``
       over rows whose own ``data_revision`` is NULL -- matches
-      ``uq_energy_correction_scheme_identity`` (correction-scheme-provenance
-      plan v2 §3-§4), unchanged, so a deposit that does not state a
-      revision behaves exactly as it did before the column existed.
+      ``uq_energy_correction_scheme_identity``, so a deposit that does not
+      state a revision resolves on that identity alone.
     * **A data revision**: ``(kind, name, level_of_theory_id,
       source_literature_id, software_release_id, data_revision)`` over rows
       that carry one -- matches ``uq_energy_correction_scheme_identity_
@@ -535,8 +534,7 @@ def resolve_or_create_freq_scale_factor_ref(
     Dedup key: the full DB identity tuple ``(level_of_theory,
     software_release, scale_kind, value, source_literature,
     workflow_tool_release)`` — matches
-    ``uq_frequency_scale_factor_identity`` (correction-scheme-provenance
-    plan v2 §6). ``ref.software`` is a ``SoftwareReleaseRef`` (name,
+    ``uq_frequency_scale_factor_identity``. ``ref.software`` is a ``SoftwareReleaseRef`` (name,
     optionally version/revision/build): a depositor who names only the
     program resolves to the version-less release row for it, mirroring
     ``resolve_or_create_scheme``. ``note`` is descriptive and never used

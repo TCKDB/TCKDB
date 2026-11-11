@@ -55,12 +55,9 @@ from app.services.scientific_read.role_settings import attach_calculation_settin
 from app.services.scientific_read.species import search_species
 from app.services.scientific_read.thermo import get_species_thermo
 
-# ``trust`` is legal here, and it was not always. This surface used to
-# declare ``records[*].thermo.trust`` — one level down, inside the ``thermo``
-# wrapper — while rejecting ``include=trust`` with
-# ``422 unknown_include_token``, so the field was structurally incapable of
-# carrying a value and shipped as a permanent ``null`` on every record. The
-# token is legal now, the value is built for the returned page (see
+# ``trust`` is legal here: ``records[*].thermo.trust`` is declared one level
+# down, inside the ``thermo`` wrapper, so the token must be accepted for the
+# field to carry a value. The value is built for the returned page (see
 # :func:`attach_thermo_trust` below), and the route drops the key when the
 # caller did not ask for it.
 #

@@ -5,7 +5,8 @@ from app.db.models.common import PhaseKind
 
 ENGINE_VERSION = "3.2.0"
 
-#: Phases these advisory NASA/rate consistency checks support. A record whose phase is outside this set is declared out of
+#: Phases these advisory NASA/rate consistency checks support. A record
+#: whose phase is outside this set is declared out of
 #: scope -- never refused as though the phase were incompatible, and never
 #: silently treated as gas. Widening support to another phase is a one-line
 #: addition here; :func:`gas_state_reason` reads this constant and nowhere
@@ -66,7 +67,7 @@ def _check_quantity(quantity, *, allow_none):
     """Refuse a quantity these evaluators do not define -- never fall back silently.
 
     Supported: ``"cp"``, ``"s"``, ``"h"``; the applicability gate also takes
-    ``None`` (the full record, as D3 uses it). A misspelt or not-yet-supported
+    ``None`` (the full record, as the kinetics/equilibrium comparison uses it). A misspelt or not-yet-supported
     quantity such as ``"g"`` would otherwise read the wrong column or apply
     the wrong unit divisor and report an innocent-looking unavailable reason.
     """
@@ -86,7 +87,7 @@ def gas_state_reason(thermo, *, quantity=None):
     reference pressure at all, so a quantity in
     :data:`PRESSURE_INDEPENDENT_QUANTITIES` skips that check -- only the
     phase requirement applies. Every other caller (entropy, and the full
-    thermo used by the D3 kinetics/equilibrium comparison) keeps requiring a
+    thermo used by the kinetics/equilibrium comparison) keeps requiring a
     valid reference pressure via the default ``quantity=None``.
 
     Phase scope is declared, not implied: a record
@@ -306,7 +307,7 @@ def enthalpy_and_entropy(poly, temperature):
     """Return (H in kJ/mol, S in J/mol/K) from ONE Cantera thermo object.
 
     For a check that needs both quantities from the same representation
-    (D4): reading them from one object means they can never come from
+    reading them from one object means they can never come from
     different NASA7 branches or NASA9 intervals. Units as :func:`evaluate`.
     """
     return poly.h(temperature) / _ENGINE_DIVISOR["h"], poly.s(temperature) / _ENGINE_DIVISOR["s"]

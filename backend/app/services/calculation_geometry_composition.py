@@ -62,7 +62,8 @@ What is deliberately not compared
 **Elements, not nuclides.** ``D`` and ``T`` name hydrogen, so they count as the
 hydrogen they are, and ``[2H]`` counts as ``H``, so an isotopologue is never a
 composition mismatch. The nuclide they also name is not ignored, only judged
-elsewhere: ``parse_xyz`` reads a ``D``/``T`` spelling as a 2H/3H declaration, and isotope agreement is a separate rule with its own code
+elsewhere: ``parse_xyz`` reads a ``D``/``T`` spelling as a 2H/3H
+declaration, and isotope agreement is a separate rule with its own code
 (:func:`~app.services.species_resolution.assert_geometry_isotopes_match_identity`),
 which owns it.
 

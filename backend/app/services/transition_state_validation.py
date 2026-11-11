@@ -92,8 +92,8 @@ W_MISSING_TS_IRC_EVIDENCE = "transition_state_missing_irc_evidence"
 W_TS_ENERGY_ORDERING_MIXED_LEVELS = "transition_state_energy_ordering_mixed_levels"
 
 #: A stated energy contradicts the energy TCKDB stores for the calculation it
-#: cites, beyond the printed-precision tolerance (issue #638). Block tier
-#: The record names a calculation and a number, and the number is
+#: cites, beyond the printed-precision tolerance. Block tier:
+#: the record names a calculation and a number, and the number is
 #: not that calculation's.
 E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH = "ts_energy_ordering_stated_energy_mismatch"
 

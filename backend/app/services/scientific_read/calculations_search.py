@@ -346,7 +346,7 @@ def search_calculations(
         .subquery("visible_candidates")
     )
 
-    # Pre-pagination review summary (Phase 2.1: counts on the candidate set
+    # Pre-pagination review summary (counts on the candidate set
     # *after* filtering, before pagination). Its ``total`` is the count of
     # that same set, so no second aggregate is needed.
     summary = summary_from_sql(session, ranked)

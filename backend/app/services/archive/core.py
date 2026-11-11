@@ -949,8 +949,8 @@ def restore_archive(
             # being restored *into* holds a corrupt twin of a blob this
             # archive carries. Aborting is right — restoring on top of it
             # would bless bytes we cannot vouch for — but the abort alone
-            # threw away the one moment TCKDB discovered corruption in
-            # that store. Record it, then fail as loudly as before
+            # would throw away the one moment TCKDB discovered corruption in
+            # that store. Record it, then fail loudly.
             record_from_error(
                 exc,
                 detected_during=ArtifactIntegrityDetectionContext.archive,

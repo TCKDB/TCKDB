@@ -136,8 +136,9 @@ from app.services.trust.ts_scoped import ListScope, declared_curvature_pins
 # statements — flat in ``limit``, because the block is resolved once per
 # distinct parent, but not flat in how many entries those parents have.
 # Keeping it out of the ``include=all`` expansion means ``include=all`` never
-# pays it, and a caller who wants the sibling lists asks for them. It stays public on the two detail surfaces, where the
-# block is bounded by one record's parent.
+# pays it, and a caller who wants the sibling lists asks for them. It stays
+# public on the two detail surfaces, where the block is bounded by one
+# record's parent.
 _LEGAL_INCLUDE_TOKENS: set[str] = _CONCEPT_LEGAL_INCLUDE_TOKENS | {"trust"}
 _INTERNAL_INCLUDE_TOKENS: set[str] = _CONCEPT_INTERNAL_INCLUDE_TOKENS | {
     "trust",

@@ -2,7 +2,7 @@
 
 See docs/specs/browse_order.md.
 
-Provenance keys are always present per Phase 2.2; TS-chain fields are populated
+Provenance keys are always present; TS-chain fields are populated
 only for TS-backed records. Evidence completeness uses the L1 kinetics
 checklist; TS-related predicates are ``False`` (not missing) for non-TS-backed
 records and never gate validity.
@@ -355,7 +355,8 @@ def get_reaction_kinetics(
     """Return kinetics records for a reaction entry, sorted by review status, then newest.
 
     ``detail`` is True when a served detail embeds these records (``/reaction-entries/{id}/full``): under ``curated`` they
-    are then shown with their badge unless rejected or deprecated, and so are the transition-state entries they name. The list route itself (``detail=False``) keeps the approved record floor.
+    are then shown with their badge unless rejected or deprecated, and so are the transition-state entries they name. The list route itself
+    (``detail=False``) keeps the approved record floor.
 
     Order: review_rank ASC, created_at DESC, id DESC (the order the exports
     list records in). Coverage and evidence are reported per
@@ -364,7 +365,7 @@ def get_reaction_kinetics(
     Every matching record is returned; the read never picks one.
 
     Filters apply shallow per D7. Provenance keys are always present, with
-    null TS-chain fields for non-TS-backed records (Phase 2.2). TS-related
+    null TS-chain fields for non-TS-backed records. TS-related
     evidence checklist items are ``False`` for non-TS-backed records but do
     not gate visibility or order.
 
@@ -644,8 +645,8 @@ def get_reaction_kinetics(
         ts_opt_calc_id = provenance.ts_opt_calculation_id
         ts_sp_calc_id = provenance.ts_sp_calculation_id
         ts_freq_calc_id = provenance.ts_freq_calculation_id
-        # NOTE: ts_freq_calc_id is intentionally not fed into the
-        # evidence breakdown below.
+        # NOTE: ts_freq_calc_id is not fed into the evidence breakdown
+        # below (a known gap).
         # It IS fed into ``levels`` (see _build_kinetics_levels).
 
         # ``ts_opt_calc_id`` (a direct citation) is structurally always

@@ -788,8 +788,8 @@ def stereo_unresolved_warning(
 ) -> UploadWarning | None:
     """Warn when a stereo-capable entry ends with a stereo element still unknown.
 
-    The entry is accepted: ``E,?`` and ``?`` are honest entries of their own
-    And a later, fully specified deposit does not merge into it.
+    The entry is accepted: ``E,?`` and ``?`` are honest entries of their own,
+    and a later, fully specified deposit does not merge into it.
     The warning tells the depositor the configuration was not pinned down by
     geometry, marks or label, so they can supply it.
 

@@ -339,7 +339,8 @@ def get_transition_state(
     ).all()
     entry_ids = [e.id for e in entries]
     # Counts and flags answer what this page lists. The page lists every entry that is not withheld (the ref guard removes
-    # the rejected and deprecated ones), so a served detail counts by the evidence rule, not the record floor: an unreviewed entry that is listed is counted.
+    # the rejected and deprecated ones), so a served detail counts by the evidence rule, not the record floor: an
+    # unreviewed entry that is listed is counted.
     hidden_entry_ids = ids_withheld_as_evidence(
         session, record_type=SubmissionRecordType.transition_state_entry, record_ids=entry_ids
     )
