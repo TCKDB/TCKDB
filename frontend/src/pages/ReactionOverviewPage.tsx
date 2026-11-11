@@ -159,6 +159,7 @@ function ChooserDocument({ reactionRef, headerRecord, total, kineticsTotal, reco
                 <section className="ledger-section" aria-labelledby="entries-heading">
                     <p className="t-kicker section-kicker">Deposited records</p>
                     <SectionHeading id="entries-heading">Reaction entries</SectionHeading>
+                    {/* kineticsTotal counts the rate records of the entries on the first page of this list. */}
                     {kineticsTotal >= 2 && <p><Link className="compare-link" to={`/reactions/${reactionRef}/compare`}>Compare these values</Link></p>}
                     {pageStatus !== "ready" && <p className="note" role="status">{pageStatus === "loading" || pageStatus === "retrying" ? "Loading this page of entries…" : "This page of entries could not be loaded."}</p>}
                     {meta && <ListPager meta={meta} noun="reaction entry" nounPlural="reaction entries" onPage={onPage} label="Reaction entries paging" />}

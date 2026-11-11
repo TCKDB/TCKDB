@@ -135,6 +135,11 @@
     border-left: 3px solid var(--control-border);
 }
 
+.compare-cell-note {
+    display: block;
+    color: var(--ink-2);
+}
+
 .compare-table .compare-delta {
     border-left: 1px solid var(--control-border);
 }

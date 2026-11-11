@@ -64,6 +64,9 @@ export function computeKineticsTable(record: Pick<ReactionKineticsRecord, "plog_
 type ArrheniusTerm = { A: number; n?: number | null; Ea_kj_mol?: number | null; T0_k?: number }
 type TermSource = Pick<ReactionKineticsRecord, "plog_entries" | "chebyshev" | "falloff" | "is_third_body" | "multi_arrhenius" | "parameters">
 
+/** The model kinds whose k depends on temperature alone. */
+const TEMPERATURE_ONLY_KINDS: ReadonlySet<string> = new Set(["arrhenius", "modified_arrhenius", "multi_arrhenius"])
+
 /**
  * The (modified-)Arrhenius terms of a record whose k depends on temperature alone; null for a pressure-dependent or
  * third-body form. A sum-of-Arrhenius term carries no T0 of its own (always 1 K); the scalar record's T0_k applies to
@@ -80,7 +83,8 @@ function arrheniusTerms(record: TermSource): ArrheniusTerm[] | null {
 const termsK = (terms: readonly ArrheniusTerm[], temperatureK: number) => terms.reduce((sum, term) => sum + arrheniusTermK(term.A, term.n, term.Ea_kj_mol, temperatureK, term.T0_k), 0)
 
 /** k at one temperature from the record's own parameters, or null when the form has no single k(T). The caller checks the fitted range. */
-export function kineticsAt(record: TermSource, temperatureK: number): number | null {
+export function kineticsAt(record: TermSource & Pick<ReactionKineticsRecord, "model_kind">, temperatureK: number): number | null {
+    if (!TEMPERATURE_ONLY_KINDS.has(record.model_kind)) return null
     const terms = arrheniusTerms(record)
     return terms ? termsK(terms, temperatureK) : null
 }

@@ -263,6 +263,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                 <section className="ledger-section" aria-labelledby="kinetics-heading">
                     <p className="t-kicker section-kicker">Deposited rate expressions</p>
                     <SectionHeading id="kinetics-heading">Numbers for this entry</SectionHeading>
+                    {/* Counts this entry's own rate records; the reaction-level count is not served here. */}
                     {kinetics.length >= 2 && <p><Link className="compare-link" to={`/reactions/${entry.reaction_ref}/compare`}>Compare these values</Link></p>}
                     <ReactionKineticsSection
                         kinetics={kinetics}

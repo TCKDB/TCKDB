@@ -4,7 +4,7 @@ import { statmechRow, thermoRow, type NumberRow, type NumberValue } from "./entr
 import { formatQuantity } from "./quantityFormat"
 
 /** A cell is a recorded value, or the words saying why there is none. Nothing is ever filled in from another record. */
-export type CompareCell = { kind: "value"; value: NumberValue } | { kind: "absent"; words: string }
+export type CompareCell = { kind: "value"; value: NumberValue; /** A line under the value, for what it does not include. */ note?: string } | { kind: "absent"; words: string }
 
 /** An `exact` row is a setting that is either the same or not; a `continuous` row is a measured or computed number, never marked. */
 export type CompareRow = {

@@ -25,6 +25,11 @@ export type CompareTableGroup = {
 export function CompareCellView({ cell, to, showUnit = false }: { cell: CompareCell; to: string | null; showUnit?: boolean }) {
     if (cell.kind === "absent") return <span className="compare-absent">{cell.words}</span>
     const { value } = cell
+    if (cell.note) return <><CompareValue value={value} to={to} showUnit={showUnit} /><span className="compare-cell-note">{cell.note}</span></>
+    return <CompareValue value={value} to={to} showUnit={showUnit} />
+}
+
+function CompareValue({ value, to, showUnit }: { value: Extract<CompareCell, { kind: "value" }>["value"]; to: string | null; showUnit: boolean }) {
     if (value.kind === "pointGroup") return <PointGroup value={value.value as string} />
     if (value.kind === "code") return <code className="t-preserve-case">{value.value}</code>
     if (value.kind === "text") return <>{value.value}</>

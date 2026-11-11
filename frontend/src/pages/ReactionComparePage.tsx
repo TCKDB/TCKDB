@@ -23,7 +23,7 @@ import { originWord } from "../domain/kineticsWords"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { equationNeedsStructure, equationText } from "../domain/reactionEquation"
 import {
-    DELTA_FORMULA, groupKinetics, kineticsColumns, MAX_COLUMNS_PER_GROUP, MAX_PROFILE_ENTRIES, profilesOfGroup, reactionRows,
+    DELTA_FORMULA, deltaNames, groupDifference, groupKinetics, kineticsColumns, MAX_COLUMNS_PER_GROUP, MAX_PROFILE_ENTRIES, profilesOfGroup, programLabel, reactionRows,
     type KineticsColumn, type KineticsGroup,
 } from "../domain/reactionCompare"
 import { displayLabel, sortNumber, type CompareRow } from "../domain/speciesCompare"
@@ -31,6 +31,12 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
 import { useEnergyProfiles } from "../hooks/useEnergyProfiles"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 import { useWalked } from "../hooks/useWalked"
+
+const BANNER = {
+    methods: "These use different methods. Differences reflect the method; neither is an error.",
+    programs: "These use different programs. Differences reflect the program; neither is an error.",
+    both: "These use different methods and programs. Differences mix both effects; neither is an error.",
+} as const
 
 const NOT_STATED_LEVEL = "Energy level of theory not recorded"
 const NOT_STATED_PROGRAM = "Program not recorded"
@@ -71,14 +77,14 @@ function speciesLabels(records: readonly ReactionOverviewRecord[]): Map<string, 
 }
 
 const recordPath = (column: KineticsColumn) => `/reaction-entries/${column.entryRef}#kinetics-${column.ref}`
-const levelText = (group: KineticsGroup) => (group.level ? lotLabel(group.level) : NOT_STATED_LEVEL)
+const levelText = (group: KineticsGroup) => (group.level ? `${lotLabel(group.level)}${group.levelDeclared ? " (declared)" : ""}` : NOT_STATED_LEVEL)
 const groupText = (group: KineticsGroup) => `${levelText(group)}, ${group.program?.text ?? NOT_STATED_PROGRAM}`
 
 function GroupHead({ group }: { group: KineticsGroup }) {
     return (
         <span className="compare-head">
-            <span className="compare-head-key">{group.level ? <LevelOfTheoryLink levelOfTheory={group.level} /> : NOT_STATED_LEVEL}</span>
-            <span className="t-preserve-case">{group.program?.text ?? NOT_STATED_PROGRAM}</span>
+            <span className="compare-head-key">{group.level ? <><LevelOfTheoryLink levelOfTheory={group.level} />{group.levelDeclared && " (declared by the depositor)"}</> : NOT_STATED_LEVEL}</span>
+            {group.program ? <span>{programLabel(group)}: <span className="t-preserve-case">{group.program.text}</span></span> : <span>{NOT_STATED_PROGRAM}</span>}
         </span>
     )
 }
@@ -95,6 +101,11 @@ function Head({ column }: { column: KineticsColumn }) {
     )
 }
 
+/** True when the row's values carry more than one unit; such a row is shown but not sorted. */
+function unitsDiffer(row: CompareRow): boolean {
+    return row.unit === null && new Set(row.cells.flatMap((cell) => (cell.kind === "value" && cell.value.kind === "number" ? [cell.value.unit] : []))).size > 1
+}
+
 type Entry = { column: KineticsColumn; group: KineticsGroup; index: number }
 
 function DataView({ entries, rows, order }: { entries: Entry[]; rows: readonly CompareRow[]; order: string }) {
@@ -105,9 +116,11 @@ function DataView({ entries, rows, order }: { entries: Entry[]; rows: readonly C
             <span className="data-table-head">
                 <span>{displayLabel(row.label)}</span>{" "}
                 {row.unit && <span className="data-table-unit t-preserve-case">{row.unit}</span>}
+                {unitsDiffer(row) && <span className="data-table-unit">units differ in this row, so it is not sortable</span>}
             </span>
         ),
-        sortValue: ({ index }) => {
+        // Values in different units are not ordered against each other, and are not converted.
+        sortValue: unitsDiffer(row) ? undefined : ({ index }) => {
             const cell = row.cells[index]
             return sortNumber(cell) ?? (cell.kind === "value" && cell.value.value !== null && cell.value.kind !== "number" ? cell.value.value : null)
         },
@@ -177,8 +190,9 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
         key: group.key,
         header: <GroupHead group={group} />,
         columns: group.columns.map((column) => ({ key: column.key, header: <Head column={column} />, to: recordPath(column) })),
-        ...(group.columns.length === 2 && { delta: { header: <span className="compare-head"><span className="compare-head-key"><span aria-hidden="true">Δ</span> Difference</span><span>second minus first in this group</span></span> } }),
+        ...(group.columns.length === 2 && { delta: { header: <span className="compare-head"><span className="compare-head-key"><span aria-hidden="true">Δ</span> {deltaNames(group)?.join(" − ")}</span><span>Difference within this group</span></span> } }),
     }))
+    const difference = model ? groupDifference(model.full) : null
     const order = `Columns are grouped by energy level of theory and program, in the order each group first appears; within a group, ${orderWords(data?.sort ?? null) ?? "the archive did not state an order"}.`
     return (
         <section className="species-overview">
@@ -208,12 +222,10 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
                         <ListNotes lists={[["rate", data]]} rest={() => "Each version's page lists its own records."} />
                         {model.total >= 1 && (
                             <section aria-labelledby="compare-rates">
-                                <SectionHeading id="compare-rates" intro="Arrhenius parameters as deposited, and k at the temperatures two or more records cover, each from the record's own parameters and only inside its own fitted range.">
+                                <SectionHeading id="compare-rates" intro="Arrhenius parameters as deposited, and k at the temperatures two or more records cover, each from the record's own parameters and only inside its own fitted range. k includes tunnelling only if the deposited fit did.">
                                     Rate coefficients
                                 </SectionHeading>
-                                {model.full.length >= 2 && (
-                                    <p className="note" role="note">These use different methods and programs. Differences mix both effects; neither is an error.</p>
-                                )}
+                                {difference && <p className="note" role="note">{BANNER[difference]}</p>}
                                 {model.total === 1 && <p className="note">Only one rate record is deposited, so there is nothing to compare it with.</p>}
                                 {model.cut && <p className="note">Showing the first {MAX_COLUMNS_PER_GROUP} records of each group here. The list below has every record.</p>}
                                 {tableGroups.some((group) => group.delta) && <p className="note">{DELTA_FORMULA}</p>}
@@ -232,6 +244,7 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
                                     Energy profiles by group
                                 </SectionHeading>
                                 {entryOrder.length > readRefs.length && <p className="note" role="note">Profiles were read for the first {readRefs.length} of {entryOrder.length} reaction entries.</p>}
+                                {profiles.status === "retrying" && <p className="note" role="status" aria-busy="true">The archive is busy. Retrying in {formatWaitSeconds(profiles.retryAfterSeconds)}.</p>}
                                 {profiles.status === "loading" && <p className="note" role="status" aria-busy="true">Loading the energy profiles.</p>}
                                 {profiles.status === "ready" && model.full.map((group, position) => (
                                     <GroupProfiles key={group.key} group={group} position={position} reads={profiles.reads} readRefs={readRefs} labels={labels} />

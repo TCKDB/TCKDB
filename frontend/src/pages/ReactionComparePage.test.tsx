@@ -19,12 +19,12 @@ const summary = { approved: 0, under_review: 0, not_reviewed: 0, deprecated: 0, 
 const sortEcho = { sort: { keys: [{ key: "review_rank", direction: "asc", meaning: "review status" }, { key: "created_at", direction: "desc", meaning: "newest deposited" }] } }
 const server = setupServer(http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })))
 
-type Spec = { ref: string; level: typeof lotA | null; software: typeof gaussian | null; A: number; n: number; Ea: number; range: [number, number]; tunnelling: string; review?: string }
+type Spec = { ref: string; level: typeof lotA | null; software: typeof gaussian | null; A: number; n: number; Ea: number; range: [number, number]; tunnelling: string; review?: string; units?: string }
 
 function kinetics(spec: Spec) {
     return {
-        kinetics_ref: spec.ref, scientific_origin: "computed", model_kind: "modified_arrhenius", review: { status: spec.review ?? "not_reviewed" },
-        parameters: { A: spec.A, A_units: "cm3_mol_s", n: spec.n, Ea_kj_mol: spec.Ea },
+        kinetics_ref: spec.ref, scientific_origin: "computed", model_kind: "modified_arrhenius", direction: "forward", review: { status: spec.review ?? "not_reviewed" },
+        parameters: { A: spec.A, A_units: spec.units ?? "cm3_mol_s", n: spec.n, Ea_kj_mol: spec.Ea },
         tunneling_model: spec.tunnelling, is_third_body: false, uncertainty: {},
         temperature_coverage: { record_min_k: spec.range[0], record_max_k: spec.range[1] },
         evidence_completeness: { score: 3, max: 9, checklist: {} },
@@ -37,9 +37,11 @@ function kinetics(spec: Spec) {
 const K1: Spec = { ref: "kin_one", level: lotA, software: gaussian, A: 1e10, n: 1.5, Ea: 40, range: [300, 2000], tunnelling: "wigner", review: "approved" }
 const K2: Spec = { ref: "kin_two", level: lotA, software: gaussian, A: 2e10, n: 1.4, Ea: 42.5, range: [300, 1000], tunnelling: "eckart" }
 const K3: Spec = { ref: "kin_three", level: lotB, software: orca, A: 3e9, n: 0, Ea: 35, range: [500, 3000], tunnelling: "eckart" }
+const K5: Spec = { ...K1, ref: "kin_five", level: lotB, software: gaussian, tunnelling: "wigner" }
+const K6: Spec = { ...K1, ref: "kin_six", software: orca }
 const K4: Spec = { ref: "kin_four", level: null, software: null, A: 5e9, n: 0.5, Ea: 20, range: [300, 3000], tunnelling: "none" }
 
-const ENTRY_OF: Record<string, string> = { kin_one: "rxe_one", kin_two: "rxe_one", kin_three: "rxe_two", kin_four: "rxe_two", kin_five: "rxe_one" }
+const ENTRY_OF: Record<string, string> = { kin_one: "rxe_one", kin_two: "rxe_one", kin_three: "rxe_two", kin_four: "rxe_two", kin_five: "rxe_one", kin_six: "rxe_one" }
 
 const participant = (ref: string, smiles: string, formula: string, index: number) => ({ species_entry_ref: ref, smiles, formula, stoichiometry: 1, participant_index: index })
 const overview = () => ({
@@ -53,10 +55,10 @@ const overview = () => ({
     pagination: { offset: 0, limit: 50, returned: 1, total: 1 },
 })
 
-function profile(level: typeof lotA, program: string, tse: string) {
-    const point = (calc: string, hartree: number) => ({ calculation_ref: calc, energy_type: "single_point", electronic_energy_hartree: hartree, software: { program, version: "1" }, review_status: "not_reviewed", convergence_unrecorded: false })
+function profile(level: typeof lotA, program: string, tse: string, version = program === "Gaussian" ? "16" : "6.0") {
+    const point = (calc: string, hartree: number) => ({ calculation_ref: calc, energy_type: "single_point", electronic_energy_hartree: hartree, software: { program, version }, review_status: "not_reviewed", convergence_unrecorded: false })
     return {
-        transition_state_entry_ref: tse, transition_state_entry_review_status: "not_reviewed", level_of_theory: level, program, energy_types: ["single_point"], versions: ["1"],
+        transition_state_entry_ref: tse, transition_state_entry_review_status: "not_reviewed", level_of_theory: level, program, energy_types: ["single_point"], versions: [version],
         energy_kind: "electronic", definition: "Each molecule's energy at this level from this program.",
         reactants: [{ species_entry_ref: "spe_a", count: 1, ...point("calc_ra", -40.1) }],
         transition_state: { transition_state_entry_ref: tse, ...point("calc_ts", -40.0) },
@@ -68,12 +70,12 @@ function profile(level: typeof lotA, program: string, tse: string) {
 
 const profileRead = (ref: string, profiles: object[]) => ({ request: { hidden_by_default: null, hidden_by_default_by_scope: {} }, reaction_entry_ref: ref, profiles, unavailable: [], cited_by_kinetics: [] })
 
-type Options = { records?: object[]; overviewPayload?: object; profiles?: Record<string, object[]> }
+type Options = { records?: object[]; overviewPayload?: object; profiles?: Record<string, object[]>; entryOf?: Record<string, string>; onProfile?: (ref: string) => void }
 
 function handlers(options: Options = {}) {
     const records = options.records ?? [K1, K2, K3, K4].map(kinetics)
-    const rows = records.map((record) => ({ reaction: { reaction_ref: reactionRef, reaction_entry_ref: ENTRY_OF[(record as { kinetics_ref: string }).kinetics_ref] }, kinetics: record }))
-    const profiles = options.profiles ?? { rxe_one: [profile(lotA, "Gaussian", "tse_one"), profile(lotB, "Orca", "tse_one")], rxe_two: [profile(lotB, "Orca", "tse_two")] }
+    const rows = records.map((record) => ({ reaction: { reaction_ref: reactionRef, reaction_entry_ref: (options.entryOf ?? ENTRY_OF)[(record as { kinetics_ref: string }).kinetics_ref] }, kinetics: record }))
+    const profiles = options.profiles ?? { rxe_one: [profile(lotA, "Gaussian", "tse_one"), profile(lotB, "Orca", "tse_one"), profile(lotB, "Gaussian", "tse_one"), profile(lotA, "Orca", "tse_one"), profile(lotA, "Gaussian", "tse_one", "09")], rxe_two: [profile(lotB, "Orca", "tse_two")] }
     return [
         http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(options.overviewPayload ?? overview())),
         http.get("/api/v1/scientific/kinetics/search", ({ request }) => {
@@ -84,7 +86,7 @@ function handlers(options: Options = {}) {
             const slice = rows.slice(offset, offset + limit)
             return HttpResponse.json({ review_summary: summary, records: slice, pagination: { offset, limit, returned: slice.length, total: rows.length }, request: sortEcho })
         }),
-        http.get("/api/v1/scientific/reaction-entries/:ref/energy-profile", ({ params }) => HttpResponse.json(profileRead(String(params.ref), profiles[String(params.ref)] ?? []))),
+        http.get("/api/v1/scientific/reaction-entries/:ref/energy-profile", ({ params }) => { options.onProfile?.(String(params.ref)); return HttpResponse.json(profileRead(String(params.ref), profiles[String(params.ref)] ?? [])) }),
     ]
 }
 
@@ -136,6 +138,25 @@ describe("reaction compare page", () => {
         expect(screen.getByText("These use different methods and programs. Differences mix both effects; neither is an error.")).toBeInTheDocument()
     })
 
+    it("says what differs: methods only, programs only", async () => {
+        await open({ records: records(K1, K5) })
+        await table()
+        expect(screen.getByText("These use different methods. Differences reflect the method; neither is an error.")).toBeInTheDocument()
+        cleanup(); resetAllRequestCaches(); server.resetHandlers()
+        await open({ records: records(K1, K6) })
+        await table()
+        expect(screen.getByText("These use different programs. Differences reflect the program; neither is an error.")).toBeInTheDocument()
+    })
+
+    it("keeps one level run in two programs as two groups", async () => {
+        await open({ records: records(K1, K6) })
+        const grid = await table()
+        const heads = within(grid).getAllByRole("columnheader").filter((head) => head.getAttribute("scope") === "colgroup")
+        expect(heads).toHaveLength(2)
+        expect(heads[0]).toHaveTextContent("Gaussian 16")
+        expect(heads[1]).toHaveTextContent("Orca 6.0")
+    })
+
     it("says nothing of the kind for a single group", async () => {
         await open({ records: records(K1, K2) })
         await table()
@@ -149,6 +170,7 @@ describe("reaction compare page", () => {
         const deltas = heads.filter((head) => head.textContent?.startsWith("Δ"))
         expect(deltas).toHaveLength(1)
         const at = heads.indexOf(deltas[0])
+        expect(deltas[0]).toHaveTextContent("kin_two − kin_one")
         expect(heads[at - 1]).toHaveTextContent("kin_two")
         expect(heads[at - 2]).toHaveTextContent("kin_one")
         expect(heads[at + 1]).toHaveTextContent("kin_three")
@@ -158,7 +180,7 @@ describe("reaction compare page", () => {
         expect(ea[0]).toHaveTextContent("40.00")
         expect(ea[1]).toHaveTextContent("42.50")
         expect(ea[2]).toHaveTextContent("+2.50")
-        expect(screen.getByText(/second record minus first record of the group/)).toBeInTheDocument()
+        expect(screen.getByText(/second record minus first record of a group of two/)).toBeInTheDocument()
     })
 
     it.each([
@@ -168,7 +190,7 @@ describe("reaction compare page", () => {
         await open({ records: records(...(specs as Spec[])) })
         const grid = await table()
         expect(within(grid).queryAllByRole("columnheader").filter((head) => head.textContent?.startsWith("Δ"))).toHaveLength(0)
-        expect(screen.queryByText(/second record minus first record of the group/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/second record minus first record of a group of two/)).not.toBeInTheDocument()
     })
 
     it("shows k only inside each record's own fitted range and never extrapolates", async () => {
@@ -211,6 +233,8 @@ describe("reaction compare page", () => {
             "ccsdt/ccpvtz, Orca 6.0",
             "Energy level of theory not recorded, Program not recorded",
         ])
+        expect(document.querySelectorAll(".energy-profile-view")).toHaveLength(2)
+        expect(document.querySelectorAll(".energy-profile-picker")).toHaveLength(0)
         const first = sections[0].parentElement as HTMLElement
         const groupOne = Array.from(document.querySelectorAll(".energy-profile-view"))[0] as HTMLElement
         expect(groupOne).toHaveTextContent("wb97xd/def2tzvp")
@@ -278,6 +302,36 @@ describe("reaction compare page", () => {
         cleanup(); resetAllRequestCaches(); server.resetHandlers()
         await open({ records: records(K1) })
         expect(await screen.findByText(/Only one rate record is deposited/)).toBeInTheDocument()
+    })
+
+    it("reads at most six reaction entries' profiles and says so", async () => {
+        const specs = Array.from({ length: 7 }, (_unused, index) => ({ ...K1, ref: `kin_n${index}` }))
+        const entryOf = Object.fromEntries(specs.map((spec, index) => [spec.ref, `rxe_n${index}`]))
+        const read: string[] = []
+        await open({ records: records(...specs), entryOf, profiles: {}, onProfile: (ref) => read.push(ref) })
+        await table()
+        expect(await screen.findByText(/Profiles were read for the first 6 of 7 reaction entries/)).toBeInTheDocument()
+        await waitFor(() => expect(read).toHaveLength(6))
+        expect(new Set(read).size).toBe(6)
+    })
+
+    it("does not sort a list column whose values carry different units", async () => {
+        await open({ records: records(K1, { ...K1, ref: "kin_m3", units: "m3_mol_s" }), entryOf: { ...ENTRY_OF, kin_m3: "rxe_one" } })
+        const list = await screen.findByRole("region", { name: "Rate records as a list" })
+        const head = within(list).getAllByRole("columnheader").find((cell) => cell.textContent?.includes("Pre-exponential")) as HTMLElement
+        expect(head).toHaveTextContent("units differ in this row")
+        expect(within(head).queryByRole("button")).toBeNull()
+        const ea = within(list).getAllByRole("columnheader").find((cell) => cell.textContent?.includes("Activation energy")) as HTMLElement
+        expect(within(ea).getByRole("button")).toBeInTheDocument()
+    })
+
+    it("offers no compare link from the reaction page below two records", async () => {
+        const one = overview()
+        one.records[0].availability.kinetics_count = 1
+        await open({ overviewPayload: one }, `/reactions/${reactionRef}`)
+        await screen.findByRole("heading", { level: 1 })
+        await screen.findByText("Reaction entries")
+        expect(screen.queryByRole("link", { name: "Compare these values" })).not.toBeInTheDocument()
     })
 
     it("offers the compare link from the reaction page when two records exist", async () => {
