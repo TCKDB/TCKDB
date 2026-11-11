@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react"
-import { Link } from "react-router-dom"
 import "../browse.css"
 import "../conformer-group.css"
 import "../methods.css"
@@ -72,13 +71,8 @@ export default function MethodsIndexPage() {
 
     return (
         <section className="conformer-page methods-page">
-            <nav className="record-breadcrumbs" aria-label="Breadcrumb">
-                <Link to="/">TCKDB</Link>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">Methods</span>
-            </nav>
             <PageShell>
-                <h1 className="t-display-1">Methods</h1>
+                <h1 className="t-display-2">Methods</h1>
                 <p className="t-body methods-index-intro">
                     Levels of theory, software and workflow tools behind deposited calculations.
                 </p>

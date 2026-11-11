@@ -64,15 +64,8 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
 
     return (
         <section className="conformer-page methods-page">
-            <nav className="record-breadcrumbs" aria-label="Breadcrumb">
-                <Link to="/">TCKDB</Link>
-                <span aria-hidden="true">/</span>
-                <Link to="/methods">Methods</Link>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">{title}</span>
-            </nav>
-
             <PageShell
+                crumbs={[{ label: "Methods", to: "/methods" }, { label: title }]}
                 identity={(
                     <header className="basin-header">
                         <div className="record-identity-header">
@@ -95,7 +88,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                 already keyed to one scheme; adding software to the
                                 heading here would repeat a fact the facts list
                                 already states, not disambiguate anything. */}
-                            <h1 className="t-display-1 record-identity-title">
+                            <h1 className="t-display-2 record-identity-title">
                                 {title}
                                 {record.level_of_theory && (
                                     <> <span className="value-pill record-identity-title-pill"><LevelOfTheoryLink levelOfTheory={record.level_of_theory} /></span></>

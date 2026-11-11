@@ -1,22 +1,18 @@
 /* Guide page (`pages/GuidePage.tsx`). */
 
-.guide-page {
-    max-width: 44rem;
-    margin: 0 auto;
-    padding: 2rem clamp(1rem, 4vw, 2.5rem) 3rem;
-}
-
 .guide-page h1 {
     margin: 0 0 .75rem;
 }
 
 .guide-lede {
+    max-width: var(--measure-prose);
     margin: 0 0 1.5rem;
     color: var(--ink-2);
     font: var(--type-body-font);
 }
 
 .guide-concepts {
+    max-width: var(--measure-prose);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -29,6 +25,7 @@
 }
 
 .guide-concepts h2 {
+    scroll-margin-top: 1rem;
     display: flex;
     align-items: center;
     gap: .5rem;
@@ -47,6 +44,7 @@
 }
 
 .guide-order {
+    max-width: var(--measure-prose);
     margin: 1rem 0 0;
     padding-top: 1rem;
     border-top: 1px solid var(--line);

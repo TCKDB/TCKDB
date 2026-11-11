@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { RecordPlaceholder } from "./RecordPlaceholder"
 import type { ScientificRecordState } from "../hooks/useScientificRecord"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { RetryCountdown } from "./RetryCountdown"
@@ -117,11 +118,11 @@ function Notice({ title, ref, busy, alert, message }: {
     message: ReactNode
 }) {
     return (
-        <section className="record-placeholder" aria-busy={busy} role={alert ? "alert" : undefined}>
+        <RecordPlaceholder busy={busy} alert={alert}>
             <p className="eyebrow">Archive record</p>
             <h1>{title}</h1>
             {ref && <code>{ref}</code>}
             <p>{message}</p>
-        </section>
+        </RecordPlaceholder>
     )
 }

@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom"
+import { useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../record-identity-header.css"
 import "../methods.css"
@@ -47,15 +47,8 @@ function FrequencyScaleFactorDetail({ record }: { record: FrequencyScaleFactorRe
 
     return (
         <section className="conformer-page methods-page">
-            <nav className="record-breadcrumbs" aria-label="Breadcrumb">
-                <Link to="/">TCKDB</Link>
-                <span aria-hidden="true">/</span>
-                <Link to="/methods">Methods</Link>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">Frequency scale factor {fsf.value}</span>
-            </nav>
-
             <PageShell
+                crumbs={[{ label: "Methods", to: "/methods" }, { label: `Frequency scale factor ${fsf.value}` }]}
                 contents="none"
                 identity={(
                     <header className="basin-header">
@@ -63,7 +56,7 @@ function FrequencyScaleFactorDetail({ record }: { record: FrequencyScaleFactorRe
                             <div className="record-identity-kicker-row">
                                 <span className="t-kicker record-identity-kicker">Frequency scale factor · deposited evidence</span>
                             </div>
-                            <h1 className="t-display-1 record-identity-title">
+                            <h1 className="t-display-2 record-identity-title">
                                 {fsf.value} <span className="value-pill">{words(fsf.scale_kind)}</span>
                             </h1>
                             <div className="record-identity-known">

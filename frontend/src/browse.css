@@ -1,8 +1,3 @@
-.browse-page {
-    max-width: 100rem;
-    margin: 0 auto;
-    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
-}
 
 /* The 4px accent bar this header used to carry is retired: this is the
    page's own primary heading, not `.card--derived` content, so a left
@@ -49,8 +44,6 @@
     outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
 }
-
-
 
 .browse-filters {
     margin: 1.5rem 0 0;
@@ -523,9 +516,15 @@ span.browse-row-title {
    separate `.value-pill`s, and this class only spaces them apart. */
 .browse-entry-chip {
     display: flex;
+    flex-wrap: wrap;
+    min-width: 0;
     align-items: center;
     gap: .4rem;
     font-size: .76rem;
+}
+
+.browse-entry-chip > span {
+    white-space: normal;
 }
 
 .browse-entry-kind-pill a {
@@ -567,6 +566,12 @@ span.browse-row-title {
 
 .browse-row-footer .browse-ref {
     margin-top: 0;
+}
+
+.browse-row-footer,
+.browse-row-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 /* The reaction row's second, secondary link -- the one deposit the row
@@ -637,4 +642,51 @@ span.browse-row-title {
         left: auto;
         right: 0;
     }
+}
+
+/* Filters in the page shell's side column: one field per row, notes in the flow. */
+.page-shell-side .browse-filters {
+    margin: 0;
+    padding: .9rem;
+}
+
+.page-shell-side .inline-explain-note {
+    position: static;
+    width: auto;
+    max-width: none;
+    margin-top: .35rem;
+}
+
+.page-shell-side .inline-explain-note:not(.inline-explain-note--open) {
+    display: none;
+}
+
+/* On phones the filters sit above the list behind a "Filters" disclosure. */
+.browse-filters-disclosure {
+    margin: 1.5rem 0 0;
+}
+
+.browse-filters-disclosure > summary {
+    display: flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding: .6rem .8rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font: var(--type-ui-font);
+    color: var(--ink);
+}
+
+.browse-filters-disclosure .browse-filters {
+    margin-top: .5rem;
+}
+
+.browse-row,
+.browse-row-entries {
+    min-width: 0;
+}
+
+.browse-row-entries {
+    flex-wrap: wrap;
 }

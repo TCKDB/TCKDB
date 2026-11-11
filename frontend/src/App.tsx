@@ -38,7 +38,7 @@ function App() {
   return (
     <AuthProvider>
     <BrowserRouter>
-      <Suspense fallback={<LoadingPage />}>
+      <Suspense fallback={<main><LoadingPage /></main>}>
         <Routes>
           <Route element={<AppShell />}>
             <Route path="/" element={<ArchiveHomePage />} />

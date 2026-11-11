@@ -4,7 +4,6 @@ import type { ReactionFullCalculationEvidence, ReactionTransitionStateInFull } f
 import { CalculationDependencyGraph, type CentreSubject } from "./CalculationDependencyGraph"
 import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
 import { ProductLevelsFact } from "./ProductLevels"
-import { TransitionStateStage } from "./TransitionStateStage"
 import { ReviewChip } from "./ReviewChip"
 import { deriveProductLevelsFromSourceCalculations } from "../domain/productLevels"
 import { buildCalculationsByRef } from "../domain/reactionKineticsLevels"
@@ -140,7 +139,7 @@ function TransitionStateBlock({ ts, calculationsByRef }: {
             <p className="t-label reaction-ts-status-label">Status</p>
             <StatusStages status={ts.status} />
 
-            <TransitionStateStage transitionStateEntryRef={ts.transition_state_entry_ref} />
+            <p className="reaction-ts-picture-link"><Link to={`/transition-state-entries/${ts.transition_state_entry_ref}`}>Picture and 3D view{" "}<span className="reaction-ts-picture-link-for">of {ts.transition_state_entry_ref}</span></Link></p>
 
             <p className="t-label reaction-ts-stage-label">Calculations by stage</p>
             <div className="table-scroll">

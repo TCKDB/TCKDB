@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom"
-import "../species-overview.css"
+import { RecordPlaceholder } from "../components/RecordPlaceholder"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
 import { AlsoKnownAs } from "../components/AlsoKnownAs"
@@ -54,12 +54,12 @@ function State({ title, ref, busy, alert, message }: {
             ? "The archive response could not be read. Try again later."
             : "No molecule with this stable reference is available in this archive projection.")
     return (
-        <section className="record-placeholder" aria-busy={busy} role={alert ? "alert" : undefined}>
+        <RecordPlaceholder busy={busy} alert={alert}>
             <p className="eyebrow">Archive record</p>
             <h1>{title}</h1>
             {ref && <code>{ref}</code>}
             <p>{resolvedMessage}</p>
-        </section>
+        </RecordPlaceholder>
     )
 }
 
@@ -69,7 +69,7 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
     return (
         <section className="species-overview">
             <PageShell
-                rail={<SpeciesRelationshipMap species={species} />}
+                side={<SpeciesRelationshipMap species={species} />}
                 identity={<>
                     <Breadcrumbs crumbs={[
                         { label: "Molecules", to: BROWSE_KIND_PATHS.species },

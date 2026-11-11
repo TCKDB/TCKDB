@@ -3,12 +3,6 @@
  * lists and link rows the record pages (conformer, observation, geometry, calculation, transition state) share.
  */
 
-.conformer-page {
-    max-width: 100rem;
-    margin: 0 auto;
-    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
-}
-
 .basin-header {
     max-width: var(--measure-wide);
 }
@@ -159,7 +153,8 @@
     background: var(--accent-50);
 }
 
-
-.conformer-page .copy-button {
-    min-height: 2.75rem;
+@media (max-width: 62rem), (pointer: coarse) {
+    .conformer-page .copy-button {
+        min-height: 2.75rem;
+    }
 }

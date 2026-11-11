@@ -58,9 +58,9 @@ describe(".ledger-summary is a single full-width card", () => {
     })
 })
 
-describe("copy buttons on the record pages are tap-sized", () => {
-    it("declares min-height 2.75rem", () => {
-        expect(extractRule(css, ".conformer-page .copy-button")).toMatch(/min-height:\s*2\.75rem/)
+describe("copy buttons on the record pages are tap-sized on phones and touch screens", () => {
+    it("declares min-height 2.75rem inside the narrow / coarse-pointer query only", () => {
+        expect(css).toMatch(/@media \(max-width: 62rem\), \(pointer: coarse\) \{\s*\.conformer-page \.copy-button \{\s*min-height:\s*2\.75rem/)
     })
 })
 
