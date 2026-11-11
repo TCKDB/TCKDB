@@ -1,7 +1,7 @@
 import { useRef } from "react"
 import { Link } from "react-router-dom"
 import { loadGeometryAtoms } from "../api/geometryApi"
-import { loadTransitionStateEntry } from "../api/transitionStateEntryApi"
+import { loadTransitionStateGeometries } from "../api/transitionStateEntryApi"
 import { stageGeometryRef } from "../domain/transitionStateStage"
 import { useLoaded } from "../hooks/useLoaded"
 import { useNearViewport } from "../hooks/useNeighbours"
@@ -14,7 +14,7 @@ import { ViewerStage } from "./ViewerStage"
 export function TransitionStateStage({ transitionStateEntryRef }: { transitionStateEntryRef: string }) {
     const ref = useRef<HTMLDivElement | null>(null)
     const near = useNearViewport(ref)
-    const entry = useLoaded(loadTransitionStateEntry, near ? transitionStateEntryRef : null)
+    const entry = useLoaded(loadTransitionStateGeometries, near ? transitionStateEntryRef : null)
     const geometryRef = entry.status === "ready" ? stageGeometryRef(entry.data) : null
     const geometry = useLoaded(loadGeometryAtoms, geometryRef)
     const atoms = geometry.status === "ready" ? geometry.data.atoms ?? [] : []
@@ -25,7 +25,7 @@ export function TransitionStateStage({ transitionStateEntryRef }: { transitionSt
             {loading && <p className="note" role="status" aria-busy="true">Loading the geometry of this transition state.</p>}
             {near && !loading && atoms.length > 0 && geometryRef && (
                 <>
-                    <ViewerStage key={geometryRef} atoms={atoms} formula="transition state" xyzText={geometry.status === "ready" ? geometry.data.xyz_text ?? null : null} />
+                    <ViewerStage key={geometryRef} atoms={atoms} formula={`transition state ${transitionStateEntryRef}`} xyzText={geometry.status === "ready" ? geometry.data.xyz_text ?? null : null} />
                     <p className="note">
                         Drawn from <Link to={`/geometries/${geometryRef}`}><code className="t-preserve-case">{geometryRef}</code></Link>, the first final geometry deposited for this entry.
                     </p>

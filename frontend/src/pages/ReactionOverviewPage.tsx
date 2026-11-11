@@ -27,7 +27,7 @@ import { chooserHeaderSourceNote } from "../domain/reactionChooser"
 import { usePagedList } from "../hooks/usePagedList"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
-import { equationText } from "../domain/reactionEquation"
+import { equationNeedsStructure, equationText } from "../domain/reactionEquation"
 
 function statusLabel(status: string): string {
     return status.replaceAll("_", " ")
@@ -108,6 +108,7 @@ function ChooserDocument({ reactionRef, headerRecord, total, records, pageStatus
     reviewSummary: { approved: number; under_review: number; not_reviewed: number; deprecated: number; rejected: number; total: number }
 }) {
     const first = headerRecord
+    const formulaOnly = !equationNeedsStructure(first.reactants, first.products)
     useDocumentTitle("Reaction", equationText(first.reactants, first.products, first.reversible))
     return (
         <section className="conformer-page">
@@ -116,7 +117,7 @@ function ChooserDocument({ reactionRef, headerRecord, total, records, pageStatus
                     <>
                         <Breadcrumbs crumbs={[
                             { label: "Reactions", to: BROWSE_KIND_PATHS.reaction },
-                            { label: <ReactionEquation reactants={first.reactants} products={first.products} reversible={first.reversible} linkParticipants={false} /> },
+                            { label: <ReactionEquation reactants={first.reactants} products={first.products} reversible={first.reversible} linkParticipants={false} formulaOnly={formulaOnly} /> },
                         ]} />
                         <header className="basin-header">
                             <div className="record-identity-header">
@@ -125,7 +126,7 @@ function ChooserDocument({ reactionRef, headerRecord, total, records, pageStatus
                                     <span className="t-kicker record-identity-kicker">Reaction · all deposited versions</span>
                                 </div>
                                 <h1 className="t-display-2 record-identity-title">
-                                    <ReactionEquation reactants={first.reactants} products={first.products} reversible={first.reversible} />
+                                    <ReactionEquation reactants={first.reactants} products={first.products} reversible={first.reversible} formulaOnly={formulaOnly} />
                                 </h1>
                                 <Lede>{reactionOverviewLede(total)}</Lede>
                                 <p className="t-body section-intro reaction-header-source">{chooserHeaderSourceNote(first.reaction_entry_ref, total)}</p>
@@ -185,14 +186,10 @@ function ChooserDocument({ reactionRef, headerRecord, total, records, pageStatus
                                         </td>
                                         <td data-label="Review"><ReviewChip status={record.review.status} explain={false} /></td>
                                         <td data-label="Has kinetics">
-                                            <span className={record.availability.has_kinetics ? "value-pill" : "value-pill value-pill--muted"}>
-                                                {record.availability.has_kinetics ? "yes" : "no"}
-                                            </span>
+                                            {record.availability.has_kinetics ? "yes" : "no"}
                                         </td>
                                         <td data-label="Has TS">
-                                            <span className={record.availability.has_transition_state ? "value-pill" : "value-pill value-pill--muted"}>
-                                                {record.availability.has_transition_state ? "yes" : "no"}
-                                            </span>
+                                            {record.availability.has_transition_state ? "yes" : "no"}
                                         </td>
                                         <td className="num" data-label="Kinetics count">{record.availability.kinetics_count}</td>
                                     </tr>

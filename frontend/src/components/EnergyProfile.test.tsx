@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
@@ -68,14 +68,14 @@ function mount(payload: object) {
 }
 
 async function loaded() {
-    await screen.findByRole("group", { name: /Electronic energy, no zero-point correction/ })
+    await screen.findByRole("group", { name: /Energy relative to the reactants/ })
 }
 
 describe("EnergyProfile", () => {
     it("draws the first profile in response order with its points, not one picked by energy", async () => {
         mount(read())
         await loaded()
-        const figure = screen.getByRole("group", { name: /Electronic energy, no zero-point correction/ })
+        const figure = screen.getByRole("group", { name: /Energy relative to the reactants/ })
         expect(figure.tagName.toLowerCase()).toBe("svg")
         expect(figure).toHaveTextContent("+84.3 kJ/mol")
         expect(figure).toHaveTextContent("−12.0 kJ/mol")
@@ -103,11 +103,78 @@ describe("EnergyProfile", () => {
         expect(table).toHaveTextContent("single-point energy")
     })
 
-    it("states electronic energy with no zero-point correction and the server's definition", async () => {
+    it("states the server's definition, which carries electronic energy and no zero-point correction, once", async () => {
         mount(read())
         await loaded()
         expect(screen.getByText(DEFINITION)).toBeInTheDocument()
-        expect(screen.getByRole("group", { name: /no zero-point correction/ })).toBeInTheDocument()
+        expect(document.body.textContent?.match(/no zero-point correction/g)).toHaveLength(1)
+    })
+
+    it("draws a linear kJ/mol axis with a zero line, a minimum span and values on the bars", async () => {
+        mount(read({ profiles: [profile("tse_one", lot("lot_a", "wb97xd"), "Gaussian", [0, 3, -2])] }))
+        await loaded()
+        const svg = document.querySelector(".energy-profile-svg") as SVGElement
+        const ticks = Array.from(svg.querySelectorAll(".energy-profile-tick")).map((tick) => tick.textContent)
+        expect(ticks).toContain("0")
+        expect(ticks.length).toBeGreaterThanOrEqual(3)
+        expect(ticks.length).toBeLessThanOrEqual(6)
+        expect(svg.querySelectorAll(".energy-profile-zero")).toHaveLength(1)
+        expect(svg.textContent).toContain("kJ/mol relative to reactants")
+        // A 5 kJ/mol spread is drawn on an axis at least 50 kJ/mol tall: the bars stay near each other.
+        const ys = Array.from(svg.querySelectorAll(".energy-profile-bar")).map((bar) => Number(bar.getAttribute("y1")))
+        expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(40)
+        expect(svg.textContent).toContain("+3.0 kJ/mol")
+    })
+
+    it("says the axis is set per profile when there are several, and names the order truthfully", async () => {
+        mount(read())
+        await loaded()
+        expect(screen.getByRole("group", { name: /axis is set for each profile/ })).toBeInTheDocument()
+        expect(screen.getByText(/Listed by transition-state entry \(approved first, then newest deposited first\), then level of theory and program in alphabetical order\./)).toBeInTheDocument()
+    })
+
+    it("adds the level ref to picker options that would otherwise read the same", async () => {
+        const twin = profile("tse_one", { level_of_theory_ref: "lot_other", method: "wb97xd", basis: "def2tzvp" }, "Gaussian", [0, 10, -5])
+        mount(read({ profiles: [FIRST, twin] }))
+        await loaded()
+        const options = within(screen.getByLabelText("Profile")).getAllByRole("option").map((option) => option.textContent)
+        expect(options).toEqual(["wb97xd/def2tzvp, Gaussian [lot_a]", "wb97xd/def2tzvp, Gaussian [lot_other]"])
+    })
+
+    it("marks sum members as part of the sum above, and has no scroll region while nothing overflows", async () => {
+        mount(read())
+        await loaded()
+        expect(screen.getAllByText("part of the reactant sum above")).toHaveLength(2)
+        expect(screen.getByText("part of the product sum above")).toBeInTheDocument()
+        expect(screen.queryByText(/see rows below/)).not.toBeInTheDocument()
+        expect(screen.queryByRole("region", { name: /Energy profile picture/ })).not.toBeInTheDocument()
+        expect(screen.queryByText(/Scroll sideways inside the box/)).not.toBeInTheDocument()
+    })
+
+    it("becomes a labelled, focusable scroll region with a hint above it only when the picture overflows", async () => {
+        class Observer { callback: () => void; constructor(callback: () => void) { this.callback = callback } observe() { this.callback() } disconnect() {} }
+        vi.stubGlobal("ResizeObserver", Observer)
+        const scrollWidth = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(600)
+        const clientWidth = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(300)
+        try {
+            mount(read())
+            await loaded()
+            const box = await screen.findByRole("region", { name: /Energy profile picture/ })
+            expect(box).toHaveAttribute("tabindex", "0")
+            const hint = screen.getByText(/Scroll sideways inside the box/)
+            expect(hint.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        } finally {
+            scrollWidth.mockRestore()
+            clientWidth.mockRestore()
+            vi.unstubAllGlobals()
+        }
+    })
+
+    it("states mixed program versions even when every point is a single-point energy", async () => {
+        const versionsOnly = profile("tse_one", lot("lot_a", "wb97xd"), "Gaussian", [0, 30, -4], { versions: ["09", "16"] })
+        mount(read({ profiles: [versionsOnly] }))
+        await loaded()
+        expect(screen.getByText(/mixes kinds of energy or program versions/)).toHaveTextContent("Program versions: 09, 16")
     })
 
     it("switches profile from the picker, marks unrecorded convergence and states mixed kinds and versions", async () => {
@@ -116,7 +183,7 @@ describe("EnergyProfile", () => {
         await loaded()
         expect(screen.queryByText(/mixes kinds of energy/)).not.toBeInTheDocument()
         await user.selectOptions(screen.getByLabelText("Profile"), "1")
-        const figure = screen.getByRole("group", { name: /Electronic energy, no zero-point correction/ })
+        const figure = screen.getByRole("group", { name: /Energy relative to the reactants/ })
         expect(figure).toHaveTextContent("+40.2 kJ/mol")
         expect(screen.getByText(/convergence not recorded/)).toBeInTheDocument()
         const mixed = screen.getByText(/mixes kinds of energy/)
@@ -139,15 +206,23 @@ describe("EnergyProfile", () => {
     })
 
     it("words every unavailable code, and shows an unknown code as code", async () => {
-        const codes = [...Object.keys(UNAVAILABLE_WORDS), "something_new"]
+        const wordings = {
+            no_reactant_energy_at_level: "Not every reactant has an energy at this level of theory from this program.",
+            no_product_energy_at_level: "Not every product has an energy at this level of theory from this program.",
+            points_from_different_programs: "The energies come from different programs, so they are not combined.",
+            no_ts_energy: "This transition state has no single-point or optimisation energy that can be used.",
+            no_program_recorded: "The only energies come from calculations with no recorded program, so no program can be named.",
+        }
+        expect(UNAVAILABLE_WORDS).toEqual(wordings)
+        const codes = [...Object.keys(wordings), "something_new"]
         mount(read({
             profiles: [],
             unavailable: codes.map((code) => ({ transition_state_entry_ref: "tse_x", transition_state_entry_review_status: "approved", code, level_of_theory: lot("lot_a", "wb97xd"), program: "Gaussian" })),
         }))
         expect(await screen.findByText("No profile for these transition states")).toBeInTheDocument()
         const items = screen.getAllByRole("listitem")
-        for (const code of Object.keys(UNAVAILABLE_WORDS)) {
-            expect(items.some((item) => item.textContent?.includes(UNAVAILABLE_WORDS[code])), code).toBe(true)
+        for (const code of Object.keys(wordings) as (keyof typeof wordings)[]) {
+            expect(items.some((item) => item.textContent?.includes(wordings[code])), code).toBe(true)
             expect(document.body.textContent).not.toContain(code)
         }
         expect(screen.getByText("something_new").tagName.toLowerCase()).toBe("code")
@@ -159,7 +234,7 @@ describe("EnergyProfile", () => {
             cited_by_kinetics: [{
                 kinetics_ref: "kin_x",
                 calculations: [
-                    { role: "ts_energy", calculation_ref: "calc_cited", review_status: "approved", transition_state_entry_ref: "tse_one", energy_type: "single_point", electronic_energy_hartree: -115.19, software: software("16") },
+                    { role: "ts_energy", calculation_ref: "calc_cited", review_status: "approved", transition_state_entry_ref: "tse_one", level_of_theory_ref: "lot_c", energy_type: "single_point", electronic_energy_hartree: -115.19, software: software("16") },
                     { role: "reactant_energy", calculation_ref: "calc_nulls", review_status: "not_reviewed", species_entry_ref: "spe_a", electronic_energy_hartree: null },
                 ],
             }],
@@ -169,6 +244,8 @@ describe("EnergyProfile", () => {
         expect(screen.getByText("Energies a rate record cites")).toBeInTheDocument()
         expect(cited).toHaveTextContent("kin_x")
         expect(cited).toHaveTextContent("Transition-state energy")
+        expect(within(cited).getByText("Level of theory", { selector: "th" })).toBeInTheDocument()
+        expect(within(cited).getByRole("link", { name: "lot_c" })).toHaveAttribute("href", "/methods/lot_c")
         expect(cited).toHaveTextContent("not recorded")
         const profileTable = screen.getByRole("table", { name: /Every point of the selected profile/ })
         expect(profileTable).not.toHaveTextContent("calc_cited")
@@ -203,7 +280,7 @@ describe("EnergyProfile", () => {
         await user.tab()
         expect(document.activeElement).toBe(picker)
         await user.selectOptions(picker, "2")
-        expect(screen.getByRole("group", { name: /Electronic energy, no zero-point correction/ })).toHaveTextContent("+70.0 kJ/mol")
+        expect(screen.getByRole("group", { name: /Energy relative to the reactants/ })).toHaveTextContent("+70.0 kJ/mol")
         const table = screen.getByRole("table", { name: /Every point of the selected profile/ })
         let reached = false
         for (let step = 0; step < 10 && !reached; step++) {

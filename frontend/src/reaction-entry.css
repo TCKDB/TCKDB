@@ -115,7 +115,7 @@
 }
 
 .reaction-ts-stages li + li::before {
-    content: "→";
+    content: "→" / "";
     margin-right: var(--s-3);
     color: var(--muted);
 }

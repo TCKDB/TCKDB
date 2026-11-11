@@ -26,9 +26,8 @@ import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { levelOfTheoryPath } from "../domain/methodsLinks"
-import { buildEquationSides, type EquationParticipant } from "../domain/reactionEquation"
+import { buildEquationSides, equationNeedsStructure, type EquationParticipant } from "../domain/reactionEquation"
 import { participantChips } from "../domain/participantFacets"
-import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 import { equationText } from "../domain/reactionEquation"
@@ -108,7 +107,8 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     const kinetics = record.kinetics ?? []
     const transitionStates = record.transition_states ?? []
     const networksState = useReactionEntryNetworks(entry.reaction_entry_ref, record.networks)
-    const equation = <ReactionEquation reactants={species.reactants} products={species.products} reversible={entry.reversible} linkParticipants={false} />
+    const formulaOnly = !equationNeedsStructure(species.reactants, species.products)
+    const equation = <ReactionEquation reactants={species.reactants} products={species.products} reversible={entry.reversible} linkParticipants={false} formulaOnly={formulaOnly} />
     const mapReactants = useMemo(() => species.reactants.map(mapParticipant), [species.reactants])
     const mapProducts = useMemo(() => species.products.map(mapParticipant), [species.products])
     const neighbours = useReactionEntryNeighbours({ reactionRef: entry.reaction_ref, reactants: mapReactants, products: mapProducts })
@@ -167,7 +167,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                                     <ReviewChip status={entry.review.status} />
                                 </div>
                                 <h1 className="t-display-2 record-identity-title">
-                                    <ReactionEquation reactants={species.reactants} products={species.products} reversible={entry.reversible} />
+                                    <ReactionEquation reactants={species.reactants} products={species.products} reversible={entry.reversible} formulaOnly={formulaOnly} />
                                 </h1>
                                 <Lede>{reactionEntryLede(entry, { kinetics: kinetics.length, transitionStates: transitionStates.length })}</Lede>
                                 <div className="record-identity-known">
@@ -380,7 +380,7 @@ function ParticipantsTable({ label, participants }: {
                                     <code className="data">{participant.species_entry_ref}</code>
                                     <CopyButton value={participant.species_entry_ref} label="Species entry" srLabel="reference" />
                                 </td>
-                                <td data-label="Review"><span className={reviewPillClass(participant.review.status)}>{statusLabel(participant.review.status)}</span></td>
+                                <td data-label="Review"><ReviewChip status={participant.review.status} explain={false} /></td>
                             </tr>
                         ))}
                     </tbody>
@@ -435,7 +435,7 @@ function NetworkSection({ state }: { state: NetworksState }) {
                                     : "not recorded"}
                             </td>
                             <td className="num" data-label="Channels">{network.channel_count}</td>
-                            <td data-label="Review"><span className={reviewPillClass(network.review.status)}>{statusLabel(network.review.status)}</span></td>
+                            <td data-label="Review"><ReviewChip status={network.review.status} explain={false} /></td>
                         </tr>
                     ))}
                 </tbody>

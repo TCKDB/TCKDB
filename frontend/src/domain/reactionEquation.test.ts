@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildEquationSides, equationText, type EquationParticipantInput } from "./reactionEquation"
+import { buildEquationSides, equationNeedsStructure, equationText, type EquationParticipantInput } from "./reactionEquation"
 
 function participant(overrides: Partial<EquationParticipantInput> & Pick<EquationParticipantInput, "species_entry_ref" | "smiles" | "participant_index">): EquationParticipantInput {
     return { stoichiometry: 1, ...overrides }
@@ -110,5 +110,21 @@ describe("equationText", () => {
         const products = [participant({ species_entry_ref: "spe_b", smiles: "NN", participant_index: 0 })]
         expect(equationText(reactants, products, true)).toBe("2 NH2 ⇌ NN")
         expect(equationText(reactants, products, false)).toBe("2 NH2 → NN")
+    })
+})
+
+describe("equationNeedsStructure", () => {
+    const p = (ref: string, formula: string | null, smiles: string, index = 0) => ({ species_entry_ref: ref, formula, smiles, stoichiometry: 1, participant_index: index })
+    it("is false when formulas tell every participant apart", () => {
+        expect(equationNeedsStructure([p("a", "CH4", "C"), p("b", "HO", "[OH]", 1)], [p("c", "CH3", "[CH3]"), p("d", "H2O", "O", 1)])).toBe(false)
+    })
+    it("is true when two distinct entries share a formula", () => {
+        expect(equationNeedsStructure([p("a", "C4H8", "C/C=C\\C")], [p("b", "C4H8", "C/C=C/C")])).toBe(true)
+    })
+    it("is true when both sides read the same, even for one entry", () => {
+        expect(equationNeedsStructure([p("a", "H2O", "O")], [p("a", "H2O", "O")])).toBe(true)
+    })
+    it("does not call a repeated occurrence of one entry ambiguous", () => {
+        expect(equationNeedsStructure([p("a", "NH2", "[NH2]"), p("a", "NH2", "[NH2]", 1)], [p("b", "N2H4", "NN")])).toBe(false)
     })
 })

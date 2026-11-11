@@ -10,10 +10,10 @@ const MINUS = "−"
 
 /** Why a transition-state entry has no profile, in TCKDB's own words. A code with no wording is shown as the code. */
 export const UNAVAILABLE_WORDS: Readonly<Record<string, string>> = {
-    no_reactant_energy_at_level: "Not every reactant has an energy at one level of theory and program.",
-    no_product_energy_at_level: "Not every product has an energy at one level of theory and program.",
+    no_reactant_energy_at_level: "Not every reactant has an energy at this level of theory from this program.",
+    no_product_energy_at_level: "Not every product has an energy at this level of theory from this program.",
     points_from_different_programs: "The energies come from different programs, so they are not combined.",
-    no_ts_energy: "This transition state has no energy at a level of theory and program that the reactants and products share.",
+    no_ts_energy: "This transition state has no single-point or optimisation energy that can be used.",
     no_program_recorded: "The only energies come from calculations with no recorded program, so no program can be named.",
 }
 
@@ -59,6 +59,42 @@ export function relativeKjText(value: number): string {
 /** One profile's choice in the picker: the transition-state entry only when there is more than one, then level and program. */
 export function profileLabel(profile: EnergyProfileRecord, withEntry: boolean): string {
     return `${withEntry ? `${profile.transition_state_entry_ref}, ` : ""}${lotLabel(profile.level_of_theory)}, ${profile.program}`
+}
+
+/** Picker labels for every profile; two profiles that would read the same get their level ref added. */
+export function profileLabels(profiles: readonly EnergyProfileRecord[]): string[] {
+    const withEntry = new Set(profiles.map((profile) => profile.transition_state_entry_ref)).size > 1
+    const labels = profiles.map((profile) => profileLabel(profile, withEntry))
+    return labels.map((label, index) => labels.filter((other) => other === label).length > 1
+        ? `${label} [${profiles[index].level_of_theory.level_of_theory_ref ?? "level not named"}]`
+        : label)
+}
+
+export const MIN_SPAN_KJ_MOL = 50
+
+export type ProfileScale = { min: number; max: number; ticks: number[] }
+
+function niceStep(raw: number): number {
+    const power = 10 ** Math.floor(Math.log10(raw))
+    const fraction = raw / power
+    return (fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10) * power
+}
+
+/**
+ * A linear axis for one profile: at least MIN_SPAN_KJ_MOL tall, so a small difference is not drawn as a big one,
+ * padded out to round tick values (at most five).
+ */
+export function profileScale(values: readonly number[]): ProfileScale {
+    const low = Math.min(...values)
+    const high = Math.max(...values)
+    const span = Math.max(high - low, MIN_SPAN_KJ_MOL)
+    const extra = (span - (high - low)) / 2
+    const step = niceStep((span * 1.1) / 3)
+    const min = Math.floor((low - extra - span * 0.05) / step) * step
+    const max = Math.ceil((high + extra + span * 0.05) / step) * step
+    const ticks: number[] = []
+    for (let tick = min; tick <= max + step / 1000; tick += step) ticks.push(Number(tick.toFixed(6)))
+    return { min, max, ticks }
 }
 
 export function hasSeveralTransitionStates(read: EnergyProfileRead): boolean {

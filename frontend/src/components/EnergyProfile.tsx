@@ -1,4 +1,4 @@
-import { Fragment, useId, useState } from "react"
+import { Fragment, useId, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import "../energy-profile.css"
 import {
@@ -12,16 +12,18 @@ import {
     citedSubjectRef,
     energyTypeWord,
     hartreeText,
-    hasSeveralTransitionStates,
     hiddenNotes,
     isMixed,
     levelsOf,
-    profileLabel,
+    profileLabels,
+    profileScale,
     programText,
     relativeKjText,
     roleWord,
     UNAVAILABLE_WORDS,
 } from "../domain/energyProfile"
+import { levelOfTheoryPath } from "../domain/methodsLinks"
+import { useOverflows } from "../hooks/useOverflows"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
 import { OrderNote } from "./OrderNote"
@@ -32,22 +34,28 @@ import { ValueLink } from "./ValueLink"
 const INTRO = "Reactants are the zero. The transition state sits above them by the energy needed to pass over the barrier, "
     + "and the products sit where the reaction ends. Each profile uses one level of theory and one program, and no profile is chosen for you."
 
-const W = 640
-const H = 250
-const TOP = 34
-const BOTTOM = 52
-const BAR_W = 140
-const CENTRES = [120, 320, 520]
+const W = 500
+const H = 240
+const TOP = 30
+const BOTTOM = 40
+const AXIS_X = 52
+const BAR_W = 100
+const CENTRES = [122, 272, 422]
 
 function ProfileFigure({ profile, captionId }: { profile: EnergyProfileRecord; captionId: string }) {
     const levels = levelsOf(profile)
-    const values = levels.map((level) => level.kj)
-    const low = Math.min(...values)
-    const high = Math.max(...values)
+    const scale = profileScale(levels.map((level) => level.kj))
     const plot = H - TOP - BOTTOM
-    const y = (kj: number) => (high === low ? TOP + plot / 2 : TOP + ((high - kj) / (high - low)) * plot)
+    const y = (kj: number) => TOP + ((scale.max - kj) / (scale.max - scale.min)) * plot
     return (
         <svg className="energy-profile-svg" viewBox={`0 0 ${W} ${H}`} role="group" aria-labelledby={captionId}>
+            {scale.ticks.map((tick) => (
+                <g key={tick}>
+                    <line className={tick === 0 ? "energy-profile-zero" : "energy-profile-grid"} x1={AXIS_X} x2={W - 6} y1={y(tick)} y2={y(tick)} />
+                    <text className="energy-profile-tick t-preserve-case" x={AXIS_X - 6} y={y(tick) + 5} textAnchor="end">{tick === 0 ? "0" : relativeKjText(tick).replace(/\.0$/, "")}</text>
+                </g>
+            ))}
+            <text className="energy-profile-axis-title t-preserve-case" x={AXIS_X} y={14}>kJ/mol relative to reactants</text>
             {levels.slice(1).map((level, index) => (
                 <line
                     key={level.key}
@@ -61,10 +69,10 @@ function ProfileFigure({ profile, captionId }: { profile: EnergyProfileRecord; c
             {levels.map((level, index) => (
                 <g key={level.key}>
                     <line className="energy-profile-bar" x1={CENTRES[index] - BAR_W / 2} x2={CENTRES[index] + BAR_W / 2} y1={y(level.kj)} y2={y(level.kj)} />
-                    <text className="energy-profile-value t-preserve-case" x={CENTRES[index]} y={y(level.kj) - 10} textAnchor="middle">
+                    <text className="energy-profile-value t-preserve-case" x={CENTRES[index]} y={y(level.kj) - 8} textAnchor="middle">
                         {relativeKjText(level.kj)} kJ/mol
                     </text>
-                    <text className="energy-profile-name" x={CENTRES[index]} y={H - 20} textAnchor="middle">{level.label}</text>
+                    <text className="energy-profile-name" x={CENTRES[index]} y={H - 14} textAnchor="middle">{level.label}</text>
                 </g>
             ))}
         </svg>
@@ -110,10 +118,10 @@ function PointCells({ point }: { point: PointShape }) {
     )
 }
 
-function RelativeCell({ kj }: { kj: number | null }) {
+function RelativeCell({ kj, note }: { kj: number | null; note?: string }) {
     return (
         <td className="num" data-label="Relative to reactants">
-            {kj === null ? <span className="energy-profile-absent">see rows below</span> : <><span>{relativeKjText(kj)}</span> <span className="u t-preserve-case">kJ/mol</span></>}
+            {kj === null ? <span className="energy-profile-absent">{note}</span> : <><span>{relativeKjText(kj)}</span> <span className="u t-preserve-case">kJ/mol</span></>}
         </td>
     )
 }
@@ -147,7 +155,7 @@ function GroupRows({ title, points, sum, kj, labels }: {
                 <tr key={point.species_entry_ref}>
                     <th scope="row" className="energy-profile-member">{title}: <SpeciesCell point={point} labels={labels} /></th>
                     <PointCells point={point} />
-                    <RelativeCell kj={null} />
+                    <RelativeCell kj={null} note={`part of the ${title === "Reactants" ? "reactant" : "product"} sum above`} />
                 </tr>
             ))}
         </>
@@ -184,8 +192,10 @@ function ProfileTable({ profile, labels }: { profile: EnergyProfileRecord; label
     )
 }
 
-function ProfileView({ profile, labels }: { profile: EnergyProfileRecord; labels: ReadonlyMap<string, string> }) {
+function ProfileView({ profile, labels, several }: { profile: EnergyProfileRecord; labels: ReadonlyMap<string, string>; several: boolean }) {
     const captionId = useId()
+    const boxRef = useRef<HTMLDivElement | null>(null)
+    const overflows = useOverflows(boxRef)
     const levels = levelsOf(profile)
     const kinds = profile.energy_types.map(energyTypeWord).join(" and ")
     const versions = profile.versions.map((version) => version ?? "version not recorded").join(", ")
@@ -197,17 +207,22 @@ function ProfileView({ profile, labels }: { profile: EnergyProfileRecord; labels
                 <div><dt>Program</dt><dd className="t-preserve-case">{profile.program}</dd></div>
             </dl>
             <figure className="energy-profile-figure">
-                <div className="energy-profile-box" tabIndex={0} role="region" aria-label="Energy profile picture, scrolls sideways on a narrow screen">
+                {overflows && <p className="energy-profile-hint">Scroll sideways inside the box to see the whole picture. The table below has the same numbers.</p>}
+                <div
+                    className="energy-profile-box"
+                    ref={boxRef}
+                    {...(overflows ? { tabIndex: 0, role: "region", "aria-label": "Energy profile picture, scrolls sideways" } : {})}
+                >
                     <ProfileFigure profile={profile} captionId={captionId} />
                 </div>
                 <figcaption id={captionId} className="energy-profile-caption">
-                    Electronic energy, no zero-point correction, in kJ/mol relative to the reactants
+                    Energy relative to the reactants, in kJ/mol
                     {profile.energy_kind !== "electronic" && <> (kind of energy: <code>{profile.energy_kind}</code>)</>}:{" "}
                     {levels.map((level, index) => (
                         <Fragment key={level.key}>{index > 0 && ", "}{level.label.toLowerCase()} <span className="t-preserve-case">{relativeKjText(level.kj)}</span></Fragment>
                     ))}.
+                    {several && " The axis is set for each profile, so it changes when you pick another."}
                 </figcaption>
-                <p className="energy-profile-hint">The picture scrolls sideways inside its box. The table below it has the same numbers.</p>
             </figure>
             <p className="note energy-profile-definition">{profile.definition}</p>
             {isMixed(profile) && (
@@ -253,6 +268,11 @@ function CitedRow({ keyRef, calculation, labels }: { keyRef: string; calculation
                     ? <span className="energy-profile-absent">not recorded</span>
                     : <ValueLink value={hartreeText(calculation.electronic_energy_hartree)} unit="hartree" to={`/calculations/${calculation.calculation_ref}`} />}
             </td>
+            <td data-label="Level of theory">
+                {calculation.level_of_theory_ref
+                    ? <Link to={levelOfTheoryPath(calculation.level_of_theory_ref)}><code className="t-preserve-case">{calculation.level_of_theory_ref}</code></Link>
+                    : "not recorded"}
+            </td>
             <td data-label="Kind of energy">{energyTypeWord(calculation.energy_type)}</td>
             <td data-label="Program">{calculation.software ? programText(calculation.software) : "not recorded"}</td>
             <td data-label="Review"><ReviewChip status={calculation.review_status} explain={false} /></td>
@@ -275,6 +295,7 @@ function CitedEnergies({ read, labels }: { read: EnergyProfileRead; labels: Read
                             <th scope="col">Rate record</th>
                             <th scope="col">What it cites</th>
                             <th scope="col">Electronic energy</th>
+                            <th scope="col">Level of theory</th>
                             <th scope="col">Kind of energy</th>
                             <th scope="col">Program</th>
                             <th scope="col">Review</th>
@@ -292,7 +313,7 @@ function CitedEnergies({ read, labels }: { read: EnergyProfileRead; labels: Read
 function Profiles({ read, labels }: { read: EnergyProfileRead; labels: ReadonlyMap<string, string> }) {
     const pickerId = useId()
     const [index, setIndex] = useState(0)
-    const withEntry = hasSeveralTransitionStates(read)
+    const optionLabels = profileLabels(read.profiles)
     const chosen = read.profiles[Math.min(index, read.profiles.length - 1)]
     return (
         <>
@@ -301,16 +322,16 @@ function Profiles({ read, labels }: { read: EnergyProfileRead; labels: ReadonlyM
                     <label htmlFor={pickerId}>Profile</label>
                     <select id={pickerId} value={index} onChange={(event) => setIndex(Number(event.target.value))}>
                         {read.profiles.map((profile, position) => (
-                            <option key={`${profile.transition_state_entry_ref}-${position}`} value={position}>{profileLabel(profile, withEntry)}</option>
+                            <option key={`${profile.transition_state_entry_ref}-${position}`} value={position}>{optionLabels[position]}</option>
                         ))}
                     </select>
                     <p className="note">
                         {read.profiles.length} profiles. The first is shown until you pick another.
                     </p>
-                    <OrderNote order="Profiles are listed by transition-state entry, then level of theory and program." />
+                    <OrderNote order="Listed by transition-state entry (approved first, then newest deposited first), then level of theory and program in alphabetical order." />
                 </div>
             )}
-            {chosen && <ProfileView profile={chosen} labels={labels} />}
+            {chosen && <ProfileView profile={chosen} labels={labels} several={read.profiles.length > 1} />}
         </>
     )
 }

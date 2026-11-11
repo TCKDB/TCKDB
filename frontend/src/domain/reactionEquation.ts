@@ -94,3 +94,21 @@ export function schemeAriaLabel(reactants: EquationParticipant[], products: Equa
     const side = (participants: EquationParticipant[]) => participants.map(spoken).join(" plus ")
     return `${side(reactants)} ${reversible ? "reacts reversibly with" : "reacts to form"} ${side(products)}`
 }
+
+/**
+ * True when formulas alone cannot tell the participants apart: two distinct entries share a formula, or both sides
+ * read the same. Then the equation shows SMILES with the formula in brackets.
+ */
+export function equationNeedsStructure(reactants: EquationParticipantInput[], products: EquationParticipantInput[]): boolean {
+    const sides = buildEquationSides(reactants, products)
+    const entriesByFormula = new Map<string, Set<string>>()
+    for (const participant of [...sides.reactants, ...sides.products]) {
+        if (!participant.formula) continue
+        const entries = entriesByFormula.get(participant.formula) ?? new Set<string>()
+        entries.add(participant.speciesEntryRef)
+        entriesByFormula.set(participant.formula, entries)
+    }
+    if ([...entriesByFormula.values()].some((entries) => entries.size > 1)) return true
+    const read = (participants: EquationParticipant[]) => participants.map((p) => `${p.coefficient} ${p.formula ?? p.smiles}`).join("+")
+    return read(sides.reactants) === read(sides.products)
+}

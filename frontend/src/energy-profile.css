@@ -49,8 +49,25 @@
 .energy-profile-svg {
     display: block;
     width: 100%;
-    min-width: 34rem;
+    min-width: 20rem;
+    max-height: 15rem;
     height: auto;
+}
+
+.energy-profile-grid,
+.energy-profile-zero {
+    stroke: var(--line-2);
+    stroke-width: 1;
+}
+
+.energy-profile-zero {
+    stroke: var(--divider);
+}
+
+.energy-profile-tick,
+.energy-profile-axis-title {
+    fill: var(--muted);
+    font-size: 14px;
 }
 
 .energy-profile-bar {
@@ -66,13 +83,13 @@
 
 .energy-profile-value {
     fill: var(--ink);
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
 }
 
 .energy-profile-name {
     fill: var(--ink-2);
-    font-size: 14px;
+    font-size: 15px;
 }
 
 .energy-profile-caption {
@@ -83,16 +100,9 @@
 }
 
 .energy-profile-hint {
-    display: none;
-    margin-top: var(--s-2);
+    margin: 0 0 var(--s-2);
     color: var(--muted);
     font: var(--type-ui-font);
-}
-
-@media (max-width: 560px) {
-    .energy-profile-hint {
-        display: block;
-    }
 }
 
 .energy-profile-facts {
