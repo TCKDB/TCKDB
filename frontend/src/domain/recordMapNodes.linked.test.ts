@@ -100,7 +100,7 @@ describe("every map node opens something", () => {
     })
 
     it("every anchor a node opens exists on the page that owns the map", () => {
-        const withoutComments = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
+        const withoutComments = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1")
         // The geometry page derives its section ids from the section titles; read the titles from the source.
         const slug = (title: string) => `provenance-${title.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`
         const provenanceIds = (source: string) => [...source.matchAll(/title="([^"]+)"/g)].map((match) => slug(match[1]))
