@@ -165,7 +165,7 @@ def test_example_script_help_runs():
 def test_includes_helper_appends_internal_ids_only_when_flag_set():
     """``_includes(args, ...)`` appends ``internal_ids`` only on opt-in.
 
-    By default scientific reads no longer carry integer ids;
+    By default scientific reads carry no integer ids;
     the example helper threads the opt-in token into every request
     when ``--include-internal-ids`` is supplied.
     """

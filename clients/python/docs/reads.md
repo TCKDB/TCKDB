@@ -260,7 +260,8 @@ Notes:
 - Path parameters like ``reaction_entry_id`` / ``species_entry_id``
   accept either an integer PK or a public ref of the matching prefix
   (``rxe_...`` / ``spe_...``). A wrong-prefix ref returns 422
-  (``handle_type_mismatch``); an unknown ref returns 404. - Supplying both ``*_id`` and ``*_ref`` for the same filter is allowed
+  (``handle_type_mismatch``); an unknown ref returns 404.
+- Supplying both ``*_id`` and ``*_ref`` for the same filter is allowed
   only when they resolve to the same row; otherwise the backend returns
   422 with a stable ``<resource>_handle_conflict`` code.
 - ``reaction_entry_id`` is strictly ``reaction_entry.id`` (not
