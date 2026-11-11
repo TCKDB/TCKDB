@@ -8,7 +8,8 @@ Why this module exists
 ----------------------
 
 Two projections are made on each imaginary mode whose recovery reproduces
-the stored spectrum -- onto the six
+the stored spectrum and that is not degenerate within
+:data:`DEGENERACY_WINDOW_CM1` -- onto the six
 rigid-body vectors, and onto a dihedral rotation about each rotatable
 bond -- because a determination beats a threshold wherever one is
 available. TCKDB stores no displacement vectors, so there is nothing to

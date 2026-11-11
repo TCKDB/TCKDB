@@ -139,7 +139,7 @@ What ``context`` promises, and what it does not
 "Branch on ``code``, read ``context``, never parse ``detail``" is the
 published advice and it is right, with one limit: ``context`` is populated
 by the raiser, and a large part of the catalogue has no raiser that can
-populate it. 65 of 170 entries arrive by
+populate it. A large share of entries arrive by
 :data:`~app.api.code_catalogue.Surface.message_prefix` — that is,
 ``raise ValueError(f"code: prose")`` — and a plain ``ValueError`` has
 nowhere to put structured facts, so :func:`error_envelope` renders
