@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import LevelOfTheorySummary, ProfiledRequestEcho, ScientificResponse
 
-ENERGY_KIND = "electronic"
+ENERGY_KIND: Literal["electronic"] = "electronic"
 
 PROFILE_DEFINITION = (
     "Each molecule's energy at this level from this program: its lowest single-point energy, or, only when it has no "
