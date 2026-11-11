@@ -25,9 +25,7 @@ export function OtherVersions({ entry }: { entry: SpeciesEntryProjection }) {
     const hidden = species ? hiddenVersionsNote(species.entriesHiddenByDefault) : null
     return (
         <section className="entry-versions" aria-labelledby="entry-versions">
-            <SectionHeading id="entry-versions" intro="A molecule can have several versions, which differ in electronic state, stereochemistry or isotopes. Each version holds its own records, and each record carries its own levels of theory.">
-                Other versions of this molecule
-            </SectionHeading>
+            <SectionHeading id="entry-versions">Other versions of this molecule</SectionHeading>
             {state.status === "loading" && <p className="note" role="status" aria-busy="true">Loading the other versions…</p>}
             {state.status !== "loading" && state.status !== "ready" && <p className="note" role="alert">The other versions of this molecule could not be loaded.</p>}
             {species && (
@@ -37,7 +35,7 @@ export function OtherVersions({ entry }: { entry: SpeciesEntryProjection }) {
                         {" "}<Link to={`/species/${species.species_ref}`}>Open the molecule page</Link>
                     </p>
                     {hidden && <p className="note" role="note">{hidden}</p>}
-                    <ul className="entry-versions-list">
+                    {versions.length > 1 && <ul className="entry-versions-list">
                         {versions.map((version) => {
                             const current = version.species_entry_ref === entry.species_entry_ref
                             const label = versionLabel(species, version)
@@ -51,7 +49,7 @@ export function OtherVersions({ entry }: { entry: SpeciesEntryProjection }) {
                                 </li>
                             )
                         })}
-                    </ul>
+                    </ul>}
                 </>
             )}
         </section>

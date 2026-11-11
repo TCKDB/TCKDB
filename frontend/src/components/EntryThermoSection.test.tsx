@@ -401,7 +401,7 @@ describe("EntryThermoSection", () => {
         expect(cell("S (J/mol·K)")).toHaveAttribute("title", "240.123456789")
         expect(cell("G (kJ/mol)")).toHaveAttribute("title", "-71.123456789")
         expect(cell("Cp (J/mol·K)")).toBeNull()
-        expect(within(alphaCard).getAllByText("Shown to 6 significant figures; hover a number for the stored value.")).toHaveLength(1)
+        expect(within(alphaCard).getAllByText("6 significant figures; hover for the stored value.")).toHaveLength(1)
     })
 
     it("shows no note when no evaluated-point number is rounded", async () => {
@@ -411,7 +411,7 @@ describe("EntryThermoSection", () => {
         page()
         const alphaCard = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
         fireEvent.click(within(alphaCard).getByText(/temperature point/))
-        expect(within(alphaCard).queryByText(/Shown to 6 significant figures/)).not.toBeInTheDocument()
+        expect(within(alphaCard).queryByText(/6 significant figures/)).not.toBeInTheDocument()
     })
 
     it("rounds a NASA end, a coverage bound and the extrapolation distance, keeping the stored value as title", async () => {
@@ -888,7 +888,7 @@ describe("EntryThermoSection", () => {
         }))))
         page()
         expect(await screen.findByText("Not listed by default: 2 rejected and 1 deprecated thermochemistry records.")).toBeVisible()
-        expect(screen.getByText(/^Display order: approved first, then newest deposited first\./)).toBeVisible()
+        expect(screen.getByText(/^Order: approved first, then newest deposited first;/)).toBeVisible()
         expect(screen.getByText(/not a ranking or a recommendation/)).toBeVisible()
     })
 

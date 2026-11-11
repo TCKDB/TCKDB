@@ -39,12 +39,7 @@ export function ShapeCalculations({ conformer, singlePoints, optimisations }: {
     const label = conformerLabel(conformer)
     return (
         <section className="shape-calculations" aria-labelledby="shape-calculations">
-            <SectionHeading
-                id="shape-calculations"
-                intro={`One row for each time ${label} was deposited: how its geometry was found and every energy computed on it.`}
-            >
-                Calculations of this shape
-            </SectionHeading>
+            <SectionHeading id="shape-calculations">Calculations of this shape</SectionHeading>
             {waiting && (
                 <p className="note" role="status" aria-busy="true">The energies are still being read; an energy shown as missing may not have arrived yet.</p>
             )}
@@ -57,7 +52,7 @@ export function ShapeCalculations({ conformer, singlePoints, optimisations }: {
                 <p className="empty-projection">No deposits of this shape are listed.</p>
             ) : (
                 <>
-                    <OrderNote />
+                    {rows.length > 1 && <OrderNote />}
                     {spreads.length > 0 && (
                         <ul className="shape-spread">
                             {spreads.map((line) => (
@@ -103,7 +98,7 @@ export function ShapeCalculations({ conformer, singlePoints, optimisations }: {
                                                             {energy.hartree === null
                                                                 ? <span className="shape-energy-absent">{(energy.kind === "sp" ? singlePoints : optimisations).status === "failed" ? "Could not be read" : "Energy not recorded"}</span>
                                                                 : <ValueLink value={formatHartree(energy.hartree)} unit="hartree" to={`/calculations/${energy.ref}`} />}
-                                                            {" "}({KIND_WORDS[energy.kind]}) <Where calculation={energy} />{" "}
+                                                            {" "}({KIND_WORDS[energy.kind]}){" "}{!row.foundBy.some((calculation) => calculation.ref === energy.ref) && <><Where calculation={energy} />{" "}</>}
                                                             <Link to={`/calculations/${energy.ref}`}><code className="t-preserve-case">{energy.ref}</code></Link>
                                                             {energy.review && <>{" "}<ReviewChip status={energy.review} explain={false} /></>}
                                                         </li>

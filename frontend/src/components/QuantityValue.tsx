@@ -7,7 +7,7 @@ export function Stored({ full, children }: { full?: string; children: ReactNode 
 }
 
 /** The line under a table or section whose numbers are rounded. */
-export const ROUNDED_NOTE = "Shown to 6 significant figures; hover a number for the stored value."
+export const ROUNDED_NOTE = "6 significant figures; hover for the stored value."
 
 /**
  * Renders whatever `fillValue` (`../domain/quantityFormat.ts`) decided a

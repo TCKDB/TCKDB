@@ -156,7 +156,7 @@ describe("molecule overview: header", () => {
         expect(identity.querySelector(".breadcrumbs [aria-current='page']")).toHaveTextContent("CH3")
         expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("CH3")
         expect(screen.getByRole("heading", { level: 1 })).not.toHaveTextContent(speciesRef)
-        expect(document.querySelector(".record-lede")).toHaveTextContent("A molecule with 2 versions; each version holds its own records.")
+        expect(document.querySelector(".record-lede")).toHaveTextContent("A molecule with 2 versions.")
         await waitFor(() => expect(titleHasKind(document.title, "/species/:ref")).toBe(true))
         expect(document.title).toBe("CH3 · Molecule · TCKDB")
         expect(within(identity).getByText("Molecule ref")).toBeVisible()
@@ -167,12 +167,12 @@ describe("molecule overview: header", () => {
 
     it("says listed versions when some were hidden by default", async () => {
         await open({ ...speciesPayload(), request: { hidden_by_default: { counts: { rejected: 1 }, include_with: {}, counted: "species_entries" } } })
-        expect(document.querySelector(".record-lede")).toHaveTextContent("A molecule with 2 listed versions; each version holds its own records.")
+        expect(document.querySelector(".record-lede")).toHaveTextContent("A molecule with 2 listed versions.")
     })
 
     it("says one version in the singular", async () => {
         await open(speciesPayload([groundEntry()]))
-        expect(document.querySelector(".record-lede")).toHaveTextContent("A molecule with 1 version; each version holds its own records.")
+        expect(document.querySelector(".record-lede")).toHaveTextContent("A molecule with 1 version.")
     })
 
     it("has one h1, a contents list for its two sections, and says nothing for the empty names slot", async () => {
@@ -327,7 +327,7 @@ describe("molecule overview: all values for this molecule", () => {
         const region = await valuesRegion()
         await waitFor(() => expect(rowIds(region)).toHaveLength(4))
         const source = (id: string) => (region.querySelector(`#${id} .value-source`) as HTMLElement)
-        expect(source("thermo-thm_g1")).toHaveTextContent("geometry wb97xd/def2tzvp")
+        expect(source("thermo-thm_g1")).toHaveTextContent("geometry, frequency, energy at wb97xd/def2tzvp")
         expect(source("thermo-thm_g1")).toHaveTextContent("Arkane")
         expect(source("statmech-stm_g1")).toHaveTextContent("energy ccsdt/ccpvtz")
         expect(source("statmech-stm_g1")).toHaveTextContent("Gaussian")
@@ -344,7 +344,7 @@ describe("molecule overview: all values for this molecule", () => {
             expect(found).not.toBeNull()
             return found
         })
-        expect(note).toHaveTextContent("Thermochemistry first, then statistical mechanics; inside each, approved first, then newest deposited first.")
+        expect(note).toHaveTextContent("Thermochemistry, then statistical mechanics; approved first, then newest deposited first.")
         expect(note).toHaveTextContent("This order is not a recommendation.")
         cleanup()
         resetAllRequestCaches()

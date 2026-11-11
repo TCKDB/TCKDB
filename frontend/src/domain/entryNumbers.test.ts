@@ -35,14 +35,14 @@ describe("orderWords and numbersOrderSentence", () => {
 
     it("says identical orders once and names only the lists given", () => {
         expect(numbersOrderSentence([{ kind: "thermo", sort: reviewThenNewest }, { kind: "transport", sort: reviewThenNewest }]))
-            .toBe("Thermochemistry first, then transport; inside each, approved first, then newest deposited first.")
+            .toBe("Thermochemistry, then transport; approved first, then newest deposited first.")
         expect(numbersOrderSentence([{ kind: "statmech", sort: reviewThenNewest }]))
             .toBe("Statistical mechanics: approved first, then newest deposited first.")
     })
 
     it("spells out lists whose orders differ or are not stated", () => {
         expect(numbersOrderSentence([{ kind: "thermo", sort: reviewThenNewest }, { kind: "statmech", sort: null }]))
-            .toBe("Thermochemistry first, then statistical mechanics. Thermochemistry: approved first, then newest deposited first. Statistical mechanics: the archive did not state an order.")
+            .toBe("Thermochemistry, then statistical mechanics. Thermochemistry: approved first, then newest deposited first. Statistical mechanics: the archive did not state an order.")
     })
 })
 

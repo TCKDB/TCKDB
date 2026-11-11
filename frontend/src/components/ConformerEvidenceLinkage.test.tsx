@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { MemoryRouter } from "react-router-dom"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { ConformerEvidenceLinkage } from "./ConformerEvidenceLinkage"
 
@@ -70,12 +71,12 @@ function openMechanics(): HTMLDetailsElement {
 
 describe("ConformerEvidenceLinkage", () => {
     it("labels the heading with the conformer's own display label (auto-numbered basin rendered as 'Conformer Group N')", () => {
-        render(<ConformerEvidenceLinkage conformer={conformer()} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={conformer()} /></MemoryRouter>)
         expect(screen.getByRole("heading", { name: "Evidence for Conformer Group 1" })).toBeVisible()
     })
 
     it("shows only the staging sentence WITHOUT opening anything -- the ONE fact the card doesn't already state", () => {
-        render(<ConformerEvidenceLinkage conformer={conformer()} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={conformer()} /></MemoryRouter>)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toBeVisible()
         // 3 observations; `observations: []` means the per-observation calc
@@ -97,7 +98,7 @@ describe("ConformerEvidenceLinkage", () => {
     })
 
     it("drops the separate 'Evidence' eyebrow -- the picker above and the tab strip below already carry one", () => {
-        render(<ConformerEvidenceLinkage conformer={conformer()} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={conformer()} /></MemoryRouter>)
         expect(document.querySelector(".evidence-linkage .eyebrow")).not.toBeInTheDocument()
     })
 
@@ -107,7 +108,7 @@ describe("ConformerEvidenceLinkage", () => {
     // the only boxed section on the page. Bare now, matching both
     // neighbours.
     it("renders as a bare section, not a boxed card -- the ONE box was inconsistent with both its neighbours", () => {
-        render(<ConformerEvidenceLinkage conformer={conformer()} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={conformer()} /></MemoryRouter>)
         const section = document.querySelector(".evidence-linkage") as HTMLElement
         expect(section.className.split(" ")).not.toContain("card")
         expect(section.className.split(" ")).not.toContain("card--sunken")
@@ -118,7 +119,7 @@ describe("ConformerEvidenceLinkage", () => {
     // place "obs" (and "calc") ever gets tied back to its full word, so it
     // must actually say so, not just define "observation" in isolation.
     it("ties the card's 'obs'/'calc' abbreviations back to their full words, inside the mechanics disclosure", () => {
-        render(<ConformerEvidenceLinkage conformer={conformer()} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={conformer()} /></MemoryRouter>)
         openMechanics()
         const note = screen.getByText(/the card above abbreviates the first two as/)
         expect(note).toHaveTextContent(
@@ -133,19 +134,19 @@ describe("ConformerEvidenceLinkage", () => {
         // nothing left to show -- the paragraph should not render an empty
         // shell.
         const noBreakdown = conformer({ calculations: null } as Partial<ConformerProjection>)
-        render(<ConformerEvidenceLinkage conformer={noBreakdown} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={noBreakdown} /></MemoryRouter>)
         expect(document.querySelector(".evidence-linkage-story")).not.toBeInTheDocument()
     })
 
     it("collapses the mechanics disclosure by default, with a summary that previews what's behind it", () => {
-        render(<ConformerEvidenceLinkage conformer={conformer()} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={conformer()} /></MemoryRouter>)
         const details = document.querySelector(".evidence-linkage-detail") as HTMLDetailsElement
         expect(details.open).toBe(false)
         expect(within(details).getByText("How this evidence connects (7 calculation rows, 2 distinct geometries)")).toBeVisible()
     })
 
     it("binds the observation count to its OWN step and unit -- swapping it with the geometry count is caught here", () => {
-        render(<ConformerEvidenceLinkage conformer={conformer()} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={conformer()} /></MemoryRouter>)
         openMechanics()
         expect(within(step("observations")).getByText("3")).toBeVisible()
         expect(within(step("observations")).getByText("deposited observations")).toBeVisible()
@@ -156,7 +157,7 @@ describe("ConformerEvidenceLinkage", () => {
     })
 
     it("binds the calculation-row total, its own opt/freq/sp breakdown, and the (different) chain count to the SAME step", () => {
-        render(<ConformerEvidenceLinkage conformer={conformer()} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={conformer()} /></MemoryRouter>)
         openMechanics()
         expect(within(step("calculations")).getByText("7")).toBeVisible()
         expect(within(step("calculations")).getByText("calculation rows")).toBeVisible()
@@ -168,7 +169,7 @@ describe("ConformerEvidenceLinkage", () => {
     })
 
     it("binds the distinct-geometry count to its OWN step, and shows how many calculation outputs converge on EACH one", () => {
-        render(<ConformerEvidenceLinkage conformer={conformer()} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={conformer()} /></MemoryRouter>)
         openMechanics()
         const geometries = step("geometries")
         expect(within(geometries).getByText("2")).toBeVisible()
@@ -188,7 +189,7 @@ describe("ConformerEvidenceLinkage", () => {
         // breakdown instead of trusting the published field would print 0
         // here, silently disagreeing with the archive's own count.
         const noBreakdown = conformer({ calculations: null } as Partial<ConformerProjection>)
-        render(<ConformerEvidenceLinkage conformer={noBreakdown} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={noBreakdown} /></MemoryRouter>)
         openMechanics()
         expect(within(step("calculations")).getByText("7")).toBeVisible()
         expect(within(step("calculations")).getByText("breakdown not loaded")).toBeVisible()
@@ -204,7 +205,7 @@ describe("ConformerEvidenceLinkage", () => {
             },
             calculations: [],
         })
-        render(<ConformerEvidenceLinkage conformer={zero} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={zero} /></MemoryRouter>)
         openMechanics()
         expect(within(step("calculations")).getByText("no calculation rows recorded")).toBeVisible()
         expect(within(step("calculations")).queryByText("breakdown not loaded")).not.toBeInTheDocument()
@@ -216,7 +217,7 @@ describe("ConformerEvidenceLinkage", () => {
         // component that derives the count from the links instead of
         // trusting the published field would print 0 here.
         const noLinks = conformer({ geometries: null } as Partial<ConformerProjection>)
-        render(<ConformerEvidenceLinkage conformer={noLinks} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={noLinks} /></MemoryRouter>)
         openMechanics()
         expect(within(step("geometries")).getByText("2")).toBeVisible()
         expect(within(step("geometries")).getByText("breakdown not loaded")).toBeVisible()
@@ -224,7 +225,7 @@ describe("ConformerEvidenceLinkage", () => {
     })
 
     it("labels stage coverage as a share of the 3 OBSERVATIONS, not of the 7 calculation rows", () => {
-        render(<ConformerEvidenceLinkage conformer={conformer()} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={conformer()} /></MemoryRouter>)
         openMechanics()
         const coverage = screen.getByText(/Stage coverage/).closest("p") as HTMLElement
         expect(coverage).toHaveTextContent("opt 2/3 · freq 2/3 · sp 1/3")
@@ -246,7 +247,7 @@ describe("ConformerEvidenceLinkage", () => {
             calculations: [{ calculation_ref: "c1", type: "opt" }] as ConformerProjection["calculations"],
             geometries: [{ calculation_ref: "c1", geometry: { geometry_ref: "geom_solo" } }] as ConformerProjection["geometries"],
         })
-        render(<ConformerEvidenceLinkage conformer={single} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={single} /></MemoryRouter>)
         openMechanics()
         expect(within(step("observations")).getByText("deposited observation")).toBeVisible()
         expect(within(step("calculations")).getByText("calculation row")).toBeVisible()
@@ -257,14 +258,14 @@ describe("ConformerEvidenceLinkage", () => {
 
     it("never prints a depositor-chosen label: the group's own ref stands in", () => {
         const named = conformer({ conformer_group: { conformer_group_ref: "cg_x", label: "anti-periplanar" } })
-        render(<ConformerEvidenceLinkage conformer={named} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={named} /></MemoryRouter>)
         expect(screen.getByRole("heading", { name: "Evidence for cg_x" })).toBeVisible()
         expect(document.body.innerHTML).not.toContain("anti-periplanar")
     })
 
     it("falls back to the group's own ref for a blank/whitespace-only label, never an empty heading", () => {
         const blank = conformer({ conformer_group: { conformer_group_ref: "cg_blank", label: "   " } })
-        render(<ConformerEvidenceLinkage conformer={blank} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={blank} /></MemoryRouter>)
         expect(screen.getByRole("heading", { name: "Evidence for cg_blank" })).toBeVisible()
     })
 
@@ -308,11 +309,10 @@ describe("ConformerEvidenceLinkage", () => {
     }
 
     it("tells CH3's real story: three sightings optimised in two stages, one in a single pass", () => {
-        render(<ConformerEvidenceLinkage conformer={ch3Conformer()} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={ch3Conformer()} /></MemoryRouter>)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toHaveTextContent(
-            "Three were optimised in two stages, one in a single pass. "
-            + "A staged optimisation runs a coarse pass first, then refines it.",
+            "Three were optimised in two stages, one in a single pass.",
         )
         expect(story).not.toHaveTextContent(/sighted/)
         expect(story).not.toHaveTextContent(/frequency calculation/)
@@ -337,7 +337,7 @@ describe("ConformerEvidenceLinkage", () => {
                 { calculation_ref: "co_b_opt", type: "opt" },
             ] as ConformerProjection["calculations"],
         })
-        render(<ConformerEvidenceLinkage conformer={noStaging} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={noStaging} /></MemoryRouter>)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toHaveTextContent(
             "Two optimisation calculations are on file, one per chain — no chain was staged in more than one pass.",
@@ -377,7 +377,7 @@ describe("ConformerEvidenceLinkage", () => {
                 { calculation_ref: "co_b_opt", type: "opt" },
             ] as ConformerProjection["calculations"],
         })
-        render(<ConformerEvidenceLinkage conformer={noStaging} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={noStaging} /></MemoryRouter>)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toHaveTextContent("Two were optimised in a single pass.")
         expect(story).not.toHaveTextContent(/\bstages\b/)
@@ -386,8 +386,7 @@ describe("ConformerEvidenceLinkage", () => {
     })
 
     // Finding 3 of the BLOCK review: this test used to assert the SEQUENTIAL
-    // reading ("optimised in three stages" + "a coarse pass first, then
-    // refines it") for a 3-row/1-chain observation, and in doing so
+    // reading ("optimised in three stages") for a 3-row/1-chain observation, and in doing so
     // ENSHRINED an inference the wire cannot support rather than guarding
     // against it. The backend's `_feeds_a_refinement_on_the_same_observation`
     // (backend/app/services/scientific_read/conformers.py:645-666) collapses
@@ -426,26 +425,21 @@ describe("ConformerEvidenceLinkage", () => {
                 { calculation_ref: "co_only_opt2", type: "opt" },
             ] as ConformerProjection["calculations"],
         })
-        render(<ConformerEvidenceLinkage conformer={threeRowsOneChain} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={threeRowsOneChain} /></MemoryRouter>)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toHaveTextContent("One was optimised in three calculations belonging to a single chain.")
-        // Neither a specific step count nor the coarse-then-fine SEQUENCE
-        // gloss may appear -- both assert more than three rows folded into
-        // one chain actually proves.
+        // No specific step count may appear: three rows folded into one chain do not prove one.
         expect(story).not.toHaveTextContent(/\btwo stages\b/)
         expect(story).not.toHaveTextContent(/\bthree stages\b/)
-        expect(story).not.toHaveTextContent(/coarse pass first, then refines it/)
         expect(story).not.toHaveTextContent(/sighted/)
     })
 
-    // The two-row case is the one shape where "two stages" and "a coarse
-    // pass first, then refines it" are still licensed: with exactly two
+    // The two-row case is the one shape where "two stages" is still licensed: with exactly two
     // rows in one chain there is only one possible relationship between
     // them (one refines the other) -- the parallel-attempts ambiguity only
     // opens up at three rows and above. This guards that the finding-3 fix
-    // didn't overcorrect and start suppressing the sequential gloss here
-    // too.
-    it("still names two stages and the sequential gloss for a genuine two-row chain", () => {
+    // didn't overcorrect and start suppressing "two stages" here too.
+    it("still names two stages for a genuine two-row chain", () => {
         function observation(ref: string, optCount: number) {
             return {
                 conformer_observation: { conformer_observation_ref: ref },
@@ -467,11 +461,9 @@ describe("ConformerEvidenceLinkage", () => {
                 { calculation_ref: "co_only_opt1", type: "opt" },
             ] as ConformerProjection["calculations"],
         })
-        render(<ConformerEvidenceLinkage conformer={twoRowsOneChain} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={twoRowsOneChain} /></MemoryRouter>)
         const story = document.querySelector(".evidence-linkage-story")
-        expect(story).toHaveTextContent(
-            "One was optimised in two stages. A staged optimisation runs a coarse pass first, then refines it.",
-        )
+        expect(story).toHaveTextContent("One was optimised in two stages.")
         expect(story).not.toHaveTextContent(/sighted/)
     })
 
@@ -480,7 +472,7 @@ describe("ConformerEvidenceLinkage", () => {
         // opens with "This conformer was sighted N times." -- the count is
         // already the conformer card's own line-1 number, so it must never
         // reach the trimmed `.evidence-linkage-story`, for any N.
-        render(<ConformerEvidenceLinkage conformer={conformer({ observations_summary: { total: 5 } })} />)
+        render(<MemoryRouter><ConformerEvidenceLinkage conformer={conformer({ observations_summary: { total: 5 } })} /></MemoryRouter>)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).not.toHaveTextContent(/sighted/)
         expect(story).not.toHaveTextContent(/sighted once/)

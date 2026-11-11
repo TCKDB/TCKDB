@@ -123,14 +123,14 @@ describe("EntryTransportSection", () => {
         const card = (await screen.findByText("trn_one")).closest("article") as HTMLElement
         const shown = within(card).getByText("2.12346")
         expect(shown).toHaveAttribute("title", "2.123456789")
-        expect(within(card).getAllByText("Shown to 6 significant figures; hover a number for the stored value.")).toHaveLength(1)
+        expect(within(card).getAllByText("6 significant figures; hover for the stored value.")).toHaveLength(1)
     })
 
     it("has no rounding note when the transport values are absent or need no rounding", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("trn_one")
-        expect(screen.queryByText(/Shown to 6 significant figures/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/6 significant figures/)).not.toBeInTheDocument()
     })
 
     it("renders a deposited transport record and never hides or reverses a superseded one", async () => {

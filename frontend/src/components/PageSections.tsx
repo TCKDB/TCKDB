@@ -1,5 +1,6 @@
 import { useMemo } from "react"
 import type { ReactNode } from "react"
+import { INTRO_WORD_LIMIT, introWordCount } from "../domain/introWords"
 import { SectionRegistry } from "../domain/sectionRegistry"
 import { SectionRegistryContext, useRegisteredSection } from "../hooks/usePageSections"
 
@@ -81,6 +82,9 @@ export function SectionHeading({ id, children, label, className, kicker, intro, 
     /** An `<h3>` listed under the section above it, numbered 3.1 in the contents list. */
     subsection?: boolean
 }) {
+    if (import.meta.env.MODE === "test" && intro && introWordCount(intro) > INTRO_WORD_LIMIT) {
+        throw new Error(`Section intro for "${id}" is over ${INTRO_WORD_LIMIT} words; shorten it or move it to the guide.`)
+    }
     const resolvedLabel = label ?? (typeof children === "string" ? children : id)
     useRegisteredSection(id, resolvedLabel, subsection ? 2 : 1)
     const titleText = typeof children === "string" ? children : undefined
@@ -93,7 +97,7 @@ export function SectionHeading({ id, children, label, className, kicker, intro, 
             {subsection
                 ? <h3 className={className ? `t-heading-2 ${className}` : "t-heading-2"} id={id}>{children}</h3>
                 : <h2 className={className ? `t-heading-1 ${className}` : "t-heading-1"} id={id}>{children}</h2>}
-            {intro && <p className="t-body section-intro">{intro}</p>}
+            {intro && <p className="note section-intro">{intro}</p>}
         </>
     )
 }

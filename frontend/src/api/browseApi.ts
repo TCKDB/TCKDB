@@ -67,29 +67,25 @@ export const BROWSE_KIND_CONTENT: Record<BrowseKind, { eyebrow: string; heading:
     species: {
         eyebrow: "Molecule index",
         heading: "Browse molecules",
-        intro: "Every stable molecule deposited in the archive (a species in TCKDB terms). Narrow by formula, "
-            + "structure, charge, or review status. Van der Waals complexes are catalogued on their own page.",
+        intro: "Stable molecules. Van der Waals complexes are listed separately.",
         breadcrumbLabel: "Molecules",
     },
     vdw: {
         eyebrow: "Van der Waals index",
         heading: "Browse van der Waals complexes",
-        intro: "Weakly bound complexes deposited in the archive, catalogued separately from ordinary species "
-            + "minima. Narrow by formula, structure, charge, or review status.",
+        intro: "Weakly bound complexes, listed apart from molecules.",
         breadcrumbLabel: "Van der Waals complexes",
     },
     transition_state: {
         eyebrow: "Transition-state index",
         heading: "Browse transition states",
-        intro: "Every transition state deposited in the archive, identified by the reaction it connects rather "
-            + "than a molecular formula. Narrow by participant SMILES, family, or calculation evidence.",
+        intro: "Transition states, named by the reaction they connect.",
         breadcrumbLabel: "Transition states",
     },
     reaction: {
         eyebrow: "Reaction index",
         heading: "Browse reactions",
-        intro: "Every reaction entry deposited in the archive. Narrow by reactant or product structure, family, "
-            + "or available kinetics and transition-state evidence.",
+        intro: "Reaction entries. Filter by structure, family or evidence.",
         breadcrumbLabel: "Reactions",
     },
 }

@@ -32,7 +32,7 @@ export function HomeExample({ state }: { state: HomeExampleState }) {
     return (
         <section className="home-section" aria-labelledby="home-example">
             <h2 id="home-example" className="home-section-title">Example record</h2>
-            <p className="home-example-copy">An example record, chosen by the site editors to show how a record reads. It is not a recommendation.</p>
+            <p className="home-example-copy">Chosen by the editors as an example. It is not a recommendation.</p>
             <article className="card home-example-card" aria-label="Example record">
                 <header className="home-example-head">
                     <RecordGlyph kind={state.status === "molecule" ? "species-entry" : "reaction"} size={18} />

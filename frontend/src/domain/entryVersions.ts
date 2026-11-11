@@ -33,7 +33,7 @@ export function versionHolds(entry: ScientificSpeciesEntrySummary): string {
 export function moleculeLede(versionCount: number, someHidden: boolean): LedeText {
     const noun = `${someHidden ? "listed " : ""}${versionCount === 1 ? "version" : "versions"}`
     const count = ledeWord("count", { count: `${versionCount} ${noun}` })
-    return ledeText`A molecule with ${count}; each version holds its own records.`
+    return ledeText`A molecule with ${count}.`
 }
 
 /** The note for versions the default visibility left out, worded as versions whatever the server called them. */

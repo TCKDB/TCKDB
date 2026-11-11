@@ -93,20 +93,17 @@
 .home-counts {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-    max-width: 72rem;
+    max-width: var(--page-max);
     margin: 0 auto;
+    padding-inline: 1.25rem;
+    column-gap: var(--s-6);
 }
 
 .home-counts > div {
     display: flex;
     flex-direction: column-reverse;
     justify-content: center;
-    padding: var(--s-5) var(--s-6);
-    border-left: 1px solid var(--line);
-}
-
-.home-counts > div:first-child {
-    border-left: 0;
+    padding: var(--s-5) 0;
 }
 
 .home-counts dt {
@@ -123,9 +120,9 @@
 }
 
 .home-section {
-    max-width: 72rem;
+    max-width: var(--page-max);
     margin: 0 auto;
-    padding: var(--s-6) var(--s-4) 0;
+    padding: var(--s-6) 1.25rem 0;
 }
 
 .home-section:last-child {
@@ -332,7 +329,7 @@
     }
 
     .home-counts > div {
-        padding: var(--s-4);
+        padding: var(--s-4) 0;
     }
 }
 

@@ -66,7 +66,7 @@ export function NumbersTable<R extends NumberRow>({ rows, caption, label, groupL
     const levelCount = new Set(rows.flatMap((row) => row.levels.map((level) => level.label))).size
     return (
         <>
-            {!compact && levelCount > 0 && <p className="entry-numbers-levels">These values were computed at {levelCount} {levelCount === 1 ? "level" : "levels"} of theory.</p>}
+            {!compact && levelCount > 0 && <p className="entry-numbers-levels">{levelCount} {levelCount === 1 ? "level" : "levels"} of theory.</p>}
             {!compact && distinctLevelCount(rows) >= 2 && (
                 <div className="entry-numbers-controls">
                     <button type="button" className="entry-numbers-toggle" aria-pressed={grouped} onClick={() => setGrouped(!grouped)}>

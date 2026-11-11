@@ -22,5 +22,5 @@ export function entryLede(entry: SpeciesEntryProjection): LedeText {
     const spin = composed(spinWord(entry.multiplicity) ?? `multiplicity ${entry.multiplicity}`)
     const state = codeWord(entry.electronic_state_kind, STATE_WORDS)
     const kind = codeWord(entry.species_entry_kind, KIND_WORDS)
-    return ledeText`One version of this molecule: ${charge}, ${spin}, ${state}, ${kind}. A molecule can have several versions.`
+    return ledeText`One version of this molecule: ${charge}, ${spin}, ${state}, ${kind}.`
 }

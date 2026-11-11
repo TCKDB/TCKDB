@@ -359,15 +359,15 @@ export function spreadLines(rows: readonly ShapeRow[]): SpreadLine[] {
         }))
 }
 
-const CARD_ORDER = "The cards within a page are listed by conformer number, then label, then reference."
+const CARD_ORDER = "Cards by conformer number."
 
 /** One statement of both orders: the order the pages follow, and the card order inside a page. */
 export function shapeOrderSentence(sort: OrderEcho | null | undefined): string {
     const words = orderWords(sort)
     const lead = !words
-        ? "Pages follow the archive's display order."
+        ? "Archive order."
         : sort?.requested_by
-            ? `Pages follow the order requested (${sort.requested_by}): ${words}.`
-            : `Pages follow the archive's display order: ${words}.`
+            ? `Order requested (${sort.requested_by}): ${words}.`
+            : `${words.charAt(0).toUpperCase()}${words.slice(1)}.`
     return `${lead} ${CARD_ORDER}`
 }

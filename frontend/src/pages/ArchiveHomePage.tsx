@@ -19,9 +19,9 @@ const TRY_EXAMPLES: { label: string; query: string }[] = [
 ]
 
 const BROWSE_CARDS: { title: string; detail: string; to: string; glyph: RecordKind; count: CountKey; unit: string }[] = [
-    { title: "Molecules", detail: "Shapes, energies, vibrations and thermochemistry, each at one or more levels of theory.", to: BROWSE_KIND_PATHS.species, glyph: "species", count: "molecules", unit: "molecules" },
-    { title: "Reactions", detail: "Transition states, barriers and rate coefficients for each reaction.", to: BROWSE_KIND_PATHS.reaction, glyph: "reaction", count: "reactions", unit: "reaction entries" },
-    { title: "Methods", detail: "The levels of theory behind the values. Listed in no particular order of quality.", to: "/methods", glyph: "calculation", count: "levels", unit: "levels of theory" },
+    { title: "Molecules", detail: "Shapes, energies and thermochemistry.", to: BROWSE_KIND_PATHS.species, glyph: "species", count: "molecules", unit: "molecules" },
+    { title: "Reactions", detail: "Transition states, barriers and rate coefficients.", to: BROWSE_KIND_PATHS.reaction, glyph: "reaction", count: "reactions", unit: "reaction entries" },
+    { title: "Methods", detail: "Levels of theory. Not ranked.", to: "/methods", glyph: "calculation", count: "levels", unit: "levels of theory" },
 ]
 
 const COUNT_CELLS: { count: CountKey; label: string }[] = [
@@ -43,7 +43,7 @@ function ArchiveHomePage() {
         <section className="home-hero" aria-labelledby="home-title">
             <h1 id="home-title">Thermochemistry and kinetics</h1>
             <p className="home-lede">
-                Each value for a molecule or reaction shows where it came from, its <Term term="level-of-theory">level of theory</Term> and its review status.
+                Every value shows its source, <Term term="level-of-theory">level of theory</Term> and review status.
             </p>
             <IdentifierSearch />
             <div className="home-try">
@@ -90,10 +90,10 @@ function ArchiveHomePage() {
             <h2 id="home-read" className="home-section-title">How to read a value</h2>
             <div className="home-read-body">
                 <ol className="home-read-steps">
-                    <li><span className="home-callout" aria-hidden="true">1</span> The number, its uncertainty and its unit, and whether it was computed, measured or estimated.</li>
-                    <li><span className="home-callout" aria-hidden="true">2</span> Where it came from (the calculation, for a computed value). Follow the link to its inputs, outputs and settings.</li>
-                    <li><span className="home-callout" aria-hidden="true">3</span> The level of theory: the method and basis set the calculation used. The same molecule can have values at several.</li>
-                    <li><span className="home-callout" aria-hidden="true">4</span> The review status. “Not reviewed” means no curator has checked the value yet, not that it is wrong.</li>
+                    <li><span className="home-callout" aria-hidden="true">1</span> Number, uncertainty and unit; computed, measured or estimated.</li>
+                    <li><span className="home-callout" aria-hidden="true">2</span> Its source: the calculation behind it.</li>
+                    <li><span className="home-callout" aria-hidden="true">3</span> Its level of theory: method and basis set.</li>
+                    <li><span className="home-callout" aria-hidden="true">4</span> Its review status. “Not reviewed” means not yet checked, not wrong.</li>
                 </ol>
                 <figure className="home-read-sample">
                     <figcaption>Illustration with placeholder wording. It is not data.</figcaption>
