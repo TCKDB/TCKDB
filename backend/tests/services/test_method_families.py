@@ -312,7 +312,10 @@ def test_family_and_rung_are_never_an_order_key_a_tie_break_or_a_select_default(
         for node in ast.walk(tree):
             if isinstance(node, (ast.ImportFrom, ast.Import)):
                 names = [node.module or ""] if isinstance(node, ast.ImportFrom) else [a.name for a in node.names]
-                if any(n.startswith("app.chemistry.method_families") for n in names):
+                imported = list(names)
+                if isinstance(node, ast.ImportFrom) and (node.module or "") == "tckdb_schemas":
+                    imported += [f"tckdb_schemas.{a.name}" for a in node.names]
+                if any(n.startswith(("app.chemistry.method_families", "tckdb_schemas.method_families")) for n in imported):
                     importers.add(rel)
             if isinstance(node, ast.Call):
                 tail = ast.unparse(node.func).rsplit(".", 1)[-1]
@@ -322,6 +325,8 @@ def test_family_and_rung_are_never_an_order_key_a_tie_break_or_a_select_default(
                     hit = [b for b in banned if b in text]
                     assert not hit, f"{rel}: {tail}(...) mentions {hit}: the classification must never order anything"
     assert importers == {
+        # The re-export the rest of the backend imports through; it holds the version registry and orders nothing.
+        "chemistry/method_families.py",
         "api/routes/scientific/calculations.py",
         "api/routes/scientific/kinetics.py",
         "api/routes/scientific/kinetics_search.py",
@@ -369,3 +374,12 @@ def test_no_order_echo_or_browse_order_names_a_family_or_rung():
                 for arg in node.args:
                     assert "family" not in ast.unparse(arg) and "rung" not in ast.unparse(arg), path
     assert browse_order("review_rank", "created_at", "id")
+
+
+def test_backend_classifier_agrees_with_the_package():
+    """Kills: the backend facade classifying differently from the table the producer adapter imports."""
+    from tckdb_schemas import method_families as package
+
+    for name in ("dlpno-ccsd(t)-f12", "ccsd(t)-f12/ri", "b3lyp", "g4", "caspt2", "mrci+q", "hf", "mp2-f12", "", None):
+        assert classify_method(name) == package.classify_method(name)
+    assert CLASSIFICATION is package.CLASSIFICATION

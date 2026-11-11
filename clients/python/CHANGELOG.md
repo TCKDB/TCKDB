@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.206.0 - 2026-11-11
+
+The `tckdb-schemas` requirement is widened to `>=0.158,<0.175`. No client code changed.
+
 ## 0.205.0 - 2026-11-11
 
 The `tckdb-schemas` requirement is widened to `>=0.158,<0.174`. No client code changed.
