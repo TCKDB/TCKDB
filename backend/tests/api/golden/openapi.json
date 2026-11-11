@@ -11339,6 +11339,9 @@
             ],
             "title": "Level Of Theory Ref"
           },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
           "role": {
             "enum": [
               "reactant_energy",
@@ -11383,7 +11386,8 @@
         },
         "required": [
           "role",
-          "calculation_ref"
+          "calculation_ref",
+          "review_status"
         ],
         "title": "CitedCalculation",
         "type": "object"
@@ -18919,6 +18923,11 @@
             "title": "Calculation Ref",
             "type": "string"
           },
+          "convergence_unrecorded": {
+            "default": false,
+            "title": "Convergence Unrecorded",
+            "type": "boolean"
+          },
           "count": {
             "title": "Count",
             "type": "integer"
@@ -18935,6 +18944,9 @@
             "title": "Energy Type",
             "type": "string"
           },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
           "software": {
             "$ref": "#/components/schemas/EnergyProfileSoftware"
           },
@@ -18949,7 +18961,8 @@
           "calculation_ref",
           "energy_type",
           "electronic_energy_hartree",
-          "software"
+          "software",
+          "review_status"
         ],
         "title": "EnergyProfileMolecule",
         "type": "object"
@@ -19075,6 +19088,11 @@
             "title": "Calculation Ref",
             "type": "string"
           },
+          "convergence_unrecorded": {
+            "default": false,
+            "title": "Convergence Unrecorded",
+            "type": "boolean"
+          },
           "electronic_energy_hartree": {
             "title": "Electronic Energy Hartree",
             "type": "number"
@@ -19086,6 +19104,9 @@
             ],
             "title": "Energy Type",
             "type": "string"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
           },
           "software": {
             "$ref": "#/components/schemas/EnergyProfileSoftware"
@@ -19100,7 +19121,8 @@
           "calculation_ref",
           "energy_type",
           "electronic_energy_hartree",
-          "software"
+          "software",
+          "review_status"
         ],
         "title": "EnergyProfileTransitionState",
         "type": "object"
@@ -19135,10 +19157,14 @@
           "transition_state_entry_ref": {
             "title": "Transition State Entry Ref",
             "type": "string"
+          },
+          "transition_state_entry_review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
           }
         },
         "required": [
           "transition_state_entry_ref",
+          "transition_state_entry_review_status",
           "code"
         ],
         "title": "EnergyProfileUnavailable",
@@ -19150,7 +19176,8 @@
           "no_reactant_energy_at_level",
           "no_product_energy_at_level",
           "points_from_different_programs",
-          "no_ts_energy"
+          "no_ts_energy",
+          "no_program_recorded"
         ],
         "title": "EnergyProfileUnavailableCode",
         "type": "string"
@@ -43239,7 +43266,7 @@
         "description": "One complete profile: reactants, transition state and products at one level and one program.",
         "properties": {
           "definition": {
-            "default": "Each molecule's lowest computed energy at this level, from this program: the lowest single-point energy, or the lowest optimisation final energy when it has no single point. Electronic energy, no zero-point correction. Reactant and product energies are summed over the entry's participants, each counted once per occurrence.",
+            "default": "Each molecule's energy at this level from this program: its lowest single-point energy, or, only when it has no single point at that level and program, its lowest optimisation final energy (an optimisation recorded as not converged is not used). Electronic energy, no zero-point correction. Reactant and product energies are summed over the entry's participants, each counted once per occurrence.",
             "title": "Definition",
             "type": "string"
           },
@@ -43251,6 +43278,17 @@
             "default": "electronic",
             "title": "Energy Kind",
             "type": "string"
+          },
+          "energy_types": {
+            "items": {
+              "enum": [
+                "single_point",
+                "optimization"
+              ],
+              "type": "string"
+            },
+            "title": "Energy Types",
+            "type": "array"
           },
           "level_of_theory": {
             "$ref": "#/components/schemas/LevelOfTheorySummary"
@@ -43282,12 +43320,32 @@
           "transition_state_entry_ref": {
             "title": "Transition State Entry Ref",
             "type": "string"
+          },
+          "transition_state_entry_review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "versions": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Versions",
+            "type": "array"
           }
         },
         "required": [
           "transition_state_entry_ref",
+          "transition_state_entry_review_status",
           "level_of_theory",
           "program",
+          "energy_types",
+          "versions",
           "reactants",
           "transition_state",
           "products",
@@ -105143,7 +105201,7 @@
     },
     "/api/v1/scientific/reaction-entries/{reaction_entry_ref}/energy-profile": {
       "get": {
-        "description": "One profile per transition-state entry, level of theory and program: reactants, transition state, products.\n\nEvery point of a profile comes from this reaction entry's own participants and transition-state entries, at one level\nfrom one program; programs are never mixed. A transition-state entry with no complete profile is listed under\n``unavailable`` with a code. Nothing is ranked or chosen between profiles. ``cited_by_kinetics`` lists, per kinetics\nrecord, the energy calculations the record cites, apart from the profiles. The review floor of the read profile applies\nto energies and transition-state entries; ``include_rejected``, ``include_deprecated`` and ``min_review_status`` apply\nto the kinetics records, and hidden ones are counted in ``request.hidden_by_default``.",
+        "description": "One profile per transition-state entry, level of theory and program: reactants, transition state, products.\n\nEvery point of a profile comes from this reaction entry's own participants and transition-state entries, at one level\nfrom one program; programs are never mixed. A transition-state entry with no complete profile is listed under\n``unavailable`` with a code. Nothing is ranked or chosen between profiles. ``cited_by_kinetics`` lists, per kinetics\nrecord, the energy calculations the record cites, apart from the profiles. Transition-state entries and kinetics records\nfollow the list rules (``include_rejected``, ``include_deprecated``, ``min_review_status``, the curated floor; hidden ones\nare counted in ``request.hidden_by_default``). The calculations behind each point are evidence: rejected and deprecated\nones are never used, and each point carries its review badge.",
         "operationId": "reaction_entry_energy_profile_api_v1_scientific_reaction_entries__reaction_entry_ref__energy_profile_get",
         "parameters": [
           {

@@ -264,7 +264,7 @@ ML_ENERGY_ROWS = (
 )
 PROFILE_ENTRIES = (
     "an energy profile is listed per transition-state ENTRY, a record of the read, so the record floor decides which entries "
-    "it lists; the calculations behind a point keep the approved floor as the ML export's energy rows do"
+    "it lists; the calculations behind a point are evidence (badged, and withheld only when rejected or deprecated)"
 )
 COMPARED_RECORDS = (
     "a relative-energy request compares conformer GROUPS, which are records, so the record floor decides the compared set; "

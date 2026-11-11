@@ -16,7 +16,6 @@ from app.db.models.reaction import ReactionEntry
 from app.schemas.reads.scientific_reaction_energy_profile import ReactionEnergyProfileResponse
 from app.services.scientific_read.handles import is_ref_handle, resolve_path_handle
 from app.services.scientific_read.internal_ids import apply_internal_ids_visibility
-from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.reaction_energy_profile import get_reaction_energy_profile
 
 router = APIRouter(route_class=ServerFaultRoute, prefix="/reaction-entries")
@@ -39,9 +38,10 @@ def reaction_entry_energy_profile(
     Every point of a profile comes from this reaction entry's own participants and transition-state entries, at one level
     from one program; programs are never mixed. A transition-state entry with no complete profile is listed under
     ``unavailable`` with a code. Nothing is ranked or chosen between profiles. ``cited_by_kinetics`` lists, per kinetics
-    record, the energy calculations the record cites, apart from the profiles. The review floor of the read profile applies
-    to energies and transition-state entries; ``include_rejected``, ``include_deprecated`` and ``min_review_status`` apply
-    to the kinetics records, and hidden ones are counted in ``request.hidden_by_default``.
+    record, the energy calculations the record cites, apart from the profiles. Transition-state entries and kinetics records
+    follow the list rules (``include_rejected``, ``include_deprecated``, ``min_review_status``, the curated floor; hidden ones
+    are counted in ``request.hidden_by_default``). The calculations behind each point are evidence: rejected and deprecated
+    ones are never used, and each point carries its review badge.
     """
     if not is_ref_handle(reaction_entry_ref):
         raise ValueError(f"invalid_handle: {reaction_entry_ref!r} is not a <prefix>_<body> public ref")
@@ -50,7 +50,6 @@ def reaction_entry_energy_profile(
         session,
         reaction_entry_id=entry_id,
         reaction_entry_ref=reaction_entry_ref,
-        profile=current_read_profile(),
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         min_review_status=min_review_status,

@@ -17,9 +17,10 @@ from app.schemas.reads.scientific_common import LevelOfTheorySummary, ProfiledRe
 ENERGY_KIND = "electronic"
 
 PROFILE_DEFINITION = (
-    "Each molecule's lowest computed energy at this level, from this program: the lowest single-point energy, or the "
-    "lowest optimisation final energy when it has no single point. Electronic energy, no zero-point correction. "
-    "Reactant and product energies are summed over the entry's participants, each counted once per occurrence."
+    "Each molecule's energy at this level from this program: its lowest single-point energy, or, only when it has no "
+    "single point at that level and program, its lowest optimisation final energy (an optimisation recorded as not "
+    "converged is not used). Electronic energy, no zero-point correction. Reactant and product energies are summed "
+    "over the entry's participants, each counted once per occurrence."
 )
 
 
@@ -30,6 +31,8 @@ class EnergyProfileUnavailableCode(str, Enum):
     no_product_energy_at_level = "no_product_energy_at_level"
     points_from_different_programs = "points_from_different_programs"
     no_ts_energy = "no_ts_energy"
+    #: The only energies there are come from calculations with no recorded software release, so no program can be named.
+    no_program_recorded = "no_program_recorded"
 
 
 class EnergyProfileRequestEcho(ProfiledRequestEcho):
@@ -56,6 +59,10 @@ class EnergyProfileMolecule(BaseModel):
     energy_type: Literal["single_point", "optimization"]
     electronic_energy_hartree: float
     software: EnergyProfileSoftware
+    #: Review badge of the calculation the energy comes from.
+    review_status: RecordReviewStatus
+    #: True for an optimisation final energy whose convergence the deposit did not record (used, but not confirmed).
+    convergence_unrecorded: bool = False
 
 
 class EnergyProfileTransitionState(BaseModel):
@@ -64,6 +71,8 @@ class EnergyProfileTransitionState(BaseModel):
     energy_type: Literal["single_point", "optimization"]
     electronic_energy_hartree: float
     software: EnergyProfileSoftware
+    review_status: RecordReviewStatus
+    convergence_unrecorded: bool = False
 
 
 class EnergyProfileValues(BaseModel):
@@ -76,8 +85,12 @@ class ReactionEnergyProfile(BaseModel):
     """One complete profile: reactants, transition state and products at one level and one program."""
 
     transition_state_entry_ref: str
+    transition_state_entry_review_status: RecordReviewStatus
     level_of_theory: LevelOfTheorySummary
     program: str
+    #: The kinds of energy the points use and the program versions they come from, so mixing is stated, not hidden.
+    energy_types: list[Literal["single_point", "optimization"]]
+    versions: list[str | None]
     energy_kind: Literal["electronic"] = ENERGY_KIND
     definition: str = PROFILE_DEFINITION
     reactants: list[EnergyProfileMolecule]
@@ -93,6 +106,7 @@ class EnergyProfileUnavailable(BaseModel):
     """A transition-state entry (at a level and program when it has an energy there) with no complete profile."""
 
     transition_state_entry_ref: str
+    transition_state_entry_review_status: RecordReviewStatus
     code: EnergyProfileUnavailableCode
     level_of_theory: LevelOfTheorySummary | None = None
     program: str | None = None
@@ -103,6 +117,7 @@ class CitedCalculation(BaseModel):
 
     role: Literal["reactant_energy", "product_energy", "ts_energy"]
     calculation_ref: str
+    review_status: RecordReviewStatus
     species_entry_ref: str | None = None
     transition_state_entry_ref: str | None = None
     level_of_theory_ref: str | None = None
