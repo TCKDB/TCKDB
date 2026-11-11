@@ -149,6 +149,21 @@ describe("ConformerGroupPage", () => {
         )
     }
 
+    it("shows where this record sits in the side column, with the drawing hidden and a list twin", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        const side = document.querySelector(".page-shell-side") as HTMLElement
+        const map = within(side).getByRole("region", { name: "Where this record sits" })
+        expect(map.querySelector("svg.rel-map-figure")).toHaveAttribute("aria-hidden", "true")
+        const list = within(map).getByRole("list", { name: "Connected records" })
+        const items = within(list).getAllByRole("listitem").map((item) => item.textContent ?? "")
+        expect(items[0]).toContain("Molecule version")
+        expect(items.find((item) => item.includes("Conformer observations"))).toContain("2 found")
+        expect(items.find((item) => item.includes("Calculations"))).toContain("3 found")
+        expect(items.find((item) => item.includes("Geometries"))).toContain("2 found")
+    })
+
     it("titles the record by what it is, never by a ref or the producer's label", async () => {
         serve()
         page()

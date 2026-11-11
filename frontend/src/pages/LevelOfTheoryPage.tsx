@@ -8,6 +8,8 @@ import { CorrectionSchemeTable } from "../components/CorrectionSchemeTable"
 import { Disclosure } from "../components/Disclosure"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
+import { RecordMap } from "../components/RelationshipMap"
+import { levelOfTheoryNodes } from "../domain/recordMapNodes"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
@@ -67,9 +69,21 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
     const title = lot.label ?? (lot.basis ? `${lot.method}/${lot.basis}` : lot.method)
     useDocumentTitle("Level of theory", title)
 
+    const mapNodes = levelOfTheoryNodes({
+        calculationCount: record.evidence_summary.calculation_usage_count,
+        compositeScheme: lot.composite_scheme
+            ? { ref: lot.composite_scheme.composite_scheme_ref, label: words(lot.composite_scheme.kind) ?? "recipe" }
+            : null,
+        schemeCount: record.correction_schemes ? record.correction_schemes.length : null,
+        scaleFactorCount: record.frequency_scale_factors
+            ? record.frequency_scale_factors.reduce((sum, group) => sum + group.frequency_scale_factor_count, 0)
+            : null,
+    })
+
     return (
         <section className="conformer-page methods-page">
             <PageShell
+                side={<RecordMap selfKind="level-of-theory" selfLabel="This level of theory" nodes={mapNodes} />}
                 crumbs={[{ label: "Methods", to: "/methods" }, { label: title }]}
                 identity={(
                     <header className="basin-header">

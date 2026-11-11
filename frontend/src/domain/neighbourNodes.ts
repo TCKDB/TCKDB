@@ -13,6 +13,8 @@ export type NeighbourNode = {
     ref?: string
     /** The page it opens; `null` when it stands for several records and no single page is the right target. */
     to: string | null
+    /** A short second line in plain words ("optimisation, b3lyp/def2tzvp"); shown when the node has no ref of its own. */
+    sub?: string
     /** What the read returned, in words ("2 found"); never a guess. */
     found: string | null
 }
