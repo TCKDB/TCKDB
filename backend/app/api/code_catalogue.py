@@ -755,6 +755,16 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("applied_energy_correction_source_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
+    ApiCode("applied_energy_correction_value_conflict", 422, Surface.coded_exception,
+            "backend/app/services/energy_correction_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "An applied correction with the same target, source, scheme or "
+                "scale factor, role and temperature is already stored with a "
+                "different total or component breakdown. context carries the "
+                "record kind, the role, the target and scheme public refs, and "
+                "which of value and components differ."
+            )),
     ApiCode("archive_release_artifacts_differ", 422, Surface.message_prefix,
             "backend/app/services/deposit/build.py",
             reach=Reach.guard,

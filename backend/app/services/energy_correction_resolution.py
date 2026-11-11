@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from typing import TypeVar
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from tckdb_schemas.enums import (
     AppliedCorrectionComponentKind,
@@ -33,7 +34,9 @@ from app.db.models.energy_correction import (
     EnergyCorrectionSchemeComponentParam,
     FrequencyScaleFactor,
 )
+from app.db.models.reaction import ReactionEntry
 from app.db.models.species import Species, SpeciesEntry
+from app.db.models.transition_state import TransitionStateEntry
 from app.schemas.fragments.refs import FreqScaleFactorRef
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.energy_correction_upload import (
@@ -770,6 +773,132 @@ def assert_bac_total_has_required_components(
 # Applied energy correction creation
 # ---------------------------------------------------------------------------
 
+#: An applied correction with this dedup key is already stored with a different total or breakdown.
+W_APPLIED_CORRECTION_VALUE_CONFLICT = "applied_energy_correction_value_conflict"
+
+
+def _find_applied_correction(
+    session: Session, key: Mapping[str, object]
+) -> AppliedEnergyCorrection | None:
+    """The applied correction with exactly this dedup key, or ``None``."""
+    return session.scalar(
+        select(AppliedEnergyCorrection).where(
+            *(
+                getattr(AppliedEnergyCorrection, column) == value
+                if value is not None
+                else getattr(AppliedEnergyCorrection, column).is_(None)
+                for column, value in key.items()
+            )
+        )
+    )
+
+
+def _add_components(
+    session: Session,
+    applied: AppliedEnergyCorrection,
+    payload: AppliedEnergyCorrectionUploadPayload,
+) -> None:
+    """Write the payload's per-component rows under ``applied``."""
+    for comp in payload.components:
+        session.add(
+            AppliedEnergyCorrectionComponent(
+                applied_correction_id=applied.id,
+                component_kind=comp.component_kind,
+                key=comp.key,
+                multiplicity=comp.multiplicity,
+                parameter_value=comp.parameter_value,
+                contribution_value=comp.contribution_value,
+            )
+        )
+    if payload.components:
+        session.flush()
+
+
+def _same_total(
+    stored: AppliedEnergyCorrection, payload: AppliedEnergyCorrectionUploadPayload
+) -> bool:
+    """Whether the stored total equals the payload's.
+
+    Same unit: exact equality. Different units: both converted to hartree and
+    compared within ``_PARAM_VALUE_ABS_TOL``.
+    """
+    if stored.value_unit == payload.value_unit:
+        return stored.value == payload.value
+    stored_h = convert_energy_to_hartree(stored.value, stored.value_unit)
+    supplied_h = convert_energy_to_hartree(payload.value, payload.value_unit)
+    return (
+        stored_h is not None
+        and supplied_h is not None
+        and abs(stored_h - supplied_h) <= _PARAM_VALUE_ABS_TOL
+    )
+
+
+def _assert_same_applied_value(
+    session: Session,
+    stored: AppliedEnergyCorrection,
+    payload: AppliedEnergyCorrectionUploadPayload,
+    *,
+    field: str | None,
+) -> None:
+    """Refuse a payload whose total or components differ from the stored row.
+
+    Components compare as an exact multiset of ``(kind, key, multiplicity,
+    parameter_value, contribution_value)``.
+    """
+    stored_components = sorted(
+        (c.component_kind.value, c.key, c.multiplicity, c.parameter_value, c.contribution_value)
+        for c in session.scalars(
+            select(AppliedEnergyCorrectionComponent).where(
+                AppliedEnergyCorrectionComponent.applied_correction_id == stored.id
+            )
+        )
+    )
+    supplied_components = sorted(
+        (c.component_kind.value, c.key, c.multiplicity, c.parameter_value, c.contribution_value)
+        for c in payload.components
+    )
+    if _same_total(stored, payload) and stored_components == supplied_components:
+        return
+
+    context: dict[str, object] = {
+        "record_kind": "applied_energy_correction",
+        "application_role": payload.application_role.value,
+    }
+    if field is not None:
+        context["field"] = field
+    for column, model, label in (
+        ("target_species_entry_id", SpeciesEntry, "species_entry_ref"),
+        ("target_reaction_entry_id", ReactionEntry, "reaction_entry_ref"),
+        ("target_transition_state_entry_id", TransitionStateEntry, "transition_state_entry_ref"),
+    ):
+        target_id = getattr(stored, column)
+        if target_id is not None:
+            context[label] = session.get(model, target_id).public_ref
+    if stored.scheme_id is not None:
+        context["scheme_ref"] = session.get(EnergyCorrectionScheme, stored.scheme_id).public_ref
+    if stored.frequency_scale_factor_id is not None:
+        context["frequency_scale_factor_ref"] = session.get(
+            FrequencyScaleFactor, stored.frequency_scale_factor_id
+        ).public_ref
+    context["differs"] = [
+        name
+        for name, differs in (
+            ("value", not _same_total(stored, payload)),
+            ("components", stored_components != supplied_components),
+        )
+        if differs
+    ]
+    raise CodedValueError(
+        W_APPLIED_CORRECTION_VALUE_CONFLICT,
+        "An applied energy correction for this target, scheme and role is "
+        "already recorded with a different value or component breakdown. "
+        "The same scheme applied to the same entry has to give the same "
+        "numbers; send matching values, or a different scheme if these are "
+        "a different correction.",
+        context=context,
+        message_prefix=False,
+    )
+
 
 def create_applied_energy_correction(
     session: Session,
@@ -784,7 +913,13 @@ def create_applied_energy_correction(
     field: str | None = None,
     warnings_out: list[UploadWarning] | None = None,
 ) -> AppliedEnergyCorrection:
-    """Resolve provenance refs and create an applied energy correction.
+    """Resolve provenance refs and create or reuse an applied energy correction.
+
+    A row with the same dedup key (target, sources, scheme or scale factor,
+    role, temperature) is reused when its total and components match the
+    payload, and refused with ``applied_energy_correction_value_conflict`` when they
+    differ. A concurrent insert of the same key is reselected and compared
+    the same way.
 
     The workflow orchestrator is responsible for resolving local string keys
     (``source_conformer_key``, ``source_calculation_key``) to integer IDs
@@ -805,7 +940,7 @@ def create_applied_energy_correction(
     :param warnings_out: Optional sink for the scheme's non-blocking
         provenance warnings (see :func:`resolve_or_create_scheme`).
         ``None`` (the default) is a no-op, matching every existing caller.
-    :returns: Newly created ``AppliedEnergyCorrection`` row.
+    :returns: The new or reused ``AppliedEnergyCorrection`` row.
     """
     scheme_id = None
     fsf_id = None
@@ -825,7 +960,7 @@ def create_applied_energy_correction(
         )
         fsf_id = fsf.id
 
-    applied = AppliedEnergyCorrection(
+    key = dict(
         target_species_entry_id=target_species_entry_id,
         target_reaction_entry_id=target_reaction_entry_id,
         target_transition_state_entry_id=target_transition_state_entry_id,
@@ -834,14 +969,29 @@ def create_applied_energy_correction(
         scheme_id=scheme_id,
         frequency_scale_factor_id=fsf_id,
         application_role=payload.application_role,
-        value=payload.value,
-        value_unit=payload.value_unit,
         temperature_k=payload.temperature_k,
-        note=payload.note,
-        created_by=created_by,
     )
-    session.add(applied)
-    session.flush()
+    applied = _find_applied_correction(session, key)
+    if applied is None:
+        try:
+            with session.begin_nested():
+                applied = AppliedEnergyCorrection(
+                    **key,
+                    value=payload.value,
+                    value_unit=payload.value_unit,
+                    note=payload.note,
+                    created_by=created_by,
+                )
+                session.add(applied)
+                session.flush()
+                _add_components(session, applied, payload)
+        except IntegrityError:
+            applied = _find_applied_correction(session, key)
+            if applied is None:
+                raise
+            _assert_same_applied_value(session, applied, payload, field=field)
+    else:
+        _assert_same_applied_value(session, applied, payload, field=field)
 
     if warnings_out is not None:
         warnings_out.extend(
@@ -850,20 +1000,5 @@ def create_applied_energy_correction(
                 field=f"{field}.application_role" if field else "application_role",
             )
         )
-
-    for comp in payload.components:
-        session.add(
-            AppliedEnergyCorrectionComponent(
-                applied_correction_id=applied.id,
-                component_kind=comp.component_kind,
-                key=comp.key,
-                multiplicity=comp.multiplicity,
-                parameter_value=comp.parameter_value,
-                contribution_value=comp.contribution_value,
-            )
-        )
-
-    if payload.components:
-        session.flush()
 
     return applied
