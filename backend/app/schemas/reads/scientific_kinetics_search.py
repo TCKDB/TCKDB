@@ -97,7 +97,7 @@ class KineticsSearchRequest(BaseModel):
     match: ReactionMatchMode = ReactionMatchMode.contains
     family: str | None = Field(default=None, max_length=_MAX_FAMILY_LENGTH)
 
-    # Phase C: optional explicit reaction/reaction-entry handles.
+    # Optional explicit reaction/reaction-entry handles.
     reaction_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
     reaction_entry_ref: str | None = Field(
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH
@@ -199,7 +199,7 @@ class KineticsSearchRequest(BaseModel):
 class KineticsSearchReactionContext(BaseModel):
     """Resolved reaction/reaction-entry identity context for a kinetics record.
 
-    Phase B: ``reaction_ref`` and ``reaction_entry_ref`` are the public
+    ``reaction_ref`` and ``reaction_entry_ref`` are the public
     stable handles alongside the integer IDs.
     """
 

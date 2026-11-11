@@ -9,9 +9,7 @@ try:
     # ``__version__`` from drifting away from the version actually
     # shipped — anything negotiating the wire contract on
     # ``__version__`` would otherwise be told a number nobody maintains.
-    # main carried a hand-written literal that had already drifted: it
-    # still named the previous release after #82 bumped pyproject.toml.
-    # (Spelling that stale number here, even in a comment, would trip
+    # (A quoted version string here, even in a comment, would trip
     # test_init_does_not_hard_code_a_version -- the guard scans the file
     # for version literals rather than parsing assignments.)
     __version__ = _distribution_version("tckdb-schemas")

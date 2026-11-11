@@ -147,7 +147,7 @@ class TransitionStateCalculationIn(CalculationWithResultsPayload):
     """A transition-state-upload calculation that a structure determination can name by a local key.
 
     The key exists only so a ``structure_determinations`` entry can say "the energy is *that* single point"
-    using a name the depositor chose, rather than a calculation row id (DR-0029 Requirement 1). Optional: a
+    using a name the depositor chose, rather than a calculation row id. Optional: a
     payload with no determination never needs one. It is not a namespace for evidence, corrections or
     anything else on this route.
 
@@ -186,7 +186,7 @@ class TransitionStateUploadRequest(SchemaBase):
         scale factor, which is defined by the frequency calculation it was
         applied to.
     :param atom_map: Which atom of each reactant and product is which atom of
-        the saddle point (ADR 0011), supplied and never derived. It names the
+        the saddle point, supplied and never derived. It names the
         participants by their ``key`` and the geometries by the ``key`` of the
         participant ``geometry`` it counts into; ``ts_geometry_key`` names
         ``geometry_key``. Optional: a deposit without one succeeds and returns
@@ -307,7 +307,7 @@ class TransitionStateUploadRequest(SchemaBase):
         default=None,
         description=(
             "Which atom of each reactant and product is which atom of the "
-            "saddle point (ADR 0011). Supplied by the depositor and never "
+            "saddle point. Supplied by the depositor and never "
             "derived. Requires 'geometry_key' on the request and a 'key' on "
             "every reaction participant; the participants' 'geometry' keys are "
             "what the map counts into. Optional: a deposit without one "
@@ -611,8 +611,7 @@ class TransitionStateUploadRequest(SchemaBase):
     def validate_reaction_coordinate_contract(self) -> Self:
         """Refuse frequency evidence with no usable reaction coordinate.
 
-        Definitional, therefore blocking (ADR 0008, narrowed by ADR
-        0012: at least one imaginary mode, exactly one designated the
+        Definitional, therefore blocking (at least one imaginary mode, exactly one designated the
         reaction coordinate, and no undeclared mode stiff enough to make
         that designation meaningless).
         """

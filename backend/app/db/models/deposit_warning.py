@@ -1,8 +1,7 @@
 """Append-only deposit-time warnings, stored against the record they are about.
 
-A deposit's warn-tier findings (``UploadWarning``) used to reach the depositor
-once, in the upload response, and then survive only inside the upload job's
-result. This table keeps each one beside the record it concerns, so a reader of
+A deposit's warn-tier findings (``UploadWarning``) reach the depositor in
+the upload response. This table keeps each one beside the record it concerns, so a reader of
 that record can see that it tripped an expectation when it was deposited.
 
 **One row per (submission, record, content hash).** Each submission writes its own
@@ -12,8 +11,7 @@ truly identical warning (same code, field, message and context) within one submi
 **Marker rows.** A row with ``code IS NULL`` says "this record was checked by this
 submission at ``check_version``", whether or not anything fired. It is what lets a
 read say ``recorded`` with no items instead of leaving "nothing fired" and "nothing
-was ever checked" looking alike. A record deposited before this table existed has no
-marker and reads ``not_recorded``.
+was ever checked" looking alike. A record with no marker reads ``not_recorded``.
 
 **Anchor.** ``record_type``/``record_id`` name the result or provenance record the
 deposit created (calculation, transition-state entry, kinetics, thermo, statmech,

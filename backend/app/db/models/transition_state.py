@@ -97,8 +97,8 @@ class TransitionStateEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
     validation_evidence: Mapped[list["TransitionStateValidationEvidence"]] = relationship(
         back_populates="transition_state_entry", cascade="all, delete-orphan"
     )
-    #: Atom correspondence across the reaction this saddle point sits in
-    #: (ADR 0011). At most one, keyed on the owning reaction entry. Distinct
+    #: Atom correspondence across the reaction this saddle point sits in.
+    #: At most one, keyed on the owning reaction entry. Distinct
     #: from ``validation_evidence``'s participant mappings, which partition the
     #: TS atoms among participant molecules without saying which atom is which.
     atom_maps: Mapped[list["ReactionAtomMap"]] = relationship(
@@ -188,12 +188,10 @@ class TransitionStateValidationEvidence(Base, TimestampMixin, CreatedByMixin):
     A producer's *conclusion* about a mode (``mode_displacement_agrees``) and
     the numbers it rests on (count, frequency) are stored, as a claim with its
     evidence. The arithmetic anyone can redo from the stored Hessian is not:
-    ADR 0012's eigenvector projections still run at *read* time
+    the eigenvector projections run at *read* time
     (``include=imaginary_mode_projections``) and write nothing, because
     ``calc_hessian`` stores the matrix those vectors diagonalise. The displacement
     flag is recorded as the verdict it is and is never recomputed here.
-    ADR 0013's earlier position, that no mode evidence belongs in this table,
-    is superseded for the conclusion and unchanged for the projections.
 
     Indices relative to what
     ------------------------
@@ -208,8 +206,8 @@ class TransitionStateValidationEvidence(Base, TimestampMixin, CreatedByMixin):
     ordering the reader has to guess, and a wrong guess silently means a
     different atom.
 
-    ``transition_state_geometry_id`` closes that, the same way ADR 0011
-    settled it for ``reaction_atom_map``: the map names the geometry it is
+    ``transition_state_geometry_id`` closes that, the same way
+    ``reaction_atom_map`` does: the map names the geometry it is
     written against rather than relying on one being derivable. It is the
     identical claim in the identical units — ``reaction_atom_map``'s
     ``ts_atom_index`` and this table's mapping values both index the saddle
@@ -377,9 +375,9 @@ class TransitionStateValidationEnergy(Base):
     )
     #: What holding ``energy_hartree`` against the energy TCKDB stores for
     #: ``source_calculation_id`` concluded when the row was written
-    #: (issue #638): ``agrees`` (within the printed-precision tolerance) or
+    #: ``agrees`` (within the printed-precision tolerance) or
     #: ``not_compared``, in which case ``not_compared_reason`` says why. NULL
-    #: means the row was deposited before the comparison existed, and is not a
+    #: means no comparison was recorded, and is not a
     #: pass. A *disagreement* is never stored: it refuses the deposit.
     stored_energy_comparison: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     not_compared_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

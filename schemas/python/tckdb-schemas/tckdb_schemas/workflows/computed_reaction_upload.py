@@ -377,13 +377,7 @@ class BundleThermoIn(ThermoStateFields):
 
     The reaction route's thermo carries the same provenance the species
     route's ``ThermoInBundle`` carries, because it is the same claim about
-    the same kind of row. The two models were written three days apart in
-    April 2026 and diverged from the start — this one first, with eight
-    fields, and never touched since; ``ThermoInBundle`` three days later
-    with fifteen. Nothing recorded a reason, and the gap was not visible
-    from either model, so a depositor putting thermo on a reaction bundle
-    silently lost the record of which calculations produced it while the
-    same deposit on the species route kept it.
+    the same kind of row.
 
     ``applied_energy_corrections`` is deliberately **not** here. The
     reaction bundle already declares applied corrections one level up, on
@@ -555,23 +549,14 @@ class BundleStatmechIn(SchemaBase):
     :class:`BundleThermoIn` gives: it is the same claim about the same
     kind of row, written against the same table.
 
-    The gap this closes had two distinct causes, and only one of them is
-    the same as thermo's. This model was born narrow in ``17706cf7`` --
-    congenital, like ``BundleThermoIn``. But the three rotational
-    constants were added to ``StatmechInBundle`` **only**, by
-    ``264519f1``, two days after ``0ea9182f`` had correctly updated both
-    models in one commit. The habit was right and then it lapsed, and
-    nothing in the tree could notice: no test compared the two field
-    sets, so a one-sided addition read exactly like a deliberate one.
-    ``tests/schemas/test_bundle_root_model_symmetry.py`` is now that
-    test, and an intentional divergence has to be written down in its
-    allowlist with a reason rather than merely happening.
+    ``tests/schemas/test_bundle_root_model_symmetry.py`` compares the two field
+    sets; an intentional divergence is written down in its allowlist with a
+    reason.
 
     Nothing is deliberately withheld here. ``applied_energy_corrections``
     -- the one field :class:`BundleThermoIn` refuses, because
     :class:`BundleSpeciesIn` already declares it against the same species
-    entry -- is not on ``StatmechInBundle`` either, so it is not part of
-    this divergence and needs no exception.
+    entry -- is not on ``StatmechInBundle`` either, so it needs no exception.
 
     ``literature``, ``software_release`` and ``workflow_tool_release``
     are per-species overrides of the bundle-level
@@ -742,20 +727,14 @@ class BundleSpeciesIn(SchemaBase):
         species's conformer geometries -- it names the geometry the
         calculation ran on.
 
-        Anchoring is ``conformer_key``'s job, not ``geometry_key``'s. This
-        docstring used to say the opposite ("so the backend can anchor them
-        to the correct observation"), and that sentence was the seam the
-        anchoring defect lived in: it made one field responsible for two
-        questions that come apart whenever a calculation's geometry is not a
-        declared conformer geometry. A coarse pre-optimisation is exactly
-        that case -- ``validate_calc_geometry_keys`` below excuses ``opt``
-        from supplying ``geometry_key`` for precisely this reason -- and the
-        result was a calculation that named no geometry, was excused from
-        naming one, and silently got no anchor either.
+        Anchoring is ``conformer_key``'s job, not ``geometry_key``'s: a
+        calculation's geometry need not be a declared conformer geometry. A
+        coarse pre-optimisation is such a case, and
+        ``validate_calc_geometry_keys`` below excuses ``opt`` from supplying
+        ``geometry_key``.
 
-        ``geometry_key`` is still honoured as the anchor when
-        ``conformer_key`` is absent, so payloads predating this field are
-        unaffected. When both are stated they must name the same conformer: a
+        ``geometry_key`` is honoured as the anchor when ``conformer_key`` is
+        absent. When both are stated they must name the same conformer: a
         ``geometry_key`` that belongs to another conformer than the
         ``conformer_key`` is refused
         (``calculation_geometry_conformer_mismatch``), and neither key is
@@ -837,7 +816,7 @@ class BundleSpeciesIn(SchemaBase):
     def validate_atomless_species_carries_no_structure(self) -> Self:
         """Refuse a geometry deposited against a participant with no atoms.
 
-        Definitional, therefore blocking (ADR 0008). This model is where a
+        Definitional, therefore blocking. This model is where a
         declared ``molecule_kind`` and the conformers deposited under it are
         both in hand for the first time, so it is the earliest place the
         contradiction can be named with the key that caused it.
@@ -865,7 +844,7 @@ class BundleSpeciesIn(SchemaBase):
         """Require a calculation's ``conformer_key`` to name one of this species's conformers.
 
         Refused here as well as at the workflow seam, and with the same code
-        and the same ``context`` (ADR 0017), so a client cannot tell which
+        and the same ``context``, so a client cannot tell which
         layer caught it. This layer refuses earlier and refuses inside
         ``tckdb-client`` with no server in reach; the seam is the backstop
         for the reach this validator does not have.
@@ -917,7 +896,7 @@ class BundleSpeciesIn(SchemaBase):
         Runs after the two undeclared-key validators above, so by here each key
         that is set names one of this species's own conformers. The mapping is
         known from the payload alone, so the request schema is the only layer
-        that checks it; the workflow can no longer be handed the contradiction.
+        that checks it; the workflow is never handed the contradiction.
         """
         assert_conformer_primaries_agree(self.conformers)
         assert_calculation_geometry_matches_conformer(
@@ -978,7 +957,7 @@ class BundleSpeciesIn(SchemaBase):
     def validate_n_imag_matches_species_entry_kind(self) -> Self:
         """Refuse frequency evidence that contradicts the declared kind.
 
-        Definitional, therefore blocking (ADR 0008). This model is the
+        Definitional, therefore blocking. This model is the
         earliest point at which one species entry's declared
         stationary-point kind and that same entry's own frequency
         evidence are both in hand.
@@ -1129,10 +1108,10 @@ class BundleTransitionStateIn(SchemaBase):
     def validate_reaction_coordinate_contract(self) -> Self:
         """Refuse frequency evidence with no usable reaction coordinate.
 
-        Definitional, therefore blocking (ADR 0008). A transition state
+        Definitional, therefore blocking. A transition state
         does not carry a ``stationary_point_kind`` — the entity is the
         claim — so this model is where the declaration and the evidence
-        meet. ADR 0012 narrowed what is definitional here: not the
+        meet. What is definitional here is not the
         *count* of imaginary modes, but that there is at least one, that
         exactly one is designated the reaction coordinate, and that no
         undeclared mode is stiff enough to make that designation
@@ -1187,8 +1166,7 @@ class BundleTransitionStateIn(SchemaBase):
                 continue
 
             # No key written at all: nothing to list alternatives against,
-            # and a different repair. Keeps the generic code (ADR 0017
-            # corollary 3).
+            # and a different repair. Keeps the generic code.
             if record.source_calculation_key is None:
                 raise ValueError(
                     "transition_state.validation_evidence requires "
@@ -1325,7 +1303,7 @@ class BundleKineticsIn(SchemaBase):
         expression. ``None`` means no claim is made; do not interpret it as
         ``1.0``.
     :param degeneracy_convention: Whether degeneracy is already included in
-        the reported rate. Defaults to ``unknown`` for legacy producers.
+        the reported rate. Defaults to ``unknown``.
     :param bath_gas: Optional bath gas the rate was obtained for (species keys with mole
         fractions summing to 1; not valid at ``pressure_context='high_p_limit'``).
     :param note: Optional note.
@@ -1335,7 +1313,7 @@ class BundleKineticsIn(SchemaBase):
     :param interpretation_assignments: Which statmech records the rate's
         partition functions came from. The same model, validation and
         persistence as ``KineticsUploadRequest``; every reference is a public
-        ref of a record deposited earlier (see
+        ref of a record already deposited (see
         :mod:`tckdb_schemas.fragments.kinetics_evidence`).
     :param tunneling_application: The typed, replayable tunneling evidence,
         cross-checked against ``tunneling_model`` exactly as the standalone
@@ -1395,8 +1373,8 @@ class BundleKineticsIn(SchemaBase):
         default_factory=list
     )
     tunneling_application: KineticsTunnelingApplicationUpload | None = None
-    # Public, opaque handle for a pressure-dependent network counterpart
-    # (DR-0036); the workflow resolves it to its internal FK.
+    # Public, opaque handle for a pressure-dependent network counterpart;
+    # the workflow resolves it to its internal FK.
     network_kinetics_ref: str | None = Field(default=None, min_length=1)
     pressure_context: PressureContext | None = None
     pressure_bar: float | None = Field(default=None, gt=0)
@@ -1417,10 +1395,10 @@ class BundleKineticsIn(SchemaBase):
             "Producer-declared kinetics provenance: each entry references "
             "a calculation by bundle-local key with a scientific role. "
             "When non-empty, the workflow writes exactly these "
-            "kinetics_source_calculation rows and skips the legacy "
+            "kinetics_source_calculation rows and skips the "
             "auto-link fallback. When empty, the workflow falls back to "
             "auto-linking species-owned SP calculations as "
-            "reactant_energy / product_energy (legacy convenience)."
+            "reactant_energy / product_energy."
         ),
     )
 
@@ -1684,7 +1662,7 @@ class ComputedReactionUploadRequest(SchemaBase):
     # Kinetics fits (empty when Arkane fitting didn't complete)
     kinetics: list[BundleKineticsIn] = Field(default_factory=list)
 
-    # Atom correspondence across the reaction (ADR 0011)
+    # Atom correspondence across the reaction
     atom_map: ReactionAtomMapIn | None = Field(
         default=None,
         description=(
@@ -1693,7 +1671,7 @@ class ComputedReactionUploadRequest(SchemaBase):
             "here: TCKDB does not run a mapping algorithm, because several "
             "chemically distinct maps are usually consistent with the same "
             "reactants and products and choosing one by algorithm would "
-            "manufacture provenance (ADR 0011). Optional — a reaction "
+            "manufacture provenance. Optional — a reaction "
             "deposited without one succeeds and returns a "
             "'reaction_atom_map_absent' upload warning, because an unmapped "
             "reaction is incomplete rather than false. Requires a transition "
@@ -2061,7 +2039,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                     )
                 # A self-edge names a key the bundle really declares, so it
                 # is a different mistake with a different repair and keeps
-                # the generic code (ADR 0017 corollary 3).
+                # the generic code.
                 if dep.parent_calculation_key == calc.key:
                     raise ValueError(
                         f"Calculation '{calc.key}' depends_on cannot "
@@ -2175,7 +2153,7 @@ class ComputedReactionUploadRequest(SchemaBase):
         # that species's own conformers (a sibling's is not in scope, so the
         # target is owner-correct by construction), and the protocol's
         # supporting calculations must be declared in the bundle. Same codes
-        # as the workflow seam (ADR 0017); ownership stays the workflow's check.
+        # as the workflow seam; ownership stays the workflow's check.
         for sp in self.species:
             if sp.thermo is None:
                 continue
@@ -2265,7 +2243,7 @@ class ComputedReactionUploadRequest(SchemaBase):
         # thermo's above, plus the owner rule the workflow also enforces:
         # this bundle carries many species, so a key that exists is not
         # yet a key that belongs to *this* species. The refusal is the
-        # coded one the workflow raises (ADR 0017).
+        # coded one the workflow raises.
         owner_of_calc: dict[str, str] = {}
         anchor_of_calc: dict[str, str | None] = {}
         for sp in self.species:
@@ -2373,7 +2351,7 @@ class ComputedReactionUploadRequest(SchemaBase):
             # A species calculation tied to no conformer cannot be placed on the carrier's
             # conformer. Exactly one side unanchored is refused (the workflow already refused it,
             # late and under the wrong name). Both unanchored is an absence, not a contradiction:
-            # the rule cannot be checked, which ADR 0008 makes a warning, and the workflow
+            # the rule cannot be checked, which is a warning, and the workflow
             # (``link_scf_stability_sources``) says so. A transition state has no conformers, so
             # it is exempt from both.
             unanchored = [

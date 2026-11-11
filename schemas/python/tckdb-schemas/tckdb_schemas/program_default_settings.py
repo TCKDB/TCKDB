@@ -21,16 +21,16 @@ not here has no assumed default, and the read says "not stated" rather than gues
   MRCI, NEVPT2 and any unrecognised method get no default. It needs a declared method, program and version, and for
   ORCA the calculation type.
   * Gaussian 09, any calculation type: ``tight``. Source: Gaussian 09 manual, keyword SCF ("In Gaussian 09, SCF=Tight
-    is the default", knowledge-base chunk 11007) and "Changes between G09 and G03" ("The default SCF accuracy is
-    SCF=Tight for all calculations, including single points", chunk 10284).
+    is the default") and "Changes between G09 and G03" ("The default SCF accuracy is
+    SCF=Tight for all calculations, including single points").
   * ORCA 5 and 6, ``opt`` only: ``tight``. Source: ORCA 5.0.4 manual 8.3.3 ("TightSCF in the SCF part is set as default
-    to avoid the buildup of too much numerical noise in the gradients", chunk 13503) and ORCA 6.1 manual 4.1.12
-    (same sentence, chunk 16764). The same manuals only say the plain default is "between medium and strong" (chunk
-    14109), which is not a named level, so an ORCA single point, frequency or any other job type has no entry.
-  * Gaussian 16, any calculation type: ``tight``. No G16 manual line is in the knowledge base; the basis is the G09
+    to avoid the buildup of too much numerical noise in the gradients") and ORCA 6.1 manual 4.1.12
+    (same sentence). The same manuals only say the plain default is "between medium and strong", which is
+    not a named level, so an ORCA single point, frequency or any other job type has no entry.
+  * Gaussian 16, any calculation type: ``tight``. No G16 manual line is cited; the basis is the G09
     sentence above (the keyword is unchanged) plus an observed Gaussian 16 Rev C.01 default run
     (``# sp b3lyp/def2svp``, no grid or SCF keyword) printing "Requested convergence on RMS density matrix=1.00D-08",
-    accepted by the owner as Tight.
+    which is the Tight convergence value.
   * Not listed, for want of a source: Gaussian 03, other programs.
 
 The grid default applies only to a DFT method; the SCF default applies to the allowlist above. The version is the one the calculation declares. It is never guessed from the other fields.
@@ -104,7 +104,7 @@ _SPIN_PREFIXES = ("ro", "u", "r")
 
 #: Gaussian composite methods (they run standard SCF steps): CBS-QB3, CBS-4M, CBS-APNO, G1-G4 and variants, W1 variants.
 #: Gaussian 09 keywords only: (RO)CBS-QB3, (RO)CBS-4M, CBS-APNO, G1, G2, G2MP2, G3, G3MP2, G3B3, G3MP2B3, G4, G4MP2 (also
-#: written G4(MP2)), W1U, W1BD, W1RO. ROCBS-QB3 is in the G09 manual (knowledge-base chunk 10430).
+#: written G4(MP2)), W1U, W1BD, W1RO. ROCBS-QB3 is in the G09 manual.
 _GAUSSIAN_COMPOSITE = re.compile(
     r"^((ro)?cbs-(qb3|4m)|cbs-apno|g1|g2|g2mp2|g3|g3mp2|g3b3|g3mp2b3|g4|g4mp2|g4\(mp2\)|w1(u|bd|ro))$"
 )

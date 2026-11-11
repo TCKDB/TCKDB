@@ -66,7 +66,7 @@ class Species(Base, TimestampMixin, PublicRefMixin):
         nullable=False,
     )
 
-    #: The species this row was merged into, or ``NULL`` for a live row (DR-0038).
+    #: The species this row was merged into, or ``NULL`` for a live row.
     #: A species keyed on stereo marks (``C/C=C/C``, ``CC=CC``) and another keyed on
     #: the constitution are one species; the rows that lose are KEPT, with their
     #: public ref and their own curation history, and forward one hop to the survivor.
@@ -90,12 +90,12 @@ class Species(Base, TimestampMixin, PublicRefMixin):
     )
 
     __table_args__ = (
-        # Identity = canonical SMILES + charge + multiplicity (DR-0031).
+        # Identity = canonical SMILES + charge + multiplicity.
         # Canonical SMILES distinguishes tautomers that standard InChIKey
         # merges; multiplicity distinguishes spin states that SMILES/InChI
         # cannot encode (singlet vs triplet CH2, O2 states).
         # Unique over LIVE rows only: a merged-away row keeps the SMILES it had and
-        # forwards to its survivor (DR-0038).
+        # forwards to its survivor.
         Index(
             "uq_species_identity",
             "smiles",
@@ -136,7 +136,7 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     The resolved identity tuple is unique, with nullable identity components
     deduped in PostgreSQL using `NULLS NOT DISTINCT`.
 
-    * ``stereo_descriptor`` is the stereo key (DR-0038): one comma-separated token per potential
+    * ``stereo_descriptor`` is the stereo key: one comma-separated token per potential
       stereo element, ordered by canonical atom rank. Tokens: ``R`` ``S`` (centre), ``r`` ``s``
       (pseudo-asymmetric centre), ``E`` ``Z`` (double bond, or an odd cumulene), ``e`` ``z`` (pseudo-asymmetric
       double bond), ``Ra`` ``Sa`` (the axis of an allene or any even cumulene; ``Ra`` is IUPAC ``M``, a negative
@@ -165,12 +165,12 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     mol: Mapped[Optional[str]] = mapped_column(RDKitMol(), nullable=True)
     unmapped_smiles: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    #: Derived display text for the configuration (DR-0038): the descriptor,
+    #: Derived display text for the configuration: the descriptor,
     #: or ``NULL`` when the entry has no stereo element or none is resolved.
     #: Not part of identity and never accepted as a key.
     stereo_label: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    #: Canonical stereo descriptor -- the entry's stereo key (DR-0038): one
+    #: Canonical stereo descriptor -- the entry's stereo key: one
     #: token per potential stereo element (``R S r s E Z e z Ra Sa - ?``; see
     #: :mod:`app.chemistry.stereo` for the vocabulary), ordered by
     #: canonical atom rank of the stereo-stripped constitution.
@@ -190,7 +190,7 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     #: sigma-vinyl radical's E/Z cannot be, so this is NULL there. Not the key.
     stereo_smiles: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    #: The entry this row was merged into, or ``NULL`` for a live row (DR-0038).
+    #: The entry this row was merged into, or ``NULL`` for a live row.
     #: Two entries that name one configuration of one species are one entry. The
     #: row that loses is KEPT -- public ref, reviews, machine reviews, release
     #: selections, supersession edges stay on it -- and forwards one hop to the
@@ -227,15 +227,14 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     #: from an uploader.
     isotope_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    #: DEPRECATED free-text isotopologue annotation. It used to participate
-    #: in ``uq_species_entry_species_id``, which let a producer mint two
-    #: species identities that differed only by an arbitrary string with no
-    #: atom-resolved isotope content anywhere in the schema. It is no longer
-    #: part of identity, is no longer accepted on any upload/Create/Update
-    #: schema, and is never written by the application. The column is
-    #: retained (rather than dropped) purely so that a self-hosted or lab
-    #: deployment that already stored annotations here does not lose them to
-    #: a migration; ``isotope_key`` supersedes it.
+    #: DEPRECATED free-text isotopologue annotation. It is not part
+    #: of identity (it would let a producer mint two species identities that
+    #: differed only by an arbitrary string with no atom-resolved isotope
+    #: content anywhere in the schema), is not accepted on any
+    #: upload/Create/Update schema, and is never written by the application.
+    #: The column is retained (rather than dropped) so that a deployment that
+    #: already stored annotations here does not lose them; ``isotope_key``
+    #: supersedes it.
     isotopologue_label: Mapped[Optional[str]] = mapped_column(
         String(64),
         nullable=True,

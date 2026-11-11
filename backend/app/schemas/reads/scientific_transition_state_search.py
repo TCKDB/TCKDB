@@ -178,12 +178,10 @@ class TransitionStatesBrowseRequest(BaseModel):
     behavioural gain. The only way ``/transition-states/browse`` gains an
     identifier field is a change written on *this* class.
 
-    ``elements`` / ``max_heavy_atoms`` / ``min_heavy_atoms`` still do not
-    exist here, and for the reason the old docstring gave: a transition
-    state has no formula of its own. But "no composition axis to browse
-    by" no longer holds as a blanket claim — it conflated "a TS entry has
-    no molecular graph" with "nothing reachable from a TS entry has one",
-    and the second is false: every TS entry belongs to exactly one
+    ``elements`` / ``max_heavy_atoms`` / ``min_heavy_atoms`` do not
+    exist here: a transition state has no formula of its own. That does
+    not mean nothing reachable from a TS entry has a structure: every TS
+    entry belongs to exactly one
     reaction, and a reaction's participants are ordinary species with
     ordinary structures. ``participant_smiles`` filters on *that* graph
     (the reaction's reactants/products), not a TS graph that does not

@@ -1,27 +1,21 @@
 """``SoftwareReleaseRef.version`` warns on and normalises a composite banner.
 
-Issue #305 originally refused a ``version`` that embedded a parsed ESS
-startup banner (``"Gaussian 09, Revision D.01"`` instead of
-``version="09", revision="D.01"``). Refusing broke real ingestion outright:
-``test_api_arc_run_fixtures.py::test_arc_run_payload_uploads_cleanly``
-HTTP-422'd on five real ARC payloads. The owner's call: warn and
-normalise, never refuse.
+A ``version`` that embeds a parsed ESS startup banner (``"Gaussian 09, Revision
+D.01"`` instead of ``version="09", revision="D.01"``) is normalised with a
+warning and never refused.
 
-MEASURED distinct ``(name, version)`` pairs across the ARC fixtures (see
-the PR description for the full table):
+Cases:
 
-* 329x ``("ARC", "1.1.0")`` -- clean, must stay silent.
-* 206x ``("gaussian", "Gaussian 09, Revision D.01")`` -- composite,
-  name matches -- normalise.
-* 54x  ``("orca", "ORCA 6.0.0")`` -- composite, name matches -- normalise.
-* 5x   ``("gaussian", "ORCA 6.0.0")`` -- composite, name does **not**
-  match -- a producer bug (a stale ``name`` rode along with a real
-  observed ORCA version). Leave completely untouched; warn that the
-  *name* looks wrong instead.
-* 63x/23x ``("atom_energy"/"bac_petersson", "None")`` -- a separate,
-  unrelated defect (the literal 4-char string, not a composite banner).
-  Explicitly out of scope for this guard; asserted here only to prove it
-  is left alone.
+* ``("ARC", "1.1.0")`` -- clean, must stay silent.
+* ``("gaussian", "Gaussian 09, Revision D.01")`` -- composite, name matches --
+  normalise.
+* ``("orca", "ORCA 6.0.0")`` -- composite, name matches -- normalise.
+* ``("gaussian", "ORCA 6.0.0")`` -- composite, name does **not** match -- a
+  producer bug (a stale ``name`` with a real observed ORCA version). Leave
+  completely untouched; warn that the *name* looks wrong instead.
+* ``("atom_energy"/"bac_petersson", "None")`` -- the literal 4-char string, not
+  a composite banner. Out of scope for this guard; asserted here only to prove
+  it is left alone.
 
 Each accepted/normalised/warned case is asserted individually, not as a
 group loop -- a blanket "these all pass" assertion cannot say which one

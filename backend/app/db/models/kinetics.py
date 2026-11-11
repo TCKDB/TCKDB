@@ -180,8 +180,8 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         default=KineticsModelKind.modified_arrhenius,
         server_default=KineticsModelKind.modified_arrhenius.value,
     )
-    # Which direction of the reaction this fit describes (DR-0036). NULL =
-    # unspecified (historical default), so existing rows are unaffected. Lets
+    # Which direction of the reaction this fit describes. NULL =
+    # unspecified. Lets
     # a forward and a reverse Arrhenius fit for one ``reaction_entry`` coexist
     # distinctly (Chemkin/Cantera round-trip).
     direction: Mapped[Optional[KineticsDirection]] = mapped_column(
@@ -202,8 +202,8 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     )
 
     # The determination this record is one representation of, and its role there
-    # (kinetics selection). Attributed claims, never inferred: NULL on every record
-    # that predates the columns or was deposited without them, and then the record's
+    # (kinetics selection). Attributed claims, never inferred: NULL on a record
+    # deposited without them, and then the record's
     # scientific meaning is reported as unresolved rather than guessed. Set together
     # or not at all (``ck_kinetics_determination_iff_role``). That the determination
     # is of this record's reaction entry and direction is a cross-table fact no CHECK
@@ -235,8 +235,7 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     # (``energy_level_of_theory`` on the upload). Stored as declared, after the
     # upload's consistency check: it is the depositor's claim, separate from
     # the level the read layer derives from the linked calculations. NULL means
-    # nothing was declared (every row that predates the column, and any upload
-    # that omitted it); it is never back-filled from the linked calculations.
+    # nothing was declared (an upload that omitted it); it is never back-filled from the linked calculations.
     # Follows ``level_of_theory_merge`` at read time. Same shape as
     # ``thermo.energy_level_of_theory_id``.
     energy_level_of_theory_id: Mapped[Optional[int]] = mapped_column(
@@ -262,7 +261,7 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         ForeignKey("software_release.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
     )
-    # Bridge to the pressure-dependent network counterpart (DR-0036). When set,
+    # Bridge to the pressure-dependent network counterpart. When set,
     # this reaction-level HPL/apparent fit corresponds to the k(T,P) of a
     # specific ``network_kinetics`` channel-under-solve, so "give me k(T,P) for
     # reaction R" resolves in one join instead of a two-query split. Nullable /
@@ -282,8 +281,7 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     n: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
     # Reference temperature of the Arrhenius expression, in K:
     # ``k = A * (T / T0)**n * exp(-Ea / (R * T))``. 1 K is the plain
-    # ``A * T**n`` form, which is what every row stored before this column
-    # existed meant. Applies to this row's own ``a``/``n``/``ea_kj_mol`` only
+    # ``A * T**n`` form. Applies to this row's own ``a``/``n``/``ea_kj_mol`` only
     # of a modified-Arrhenius rate; falloff, PLOG, sum-of-Arrhenius
     # and Chebyshev records are at 1 K (upload refuses another value).
     t0_k: Mapped[float] = mapped_column(
@@ -586,7 +584,7 @@ class KineticsTunnelingApplication(Base):
 
 
 class KineticsFalloff(Base):
-    """Pressure-dependent falloff parameters for a kinetics record (DR-0032).
+    """Pressure-dependent falloff parameters for a kinetics record.
 
     Falloff reactions transition between a low-pressure limit (k0,
     effectively third-order) and a high-pressure limit (k∞, second-order).
@@ -712,7 +710,7 @@ class KineticsPlog(Base):
 
     A PLOG rate coefficient is given as modified-Arrhenius parameters at a
     set of pressures; k(T,P) is interpolated in log P between the bracketing
-    entries. Stored reaction-level (DR-0032 Part C) so a literature PLOG fit
+    entries. Stored reaction-level so a literature PLOG fit
     can be deposited without a master-equation network/solve. The parent
     ``kinetics.model_kind`` must be ``plog``.
     """
@@ -747,7 +745,7 @@ class KineticsPlog(Base):
 
 
 class KineticsArrheniusEntry(Base):
-    """One modified-Arrhenius term of a sum-of-Arrhenius rate (DR-0036).
+    """One modified-Arrhenius term of a sum-of-Arrhenius rate.
 
     Represents a single term of a Chemkin ``DUPLICATE`` channel: the rate
     coefficient is the *sum* over these entries,
@@ -789,7 +787,7 @@ class KineticsChebyshev(Base):
     """Chebyshev-polynomial k(T,P) surface for a kinetics record.
 
     Stores the n_T × n_P coefficient matrix and the T/P domain over which
-    it is valid. Reaction-level (DR-0032 Part C) so a literature Chebyshev
+    it is valid. Reaction-level so a literature Chebyshev
     fit can be deposited without a master-equation solve. The parent
     ``kinetics.model_kind`` must be ``chebyshev``.
     """

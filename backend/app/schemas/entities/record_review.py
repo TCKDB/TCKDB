@@ -73,9 +73,7 @@ class RecordReviewRead(TimestampedCreatedByReadSchema):
     #: They are listed canonically in
     #: :mod:`app.services.record_containers` (``container-null-causes``); the
     #: ``description`` below restates the same four, in the same order, and
-    #: must not drift from them -- an earlier draft said three in the module,
-    #: four in the resolver and two here, so a reader of any one of them came
-    #: away with a different idea of what null meant.
+    #: must not drift from them.
     #:
     #: The ``description`` is not a duplicate of this comment: it is what
     #: reaches a reader of the published OpenAPI, who has neither this source
@@ -168,7 +166,7 @@ class ReviewQueueSubjectChemistry(SchemaBase):
     stereo_descriptor: str | None = Field(
         default=None,
         description=(
-            "The species entry's stereo key (DR-0038), null only for an achiral species. `stereo_label` is "
+            "The species entry's stereo key, null only for an achiral species. `stereo_label` is "
             "its display text and is null while nothing is resolved, which must not be read as achiral."
         ),
     )
@@ -225,9 +223,8 @@ class ReviewQueueSubjectRead(SchemaBase):
     every review row nested under it.
 
     ``subject_type``/``subject_ref`` are NOT the same null contract as
-    ``container_type``/``container_ref`` on :class:`RecordReviewRead` --
-    an earlier draft of this docstring claimed they were, which was wrong
-    and caught in review. Three shapes, not two:
+    ``container_type``/``container_ref`` on :class:`RecordReviewRead`.
+    Three shapes, not two:
 
     * both set -- the ordinary case, a named, addressable subject;
     * both null -- the orphan case: a record with no public ref of its

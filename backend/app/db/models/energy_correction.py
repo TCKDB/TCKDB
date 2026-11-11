@@ -75,8 +75,7 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     #:
     #: Part of identity (migration ``c5e1a8d3f6b9``), under ``NULLS NOT
     #: DISTINCT`` like every other nullable member: NULL is "no frequency
-    #: level stated", which is what every row that predates the column
-    #: holds, so those rows keep their identity and their public ref.
+    #: level stated".
     frequency_level_of_theory_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -96,11 +95,9 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     # output of a program's own build-level numerics (integration grid,
     # SCF thresholds, basis-set definition) -- these change between
     # releases of the same program, so the correction is release-specific,
-    # not merely program-specific (correction-scheme-provenance plan v2
-    # §3.1). Keyed on ``software_release`` like every other
-    # provenance-bearing table in this schema (plan §2.2), including
-    # ``FrequencyScaleFactor.software_release_id`` below since its own
-    # sibling revision (plan §6).
+    # not merely program-specific. Keyed on ``software_release`` like every
+    # other provenance-bearing table in this schema, including
+    # ``FrequencyScaleFactor.software_release_id`` below.
     software_release_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -135,8 +132,7 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     #: ``(kind, name, level_of_theory_id, source_literature_id,
     #: software_release_id, data_revision)`` and the tool build is
     #: provenance only (the first depositor's build is what this row
-    #: keeps). NULL is "not stated", never "the same as any revision", so
-    #: every row that predates the column keeps its identity and ref.
+    #: keeps). NULL is "not stated", never "the same as any revision".
     data_revision: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     #: How ``atom_params`` enter the corrected energy, one answer for the
@@ -339,11 +335,9 @@ class FrequencyScaleFactor(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
     # against a program's own build-level vibrational frequencies (same
     # LOT in Gaussian 16 vs Gaussian 09 vs QChem can legitimately need a
     # different factor), so the factor is release-specific, not merely
-    # program-specific (correction-scheme-provenance plan v2 §6, mirroring
-    # §3.1's argument for EnergyCorrectionScheme.software_release_id
-    # above). Keyed on ``software_release`` like every other
+    # program-specific. Keyed on ``software_release`` like every other
     # provenance-bearing table in this schema, including
-    # ``EnergyCorrectionScheme`` as of plan v2.
+    # ``EnergyCorrectionScheme``.
     software_release_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(

@@ -205,7 +205,7 @@ class NetworkSolveEnergyTransferBase(BaseModel):
 
     :param scope: What the declaration was specified over — ``per_well``
         (resolves a state and a collider) or ``network_wide`` (one model the
-        producer applied to the entire network). See ADR 0009.
+        producer applied to the entire network).
     :param model: Energy transfer model name.
     :param alpha0_cm_inv: Average downward energy transfer at reference T.
     :param t_exponent: Temperature exponent.
@@ -290,7 +290,7 @@ class NetworkSolveBase(BaseModel):
     :param network_id: Owning network id.
     :param kind: Whether the master equation was solved here (``computed``)
         or the k(T,P) were transcribed from a publication (``reported``,
-        which requires ``literature_id``). See ADR 0010.
+        which requires ``literature_id``).
     :param literature_id: Optional linked literature row.
     :param software_release_id: Optional software provenance.
     :param workflow_tool_release_id: Optional workflow provenance.
@@ -432,8 +432,8 @@ class NetworkSolveRead(NetworkSolveBase, TimestampedCreatedByReadSchema):
 
     # Overrides ``NetworkSolveBase``'s default. On the write side a default is
     # defensible -- a producer that does not know about this axis should write
-    # the stronger, more informative claim. On a *read* schema it is the
-    # read-side twin of the gap ADR 0010 closed: projecting a source that never
+    # the stronger, more informative claim. On a *read* schema a default is wrong:
+    # projecting a source that never
     # stated a kind would fabricate ``computed`` and publish a provenance claim
     # nothing supports. This schema is unwired today, which is why the hole was
     # latent rather than served -- but it is reachable from the test suite, so

@@ -85,7 +85,7 @@ class CalculationCreateRequest(CalculationOwnerRequiredMixin, SchemaBase):
     transition_state_entry_id: int | None = None
 
     software_release: SoftwareReleaseRef | None = None
-    #: ``True`` only for an assembled composite (ADR 0021, P5): arithmetic over
+    #: ``True`` only for an assembled composite: arithmetic over
     #: other deposited calculations, which no program ran. Every other request
     #: must name its software.
     software_optional: bool = False

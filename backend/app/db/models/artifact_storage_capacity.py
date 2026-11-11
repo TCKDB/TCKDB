@@ -1,16 +1,13 @@
 """Durable observations about whether the object store will accept bytes.
 
-TCKDB learned, in the work that produced the ``artifact_storage_full``
-code, that a full object store is *invisible to inspection*: measured
-against MinIO on a volume filled to its free-space threshold,
-``head_bucket`` returns 200, every read succeeds, and a 1-byte write
-succeeds on the same store that refuses a 4 MiB one. The S3 API exposes
-no capacity query. So the signal has to be what the **real write path**
-was told.
+A full object store can be *invisible to inspection*: ``head_bucket`` can
+return 200 and every read succeed while a large write is refused, and the S3
+API exposes no capacity query. So the signal has to be what the **real write
+path** was told.
 
-That fact then lived in a module global, and a restart forgot it: the API
-came back up reporting healthy while every artifact upload still failed.
-This table is where the fact stops being process state.
+The fact is recorded in this table rather than held as process state, so a
+restart does not forget it (otherwise the API would come back up reporting
+healthy while every artifact upload still failed).
 
 Append-only, and deliberately without a boolean
 -----------------------------------------------
@@ -18,10 +15,9 @@ There is no ``is_full`` column. "Is the store currently full?" is
 computed as head-of-log by
 :func:`app.services.artifact_storage_capacity.current_full_state`. A
 stored flag would be a second source of truth able to disagree with the
-log it summarises, which is the ``is_current`` shape ADR 0007 rejected
-for curated selections and ADR 0003 for accepted science. The same
-reasoning applies here for the same reason: a claim about a subject is
-stored beside it, never inside it, and a summary that can drift from its
+log it summarises, which is the stored ``is_current`` shape that curated
+selections and accepted science avoid for the same reason: a claim about a
+subject is stored beside it, never inside it, and a summary that can drift from its
 evidence is worse than no summary.
 
 Nothing here is ever updated or deleted. Recovery is a **new**

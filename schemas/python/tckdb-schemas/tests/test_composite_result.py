@@ -1,4 +1,4 @@
-"""The ``composite_result`` wire block and its pairing with ``type: "composite"`` (ADR 0021, P3a).
+"""The ``composite_result`` wire block and its pairing with ``type: "composite"``.
 
 Every payload shape that carries calculations is covered, because the pairing
 rule is repeated per shape and a shape that forgot it would accept a composite
@@ -171,7 +171,7 @@ def test_duplicate_term_positions_are_refused():
 
 
 def test_the_assembled_form_needs_its_inputs():
-    """Until P5 the form parsed bare so the server could refuse it by name; now it must say what it assembles."""
+    """The assembled form must say what it assembles."""
     with pytest.raises(ValidationError) as exc:
         CompositeResultPayload(assembly="assembled")
     assert _coded(exc).code == "composite_total_required"

@@ -1,4 +1,4 @@
-"""``BundleKineticsIn`` carries ``t0_k`` and the standalone route's kinetics evidence (#620).
+"""``BundleKineticsIn`` carries ``t0_k`` and the standalone route's kinetics evidence.
 
 These run against the wire package alone, with no backend: the evidence models
 and their cross-field checks live in

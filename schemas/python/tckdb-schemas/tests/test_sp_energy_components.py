@@ -1,4 +1,4 @@
-"""``sp_energy_components`` at the wire: the checks run in every carrier (ADR 0021, P4).
+"""``sp_energy_components`` at the wire: the checks run in every carrier.
 
 A single point's electronic energy can arrive in three shapes, and the rules
 must not depend on which one a producer uses:

@@ -137,9 +137,7 @@ class StatmechSourceCalculationIn(StatmechSourceCalcIn):
     :class:`app.schemas.workflows.thermo_upload.ThermoSourceCalculationIn`
     ``.existing_calculation_id``, which does the same job for thermo. The
     two are intended to stay symmetric; an asymmetry between them is a
-    bug, not a signal. (Statmech reached this contract later only because
-    PR #148 moved it to local keys without a chaining mechanism, and the
-    gap read as deliberate because nothing recorded that it was not.)
+    bug, not a signal.
 
     :param calculation_key: Local key of a calculation declared in this
         request's ``calculations`` list.
@@ -332,7 +330,7 @@ class StatmechUploadRequest(SchemaBase):
     def validate_n_imag_matches_species_entry_kind(self) -> Self:
         """Refuse inline frequency evidence that contradicts the declared kind.
 
-        Definitional, therefore blocking (ADR 0008). The inline
+        Definitional, therefore blocking. The inline
         calculations are scoped to this upload's species entry, so the
         declared kind and the parsed ``n_imag`` are both present here.
         """

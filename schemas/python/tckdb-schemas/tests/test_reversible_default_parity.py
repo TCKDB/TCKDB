@@ -1,5 +1,5 @@
 """The two reaction-carrying upload routes agree on what an omitted
-``reversible`` means (issue #583)."""
+``reversible`` means."""
 
 from __future__ import annotations
 

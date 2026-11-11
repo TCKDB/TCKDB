@@ -328,8 +328,7 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     the derivation.
 
     The distinction is stored rather than inferred because every ME-specific
-    column here is nullable — before ADR 0010 ``network_id`` was the only NOT
-    NULL column, so a row could assert "master-equation solution" by table
+    column here is nullable, so a row could assert "master-equation solution" by table
     membership alone while carrying no evidence of one. ``kind`` is what
     turns that into a checkable claim.
 
@@ -348,8 +347,7 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
       state, one ⟨ΔE⟩down per (well, collider) pair, one barrier per
       saddle-point path — those remain properties of the wired upload path,
       enforced by ``validate_mechanistic_channel_evidence`` in
-      ``app/schemas/workflows/network_pdep_upload.py``. See ADR 0010's
-      amendment.
+      ``app/schemas/workflows/network_pdep_upload.py``.
     """
 
     __tablename__ = "network_solve"
@@ -364,7 +362,7 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     # Whether the master equation was solved here or the rates were read out
     # of a publication. A ``reported`` solve is not required to carry state
     # energies, channel barriers or an energy-transfer model, and must name
-    # the literature it was transcribed from (ADR 0010).
+    # the literature it was transcribed from.
     kind: Mapped[NetworkSolveKind] = mapped_column(
         SAEnum(NetworkSolveKind, name="network_solve_kind"),
         nullable=False,
@@ -405,7 +403,7 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     # Versioned declarations (``tckdb_schemas.network_declarations``): what the outputs are
     # outputs of, the recipe, and the evidence cited. Attributed claims, stored in their
     # resolved form (states by composition hash, determinations by public ref) and never
-    # inferred: NULL on every solve deposited before the columns or without them, and then
+    # inferred: NULL on a solve deposited without them, and then
     # the solve's scientific meaning reads as unresolved. ``none_as_null``: Python ``None`` is
     # SQL NULL ("not stated"), never the JSON value ``null``.
     target_declaration: Mapped[Optional[dict]] = mapped_column(JSONB(none_as_null=True), nullable=True)
@@ -533,7 +531,7 @@ class NetworkSolveEnergyTransfer(Base):
     because the producer declared one model for the whole network and the
     well-resolved values simply do not exist. The check constraint keeps the
     two shapes from blurring into each other, so a NULL ``state_id`` is always
-    an explained absence rather than a dropped field. See ADR 0009.
+    an explained absence rather than a dropped field.
     """
 
     __tablename__ = "network_solve_energy_transfer"
@@ -624,8 +622,8 @@ class NetworkSolveStateEnergy(Base):
     )
 
     #: What comparing the stated energy with the sum of its per-participant
-    #: sources concluded at upload (#678): ``agrees`` or ``not_compared``. NULL
-    #: means the row was deposited before the comparison existed, and is not a
+    #: sources concluded at upload: ``agrees`` or ``not_compared``. NULL
+    #: means no comparison was recorded, and is not a
     #: pass. A *disagreement* is never stored: it refuses the deposit. No computed
     #: total is stored either; the sum is recomputed, never kept.
     source_sum_comparison: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -636,14 +634,14 @@ class NetworkSolveStateEnergy(Base):
     #: "not stated" (never inferred from the digits of the number).
     energy_precision_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
     #: The factor ``s`` the producer scaled the zero-point energies of an ``electronic_plus_zpe``
-    #: state with (#693): the sum compared is ``sum(nu * (E + s * ZPE))``. NULL is "not stated",
+    #: state with: the sum compared is ``sum(nu * (E + s * ZPE))``. NULL is "not stated",
     #: never one; the stored ZPE is the producer's unscaled one.
     zpe_scale_factor: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
 
     solve: Mapped["NetworkSolve"] = relationship(back_populates="state_energies")
     state: Mapped["NetworkState"] = relationship()
     source_calculation: Mapped[Optional["Calculation"]] = relationship()
-    #: One calculation per participant (#678); empty on a row that used the
+    #: One calculation per participant; empty on a row that used the
     #: single ``source_calculation_id`` slot.
     participant_sources: Mapped[list["NetworkSolveStateEnergySource"]] = relationship(
         back_populates="state_energy",
@@ -686,7 +684,7 @@ class NetworkSolveStateEnergy(Base):
 
 
 class NetworkSolveStateEnergySource(Base):
-    """The calculation one participant of a state contributes to its energy (#678).
+    """The calculation one participant of a state contributes to its energy.
 
     A bimolecular state's energy is a sum over its species, so one source slot
     cannot name where it came from. One row per participant: ``stoichiometry``
@@ -735,7 +733,7 @@ class NetworkSolveStateEnergySource(Base):
         nullable=False,
     )
     #: The ``freq`` calculation whose zero-point energy this participant adds to the energy of
-    #: ``calculation_id`` (#693); NULL when none was cited (an atom, a composite's E0, an
+    #: ``calculation_id``; NULL when none was cited (an atom, a composite's E0, an
     #: ``electronic_only`` state). It is the participant's own, checked at upload.
     zpe_calculation_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
@@ -910,8 +908,8 @@ class NetworkKinetics(Base, TimestampMixin, PublicRefMixin):
     stores_log10_k: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # The determination this fit is one representation of, its role there and its own
-    # declared identity (network selection). Attributed claims, never inferred: NULL on every
-    # fit that predates the columns or was deposited without them, and then its relationship to
+    # declared identity (network selection). Attributed claims, never inferred: NULL on a
+    # fit deposited without them, and then its relationship to
     # the channel's other fits reads as unresolved. Set together or not at all
     # (``ck_network_kinetics_determination_iff_role`` and ``..._iff_representation``). That the
     # determination is of this fit's channel and solve is enforced where the row is written.

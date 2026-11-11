@@ -140,7 +140,7 @@ class Statmech(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     )
     uses_projected_frequencies: Mapped[Optional[bool]] = mapped_column(nullable=True)
     # Number of optical isomers (enantiomers). Contributes R*ln(n) to the
-    # entropy (DR-0033). NULL = unspecified; 1 = achiral / no contribution.
+    # entropy. NULL = unspecified; 1 = achiral / no contribution.
     optical_isomers: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -211,7 +211,7 @@ class StatmechElectronicLevel(Base):
     """One electronic energy level for the electronic partition function.
 
     q_elec = Σ gᵢ·exp(−εᵢ/kT). Store the low-lying electronic states as
-    ordered (energy, degeneracy) pairs (DR-0033): the ground state is
+    ordered (energy, degeneracy) pairs: the ground state is
     ``level_index=1`` at ``energy_cm1=0`` with its degeneracy; excited
     states follow. Needed for open-shell atoms/radicals with low-lying
     states (OH ²Π spin-orbit splitting, O(³P), halogen atoms) where a bare
@@ -317,11 +317,8 @@ class StatmechTorsion(Base):
         # ``torsion_index`` is not a constraint violation anyone would
         # notice at read time -- it is one rotor contributing twice to a
         # partition function, i.e. a wrong number rather than an error.
-        # Named for both columns since ``b7e4d1a9c026``: the previous
-        # name said only ``statmech_id``, and was read as a uniqueness
-        # rule on ``statmech_id`` alone, which made the real invariant
-        # look absent. Measured in
-        # ``tests/db/test_statmech_torsion_index_uniqueness.py``.
+        # Named for both columns so the name states the real invariant.
+        # Covered by ``tests/db/test_statmech_torsion_index_uniqueness.py``.
         Index(
             "uq_statmech_torsion_statmech_id_torsion_index",
             "statmech_id",

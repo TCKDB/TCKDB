@@ -1,9 +1,9 @@
-"""Recomputing an assembled composite's total from its inputs (ADR 0021, P5).
+"""Recomputing an assembled composite's total from its inputs.
 
 An assembled composite's deposited ``electronic_energy_hartree`` is *checked*
 here and never replaced: TCKDB forms the sum below only to compare it with the
 number the producer sent, returns nothing from it that is stored, and writes it
-nowhere (owner decision 5). The functions take plain numbers, so the backend, the
+nowhere. The functions take plain numbers, so the backend, the
 client and a producer's own pre-flight check run the same arithmetic.
 
 The total of a scheme is the **sum of its terms**, and a term's value is:
@@ -20,7 +20,7 @@ An input is a single point (its ``electronic_energy_hartree``) or an optimisatio
 optimisation's own level). ``total`` is that energy. The other components are the
 single point's stored ``calc_sp_energy_component`` rows; an optimisation has none.
 
-**Correlation and the triples convention (pinned here, ADR 0021).** Single-point
+**Correlation and the triples convention (pinned here).** Single-point
 components allow two conventions when a ``triples`` part is also stored (see
 :mod:`tckdb_schemas.sp_energy_components`): ORCA's correlation energy already
 includes (T) (``reference + correlation = energy``); Molpro's is the CCSD part and
@@ -94,7 +94,7 @@ __all__ = [
 ]
 
 #: The deposited total differs from the total recomputed from the inputs by more
-#: than the tolerance. Block tier (ADR 0008): a total that does not follow from
+#: than the tolerance. Block tier: a total that does not follow from
 #: the inputs it cites contradicts its own recipe.
 COMPOSITE_TOTAL_MISMATCH = "composite_total_mismatch"
 

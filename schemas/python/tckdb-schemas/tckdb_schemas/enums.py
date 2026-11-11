@@ -53,12 +53,10 @@ class StationaryPointKind(str, Enum):
 
 class ImaginaryModeDisposition(str, Enum):
     # What an imaginary vibrational mode *is*, other than the reaction
-    # coordinate. Declared by the depositor, never inferred: ADR 0012
-    # accepts a transition state carrying extra imaginary modes only
-    # because the record says what they are, and
-    # ``transition_state.py`` records that TCKDB deliberately does not
-    # store normal-mode displacement vectors, so there is nothing here
-    # to infer an assignment from.
+    # coordinate. Declared by the depositor, never inferred: a transition state
+    # carrying extra imaginary modes is accepted only because the record says
+    # what they are. Read-time projections from ``calc_hessian`` are
+    # reported beside it, never in place of it.
     #
     # ``unassigned`` is a real answer and not a placeholder: it says the
     # depositor looked and could not classify the mode. It is treated as
@@ -85,7 +83,7 @@ class HessianMethod(str, Enum):
     # This is *not* ``opt.initial_hessian``, which names where the
     # optimiser got its starting Hessian. It is the frequency job's own
     # method, and it is the single largest term in the noise floor of a
-    # small imaginary mode, so ADR 0012's tolerance keys on it.
+    # small imaginary mode, so the imaginary-mode tolerance keys on it.
     #
     # Recorded only when the output says so explicitly (Gaussian
     # ``Freq=Numer``, ORCA ``NumFreq`` / ``AnFreq``). Absence means "not
@@ -193,7 +191,7 @@ class CalculationType(str, Enum):
     # A comment, not a docstring: mirrored by the backend's
     # ``app.db.models.common.CalculationType`` (see ``MoleculeKind``).
     #
-    # ``composite`` (ADR 0021) is one composite energy at a scheme-bound level
+    # ``composite`` is one composite energy at a scheme-bound level
     # of theory, deposited with a ``composite_result`` block.
     opt = "opt"
     freq = "freq"
@@ -206,17 +204,17 @@ class CalculationType(str, Enum):
 
 
 class CompositeAssembly(str, Enum):
-    # How a ``composite`` calculation's energy was produced (ADR 0021).
+    # How a ``composite`` calculation's energy was produced.
     # ``program_run``: one program run printed the final number (a named method).
-    # ``assembled``: arithmetic over other deposited calculations; accepted
-    # only once user-built schemes exist (refused today). A comment, not a
+    # ``assembled``: arithmetic over other deposited calculations (a
+    # user-built scheme). A comment, not a
     # docstring, for the reason given on ``CalculationType``.
     program_run = "program_run"
     assembled = "assembled"
 
 
 class CompositeSchemeKind(str, Enum):
-    # What sort of recipe a composite scheme is (ADR 0021). A producer sends
+    # What sort of recipe a composite scheme is. A producer sends
     # ``extrapolation`` or ``additive``; ``named_method`` is the server's own
     # kind for a catalogued program recipe (CBS-QB3, G4, ...) and is refused on
     # the wire. A comment, not a docstring, for the reason given on
@@ -227,7 +225,7 @@ class CompositeSchemeKind(str, Enum):
 
 
 class CompositeTermOperation(str, Enum):
-    # What a scheme term does (ADR 0021). ``base`` / ``value``: one input taken
+    # What a scheme term does. ``base`` / ``value``: one input taken
     # as it is; ``extrapolation``: a basis-set limit from several cardinal
     # numbers; ``difference``: high minus low; ``empirical``: a fitted term of a
     # named method, which a producer cannot define (there is nothing to
@@ -240,7 +238,7 @@ class CompositeTermOperation(str, Enum):
 
 
 class CompositeExtrapolationFormula(str, Enum):
-    # The extrapolation formula of an extrapolation term (ADR 0021). The
+    # The extrapolation formula of an extrapolation term. The
     # arithmetic is in ``tckdb_schemas.composite_formulas``.
     inverse_power = "inverse_power"
     inverse_power_shifted_half = "inverse_power_shifted_half"
@@ -252,7 +250,7 @@ class CompositeExtrapolationFormula(str, Enum):
 
 
 class CompositeInputSlot(str, Enum):
-    # The role of one input of a scheme term (ADR 0021). ``value``: the single
+    # The role of one input of a scheme term. ``value``: the single
     # input of a base or value term; ``high`` / ``low``: the two sides of a
     # difference; ``cardinal``: one point of an extrapolation, told apart by
     # its cardinal number.
@@ -293,7 +291,7 @@ class CalculationDependencyRole(str, Enum):
     irc_start = "irc_start"
     irc_followup = "irc_followup"
     scan_parent = "scan_parent"
-    # ``composite_input`` (ADR 0021, P5): parent is an ``sp`` (or an ``opt``
+    # ``composite_input``: parent is an ``sp`` (or an ``opt``
     # whose final energy is the single-point value) that an assembled
     # ``composite`` calculation consumed; child is that composite. Written by
     # the server from ``composite_result.inputs``; never declared in
@@ -386,7 +384,7 @@ class KineticsModelKind(str, Enum):
 
 
 class KineticsDirection(str, Enum):
-    """Direction a reaction-level kinetics fit describes (DR-0036)."""
+    """Direction a reaction-level kinetics fit describes."""
 
     forward = "forward"
     reverse = "reverse"
@@ -464,7 +462,7 @@ class KineticsDegeneracyConvention(str, Enum):
 
 
 class TunnelingModel(str, Enum):
-    """Tunneling correction applied to a rate coefficient (DR-0032)."""
+    """Tunneling correction applied to a rate coefficient."""
 
     none = "none"
     wigner = "wigner"
@@ -474,7 +472,7 @@ class TunnelingModel(str, Enum):
 
 
 class SpinTreatment(str, Enum):
-    """Spin treatment of the electronic-structure method (DR-0034)."""
+    """Spin treatment of the electronic-structure method."""
 
     restricted = "restricted"
     unrestricted = "unrestricted"
@@ -483,7 +481,7 @@ class SpinTreatment(str, Enum):
 
 
 class CoreTreatment(str, Enum):
-    """Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).
+    """Which electrons a post-SCF method correlates.
 
     ``frozen_core``: the chemical core is held uncorrelated. ``all_electron``:
     every electron is correlated. CCSD(T)/cc-pCVTZ frozen-core and all-electron
@@ -554,7 +552,7 @@ class RiApproximation(str, Enum):
 
 
 class EnergyComponentKind(str, Enum):
-    """Which part of an electronic energy a value is (ADR 0021).
+    """Which part of an electronic energy a value is.
 
     Named generically because it is shared: a scheme term says which
     component of an input energy it consumes, and a single-point energy
@@ -581,7 +579,7 @@ class EnergyComponentKind(str, Enum):
 
 
 class PressureContext(str, Enum):
-    """What a rate coefficient means w.r.t. pressure (DR-0032).
+    """What a rate coefficient means w.r.t. pressure.
 
     ``high_p_limit`` = k∞; ``apparent_at_pressure`` requires a
     ``pressure_bar``; ``pressure_dependent`` defers to an associated model.
@@ -789,7 +787,7 @@ class EnergyZeroConvention(str, Enum):
     # Deliberately a comment rather than a docstring: this enum is mirrored
     # between ``app.db.models.common`` and ``tckdb_schemas.enums``, and the
     # two JSON schemas merge into one published component only while they are
-    # byte-identical (see ``MoleculeKind``). Since #620 the typed tunneling
+    # byte-identical (see ``MoleculeKind``). The typed tunneling
     # evidence lives in the wire package, so this enum is reachable from both
     # sides of the OpenAPI document. Kept in lockstep by
     # ``tests/schemas/test_tckdb_schemas_enum_drift.py``.
@@ -817,7 +815,7 @@ class EnergyCorrectionConvention(str, Enum):
     # Deliberately a comment rather than a docstring: this enum is mirrored
     # between ``app.db.models.common`` and ``tckdb_schemas.enums``, and the
     # two JSON schemas merge into one published component only while they are
-    # byte-identical (see ``MoleculeKind``). Since #620 the typed tunneling
+    # byte-identical (see ``MoleculeKind``). The typed tunneling
     # evidence lives in the wire package, so this enum is reachable from both
     # sides of the OpenAPI document. Kept in lockstep by
     # ``tests/schemas/test_tckdb_schemas_enum_drift.py``.
@@ -835,7 +833,7 @@ class ReactionRole(str, Enum):
 
 
 class AtomMapSource(str, Enum):
-    """How a reaction atom map was obtained (ADR 0011).
+    """How a reaction atom map was obtained.
 
     ``declared``
         The depositor stated the correspondence.

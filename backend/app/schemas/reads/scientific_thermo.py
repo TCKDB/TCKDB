@@ -93,7 +93,7 @@ class ThermoReadRequest(BaseModel):
     # Matches when ANY source calculation linked to the thermo record ran at this level of theory. There is no
     # "primary" calculation for a filter, and no role priority: a record is kept when any linked calculation matches.
     level_of_theory_id: int | None = None
-    # Phase C: LoT may be supplied by ref instead of (or alongside) id.
+    # LoT may be supplied by ref instead of (or alongside) id.
     level_of_theory_ref: str | None = None
     # Matches when ANY source calculation linked to the thermo record ran in a software of this name (what ran the
     # electronic structure; ``ThermoProvenance.primary_calculation.software`` is one of them). There is no "primary"
@@ -188,11 +188,11 @@ class ThermoPointBlock(BaseModel):
 class ThermoProvenance(BaseModel):
     """Thermo provenance block — keys always present, ``null`` when absent.
 
-    Phase B: integer ``*_id`` fields keep their place; ``*_ref`` siblings
+    Integer ``*_id`` fields keep their place; ``*_ref`` siblings
     carry the public stable handles.
 
     Two distinct kinds of "software" can appear on a thermo record, and
-    issue #284 was exactly the two getting collapsed into one field:
+    they are kept in separate fields:
 
     - ``software_release`` / ``workflow_tool_release`` — what computed
       *this thermochemistry* (e.g. Arkane, run by ARC). Sourced strictly
@@ -290,7 +290,7 @@ class ThermoRecord(BaseModel):
     (and only) cp representation in v0. Future schema work may surface a
     cp-units field; v0 omits it from the response.
 
-    Phase B: ``thermo_ref`` is the public stable handle alongside the
+    ``thermo_ref`` is the public stable handle alongside the
     integer ``thermo_id``.
     """
 
@@ -344,10 +344,10 @@ class ThermoRecord(BaseModel):
     #: record does not cover (R6: a thermo derived from a statmech record
     #: inherits its levels). Never borrowed from an unlinked statmech on the
     #: same entry: an unlinked thermo with no source calculations has none
-    #: (#636). See :class:`ScientificLevelsSummary`.
+    #: See :class:`ScientificLevelsSummary`.
     levels: ScientificLevelsSummary = Field(default_factory=ScientificLevelsSummary)
     # Group-additivity estimation breakdown; null unless the record is an
-    # estimated thermo with an attached GA breakdown (DR-0035).
+    # estimated thermo with an attached GA breakdown.
     group_additivity: GroupAdditivityBlock | None = None
     #: ``include=calculation_settings``. For each of geometry / frequency / energy, the calculation this record links
     #: for that level and the grid and SCF convergence it used, each with its evidence. A level with no linked
@@ -372,7 +372,7 @@ class RequestEcho(ProfiledRequestEcho):
 class ScientificSpeciesThermoResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/species-entries/{id}/thermo.
 
-    Phase B: ``species_entry_ref`` mirrors ``species_entry_id`` as the
+    ``species_entry_ref`` mirrors ``species_entry_id`` as the
     public stable handle for the response's path-parameter resource.
     """
 

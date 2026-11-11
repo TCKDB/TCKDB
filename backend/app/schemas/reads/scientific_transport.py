@@ -107,7 +107,7 @@ class TransportSpeciesContext(EntryFacetFields):
     """Lightweight species/species-entry pointer for a transport record.
 
     Mirrors the statmech / conformer / TS species context shape.
-    Integer ids are Phase D policy-gated.
+    Integer ids are policy-gated.
 
     ``species_entry_label`` is the short discriminator that says *which*
     entry of that species this is -- ``"E"``, ``"Z"``, ``"excited T1"``.

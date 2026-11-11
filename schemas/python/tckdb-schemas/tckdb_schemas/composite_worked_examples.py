@@ -1,4 +1,4 @@
-"""Worked payloads for user-built composite schemes (ADR 0021, P5).
+"""Worked payloads for user-built composite schemes.
 
 Two complete ``computed-species`` bundles a producer can copy, rendered into the
 producer contract by ``backend/scripts/generate_producer_contract.py`` and checked

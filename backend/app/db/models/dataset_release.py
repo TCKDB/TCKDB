@@ -1,4 +1,4 @@
-"""Curated product selection and citable dataset releases (Stage 3).
+"""Curated product selection and citable dataset releases.
 
 This module adds the *curation overlay* that lets TCKDB answer "what is **the**
 TCKDB value?" without ever touching the science it points at.
@@ -34,7 +34,7 @@ Three invariants this module exists to protect:
 2. **Superseding appends; it never edits.** A curator who changes their mind
    inserts a new row with ``action='supersede'`` and
    ``supersedes_selection_id`` pointing at the row it replaces. A DB trigger
-   (see the Stage 3 migration) rejects ``UPDATE``/``DELETE`` on
+   rejects ``UPDATE``/``DELETE`` on
    ``release_selection`` so this holds independently of application code —
    the same belt-and-braces approach used by
    ``record_reproducibility_assessment``.
@@ -256,7 +256,7 @@ class ReleaseSelection(Base, PublicRefMixin):
     The append-only contract is enforced three ways:
 
     * no application code path issues ``UPDATE``/``DELETE``;
-    * a database trigger rejects both (Stage 3 migration);
+    * a database trigger rejects both;
     * ``supersedes_selection_id`` is ``UNIQUE``, so a selection can be
       replaced at most once and the supersession chain stays linear and
       auditable, exactly as ``scientific_record_supersession`` does.
@@ -386,13 +386,10 @@ class ReleaseManifest(Base, CreatedByMixin, PublicRefMixin):
     scalar snapshot columns below are written once, from the release as it
     stood at that instant.
 
-    An earlier design rendered the document from the *live* release row on
-    every read. That was wrong in a way that only shows up in the steady
-    state: recording the DOI — the last step of publishing — mutates
-    ``dataset_release.doi``, which changed the rendered document and broke the
-    digest permanently, so `verified: true` was reachable only for releases
-    nobody had actually deposited. Withdrawing did the same via ``status``.
-    A citable document must not move when the row it describes is later
+    The document is not rendered from the *live* release row: recording the
+    DOI — the last step of publishing — mutates ``dataset_release.doi`` and
+    withdrawing mutates ``status``, which would change a live rendering and
+    break the digest. A citable document must not move when the row it describes is later
     annotated.
 
     Whether the *live* database still agrees with the frozen release is a
@@ -558,15 +555,10 @@ class ReleaseArtifact(Base):
     Immutable, and **the bytes are stored**. ``content`` holds exactly what
     was rendered at publication and is what every later download returns.
 
-    An earlier design re-rendered each file from the live database on every
-    request and refused (409) to serve it when the digest no longer matched.
-    That made a published release self-destruct on the next ordinary write:
-    uploading one more thermo record for a released species changes the
-    candidate set, so ``candidate_records.ndjson`` legitimately grows and the
-    citation stops resolving. On a corpus where review is *expected* to
-    progress, the window in which a release remained citable was effectively
-    zero — and the failure was indistinguishable from tampering, so the
-    operator runbook diagnosed normal growth as corruption.
+    Serving the stored bytes, rather than re-rendering from the live database,
+    keeps a published release citable after ordinary writes change the
+    candidate set (uploading one more thermo record for a released species
+    makes ``candidate_records.ndjson`` legitimately grow).
 
     A release is a snapshot claim. New science arriving after publication is
     the system working, not a fault; it is reported by the non-fatal

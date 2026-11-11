@@ -192,7 +192,7 @@ class ScientificSpeciesStructureSearchRequest(BaseModel):
     #: Entry-level isomeric search (``exact`` mode with ``query_smiles``): keep
     #: only the entries whose stereo descriptor equals the one the query's
     #: stereo marks specify, so ``C/C=C/C`` finds the E entries of 2-butene and
-    #: not the Z or unresolved ones. Species identity is stereo-blind (DR-0038),
+    #: not the Z or unresolved ones. Species identity is stereo-blind,
     #: so without it every stereo entry of the species is returned.
     isomeric: bool = False
 

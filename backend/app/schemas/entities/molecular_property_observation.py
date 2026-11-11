@@ -68,8 +68,8 @@ class MolecularPropertyObservationBase(BaseModel):
     vector_json: dict[str, Any] | list[Any] | None = None
     tensor_json: dict[str, Any] | list[Any] | None = None
 
-    # Phase C-E1: typed uncertainty meaning. See ObservedUncertaintyKind's
-    # docstring -- no "unspecified" member (DR-0007); absent is None.
+    # Typed uncertainty meaning. See ObservedUncertaintyKind's
+    # docstring -- no "unspecified" member; absent is None.
     uncertainty_kind: ObservedUncertaintyKind | None = None
     uncertainty_coverage_factor: float | None = Field(default=None, ge=1.0)
     uncertainty_level_of_confidence_pct: float | None = Field(
@@ -99,7 +99,7 @@ class MolecularPropertyObservationBase(BaseModel):
     external_source_parser_name: str | None = None
     external_source_parser_version: str | None = None
 
-    # Phase C-E1 source custody. Follows the same convention as the FK ids
+    # Source custody. Follows the same convention as the FK ids
     # above (literature_id, source_calculation_id, ...): this schema is the
     # importer bridge's internal linkage shape, not a contributor-facing
     # upload schema, so a resolved FK id here is consistent with the

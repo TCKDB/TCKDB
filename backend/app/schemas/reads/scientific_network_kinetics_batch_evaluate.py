@@ -8,17 +8,13 @@ The per-record surface (``GET /scientific/network-kinetics/{ref}/evaluate``,
 see ``scientific_network_kinetics_evaluate.py``) evaluates one stored fit.
 This surface evaluates *every* stored ``network_kinetics`` fit belonging to
 one network at a shared ``(temperature_k, pressure_bar)`` grid, in one call
-— the batch variant §2.4/§4 A of
-``docs/plans/pressure-dependent-network-surface.md`` calls for, so a
-k(T,P) chart covering a whole network needs one request instead of one per
-fit (42 on the live hydrazine network: 21 channels, each carrying both a
-Chebyshev and a PLOG fit).
+— so a k(T,P) chart covering a whole network needs one request instead of one
+per fit.
 
 **Keyed by ``network_kinetics_ref``, not by channel.** A channel can carry
 more than one fit (both a Chebyshev and a PLOG parameterization on the same
-channel, which is the norm on the live archive, not an edge case), and the
-two are never picked, preferred, averaged, or otherwise collapsed — they can
-disagree materially (measured ~1.6x-2.9x apart on one live channel), and
+channel), and the two are never picked, preferred, averaged, or otherwise collapsed — they can
+disagree materially, and
 presenting one as *the* rate for that channel would be a false scientific
 claim. Every stored fit is served; the client decides how to group and
 render the (possibly two) fits sharing a channel.

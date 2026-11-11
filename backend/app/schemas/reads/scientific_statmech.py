@@ -122,7 +122,7 @@ class StatmechSpeciesContext(EntryFacetFields):
     """Lightweight species/species-entry pointer for a statmech record.
 
     Mirrors the species context shape used by the conformer and
-    transition-state surfaces. Integer ids are Phase D policy-gated.
+    transition-state surfaces. Integer ids are policy-gated.
 
     ``species_entry_label`` is the short discriminator that says *which*
     entry of that species this is -- ``"E"``, ``"Z"``, ``"excited T1"``.
@@ -254,7 +254,7 @@ class StatmechElectronicLevelSummary(BaseModel):
     """One ``statmech_electronic_level`` row for ``include=electronic_levels``.
 
     Low-lying electronic states drive the electronic partition function
-    ``q_elec = Σ gᵢ·exp(−εᵢ/kT)`` (DR-0033). Each row is an ordered
+    ``q_elec = Σ gᵢ·exp(−εᵢ/kT)``. Each row is an ordered
     ``(energy, degeneracy)`` pair: the ground state is ``level_index=1`` at
     ``energy_cm1=0`` with its degeneracy; excited states follow. Needed for
     open-shell atoms/radicals with low-lying states (OH ²Π spin-orbit
@@ -300,7 +300,7 @@ class StatmechEvidenceSummary(BaseModel):
     upload layer accepts an ``opt`` calculation under the ``sp`` role —
     an optimisation's final energy is the single-point value at the
     optimisation's own level of theory — so ``has_sp_calculation`` alone
-    no longer says whether a dedicated single point was ever run. That is
+    does not say whether a dedicated single point was ever run. That is
     a genuine provenance difference between two records, and the four-role
     model says a difference like that belongs in the data rather than in
     an inference a reader has to draw from

@@ -75,7 +75,7 @@ def test_the_forms_the_frontend_wrongly_hid_are_accepted(value: str) -> None:
 
 @pytest.mark.parametrize("field", list(FIELDS))
 def test_no_stereo_descriptor_token_is_accepted_except_the_state_letter_e(field: str) -> None:
-    """R S Z M P and their lower case never; ``E``/``e`` only as a state letter (owner decision 2026-11-03)."""
+    """R S Z M P and their lower case never; ``E``/``e`` only as a state letter."""
     is_valid = FIELDS[field][0]
     tokens = ["R", "S", "r", "s", "Z", "z", "M", "P", "m", "p", "Ra", "Sa", "?", "-", "R,S", "E,Z", "Ra,Sa", "E,?"]
     for token in tokens:

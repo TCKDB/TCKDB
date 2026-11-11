@@ -64,9 +64,7 @@ class CalculationScanPointCoordinateValuePayload(BaseModel):
 
     ``coordinate_value`` is the internal coordinate itself, in that
     coordinate's own unit -- degrees for ``angle``/``dihedral``/
-    ``improper``, Angstrom for ``bond`` -- per ADR 0020
-    (``docs/adr/0020-a-scan-coordinate-value-is-the-coordinate-itself.md``,
-    which supersedes 0019's relative-to-start reading). It is never a
+    ``improper``, Angstrom for ``bond``. It is never a
     displacement and never relative to anything; the matching
     ``CalculationScanCoordinatePayload.start_value``/``end_value`` are the
     requested grid's extent, not an anchor to add back onto this field.

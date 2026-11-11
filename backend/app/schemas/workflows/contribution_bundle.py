@@ -7,7 +7,7 @@ hosted/community TCKDB instance.
 Bundle v0 is a schema/format milestone only. It does **not** export from
 the database, import into hosted, create submissions, or perform any
 network/DB action. Hosted identity resolution and moderation happen later,
-during dry-run/import milestones (see DR-0023).
+during dry-run/import milestones.
 
 These schemas are bundle-format schemas, not public route schemas. They
 should not be wired into any FastAPI router.
@@ -68,7 +68,7 @@ class BundleSubmissionSourceKind(str, Enum):
 
     This is **not** the same as ``app.db.models.common.SubmissionSourceKind``.
     Adding ``local_bundle`` to the database enum is deferred to the
-    hosted-import milestone (see DR-0023). The bundle format only states
+    hosted-import milestone. The bundle format only states
     "this submission came from a local bundle"; the hosted instance maps
     that to its own submission machinery later.
     """

@@ -1,9 +1,9 @@
-"""Review fixes on P5: weights, the CCSD-only correlation, stable three-point, rules (ADR 0021).
+"""Weights, the CCSD-only correlation, stable three-point and rules.
 
 Each test names the defect it keeps out. The textbook scheme (extrapolate the CCSD
-correlation energy, add (T) at a smaller basis as its own term) is the case that had
-no spelling before ``correlation_excluding_triples``: written with ``correlation`` it
-counted (T) twice and missed by ~15 mEh.
+correlation energy, add (T) at a smaller basis as its own term) is spelled with
+``correlation_excluding_triples``: written with ``correlation`` it
+counts (T) twice and misses by ~15 mEh.
 """
 
 from __future__ import annotations

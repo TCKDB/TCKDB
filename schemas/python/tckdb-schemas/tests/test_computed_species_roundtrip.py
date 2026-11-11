@@ -84,7 +84,7 @@ def test_undefined_thermo_source_calculation_key_rejected() -> None:
 
 
 def test_forbidden_db_id_in_parameters_json_rejected() -> None:
-    """DR-0029 Requirement 1: bundle payload must not embed DB FK ids."""
+    """A bundle payload must not embed DB FK ids."""
     data = _hydrogen_bundle_data()
     data["conformers"][0]["primary_calculation"]["parameters_json"] = {
         "tckdb_extra": {"existing_calculation_id": 42},

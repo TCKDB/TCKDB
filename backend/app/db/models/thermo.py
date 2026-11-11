@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Thermochemistry records for a species entry.
 
-    Enthalpy reference decision (2026-09-23): a declared enthalpy is the
+    Enthalpy reference: a declared enthalpy is the
     standard formation enthalpy at 298.15 K plus the species' own enthalpy
     increment from 298.15 K. Elements in their reference forms have zero
     formation enthalpy; their term stays pinned at 298.15 K, not at T.
@@ -55,7 +55,7 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     workflows require it for any enthalpy content and refuse declarations
     without content. Declared fit/point-only records need no h298 scalar.
     Null is absence of knowledge, not an unspecified enum member. There is
-    no origin default and no backfill: existing rows remain undeclared.
+    no origin default and no backfill: a row without a declaration stays undeclared.
     The rule is enforced by a trigger (``trg_guard_thermo_enthalpy_reference``,
     migration ``e7b1c9d4a632``), not a CHECK constraint: it fires only when
     an insert or update actually writes ``h298_kj_mol`` or
@@ -107,22 +107,18 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
       and NASA/tabulated values are referenced to (IUPAC 1 bar; legacy
       data using the older 1 atm convention should record 1.01325).
       ``NULL`` means the reference pressure was not specified. There is
-      no origin default (decided 2026-09-24, issue #529): a QC computed
-      upload that omits it stays ``NULL`` rather than being stamped
-      ``1.0``, because the dominant computed producer (ARC) computes
+      no origin default: a QC computed upload that omits it stays
+      ``NULL``, because the dominant computed producer (ARC) computes
       entropy at 1 atm and records no pressure anywhere in its output --
-      the same class of invisible, plausible-looking error the
-      enthalpy-reference decision above exists to prevent. Rows written
-      before this decision still carry the invented ``1.0``; correcting
-      them is a separate, undecided question.
+      a default would be the same class of invisible, plausible-looking
+      error the enthalpy reference declaration exists to prevent.
     * ``phase`` records the physical phase (gas by default for computed
       species). ``NULL`` means unspecified.
     * ``statmech_id`` links a *computed* thermo row to the ``statmech``
       record it was derived from. ``NULL`` for experimental, literature,
       or group-additivity thermo that has no statmech basis.
 
-    All of these are nullable and additive; legacy rows keep their
-    original (now explicitly under-specified) semantics.
+    All of these are nullable.
     """
 
     __tablename__ = "thermo"
@@ -140,10 +136,9 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         nullable=False,
     )
 
-    # Explicit representation kind. Nullable/additive: legacy rows are
-    # backfilled by the introducing migration, but the column may still be
-    # NULL when representation could not be inferred (read layer falls back
-    # to deriving it from which child rows exist).
+    # Explicit representation kind. The column may be NULL when
+    # representation could not be inferred (read layer falls back to
+    # deriving it from which child rows exist).
     model_kind: Mapped[Optional[ThermoModelKind]] = mapped_column(
         SAEnum(ThermoModelKind, name="thermo_model_kind"),
         nullable=True,
@@ -173,8 +168,7 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     # the upload's role-consistency check: it is the depositor's claim, not
     # a derived value, and it is separate from the level the read layer
     # derives from the linked calculations (``ScientificLevelsSummary``).
-    # NULL means nothing was declared (every row that predates the column,
-    # and any upload that omitted it); it is never back-filled from the
+    # NULL means nothing was declared (an upload that omitted it); it is never back-filled from the
     # linked calculations. Follows ``level_of_theory_merge`` at read time.
     energy_level_of_theory_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
@@ -190,8 +184,7 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     # Thermodynamic target declaration: what the values are claimed to describe
     # (the equilibrium ensemble, or one conformer group of this species entry).
     # An attributed claim, never inferred from ``statmech_id`` or a conformer
-    # selection; NULL on every row that predates the column and on any deposit
-    # that omitted it. ``target_conformer_group_id`` is set exactly when the
+    # selection; NULL on a deposit that omitted it. ``target_conformer_group_id`` is set exactly when the
     # kind is ``single_conformer`` (``ck_thermo_target_group_iff_single_conformer``);
     # that the group belongs to this row's species entry is a cross-table fact
     # no CHECK can state, and is enforced where the row is written
@@ -308,7 +301,7 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         uselist=False,
     )
     # Read-only convenience for the trust rubric's correction-scheme
-    # provenance checks (correction-scheme-provenance plan v2 §7 / PR 5).
+    # provenance checks.
     # ``applied_energy_correction`` targets a *species entry*
     # (``target_species_entry_id``), not a specific thermo row -- a
     # correction is applied at the species level and any thermo record for
@@ -374,7 +367,7 @@ class ThermoPoint(Base):
       enthalpy increment from 298.15 K to ``temperature_k``, with the
       elemental term pinned at 298.15 K and not reevaluated at T -- so this
       is not ``H(T) - H(0)``. A parent record whose reference is undeclared
-      (legacy, predating the declaration rule) leaves this value's
+      (a row stored without one) leaves this value's
       reference zero unestablished; ``h_kj_mol`` carries no declaration of
       its own, it is governed entirely by the parent's.
     * ``g_kj_mol`` is the Gibbs free energy at ``temperature_k`` on that

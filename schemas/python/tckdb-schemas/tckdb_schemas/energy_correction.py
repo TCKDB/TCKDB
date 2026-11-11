@@ -95,8 +95,7 @@ class EnergyCorrectionSchemeRef(SchemaBase):
 
     ``frequency_level_of_theory`` is part of identity in both forms, and an
     absent value is a value of its own: a scheme sent without one never
-    matches a scheme that has one, and keeps exactly the identity it had
-    before the field existed.
+    matches a scheme that has one.
 
     A scheme deposited without ``data_revision`` never matches one
     deposited with it, even when the tables are identical: absence says
@@ -144,8 +143,8 @@ class EnergyCorrectionSchemeRef(SchemaBase):
         omit it for a scheme keyed on one level, and nothing is assumed. A
         scheme is never stored with an inferred frequency level.
 
-        Refused, because each is a contradiction and not a preference
-        (ADR 0008): a frequency level without ``level_of_theory``
+        Refused, because each is a contradiction and not a preference:
+        a frequency level without ``level_of_theory``
         (``energy_correction_scheme_frequency_level_without_energy_level``),
         and a frequency level on any kind other than the two BAC kinds, for now
         (``energy_correction_scheme_frequency_level_not_applicable``).
@@ -254,7 +253,7 @@ class EnergyCorrectionSchemeRef(SchemaBase):
         keyed on a pair too; the ``isodesmic`` kind has no defined content
         yet, so it is revisited when it does.) And a frequency half is a
         half: without the energy level there is no pair. Both are contradictions in the payload, not
-        gaps in it, so they are refused with a code (ADR 0008).
+        gaps in it, so they are refused with a code.
         """
         if self.frequency_level_of_theory is None:
             return self

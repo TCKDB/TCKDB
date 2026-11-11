@@ -43,8 +43,7 @@ class ScanRequestEcho(ProfiledRequestEcho):
     Mirrors the convention used by other ``/scientific/*`` envelopes
     (``request.include`` etc.) so callers can confirm the resolved
     filter / pagination values. ``include`` carries opt-in tokens
-    such as ``internal_ids`` that flow through the existing Phase D
-    visibility policy via ``apply_internal_ids_visibility``.
+    such as ``internal_ids`` that flow through the existing visibility policy via ``apply_internal_ids_visibility``.
     """
 
     include_geometries: bool = False
@@ -96,7 +95,7 @@ class ScanPointDetail(BaseModel):
     """One scan point with its energy projection, geometry link, and
     coordinate-value list.
 
-    ``geometry_id`` is subject to the Phase D internal-ID visibility
+    ``geometry_id`` is subject to the internal-ID visibility
     policy. ``geometry_ref`` is always present when the underlying
     geometry exists. The ``geometry_link`` field is populated only
     when the caller passes ``include_geometries=true``; otherwise the

@@ -2,7 +2,7 @@
 
 A block that names a species entry (a reaction participant, a network state
 participant, the species context of a conformer, statmech, transport, geometry
-or calculation record) used to carry only ``species_entry_label``: the five
+or calculation record) carries ``species_entry_label``: the five
 identity columns joined into one string. That string mixes parts TCKDB computes
 (the stereo descriptor, the state kind, the isotope key) with parts a depositor
 typed (``electronic_state_label``, ``term_symbol``), and a client cannot take it
@@ -16,7 +16,7 @@ renders species pages renders these blocks with the same code. Every one is
 ``electronic_state_label`` and ``term_symbol`` are typed text. They are served
 here only when they satisfy the write-time grammar
 (``tckdb_schemas.electronic_state``), in their canonical NFC spelling (``T1``,
-``X ²Π``); a value that fails it (a row stored before the grammar was enforced)
+``X ²Π``); a value that fails it (a stored value outside the grammar)
 reads ``None``. They are for the display of excited and spin states and are
 never to be parsed as stereo descriptors.
 """
@@ -36,7 +36,7 @@ class EntryFacetFields(BaseModel):
     electronic_state_kind: SpeciesEntryStateKind | None = None
     #: Display text of the stereo key (``R``, ``E``, ...); ``None`` while nothing is resolved.
     stereo_label: str | None = None
-    #: The entry's stereo key (DR-0038), ``None`` only for an achiral species.
+    #: The entry's stereo key, ``None`` only for an achiral species.
     stereo_descriptor: str | None = None
     stereo_resolution: StereoResolution | None = None
     isotope_key: str | None = None

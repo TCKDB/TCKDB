@@ -14,7 +14,7 @@ Conformer concepts split three ways (per
 - ``conformer_selection`` — curation row keyed by selection_kind;
   **not reviewable** and **has no public ref column today** (see open
   question 13.1 in the spec). Surfaced via an integer ``conformer_selection_id``
-  that is policy-gated by the Phase D internal-ID visibility helper.
+  that is policy-gated by the internal-ID visibility helper.
 
 Large JSON blobs (``representative_fingerprint_json``,
 ``representative_coords_json`` on the group; ``torsion_fingerprint_json``
@@ -243,15 +243,11 @@ class ConformerObservationSiblingSummary(BaseModel):
     slightly richer, projection the **conformer-group** surface embeds
     under its own ``observations`` include by default.
 
-    Before this type existed, a sibling was built as a full
-    :class:`ScientificConformerObservationRecord` with every include
-    token minus ``observations`` — its own calculations, geometries,
-    selections, review history and evidence summary, and a *duplicate*
-    copy of the parent group's core block and species context. For a
-    basin the UI renders as three ``<li>`` elements (ref + review pill),
-    that scaled the response linearly with basin size: one measured
-    request came back at 22.8 KB, 90%+ of it the sibling block (issue
-    #269). A sibling in a list carries what the list needs; the full
+    A full :class:`ScientificConformerObservationRecord` per sibling would
+    carry its own calculations, geometries, selections, review history and
+    evidence summary, and a *duplicate* copy of the parent group's core
+    block and species context, scaling the response linearly with basin
+    size. A sibling in a list carries what the list needs; the full
     record for any one sibling is one hop away, at that sibling's own
     ``GET /scientific/conformer-observations/{ref}``.
     """
@@ -278,16 +274,12 @@ class ConformerObservationGroupSummary(BaseModel):
     different need, not the same one duplicated.
 
     What it does **not** carry is calculations, geometries, selections,
-    review history or its own evidence summary — before ``observation_
-    details`` existed as an explicit opt-in, every embedded observation
-    was a full :class:`ScientificConformerObservationRecord` (every
-    include token minus ``observations``), so a caller requesting
-    ``include=observations,selections,review`` on the group surface got
-    every one of those sections duplicated onto every observation, never
-    requested them there, and paid a cost that multiplied with basin
-    size without ever asking for it (issue #537, following the same
-    shape #269/PR #535 fixed on the observation-sibling case above). A
-    caller that genuinely needs an observation's own calculations and
+    review history or its own evidence summary: a full
+    :class:`ScientificConformerObservationRecord` per observation would
+    duplicate every include token onto every observation, at a cost that
+    multiplies with basin size.
+
+    A caller that genuinely needs an observation's own calculations and
     geometries inline — the group page's own use — asks for both
     explicitly: ``include=observations,observation_details,calculations,
     geometries``, which builds :class:`ScientificConformerObservationRecord`
@@ -308,7 +300,7 @@ class ConformerSpeciesContext(EntryFacetFields):
 
     Mirrors :class:`SpeciesEntryOwnerSummary` shape conventions used by
     the calculation surface so a generic client can reuse one parser
-    for both surfaces. Integer ids are Phase D policy-gated.
+    for both surfaces. Integer ids are policy-gated.
 
     ``species_entry_label`` is the short discriminator that says *which*
     entry of that species this is -- ``"E"``, ``"Z"``, ``"excited T1"``.
@@ -368,7 +360,7 @@ class ConformerSelectionSummary(BaseModel):
 
     ``conformer_selection`` has no ``public_ref`` column today — the
     integer ``conformer_selection_id`` is the only addressable handle
-    and it is stripped under the Phase D default visibility policy.
+    and it is stripped under the default visibility policy.
     Callers identify selections by ``(selection_kind, assignment_scheme_ref)``
     instead of by id.
 
@@ -444,20 +436,18 @@ class ConformerGroupEvidenceSummary(BaseModel):
     :class:`ConformerObservationEvidenceSummary`. That asymmetry is the
     point, not an oversight, and it should not be smoothed over.
 
-    A group pools several observations. The booleans this block used to
-    carry (``has_opt`` / ``has_freq`` / …) were a plain OR across all of
-    them, which made them asymmetrically informative: ``false`` was
-    strong (nothing in the group has it) while ``true`` was nearly
-    empty (one calculation out of a hundred made it ``true``). A reader
-    seeing ``has_freq: true`` on a five-observation basin could not tell
-    whether five observations had frequencies or one did. Counts answer
-    that question — ``freq: 2`` with ``observation_count: 5`` shows an
-    unevenly covered basin at a glance — and ``count > 0`` reproduces
-    the old boolean exactly, so nothing that the boolean expressed was
-    lost.
+    A group pools several observations. A plain OR across them
+    (``has_opt`` / ``has_freq`` / …) would be asymmetrically informative:
+    ``false`` is strong (nothing in the group has it) while ``true`` is
+    nearly empty (one calculation out of a hundred makes it ``true``). A
+    reader seeing ``has_freq: true`` on a five-observation basin could
+    not tell whether five observations had frequencies or one did. Counts
+    answer that question — ``freq: 2`` with ``observation_count: 5``
+    shows an unevenly covered basin at a glance — and ``count > 0``
+    gives the boolean.
 
     An observation is a single provenance row, so on that surface the
-    booleans are unambiguous and are kept as they were.
+    booleans are unambiguous.
     """
 
     observation_count: int | None = None
@@ -598,7 +588,7 @@ class ConformerReviewEntry(BaseModel):
     The associated record is implicit (conformer_group or
     conformer_observation depending on which detail surface returned
     the block). Reviewer / reviewed_by id is policy-gated by the
-    Phase D internal-ID visibility helper.
+    internal-ID visibility helper.
     """
 
     status: str
@@ -643,7 +633,7 @@ class ScientificConformerObservationRecord(BaseModel):
     #: Every observation in this record's conformer group, this one
     #: included, projected as a lean ref+review summary rather than a
     #: full nested record — see :class:`ConformerObservationSiblingSummary`
-    #: for why (issue #269). Populated under ``include=observations``,
+    #: for why. Populated under ``include=observations``,
     #: which on an observation-grained record is the one question the
     #: record cannot answer from itself: *what else is in this basin*.
     #: This field only exists on the top-level record returned by the
@@ -675,10 +665,9 @@ class ScientificConformerGroupRecord(BaseModel):
     and :class:`ConformerObservationGroupSummary`): a lean per-observation
     summary by default, or the full :class:`ScientificConformerObservationRecord`
     — with its own calculations/geometries/selections/review history — only
-    when a caller deliberately opts into the heavier shape. This is the
-    fix for issue #537: previously ``observations`` was unconditionally
-    the full shape, so every include token requested at the group level
-    cascaded onto every embedded observation as well, multiplying with
+    when a caller deliberately opts into the heavier shape. The lean
+    default keeps every include token requested at the group level from
+    cascading onto every embedded observation, which would multiply with
     basin size.
     """
 

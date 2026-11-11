@@ -135,7 +135,7 @@ the gap.
 
 **Role:** identity
 
-**Purpose:** One input of an assembled composite: the calculation that fills a scheme slot (ADR 0021, P5).
+**Purpose:** One input of an assembled composite: the calculation that fills a scheme slot.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
@@ -395,7 +395,7 @@ the gap.
 | `mol` | mol (RDKit cartridge structure) | yes | — | — | — | not documented |
 | `unmapped_smiles` | TEXT | yes | — | — | — | not documented |
 | `stereo_label` | TEXT | yes | — | — | — | not documented |
-| `stereo_descriptor` | TEXT | yes | — | — | — | ``stereo_descriptor`` is the stereo key (DR-0038): one comma-separated token per potential stereo element, ordered by canonical atom rank. Tokens: ``R`` ``S`` (centre), ``r`` ``s`` (pseudo-asymmetric centre), ``E`` ``Z`` (double bond, or an odd cumulene), ``e`` ``z`` (pseudo-asymmetric double bond), ``Ra`` ``Sa`` (the axis of an allene or any even cumulene; ``Ra`` is IUPAC ``M``, a negative torsion between the two CIP-higher substituents, and ``Sa`` is ``P``), ``-`` (not stereogenic in this configuration) and ``?`` (unknown, or not representable). An allene's token is read from geometry or from the chirality mark in the SMILES; an odd cumulene's from geometry only; ``NULL`` only for an achiral species. |
+| `stereo_descriptor` | TEXT | yes | — | — | — | ``stereo_descriptor`` is the stereo key: one comma-separated token per potential stereo element, ordered by canonical atom rank. Tokens: ``R`` ``S`` (centre), ``r`` ``s`` (pseudo-asymmetric centre), ``E`` ``Z`` (double bond, or an odd cumulene), ``e`` ``z`` (pseudo-asymmetric double bond), ``Ra`` ``Sa`` (the axis of an allene or any even cumulene; ``Ra`` is IUPAC ``M``, a negative torsion between the two CIP-higher substituents, and ``Sa`` is ``P``), ``-`` (not stereogenic in this configuration) and ``?`` (unknown, or not representable). An allene's token is read from geometry or from the chirality mark in the SMILES; an odd cumulene's from geometry only; ``NULL`` only for an achiral species. |
 | `stereo_resolution` | StereoResolution (enum) | yes | — | — | `resolved`, `partial`, `unresolved` | not documented |
 | `stereo_smiles` | TEXT | yes | — | — | — | not documented |
 | `merged_into_species_entry_id` | BIGINT | yes | — | species_entry.id | — | not documented |
@@ -537,7 +537,7 @@ the gap.
 
 **Role:** provenance
 
-**Purpose:** A level-of-theory row merged into another spelling of the same level (#574).
+**Purpose:** A level-of-theory row merged into another spelling of the same level.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
@@ -698,7 +698,7 @@ the gap.
 
 **Role:** result
 
-**Purpose:** What comparing a composite calculation with one attached output log concluded (ADR 0021, P7a).
+**Purpose:** What comparing a composite calculation with one attached output log concluded.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
@@ -1050,7 +1050,7 @@ the gap.
 
 **Role:** role not stated on the model
 
-**Purpose:** The energy of a ``composite`` calculation (ADR 0021), 1:1 with ``calculation``.
+**Purpose:** The energy of a ``composite`` calculation, 1:1 with ``calculation``.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
@@ -1393,7 +1393,7 @@ the gap.
 
 **Role:** role not stated on the model
 
-**Purpose:** One deposited part of a single point's electronic energy (ADR 0021).
+**Purpose:** One deposited part of a single point's electronic energy.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
@@ -1991,7 +1991,7 @@ the gap.
 
 **Role:** role not stated on the model
 
-**Purpose:** One modified-Arrhenius term of a sum-of-Arrhenius rate (DR-0036).
+**Purpose:** One modified-Arrhenius term of a sum-of-Arrhenius rate.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
@@ -2078,7 +2078,7 @@ the gap.
 
 **Role:** role not stated on the model
 
-**Purpose:** Pressure-dependent falloff parameters for a kinetics record (DR-0032).
+**Purpose:** Pressure-dependent falloff parameters for a kinetics record.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
@@ -2545,7 +2545,7 @@ the gap.
 
 **Role:** role not stated on the model
 
-**Purpose:** The calculation one participant of a state contributes to its energy (#678).
+**Purpose:** The calculation one participant of a state contributes to its energy.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
@@ -3393,7 +3393,7 @@ the gap.
 | `s298_uncertainty_j_mol_k` | DOUBLE PRECISION | yes | — | — | — | not documented |
 | `enthalpy_formation_0k_kj_mol` | DOUBLE PRECISION | yes | — | — | — | ``enthalpy_formation_0k_kj_mol`` is the 0 K standard formation enthalpy (ΔfH°(0 K)), the quantity computational thermochemistry derives directly from atomization/composite energies. It relates to ``h298_kj_mol`` through the species and element thermal enthalpy increments, ΔfH°(298) = ΔfH°(0) + [H°(298) − H°(0)]_species − Σ [H°(298) − H°(0)]_elements; the two are stored side by side rather than derived from one another because either may be the primary reported value. |
 | `enthalpy_formation_0k_uncertainty_kj_mol` | DOUBLE PRECISION | yes | — | — | — | not documented |
-| `reference_pressure_bar` | DOUBLE PRECISION | yes | — | — | — | ``reference_pressure_bar`` is the standard-state pressure the H/S and NASA/tabulated values are referenced to (IUPAC 1 bar; legacy data using the older 1 atm convention should record 1.01325). ``NULL`` means the reference pressure was not specified. There is no origin default (decided 2026-09-24, issue #529): a QC computed upload that omits it stays ``NULL`` rather than being stamped ``1.0``, because the dominant computed producer (ARC) computes entropy at 1 atm and records no pressure anywhere in its output -- the same class of invisible, plausible-looking error the enthalpy-reference decision above exists to prevent. Rows written before this decision still carry the invented ``1.0``; correcting them is a separate, undecided question. |
+| `reference_pressure_bar` | DOUBLE PRECISION | yes | — | — | — | ``reference_pressure_bar`` is the standard-state pressure the H/S and NASA/tabulated values are referenced to (IUPAC 1 bar; legacy data using the older 1 atm convention should record 1.01325). ``NULL`` means the reference pressure was not specified. There is no origin default: a QC computed upload that omits it stays ``NULL``, because the dominant computed producer (ARC) computes entropy at 1 atm and records no pressure anywhere in its output -- a default would be the same class of invisible, plausible-looking error the enthalpy reference declaration exists to prevent. |
 | `phase` | PhaseKind (enum) | yes | — | — | `gas`, `liquid`, `solid`, `aqueous` | ``phase`` records the physical phase (gas by default for computed species). ``NULL`` means unspecified. |
 | `tmin_k` | DOUBLE PRECISION | yes | — | — | — | not documented |
 | `tmax_k` | DOUBLE PRECISION | yes | — | — | — | not documented |
@@ -3500,7 +3500,7 @@ the gap.
 | `thermo_id` | BIGINT | no | — | thermo.id | — | not documented |
 | `temperature_k` | DOUBLE PRECISION | no | — | — | — | not documented |
 | `cp_j_mol_k` | DOUBLE PRECISION | yes | — | — | — | not documented |
-| `h_kj_mol` | DOUBLE PRECISION | yes | — | — | — | ``h_kj_mol`` is the tabulated enthalpy at ``temperature_k``, on the same reference zero the parent ``thermo`` row's ``enthalpy_reference_kind`` declares: for ``formation_298k``, the standard formation enthalpy at 298.15 K plus the species' own enthalpy increment from 298.15 K to ``temperature_k``, with the elemental term pinned at 298.15 K and not reevaluated at T -- so this is not ``H(T) - H(0)``. A parent record whose reference is undeclared (legacy, predating the declaration rule) leaves this value's reference zero unestablished; ``h_kj_mol`` carries no declaration of its own, it is governed entirely by the parent's. |
+| `h_kj_mol` | DOUBLE PRECISION | yes | — | — | — | ``h_kj_mol`` is the tabulated enthalpy at ``temperature_k``, on the same reference zero the parent ``thermo`` row's ``enthalpy_reference_kind`` declares: for ``formation_298k``, the standard formation enthalpy at 298.15 K plus the species' own enthalpy increment from 298.15 K to ``temperature_k``, with the elemental term pinned at 298.15 K and not reevaluated at T -- so this is not ``H(T) - H(0)``. A parent record whose reference is undeclared (a row stored without one) leaves this value's reference zero unestablished; ``h_kj_mol`` carries no declaration of its own, it is governed entirely by the parent's. |
 | `s_j_mol_k` | DOUBLE PRECISION | yes | — | — | — | not documented |
 | `g_kj_mol` | DOUBLE PRECISION | yes | — | — | — | ``g_kj_mol`` is the Gibbs free energy at ``temperature_k`` on that same zero, ``H(T) - T*S(T)`` (entropy converted from J/(mol*K) to kJ/(mol*K)); it inherits the same parent-governed, possibly-undeclared reference zero as ``h_kj_mol``. |
 

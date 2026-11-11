@@ -12,9 +12,8 @@ class NetworkStateCompositionParticipant(EntryFacetFields):
 
     ``canonical_smiles`` is the *species*-level graph identity and is
     deliberately not unique among participants: two ``species_entry`` rows
-    under one ``species`` share it by construction. The hydrazine network has
-    exactly that shape — two diazene entries, one ``species`` row, one
-    ``N=N`` — and a consumer that renders a state from ``canonical_smiles``
+    under one ``species`` share it by construction. For example, two diazene
+    entries share one ``species`` row and one ``N=N``, and a consumer that renders a state from ``canonical_smiles``
     alone collapses two distinct wells onto one string and can produce a
     channel that appears to run from a state to itself.
 

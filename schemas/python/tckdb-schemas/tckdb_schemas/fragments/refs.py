@@ -32,10 +32,7 @@ from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 
 #: A declared ``version`` that embeds a parsed ESS startup banner --
 #: ``"Gaussian 09, Revision D.01"`` instead of ``version="09",
-#: revision="D.01"``. Issue #305 measured 494 Gaussian software_release
-#: rows on the deployed archive carrying the composite form, and five
-#: real ARC payloads that HTTP 422 refused it (never accepted anywhere)
-#: broke real ingestion outright. This code now names a warning, not a
+#: revision="D.01"``. This code names a warning, not a
 #: refusal: :meth:`SoftwareReleaseRef.normalize_composite_version` splits
 #: the composite deterministically wherever a leading package-name token
 #: matches the declared ``name`` and reports it under this code. See
@@ -45,11 +42,9 @@ from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 W_SOFTWARE_RELEASE_VERSION_IS_COMPOSITE = "software_release_version_is_composite"
 
 #: The version's leading package-name token disagrees with the declared
-#: ``name`` -- e.g. ``name="gaussian", version="ORCA 6.0.0"``. Measured
-#: live in five ARC records: the calculation actually ran on ORCA (the
-#: version is the parser-observed fact) but a stale/default ``name``
-#: rode along from an earlier species in the same run. Normalizing this
-#: the way the matching case is normalized would manufacture
+#: ``name`` -- e.g. ``name="gaussian", version="ORCA 6.0.0"``. The
+#: version is the parser-observed fact, so ``name`` is the likelier to be
+#: stale. Normalizing this the way the matching case is normalized would manufacture
 #: ``name="gaussian", version="6.0.0"`` -- a Gaussian release that never
 #: existed -- and destroy the only evidence the record disagrees with
 #: itself. Left completely untouched; only the warning fires.
@@ -57,15 +52,15 @@ W_SOFTWARE_RELEASE_NAME_LOOKS_WRONG = "software_release_name_looks_wrong"
 
 #: ``LevelOfTheoryRef.method`` contains ``//``: an ``energy//geometry`` pair
 #: written as one method name (ARC's ``level_of_theory: "x//y"`` shorthand).
-#: That is two ordinary levels of theory, not one method (ADR 0021), and a
+#: That is two ordinary levels of theory, not one method, and a
 #: single row named by both would be a level no program ran. Refused.
 LEVEL_OF_THEORY_METHOD_IS_COMPOUND = "level_of_theory_method_is_compound"
 
 #: ``LevelOfTheoryRef.method`` is a named composite method followed by a
 #: correction-table label (``cbs-qb3-paraskevas``) or a year (``cbsqb32023``).
 #: Those select a set of AEC/BAC parameters in Arkane, not a method: the
-#: calculation that ran is CBS-QB3. The name is stored as sent (never aliased,
-#: ADR 0021) and this warning tells the producer to send the method and name
+#: calculation that ran is CBS-QB3. The name is stored as sent (never aliased)
+#: and this warning tells the producer to send the method and name
 #: the table as an energy correction scheme.
 W_LEVEL_OF_THEORY_METHOD_NAMES_CORRECTION_TABLE = (
     "level_of_theory_method_names_correction_table"
@@ -241,11 +236,7 @@ class SoftwareReleaseRef(SchemaBase):
     def normalize_composite_version(self) -> Self:
         """Warn on, and deterministically normalise, a composite ``version``.
 
-        Never refuses (issue #305 follow-up: refusing broke real ARC
-        ingestion outright -- five real payloads carried
-        ``version="ORCA 6.0.0"`` under a stale ``name="gaussian"``, and
-        every one of them was a correct deposit of a producer bug this
-        archive has no business rejecting). Instead:
+        Never refuses. Instead:
 
         1. If ``version`` has no internal whitespace, it is not a banner
            shape at all -- return silently. This also deliberately leaves
@@ -343,7 +334,7 @@ class SoftwareReleaseRef(SchemaBase):
         # (``software_release`` dedupes on (software_id, version,
         # revision, build); see resolve_software_release). It is the
         # honest place for this, not calculation.observed_software_banner
-        # / software_reconciliation_status (DR-0008): those specifically
+        # / software_reconciliation_status: those specifically
         # model a *parser*-observed banner extracted from an ESS output
         # artifact at a later, separate seam, and are already
         # ``declared_only`` for every one of these rows because no
@@ -525,7 +516,7 @@ class OrdinaryLevelOfTheoryRef(SchemaBase):
     solvent: str | None = None
     solvent_model: str | None = None
     spin_treatment: SpinTreatment | None = None
-    #: Frozen-core or all-electron (ADR 0021). State it only when the run
+    #: Frozen-core or all-electron. State it only when the run
     #: says so; leave it out otherwise. It joins the level's identity only
     #: when given, so a payload that omits it is the level it always was.
     core_treatment: CoreTreatment | None = None
@@ -801,8 +792,7 @@ class FreqScaleFactorRef(SchemaBase):
         (e.g. Gaussian 16, Revision C.02). A harmonic frequency scale
         factor is fit against a program's own build-level vibrational
         frequencies, which change between releases of the same program
-        (correction-scheme-provenance plan v2 §6, mirroring
-        ``EnergyCorrectionSchemeRef.software``'s reasoning) -- so the
+        (the same reason as ``EnergyCorrectionSchemeRef.software``) -- so the
         factor is release-specific, not merely program-specific. Only
         ``name`` is required; a depositor who knows only the program
         resolves to the version-less release row for it. Null means

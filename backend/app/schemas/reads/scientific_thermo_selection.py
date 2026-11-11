@@ -326,7 +326,7 @@ class ThermoSelectionManifest(BaseModel):
     procedure replay re-runs; this is the assessment that produced the recorded ``eligible`` flags, which replay does not rerun."""
     read_profile: dict[str, Any]
     """The read profile the manifest was made under: ``profile``, its ``review_floor`` and ``linked_evidence_withheld``, the
-    review statuses whose linked evidence that profile withheld (ADR 0023; format 4). A manifest without a block whose
+    review statuses whose linked evidence that profile withheld (format 4). A manifest without a block whose
     evidence rule matches its profile is refused on replay."""
     request: ThermoSelectionManifestRequest
     subject: dict[str, Any]

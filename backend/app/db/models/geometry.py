@@ -70,25 +70,22 @@ class GeometryAtom(Base):
 
     #: Element symbol, **case-canonical as an invariant**: first character
     #: upper, rest lower (:func:`app.chemistry.geometry.normalize_element_symbol`,
-    #: applied by :func:`app.chemistry.geometry.parse_xyz` and backfilled onto
-    #: older rows by Alembic revision ``b4e7c1d20f83``). A file that writes
+    #: applied by :func:`app.chemistry.geometry.parse_xyz`). A file that writes
     #: ``CL`` stores ``Cl`` here while ``geometry.xyz_text`` keeps the ``CL`` it
     #: deposited; this column is the index the database joins and compares on.
     #:
     #: ``ck_geometry_atom_element_canonical`` (``c5a1f8e3d074``) is what makes
     #: that a fact about the column rather than a habit of one code path.
-    #: Until it existed, a restore from a backup older than ``b4e7c1d20f83``, a
-    #: bulk import, or any write path that skipped ``parse_xyz`` could put
-    #: ``CL`` back, so every reader that compared this column had to normalise
-    #: first and none of them could assume anything. A CHECK holds on all of
-    #: those paths -- unlike a foreign key or a trigger, it is not suspended by
-    #: ``session_replication_role = replica`` -- so readers may now compare the
-    #: stored value directly.
+    #: Without it, a restore from an old backup, a bulk import, or any write
+    #: path that skipped ``parse_xyz`` could put ``CL`` back, and every reader
+    #: that compared this column would have to normalise first. A CHECK holds
+    #: on all of those paths -- unlike a foreign key or a trigger, it is not
+    #: suspended by ``session_replication_role = replica`` -- so readers can
+    #: compare the stored value directly.
     #:
-    #: Case is canonicalised, and so is the hydrogen-isotope spelling, since
-    #: ``docs/adr/0022`` (2026-10-03): a deposited ``D``/``T`` is stored as
+    #: Case is canonicalised, and so is the hydrogen-isotope spelling: a deposited ``D``/``T`` is stored as
     #: ``H`` with ``isotope_mass_number`` 2/3, while ``geometry.xyz_text`` keeps
-    #: the ``D``. Rows written before that decision hold ``D``/``T`` here with
+    #: the ``D``. A row may hold ``D``/``T`` here with
     #: a NULL mass number and cannot be rewritten
     #: (``trg_as_geometry_atom``); code that counts elements resolves them with
     #: :func:`app.chemistry.geometry.resolve_element_symbol`, and code that needs
@@ -138,7 +135,7 @@ class GeometryAtom(Base):
         # restriction. It exists to be the target of
         # ``reaction_atom_map_pair``'s two foreign keys, which carry
         # ``element`` on both ends so that a mapped pair whose atoms are
-        # different elements cannot be written. See ADR 0011 and
+        # different elements cannot be written. See
         # :mod:`app.db.models.reaction_atom_map`.
         UniqueConstraint(
             "geometry_id",

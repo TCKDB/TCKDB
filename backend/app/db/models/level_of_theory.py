@@ -34,21 +34,20 @@ class LevelOfTheory(Base, TimestampMixin, PublicRefMixin):
     solvent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     solvent_model: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Restricted / unrestricted / restricted-open — part of LOT identity
-    # (DR-0034). NULL = unspecified (distinct from an explicit 'unknown').
+    # NULL = unspecified (distinct from an explicit 'unknown').
     spin_treatment: Mapped[Optional[SpinTreatment]] = mapped_column(
         SAEnum(SpinTreatment, name="spin_treatment"),
         nullable=True,
     )
 
-    # Frozen-core vs all-electron (ADR 0021). NULL = not stated, and a NULL
-    # row hashes exactly as it did before the column existed: the key joins the
-    # hash only when set, so no existing row is re-keyed.
+    # Frozen-core vs all-electron. NULL = not stated: the key joins the
+    # hash only when set, so a NULL row adds no key.
     core_treatment: Mapped[Optional[CoreTreatment]] = mapped_column(
         SAEnum(CoreTreatment, name="core_treatment"),
         nullable=True,
     )
 
-    # Method qualifiers (Stage 2 of the keywords decision). Each joins the hash
+    # Method qualifiers. Each joins the hash
     # only when set, exactly like ``core_treatment``: NULL = not stated and adds
     # no key. There is deliberately no free-text keywords column; the settings a
     # deck or log states are stored as calculation parameters.
@@ -73,15 +72,15 @@ class LevelOfTheory(Base, TimestampMixin, PublicRefMixin):
 
 
 class LevelOfTheoryMerge(Base, TimestampMixin):
-    """A level-of-theory row merged into another spelling of the same level (#574).
+    """A level-of-theory row merged into another spelling of the same level.
 
     Written only by ``scripts/ops/merge_duplicate_levels_of_theory.py``. The
     merged row is kept, with its ``public_ref``, so a citation of it (a
     published release's frozen provenance) still resolves; the read layer
     resolves that ref to ``into_lot_id``. No calculation points at a merged
     row, and ``into_lot_id`` is never itself merged, so one hop is enough.
-    Both rules are enforced by database triggers (revision ``e88231299733``,
-    #591), not only by the script: ``trg_lot_merge_guard`` refuses a chain, a
+    Both rules are enforced by database triggers (revision ``e88231299733``),
+    not only by the script: ``trg_lot_merge_guard`` refuses a chain, a
     loop, or a merge of a row calculations still use, and
     ``trg_calculation_lot_not_merged`` refuses a calculation on a merged row.
 

@@ -10,7 +10,7 @@ from tckdb_schemas.fragments.kinetics_bath_gas import (
 from tckdb_schemas.fragments.kinetics_evidence import (
     T0_K_DESCRIPTION,
     T0_K_MAX,
-    # Re-exported: the class moved to the wire package in #620, and importers
+    # Re-exported: the class lives in the wire package, and importers
     # (``tests/services/test_conformer_selection_locator.py``) name it here.
     ConformerSelectionContentRef,  # noqa: F401
     KineticsInterpretationAssignmentUpload,
@@ -88,7 +88,7 @@ def _validate_a_units_named(field: str, a_units: ArrheniusAUnits, orders: tuple[
     move a published message.
 
     Note what the prefix does *not* become. The message now starts with
-    ``"plog_entries[1].a_units: "``, and #159 promotes a leading token only
+    ``"plog_entries[1].a_units: "``, and a leading token is promoted to a code only
     where :mod:`app.api.code_catalogue` calls it a code. A field path is not
     catalogued, so it cannot be mistaken for one; the code arrives because
     the exception declares it, never because of where it sits in a sentence.
@@ -166,7 +166,7 @@ class KineticsReactionUpload(SchemaBase):
 
 
 class FalloffUpload(SchemaBase):
-    """Pressure-dependent falloff parameters (DR-0032 Part B).
+    """Pressure-dependent falloff parameters.
 
     The high-pressure-limit (k∞) Arrhenius parameters are the top-level
     ``a``/``n``/``reported_ea`` on the kinetics request; this block carries
@@ -207,7 +207,7 @@ class ThirdBodyEfficiencyUpload(SchemaBase):
 
 
 class PlogEntryUpload(SchemaBase):
-    """One pressure entry of a standalone PLOG rate (DR-0032 Part C)."""
+    """One pressure entry of a standalone PLOG rate."""
 
     entry_index: int = Field(ge=1)
     pressure_bar: float = Field(gt=0)
@@ -218,7 +218,7 @@ class PlogEntryUpload(SchemaBase):
 
 
 class MultiArrheniusEntryUpload(SchemaBase):
-    """One modified-Arrhenius term of a sum-of-Arrhenius rate (DR-0036).
+    """One modified-Arrhenius term of a sum-of-Arrhenius rate.
 
     A Chemkin ``DUPLICATE`` channel's rate coefficient is the sum of these
     terms. Unlike a PLOG entry there is no pressure — the terms are summed,
@@ -246,7 +246,7 @@ class MultiArrheniusEntryUpload(SchemaBase):
 
 
 class ChebyshevUpload(SchemaBase):
-    """A standalone Chebyshev k(T,P) surface (DR-0032 Part C).
+    """A standalone Chebyshev k(T,P) surface.
 
     ``coefficients`` is the n_temperature × n_pressure coefficient matrix
     (list of rows).
@@ -386,8 +386,8 @@ class KineticsUploadRequest(SchemaBase):
     # so existing clients keep working -- absence bites at release time.
     rights: DepositRights | None = None
 
-    # Public, opaque handle for a pressure-dependent network counterpart
-    # (DR-0036). Upload payloads must never accept database primary keys;
+    # Public, opaque handle for a pressure-dependent network counterpart.
+    # Upload payloads must never accept database primary keys;
     # the workflow resolves this handle to its internal FK.
     network_kinetics_ref: str | None = Field(default=None, min_length=1)
 
@@ -494,7 +494,7 @@ class KineticsUploadRequest(SchemaBase):
 
     @model_validator(mode="after")
     def validate_multi_arrhenius(self) -> Self:
-        """Bind ``multi_arrhenius`` to its sum-of-terms child rows (DR-0036).
+        """Bind ``multi_arrhenius`` to its sum-of-terms child rows.
 
         A DUPLICATE channel is a sum of at least two modified-Arrhenius
         terms; the scalar ``a`` must stay unset because the coefficient lives
@@ -545,7 +545,7 @@ class KineticsUploadRequest(SchemaBase):
     def _rate_side_counts(self) -> tuple[int, ...] | None:
         """Species on the side the coefficient is a rate *of*; ``None`` when no order exists.
 
-        A forward coefficient is a rate of the reactants, a reverse one of the products (#695), so
+        A forward coefficient is a rate of the reactants, a reverse one of the products, so
         one count. A ``net`` rate folds both directions and has no single order: ``None``, not
         checked. A record that states no direction could be either, and none is assumed: it returns
         ``(reactants, products)`` (one count when they are equal) and the check accepts units of
@@ -619,7 +619,7 @@ class KineticsUploadRequest(SchemaBase):
     @model_validator(mode="after")
     def validate_arrhenius_entries_a_units(self) -> Self:
         """Every summed ``multi_arrhenius`` term is the SAME reaction rate, so
-        each term's ``a_units`` must match the main-line molecularity (DR-0036).
+        each term's ``a_units`` must match the main-line molecularity.
         """
         orders = self._main_line_molecularities()
         if orders is None:
@@ -637,7 +637,7 @@ class KineticsUploadRequest(SchemaBase):
     @model_validator(mode="after")
     def validate_plog_entries_a_units(self) -> Self:
         """Each PLOG pressure entry's A is the reaction's rate at that pressure,
-        so its ``a_units`` shares the main-line molecularity (DR-0032 Part C).
+        so its ``a_units`` shares the main-line molecularity.
         """
         orders = self._main_line_molecularities()
         if orders is None:
@@ -657,7 +657,7 @@ class KineticsUploadRequest(SchemaBase):
         """The low-pressure-limit k0 Arrhenius is by definition one order higher
         than k∞, so ``falloff.low_a_units`` validates one order above the
         coefficient's side (reactants forward, products reverse, either when
-        no direction is stated) regardless of ``is_third_body`` (DR-0032 Part B).
+        no direction is stated) regardless of ``is_third_body``.
         """
         if self.falloff is None or self.falloff.low_a_units is None:
             return self

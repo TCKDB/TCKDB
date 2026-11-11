@@ -76,7 +76,7 @@ class CalculationCreateResolved(CalculationOwnerRequiredMixin, SchemaBase):
     species_entry_id: int | None = None
     transition_state_entry_id: int | None = None
 
-    #: ``None`` only on an assembled composite (ADR 0021, P5): arithmetic over
+    #: ``None`` only on an assembled composite: arithmetic over
     #: other deposited calculations, run by no program.
     software_release_id: int | None = None
     workflow_tool_release_id: int | None = None
@@ -420,7 +420,7 @@ class CalculationScanResultRead(CalculationScanResultPayload, ORMBaseSchema):
 
 
 # ---------------------------------------------------------------------------
-# IRC result and points (Phase 2)
+# IRC result and points
 # ---------------------------------------------------------------------------
 
 
@@ -453,7 +453,7 @@ class CalculationIRCResultRead(ORMBaseSchema):
 
 
 # ---------------------------------------------------------------------------
-# Path-search results (Phase 2 — generalizes NEB / GSM / string methods)
+# Path-search results (generalizes NEB / GSM / string methods)
 # ---------------------------------------------------------------------------
 
 
@@ -490,7 +490,7 @@ class CalculationPathSearchResultRead(ORMBaseSchema):
 
 
 # ---------------------------------------------------------------------------
-# Calculation parameters (Phase 2)
+# Calculation parameters
 # ---------------------------------------------------------------------------
 
 
@@ -508,7 +508,7 @@ class CalculationParameterRead(TimestampedReadSchema):
 
 
 # ---------------------------------------------------------------------------
-# Geometry validation (Phase 2)
+# Geometry validation
 # ---------------------------------------------------------------------------
 
 

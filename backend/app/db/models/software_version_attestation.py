@@ -1,6 +1,6 @@
 """Owner attestations of a software version, and the calculations they moved.
 
-Issue #305, owner decision (a) (2026-09-29). A calculation can cite a
+A calculation can cite a
 ``software_release`` whose ``version`` is NULL -- the program was recorded,
 its version was not -- and have no stored artifact whose banner could say
 which version ran. The only evidence left is the person who ran it saying

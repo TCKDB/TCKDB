@@ -240,19 +240,18 @@ class TransitionStateEvidenceSummary(BaseModel):
     :class:`TransitionStateEntryEvidenceSummary`. That asymmetry is the
     point, not an oversight, and it should not be smoothed over.
 
-    A TS concept pools several candidate entries. The booleans this
-    block used to carry (``has_opt`` / ``has_freq`` / …) were a plain OR
-    across all of them, which made them asymmetrically informative:
-    ``false`` was strong (nothing under the TS has it) while ``true``
-    was nearly empty (one calculation under one entry made it ``true``).
-    A reader seeing ``has_sp: true`` on a three-entry TS could not tell
+    A TS concept pools several candidate entries. A plain OR across them
+    (``has_opt`` / ``has_freq`` / …) would be asymmetrically informative:
+    ``false`` is strong (nothing under the TS has it) while ``true`` is
+    nearly empty (one calculation under one entry makes it ``true``). A
+    reader seeing ``has_sp: true`` on a three-entry TS could not tell
     whether three entries had single points or one did. Counts answer
     that question — ``sp: 1`` against ``entry_count: 3`` shows an
-    unevenly covered TS at a glance — and ``count > 0`` reproduces the
-    retired boolean exactly, so nothing the boolean expressed was lost.
+    unevenly covered TS at a glance — and ``count > 0`` gives the
+    boolean.
 
     A TS entry is a single candidate saddle point, so on that surface
-    the booleans are unambiguous and are kept as they were.
+    the booleans are unambiguous.
     """
 
     entry_count: int
@@ -261,7 +260,7 @@ class TransitionStateEvidenceSummary(BaseModel):
     #: Levels of theory used under this TS, per calculation type, pooled
     #: across every entry. See
     #: ``app/services/scientific_read/levels_of_theory.py`` for the shape's
-    #: whole argument: lists because 12 of 34 deployed TS entries carry two
+    #: whole argument: lists because a TS entry can carry two
     #: levels, an absent key because that type has no calculation here, and
     #: an empty list because it has one that names no level. This is the
     #: block ``evidence_coverage``'s docstring says a count cannot stand in
@@ -437,8 +436,8 @@ class TransitionStateSaddlePointEvidence(BaseModel):
     calculation with a result row — a real absence, not a zeroed-out
     struct. When present, every field below still reports its own
     ``None`` faithfully: a freq result can record ``n_imag`` without a
-    designated ``reaction_coordinate_mode_index`` (single imaginary mode,
-    ADR 0012), and a pre-ADR-0012 record may have neither the mode index
+    designated ``reaction_coordinate_mode_index`` (single imaginary mode),
+    and a record that was never judged may have neither the mode index
     nor the structural flag at all.
     """
 
@@ -548,7 +547,7 @@ class TransitionStateReviewEntry(BaseModel):
     The associated record is implicit (transition_state_entry or
     transition_state, depending on which detail surface returned the
     block). Internal user ids surface only when the deployment permits
-    them — they are stripped by the Phase D visibility helper.
+    them — they are stripped by the visibility helper.
     """
 
     status: str
@@ -569,7 +568,7 @@ class ScientificTransitionStateEntryRecord(BaseModel):
     default (exploratory) profile. Under ``?profile=curated`` it is ``null``
     when the owning transition state is below the review floor: the entry is
     still a visible record, only its owner is withheld, and a hidden owner
-    never hides the entry (owner decision D1). A client must read ``null`` as
+    never hides the entry. A client must read ``null`` as
     "an owner exists that this profile does not show", not as "the entry has no
     owner".
     """
@@ -645,10 +644,7 @@ class ScientificTransitionStateRecord(BaseModel):
     review_history: list[TransitionStateReviewEntry] | None = None
 
     #: IRC validation evidence for the concept's entries, one list per
-    #: entry, populated under ``include=validation_evidence``. The token was
-    #: legal on this surface before the field existed, so it was accepted,
-    #: echoed, and produced nothing — while ``available_sections``
-    #: advertised ``has_validation_evidence`` on the same record.
+    #: entry, populated under ``include=validation_evidence``.
     validation_evidence: (
         list[TransitionStateEntryValidationEvidence] | None
     ) = None

@@ -44,12 +44,10 @@ class StationaryPointKind(str, Enum):
 
 class ImaginaryModeDisposition(str, Enum):
     # What an imaginary vibrational mode *is*, other than the reaction
-    # coordinate. Declared by the depositor, never inferred: ADR 0012
-    # accepts a transition state carrying extra imaginary modes only
-    # because the record says what they are, and
-    # ``transition_state.py`` records that TCKDB deliberately does not
-    # store normal-mode displacement vectors, so there is nothing here
-    # to infer an assignment from.
+    # coordinate. Declared by the depositor, never inferred: a transition state
+    # carrying extra imaginary modes is accepted only because the record says
+    # what they are. Read-time projections from ``calc_hessian`` are
+    # reported beside it, never in place of it.
     #
     # ``unassigned`` is a real answer and not a placeholder: it says the
     # depositor looked and could not classify the mode. It is treated as
@@ -76,7 +74,7 @@ class HessianMethod(str, Enum):
     # This is *not* ``opt.initial_hessian``, which names where the
     # optimiser got its starting Hessian. It is the frequency job's own
     # method, and it is the single largest term in the noise floor of a
-    # small imaginary mode, so ADR 0012's tolerance keys on it.
+    # small imaginary mode, so the imaginary-mode tolerance keys on it.
     #
     # Recorded only when the output says so explicitly (Gaussian
     # ``Freq=Numer``, ORCA ``NumFreq`` / ``AnFreq``). Absence means "not
@@ -95,7 +93,7 @@ class HessianMethod(str, Enum):
 
 
 #: Every value ``calc_freq_result.imaginary_mode_tau_basis`` may hold --
-#: which row of ADR 0012's protocol table set the tolerance this record
+#: which row of the protocol table set the tolerance this record
 #: was judged at. A tuple rather than an ``Enum`` because the column is
 #: deliberately ``TEXT`` in the ORM and ``str`` on the wire: a reader must
 #: be shown a basis this build does not recognise rather than have the
@@ -117,13 +115,12 @@ IMAGINARY_MODE_TAU_BASIS_VALUES: tuple[str, ...] = (
     "finite_difference_gradient",
     "finite_difference_energy",
     "protocol_not_recorded",
-    # ADR 0012's 2026-09-04 amendment: an unrecorded Hessian method may
+    # An unrecorded Hessian method may
     # be assumed from the producing program's documented default for the
     # level-of-theory's method family (see
     # tckdb_schemas.hessian_method_assumption). Never confusable with a
     # recorded statement -- hence separate members rather than reusing
-    # the three above -- and widened onto this CHECK constraint by the
-    # revision following e2a7c9d4b615, not folded into it.
+    # the three above.
     "assumed_analytic_default",
     "assumed_finite_difference_gradient",
     "assumed_finite_difference_energy",
@@ -237,7 +234,7 @@ class MolecularPropertyKind(str, Enum):
     homo_lumo_gap = "homo_lumo_gap"
     rotational_constant = "rotational_constant"
     spectroscopic_constant = "spectroscopic_constant"
-    # Phase C-E1: fixed-unit (J/mol/K) ideal-gas heat capacity observation.
+    # Fixed-unit (J/mol/K) ideal-gas heat capacity observation.
     # See ``ck_mpo_heat_capacity_cp_unit_j_mol_k`` on
     # ``molecular_property_observation`` -- the unit is enforced by CHECK,
     # not left to ``scalar_unit`` free text, per the unit policy.
@@ -278,7 +275,7 @@ class ObservedUncertaintyKind(str, Enum):
     (``vDataUncertaintyType`` sub-elements): a standard deviation, an
     expanded interval at a stated coverage factor, or a combined
     (multi-source) variant of either. Deliberately has no "unspecified"
-    member (DR-0007) -- an uncertainty whose kind was not stated is
+    member -- an uncertainty whose kind was not stated is
     absent, not an enum value pretending to carry meaning it doesn't have.
     """
 
@@ -369,7 +366,7 @@ class ReactionRole(str, Enum):
 
 
 class AtomMapSource(str, Enum):
-    """How a reaction atom map was obtained (ADR 0011).
+    """How a reaction atom map was obtained.
 
     ``declared``
         The depositor stated the correspondence. They ran the calculation and
@@ -394,7 +391,7 @@ class CalculationType(str, Enum):
     # ``tckdb_schemas.enums.CalculationType`` and the two JSON schemas merge into
     # one OpenAPI component only while they are byte-identical.
     #
-    # ``composite`` (ADR 0021) is one composite energy at a scheme-bound level
+    # ``composite`` is one composite energy at a scheme-bound level
     # of theory: a program run of a named method (CBS-QB3, G4, ...), or in a
     # later phase an energy assembled from other calculations. Its number lives
     # in ``calc_composite_result``, not in an ``sp`` or ``opt`` result.
@@ -485,7 +482,7 @@ class CalculationDependencyRole(str, Enum):
       energy is the single-point value at its own level) that an assembled
       ``composite`` consumed -> child is that composite. Written by the server
       from ``calc_composite_input``, one edge per input row; never declared
-      by a producer (ADR 0021, P5).
+      by a producer.
 
     Any consumer that buckets these roles by "which side of the edge is
     the calc of interest on" (e.g. the transition-state trust rubric's
@@ -606,10 +603,8 @@ class ArtifactIntegrityDetectionContext(str, Enum):
     archive = "archive"
 
     #: The reproducibility rubric re-reading a graded calculation's output
-    #: log. The rubric has verified those bytes since it was written; what
-    #: it used to do with a failure was record a warning of its own, which
-    #: made it a second, quieter owner of the same fact (ADR 0008). It is
-    #: now a detector that reports to this table like every other one.
+    #: log. The rubric verifies those bytes and reports a failure to this
+    #: table like every other detector.
     reproducibility_verification = "reproducibility_verification"
 
     #: The orphan reclaim putting an object back at its content-addressed
@@ -761,13 +756,13 @@ class ParameterStatementKind(str, Enum):
 
 
 class SoftwareVersionEvidenceKind(str, Enum):
-    """What a ``software_version_attestation`` rests on (issue #305, decision (a)).
+    """What a ``software_version_attestation`` rests on.
 
     * ``owner_attestation`` — a person's own statement about the version of
       a program they ran, recorded verbatim, for calculations whose stored
       artifacts carry no banner (or were never stored). Artifact banners are
       not recorded here: they are observations and live on the calculation
-      (``observed_software_banner``, DR-0008).
+      (``observed_software_banner``).
     """
 
     owner_attestation = "owner_attestation"
@@ -775,7 +770,7 @@ class SoftwareVersionEvidenceKind(str, Enum):
 
 class SoftwareReconciliationStatus(str, Enum):
     """Outcome of reconciling user-declared vs parser-observed software
-    provenance on a ``calculation`` (DR-0008).
+    provenance on a ``calculation``.
 
     The user declares a software release in the upload payload; the ESS
     output parser observes a version banner. This status records how the
@@ -788,18 +783,16 @@ class SoftwareReconciliationStatus(str, Enum):
       *declared field* is disagreed with (``version``, ``revision``,
       ``build``), the declared value still takes precedence — the parser
       may have mis-read a banner and there is nothing on the calculation
-      to check it against. Narrowed 2026-09 for the *software identity*
+      to check it against. For the *software identity*
       itself: when the parsed banner names a **different program** than
       the declared ``name``, the observed program wins on
       ``software_release_id`` — an artifact that positively identifies
-      what actually ran outranks a declared label that, per issue #305's
-      ARC follow-up, can be a stale value that rode along from an
-      unrelated job. The declared string is never discarded even when
+      what actually ran outranks a declared label, which can be a stale
+      value that rode along from an unrelated job. The declared string is never discarded even when
       outranked: it survives on ``calculation.declared_software_banner``.
     * ``declared_only`` — user declared, no parseable banner was observed.
-      The overwhelming majority of live rows: no artifact was ever
-      uploaded for them, so there is nothing to reconcile against and the
-      declared value is simply what the calculation records.
+      No parseable banner was observed (usually because no output log was uploaded), so there is
+      nothing to reconcile against and the declared value is what the calculation records.
     * ``parsed_only`` — no user declaration, only a parsed banner.
 
     A NULL value means reconciliation was never run for the calculation
@@ -833,8 +826,7 @@ class ThermoCalculationRole(str, Enum):
 class ThermoModelKind(str, Enum):
     """Explicit representation kind for a thermo record.
 
-    Previously the representation was implied by which child rows existed;
-    this enum makes it explicit so NASA-9 (arbitrary interval count) and
+    The representation is explicit, so NASA-9 (arbitrary interval count) and
     Wilhoit forms can be distinguished from NASA-7 / tabulated / scalar.
     """
 
@@ -865,19 +857,19 @@ class ArrheniusAUnits(str, Enum):
 class KineticsModelKind(str, Enum):
     arrhenius = "arrhenius"
     modified_arrhenius = "modified_arrhenius"
-    # Sum-of-modified-Arrhenius form (DR-0036). Represents a Chemkin
+    # Sum-of-modified-Arrhenius form. Represents a Chemkin
     # ``DUPLICATE`` channel whose rate coefficient is the *sum* of N
     # modified-Arrhenius terms. The individual terms live in
     # ``kinetics_arrhenius_entry``; the parent ``a``/``n``/``ea_kj_mol``
     # columns stay null.
     multi_arrhenius = "multi_arrhenius"
-    # Pressure-dependent falloff forms (DR-0032 Part B). The k∞ Arrhenius
+    # Pressure-dependent falloff forms. The k∞ Arrhenius
     # lives on the kinetics row; k0 and broadening params live in
     # ``kinetics_falloff``.
     lindemann = "lindemann"
     troe = "troe"
     sri = "sri"
-    # Standalone pressure-dependent fits (DR-0032 Part C) — parameters in
+    # Standalone pressure-dependent fits — parameters in
     # ``kinetics_plog`` / ``kinetics_chebyshev`` with no master-equation
     # solve required (for literature fits).
     plog = "plog"
@@ -885,7 +877,7 @@ class KineticsModelKind(str, Enum):
 
 
 class KineticsDirection(str, Enum):
-    """Direction a reaction-level kinetics fit describes (DR-0036).
+    """Direction a reaction-level kinetics fit describes.
 
     Graph-level ``chem_reaction.reversible`` only says a reaction *can* run
     both ways; it cannot tell apart a forward-rate fit from a reverse-rate
@@ -897,8 +889,7 @@ class KineticsDirection(str, Enum):
     ``forward`` / ``reverse`` are relative to the reaction_entry's stored
     reactant→product orientation. ``net`` marks a rate that already folds
     both directions (e.g. an apparent/observed net rate). A ``NULL`` column
-    means the producer did not specify — the historical default, so existing
-    rows are unaffected.
+    means the producer did not specify.
     """
 
     forward = "forward"
@@ -1040,7 +1031,7 @@ class KineticsDegeneracyConvention(str, Enum):
 
 
 class TunnelingModel(str, Enum):
-    """Tunneling correction applied to a rate coefficient (DR-0032).
+    """Tunneling correction applied to a rate coefficient.
 
     Machine tokens, per the project enum policy (replaces the former
     free-text ``kinetics.tunneling_model`` column). ``other`` is the
@@ -1055,7 +1046,7 @@ class TunnelingModel(str, Enum):
 
 
 class SpinTreatment(str, Enum):
-    """Spin treatment of the electronic-structure method (DR-0034).
+    """Spin treatment of the electronic-structure method.
 
     Restricted (R), unrestricted (U), and restricted-open-shell (RO) treatments
     of the same method/basis are genuinely different levels of theory —
@@ -1071,12 +1062,11 @@ class SpinTreatment(str, Enum):
 
 
 class CompositeAssembly(str, Enum):
-    # How a ``composite`` calculation's energy was produced (ADR 0021).
+    # How a ``composite`` calculation's energy was produced.
     #
     # ``program_run``: one program run printed the final number (a named method:
     # CBS-QB3, G4, W1U, ...). ``assembled``: the energy is arithmetic over other
-    # deposited calculations (a user-built scheme). Only ``program_run`` is
-    # accepted today; ``assembled`` arrives with user schemes (phase P5).
+    # deposited calculations (a user-built scheme).
     #
     # A comment, not a docstring: mirrored by ``tckdb_schemas.enums`` (see
     # ``CalculationType``).
@@ -1102,7 +1092,7 @@ class CompositeLogOutcome(str, Enum):
 
 
 class CompositeEnergyVerificationState(str, Enum):
-    """How far a composite energy has been checked, as a read reports it (ADR 0021, P7a).
+    """How far a composite energy has been checked, as a read reports it.
 
     Derived at read time and never stored; a read-only vocabulary with no
     database type. ``recomputed`` and ``recompute_mismatch`` apply to an
@@ -1118,7 +1108,7 @@ class CompositeEnergyVerificationState(str, Enum):
 
 
 class CompositeTermLinearity(str, Enum):
-    """Whether a scheme term is a fixed linear combination of its inputs' energies (ADR 0021, P7a).
+    """Whether a scheme term is a fixed linear combination of its inputs' energies.
 
     Read-only vocabulary derived from a term's operation and formula; no database type.
     ``linear``: ``base``, ``value`` and ``difference`` terms and the two-point extrapolations,
@@ -1133,7 +1123,7 @@ class CompositeTermLinearity(str, Enum):
 
 
 class LegacyCompositeShape(str, Enum):
-    """A record shape from before the ``composite`` calculation type existed (ADR 0021, P7a).
+    """A record shape from before the ``composite`` calculation type existed.
 
     Annotated on reads, never repaired: the derived levels of such a record are
     exactly what they were, so a depositor's data is not silently re-read as
@@ -1150,7 +1140,7 @@ class LegacyCompositeShape(str, Enum):
 
 
 class CoreTreatment(str, Enum):
-    """Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).
+    """Which electrons a post-SCF method correlates.
 
     ``frozen_core``: the chemical core is held uncorrelated. ``all_electron``:
     every electron is correlated. CCSD(T)/cc-pCVTZ frozen-core and all-electron
@@ -1221,7 +1211,7 @@ class RiApproximation(str, Enum):
 
 
 class CompositeSchemeKind(str, Enum):
-    """What sort of recipe a ``composite_scheme`` is (ADR 0021).
+    """What sort of recipe a ``composite_scheme`` is.
 
     ``named_method``: a fixed program recipe addressed by its name (CBS-QB3,
     G4, W1U, ...); the recipe is the method's own, held in the curated
@@ -1238,7 +1228,7 @@ class CompositeSchemeKind(str, Enum):
 
 
 class CompositeTermOperation(str, Enum):
-    """What a ``composite_scheme_term`` does to the running energy (ADR 0021).
+    """What a ``composite_scheme_term`` does to the running energy.
 
     ``base``: the starting energy. ``extrapolation``: a basis-set limit from
     several cardinal numbers. ``difference``: a high-minus-low correction.
@@ -1255,7 +1245,7 @@ class CompositeTermOperation(str, Enum):
 
 
 class EnergyComponentKind(str, Enum):
-    """Which part of an electronic energy a value is (ADR 0021).
+    """Which part of an electronic energy a value is.
 
     Named generically because it is shared: a scheme term says which
     component of an input energy it consumes, and a single-point energy
@@ -1282,7 +1272,7 @@ class EnergyComponentKind(str, Enum):
 
 
 class CompositeExtrapolationFormula(str, Enum):
-    """The basis-set extrapolation formula of an extrapolation term (ADR 0021).
+    """The basis-set extrapolation formula of an extrapolation term.
 
     Formula, exponent and cardinal numbers are identity: anything that
     changes the number for fixed component energies is part of what the
@@ -1297,7 +1287,7 @@ class CompositeExtrapolationFormula(str, Enum):
 
 
 class CompositeInputSlot(str, Enum):
-    """The role of one input to a ``composite_scheme_term`` (ADR 0021).
+    """The role of one input to a ``composite_scheme_term``.
 
     ``value``: the single input of a base or value term. ``high`` / ``low``:
     the two sides of a difference. ``cardinal``: one of the points of an
@@ -1311,7 +1301,7 @@ class CompositeInputSlot(str, Enum):
 
 
 class CompositeBindingSource(str, Enum):
-    """Why a level of theory is bound to a composite scheme (ADR 0021).
+    """Why a level of theory is bound to a composite scheme.
 
     ``named_method_catalogue``: the level's method is a catalogued named
     composite method, bound by TCKDB. ``declared``: a depositor declared the
@@ -1323,7 +1313,7 @@ class CompositeBindingSource(str, Enum):
 
 
 class PressureContext(str, Enum):
-    """What a rate coefficient means with respect to pressure (DR-0032).
+    """What a rate coefficient means with respect to pressure.
 
     ``high_p_limit``: the high-pressure-limit rate k∞.
     ``apparent_at_pressure``: an apparent rate at a specific pressure
@@ -1381,8 +1371,7 @@ class LiteratureKind(str, Enum):
 class LiteratureTitleSource(str, Enum):
     """Where a ``literature.title`` came from.
 
-    ``NULL`` on the column means "not recorded" (rows written before the column
-    existed); it is never a third value to infer from.
+    ``NULL`` on the column means "not recorded"; it is never a third value to infer from.
     """
 
     resolved_metadata = "resolved_metadata"  # fetched from the DOI/ISBN registry
@@ -1436,7 +1425,7 @@ class NetworkSolveKind(str, Enum):
     software / workflow-tool triple they are attributed to. This axis says
     what stands behind that attribution. Without it the database can only hold
     rates whose master-equation inputs it also holds, which excludes every
-    rate ever read out of a paper's supplementary table. See ADR 0010.
+    rate ever read out of a paper's supplementary table.
 
     ``computed``
         The master equation was solved here and its inputs were deposited
@@ -1465,7 +1454,7 @@ class NetworkEnergyTransferScope(str, Enum):
     runs routinely declare one single-exponential-down model for the whole
     network. Recording which of the two happened is the difference between
     N independently determined values and one value copied N times; without
-    this axis the database cannot tell them apart. See ADR 0009.
+    this axis the database cannot tell them apart.
 
     ``per_well``
         The declaration names one network state and one collider species, and
@@ -1601,7 +1590,7 @@ class EnergyZeroConvention(str, Enum):
     # Deliberately a comment rather than a docstring: this enum is mirrored
     # between ``app.db.models.common`` and ``tckdb_schemas.enums``, and the
     # two JSON schemas merge into one published component only while they are
-    # byte-identical (see ``MoleculeKind``). Since #620 the typed tunneling
+    # byte-identical (see ``MoleculeKind``). The typed tunneling
     # evidence lives in the wire package, so this enum is reachable from both
     # sides of the OpenAPI document. Kept in lockstep by
     # ``tests/schemas/test_tckdb_schemas_enum_drift.py``.
@@ -1629,7 +1618,7 @@ class EnergyCorrectionConvention(str, Enum):
     # Deliberately a comment rather than a docstring: this enum is mirrored
     # between ``app.db.models.common`` and ``tckdb_schemas.enums``, and the
     # two JSON schemas merge into one published component only while they are
-    # byte-identical (see ``MoleculeKind``). Since #620 the typed tunneling
+    # byte-identical (see ``MoleculeKind``). The typed tunneling
     # evidence lives in the wire package, so this enum is reachable from both
     # sides of the OpenAPI document. Kept in lockstep by
     # ``tests/schemas/test_tckdb_schemas_enum_drift.py``.
@@ -1990,7 +1979,7 @@ class SubmissionRecordType(str, Enum):
     # for traceability (role="artifact") but never carries a record_review row:
     # artifacts are contribution evidence, not reviewable scientific results.
     artifact = "artifact"
-    # Phase C-E1: an experimental molecular-property observation (e.g. an
+    # An experimental molecular-property observation (e.g. an
     # imported ThermoML/CCCBDB Cp(T) point). Reviewable like other results
     # (may carry a ``record_review`` / ``record_machine_review`` row) but
     # deliberately NOT in ``SELECTABLE_RECORD_TYPES`` -- observations are
@@ -2125,15 +2114,15 @@ class MachineReviewCuratorTaskState(str, Enum):
 
 
 # ---------------------------------------------------------------------------
-# Curated product / dataset-release semantics (Stage 3)
+# Curated product / dataset-release semantics
 # ---------------------------------------------------------------------------
 
 
 class ReadProfile(str, Enum):
     """Which contract a scientific read (or a dataset manifest) answers under.
 
-    ``exploratory`` is the **default** on every read surface. That is a
-    deliberate product decision, not an oversight: on a pre-curation corpus a
+    ``exploratory`` is the **default** on every read surface. That is
+    deliberate: on a pre-curation corpus a
     curated default returns an empty result set and reads as a broken
     database. The miscitation risk is mitigated instead by *always* echoing
     the resolved profile (see :class:`ProfileRecommendation`), never by
@@ -2148,8 +2137,8 @@ class ReadProfile(str, Enum):
                      ``rejected`` or ``deprecated``, with its review badge,
                      and the linked evidence of a returned record is shown
                      with its badge too; only ``rejected`` and ``deprecated``
-                     evidence is withheld, and a request cannot lift that
-                     (ADR 0023). The badge is carried
+                     evidence is withheld, and a request cannot lift that.
+                     The badge is carried
                      where the response carries ``review_status_by_ref``; a
                      legacy ``/api/v1/*`` single-record read carries only the
                      served record's own status, in the

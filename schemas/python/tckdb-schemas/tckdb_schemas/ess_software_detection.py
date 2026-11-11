@@ -18,11 +18,10 @@ SoftwareName = Literal["gaussian", "orca", "molpro", "psi4", "xtb"]
 _GAUSSIAN_MARKERS = re.compile(
     r"Gaussian\s+\d+:|Entering Gaussian System", re.IGNORECASE
 )
-# Every alternative must name ORCA. A bare ``Program Version X.Y.Z`` was
-# previously accepted here, which is not an ORCA fingerprint at all -- it is a
-# phrase many programs print. Because ORCA is the last branch, any non-Gaussian,
-# non-Molpro log containing that phrase anywhere in its first 8 kB was dispatched
-# to the ORCA parser, which would then read charge, multiplicity and energies out
+# Every alternative must name ORCA. A bare ``Program Version X.Y.Z`` is
+# not an ORCA fingerprint at all -- it is a phrase many programs print. Because ORCA is the last branch, any
+# non-Gaussian, non-Molpro log containing that phrase anywhere in its first
+# 8 kB would be dispatched to the ORCA parser, which would then read charge, multiplicity and energies out
 # of a foreign format. Misattribution is worse than silence: returning ``None``
 # means the caller records nothing, while a wrong program yields a confident
 # wrong answer. Reject, don't guess.

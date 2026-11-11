@@ -1,4 +1,4 @@
-"""Upload payload for a depositor-supplied ThermoML XML document (Phase C-E6).
+"""Upload payload for a depositor-supplied ThermoML XML document.
 
 Unlike every other workflow upload schema, this one carries inline file
 bytes rather than already-structured scientific content: a ThermoML

@@ -61,9 +61,8 @@ class GeometryAtomPayload(BaseModel):
     per atom rather than guessing from ``element`` alone (a ``D``/``T``
     symbol already implies a non-standard nuclide; an ordinary symbol with a
     non-null value here does too). A geometry deposited with a ``D``/``T``
-    element token is stored as ``H`` with ``isotope_mass_number`` 2 or 3
-    (``docs/adr/0022``); only rows deposited before that decision still hold
-    the ``D``/``T`` symbol with a null value here.
+    element token is stored as ``H`` with ``isotope_mass_number`` 2 or 3;
+    a row may still hold the ``D``/``T`` symbol with a null value here.
     """
 
     atom_index: int
@@ -207,8 +206,7 @@ class GeometryIdentity(BaseModel):
 class ScientificGeometryResponse(ScientificResponse):
     """Response envelope for ``/api/v1/scientific/geometries/{geometry_handle}``.
 
-    Phase D: ``geometry_id`` is hidden in the default response (Phase D
-    internal-id visibility rules apply). ``geometry_ref`` is the
+    ``geometry_id`` is hidden in the default response (internal-id visibility rules apply). ``geometry_ref`` is the
     public stable handle.
 
     ``submission_ref`` — which upload produced this geometry, resolved
@@ -216,7 +214,7 @@ class ScientificGeometryResponse(ScientificResponse):
     calculation — is served only to an authenticated caller; anonymous
     callers do not receive the key at all (see
     ``app.services.scientific_read.auth_visibility``). ``submission_id``
-    follows the separate Phase D internal-id policy on top of that.
+    follows the separate internal-id policy on top of that.
     """
 
     request: RequestEcho

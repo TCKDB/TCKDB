@@ -1,4 +1,4 @@
-"""The worked payloads printed in the producer contract are valid and their totals recompute (ADR 0021, P5).
+"""The worked payloads printed in the producer contract are valid and their totals recompute.
 
 A documentation example that no model has parsed and no arithmetic has checked is
 how a contract teaches a producer a payload the server refuses.

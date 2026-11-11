@@ -1,4 +1,4 @@
-"""Read schemas for the scientific composite-scheme surface (ADR 0021).
+"""Read schemas for the scientific composite-scheme surface.
 
 Covers ``GET /api/v1/scientific/composite-schemes/{composite_scheme_ref}``.
 

@@ -1,4 +1,4 @@
-"""Shape rules for a user-built composite scheme (ADR 0021, P5).
+"""Shape rules for a user-built composite scheme.
 
 A producer who builds a composite energy from its own recipe sends the recipe
 inline, as ``level_of_theory.composite_scheme``. This module owns the rules that
@@ -399,7 +399,7 @@ def _assert_term(term: Any, operation: CompositeTermOperation) -> None:
 
 
 #: An assembled composite does not name an input for every slot of its scheme
-#: (or names none). Block tier (ADR 0008): the recipe cannot be evidenced.
+#: (or names none). Block tier: the recipe cannot be evidenced.
 COMPOSITE_INPUT_MISSING = "composite_input_missing"
 
 #: A composite input names a term or slot the scheme does not have.

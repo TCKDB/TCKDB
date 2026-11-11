@@ -77,10 +77,8 @@ class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin, PublicR
     See module docstring for the rationale behind nullable
     ``species_entry_id`` and the JSONB vector/tensor fields.
 
-    ``public_ref`` (prefix ``mpo_``, Phase C-E5) was added by migration
-    ``d2f4a7c1b8e6`` — an already-deployed table, so the column was added
-    and backfilled in place rather than folded into the initial schema.
-    See that revision and ``app/services/public_refs.py`` for the
+    ``public_ref`` (prefix ``mpo_``) is opaque. See
+    ``app/services/public_refs.py`` for the
     opaque-ref rationale (two rows with identical scalar bytes from two
     distinct import events must stay separately citable).
     """
@@ -124,12 +122,11 @@ class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin, PublicR
     vector_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     tensor_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
-    # ---- Uncertainty meaning (Phase C-E1) -----------------------------
+    # ---- Uncertainty meaning -----------------------------
     # A typed uncertainty *meaning* for ``scalar_uncertainty``, versioned
-    # as ``uncertainty.precedence.v1`` (docs/research/tckdb-phase-c-
-    # implementation-plan.md C2): the first present of combined expanded,
+    # as ``uncertainty.precedence.v1``: the first present of combined expanded,
     # combined standard, expanded, standard. No "unspecified" member
-    # (DR-0007) -- an uncertainty without a stated kind is NULL, enforced
+    # -- an uncertainty without a stated kind is NULL, enforced
     # by ``ck_mpo_uncertainty_kind_iff_value`` below.
     uncertainty_kind: Mapped[Optional[ObservedUncertaintyKind]] = mapped_column(
         SAEnum(ObservedUncertaintyKind, name="observed_uncertainty_kind"),
@@ -219,7 +216,7 @@ class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin, PublicR
         Text, nullable=True
     )
 
-    # ---- Source custody (Phase C-E1, new rows only) -------------------
+    # ---- Source custody (new rows only) -------------------
     # Points at the exact fetched-document snapshot an importer derived
     # this row from. Existing CCCBDB rows keep their flattened
     # ``external_source_*`` columns above and are NOT migrated to this FK
@@ -283,20 +280,15 @@ class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin, PublicR
             "wavelength_nm IS NULL OR wavelength_nm > 0",
             name="mpo_wavelength_nm_gt_0",
         ),
-        # Phase C-E1 CHECKs below are named with ``conv(...)`` rather than a
-        # bare string, unlike the pre-existing ``mpo_*`` CHECKs above. A bare
-        # name is treated as *input* to ``NAMING_CONVENTION["ck"]`` and gets
-        # ``ck_molecular_property_observation_`` glued on -- harmless for the
-        # pre-existing short names (they stay under Postgres's 63-char
-        # identifier limit and got realigned to the expanded form by
-        # ``b7e4d1a9c026``), but several of these names would then exceed 63
-        # chars and get silently hash-truncated (measured: two land on
-        # "ck_molecular_property_observation_ck_mpo_uncertainty_co_XXXX",
-        # distinguished only by an opaque hash). ``conv()`` marks the name as
-        # already final, matching exactly what the migration
-        # (``0b4a3afabfd3``) creates via ``op.f(...)`` -- the same fix
-        # ``execution_environment_manifest`` uses for its FK names, for the
-        # same reason.
+        # The CHECKs below are named with ``conv(...)`` rather than a bare
+        # string. A bare name is treated as *input* to
+        # ``NAMING_CONVENTION["ck"]`` and gets
+        # ``ck_molecular_property_observation_`` glued on, so several of these
+        # names would exceed Postgres's 63-char identifier limit and get
+        # silently hash-truncated. ``conv()`` marks the name as already final,
+        # matching exactly what the migration (``0b4a3afabfd3``) creates via
+        # ``op.f(...)`` -- the same approach ``execution_environment_manifest``
+        # uses for its FK names.
         CheckConstraint(
             "pressure_bar IS NULL OR pressure_bar > 0",
             name=conv("ck_mpo_pressure_bar_gt_0"),

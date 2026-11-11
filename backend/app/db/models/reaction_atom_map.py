@@ -1,4 +1,4 @@
-"""Atom correspondence across one micro reaction (ADR 0011).
+"""Atom correspondence across one micro reaction.
 
 A reaction records which species react, which transition state sits between
 them, and what rate results. It does not record *which atom is which*. These
@@ -12,8 +12,7 @@ That column maps an *input* geometry to an *output* geometry for the **same
 species**, beside ``is_isomorphic``, ``rmsd`` and ``n_mappings``. It answers
 "did the optimiser hand back the molecule I gave it" — conformer alignment. It
 says nothing across a reaction. These tables are deliberately named
-``reaction_atom_map*`` so the two cannot be read as one another, and ADR 0011
-leaves renaming the older column undecided.
+``reaction_atom_map*`` so the two cannot be read as one another.
 
 Not to be confused with ``transition_state_validation_evidence``
 ---------------------------------------------------------------
@@ -43,10 +42,9 @@ of a geometry, not of a species.
 
 What the database refuses on its own
 ------------------------------------
-Three of ADR 0011's blocking rules are structural here rather than only
-validated at the API boundary, following the reasoning of ADR 0010 and
-``f9b2e6c4a1d7``: a second write path must not be able to assert what the
-first one refuses.
+Three blocking rules are structural here rather than only validated at the
+API boundary: a second write path must not be able to assert what the first one
+refuses.
 
 * **An index that is not a real atom of the named geometry** —
   ``fk_reaction_atom_map_pair_geometry_id_geometry_atom`` and its TS-side twin
@@ -59,45 +57,24 @@ first one refuses.
   rule enforceable declaratively instead of in a trigger.
 
   There are **two** of them, ``element`` and ``ts_element``, rather than one
-  column shared by both foreign keys. The reason *was* that
-  ``geometry_atom.element`` used to be stored verbatim as the depositor's XYZ
-  wrote it: ``CL`` and ``Cl`` are the same element and different
-  ``character(2)`` values, so when a reactant geometry came out of one program
-  and the saddle point out of another, *no single stored value satisfied both
-  foreign keys* and a perfectly correct map could not be written at all. One
-  column made capitalisation load-bearing — the same defect, one table over,
-  that made a ``CL`` saddle point contradict its own reaction.
+  column shared by both foreign keys, so that ``ck_..._element_matches`` has two
+  values to compare. Collapsing them would demote "an element does not change
+  across a reaction" from a CHECK to a consequence of two foreign keys. A
+  foreign key in PostgreSQL is a system trigger, and ``SET
+  session_replication_role = replica`` suspends system triggers while leaving
+  CHECK constraints armed: under ``replica`` a pair row naming an atom that does
+  not exist is **accepted**, and a pair row mapping ``C`` onto ``N`` is still
+  refused by the CHECK. So on the bulk-load and restore path the foreign keys
+  hold nothing and the CHECK holds everything. The CHECK also carries a name a
+  client can be handed: ``ck_..._element_matches`` carries
+  ``atom_map_element_not_conserved`` in :mod:`app.scientific_checks.declarations`,
+  whereas the foreign key also fires for "that geometry has no such atom" and so
+  can name neither claim unambiguously.
 
-  **That reason is gone.** ``b4e7c1d20f83`` canonicalised the column at
-  ingestion and ``c5a1f8e3d074`` added ``ck_geometry_atom_element_canonical``,
-  so two geometries can no longer spell one element two ways in any state the
-  database can be in. A single shared column would now satisfy both foreign
-  keys for every correct map, and the split *could* be collapsed.
-
-  It is not collapsed, for a reason that did not exist when it was created.
-  Collapsing would delete ``ck_..._element_matches`` — with one column there is
-  nothing left to compare — and demote "an element does not change across a
-  reaction" from a CHECK to a consequence of two foreign keys. A foreign key in
-  PostgreSQL is a system trigger, and ``SET session_replication_role =
-  replica`` suspends system triggers while leaving CHECK constraints armed.
-  Measured at ``e2c9a4f7b163``: under ``replica`` a pair row naming an atom
-  that does not exist is **accepted**, and a pair row mapping ``C`` onto ``N``
-  is still refused by the CHECK. So on the bulk-load and restore path — the
-  exact path canonicality was made structural to defend — the foreign keys hold
-  nothing and the CHECK holds everything. Collapsing would trade a rule that
-  survives a bulk import for one that does not, and would additionally take the
-  rule's name off the error a client is handed: ``ck_..._element_matches``
-  carries ``atom_map_element_not_conserved`` in
-  :mod:`app.scientific_checks.declarations`, whereas the foreign key that would
-  replace it also fires for "that geometry has no such atom" and so can name
-  neither claim unambiguously.
-
-  What canonicality did change is the *check*: it was
-  ``upper(element) = upper(ts_element)``, and ``c5a1f8e3d074`` tightened it to
-  plain ``element = ts_element``. Both columns now carry their own canonicality
-  CHECK — not inherited through the foreign keys, which lapse under ``replica``
-  — so two atoms of the same element carry byte-identical values on every path,
-  and the case-blindness could only ever have been a no-op.
+  The check is plain ``element = ts_element``. Both columns carry their own
+  canonicality CHECK -- not inherited through the foreign keys, which lapse under
+  ``replica`` -- so two atoms of the same element carry byte-identical values on
+  every path.
 
   ``isotope_mass_number`` is *not* carried the same way, because it is nullable
   and a NULL column silently disables a MATCH SIMPLE foreign key — isotope
@@ -144,7 +121,7 @@ class ReactionAtomMap(Base, TimestampMixin, CreatedByMixin):
     keyed by ``(reaction_entry_id, transition_state_entry_id)``.
 
     A reaction with no transition state has no map, and that is not a gap: the
-    ADR stores both legs *toward the saddle point*, so a barrierless channel
+    map stores both legs *toward the saddle point*, so a barrierless channel
     has nothing for the legs to point at.
     """
 
@@ -154,7 +131,7 @@ class ReactionAtomMap(Base, TimestampMixin, CreatedByMixin):
 
     #: The micro reaction this map belongs to. Derivable through
     #: ``transition_state_entry → transition_state → reaction_entry``, and
-    #: stored anyway: ADR 0011 puts the map on the micro reaction, and a read
+    #: stored anyway: the map belongs to the micro reaction, and a read
     #: that filters by reaction entry should not have to go through the TS to
     #: find out whether one exists.
     reaction_entry_id: Mapped[int] = mapped_column(
@@ -204,8 +181,8 @@ class ReactionAtomMap(Base, TimestampMixin, CreatedByMixin):
     #: How many maps are equivalent to this one under the symmetry of the
     #: participating structures, where the depositor knows. ``NULL`` means no
     #: claim is made — it does **not** mean 1. Symmetry makes a valid map
-    #: routinely non-unique; ADR 0011 records the map that was used and does
-    #: not attempt to canonicalise among the alternatives.
+    #: routinely non-unique; the map that was used is recorded and no
+    #: attempt is made to canonicalise among the alternatives.
     equivalent_map_count: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
     )

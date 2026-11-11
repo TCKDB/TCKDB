@@ -156,7 +156,7 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         DateTime(timezone=False), nullable=True, doc="When parameters were extracted"
     )
 
-    # --- Software provenance reconciliation (DR-0008) -----------------------
+    # --- Software provenance reconciliation -----------------------------------
     # Records how the user-declared software_release related to the version
     # banner observed by the ESS output parser. Provenance, not a trust gate:
     # a mismatch is recorded here (declared value still wins on
@@ -591,7 +591,7 @@ class CalculationSPResult(Base):
 
 
 class CalculationSPEnergyComponent(Base):
-    """One deposited part of a single point's electronic energy (ADR 0021).
+    """One deposited part of a single point's electronic energy.
 
     A child of a single-point calculation: the reference (SCF) energy, the
     correlation energy, a triples part, or a correction, as the program
@@ -627,7 +627,7 @@ class CalculationSPEnergyComponent(Base):
             name="value_hartree_finite",
         ),
         # ``correlation_excluding_triples`` is derived from ``correlation`` and ``triples`` and is never
-        # stored (ADR 0021). Compared as text so the constraint can be created in the transaction that
+        # stored. Compared as text so the constraint can be created in the transaction that
         # adds the enum value.
         CheckConstraint(
             "component::text <> 'correlation_excluding_triples'",
@@ -637,7 +637,7 @@ class CalculationSPEnergyComponent(Base):
 
 
 class CalculationCompositeResult(Base):
-    """The energy of a ``composite`` calculation (ADR 0021), 1:1 with ``calculation``.
+    """The energy of a ``composite`` calculation, 1:1 with ``calculation``.
 
     All three energies are nullable and ``NULL`` means *not stated*, never
     zero. TCKDB never stores a total it computed itself: a value here is one
@@ -719,7 +719,7 @@ class CalculationCompositeTerm(Base):
 
 
 class CalculationCompositeInput(Base):
-    """One input of an assembled composite: the calculation that fills a scheme slot (ADR 0021, P5).
+    """One input of an assembled composite: the calculation that fills a scheme slot.
 
     Evidence, not arithmetic: the row says *which* deposited calculation was
     the ``slot`` of term ``term_position`` of the composite's scheme, so a reader
@@ -786,7 +786,7 @@ class CalculationCompositeInput(Base):
 
 
 class CalculationCompositeLogCheck(Base, TimestampMixin):
-    """What comparing a composite calculation with one attached output log concluded (ADR 0021, P7a).
+    """What comparing a composite calculation with one attached output log concluded.
 
     An observation, appended when the log is uploaded: the upload hook
     (:func:`app.services.composite_energy_extraction.try_reconcile_composite_energy_from_output_log`)
@@ -860,8 +860,7 @@ class CalculationFreqResult(Base):
     zpe_uncertainty_hartree: Mapped[Optional[float]] = mapped_column(nullable=True)
 
     #: ``mode_index`` of the mode the depositor designated the reaction
-    #: coordinate. ADR 0012 makes this the contract that replaced the
-    #: ``n_imag == 1`` gate, and persisting it is what lets the read-time
+    #: coordinate. Persisting it is what lets the read-time
     #: trust rubric *cite* the upload-time judgement instead of
     #: re-deriving it from ``n_imag`` and disagreeing with it. NULL on
     #: every minimum and on any transition state with a single imaginary
@@ -870,12 +869,12 @@ class CalculationFreqResult(Base):
         Integer, nullable=True
     )
 
-    #: The ADR 0012 tolerance actually applied to this record's extra
+    #: The tolerance actually applied to this record's extra
     #: imaginary modes (cm⁻¹), and which row of the protocol table chose
     #: it. Stored rather than recomputed because τ is read from execution
     #: provenance: a later parser improvement would silently re-decide
-    #: every historical record, and ADR 0012's whole point is that a
-    #: reader can see what was decided and on what basis.
+    #: every historical record; storing it lets a reader see what was decided
+    #: and on what basis.
     imaginary_mode_tau_cm1: Mapped[Optional[float]] = mapped_column(nullable=True)
     #: Typed ``str`` rather than the ``TauBasis`` enum **on purpose**, and
     #: only on the wire: a reader must be shown a basis this build does
@@ -893,7 +892,7 @@ class CalculationFreqResult(Base):
         Text, nullable=True
     )
 
-    #: ADR 0012's structural flag: this record carries an imaginary mode
+    #: The structural flag: this record carries an imaginary mode
     #: at or above τ beyond its reaction coordinate, so it is a genuine
     #: higher-order saddle. Accepted, because that can be correct
     #: chemistry, but excluded from default transition-state consumption
@@ -950,15 +949,13 @@ class CalculationFreqMode(Base):
     symmetry_label: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     #: What this imaginary mode is, when it is not the reaction
-    #: coordinate — declared by the depositor, never inferred. ADR 0012
-    #: accepts extra imaginary modes on a transition state only because
+    #: coordinate — declared by the depositor, never inferred. Extra
+    #: imaginary modes on a transition state are accepted only because
     #: the record says what they are.
     #:
-    #: Declared, and — since 2026-08-11 — *checkable*. ADR 0013 held that
-    #: TCKDB could not compute the assignment itself because it stores no
-    #: displacement vectors; that was wrong, because ``calc_hessian``
-    #: stores the matrix whose eigenvectors they are. The ADR 0012
-    #: projections run at read time from that matrix
+    #: Declared, and *checkable*: ``calc_hessian`` stores the matrix whose
+    #: eigenvectors the modes are, and the imaginary-mode projections run
+    #: at read time from that matrix
     #: (``include=imaginary_mode_projections``) and report a determination
     #: *beside* this column, never in place of it. A conflict between the
     #: two is surfaced and left for a curator: this column keeps saying
@@ -1234,11 +1231,9 @@ class CalculationScanPoint(Base):
 class CalculationScanPointCoordinateValue(Base):
     """Coordinate values for one sampled scan point.
 
-    ``coordinate_value``'s meaning is fixed by ADR 0020
-    (``docs/adr/0020-a-scan-coordinate-value-is-the-coordinate-itself.md``),
-    which supersedes ADR 0019's relative-axis reading. See the column
-    comment below for the contract; ``app.services.scan_coordinate_conformance``
-    is the read-time check that finds deposits that do not yet conform to it.
+    ``coordinate_value`` is the coordinate itself, not a displacement. See the
+    column comment below for the contract; ``app.services.scan_coordinate_conformance``
+    is the read-time check that finds deposits that do not conform to it.
     """
 
     __tablename__ = "calc_scan_point_coordinate_value"
@@ -1249,13 +1244,11 @@ class CalculationScanPointCoordinateValue(Base):
 
     #: The value of the internal coordinate *itself* at this sampled point,
     #: in that coordinate's own unit -- degrees for ``angle``/``dihedral``/
-    #: ``improper``, Angstrom for ``bond`` (ADR 0020). Not a displacement
+    #: ``improper``, Angstrom for ``bond``. Not a displacement
     #: and not relative to anything: ``calc_scan_coordinate.start_value``/
     #: ``end_value`` are the requested grid's extent (metadata, alongside
     #: ``step_count``/``step_size``), never an anchor added onto this
-    #: column to recover the "real" value. ADR 0019 described the opposite
-    #: convention -- a sweep relative to the first point, with the
-    #: absolute value held in ``start_value`` -- and is SUPERSEDED.
+    #: column to recover the "real" value.
     #:
     #: A periodic coordinate may continue past 360 degrees where doing so
     #: keeps a relaxed, path-dependent sweep monotone (419.867 and 59.867
@@ -1266,12 +1259,9 @@ class CalculationScanPointCoordinateValue(Base):
     #: and carry it forever, and does not adopt one producer's internal
     #: representation as the database's contract.
     #:
-    #: The deposited corpus (46 series, all one-dimensional dihedral scans
-    #: from a single producer) predates this decision and does not yet
-    #: conform to it -- every one of those series holds ADR 0019's
-    #: relative sweep. Correcting them in place is a separate, later
-    #: migration; ``app.services.scan_coordinate_conformance`` is the
-    #: read-time, warn-tier check (ADR 0008) that finds non-conforming
+    #: A deposit that stores a sweep relative to the first point does not
+    #: conform. ``app.services.scan_coordinate_conformance`` is the
+    #: read-time, warn-tier check that finds non-conforming
     #: deposits by recomputing this column from the point's own stored
     #: geometry, without reading ``start_value``/``end_value`` as an
     #: anchor.
@@ -1594,10 +1584,10 @@ class CalculationArtifact(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     #: its N-1 twins reading as sound.
     #:
     #: ``lazy="selectin"`` rather than a loader option at each call site.
-    #: Eleven read paths already ``selectinload(Calculation.artifacts)`` on
+    #: Many read paths ``selectinload(Calculation.artifacts)`` on
     #: the way to a trust evaluation, and a custody break that is only
-    #: visible to the paths someone remembered to annotate is the same
-    #: failure this whole change exists to end. The price is one extra
+    #: visible to the paths someone remembered to annotate would be a
+    #: silent gap. The price is one extra
     #: indexed ``sha256 IN (...)`` per artifact-loading statement, which
     #: returns nothing in the normal case; verifying custody is not free
     #: and this is the bounded, constant version of the bill.
@@ -1688,16 +1678,15 @@ class ArtifactIntegrityEvent(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     :class:`~app.services.trust.models.HardFailReason.artifact_integrity_failed`
     reads. Detection therefore has a read-time consequence for *every*
     reader of the owning calculation, not only for whoever requested the
-    download. See ``docs/adr/0014-custody-of-stored-evidence.md``.
+    download.
 
     Citable
     -------
     ``public_ref`` (``aie_``) exists because the consequence is cited.
     The reproducibility rubric copies this record's verdict for artifacts
     it does not read itself and names the observation it copied, so a
-    curator holding that citation has to be able to resolve it -- and the
-    citation was a row id, which is not TCKDB's to hand out and which the
-    read surface strips by policy. Opaque rather than content-derived: an
+    curator holding that citation has to be able to resolve it -- a row id
+    would not do, because the read surface strips row ids by policy. Opaque rather than content-derived: an
     observation is an event, and two identical-looking observations of
     the same object months apart are the whole point of an append-only
     log.
@@ -2118,8 +2107,6 @@ class CalculationHessian(Base, TimestampMixin, CreatedByMixin):
     to the exact :class:`~app.db.models.geometry.Geometry` it was computed
     at (deduped through the content-addressed geometry seam, so it usually
     coincides with the calculation's input geometry with no duplication).
-
-    See DR-0030 for the full rationale.
     """
 
     __tablename__ = "calc_hessian"
@@ -2173,8 +2160,7 @@ class CalculationWavefunctionDiagnostic(Base, TimestampMixin, CreatedByMixin):
     about the reliability of the electronic-structure result; the table
     itself carries no thresholds and no "good/bad" labels.
 
-    One advisory reads it (``app.services.wavefunction_reliability_warnings``),
-    reversing the earlier "deliberately not enforced" position for one case:
+    One advisory reads it (``app.services.wavefunction_reliability_warnings``):
     a closed-shell, restricted-reference coupled-cluster calculation (entry
     multiplicity 1; unrestricted (U) and RO methods are out of scope) whose
     ``t1_diagnostic`` is strictly above 0.02 (Lee and Taylor, 1989) earns the
@@ -2192,8 +2178,7 @@ class CalculationWavefunctionDiagnostic(Base, TimestampMixin, CreatedByMixin):
       / not applicable / not reported" — there is no ``not_checked``
       enum.
     * Spin-contamination signals (``<S^2>``) are NOT carried here; they
-      will land in a separate diagnostic table once their schema is
-      reviewed.
+      live in ``calc_spin_diagnostic``.
     """
 
     __tablename__ = "calc_wavefunction_diagnostic"
@@ -2245,8 +2230,7 @@ class CalculationSpinDiagnostic(Base, TimestampMixin, CreatedByMixin):
     evidence about the quality of the electronic-structure result; the table
     itself carries no thresholds and no "clean / contaminated" labels.
 
-    Two advisories read it (``app.services.wavefunction_reliability_warnings``),
-    reversing the earlier "deliberately not interpreted" position. Both are
+    Two advisories read it (``app.services.wavefunction_reliability_warnings``). Both are
     deposit warnings on the calculation only; the row is stored as deposited.
     ``spin_contamination_above_conventional_threshold`` fires when ``s_squared``
     is strictly more than 0.1 from ``S(S+1)`` with ``S`` taken from the
@@ -2256,8 +2240,7 @@ class CalculationSpinDiagnostic(Base, TimestampMixin, CreatedByMixin):
     fires when ``s_squared_expected`` differs from the entry's ``S(S+1)`` by
     more than 0.001.
 
-    Wavefunction diagnostics (T1/D1) said their ``<S^2>`` signals "will land
-    in a separate diagnostic table"; this is that table.
+    ``<S^2>`` values are held here; T1/D1 are in ``calc_wavefunction_diagnostic``.
 
     Producer contract (not enforced by DB):
 

@@ -1,6 +1,6 @@
 """Group-additivity (Benson) estimation provenance.
 
-Two-layer design mirroring ``energy_correction`` (DR-0003), applied to
+Two-layer design mirroring ``energy_correction``, applied to
 ``scientific_origin=estimated`` thermochemistry:
 
 * **Reference layer** — :class:`GroupAdditivityScheme` is a reusable,
@@ -11,8 +11,6 @@ Two-layer design mirroring ``energy_correction`` (DR-0003), applied to
   :class:`AppliedGroupAdditivityComponent` records the per-Benson-group
   breakdown (which group, how many, and each one's contribution to
   H298 / S298 / Cp298).
-
-See DR-0035 for the full rationale and the thermo-link choice.
 """
 
 from __future__ import annotations
