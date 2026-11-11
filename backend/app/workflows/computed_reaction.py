@@ -66,6 +66,8 @@ from app.services.calculation_levels import (
     RoleLink,
     assert_kinetics_energy_level_consistency,
     assert_role_consistency,
+    kinetics_one_electron_hf_substitutions,
+    one_electron_hf_warning,
 )
 from app.services.calculation_ownership import (
     W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -2249,6 +2251,16 @@ def persist_computed_reaction_upload(
         # A declared level must not contradict the energies this record links (the
         # same check thermo and statmech apply; nothing is inferred when none is linked).
         assert_kinetics_energy_level_consistency(kin_energy_links, kin_declared_energy_lot)
+        if kin_declared_energy_lot is not None:
+            substitution = one_electron_hf_warning(
+                kinetics_one_electron_hf_substitutions(
+                    [link.calculation for link in kin_energy_links], kin_declared_energy_lot
+                ),
+                kin_declared_energy_lot,
+                field=f"{kin_field_prefix}energy_level_of_theory",
+            )
+            if substitution is not None:
+                sp_energy_warnings.append(substitution)
 
     session.flush()
 
