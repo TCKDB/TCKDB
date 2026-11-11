@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.174.0 - 2026-11-11
+
+The method-family classifier ships in the package. New module `tckdb_schemas.method_families` with `MethodFamily`, `MethodClass`, `MethodClassFilter`, `classify_method`, `method_stem_key`, `CLASSIFICATION`, `CLASSIFICATION_NAME`, `CLASSIFICATION_VERSION`, `CLASSIFICATION_REF`, `UNCLASSIFIED` and the table constants `DFT_BY_RUNG`, `OTHER_BY_FAMILY`, `DISPERSION_SUFFIXES`, `DISPERSION_STRIP_PATTERN`, `SPIN_PREFIXES`, `SUFFIX_STEM_OVERRIDES`, `SUFFIXED_KEYS`, `MIN_DFT_RUNG` and `MAX_DFT_RUNG`; and `tckdb_schemas.method_names` with `method_identity_key`, `MethodAlias`, `NAME_ALIASES`, `SUFFIX_ALIASES` and `SUFFIX_RULES`. The classification of every method name is unchanged. No refusal, warning, field or payload shape changed.
+
 ## 0.173.1 - 2026-11-11
 
 The producer contract text is reworded to state behaviour only: route descriptions in `PRODUCER_CONTRACT.md` no longer cite decision records or design plans. No refusal, warning, field or behaviour changes.

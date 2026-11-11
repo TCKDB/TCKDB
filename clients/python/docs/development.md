@@ -14,7 +14,7 @@ instance.
 
 ## The `tckdb-schemas` window
 
-`tckdb-client` depends on `tckdb-schemas` with a rolling window, currently `>=0.158,<0.173`.
+`tckdb-client` depends on `tckdb-schemas` with a rolling window, currently `>=0.158,<0.175`.
 
 - The floor is the schemas release the client release was built and tested with.
 - The ceiling sits above the floor and above the in-repo schemas version. `tckdb-schemas` is 0.x and a minor may break, so the window is a promise about releases we have not seen, not a guarantee.
