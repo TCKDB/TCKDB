@@ -123,7 +123,7 @@ describe("Species mode is the default and is labelled/placeholder-ed for species
         const input = await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")
         expect(input.getAttribute("placeholder")).toContain("spc_/spe_ ref")
         expect(input.getAttribute("placeholder")).not.toMatch(/rxn_|rxe_/)
-        expect(screen.getByText(/Names such as "water" are not searched/)).toBeVisible()
+        expect(screen.getByText("Formula, SMILES, InChI, InChIKey, TCKDB ref, or a name such as water.")).toBeVisible()
     })
 })
 

@@ -1,5 +1,5 @@
 import type { FormEvent, KeyboardEvent } from "react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import {
     ScientificApiError,
@@ -9,6 +9,9 @@ import {
     type ReactionParticipationMatch,
     type SearchMatch,
 } from "../api/scientificApi"
+import { nameSearchBackoffSeconds, searchSpeciesNames, type NameMatch } from "../api/nameSearchApi"
+import { isValidNameQuery, looksLikeName } from "../domain/nameQuery"
+import { useNameSuggestions } from "../hooks/useNameSuggestions"
 import { classifyIdentifier, looksLikeReferenceAttempt, resultPath, type IdentifierClassification } from "../domain/recordModel"
 import { classifyReactionQuery, type ReactionQueryClassification } from "../domain/reactionQuery"
 import { chargeDisplay, entryCountDisplay, spinDisplay } from "../domain/chemistryFormat"
@@ -46,12 +49,23 @@ const PLACEHOLDER: Record<SearchMode, string> = {
 }
 
 const HELP: Record<SearchMode, string> = {
-    species: "Exact matches only. Names such as \"water\" are not searched.",
+    species: "Formula, SMILES, InChI, InChIKey, TCKDB ref, or a name such as water.",
     reactions: "Exact matches only. Both directions are searched.",
 }
 
 function matchCountAnnouncement(count: number): string {
     return `${count} ${count === 1 ? "match" : "matches"}`
+}
+
+const NAME_EMPTY_MESSAGE = "No molecule with that name. Names come from PubChem and curators; try a formula or SMILES."
+const NAME_ORDER_NOTE = "Alphabetical, not a ranking"
+
+function speciesPath(ref: string): string {
+    return `/species/${encodeURIComponent(ref)}`
+}
+
+function rateLimitedMessage(seconds: number): string {
+    return `Too many searches; try again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`
 }
 
 /**
@@ -144,11 +158,27 @@ export function IdentifierSearch() {
     const [message, setMessage] = useState<string | null>(null)
     const [ambiguousInput, setAmbiguousInput] = useState<string | null>(null)
     const [matches, setMatches] = useState<SearchMatch[]>([])
+    const [nameMatches, setNameMatches] = useState<NameMatch[]>([])
+    const [suggestOpen, setSuggestOpen] = useState(false)
+    const [activeIndex, setActiveIndex] = useState(-1)
+    const listId = useId()
     const [crossLink, setCrossLink] = useState<CrossLink | null>(null)
     const [reactionResult, setReactionResult] = useState<ReactionResultState | null>(null)
     const [isSearching, setIsSearching] = useState(false)
     const activeRequest = useRef<AbortController | null>(null)
     const announce = useAnnounce()
+    const suggestions = useNameSuggestions(query, mode === "species" && suggestOpen && looksLikeName(query))
+    const options = suggestions.status === "ready" ? suggestions.matches : []
+    const announcedKey = useRef("")
+    useEffect(() => {
+        if (suggestions.status !== "ready") return
+        const count = suggestions.matches.length
+        const text = count === 0 ? "No molecules match" : `${count} ${count === 1 ? "molecule matches" : "molecules match"}`
+        const key = `${query.trim().toLowerCase()}|${text}`
+        if (announcedKey.current === key) return
+        announcedKey.current = key
+        announce(text)
+    }, [suggestions, query, announce])
     const formRef = useRef<HTMLFormElement>(null)
     const [searchParams, setSearchParams] = useSearchParams()
     const incoming = searchParams.get("q")
@@ -179,7 +209,7 @@ export function IdentifierSearch() {
     }
 
     function clearResults() {
-        setMatches([]); setCrossLink(null); setReactionResult(null); setMessage(null)
+        setMatches([]); setNameMatches([]); setCrossLink(null); setReactionResult(null); setMessage(null)
     }
 
     /**
@@ -291,13 +321,61 @@ export function IdentifierSearch() {
         void runSpeciesSearch(classified)
     }
 
+    function closeSuggestions() {
+        setSuggestOpen(false)
+        setActiveIndex(-1)
+    }
+
+    function openMolecule(ref: string) {
+        closeSuggestions()
+        navigate(speciesPath(ref))
+    }
+
+    async function runNameSearch(text: string) {
+        abortActiveRequest()
+        const controller = new AbortController()
+        activeRequest.current = controller
+        clearResults(); setIsSearching(true)
+        try {
+            const { matches: found } = await searchSpeciesNames(text, "exact", 20, controller.signal)
+            if (activeRequest.current !== controller || controller.signal.aborted) return
+            if (found.length === 1) {
+                navigate(speciesPath(found[0].speciesRef))
+            } else if (found.length === 0) {
+                setMessage(NAME_EMPTY_MESSAGE)
+            } else {
+                setNameMatches(found)
+                announce(matchCountAnnouncement(found.length))
+            }
+        } catch (error) {
+            if (activeRequest.current !== controller || controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return
+            if (error instanceof ScientificRateLimitError) {
+                setMessage(rateLimitedMessage(nameSearchBackoffSeconds() || Math.round(error.retryAfterSeconds)))
+            } else if (error instanceof ScientificApiError && error.code === "species_name_query_invalid") {
+                setMessage("That is not a valid name. Use 2 to 64 letters, digits, spaces or - , ' ( ) [ ] + . :")
+            } else {
+                setMessage("The archive could not complete that search. Try again.")
+            }
+        } finally { if (activeRequest.current === controller && !controller.signal.aborted) setIsSearching(false) }
+    }
+
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         const trimmed = query.trim()
         abortActiveRequest()
         setAmbiguousInput(null)
+        closeSuggestions()
 
         if (looksLikeReferenceAttempt(trimmed)) { void runReferenceLookup(trimmed); return }
+
+        if (mode === "species" && looksLikeName(trimmed)) {
+            if (!isValidNameQuery(trimmed)) {
+                clearResults(); setMessage("A name needs 2 to 64 letters, digits, spaces or - , ' ( ) [ ] + . :")
+                return
+            }
+            void runNameSearch(trimmed)
+            return
+        }
 
         if (mode === "species") {
             const classified = classifyIdentifier(trimmed)
@@ -312,6 +390,25 @@ export function IdentifierSearch() {
         const classified = classifyReactionQuery(trimmed)
         if (!classified.valid) { clearResults(); setMessage(classified.message); return }
         void runReactionSearch(classified)
+    }
+
+    function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+        const listed = suggestOpen && options.length > 0
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            if (!listed) return
+            event.preventDefault()
+            const last = options.length - 1
+            setActiveIndex(event.key === "ArrowDown"
+                ? (activeIndex >= last ? 0 : activeIndex + 1)
+                : (activeIndex <= 0 ? last : activeIndex - 1))
+        } else if (event.key === "Enter") {
+            if (listed && activeIndex >= 0 && activeIndex < options.length) {
+                event.preventDefault()
+                openMolecule(options[activeIndex].speciesRef)
+            }
+        } else if (event.key === "Escape") {
+            if (suggestOpen) { event.preventDefault(); closeSuggestions() }
+        }
     }
 
     function chooseAmbiguous(kind: "formula" | "smiles") {
@@ -341,10 +438,21 @@ export function IdentifierSearch() {
             <span aria-hidden="true">⌕</span>
             <input id="identifier" maxLength={MAX_SEARCH_LENGTH} value={query} onChange={(event) => {
                 setQuery(event.target.value); setMessage(null); setAmbiguousInput(null)
+                setSuggestOpen(true); setActiveIndex(-1)
             }}
+                onKeyDown={onSearchKeyDown}
+                onBlur={() => closeSuggestions()}
+                role={mode === "species" ? "combobox" : undefined}
+                aria-expanded={mode === "species" ? options.length > 0 : undefined}
+                aria-controls={mode === "species" && options.length > 0 ? listId : undefined}
+                aria-autocomplete={mode === "species" ? "list" : undefined}
+                aria-activedescendant={mode === "species" && options.length > 0 && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
                 placeholder={PLACEHOLDER[mode]} autoComplete="off" aria-describedby="identifier-search-help" />
             <button type="submit" aria-busy={isSearching}>Search</button>
         </div>
+        {mode === "species" && suggestOpen && <NameSuggestionList
+            suggestions={suggestions} listId={listId} activeIndex={activeIndex}
+            onHover={setActiveIndex} onPick={openMolecule} />}
         <p className="search-help" id="identifier-search-help">{HELP[mode]}</p>
         {message && <p className="search-message" role="status">{message}</p>}
         {mode === "species" && ambiguousInput && <fieldset className="identifier-choice">
@@ -358,6 +466,15 @@ export function IdentifierSearch() {
             <button type="button" onClick={() => chooseAmbiguous("smiles")}>SMILES</button>
             <button type="button" onClick={() => chooseAmbiguous("formula")}>Formula</button>
         </fieldset>}
+        {mode === "species" && nameMatches.length > 0 && <section className="search-results" aria-label="Name search results">
+            <h2>Molecules with that name</h2>
+            <ul>{nameMatches.map((match) => <li className="search-result" key={match.speciesRef + match.name}>
+                <Link className="search-result-link" to={speciesPath(match.speciesRef)}>
+                    <NameLabel match={match} />
+                </Link>
+            </li>)}</ul>
+            <p className="search-help">{NAME_ORDER_NOTE}</p>
+        </section>}
         {mode === "species" && matches.length > 0 && <section className="search-results" aria-label="Exact search results">
             <h2>Exact matches</h2>
             <ul>{matches.map((match) => {
@@ -372,6 +489,50 @@ export function IdentifierSearch() {
         </section>}
         {mode === "reactions" && reactionResult && <ReactionResultsSection result={reactionResult} />}
     </form>
+}
+
+/** "Water · H₂O", with a quiet note for a name imported from PubChem. */
+function NameLabel({ match }: { match: NameMatch }) {
+    return <span className="search-result-headline">
+        <span className="name-suggest-name">{match.name}</span>
+        {match.formula && <><span aria-hidden="true">·</span><span className="search-result-formula"><Formula value={match.formula} /></span></>}
+        {match.imported && <span className="name-suggest-source">from PubChem</span>}
+    </span>
+}
+
+/**
+ * The suggestion list of the name combobox. The options are the only children of the listbox;
+ * the order note and the empty and rate-limited states sit beside it.
+ */
+function NameSuggestionList({ suggestions, listId, activeIndex, onHover, onPick }: {
+    suggestions: ReturnType<typeof useNameSuggestions>
+    listId: string
+    activeIndex: number
+    onHover: (index: number) => void
+    onPick: (ref: string) => void
+}) {
+    if (suggestions.status === "limited") {
+        return <div className="name-suggest"><p className="name-suggest-note">{rateLimitedMessage(suggestions.retryInSeconds)}</p></div>
+    }
+    if (suggestions.status !== "ready") return null
+    if (suggestions.matches.length === 0) {
+        return <div className="name-suggest"><p className="name-suggest-note">{NAME_EMPTY_MESSAGE}</p></div>
+    }
+    return <div className="name-suggest">
+        <ul role="listbox" id={listId} aria-label="Molecule names">
+            {suggestions.matches.map((match, index) => <li
+                key={match.speciesRef + match.name}
+                id={`${listId}-${index}`}
+                role="option"
+                aria-selected={index === activeIndex}
+                className="name-suggest-option"
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => onHover(index)}
+                onClick={() => onPick(match.speciesRef)}
+            ><NameLabel match={match} /></li>)}
+        </ul>
+        <p className="name-suggest-note">{NAME_ORDER_NOTE}</p>
+    </div>
 }
 
 /**
