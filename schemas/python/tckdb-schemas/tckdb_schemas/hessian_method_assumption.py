@@ -1,29 +1,21 @@
 """Assume a frequency job's Hessian method when the record does not say.
 
-**Where this applies (owner decision 2026-10-31).** This table is the one
-owner of the assumption, and it is applied where tau is *decided*: at upload
-validation, through :func:`resolve_tau_with_assumption`, by every adapter that
-judges a calculation's imaginary modes. Persistence then stores exactly the
-tau and basis that validation judged. Before 2026-10-31 the assumption was
-applied only after validation, at persistence, so a record could be judged at
-the conservative 50 cm-1 and stored at an assumed 30.
+**Where this applies.** This table is the single owner of the assumption, and
+it is applied where tau is *decided*: at upload validation, through
+:func:`resolve_tau_with_assumption`, by every adapter that judges a
+calculation's imaginary modes. Persistence then stores exactly the tau and
+basis that validation judged.
 
-ADR 0012's original rule was strict: an unrecorded ``freq.hessian_method``
-resolves to the conservative ``protocol_not_recorded`` row of the tau
-table, full stop. Measured 2026-09-04: 0 of 132 stored frequency results
-carry that parameter, because Gaussian never names its analytic default
-in the output and ``app/services/gaussian_parameter_parser.py`` records
-only explicit statements (``Freq=Numer``) — so the conservative row was,
-in practice, *every* Gaussian record TCKDB has ever stored.
-
-The archive owner's 2026-09-04 amendment (see the addendum to
-``docs/adr/0012-imaginary-modes-are-judged-by-magnitude-not-counted.md``):
-when the method is not recorded, TCKDB may *assume* the producing
-program's documented default for the level-of-theory's method family,
-record that it was assumed, and give the assumed method the same tau as
-its recorded counterpart. This module is that assumption, and nothing
-else — it does not touch tau's magnitude, only which basis is credited
-and whether one is credited at all.
+When ``freq.hessian_method`` is not recorded, ``resolve_tau`` returns the
+conservative ``protocol_not_recorded`` row of the tau table. This module
+instead *assumes* the producing program's documented default for the
+level-of-theory's method family, records that it was assumed, and gives the
+assumed method the same tau as its recorded counterpart. Gaussian never names
+its analytic default in the output, and
+``app/services/gaussian_parameter_parser.py`` records only explicit
+statements (``Freq=Numer``), so without the assumption every Gaussian record
+would fall to the conservative row. The assumption does not touch tau's
+magnitude, only which basis is credited and whether one is credited at all.
 
 **Pure function, table-driven.** Takes two plain strings (a software
 name and a level-of-theory method), returns a
@@ -74,8 +66,8 @@ Why some things stay ``None``
 Every software not spelled "Gaussian" or "ORCA" (Molpro, Arkane, ARC,
 RMG, an empty or garbled name) returns ``None`` regardless of method —
 this module was not asked to research Molpro's or Arkane's defaults, and
-guessing one would be exactly the "assume the better case" mistake ADR
-0012's original conservative fallback exists to avoid. Likewise a method
+guessing one would be the "assume the better case" error the conservative
+fallback exists to avoid. Likewise a method
 string this module's recognisers do not match (an unfamiliar functional
 spelling, a composite method, a semi-empirical method, garbage) returns
 ``None`` rather than a best-effort guess: the table is a documented
@@ -427,7 +419,7 @@ _ORCA_FINITE_DIFFERENCE_ENERGY = frozenset({MethodFamily.CCSD, MethodFamily.CCSD
 # ---------------------------------------------------------------------------
 # ORCA: functional class and release gate
 #
-# Sources (ORCA manuals read through the group knowledge base, 2026-10-31):
+# Sources (ORCA manuals):
 #
 # * meta-GGA: ORCA 5.0.4 manual, "ORCA 5.0 Foreword" (pp. 29-38): "Meta-GGA
 #   analytic Hessians are now available." So below 5 a meta-GGA frequency job
@@ -543,9 +535,8 @@ _FAMILY_LABEL: dict[str, str] = {
 _DISPLAY_NAME: dict[str, str] = {"gaussian": "Gaussian", "orca": "ORCA"}
 
 #: One row per ``(software, assumed basis)`` pair. tau is always the
-#: assumed basis's recorded counterpart -- the owner's explicit decision
-#: that an assumption changes *which basis is credited*, never the
-#: number.
+#: assumed basis's recorded counterpart: an assumption changes *which basis
+#: is credited*, never the number.
 _ASSUMED_TAU_BY_BASIS: dict[TauBasis, float] = {
     TauBasis.assumed_analytic_default: TAU_ANALYTIC_DEFAULT_CM1,
     TauBasis.assumed_finite_difference_gradient: TAU_FINITE_DIFFERENCE_GRADIENT_CM1,

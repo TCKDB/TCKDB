@@ -5,11 +5,10 @@ imaginary modes is a minimum, one is a first-order saddle point, two or
 more is a higher-order saddle. For minima that statement survives only
 above the noise floor: this module refuses a minimum whose own frequency
 evidence shows an imaginary mode at or above tau, and accepts one whose
-modes are all below it (ADR 0012's 2026-10-29 note).
+modes are all below it.
 
-For transition states it does not survive, and
-`ADR 0012 <../../../../docs/adr/0012-imaginary-modes-are-judged-by-magnitude-not-counted.md>`_
-replaced the count with a magnitude-and-protocol judgement. A deposit
+For transition states it does not survive, so the count is replaced
+with a magnitude-and-protocol judgement. A deposit
 does not contain the exact Hessian at the exact stationary point on a
 smooth surface; it contains a finite-precision Hessian at an
 approximately converged geometry on a quadrature grid. Two scientifically
@@ -76,14 +75,14 @@ formally also a minimum:
 * A transition state whose reaction coordinate is very small is
   *suspicious* but can be perfectly real — flat barriers and variational
   transition states genuinely produce them. Magnitude is therefore a
-  quality expectation, never a definition, and ADR 0008 names it
-  explicitly as a check that must not block.
+  quality expectation, never a definition, and is a check that must not
+  block.
 
 Absence is never contradiction: a payload with no frequency evidence
 produces no findings at all, in every case.
 
-This module is the **single owner** of every imaginary-mode finding, and
-ADR 0008 §9 means that literally: the read-time trust rubric cites the
+This module is the **single owner** of every imaginary-mode finding: the
+read-time trust rubric cites the
 judgement recorded here rather than re-deriving it from ``n_imag``. See
 ``backend/app/services/trust/rubrics.py``.
 
@@ -180,13 +179,11 @@ _TIGHT_OPT_VALUES = frozenset({"tight", "very_tight", "verytight"})
 class TauBasis(str, Enum):
     """Why :func:`resolve_tau` returned the value it did.
 
-    Stored alongside the τ it explains. ADR 0012 requires that a reader
-    can re-decide a borderline mode later, and "τ was 50" is not
-    re-decidable without "…because nothing recorded says how the Hessian
+    Stored alongside the τ it explains, so that a reader can re-decide
+    a borderline mode later: "τ was 50" is not re-decidable without "…because nothing recorded says how the Hessian
     was built".
 
-    **The ``assumed_*`` members** are ADR 0012's 2026-09-04 amendment.
-    Measured live: 0 of 132 frequency results carry
+    **The ``assumed_*`` members** cover a frequency result with no
     ``freq.hessian_method``, because Gaussian never names its analytic
     default in the output and the parser records only explicit
     statements — so ``protocol_not_recorded`` was, in practice, every
@@ -230,7 +227,7 @@ class TauResolution:
     """The τ used for one judgement, and the provenance that chose it.
 
     :param tau_cm1: The threshold actually applied, in cm⁻¹.
-    :param basis: Which row of ADR 0012's protocol table was matched.
+    :param basis: Which row of the tau protocol table was matched.
     :param reason: Producer-facing prose naming the recorded parameters
         that decided it, including the ones that were absent.
     :param hessian_method: The frequency job's Hessian method as
@@ -293,9 +290,9 @@ def resolve_tau(
     grid_quality: str | None = None,
     opt_convergence: str | None = None,
 ) -> TauResolution:
-    """Resolve ADR 0012's τ from recorded execution provenance.
+    """Resolve τ from recorded execution provenance.
 
-    The table is ADR 0012's, and the fallback is the conservative row:
+    The fallback is the conservative row:
     this function never assumes a Hessian method: an absent one is
     ``protocol_not_recorded``. The producing program's assumed default is
     applied one level up, by
@@ -458,8 +455,7 @@ def resolve_tau_from_parameters(
 W_N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
 
 #: Every imaginary mode on an entry declared a minimum is below tau, the
-#: protocol-resolved noise floor (ADR 0012, extended to minima by its
-#: 2026-10-29 note). Accepted with a warning and the deciding tau recorded;
+#: protocol-resolved noise floor. Accepted with a warning and the deciding tau recorded;
 #: a mode at or above tau keeps the refusal under
 #: ``W_N_IMAG_CONTRADICTS_MINIMUM`` / ``W_N_IMAG_HIGHER_ORDER_SADDLE``.
 W_MINIMUM_IMAGINARY_MODES_BELOW_TAU = "minimum_imaginary_modes_below_tau"
@@ -468,27 +464,18 @@ W_MINIMUM_IMAGINARY_MODES_BELOW_TAU = "minimum_imaginary_modes_below_tau"
 #: ``minimum``; reported as a warning for ``vdw_complex``.
 W_N_IMAG_HIGHER_ORDER_SADDLE = "n_imag_higher_order_saddle"
 
-#: Narrowed by ADR 0008's tier split. Before the split this fired on
-#: every species entry with one imaginary mode, alongside
-#: ``W_N_IMAG_CONTRADICTS_MINIMUM``, and said "if this is a TS, use the
-#: transition-state endpoint". That advice now lives inside the blocking
-#: message for ``minimum``, and the only declared kind that still reaches
-#: the warning tier with an imaginary mode is ``vdw_complex`` — where
-#: suggesting a transition state would usually be wrong, because the mode
-#: is intermolecular noise.
-#:
-#: So the code keeps its name and gains a precise, reachable subject: a
-#: van der Waals complex whose imaginary mode is *too stiff* to be
+#: A van der Waals complex whose imaginary mode is *too stiff* to be
 #: intermolecular noise (at or above
 #: :data:`TS_IMAGINARY_FREQUENCY_MIN_CM1`) is not showing a grid
-#: artifact, and really does look like a first-order saddle point.
+#: artifact, and looks like a first-order saddle point. ``vdw_complex``
+#: is the only declared kind that reaches the warning tier with an
+#: imaginary mode; ``minimum`` blocks.
 W_N_IMAG_SUGGESTS_TS = "n_imag_suggests_transition_state"
 
 #: A transition state whose frequency evidence reports no imaginary mode
 #: at all. There is no reaction coordinate, so the structure is not a
-#: transition state. Definitional, therefore blocking. This is what
-#: survives of the old ``transition_state_n_imag_not_one``, which ADR
-#: 0012 retired because it also refused correct higher-order records.
+#: transition state. Definitional, therefore blocking. Only
+#: a missing mode is refused; extra modes are judged against tau.
 W_TS_NO_IMAGINARY_MODE = "transition_state_no_imaginary_mode"
 
 #: More than one imaginary mode, and the payload does not say which one
@@ -524,8 +511,8 @@ W_TS_EXTRA_IMAGINARY_MODE_ABOVE_TAU = (
 
 #: A reaction coordinate was designated but the frequency list was not
 #: deposited, so the extra modes cannot be judged against τ at all.
-#: Accepted, warned and flagged — ADR 0012 requires the complete signed
-#: frequency list precisely so this case does not arise.
+#: Accepted, warned and flagged. Depositing the complete signed
+#: frequency list avoids this case.
 W_TS_EXTRA_IMAGINARY_MODES_NOT_ASSESSABLE = (
     "transition_state_extra_imaginary_modes_not_assessable"
 )
@@ -564,7 +551,7 @@ _REMEDIATION = (
 
 
 class ValidationTier(str, Enum):
-    """Consequence of a finding, in ADR 0008's vocabulary."""
+    """Consequence of a finding."""
 
     #: Refuse the payload. Reserved for definitions and contracts.
     block = "block"
@@ -608,12 +595,11 @@ class StationaryPointFinding:
     :param message: Producer-facing explanation, including the remedy.
     :param structural_flag: Whether the record should be excluded from
         default query results and bulk transition-state exports unless
-        explicitly opted into. ADR 0012's answer to "warnings get
-        ignored": the flag is the protection a hard block was providing,
-        without the incentive to edit the frequency list.
+        explicitly opted into. The flag protects readers without refusing
+        the record, so there is no incentive to edit the frequency list.
     :param tau: The τ this finding was decided against, and why that τ.
-        ``None`` on findings no threshold took part in. ADR 0012 requires
-        it so a reader can re-decide the mode later.
+        ``None`` on findings no threshold took part in. Kept so a reader can
+        re-decide the mode later.
     :param context: The numbers the finding was decided on (counts, mode
         magnitudes, τ), for the warning built from a warn-tier finding. A
         warning's sentence is rendered from its code and this, never from
@@ -706,9 +692,8 @@ def _evaluate_species_entry_frequency(
 ) -> list[StationaryPointFinding]:
     """Judge one species entry's declared kind against its own frequency evidence.
 
-    ADR 0012 changed the transition-state rule; its 2026-10-29 note extends
-    the same magnitude judgement to a declared ``minimum``: imaginary modes
-    all below tau are a numerical artefact the protocol cannot tell from
+    A declared ``minimum`` is judged by the same magnitude rule as a
+    transition state: imaginary modes all below tau are a numerical artefact the protocol cannot tell from
     zero (warn), and one at or above tau is real negative curvature
     (refuse).
 
@@ -760,7 +745,7 @@ def _evaluate_species_entry_frequency(
 
     # A kind this module has not been taught about. Say nothing rather
     # than guess a tier for it; adding an enum member must be a
-    # deliberate decision here, not a default.
+    # deliberate addition here, not a default.
     return []
 
 
@@ -844,8 +829,8 @@ def _minimum_contradiction(
     else:
         real = [m for m in magnitudes if m >= tau.tau_cm1]
         if len(real) == 1 and len(magnitudes) > 1:
-            # One mode the protocol can resolve plus noise: under ADR 0012
-            # that is a transition state with extra soft modes.
+            # One mode the protocol can resolve plus noise: that
+            # is a transition state with extra soft modes.
             why = (
                 f"One mode ({real[0]:.1f} cm-1) is at or above tau = "
                 f"{tau.tau_cm1:.0f} cm-1, so at this protocol its negative "
@@ -1322,7 +1307,7 @@ def warning_findings(
 
 
 def has_structural_flag(findings: Sequence[StationaryPointFinding]) -> bool:
-    """Whether any accepted finding carries ADR 0012's structural flag.
+    """Whether any accepted finding carries the structural flag.
 
     The value persisted with the frequency result, and the one the
     read-time trust rubric cites rather than re-deriving.
