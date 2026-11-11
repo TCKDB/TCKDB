@@ -34,6 +34,20 @@ describe("GuidePage", () => {
         expect(document.getElementById("order")?.closest("li")).toHaveTextContent("A list's order is never a recommendation.")
     })
 
+    it("has an entry for every guide anchor that a page links to", () => {
+        render(<MemoryRouter><GuidePage /></MemoryRouter>)
+        const ids = new Set(screen.getAllByRole("heading", { level: 2 }).map((h) => h.id))
+        const sources = import.meta.glob("../**/*.{ts,tsx}", { query: "?raw", import: "default", eager: true }) as Record<string, string>
+        const linked = new Set<string>()
+        for (const [path, text] of Object.entries(sources)) {
+            if (/\.test\.tsx?$/.test(path)) continue
+            for (const match of text.matchAll(/<GuideLink to="([^"]+)"/g)) linked.add(match[1])
+            for (const match of text.matchAll(/\/guide#([a-z-]+)/g)) linked.add(match[1])
+        }
+        expect(linked.size).toBeGreaterThan(5)
+        expect([...linked].filter((id) => !ids.has(id))).toEqual([])
+    })
+
     it("sets the page title", () => {
         render(<MemoryRouter><GuidePage /></MemoryRouter>)
         expect(document.title).toBe("Guide · TCKDB")

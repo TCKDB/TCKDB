@@ -24,7 +24,9 @@ export function SpeciesValues({ species }: { species: SpeciesOverview }) {
     )
     return (
         <section className="entry-numbers" aria-labelledby="species-values">
-            <SectionHeading id="species-values">All values for this molecule</SectionHeading>
+            <SectionHeading id="species-values" intro="Thermochemistry and statistical mechanics of every version; transport is on each version's page.">
+                All values for this molecule
+            </SectionHeading>
             <WalkStatus
                 state={state}
                 loading="Loading the values for this molecule…"

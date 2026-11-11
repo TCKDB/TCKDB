@@ -1,3 +1,4 @@
+import { GuideLink } from "./GuideLink"
 import { Fragment, useId, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import "../energy-profile.css"
@@ -244,6 +245,7 @@ function ProfileView({ profile, labels, several, markPeak }: { profile: EnergyPr
                         <Fragment key={level.key}>{index > 0 && ", "}{level.label.toLowerCase()} <span className="t-preserve-case">{relativeKjText(level.kj)}</span></Fragment>
                     ))}.
                     {several && " Each profile has its own axis."}
+                    <GuideLink to="energy-profile" />
                 </figcaption>
             </figure>
             <ProfileDefinition definition={profile.definition} />

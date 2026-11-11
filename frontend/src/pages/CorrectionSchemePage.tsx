@@ -1,3 +1,4 @@
+import { GuideLink } from "../components/GuideLink"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../record-identity-header.css"
@@ -94,6 +95,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                     <> <span className="value-pill record-identity-title-pill"><LevelOfTheoryLink levelOfTheory={record.level_of_theory} /></span></>
                                 )}
                             </h1>
+                            <p><GuideLink to="correction-scheme" /></p>
                             <div className="record-identity-known">
                                 <dl className="kv-list record-identity-facts">
                                     <div>

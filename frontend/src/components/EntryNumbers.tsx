@@ -1,3 +1,4 @@
+import { GuideLink } from "./GuideLink"
 import { useMemo } from "react"
 import { Link } from "react-router-dom"
 import "../data-table.css"
@@ -51,6 +52,7 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers, 
             <SectionHeading
                 id="entry-numbers"
                 subsection={compact}
+                intro={compact ? undefined : <>Each version holds its own values.<GuideLink to="species-entry" /></>}
             >
                 Numbers for this entry
             </SectionHeading>

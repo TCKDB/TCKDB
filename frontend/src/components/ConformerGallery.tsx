@@ -1,3 +1,4 @@
+import { GuideLink } from "./GuideLink"
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import "../molecule-page.css"
@@ -190,7 +191,7 @@ export function ConformerGallery({
                         ) : (
                             <>
                                 <p className="note">
-                                    kJ/mol at one level and one program. Only shapes confirmed as minima get a number.
+                                    Electronic energy in kJ/mol, one level and one program. Only confirmed minima get a number.<GuideLink to="relative-energy" />
                                 </p>
                                 <div className="shape-energy-fields">
                                     <label>
@@ -263,7 +264,7 @@ export function ConformerGallery({
                                         counts={shapeCountsSentence(conformer)}
                                         onSelect={() => select(ref)}
                                     />
-                                    <p className="shape-card-energy"><span className="shape-card-key">Relative energy</span> <EnergyText energy={energyFor(state, ref)} /></p>
+                                    {total > 1 && <p className="shape-card-energy"><span className="shape-card-key">Relative energy</span> <EnergyText energy={energyFor(state, ref)} /></p>}
                                     <ConformerUsedBy usage={usage} group={usageData?.groups.get(ref)} entryRef={entryRef} groupRef={ref} labelOf={labelOf} />
                                     <DepositorNote>{typed}</DepositorNote>
                                     <p className="shape-card-3d"><Link to={`/conformer-groups/${ref}`}>Open in 3D{" "}<span className="molecule-page-visually-hidden">of {conformerLabel(conformer)}</span></Link></p>
@@ -273,7 +274,7 @@ export function ConformerGallery({
                         })}
                     </ul>
 
-                    {levelRef !== null && energies.status === "ready" && (
+                    {total > 1 && levelRef !== null && energies.status === "ready" && (
                         <div className="table-scroll" tabIndex={0} role="region" aria-label="Relative energies table">
                             <table className="data-table shape-energy-table">
                                 <caption>

@@ -244,7 +244,8 @@ describe("reaction compare page", () => {
         expect(second).not.toHaveTextContent("wb97xd/def2tzvp")
         expect(first).toBeTruthy()
         expect(screen.getByText(/do not state both an energy level of theory and a program/)).toBeInTheDocument()
-        expect(screen.getByText(/never drawn together/)).toBeInTheDocument()
+        expect(screen.getByText("Each group's profile has its own axis. Profiles of different groups are never drawn together.")).toBeInTheDocument()
+        expect(screen.getByText("As deposited; k only within each fitted range, tunnelling only if the fit had it.")).toBeInTheDocument()
     })
 
     it("names the order and offers the list view with sort buttons", async () => {

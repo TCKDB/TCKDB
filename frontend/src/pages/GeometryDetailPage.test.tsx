@@ -941,20 +941,9 @@ describe("GeometryDetailPage", () => {
             // thing bounding them) -- the two must not resolve to the same
             // value, which is what "wide page, capped prose" actually
             // means as a checkable claim rather than a screenshot.
-            // Was a one-off literal `44rem` (`.basin-intro`) -- design/
-            // foundations PR B consolidates every intro-style paragraph on
-            // these five record pages onto the ONE `--measure-prose` token
-            // step, the same cap `SectionHeading`'s own `intro` prop and
-            // the old `.ledger-heading` wrapper already used, rather than a
-            // second, slightly different figure for the page header
-            // specifically. jsdom's CSSOM does not resolve CSS custom
-            // properties (no `var()` substitution -- a documented jsdom
-            // limitation), so the raw, unresolved token reference is what
-            // `getComputedStyle` actually reports here; asserting that
-            // literal string is a STRONGER check than a resolved rem value
-            // would be, since it also pins WHICH token this class points
-            // at, not just its current numeric value.
-            expect(proseMaxWidth).toMatch(/^var\(--measure-(prose|note)\)$/)
+            // jsdom does not resolve `var()`, so `getComputedStyle` reports the raw token. The section intro is a `.note`,
+            // which caps at `--measure-note`; asserting the token pins which cap the class points at.
+            expect(proseMaxWidth).toBe("var(--measure-note)")
             expect(viewerMaxWidth).not.toBe(proseMaxWidth)
             // jsdom's CSSOM reports an unset property as "" rather than
             // resolving it to CSS's own "none" initial value -- either way,

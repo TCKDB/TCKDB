@@ -1,3 +1,4 @@
+import { GuideLink } from "../components/GuideLink"
 import { useMemo, type ReactNode } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
@@ -298,7 +299,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 </section>
 
                 <section className="ledger-section" aria-labelledby="checks-heading">
-                    <SectionHeading id="checks-heading" intro="Not recorded means not deposited, not failed.">
+                    <SectionHeading id="checks-heading" intro={<>Not recorded means not deposited, not failed.<GuideLink to="ts-checks" /></>}>
                         Checks
                     </SectionHeading>
                     <div className="table-scroll tse-scroll" tabIndex={0} role="region" aria-label="Checks on this transition state">

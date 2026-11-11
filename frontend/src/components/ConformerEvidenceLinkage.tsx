@@ -1,3 +1,4 @@
+import { GuideLink } from "./GuideLink"
 import type { ReactNode } from "react"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { CalculationTypeCount } from "../domain/conformerEvidence"
@@ -81,7 +82,7 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
                 Three "evidence" labels in a row said nothing a heading
                 alone doesn't; the heading is enough. */}
             <SectionHeading id="evidence-linkage-heading" label={`Evidence for ${label}`}>Evidence for {label}</SectionHeading>
-            {staging && <p className="evidence-linkage-story">{staging}</p>}
+            {staging && <p className="evidence-linkage-story">{staging}<GuideLink to="staged-optimisation" /></p>}
             {/* The count in the summary is the "References (4)" lesson applied
                 here: a bare "How this evidence connects" gave a reader no reason
                 to open it. Both figures are already published elsewhere on this

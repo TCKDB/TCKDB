@@ -132,7 +132,7 @@ describe("a section intro is at most one short sentence", () => {
         quiet.mockRestore()
     })
 
-    it("holds for every literal intro in the source", () => {
+    it("holds for every literal intro= string or template in the source (dynamic intros are caught at render under test)", () => {
         const sources = import.meta.glob("../**/*.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>
         const over: string[] = []
         for (const [path, text] of Object.entries(sources)) {
