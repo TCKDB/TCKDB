@@ -1294,7 +1294,11 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
         await waitFor(() => expect(container.querySelector(".energy-profile-definition")).not.toBeNull())
         const clone = container.cloneNode(true) as HTMLElement
         expect(rankingWords(textOf(clone))).toEqual(["lowest"])
-        expect(clone.querySelector(".energy-profile-definition")?.textContent).toBe(DEFINITION_WITH_RANKING_WORD)
+        expect(clone.querySelector(".energy-profile-definition")?.textContent).toBe(
+            "Electronic energy, no zero-point correction."
+            + "How these energies are chosen"
+            + "Each molecule's energy at this level from this program: its lowest single-point energy.",
+        )
         clone.querySelector(".energy-profile-definition")?.remove()
         expect(rankingWords(textOf(clone))).toEqual([])
         expect(textOf(container)).not.toContain("--")

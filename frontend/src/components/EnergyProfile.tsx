@@ -25,16 +25,30 @@ import {
 import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { useOverflows } from "../hooks/useOverflows"
 import { useScientificRecord } from "../hooks/useScientificRecord"
+import { Disclosure } from "./Disclosure"
 import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
 import { OrderNote } from "./OrderNote"
 import { SectionHeading } from "./PageSections"
 import { ReviewChip } from "./ReviewChip"
 import { ValueLink } from "./ValueLink"
 
-const INTRO = "Reactants are the zero. The transition state sits above them by the energy needed to pass over the barrier, "
-    + "and the products sit where the reaction ends. Each profile uses one level of theory and one program, and no profile is chosen for you."
+const INTRO = "kJ/mol relative to the reactants. One level and program per profile; none is chosen for you."
 
-const HILL_NOTE = "The hill is TCKDB's own comparison at one level and one program; the depositor's ordering check may use other energies."
+const HILL_NOTE = "TCKDB's comparison at one level and program; the depositor's check may use other energies."
+
+const NO_ZPE = "Electronic energy, no zero-point correction."
+
+/** The kind of energy stays visible; the rest of the served definition sits in a closed disclosure. */
+function ProfileDefinition({ definition }: { definition: string }) {
+    if (!definition.includes(NO_ZPE)) return <p className="note energy-profile-definition">{definition}</p>
+    const rest = definition.replace(NO_ZPE, "").replace(/\s+/g, " ").trim()
+    return (
+        <div className="energy-profile-definition">
+            <p className="note">{NO_ZPE}</p>
+            {rest && <Disclosure summary="How these energies are chosen"><p className="note">{rest}</p></Disclosure>}
+        </div>
+    )
+}
 
 const W = 500
 const H = 240
@@ -229,10 +243,10 @@ function ProfileView({ profile, labels, several, markPeak }: { profile: EnergyPr
                     {levels.map((level, index) => (
                         <Fragment key={level.key}>{index > 0 && ", "}{level.label.toLowerCase()} <span className="t-preserve-case">{relativeKjText(level.kj)}</span></Fragment>
                     ))}.
-                    {several && " The axis is set for each profile, so it changes when you pick another."}
+                    {several && " Each profile has its own axis."}
                 </figcaption>
             </figure>
-            <p className="note energy-profile-definition">{profile.definition}</p>
+            <ProfileDefinition definition={profile.definition} />
             {markPeak && <p className="note">{HILL_NOTE}</p>}
             {isMixed(profile) && (
                 <p className="note energy-profile-mixed">
@@ -302,7 +316,7 @@ function CitedEnergies({ read, labels }: { read: EnergyProfileRead; labels: Read
     return (
         <div className="energy-profile-cited">
             <h3 className="t-heading-2">Energies a rate record cites</h3>
-            <p className="note">These are the calculations the rate records themselves name. They are listed apart from the profiles above and are not combined with them.</p>
+            <p className="note">Named by the rate records; not combined with the profiles.</p>
             <div className="table-scroll energy-profile-scroll" tabIndex={0} role="region" aria-label="Energies cited by rate records">
                 <table className="data-table energy-profile-table">
                     <caption className="energy-profile-caption-table">Calculations cited by each rate record on this entry</caption>
@@ -346,8 +360,8 @@ export function Profiles({ read, labels, markPeak = false }: { read: Pick<Energy
                         {read.profiles.length} profiles. The first is shown until you pick another.
                     </p>
                     <OrderNote order={markPeak
-                        ? "Listed by level of theory, then program, in alphabetical order."
-                        : "Listed by transition-state entry (approved first, then newest deposited first), then level of theory and program in alphabetical order."} />
+                        ? "By level, then program."
+                        : "By TS entry, then level and program."} />
                 </div>
             )}
             {chosen && <ProfileView profile={chosen} labels={labels} several={read.profiles.length > 1} markPeak={markPeak} />}
@@ -381,7 +395,7 @@ export function EnergyProfile({ entryRef, speciesLabels, onlyTransitionState }: 
     const noun = onlyTransitionState ? "transition state" : "reaction entry"
     return (
         <section className="energy-profile" aria-labelledby="energy-heading">
-            <SectionHeading id="energy-heading" kicker="How the energy changes" intro={INTRO}>{onlyTransitionState ? "Energy hill" : "Energy profile"}</SectionHeading>
+            <SectionHeading id="energy-heading" intro={INTRO}>{onlyTransitionState ? "Energy hill" : "Energy profile"}</SectionHeading>
             {(state.status === "loading" || state.status === "retrying") && <p className="note" role="status" aria-busy="true">Loading the energy profile.</p>}
             {state.status !== "ready" && state.status !== "loading" && state.status !== "retrying" && (
                 <p className="note" role="alert">The energy profile could not be loaded.</p>

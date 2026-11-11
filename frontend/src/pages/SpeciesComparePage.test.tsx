@@ -114,8 +114,8 @@ describe("molecule compare page", () => {
         expect(crumbs.getByRole("link", { name: "Molecules" })).toHaveAttribute("href", "/species")
         expect(crumbs.getByRole("link", { name: "CH3" })).toHaveAttribute("href", `/species/${speciesRef}`)
         expect(document.querySelector(".breadcrumbs [aria-current='page']")).toHaveTextContent("Compare")
-        expect(screen.getByRole("note")).toHaveTextContent("listed side by side for reading, not ranked")
-        expect(screen.getByRole("note")).toHaveTextContent("never subtracts values across levels or programs")
+        expect(screen.getByRole("note")).toHaveTextContent("Side by side, not ranked")
+        expect(screen.getByRole("note")).toHaveTextContent("No differences across levels or programs; nothing is filled in from another record")
         expect(document.body.textContent).toContain("Columns are grouped by version; within a version, the archive's display order.")
     })
 

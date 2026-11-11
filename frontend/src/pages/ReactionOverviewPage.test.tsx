@@ -106,7 +106,7 @@ describe("ReactionOverviewPage -- the header of the page that lists every versio
         expect(screen.getByText("Reaction · all deposited versions")).toBeVisible()
         const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" })
         expect(crumbs.querySelector('a[href="/reactions"]')).toHaveTextContent("Reactions")
-        expect(document.querySelector(".record-lede")).toHaveTextContent("This reaction has 2 deposited versions. Each is a separate record with its own numbers, and none is chosen for you.")
+        expect(document.querySelector(".record-lede")).toHaveTextContent("2 deposited versions; none is chosen for you.")
         expect(screen.getByRole("link", { name: "Compare these values" })).toHaveAttribute("href", `/reactions/${REACTION_REF}/compare`)
         expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
     })
@@ -262,17 +262,17 @@ describe("ReactionOverviewPage: what the page says it chose, and paging", () => 
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
         page(REACTION_REF)
         await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
-        expect(screen.getByText(/The title and equation are read from rxe_tku6xu2lt3girf2rsiwl5uds4e, the first entry listed, not from every entry/)).toBeVisible()
+        expect(screen.getByText(/Title from rxe_tku6xu2lt3girf2rsiwl5uds4e, the first entry; entries can differ\./)).toBeVisible()
     })
 
-    it("says where the title comes from even for a single entry", async () => {
+    it("names no title source for a single entry, since nothing else could be the source", async () => {
         server.use(http.get("/api/v1/scientific/reactions/search", () => {
             const response = searchResponse()
             return HttpResponse.json({ ...response, records: response.records.slice(0, 1), pagination: { offset: 0, limit: 50, returned: 1, total: 1 } })
         }))
         page(REACTION_REF)
         await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
-        expect(screen.getByText("The title and equation are read from the one deposited entry, rxe_tku6xu2lt3girf2rsiwl5uds4e.")).toBeVisible()
+        expect(screen.queryByText(/Title from/)).not.toBeInTheDocument()
     })
 
     it("pages the entries: the headline count is the archive's total and Next asks for the following window", async () => {
@@ -288,7 +288,7 @@ describe("ReactionOverviewPage: what the page says it chose, and paging", () => 
         }))
         page(REACTION_REF)
         expect(await screen.findByText("Showing 1\u20131 of 2 reaction entries.")).toBeVisible()
-        expect(screen.getByText(/This reaction has 2 deposited versions/)).toBeVisible()
+        expect(screen.getByText(/2 deposited versions; none is chosen for you/)).toBeVisible()
         fireEvent.click(screen.getByRole("button", { name: "Next" }))
         expect(await screen.findByText("Showing 2\u20132 of 2 reaction entries.")).toBeVisible()
         expect(seen).toContain("1:1")
@@ -314,7 +314,7 @@ describe("ReactionOverviewPage: what the page says it chose, and paging", () => 
         fireEvent.click(screen.getByRole("button", { name: "Next" }))
         await screen.findByRole("link", { name: "rxe_kftcgjn7zalusaouojwi23z3gy" })
         expect(document.querySelector("h1")?.textContent).toBe(titleBefore)
-        expect(screen.getByText(/read from rxe_tku6xu2lt3girf2rsiwl5uds4e, the first entry listed/)).toBeVisible()
+        expect(screen.getByText(/Title from rxe_tku6xu2lt3girf2rsiwl5uds4e, the first entry/)).toBeVisible()
     })
 
     it("returns to the first page when the reaction changes while the page stays mounted", async () => {

@@ -196,14 +196,14 @@ describe("ConformerGroupPage", () => {
         expect(within(breadcrumb).getByText("Conformer Group 1")).toHaveAttribute("aria-current", "page")
     })
 
-    it("draws the group's first final geometry with a Show in 3D button and a sentence about its shape", async () => {
+    it("draws the group's first final geometry with a Show in 3D button", async () => {
         serve()
         page()
         await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
         const figure = await screen.findByRole("figure", { name: "Picture of this conformer" })
         expect(await within(figure).findByRole("img", { name: /Ball-and-stick picture of CH3/ })).toBeVisible()
         expect(within(figure).getByRole("button", { name: "Show in 3D" })).toBeVisible()
-        expect(within(figure).getByText(/2 atoms, O and H, 0\.98 Å apart\./)).toBeVisible()
+        expect(within(figure).getByText(/First deposited final geometry\./)).toBeVisible()
         expect(within(figure).getByRole("link", { name: "Open the geometry" })).toHaveAttribute("href", "/geometries/geo_one")
     })
 
@@ -296,7 +296,7 @@ describe("ConformerGroupPage", () => {
         const head = within(section).getByRole("link", { name: "Observation 1" }).closest("p") as HTMLElement
         expect(head).toHaveTextContent("co_one")
         expect(head).toHaveTextContent("Origin: computed")
-        expect(within(section).getByText(/1 optimisation chain in all/)).toBeVisible()
+        expect(within(section).getByText(/1 optimisation chain\./)).toBeVisible()
     })
 
     it("names the thermochemistry and rate coefficients that name this conformer, and where it was merged", async () => {

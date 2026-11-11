@@ -78,22 +78,13 @@ export default function MethodsIndexPage() {
                 <span aria-current="page">Methods</span>
             </nav>
             <PageShell>
-                <p className="eyebrow">Archive index</p>
                 <h1 className="t-display-1">Methods</h1>
                 <p className="t-body methods-index-intro">
-                    The provenance vocabulary this archive records: the levels of theory, software, and workflow
-                    tools attached to at least one deposited calculation. Levels of theory below link to their
-                    correction parameters and observed software, where any are deposited.
+                    Levels of theory, software and workflow tools behind deposited calculations.
                 </p>
 
                 <section className="ledger-section" aria-labelledby="methods-lot-heading">
-                    <SectionHeading
-                        id="methods-lot-heading"
-                        kicker="Provenance vocabulary"
-                        intro="One row per distinct level-of-theory identity — two levels can share a method and basis while differing in dispersion, solvent, or spin treatment, so this table never groups on that display text."
-                    >
-                        Levels of theory
-                    </SectionHeading>
+                    <SectionHeading id="methods-lot-heading">Levels of theory</SectionHeading>
                     {/* Stays visible while a server-side filter is chosen, even when
                         it matches nothing: hiding the control that caused an empty
                         list would leave no way back. */}
@@ -113,14 +104,14 @@ export default function MethodsIndexPage() {
                 </section>
 
                 <section className="ledger-section" aria-labelledby="methods-software-heading">
-                    <SectionHeading id="methods-software-heading" kicker="Provenance vocabulary" intro="Software packages observed running at least one calculation in this archive.">
+                    <SectionHeading id="methods-software-heading">
                         Software
                     </SectionHeading>
                     <VocabTable state={softwareState} nameLabel="Software" emptyText="No software usage is recorded in this archive." />
                 </section>
 
                 <section className="ledger-section" aria-labelledby="methods-workflow-heading">
-                    <SectionHeading id="methods-workflow-heading" kicker="Provenance vocabulary" intro="Workflow tools observed orchestrating at least one calculation in this archive.">
+                    <SectionHeading id="methods-workflow-heading">
                         Workflow tools
                     </SectionHeading>
                     <VocabTable state={workflowToolState} nameLabel="Workflow tool" emptyText="No workflow-tool usage is recorded in this archive." />
