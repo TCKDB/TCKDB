@@ -2957,6 +2957,8 @@ the gap.
 | `kind` | SpeciesNameKind (enum) | no | — | — | `common`, `systematic`, `abbreviation` | not documented |
 | `source_kind` | SpeciesNameSourceKind (enum) | no | — | — | `curated`, `offline_import` | not documented |
 | `external_source_id` | BIGINT | yes | — | external_source.id | — | not documented |
+| `external_record_key` | TEXT | yes | — | — | — | not documented |
+| `retrieved_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
 | `created_by_user_id` | BIGINT | yes | — | app_user.id | — | not documented |
 | `retired_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
@@ -2964,8 +2966,10 @@ the gap.
 
 **Check constraints:**
 
+- `ck_species_name_curated_has_no_record`: `source_kind <> 'curated' OR (external_record_key IS NULL AND retrieved_at IS NULL)`
 - `ck_species_name_name_key_length`: `char_length(name_key) BETWEEN 1 AND 128`
 - `ck_species_name_name_length`: `char_length(name) BETWEEN 1 AND 128`
+- `ck_species_name_offline_import_has_source`: `source_kind <> 'offline_import' OR (external_source_id IS NOT NULL AND external_record_key IS NOT NULL AND retrieved_at IS NOT NULL)`
 
 ### `statmech`
 

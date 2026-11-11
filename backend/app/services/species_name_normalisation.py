@@ -71,6 +71,29 @@ def is_valid_query_key(raw: str, key: str) -> bool:
     return all(_allowed_char(ch) for ch in key)
 
 
+def name_problem(name: str) -> str | None:
+    """Why ``name`` cannot be stored as a species name, or ``None`` when it can.
+
+    The codes are ``name_empty``, ``name_length`` (the name or its key is over ``MAX_NAME_LENGTH``),
+    ``name_characters`` (control characters, default-ignorable code points, or characters a name search could not
+    send) and ``name_no_letter_or_digit``.
+    """
+    key = normalise_name(name)
+    if not key:
+        return "name_empty"
+    if len(name) > MAX_NAME_LENGTH or len(key) > MAX_NAME_LENGTH:
+        return "name_length"
+    if any(unicodedata.category(ch) == "Cc" and ch != "\t" for ch in name):
+        return "name_characters"
+    if has_default_ignorable(name) or has_default_ignorable(key):
+        return "name_characters"
+    if not all(_allowed_char(ch) for ch in key):
+        return "name_characters"
+    if not any(unicodedata.category(ch)[0] == "L" or unicodedata.category(ch) == "Nd" for ch in key):
+        return "name_no_letter_or_digit"
+    return None
+
+
 def prefix_upper_bound(key: str) -> str | None:
     """The smallest string above every string that starts with ``key``, in code-point order.
 
