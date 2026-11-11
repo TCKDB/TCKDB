@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.205.0 - 2026-11-11
+
+The `tckdb-schemas` requirement is widened to `>=0.158,<0.174`. No client code changed.
+
 ## 0.204.0 - 2026-11-11
 
 `RejectionCode` gains `APPLIED_ENERGY_CORRECTION_VALUE_CONFLICT`. The `tckdb-schemas` requirement is widened to `>=0.158,<0.173`.

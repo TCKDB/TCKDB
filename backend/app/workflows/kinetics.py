@@ -58,8 +58,11 @@ from app.services.calculation_levels import (
     kinetics_closed_shell_exempt,
     kinetics_energy_level_violation,
     kinetics_level_fields_match,
+    kinetics_one_electron_hf_substitutions,
     kinetics_spin_facts,
     level_spin_value,
+    one_electron_calculation_ids,
+    one_electron_hf_warning,
 )
 from app.services.calculation_ownership import (
     W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
@@ -122,7 +125,8 @@ def _calculations_at_declared_level(
 ) -> list[Calculation]:
     """The species entry's calculations of a type that can stand for the declared kinetics energy level.
 
-    Fields: every level-identity field but the spin treatment must match
+    Fields: every level-identity field but the spin treatment must match, except that a one-electron species'
+    Hartree-Fock calculation stands for a correlated declared level
     (:func:`~app.services.calculation_levels.kinetics_level_fields_match`).
 
     Spin, when the declaration states one: a calculation that ran with it is eligible, and so is one
@@ -145,7 +149,12 @@ def _calculations_at_declared_level(
         .order_by(Calculation.id)
     ).all()
     scheme_ids = declared_scheme_level_ids(session, [lot_id, *{c.lot_id for c in candidates}])
-    matching = [c for c in candidates if kinetics_level_fields_match(declared, c.lot, scheme_ids=scheme_ids)]
+    one_electron = one_electron_calculation_ids(session, [c.id for c in candidates])
+    matching = [
+        c
+        for c in candidates
+        if kinetics_level_fields_match(declared, c.lot, scheme_ids=scheme_ids, one_electron=c.id in one_electron)
+    ]
     spin = level_spin_value(declared)
     if spin is None:
         return [c for c in matching if c.lot_id == lot_id] or matching
@@ -1197,6 +1206,14 @@ def persist_kinetics_upload(
                 if require_energy_sources:
                     raise violation
                 unlinked_reason = "contradiction"
+            else:
+                substitution = one_electron_hf_warning(
+                    kinetics_one_electron_hf_substitutions([calc for calc, _role in links], lot),
+                    lot,
+                    field="energy_level_of_theory",
+                )
+                if substitution is not None:
+                    warning_sink.append(substitution)
         if unlinked_reason is not None:
             links = []
             warning_sink.append(

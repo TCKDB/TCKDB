@@ -167,6 +167,7 @@ W_THERMO_ENERGY_LEVEL_CONTRADICTION = "thermo_energy_level_contradiction"
 #: ``energy_level_of_theory`` disagrees with the level of a linked reactant, product or
 #: transition-state energy calculation.
 W_KINETICS_ENERGY_LEVEL_CONTRADICTION = "kinetics_energy_level_contradiction"
+W_ONE_ELECTRON_HF_SUBSTITUTION = "one_electron_hf_substitution"
 
 #: Two or more linked 'sp's (or 'composite's) disagree on level of theory, so
 #: "the energy level" has no single answer (R2').
@@ -1240,8 +1241,44 @@ def declared_scheme_level_ids(session: Session | None, lot_ids: Collection[int])
     )
 
 
+#: Method identity keys (:func:`~app.chemistry.method_names.method_identity_key`) that are Hartree-Fock for the
+#: one-electron rule. The key keeps ``hf``, ``rhf``, ``uhf``, ``rohf`` and ``hartree-fock`` apart; only ``hf`` is
+#: listed, because a producer states the spin form in ``spin_treatment``, not in the method.
+HARTREE_FOCK_METHOD_KEYS = frozenset({"hf"})
+
+
+def _method_key(level: LevelOfTheory) -> str:
+    from app.chemistry.dispersion_names import level_identity_keys
+
+    return level_identity_keys(level.method, level.dispersion)[0]
+
+
+def is_one_electron_hf_substitute(declared: LevelOfTheory, linked: LevelOfTheory) -> bool:
+    """Whether ``linked`` is Hartree-Fock where ``declared`` is a correlated level and nothing else differs.
+
+    The method of ``linked`` is Hartree-Fock (identity key ``hf``), the method of ``declared`` is not, and every other
+    identity field but spin treatment agrees. The caller adds the one-electron condition: for one electron every
+    correlation term (CCSD, (T), MP2, the PNO truncation and the F12 pair correction) is zero, so a Hartree-Fock
+    energy in the same orbital basis is the correlated energy. ORCA refuses every correlated method for one electron
+    ("no electrons to correlate" for MP2-F12, "Number of processes (1) exceeds number of pairs (0)" for CCSD(T)-F12/RI).
+    """
+    from app.services.calculation_resolution import spin_agnostic_level_key
+
+    if _method_key(linked) not in HARTREE_FOCK_METHOD_KEYS or _method_key(declared) in HARTREE_FOCK_METHOD_KEYS:
+        return False
+    declared_key = spin_agnostic_level_key(declared)
+    linked_key = spin_agnostic_level_key(linked)
+    declared_key.pop("method")
+    linked_key.pop("method")
+    return declared_key == linked_key
+
+
 def kinetics_level_fields_match(
-    declared: LevelOfTheory, linked: LevelOfTheory | None, *, scheme_ids: Collection[int] = ()
+    declared: LevelOfTheory,
+    linked: LevelOfTheory | None,
+    *,
+    scheme_ids: Collection[int] = (),
+    one_electron: bool = False,
 ) -> bool:
     """Whether a linked energy's level agrees with the declared kinetics level on every field but spin.
 
@@ -1252,6 +1289,9 @@ def kinetics_level_fields_match(
     A level that names a user-declared composite scheme hashes by the scheme's definition, not
     by columns, so it keeps the row comparison. ``scheme_ids`` is the set of such levels among the
     ones being compared (:func:`declared_scheme_level_ids`, computed once by the caller).
+
+    ``one_electron`` says the participant has exactly one electron (:func:`one_electron_calculation_ids`); its
+    Hartree-Fock energy then matches a correlated declared level (:func:`is_one_electron_hf_substitute`).
     """
     if linked is None or declared.id == linked.id:
         return True
@@ -1259,7 +1299,72 @@ def kinetics_level_fields_match(
         return False
     from app.services.calculation_resolution import spin_agnostic_level_key
 
-    return spin_agnostic_level_key(declared) == spin_agnostic_level_key(linked)
+    if spin_agnostic_level_key(declared) == spin_agnostic_level_key(linked):
+        return True
+    return one_electron and is_one_electron_hf_substitute(declared, linked)
+
+
+def one_electron_calculation_ids(session: Session, calculation_ids: Collection[int]) -> set[int]:
+    """The calculations of a species entry with exactly one electron: one query for every calculation.
+
+    The electron count is the sum of atomic numbers of the owning species' stored SMILES (implicit hydrogens
+    included, isotopes counted as their element) minus its stored net charge. Nothing a producer sends is read.
+    A transition-state calculation, and a species whose SMILES cannot be read, is never one-electron.
+    """
+    from app.chemistry.species import electron_count_from_smiles
+
+    ids = list(calculation_ids)
+    if not ids:
+        return set()
+    rows = session.execute(
+        select(Calculation.id, Species.smiles, Species.charge)
+        .join(SpeciesEntry, SpeciesEntry.id == Calculation.species_entry_id)
+        .join(Species, Species.id == SpeciesEntry.species_id)
+        .where(Calculation.id.in_(ids))
+    ).all()
+    return {cid for cid, smiles, charge in rows if electron_count_from_smiles(smiles, charge) == 1}
+
+
+def kinetics_one_electron_hf_substitutions(
+    energies: Sequence[Calculation], declared: LevelOfTheory | None
+) -> list[Calculation]:
+    """The linked energies accepted at Hartree-Fock for a one-electron participant under a correlated declared level.
+
+    Empty when the declared level is a composite scheme, and when every linked energy would be exempted: with no
+    link at the declared method there is no correlated level for the exemption to stand beside, and the ordinary
+    comparison applies.
+    """
+    if declared is None:
+        return []
+    energies = [c for c in {c.id: c for c in energies}.values() if c.lot_id is not None]
+    session = object_session(declared)
+    if not energies or session is None:
+        return []
+    scheme_ids = declared_scheme_level_ids(session, [declared.id, *(c.lot_id for c in energies)])
+    if declared.id in scheme_ids:
+        return []
+    candidates = [
+        c
+        for c in energies
+        if c.lot_id != declared.id and c.lot_id not in scheme_ids and is_one_electron_hf_substitute(declared, c.lot)
+    ]
+    one_electron = one_electron_calculation_ids(session, [c.id for c in candidates])
+    exempt = [c for c in candidates if c.id in one_electron]
+    return [] if len(exempt) == len(energies) else exempt
+
+
+def one_electron_hf_warning(
+    substitutions: Sequence[Calculation], declared: LevelOfTheory, *, field: str
+) -> UploadWarning | None:
+    """The informational warning for linked one-electron Hartree-Fock energies accepted under ``declared``."""
+    if not substitutions:
+        return None
+    context: dict[str, object] = {
+        "declared_level_of_theory_ref": declared.public_ref,
+        "energy_calculation_refs": sorted({c.public_ref for c in substitutions}),
+        "cabs_singles_absent": "f12" in _method_key(declared),
+    }
+    return UploadWarning.from_code(field=field, code=W_ONE_ELECTRON_HF_SUBSTITUTION, context=context)
 
 
 #: ``reason`` values on a spin-treatment ``kinetics_energy_level_contradiction`` (closed; no depositor text).
@@ -1323,7 +1428,8 @@ def kinetics_energy_level_violation(
     """The refusal a declared kinetics energy level earns against these linked energy calculations, or ``None``.
 
     1. Every calculation with a level must match the declared level on every field but spin
-       (:func:`kinetics_level_fields_match`).
+       (:func:`kinetics_level_fields_match`); a one-electron participant's Hartree-Fock energy matches a
+       correlated declared level (:func:`is_one_electron_hf_substitute`).
     2. A closed-shell one (:func:`kinetics_closed_shell_exempt`) never constrains spin.
     3. The others (every multiplicity above 1, a broken-symmetry or ``<S^2>``-less unrestricted
        singlet) form the open-shell reference set. Unknown spin is skipped; the rest must agree
@@ -1343,6 +1449,9 @@ def kinetics_energy_level_violation(
     scheme_ids = declared_scheme_level_ids(session, [declared.id, *(c.lot_id for c in energies)])
 
     differing = [c for c in energies if not kinetics_level_fields_match(declared, c.lot, scheme_ids=scheme_ids)]
+    if differing and session is not None:
+        exempt = {c.id for c in kinetics_one_electron_hf_substitutions(energies, declared)}
+        differing = [c for c in differing if c.id not in exempt]
     if differing:
         return CodedValueError(
             W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
@@ -1454,6 +1563,7 @@ __all__ = [
     "W_COMPOSITE_FREQUENCY_LEVEL_DIFFERS",
     "W_COMPOSITE_ROLE_ON_NON_COMPOSITE",
     "W_KINETICS_ENERGY_LEVEL_CONTRADICTION",
+    "W_ONE_ELECTRON_HF_SUBSTITUTION",
     "W_STATMECH_ENERGY_LEVEL_AMBIGUOUS",
     "W_STATMECH_ENERGY_LEVEL_CONTRADICTION",
     "W_STATMECH_ENERGY_LEVEL_REQUIRES_SP",
@@ -1480,7 +1590,10 @@ __all__ = [
     "kinetics_closed_shell_exempt",
     "kinetics_energy_level_violation",
     "kinetics_level_fields_match",
+    "kinetics_one_electron_hf_substitutions",
     "kinetics_spin_facts",
     "level_spin_value",
+    "one_electron_calculation_ids",
+    "one_electron_hf_warning",
     "role_calc_infos",
 ]

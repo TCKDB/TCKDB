@@ -375,6 +375,13 @@ RENDERED: dict[str, str] = {
     "energy_level_stored_without_source_calculations": (
         "The declared energy level of theory was stored, but no source calculations were linked to the record."
     ),
+    "one_electron_hf_substitution": (
+        "The declared energy level of theory is a correlated method, and the energy of a one-electron participant "
+        "linked to this record was computed at Hartree-Fock in the same basis. With one electron there are no "
+        "electron pairs to correlate, so the correlated energy equals the Hartree-Fock energy, and the declared "
+        "level was accepted for it. If the declared level is an F12 method, the CABS singles correction that F12 "
+        "methods add to the reference energy is absent from that participant's energy."
+    ),
     "applied_energy_correction_note_not_stored": (
         "A correction for this entry, scheme and role was already recorded, so this deposit was linked to it "
         "and the note sent with it was not stored. The stored note, if any, was kept."
@@ -1557,6 +1564,28 @@ def _level_without_sources(context: Mapping[str, Any]) -> str | None:
     return f"The declared energy level of theory was stored, but no source calculations were linked: {why}."
 
 
+def _one_electron_hf(context: Mapping[str, Any]) -> str | None:
+    refs = context.get("energy_calculation_refs")
+    f12 = context.get("cabs_singles_absent")
+    if not isinstance(refs, list) or not refs or not isinstance(f12, bool):
+        return None
+    one = len(refs) == 1
+    subject = "the energy of a one-electron participant" if one else f"the energies of {len(refs)} one-electron participants"
+    sentence = (
+        f"The declared energy level of theory is a correlated method, and {subject} linked to this record "
+        f"{'was' if one else 'were'} computed at Hartree-Fock in the same basis. With one electron there are no "
+        "electron pairs to correlate, so the correlated energy equals the Hartree-Fock energy, and the declared "
+        f"level was accepted for {'it' if one else 'them'}."
+    )
+    if f12:
+        sentence += (
+            " The declared level is an F12 method, which adds a CABS singles correction to the reference energy "
+            "that a Hartree-Fock calculation omits, so that correction is absent from "
+            f"{'that energy' if one else 'those energies'}."
+        )
+    return sentence
+
+
 def _tunneling(context: Mapping[str, Any]) -> str | None:
     model = _token(context.get("tunneling_model"), frozenset({"wigner", "eckart", "sct", "other"}))
     if model is None:
@@ -2022,6 +2051,7 @@ _WITH_CONTEXT: dict[str, Any] = {
     "literature_year_mismatch": _literature_year,
     "reaction_reversible_twin": _reversible_twin,
     "energy_level_stored_without_source_calculations": _level_without_sources,
+    "one_electron_hf_substitution": _one_electron_hf,
     "missing_tunneling_application_evidence": _tunneling,
     "missing_energy_correction_scheme_software": _scheme_software,
     "level_of_theory_method_names_correction_table": _method_table,
@@ -2135,6 +2165,8 @@ def _closed_values(key: str, code: str) -> Any:
         "twin_ref": _PUBLIC_REF,
         "sibling_ref": _PUBLIC_REF,
         "release_ref": _PUBLIC_REF,
+        "declared_level_of_theory_ref": _PUBLIC_REF,
+        "energy_calculation_refs": _PUBLIC_REF,
         "version": _VERSION,
         "log_method": _LOWER_TOKEN,
         "refusal_code": _LOWER_TOKEN,

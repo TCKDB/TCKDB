@@ -135,10 +135,13 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # entry 12 compares a declared state with an output log, these judge a stored diagnostic against a criterion or
     # against the entry. Different tier from every blocking entry.
     #
+    # 82 -> 83: one entry, one warning code: a one-electron participant's Hartree-Fock energy accepted under a correlated
+    # declared kinetics level. A referee could dispute that the substitution is exact, and the CABS singles term is not.
+    #
     # 52 -> 82: the codes that had no entry are declared in gap_declarations.py (the rest are in NOT_SCIENTIFIC).
-    assert 10 <= len(REGISTER) <= 82, (
+    assert 10 <= len(REGISTER) <= 83, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~82 the inclusion test ('could this check be wrong "
+        "the system; above ~83 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 
@@ -891,6 +894,7 @@ _OPENINGS: dict[int, str] = {
     80: 'The job named as having measured an SCF stability ',
     81: 'A thermo declaration the file format defines descr',
     82: 'A recorded finite difference of gradients on an OR',
+    83: "A kinetics record's declared correlated energy lev",
 }
 
 

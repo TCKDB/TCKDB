@@ -1238,4 +1238,42 @@ CHECK_A_RECORDED_HESSIAN_METHOD_IS_REFINED_WHEN_IT_CANNOT_HOLD = ScientificCheck
     escape_hatch="None needed: the deposit is accepted. Record finite_difference_energy to state it directly.",
 )
 
+# ---------------------------------------------------------------------------
+# One-electron participants
+# ---------------------------------------------------------------------------
+
+CHECK_A_ONE_ELECTRON_HARTREE_FOCK_ENERGY_STANDS_FOR_THE_CORRELATED_LEVEL = ScientificCheck(
+    group="One-electron participants",
+    sort_key=1,
+    code=calculation_levels.W_ONE_ELECTRON_HF_SUBSTITUTION,
+    asserts=(
+        "A kinetics record's declared correlated energy level is accepted for a linked energy of a one-electron "
+        "participant computed at Hartree-Fock in the same basis, and the substitution is reported: with one "
+        "electron every correlation term is zero, so the two energies are equal."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    tier_rationale=(
+        "Not a contradiction: ORCA refuses every correlated method for one electron, so a correct producer has "
+        "no correlated energy to link, and the Hartree-Fock one is exact apart from the CABS singles term that "
+        "an F12 method adds to its reference. That term is about 0.05 to 0.1 mEh for a hydrogen atom, below the "
+        "noise of a PNO truncation but not zero, so the acceptance is stated rather than silent. The condition "
+        "is narrow (one electron by the stored species, Hartree-Fock, every other identity field equal); a "
+        "two-electron participant or a different basis stays a kinetics_energy_level_contradiction."
+    ),
+    adr="0008",
+    enforced_by=(
+        PythonCheck(
+            calculation_levels.kinetics_one_electron_hf_substitutions,
+            note=(
+                "Run on the linked reactant, product and transition-state energies of a kinetics record whose "
+                "declared level is not a composite scheme or a Hartree-Fock method. The electron count is the "
+                "sum of the atomic numbers of the stored SMILES minus the stored charge."
+            ),
+        ),
+        PythonCheck(calculation_levels.is_one_electron_hf_substitute),
+    ),
+    escape_hatch="None needed: the deposit is accepted. Link a correlated energy to state a level without the substitution.",
+)
+
 __all__: list[str] = []

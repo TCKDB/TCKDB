@@ -68,6 +68,21 @@ def formal_charge(mol: Chem.Mol) -> int:
     return sum(atom.GetFormalCharge() for atom in mol.GetAtoms())
 
 
+def electron_count_from_smiles(smiles: str, charge: int) -> int | None:
+    """The number of electrons of a species: the atomic numbers of its atoms, implicit hydrogens included, minus its net charge.
+
+    Isotopes count as their element (D and T have one electron). ``None`` when RDKit cannot read the SMILES.
+
+    :param smiles: The species' stored SMILES.
+    :param charge: The species' stored net charge.
+    """
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None
+    return sum(atom.GetAtomicNum() + atom.GetTotalNumHs() for atom in mol.GetAtoms()) - charge
+
+
 def spin_multiplicity(mol: Chem.Mol) -> int:
     """Estimate spin multiplicity from radical electrons.
 
