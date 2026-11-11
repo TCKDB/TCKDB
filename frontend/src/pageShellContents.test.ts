@@ -18,6 +18,7 @@ const DECLARED: Record<string, "list" | "none"> = {
     "./pages/LevelOfTheoryPage.tsx": "list",
     "./pages/MethodsIndexPage.tsx": "list",
     "./pages/NetworkEntryPage.tsx": "list",
+    "./pages/ReactionComparePage.tsx": "list",
     "./pages/ReactionEntryPage.tsx": "list",
     "./pages/ReactionOverviewPage.tsx": "list",
     "./pages/SpeciesComparePage.tsx": "list",

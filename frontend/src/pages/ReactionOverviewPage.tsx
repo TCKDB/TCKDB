@@ -2,6 +2,7 @@ import { Link, Navigate, useParams } from "react-router-dom"
 import { ParticipantChips } from "../components/ParticipantChips"
 import "../conformer-group.css"
 import "../record-identity-header.css"
+import "../data-table.css"
 import "../reaction-entry.css"
 import type { ReactionOverviewParticipant, ReactionOverviewRecord } from "../api/reactionOverviewApi"
 import { loadReactionOverview } from "../api/reactionOverviewApi"
@@ -87,6 +88,7 @@ function ReactionChooser({ reactionRef }: { reactionRef: string }) {
             reactionRef={reactionRef}
             headerRecord={firstPage.record.records[0]}
             total={firstPage.record.pagination.total}
+            kineticsTotal={firstPage.record.records.reduce((sum, record) => sum + record.availability.kinetics_count, 0)}
             records={shown?.records ?? []}
             pageStatus={state.status}
             reviewSummary={shown?.review_summary ?? firstPage.record.review_summary}
@@ -96,11 +98,13 @@ function ReactionChooser({ reactionRef }: { reactionRef: string }) {
     )
 }
 
-function ChooserDocument({ reactionRef, headerRecord, total, records, pageStatus, reviewSummary, meta, onPage }: {
+function ChooserDocument({ reactionRef, headerRecord, total, kineticsTotal, records, pageStatus, reviewSummary, meta, onPage }: {
     reactionRef: string
     /** The first entry of the first page: the source of the title and equation, whatever page the table is on. */
     headerRecord: ReactionOverviewRecord
     total: number
+    /** Kinetics records across the first page of entries; the compare link is offered from two. */
+    kineticsTotal: number
     pageStatus: string
     meta: ListMeta | null
     onPage: (request: PageRequest) => void
@@ -155,6 +159,8 @@ function ChooserDocument({ reactionRef, headerRecord, total, records, pageStatus
                 <section className="ledger-section" aria-labelledby="entries-heading">
                     <p className="t-kicker section-kicker">Deposited records</p>
                     <SectionHeading id="entries-heading">Reaction entries</SectionHeading>
+                    {/* kineticsTotal counts the rate records of the entries on the first page of this list. */}
+                    {kineticsTotal >= 2 && <p><Link className="compare-link" to={`/reactions/${reactionRef}/compare`}>Compare these values</Link></p>}
                     {pageStatus !== "ready" && <p className="note" role="status">{pageStatus === "loading" || pageStatus === "retrying" ? "Loading this page of entries…" : "This page of entries could not be loaded."}</p>}
                     {meta && <ListPager meta={meta} noun="reaction entry" nounPlural="reaction entries" onPage={onPage} label="Reaction entries paging" />}
                     <div className="table-scroll">

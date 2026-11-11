@@ -326,7 +326,8 @@ function CitedEnergies({ read, labels }: { read: EnergyProfileRead; labels: Read
     )
 }
 
-function Profiles({ read, labels, markPeak }: { read: EnergyProfileRead; labels: ReadonlyMap<string, string>; markPeak: boolean }) {
+/** The picker and the chosen profile; `read` needs only its profiles. */
+export function Profiles({ read, labels, markPeak = false }: { read: Pick<EnergyProfileRead, "profiles">; labels: ReadonlyMap<string, string>; markPeak?: boolean }) {
     const pickerId = useId()
     const [index, setIndex] = useState(0)
     const optionLabels = profileLabels(read.profiles)

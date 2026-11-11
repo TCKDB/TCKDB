@@ -89,6 +89,8 @@ export const productLevelsSchema = z.object({
     frequency: levelOfTheorySchema.nullable().optional(),
     energy: levelOfTheorySchema.nullable().optional(),
     energy_source: z.string().nullable().optional(),
+    /** The level the depositor declared for a record's energies; never filled from a linked calculation. */
+    declared_energy: levelOfTheorySchema.nullable().optional(),
     // ADR 0021 / P7a. `notation` is the SERVER's chemist's shorthand
     // (`energy//geometry`), never composed on the client; `null` when
     // either level is absent. `geometry_source`/`frequency_source` say
