@@ -8,6 +8,7 @@ import ConformerGroupPage from "./ConformerGroupPage"
 import ConformerObservationPage from "./ConformerObservationPage"
 import GeometryDetailPage from "./GeometryDetailPage"
 import SpeciesEntryPage from "./SpeciesEntryPage"
+import { conformerReadHandlers } from "../test/conformerReads"
 
 /**
  * ToC-top-alignment (follow-up to #321/#322/#323/#325): five record pages
@@ -38,7 +39,7 @@ afterEach(() => {
 })
 afterAll(() => server.close())
 
-function assertIdentityLeadsContentColumn(container: HTMLElement, headingName: string) {
+function assertIdentityLeadsContentColumn(container: HTMLElement, headingName: string | RegExp) {
     const layout = container.querySelector(".page-shell-layout")
     const content = container.querySelector(".page-shell-content")
     const identitySlot = container.querySelector(".page-shell-identity")
@@ -84,8 +85,8 @@ describe("Every record page routes its header through PageShell's identity slot"
                 </Routes>
             </MemoryRouter>,
         )
-        await screen.findByRole("heading", { name: "CH4 geometry" })
-        assertIdentityLeadsContentColumn(container, "CH4 geometry")
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        assertIdentityLeadsContentColumn(container, /^Geometry of CH4/)
     })
 
     it("CalculationDetailPage: the calculation header leads the content column", async () => {
@@ -143,6 +144,7 @@ describe("Every record page routes its header through PageShell's identity slot"
     })
 
     it("ConformerObservationPage: the observation header leads the content column", async () => {
+        server.use(...conformerReadHandlers({ entryRef: "spe_demo" }))
         server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => HttpResponse.json({
             record: {
                 conformer_observation: {
@@ -173,11 +175,12 @@ describe("Every record page routes its header through PageShell's identity slot"
                 </Routes>
             </MemoryRouter>,
         )
-        await screen.findByRole("heading", { name: "Computed observation" })
-        assertIdentityLeadsContentColumn(container, "Computed observation")
+        await screen.findByRole("heading", { name: "Observation of Conformer Group 1" })
+        assertIdentityLeadsContentColumn(container, "Observation of Conformer Group 1")
     })
 
-    it("ConformerGroupPage: the basin header leads the content column", async () => {
+    it("ConformerGroupPage: the conformer header leads the content column", async () => {
+        server.use(...conformerReadHandlers({ entryRef: "spe_demo" }))
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json({
             record: {
                 conformer_group: { conformer_group_ref: "cg_demo", label: "conformer_1", note: null, review: { status: "not_reviewed" } },
@@ -199,13 +202,8 @@ describe("Every record page routes its header through PageShell's identity slot"
                 </Routes>
             </MemoryRouter>,
         )
-        // The h1 now states what the record IS ("Conformer basin"), not
-        // the producer's own deposited label -- see
-        // `ConformerGroupPage.tsx`'s header comment. The fixture keeps
-        // `label: "conformer_1"` on purpose; this file only checks that
-        // whatever the header renders leads the content column.
-        await screen.findByRole("heading", { name: "Conformer basin" })
-        assertIdentityLeadsContentColumn(container, "Conformer basin")
+        await screen.findByRole("heading", { name: "Conformer Group 1" })
+        assertIdentityLeadsContentColumn(container, "Conformer Group 1")
     })
 
     it("SpeciesEntryPage: EntryIdentity leads the content column (previously rendered entirely outside PageShell)", async () => {

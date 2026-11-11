@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-// `?raw` = plain source text (see geometry-detail.css.test.ts for why).
+// `?raw` = plain source text (see geometry-viewer.css.test.ts for why).
 import css from "./geometry-measure.css?raw"
 
 /** Extracts the declaration block for a single, non-nested selector. */
@@ -15,7 +15,7 @@ function extractRule(source: string, selector: string): string {
  * header h3` was `600 .82rem mono` and `.measure-clear-button` was `.68rem`
  * (10.88px, under the 11px accessibility-pass floor) -- both one-off sizes
  * outside the 13-step scale. Mapped onto `--type-ui-font`, matching the
- * button vocabulary `geometry-detail.css`'s own viewer controls now use.
+ * button vocabulary `geometry-viewer.css`'s own viewer controls now use.
  */
 describe("measurements panel heading/button use --type-ui (SHOULD-FIX-10)", () => {
     it(".viewer-measurements-header h3 uses --type-ui-font, not a literal .82rem mono", () => {

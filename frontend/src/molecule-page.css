@@ -681,3 +681,14 @@
         font: var(--type-label-font);
     }
 }
+
+.shape-usedby a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: .16em;
+}
+
+.shape-usedby a:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}

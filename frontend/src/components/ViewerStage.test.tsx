@@ -129,7 +129,7 @@ describe("ViewerStage", () => {
     })
 
     it("imports the viewer's canvas sizing itself, so it works on pages that do not", () => {
-        expect(stageSource).toContain('import "../geometry-detail.css"')
+        expect(stageSource).toContain('import "../geometry-viewer.css"')
     })
 
     it("returns to the picture on Show picture", async () => {

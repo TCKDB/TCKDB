@@ -11,19 +11,7 @@ import { describe, expect, it } from "vitest"
 import css from "./geometry-detail.css?raw"
 
 /**
- * jsdom does not lay out or paint anything, so it cannot see either of the
- * two visual defects this file exists to guard: a stray accent bar reads as
- * "a big thick blue ruler line" only in a real, rendered viewport, and the
- * missing right/bottom canvas borders are a browser painting-order artifact
- * (see `.viewer-canvas`'s comment below). Both were verified with Playwright
- * against a real Chromium instance loading the live geometry detail page —
- * not by a computed-layout assertion here, which jsdom could pass having
- * checked nothing. What CAN be checked without a browser is the raw CSS
- * text itself: that the accent-bar declaration does not creep back onto
- * `.viewer-stage`, and that `.viewer-canvas` keeps using `outline` (which
- * `offsetWidth`/`offsetHeight` never include) rather than `border` (which
- * they do, and which is what caused the two hidden borders in the first
- * place — see that rule's comment for the full mechanism).
+ * The page's own rules. The viewer's rules, and their tests, are in `geometry-viewer.css` / `geometry-viewer.css.test.ts`.
  */
 
 /** Extracts the declaration block for a single, non-nested selector (not inside
@@ -36,136 +24,33 @@ function extractRule(source: string, selector: string): string {
     return match[1]
 }
 
-describe(".viewer-stage (defect 1: accent bar)", () => {
-    const rule = extractRule(css, ".viewer-stage")
-
-    it("does not declare a border-left accent bar", () => {
-        expect(rule).not.toMatch(/border-left/)
-    })
-
-    it("keeps a plain 1px border on all four sides", () => {
-        // `#dbe2ea` was tokenised to `var(--line)` in the theme pass (see
-        // `theme.css`) -- same colour, now theme-aware. Matching the token
-        // rather than the retired literal keeps this guard aligned with
-        // that rename instead of failing on a colour that never regressed.
-        expect(rule).toMatch(/border:\s*1px solid var\(--line\)/)
-    })
-})
-
-/**
- * Item 1 ("record-page residuals" re-review, post-review fix): the
- * measurements panel used to float to the right of and below the 3D
- * picture (see `geometry-measure.layout.css.test.ts`, which pins the
- * panel's own half of this fix). Half of that fix lives HERE: the
- * canvas and toolbar were centred inside `.viewer-stage` (`align-items:
- * center`) rather than left-aligned to the same edge the panel now
- * anchors to. Reverting `align-items` alone (leaving the panel's own
- * `margin: 0` fix in place) is a silent regression: MEASURED (CDP,
- * 1920px) the canvas snaps back to x=228 while the panel sits at
- * x=180 -- no longer sharing a left edge, the exact defect this item
- * exists to fix, just with the panel's OWN half of the bug gone. This
- * guards the other half.
- */
-describe(".viewer-stage (item 1: canvas/toolbar left-alignment)", () => {
-    it("uses align-items: flex-start, not center -- the canvas and panel must share one left edge", () => {
-        const rule = extractRule(css, ".viewer-stage")
-        expect(rule).toMatch(/align-items:\s*flex-start/)
-        expect(rule).not.toMatch(/align-items:\s*center/)
-    })
-})
-
-describe(".viewer-canvas (defect 2: only 2 of 4 borders visible)", () => {
-    const rule = extractRule(css, ".viewer-canvas")
-
-    it("does not declare a `border` (offsetWidth/offsetHeight would include it, " +
-        "which is what let 3Dmol's injected canvas overlay the right/bottom edges)", () => {
-        expect(rule).not.toMatch(/\bborder:/)
-        expect(rule).not.toMatch(/\bborder-\w+:/)
-    })
-
-    it("uses `outline` instead, which offsetWidth/offsetHeight never include", () => {
-        // See the note on the `.viewer-stage` border test above: `#dbe2ea`
-        // is now `var(--line)`.
-        expect(rule).toMatch(/outline:\s*1px solid var\(--line\)/)
-    })
-})
-
-/**
- * SHOULD-FIX-11 ("record-page residuals" re-review): `margin: 0 auto`
- * centred the viewer picture and its caption inside the page while every
- * other block on this page sits flush left -- MEASURED ~350px gutter at
- * 1920. Both are left-aligned now (`margin: 0`).
- */
-describe(".viewer-stage / .viewer-caption are left-aligned, not centred (SHOULD-FIX-11)", () => {
-    it(".viewer-stage no longer auto-centres", () => {
-        const rule = extractRule(css, ".viewer-stage")
-        expect(rule).toMatch(/margin:\s*0;/)
-        expect(rule).not.toMatch(/margin:\s*0 auto/)
-    })
-
-    it(".viewer-caption no longer auto-centres", () => {
-        const rule = extractRule(css, ".viewer-caption")
-        expect(rule).toMatch(/margin:\s*0;/)
-        expect(rule).not.toMatch(/margin:\s*0 auto/)
-    })
-})
-
-/**
- * SHOULD-FIX-10 ("record-page residuals" re-review): the viewer's own
- * button vocabulary (`.72rem uppercase mono`) was used nowhere else on
- * the site -- mapped onto `--type-ui-font`, the sans step every other
- * button/toggle in this app (the chart's own controls included) uses.
- */
-describe("viewer buttons/legends use --type-ui, not a one-off uppercase mono (SHOULD-FIX-10)", () => {
-    it(".viewer-controls button / .viewer-style-choice button use --type-ui-font", () => {
-        const rule = /\.viewer-controls button,\s*\.viewer-style-choice button \{([^}]*)\}/.exec(css)
-        expect(rule, "rule not found").not.toBeNull()
-        expect(rule![1]).toMatch(/font:\s*var\(--type-ui-font\)/)
-        expect(rule![1]).not.toMatch(/text-transform:\s*uppercase/)
-    })
-
-    for (const selector of [".viewer-style-choice legend", ".viewer-label-choice", ".coordinate-toggle button"]) {
-        it(`${selector} uses --type-ui-font, no uppercase transform, no .72rem literal`, () => {
-            const rule = extractRule(css, selector)
-            expect(rule).toMatch(/font:\s*var\(--type-ui-font\)/)
-            expect(rule).not.toMatch(/text-transform:\s*uppercase/)
-            expect(rule).not.toMatch(/\.72rem/)
-        })
-    }
-
-    it(".viewer-label-choice select uses --type-ui-font", () => {
-        const rule = extractRule(css, ".viewer-label-choice select")
+describe("coordinate toggle buttons use --type-ui, not a one-off uppercase mono", () => {
+    it(".coordinate-toggle button uses --type-ui-font, no uppercase transform, no .72rem literal", () => {
+        const rule = extractRule(css, ".coordinate-toggle button")
         expect(rule).toMatch(/font:\s*var\(--type-ui-font\)/)
+        expect(rule).not.toMatch(/text-transform:\s*uppercase/)
         expect(rule).not.toMatch(/\.72rem/)
     })
 })
 
-/**
- * record-summary-row PR, item 1: the Validation card used to share this
- * page's `.ledger-summary` grid as a 3rd column (`repeat(2, 1fr) 2fr`) --
- * it now renders below the tile row instead, in its own full-width
- * `.ledger-summary--single` section, so this page's tile row only ever
- * has the 2 `Metric` tiles left in it.
- */
-describe(".geometry-summary is a 2-tile row now, no trailing card column (record-summary-row PR, item 1)", () => {
-    it("declares grid-template-columns: repeat(2, 1fr), not repeat(2, 1fr) 2fr", () => {
-        const rule = extractRule(css, ".geometry-summary")
-        expect(rule).toMatch(/grid-template-columns:\s*repeat\(2,\s*1fr\)/)
-        expect(rule).not.toMatch(/2fr/)
+describe("the viewer's own rules are not declared here", () => {
+    it("declares no .viewer-* or .geometry-viewer rule", () => {
+        const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "")
+        expect(withoutComments).not.toMatch(/\.viewer-|\.geometry-viewer/)
     })
 })
 
-/**
- * `.validation-card` is retired (record-summary-row PR): this page's
- * evidence box now renders through the shared `.coverage-card` structure
- * every other record page uses -- see `evidenceChecklist.css.test.ts` for
- * the cross-file source test.
- */
-describe(".validation-card is retired from this file", () => {
-    it("declares no .validation-card rule of any kind", () => {
-        // Comments mentioning the retired class name in prose (explaining
-        // WHY it's gone) must not trip this -- only an actual declaration.
+describe(".validation-card and the metric tile row are retired from this file", () => {
+    it("declares no .validation-card or .geometry-summary rule", () => {
         const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "")
-        expect(withoutComments).not.toMatch(/\.validation-card/)
+        expect(withoutComments).not.toMatch(/\.validation-card|\.geometry-summary/)
+    })
+})
+
+describe("coordinate toggle buttons are tap-sized", () => {
+    it("declares min-width and min-height 2.75rem", () => {
+        const rule = extractRule(css, ".coordinate-toggle button")
+        expect(rule).toMatch(/min-width:\s*2\.75rem/)
+        expect(rule).toMatch(/min-height:\s*2\.75rem/)
     })
 })

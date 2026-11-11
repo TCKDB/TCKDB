@@ -149,7 +149,7 @@ describe("ConformerEvidenceLinkage", () => {
         openMechanics()
         expect(within(step("observations")).getByText("3")).toBeVisible()
         expect(within(step("observations")).getByText("deposited observations")).toBeVisible()
-        expect(within(step("observations")).getByText("each a separate sighting of this basin")).toBeVisible()
+        expect(within(step("observations")).getByText("each a separate sighting of this shape")).toBeVisible()
         // Not present in this step under a swap: the OTHER two steps' own counts.
         expect(within(step("observations")).queryByText("7")).not.toBeInTheDocument()
         expect(within(step("observations")).queryByText("2")).not.toBeInTheDocument()

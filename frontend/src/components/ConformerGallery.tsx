@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import "../molecule-page.css"
 import type { ListMeta } from "../api/listEnvelope"
-import { loadConformerUsage, type ConformerUsage, type ConformerUsageGroup } from "../api/conformerUsageApi"
+import { loadConformerUsage } from "../api/conformerUsageApi"
 import { loadRelativeEnergies, relativeEnergyKey, type RelativeEnergies } from "../api/relativeEnergyApi"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel, sortConformersForDisplay } from "../domain/conformerEvidence"
@@ -21,6 +21,7 @@ import { ListPager } from "./ListPager"
 import { OrderNote } from "./OrderNote"
 import { SectionHeading } from "./PageSections"
 import { RefsDisclosure } from "./RefsDisclosure"
+import { ConformerUsedBy } from "./ConformerUsedBy"
 import { ShapeCardHead } from "./ShapePicture"
 import { ValueLink } from "./ValueLink"
 
@@ -87,55 +88,6 @@ function energyFor(energies: Energies, groupRef: string): CardEnergy {
     if (energies.state.status === "ready") return cardEnergy(energies.state.data, groupRef, energies.programs)
     if (energies.state.status === "failed" || energies.state.status === "rate-limited") return { kind: "unread" }
     return { kind: "pending" }
-}
-
-function UsedBy({ usage, group, entryRef, groupRef, labelOf }: {
-    usage: LoadedState<ConformerUsage>
-    group: ConformerUsageGroup | undefined
-    entryRef: string
-    groupRef: string
-    labelOf: (ref: string) => string
-}) {
-    if (usage.status !== "ready") return null
-    if (!group || (group.thermo.length === 0 && group.kinetics.length === 0 && !group.merged_into_conformer_group_ref)) {
-        return <p className="shape-usedby"><span className="shape-usedby-key">Used by</span> No thermochemistry or rate coefficient names this shape.</p>
-    }
-    const merged = group.merged_into_conformer_group_ref
-    return (
-        <div className="shape-usedby">
-            <span className="shape-usedby-key">Used by</span>
-            {group.thermo.length > 0 && (
-                <p>
-                    Thermochemistry:{" "}
-                    {group.thermo.map((record, index) => (
-                        <span key={record.thermo_ref}>
-                            {index > 0 && ", "}
-                            <Link to={`/species-entries/${entryRef}/thermo?conformer=${encodeURIComponent(groupRef)}#thermo-heading-${record.thermo_ref}`}>
-                                <code className="t-preserve-case">{record.thermo_ref}</code>
-                            </Link>
-                        </span>
-                    ))}
-                </p>
-            )}
-            {group.kinetics.length > 0 && (
-                <p>
-                    Rate coefficients:{" "}
-                    {group.kinetics.map((record, index) => (
-                        <span key={`${record.kinetics_ref}-${record.role ?? ""}-${index}`}>
-                            {index > 0 && ", "}
-                            <Link to={`/reaction-entries/${record.reaction_entry_ref}#kinetics-heading`}>
-                                <code className="t-preserve-case">{record.kinetics_ref}</code>
-                            </Link>
-                            {record.role && ` (${record.role})`}
-                        </span>
-                    ))}
-                </p>
-            )}
-            {merged && (
-                <p>This shape was merged into <Link to={`/conformer-groups/${merged}`}>{labelOf(merged)}</Link>. Records that name it are listed here and were not moved.</p>
-            )}
-        </div>
-    )
 }
 
 /**
@@ -320,7 +272,7 @@ export function ConformerGallery({
                                         onSelect={() => select(ref)}
                                     />
                                     <p className="shape-card-energy"><span className="shape-card-key">Relative energy</span> <EnergyText energy={energyFor(state, ref)} /></p>
-                                    <UsedBy usage={usage} group={usageData?.groups.get(ref)} entryRef={entryRef} groupRef={ref} labelOf={labelOf} />
+                                    <ConformerUsedBy usage={usage} group={usageData?.groups.get(ref)} entryRef={entryRef} groupRef={ref} labelOf={labelOf} />
                                     <DepositorNote>{typed}</DepositorNote>
                                     <RefsDisclosure inset refs={[{ label: "Conformer group", value: ref, to: `/conformer-groups/${ref}` }]} />
                                 </li>
