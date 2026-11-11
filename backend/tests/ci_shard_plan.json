@@ -787,6 +787,7 @@
    "tests/api/scientific/test_api_phase_c_refs.py": 2,
    "tests/api/scientific/test_api_phase_d_internal_ids.py": 2,
    "tests/api/scientific/test_api_reaction_atom_map.py": 1,
+   "tests/api/scientific/test_api_reaction_energy_profile.py": 2,
    "tests/api/scientific/test_api_reaction_full.py": 2,
    "tests/api/scientific/test_api_reaction_full_trust.py": 1,
    "tests/api/scientific/test_api_reaction_kinetics.py": 1,

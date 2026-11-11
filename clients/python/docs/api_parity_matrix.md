@@ -12,9 +12,9 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 | Classification | Operations |
 |---|---|
 | typed | 127 |
-| raw_only | 107 |
+| raw_only | 108 |
 | not_applicable | 47 |
-| **total** | **281** |
+| **total** | **282** |
 
 ## Typed coverage
 
@@ -273,6 +273,12 @@ Deliberately reachable only through the generic request helpers. Each group stat
 | Operation | raw HTTP | typed client | iterator | example | contract test |
 |---|---|---|---|---|---|
 | `GET /api/v1/scientific/networks/{network_ref_or_id}` | yes | — | — | — | — |
+
+> Electronic-energy profiles of a reaction entry, one level of theory and one program each; a page-level read with no typed wrapper yet. Reachable via get_json().
+
+| Operation | raw HTTP | typed client | iterator | example | contract test |
+|---|---|---|---|---|---|
+| `GET /api/v1/scientific/reaction-entries/{reaction_entry_ref}/energy-profile` | yes | — | — | — | — |
 
 > Dataset-release surface is still stabilising (DR-0026); binding it typed now would lock in a shape that is expected to change. Reachable via get_json().
 

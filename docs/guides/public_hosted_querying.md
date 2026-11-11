@@ -39,6 +39,7 @@ Companion documents:
 | species-entry thermo | `GET /scientific/species-entries/{species_entry_handle}/thermo` |
 | species-entry conformer usage | `GET /scientific/species-entries/{species_entry_ref}/conformer-usage` |
 | reaction-entry kinetics | `GET /scientific/reaction-entries/{reaction_entry_handle}/kinetics` |
+| reaction-entry energy profile | `GET /scientific/reaction-entries/{reaction_entry_ref}/energy-profile` |
 | reaction-entry full provenance | `GET /scientific/reaction-entries/{reaction_entry_handle}/full` |
 
 All paths are relative to the deployment's `/api/v1` base URL.
