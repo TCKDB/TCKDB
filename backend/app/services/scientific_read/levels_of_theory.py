@@ -7,7 +7,7 @@ sat two levels down, one calculation at a time, behind ``include=calculations``.
 Why a map of lists rather than one field
 ----------------------------------------
 A transition-state entry can carry **two** distinct levels of theory. That is not an inconsistent
-record — they are the standard composite workflow: optimise and take
+record — it is the standard composite workflow: optimise and take
 frequencies at a cheap functional, then one high-level single point at that
 geometry. So "the level of theory of this record" does not exist as a single
 value for such an entry, and any field collapsing it to one

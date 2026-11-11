@@ -484,7 +484,7 @@ def _merge_inline(session: Session, kept_id: int, absorbed_ids: Sequence[int], *
     """Merge younger groups into the oldest one the upload linked, when no approved record is involved.
 
     Every observation, thermo target, statmech basin declaration and ensemble member, and selection of an absorbed
-    group goes to the kept group (each of those would, by D5, follow an observation that now lives there). The
+    group goes to the kept group (each of those follows an observation that now lives there). The
     emptied row is kept, with no representative and ``merged_into_conformer_group_id`` naming the survivor, so a
     cited group ref still resolves. Reviews of both groups reset: neither is the group that was reviewed.
     """

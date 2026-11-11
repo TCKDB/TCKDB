@@ -354,8 +354,9 @@ def get_reaction_kinetics(
 ) -> ScientificReactionKineticsResponse:
     """Return kinetics records for a reaction entry, sorted by review status, then newest.
 
-    ``detail`` is True when a served detail embeds these records (``/reaction-entries/{id}/full``): under ``curated`` they
-    are then shown with their badge unless rejected or deprecated, and so are the transition-state entries they name. The list route itself
+    ``detail`` is True when a served detail embeds these records (``/reaction-entries/{id}/full``): under ``curated``
+    they are then shown with their badge unless rejected or deprecated, and
+    so are the transition-state entries they name. The list route itself
     (``detail=False``) keeps the approved record floor.
 
     Order: review_rank ASC, created_at DESC, id DESC (the order the exports
@@ -364,7 +365,7 @@ def get_reaction_kinetics(
     ``coverage_temperature_max_k`` do not filter, they only fill ``temperature_coverage``.
     Every matching record is returned; the read never picks one.
 
-    Filters apply shallow per D7. Provenance keys are always present, with
+    Filters apply shallow. Provenance keys are always present, with
     null TS-chain fields for non-TS-backed records. TS-related
     evidence checklist items are ``False`` for non-TS-backed records but do
     not gate visibility or order.

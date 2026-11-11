@@ -1,11 +1,11 @@
 """Neutral stoichiometric facts shared by the advisory consistency checks.
 
-Extracted from D3 (``consistency/kinetics.py``) so D5 and D6 count
+Shared with ``consistency/kinetics.py`` so the other checks count
 participants, compositions and balance the same way. This module states
 facts only -- slot counts, compositions, element and charge balance,
 whether a species carries isotope labels -- and never decides what a fact
 means for a check. Each check maps facts to its own reason tokens at its
-call site (D3 keeps ``isotope_specific_equilibrium_unsupported``, for
+call site (the kinetics check keeps ``isotope_specific_equilibrium_unsupported``, for
 example); the one exception is :func:`species_scope_reason`, the single
 place the per-species scope of the thermochemical checks is declared, so
 widening scope to ions or isotopologues later is a change here only.

@@ -431,7 +431,8 @@ def run_and_persist_geometry_validation(
     # this is best-effort by policy and must never abort the upload. Catching
     # the chemistry call alone would not deliver that, because the row is added
     # without a flush — so its INSERT would be emitted by whatever flushes next, in
-    # practice the route's COMMIT, outside every guard here. The failure shape is a verdict *about* a calculation taking the calculation
+    # practice the route's COMMIT, outside every guard here. The failure
+    # shape is a verdict *about* a calculation taking the calculation
     # with it. ``isolated_best_effort`` flushes inside a savepoint so an
     # unstorable ``atom_mapping``/``validation_reason`` fails where it can be
     # absorbed.

@@ -23,10 +23,10 @@ distributable package from the workflow it protects — so the two can drift
 without anything going red, and some schema guards are conditional on a
 branch. ``NetworkPDepUploadRequest`` narrows a **species** statmech's
 source and torsion keys to that species's own calculations and does not do
-the same for a **transition state**'s, so a PDep TS statmech naming a key
-nothing declared would reach ``_persist_statmech_block`` and raise
-``KeyError`` out of the route. ``tests/api/test_api_pdep_ts_statmech_
-undeclared_key.py`` provokes it on the wire.
+the same for a **transition state**'s, so the workflow's resolver is what
+refuses a PDep TS statmech naming a key nothing declared, with a 422
+naming the key. ``tests/api/test_api_pdep_ts_statmech_undeclared_key.py``
+asserts it on the wire.
 
 Keeping the schema checks is deliberate. They refuse one layer earlier,
 they run in a client that never talks to a server, and a duplicated
@@ -46,17 +46,14 @@ and geometry keys are resolved the same way:
   are guarded by the schema only inside the ``kind == 'computed'`` branch of
   ``validate_mechanistic_channel_evidence``, so a ``reported`` solve
   (k(T,P) transcribed from a paper, holding none of the master-equation
-  inputs) reaches the workflow's subscripts unchecked: an undeclared key
-  raises ``KeyError``, which becomes a 500.
+  inputs) is not guarded by the schema, so the workflow's resolvers refuse
+  an undeclared key, each with a coded 422 naming the key.
 * ``NetworkSpeciesIn`` narrows a species calculation's ``geometry_key``
   to that species's own conformer geometries; ``TransitionStateIn`` has
   no such validator, and ``validate_key_references`` checks TS
   calculations against the *global* geometry namespace. So a transition
   state's calculation could legally name a later transition state's
   geometry, which the workflow has not resolved yet.
-
-A guard that runs for one member of an enum and not the other, in a
-workflow that runs for both, is the shape of each of these gaps.
 
 What the refusal carries
 ------------------------

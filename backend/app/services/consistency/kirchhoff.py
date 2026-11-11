@@ -1,4 +1,4 @@
-"""D5: Kirchhoff consistency of supplied enthalpies -- advisory, residuals only.
+"""Kirchhoff consistency of supplied enthalpies -- advisory, residuals only.
 
 Under ``enthalpy_reference_kind = formation_298k`` a record's enthalpy at T is
 

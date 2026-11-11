@@ -1048,8 +1048,8 @@ def _check_thermo_uncertainty_present(thermo: Thermo) -> EvidenceOutcome:
 
 # Kinds whose parameters are the output of a program's own build-level
 # numerics (integration grid, SCF thresholds, basis-set definition) and are
-# therefore release-specific. ``atom_hf`` / ``atom_thermal`` / ``soc`` are physical or reference
-# constants -- not a program's output -- so the software axis does not
+# therefore release-specific. ``atom_hf`` / ``atom_thermal`` / ``soc`` are
+# physical or reference constants -- not a program's output -- so the software axis does not
 # apply to them, and neither does ``isodesmic`` / ``other``, which this
 # rubric does not attempt to classify.
 _SOFTWARE_SCOPED_CORRECTION_SCHEME_KINDS: frozenset[EnergyCorrectionSchemeKind] = (
@@ -3165,7 +3165,9 @@ def _check_ts_review_not_rejected_or_deprecated_if_applicable(
 
 
 # Contract of the baseline version. A transition state's representative frequency result is
-# not asked to have exactly one imaginary mode, and that count is not re-derived here: the required check is ``reaction_coordinate_designated_for_ts``, which cites the persisted
+# not asked to have exactly one imaginary mode, and that count is not
+# re-derived here: the required check is
+# ``reaction_coordinate_designated_for_ts``, which cites the persisted
 # designation instead of recounting, beside the advisory check that surfaces the recorded structural flag. Two zero-weight
 # warnings report on the frequency result, ``no_frequency_result_lacks_an_imaginary_mode`` and
 # ``no_frequency_result_has_undesignated_imaginary_modes``. The scoped structure assessment is brought into the

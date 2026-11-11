@@ -311,7 +311,7 @@ def search_calculations(
 
     # Apply the review-status visibility gate. Default trust posture excludes
     # rejected/deprecated unless explicitly opted in; min_review_status
-    # narrows further (D5/D7).
+    # narrows further.
     visible = visible_statuses(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,

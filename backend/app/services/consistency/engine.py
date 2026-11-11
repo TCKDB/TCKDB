@@ -306,7 +306,7 @@ T298_K = _T298_K
 def enthalpy_and_entropy(poly, temperature):
     """Return (H in kJ/mol, S in J/mol/K) from ONE Cantera thermo object.
 
-    For a check that needs both quantities from the same representation
+    For a check that needs both quantities from the same representation:
     reading them from one object means they can never come from
     different NASA7 branches or NASA9 intervals. Units as :func:`evaluate`.
     """
