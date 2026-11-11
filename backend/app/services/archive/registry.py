@@ -171,6 +171,9 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "species",
         "species_entry",
         "species_entry_review",
+        # Curated names of species: identity-side curation keyed to ``species``. A restore that dropped them would
+        # leave every molecule findable only by structure.
+        "species_name",
         "statmech",
         "statmech_electronic_level",
         "statmech_model_declaration",
