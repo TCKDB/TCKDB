@@ -149,12 +149,8 @@ describe("GeometryDetailPage identity (#321)", () => {
         expect(screen.queryByText("SMILES")).not.toBeInTheDocument()
         expect(screen.queryByText("InChIKey")).not.toBeInTheDocument()
         expect(screen.queryByText("Reaction SMILES (unmapped)")).not.toBeInTheDocument()
-        // This page does not opt out of `RecordIdentityHeader`'s
-        // `explainTransitionStateIdentity` default (only
-        // `TransitionStateEntryPage`, which has its own Reaction-section
-        // lede, does) -- it has no Reaction section of its own for a
-        // TS-owned geometry, so it must keep the one explanation.
-        expect(screen.getByText(/This SMILES is the depositor's label, not an identity key/)).toBeVisible()
+        // This page keeps the header's default, so a TS-owned geometry gets the identified-by-reaction note.
+        expect(screen.getByText(/A transition state has no SMILES identity; it is identified by the reaction it connects/)).toBeVisible()
     })
 
     it("renders no submission row when the key is absent (anonymous caller)", async () => {
@@ -304,6 +300,15 @@ describe("GeometryDetailPage", () => {
         const details = screen.getByRole("heading", { name: "Record details" }).closest("section") as HTMLElement
         expect(within(details).getByText(/Validation lives on the producing or consuming calculation/)).toBeVisible()
         expect(within(details).queryAllByRole("link")).toHaveLength(0)
+    })
+
+    it("says nothing about where validation lives when a geometry has no producers or consumers", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({
+            provenance: { produced_by: [], used_as_input_by: [] },
+        }))))
+        page()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        expect(screen.queryByText(/Validation lives on/)).not.toBeInTheDocument()
     })
 
     it("renders every atom row in the coordinate table, in payload order", async () => {

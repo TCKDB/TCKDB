@@ -102,14 +102,14 @@ describe("RecordIdentityHeader", () => {
         }
     })
 
-    it("renders the depositor-label SMILES note for a transition-state identity by default", () => {
+    it("renders the identified-by-reaction note for a transition-state identity by default", () => {
         renderHeader({ identity: tsIdentity })
-        expect(screen.getByText(/This SMILES is the depositor's label, not an identity key/)).toBeVisible()
+        expect(screen.getByText(/A transition state has no SMILES identity; it is identified by the reaction it connects/)).toBeVisible()
     })
 
-    it("omits the 'no canonical SMILES' note when explainTransitionStateIdentity=false -- the caller's own Reaction section covers it instead", () => {
+    it("omits the identified-by-reaction note when explainTransitionStateIdentity=false", () => {
         renderHeader({ identity: tsIdentity, explainTransitionStateIdentity: false })
-        expect(screen.queryByText(/not an identity key/i)).not.toBeInTheDocument()
+        expect(screen.queryByText(/identified by the reaction it connects/i)).not.toBeInTheDocument()
     })
 
     it("renders no submission row at all when the key is absent (anonymous caller)", () => {

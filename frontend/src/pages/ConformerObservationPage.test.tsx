@@ -212,7 +212,7 @@ describe("ConformerObservationPage", () => {
         expect(within(figure).getByText(/Final geometry of this observation\./)).toBeVisible()
     })
 
-    it("shows each energy with its level, program and review beneath it, and the calculations that found the geometry", async () => {
+    it("shows a source line with level, program and review under each energy, and the calculations that found the geometry", async () => {
         serve()
         page()
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
@@ -223,6 +223,46 @@ describe("ConformerObservationPage", () => {
         expect(energy.closest("li")).toHaveTextContent(/Source calc_sp · single-point · at ccsd\(t\)\/cc-pvtz · Molpro 2024 · Review of this record: approved/)
         expect(within(section).getAllByText("b3lyp/def2tzvp").length).toBeGreaterThan(0)
         expect(within(section).getByRole("link", { name: "calc_freq" })).toHaveAttribute("href", "/calculations/calc_freq")
+    })
+
+    it("shows only the source link under an optimisation energy whose calculation is under Found by, which carries its level and review", async () => {
+        const OPT_RECORD = {
+            calculation: { calculation_ref: "calc_opt", calculation_type: "opt", review: { status: "reviewed" } },
+            energy: { energy_hartree: -40.2, energy_kind: "electronic" },
+            conformer: { conformer_observation_ref: "co_one", conformer_group_ref: "cg_demo" },
+            level_of_theory: { method: "b3lyp", basis: "def2tzvp" },
+            software_release: { software: "Gaussian" },
+        }
+        serve(mockRecord(), { sp: [SP_RECORD], opt: [OPT_RECORD] })
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        const section = screen.getByRole("heading", { name: "Calculations and energies" }).closest("section") as HTMLElement
+        const optEnergy = await within(section).findByText("−40.200000")
+        expect(optEnergy.closest("li")).toHaveTextContent(/^−40\.200000 hartree \(final energy of the optimisation\)\s*Source calc_opt$/)
+        const foundBy = within(section).getByText("Found by").closest("div") as HTMLElement
+        const foundRow = within(foundBy).getByRole("link", { name: "calc_opt" }).closest("li") as HTMLElement
+        expect(foundRow).toHaveTextContent(/at b3lyp\/def2tzvp/)
+        expect(within(foundRow).getByText("reviewed")).toBeVisible()
+        // The single point is not under Found by, so its source line stays whole.
+        expect(within(section).getByText("−40.123457").closest("li")).toHaveTextContent(/Source calc_sp · single-point · at ccsd\(t\)\/cc-pvtz · Molpro 2024 · Review of this record: approved/)
+    })
+
+    it("keeps an energy's level when its Found by row has none of its own", async () => {
+        const OPT_RECORD = {
+            calculation: { calculation_ref: "calc_opt", calculation_type: "opt", review: { status: "reviewed" } },
+            energy: { energy_hartree: -40.2, energy_kind: "electronic" },
+            conformer: { conformer_observation_ref: "co_one", conformer_group_ref: "cg_demo" },
+            level_of_theory: { method: "b3lyp", basis: "def2tzvp" },
+            software_release: { software: "Gaussian" },
+        }
+        const base = mockRecord() as { calculations: Array<Record<string, unknown>> }
+        const calculations = base.calculations.map((c) => (c.calculation_ref === "calc_opt" ? { ...c, level_of_theory: undefined } : c))
+        serve(mockRecord({ calculations }), { sp: [SP_RECORD], opt: [OPT_RECORD] })
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        const section = screen.getByRole("heading", { name: "Calculations and energies" }).closest("section") as HTMLElement
+        const optEnergy = await within(section).findByText("−40.200000")
+        expect(optEnergy.closest("li")).toHaveTextContent(/Source calc_opt · at b3lyp\/def2tzvp$/)
     })
 
     it("lists no energy that the read attributes to another observation", async () => {

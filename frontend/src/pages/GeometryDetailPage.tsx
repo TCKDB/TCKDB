@@ -217,9 +217,9 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                         <div><dt>Deposited</dt><dd>{isoDate(geometry.created_at)}</dd></div>
                         <div><dt>Validation</dt><dd>not recorded for this geometry</dd></div>
                     </dl>
-                    <p className="note">
-                        Validation lives on the producing or consuming calculation.
-                    </p>
+                    {(producedBy.length > 0 || usedAsInputBy.length > 0) && (
+                        <p className="note">Validation lives on the producing or consuming calculation.</p>
+                    )}
                 </section>
             </PageShell>
         </section>

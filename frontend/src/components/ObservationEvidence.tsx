@@ -38,8 +38,9 @@ export function EnergyNotices({ singlePoints, optimisations }: { singlePoints: S
 
 /**
  * One observation's evidence: the calculations that found its geometry, and every energy computed on it. Each energy
- * links to its calculation and says its level, program and review beneath it. Nothing is picked, averaged or compared
- * across observations.
+ * links to its calculation. Beneath it, a source line gives the calculation's type, level, program and review, except
+ * for a part that the same calculation's "Found by" row already shows. Nothing is picked, averaged or compared across
+ * observations.
  */
 export function ObservationEvidence({ row, singlePoints, optimisations }: {
     row: ShapeRow
@@ -71,8 +72,10 @@ export function ObservationEvidence({ row, singlePoints, optimisations }: {
                         <ul className="shape-cell-list">
                             {row.energies.map((energy) => {
                                 const state = energy.kind === "sp" ? singlePoints : optimisations
-                                // A calculation listed under "Found by" already shows its level, program and review there.
-                                const listed = row.foundBy.some((calculation) => calculation.ref === energy.ref)
+                                // A part of the source line that the same calculation's "Found by" row already shows is left out.
+                                const found = row.foundBy.find((calculation) => calculation.ref === energy.ref)
+                                const level = !found?.levelLabel && energy.levelLabel ? [{ role: "at", label: energy.levelLabel }] : []
+                                const program = !found?.program && energy.program ? [energy.program] : []
                                 return (
                                     <li key={energy.ref} className="observation-energy">
                                         {energy.hartree === null
@@ -82,10 +85,10 @@ export function ObservationEvidence({ row, singlePoints, optimisations }: {
                                         <br />
                                         <ValueSource
                                             source={{ recordType: "calculation", ref: energy.ref }}
-                                            did={listed ? undefined : energy.type}
-                                            levels={!listed && energy.levelLabel ? [{ role: "at", label: energy.levelLabel }] : []}
-                                            programs={!listed && energy.program ? [energy.program] : []}
-                                            review={listed ? undefined : energy.review}
+                                            did={found ? undefined : energy.type}
+                                            levels={level}
+                                            programs={program}
+                                            review={found?.review ? undefined : energy.review}
                                         />
                                     </li>
                                 )
