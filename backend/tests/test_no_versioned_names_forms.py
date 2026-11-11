@@ -195,6 +195,8 @@ def test_svg_path_data_in_the_frontend_is_not_a_versioned_name(tmp_path: Path) -
         "const C = `m0,0V2.5`;\n"
         "const real = 'profile_v2';\n"
         "const lookalike = 'V8.5';\n"
+        "const mass = 'mass-v2';\n"
+        "const mz = 'mz-v3';\n"
     )
     found = sorted(f.token for f in scan_frontend(root=tmp_path, repo_root=tmp_path))
-    assert found == ["profile_v2"]
+    assert found == ["mass-v2", "mz-v3", "profile_v2"]

@@ -201,7 +201,7 @@ inside the API container with the API's own `DB_*` settings, so it needs no API 
 
    ```bash
    python scripts/names/fetch_pubchem_names.py --from-api https://<host> --save-species species.json --out names_review.json
-   # or, from a species list you already have (species_ref, inchi_key per item):
+   # or, from a species list you already have (species_ref, inchi_key and an integer charge per item; smiles is optional):
    python scripts/names/fetch_pubchem_names.py --species species.json --out names_review.json
    ```
 
@@ -223,7 +223,7 @@ inside the API container with the API's own `DB_*` settings, so it needs no API 
 
 4. **Import.** The same command with `--commit`. A name is written only when the species ref exists, is not merged, still has
    the row's InChIKey, and that InChIKey belongs to no other live species. Names are stored with source kind `offline_import`
-   the one shared `external_source` row `PubChem Compound` / `rolling`, the PubChem CID (`external_record_key`) and the row's
+   and the one shared `external_source` row `PubChem Compound` / `rolling`, the PubChem CID (`external_record_key`) and the row's
    `retrieved_at`; a row without a usable `retrieved_at` is skipped as `bad_row`. A name the species already has (live, or retired; curated or imported)
    is skipped, so a re-run writes nothing new and a retired name is never restored. Skip reasons: `bad_row`,
    `species_not_found`, `inchikey_mismatch`, `inchikey_shared_by_species`, `species_merged`, `already_present`,

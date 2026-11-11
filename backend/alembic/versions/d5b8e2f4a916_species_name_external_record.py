@@ -39,6 +39,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Dropping the columns would erase the source record of every imported name.
+    imported = op.get_bind().scalar(sa.text("SELECT count(*) FROM species_name WHERE source_kind = 'offline_import'"))
+    if imported:
+        raise RuntimeError(
+            f"cannot downgrade d5b8e2f4a916: {imported} offline_import row(s) in species_name would lose their "
+            "external_record_key and retrieved_at; retire or delete them first"
+        )
     op.drop_constraint(op.f("ck_species_name_curated_has_no_record"), "species_name", type_="check")
     op.drop_constraint(op.f("ck_species_name_offline_import_has_source"), "species_name", type_="check")
     op.drop_column("species_name", "retrieved_at")

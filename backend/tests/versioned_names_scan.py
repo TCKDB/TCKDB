@@ -303,7 +303,7 @@ _TS_TOKEN = re.compile(
     re.DOTALL,
 )
 #: SVG path data (``M2 11.5V8.5h2.6v3Z``): drawing commands and numbers, never a name.
-_SVG_PATH = re.compile(r"^[Mm][MmZzLlHhVvCcSsQqTtAa0-9.,\s-]*$")
+_SVG_PATH = re.compile(r"^[Mm]\s*-?\.?\d[MmZzLlHhVvCcSsQqTtAa0-9.,\s-]*$")
 _TS_TEST = re.compile(r"(?:\.test\.|\.spec\.)|(?:^|/)(?:__tests__|__mocks__|test|tests)/")
 
 

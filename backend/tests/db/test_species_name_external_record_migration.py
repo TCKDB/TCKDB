@@ -65,6 +65,43 @@ def test_downgrade_then_upgrade_round_trips(db_engine, monkeypatch):
         command.upgrade(config, "head")
 
 
+def test_downgrade_is_refused_while_imported_names_exist(db_engine, monkeypatch):
+    config = _configure(db_engine, monkeypatch)
+    engine = create_engine(db_engine.url.render_as_string(hide_password=False))
+    try:
+        with engine.begin() as connection:
+            species_id = connection.scalar(
+                text(
+                    "INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind, public_ref) "
+                    "VALUES ('molecule', 'C', 'AAAAAAAAAAAAAA-AAAAAAAAAC-A', 0, 1, 'achiral', 'spc_snmdowngrade') RETURNING id"
+                )
+            )
+            source_id = connection.scalar(
+                text(
+                    "INSERT INTO external_source (source_name, source_release) VALUES ('PubChem Compound', 'dg') RETURNING id"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO species_name (species_id, name, name_key, kind, source_kind, external_source_id, "
+                    "external_record_key, retrieved_at, public_ref) VALUES (:s, 'n', 'n', 'common', 'offline_import', "
+                    ":src, '297', now(), 'snm_dg')"
+                ),
+                {"s": species_id, "src": source_id},
+            )
+        with pytest.raises(RuntimeError, match=r"1 offline_import row"):
+            command.downgrade(config, _MIGRATION.parent)
+        with engine.connect() as connection:
+            assert {"external_record_key", "retrieved_at"} <= _columns(connection)
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM species_name WHERE public_ref = 'snm_dg'"))
+            connection.execute(text("DELETE FROM species WHERE public_ref = 'spc_snmdowngrade'"))
+            connection.execute(text("DELETE FROM external_source WHERE source_release = 'dg'"))
+        engine.dispose()
+        command.upgrade(config, "head")
+
+
 def test_the_checks_tie_the_source_columns_to_the_source_kind(db_session):
     species_id = db_session.scalar(
         text(

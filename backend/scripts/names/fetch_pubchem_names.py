@@ -27,7 +27,7 @@ from app.importers.pubchem_names.species_list import fetch_species_list  # noqa:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fetch_pubchem_names", description=__doc__.split("\n\n")[0])
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--species", type=Path, help="JSON species list (species_ref, inchi_key, ...)")
+    source.add_argument("--species", type=Path, help="JSON species list (species_ref, inchi_key, integer charge; smiles optional)")
     source.add_argument("--from-api", metavar="BASE_URL", help="read the species list from this TCKDB instance")
     parser.add_argument("--save-species", type=Path, help="with --from-api: also write the species list here")
     parser.add_argument("--out", type=Path, required=True, help="the review file to write")
