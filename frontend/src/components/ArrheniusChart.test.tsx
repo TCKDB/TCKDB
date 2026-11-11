@@ -280,9 +280,9 @@ describe("ArrheniusChart -- the plotted curve lands on the mapping a reader woul
     })
 })
 
-// Review finding (blocking #2): every OTHER fixture in this file shares
-// bimolecularRecord()'s 300-3000 K range, so nothing here previously
-// exercised "one record narrower than the panel it's drawn in". This pairs
+// Every OTHER fixture in this file shares
+// bimolecularRecord()'s 300-3000 K range, so this test covers
+// "one record narrower than the panel it's drawn in". This pairs
 // a narrow (1000-2000 K) record with the wide (300-3000 K) one in the SAME
 // panel and checks the narrow curve's own rendered pixel extent stays
 // strictly inside the wide curve's -- a purely relational, DOM-only check,
@@ -341,14 +341,10 @@ describe("ArrheniusChart -- the SVG is pinned to a fixed pixel size (defect (b) 
 // component that hardcoded "cm³ mol⁻¹ s⁻¹" in either place would have
 // stayed green.
 //
-// Round 3 (owner's report -- "when i do change units, it does change y
-// axis but it stil shows log10k there on the side"): the y-axis title is
-// now the primary statement of the plotted unit (`log₁₀ [k / <unit>]`),
-// replacing the old separate `.arrhenius-chart-panel-heading` caption
-// (retired -- restating the same unit a second time was the owner's other
-// complaint this round, "display units is confusing... can also be read
-// for x units"). These assertions read the axis title directly rather
-// than the retired heading class.
+// The y-axis title is the primary statement of the plotted unit
+// (`log₁₀ [k / <unit>]`); there is no separate
+// `.arrhenius-chart-panel-heading` caption. These assertions read the axis
+// title directly.
 describe("ArrheniusChart -- the y-axis title and table caption/header are pinned to the record's OWN A_units, not hardcoded", () => {
     it("a per_s record's y-axis title, table caption, and table header all read s⁻¹, not cm³ mol⁻¹ s⁻¹", () => {
         render(<ArrheniusChart kinetics={[unimolecularRecord()]} />)
@@ -369,9 +365,8 @@ describe("ArrheniusChart -- the y-axis title and table caption/header are pinned
         expect(table.querySelector("thead th:nth-child(2)")?.textContent).toBe("k (cm³ mol⁻¹ s⁻¹)")
     })
 
-    // The old standalone unit caption above the legend is gone -- once the
-    // axis itself names the unit, that heading stated the same fact twice
-    // (owner: "this page stating the same thing twice").
+    // There is no separate standalone unit caption above the legend: the
+    // axis itself names the unit.
     it("renders no separate .arrhenius-chart-panel-heading caption any more", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
         expect(document.querySelector(".arrhenius-chart-panel-heading")).toBeNull()
@@ -503,9 +498,8 @@ describe("ArrheniusChart -- records sharing an order family (not just an A_units
 })
 
 describe("ArrheniusChart -- the per-panel unit selector", () => {
-    // Owner's report: hiding the control entirely (the OLD behaviour) is
-    // exactly what left the majority of live reaction entries -- 14 of 17
-    // deposit in `per_s`, the order family with exactly one member --
+    // Hiding the control entirely would leave the majority of
+    // reaction entries -- `per_s`, the only family with exactly one member --
     // looking like there was no y-axis control at all. This panel's own
     // control must still be found, DISABLED, showing the one unit it's
     // stuck at, with a plain-language reason next to it.
@@ -526,7 +520,7 @@ describe("ArrheniusChart -- the per-panel unit selector", () => {
     // MUTATION TARGET (d) -- "hide the y control when there is no
     // alternative": item (d) in the mutation table checks the control's
     // presence; this checks it looks DELIBERATE rather than broken --
-    // owner's round-3 report on visual polish. The disabled chip carries
+    // visual polish. The disabled chip carries
     // its own modifier class (a quieter fill/border, never a dashed or
     // faded-out look) while staying the same shape/position an enabled
     // control has.
@@ -683,18 +677,11 @@ describe("ArrheniusChart -- the x-axis mode control (temperature vs 1000/T)", ()
     })
 })
 
-// Owner's report, round 1: "X-AXIS" sat at the far left of the chart block
-// while "DISPLAY UNITS" floated to the far right of the same row, reading
-// as two unrelated controls rather than a pair. Round 2, on the fix for
-// round 1: it rebuilt the pairing as a titled "Chart controls" box
-// followed by a SECOND boxed section with a full-sentence "this panel
-// only" caption underneath -- on THIS page there is exactly one panel, so
-// neither caption disambiguated anything, and the owner pasted the actual
-// rendered text back ("this looks so shit"). This describe block covers
-// the compact rebuild: a single panel collapses X+Y into ONE row with no
-// captions at all; two or more panels keep X-axis as its own single
-// (still page-wide, never duplicated) row, with each panel's own Y-axis
-// row below it, now naming its scope in two words rather than a sentence
+// A single panel collapses the X-axis and Y-axis controls into ONE row with no
+// captions at all (with one panel, "this panel only" disambiguates nothing);
+// two or more panels keep X-axis as its own single
+// (page-wide, never duplicated) row, with each panel's own Y-axis
+// row below it, naming its scope in two words rather than a sentence
 // -- and only because a second panel actually exists to name it against.
 describe("ArrheniusChart -- the x-axis and y-axis controls read as a compact pair, not a wall of chrome", () => {
     it("a single panel renders X-axis and Y-axis together in ONE row, with no scope caption at all (mutation table item (d))", () => {
@@ -733,11 +720,9 @@ describe("ArrheniusChart -- the x-axis and y-axis controls read as a compact pai
     })
 })
 
-// Owner's report on the no-alternative-unit case specifically: the
-// previous round's fix kept the control present (correct) but printed
-// `yAxisUnitNote`'s full sentence directly in the page layout. The
-// requirement standing from that round -- "never silently omit the y
-// control" -- is unchanged; what moved is only where the REASON lives.
+// The no-alternative-unit case: the control stays present (never silently
+// omit the y control) and `yAxisUnitNote`'s full sentence is not printed
+// directly in the page layout; the REASON is compact and on demand.
 describe("ArrheniusChart -- the no-alternative-unit reason is compact and on-demand, never a sentence in the layout", () => {
     it("a per_s panel's disabled Y-axis control shows no full-sentence reason in the visible layout", () => {
         render(<ArrheniusChart kinetics={[unimolecularRecord()]} />)

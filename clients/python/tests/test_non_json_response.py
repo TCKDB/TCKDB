@@ -2,8 +2,8 @@
 
 Point ``base_url`` at a site root (``https://host``) instead of the API root
 (``https://host/api/v1``) and the web app's single-page fallback answers
-every path with its ``index.html`` and a 200. The client used to hand that
-HTML back as ``data``; callers then indexed a string and died with a bare
+every path with its ``index.html`` and a 200. Without the refusal the client would hand that
+HTML back as ``data``, and callers would then indexed a string and died with a bare
 ``TypeError`` far from the cause. These tests pin the refusal, its message,
 and the paths it must not touch.
 """

@@ -7,8 +7,7 @@ import { PageSectionsProvider, SectionHeading } from "./PageSections"
 afterEach(cleanup)
 
 /**
- * SHOULD-FIX-6 ("record-page residuals" re-review, widened on the
- * re-review pass): a section kicker earns its place only when it adds a
+ * a section kicker earns its place only when it adds a
  * category the title itself lacks. MEASURED: four `SectionHeading`s on
  * `CalculationDetailPage`/`GeometryDetailPage` passed their own title
  * straight back in as `kicker` ("Result" over "Result"). A reviewer then

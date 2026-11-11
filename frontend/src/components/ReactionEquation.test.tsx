@@ -19,11 +19,9 @@ function renderEquation(reactants: EquationParticipantInput[], products: Equatio
 }
 
 describe("ReactionEquation", () => {
-    // The owner's own reported defect, live:
-    // `rxn_fktlilofmrdaylunqva2hbltpq` rendered as "CH3OS <=> CH3OS" because
-    // a formula-only face cannot tell apart a reactant and a product that
+    // A formula-only face cannot tell apart a reactant and a product that
     // share a formula but are different structures (`[CH2]SO`, the carbon
-    // radical, vs `OC[S]`, the sulfur radical). SMILES leads now, so the
+    // radical, vs `OC[S]`, the sulfur radical). SMILES leads, so the
     // two participants must never render the same text -- this is the
     // regression test for that specific pair, and it is also the invariant
     // this whole change exists to guarantee: no two DIFFERENT species in
@@ -100,8 +98,8 @@ describe("ReactionEquation", () => {
         expect(container.textContent).toContain(" +")
     })
 
-    // `species_entry_label` joins in depositor-typed parts, so it is never printed
-    // (owner decision 2026-11-03); the equation shows the SMILES/formula only.
+    // `species_entry_label` joins in depositor-typed parts, so it is never printed;
+    // the equation shows the SMILES/formula only.
     it("never prints a served species_entry_label, with the formula present", () => {
         const { container } = renderEquation(
             [participant({ species_entry_ref: "spe_a", smiles: "N=N", formula: "H2N2", species_entry_label: "R DEPOSITOR_SENTINEL_label", participant_index: 0 })],

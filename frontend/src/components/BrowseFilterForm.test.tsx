@@ -410,9 +410,8 @@ const EVIDENCE_ONLY_LABELS = [
 // still has no formula/elements axis of its own.
 const FINDABILITY_ONLY_LABELS = ["SMILES", "Family"]
 
-// The six provenance selects used to live inside a section mounted ONLY
-// for `kind="transition_state"` -- `/species/browse` has genuinely
-// accepted all six all along (see the design brief), so hiding them on
+// The six provenance selects render for EVERY browse kind:
+// `/species/browse` accepts all six, so hiding them on
 // "species"/"vdw" hid a real capability. This asserts PER KIND, not once,
 // because a bug here is exactly the kind that a single-kind assertion
 // (as `describe`s above all render with kind="transition_state") cannot
@@ -518,7 +517,7 @@ describe("the evidence checkboxes collapse the seven has_* selects into one row"
     })
 })
 
-// `record_kind` scoping decision (see the design brief): Software and
+// `record_kind` scoping: Software and
 // Workflow tool narrow their /meta/* fetch to the calculation-owner scope
 // that matches the browse `kind` -- "species" for BOTH "species" and
 // "vdw" (a van der Waals complex is a species_entry row, so it has no
@@ -601,9 +600,7 @@ describe("Software/Workflow tool scope their vocabulary fetch by record_kind; Me
 
 // ---------------------------------------------------------------------------
 // Structure filter fields (query_smiles / query_smarts / mode /
-// similarity_threshold), folded into the composition section per the
-// owner's correction: "just make the struct and smiles search part of
-// the browser-filters class". Species/vdW only, mirroring the rest of
+// similarity_threshold), folded into the composition section. Species/vdW only, mirroring the rest of
 // CompositionFields.
 // ---------------------------------------------------------------------------
 
@@ -623,11 +620,7 @@ describe("structure search fields render on species/vdw, not on transition_state
     })
 
     it('kind="transition_state": the SPECIES structure engine (mode/SMARTS/similarity) is absent, but a TS-specific SMILES + Family pair now renders instead', async () => {
-        // Corrects an earlier version of this test, which additionally
-        // claimed `/transition-states/browse` "accepts no structure
-        // filter" -- true when that test was written, no longer true
-        // after item 4 added `participant_smiles`/`family`. What is STILL
-        // true, and what this test now actually asserts, is narrower: the
+        // `/transition-states/browse` accepts `participant_smiles`/`family`, but the
         // species/vdW structure-SEARCH ENGINE (substructure/similarity/
         // exact mode, SMARTS) does not apply to a transition state, which
         // has no molecular graph of its own -- only the exact-match
@@ -757,8 +750,7 @@ describe("SMILES field: short label, hover/focus explanation instead of a perman
 })
 
 // ---------------------------------------------------------------------------
-// Field order: structure and formula lead the grid, per the owner's
-// correction ("why isn't smiles and formula the first in the filter?").
+// Field order: structure and formula lead the grid.
 // CompositionFields (Formula, Structure, Elements, Element match, Min/Max
 // heavy atoms, Electronic state) now renders FIRST, ahead of Charge,
 // Multiplicity, review status, and the two include-* checkboxes, which in
@@ -1038,11 +1030,11 @@ describe("reaction kind: the direction control defaults to the backend's own def
 
 // ---------------------------------------------------------------------------
 // Item 1 (renamed "Reactant structures" / "Product structures", item 2):
-// the matching-rules prose that used to sit permanently under these two
-// fields must still be fully present -- comma separation, same-side
-// grouping, either-direction matching (now the field's OWN explanation for
-// why the conventional "Reactant"/"Product" naming is still accurate), and
-// an unheld SMILES emptying the result -- just reachable on demand instead
+// the matching-rules prose under these two
+// fields must be fully present -- comma separation, same-side
+// grouping, either-direction matching (the field's OWN explanation for
+// why the conventional "Reactant"/"Product" naming is accurate), and
+// an unheld SMILES emptying the result -- reachable on demand instead
 // of always rendered. Item 3: neither hint may contain a literal `--`.
 // ---------------------------------------------------------------------------
 

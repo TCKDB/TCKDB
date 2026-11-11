@@ -15,8 +15,7 @@ const statusLabel = (status: string) => status.replaceAll("_", " ")
  * `invalidated_reason` is its own column, not folded into "Treatment" or
  * dropped — a torsion the archive has marked invalid (a scan that did not
  * close, e.g.) must never look identical to a sound one. `top_description`
- * is rendered for the same reason: both are parsed by `api/statmechApi.ts`
- * and were previously silently dropped from this table.
+ * is rendered for the same reason: both are parsed by `api/statmechApi.ts`.
  */
 export function TorsionsTable({ rows }: { rows: StatmechRecord["torsions"] }) {
     if (!rows || rows.length === 0) {

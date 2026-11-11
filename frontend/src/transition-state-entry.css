@@ -8,15 +8,12 @@
  * win or lose a cascade fight against `ConformerObservationPage`, the
  * other page that imports it.
  *
- * Design/foundations PR B: `.tse-title-row`/`.tse-equation-heading`/
- * `.tse-title-badges`/`.tse-label-facet`/`.tse-trust-badge` are ALL
- * retired -- the reaction equation is now this page's `title` on the
+ * The reaction equation is this page's `title` on the
  * shared `RecordIdentityHeader` (`titleVariant="display-2"`, the wrapping-
  * equation step), the review status is the header's ONE pill slot, the
  * TS label is an identity fact in that header's own `.kv-list`, and the
  * trust verdict is a plain fact in this page's own provenance `.kv-list`
- * rather than a second pill next to the first -- see item 1 in this PR's
- * body ("kicker row: `.t-kicker` + the ONE status/trust pill slot").
+ * rather than a second pill next to the first.
  */
 
 /* The saddle-point verdict -- the first evidence statement on the page,
@@ -78,7 +75,7 @@
    other record pages follows; this file keeps only what `.card` does
    not already cover. */
 .tse-irc-summary p {
-    /* MEASURED (SHOULD-FIX-4, "record-page residuals" re-review): 126
+    /* MEASURED (, "record-page residuals" re-review): 126
        characters per line with no cap -- the same "genuine prose needs a
        readable measure" fix `--measure-note` already exists for; this
        card just never composed it. */
@@ -95,21 +92,14 @@
 /* IRC trajectory points, hoisted out of one-card-per-point into a compact
    ordered list -- 2-3 text columns (index, ref, atom count), no card
    chrome. */
-/* BLOCKING-1 ("record-page residuals" re-review): `minmax(11rem, 1fr)`
-   (176px cells) against an index-plus-31-char-mono-ref item (~250px, no
-   wrap) meant column 1 printed OVER column 2 at every viewport this grid
-   ever showed more than one column at -- MEASURED `document.
-   documentElement.scrollWidth` 714 at a 680px viewport. `minmax(18rem,
-   1fr)` (288px) is wide enough for the widest ref this list renders (a
-   30-char `geom_…` ref is ~234px at `--type-data-font`) -- a controlled
-   before/after on the re-review pass confirmed the width alone is what
-   fixes all six required routes; an earlier version of this comment
-   credited a `<wbr>`-inserting ref renderer with "somewhere to break if
-   it still doesn't fit", which that pass retired as unneeded (see
-   `design-system.css`'s matching note on its own `.kv-list` fix). The
-   explicit `62rem` breakpoint below forces a single column below that
-   width rather than relying on auto-fill to happen to resolve to one on
-   its own. */
+/* `minmax(18rem, 1fr)` (288px cells) is wide enough for the widest ref this
+   list renders (an index plus a 31-char mono ref is ~250px, no wrap; a
+   30-char `geom_…` ref is ~234px at `--type-data-font`); narrower cells
+   would print column 1 over column 2. There is no `<wbr>`-inserting ref
+   renderer (see `design-system.css`'s matching note on its own `.kv-list`
+   fix). The explicit `62rem` breakpoint below forces a single column below
+   that width rather than relying on auto-fill to happen to resolve to one
+   on its own. */
 .tse-irc-point-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
@@ -167,16 +157,14 @@
 
 .tse-siblings-list a { color: var(--accent); font-weight: 600; }
 
-/* `.tse-sibling-pill` (a font-size override for the sibling-row review
-   pill) is retired -- SHOULD-FIX-3 (PR B review): `.68rem` (10.88px) sat
-   under the accessibility-pass 11px floor this whole app holds every
-   other label/pill/UI string to. The pill's SIZE is the shared
-   `.value-pill` primitive's to own (`index.css`); a page composes
-   `.value-pill`/`.value-pill--muted` for colour/state only now, with no
-   size override of its own. See the retired class's own former comment,
-   still relevant to any FUTURE page-scoped pill modifier: compose a new
+/* There is no `.tse-sibling-pill` font-size override for the sibling-row
+   review pill: the pill's SIZE is the shared
+   `.value-pill` primitive's to own (`index.css`; `.68rem` (10.88px) would sit
+   under the 11px floor this app holds every other label/pill/UI string to);
+   a page composes `.value-pill`/`.value-pill--muted` for colour/state only.
+   A page-scoped pill modifier should be a new
    class alongside `.value-pill`, never a selector ending in
-   `.value-pill` itself (PR D review finding on this same file). */
+   `.value-pill` itself. */
 
 .tse-siblings-list code { font: var(--type-data-font); color: var(--muted-2); }
 

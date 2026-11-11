@@ -9,9 +9,8 @@ import { CalculationDependencyGraph, type CentreSubject } from "./CalculationDep
 afterEach(cleanup)
 
 /**
- * The owner's ask ("I think this can be presented as a graph instead...
- * Would read/flow better") for what used to be plain Related-calculations
- * sentences with links -- see `CalculationDependencyGraph.tsx`'s own
+ * The graph form of the Related-calculations section
+ * -- see `CalculationDependencyGraph.tsx`'s own
  * docstring for the layout/accessibility design this exercises.
  *
  * `window.matchMedia` is not implemented by jsdom (confirmed against this
@@ -134,7 +133,7 @@ describe("CalculationDependencyGraph — centreLinked opt-in", () => {
         expect(link).toHaveAccessibleName("Optimisation calc_own_ref")
     })
 
-    // SC 2.5.3 Label in Name: review finding -- an earlier version inserted
+    // SC 2.5.3 Label in Name: the accessible name must not insert
     // the word "calculation" between the pill text and the ref
     // ("Optimisation calculation calc_own_ref"), a word that never appears
     // on screen, which breaks the two VISIBLE text runs (pill, then ref)
@@ -163,10 +162,8 @@ describe("CalculationDependencyGraph — centreLinked opt-in", () => {
     })
 })
 
-// The owner's core defect report on the reaction-entry page's graph:
-// "what the fuck is it? a ts? a random ass molecule?... there is no real
-// indication except before it some tiny ass text that no one is going to
-// read". `centreSubject` puts the answer ON the node itself.
+// The reaction-entry page's graph: `centreSubject` puts the answer to "what is this
+// calculation of?" ON the node itself.
 const SUBJECT: CentreSubject = { label: "Transition state", ref: "tse_own1", href: "/transition-state-entries/tse_own1" }
 
 describe("CalculationDependencyGraph — centreSubject opt-in", () => {
@@ -303,8 +300,8 @@ describe("CalculationDependencyGraph — edge labels reuse the sentence-list wor
     })
 
     it("falls back to the raw (spaced) role token for a role with no bespoke wording, same as the sentence list", () => {
-        // All seven CalculationDependencyRole values are bespoke as of the
-        // 2026-09 wording rewrite (`dependencyWording.ts`) -- only a role
+        // All seven CalculationDependencyRole values are bespoke in the
+        // `dependencyWording.ts` -- only a role
         // this backend enum has not shipped yet exercises the fallback.
         renderGraph([
             { role: "some_future_role", direction: "child", parent_calculation_ref: "calc_scan_owner", child_calculation_ref: "calc_own_ref" },

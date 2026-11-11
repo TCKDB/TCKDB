@@ -103,12 +103,10 @@ describe("the demoted sentence list uses the .note step, not body prose", () => 
         expect(match![1]).toMatch(/color:\s*var\(--muted\)/)
     })
 
-    // The rule this replaces (`.dependency-sentences li`, retired from
-    // `calculation-detail.css` -- see that file's own test) capped a
+    // `.dep-graph-sentences` caps a
     // sentence row to `--measure-note`, the "readable prose measure"
-    // step, since each row is a genuine sentence, not raw data. Pinned
-    // here in its new home so the cap itself survives the move.
-    it(".dep-graph-sentences caps to --measure-note, carrying forward calculation-detail.css's retired SHOULD-FIX-4 rule", () => {
+    // step, since each row is a genuine sentence, not raw data.
+    it(".dep-graph-sentences caps to --measure-note", () => {
         const match = /\.dep-graph-sentences\s*\{([^}]*)\}/.exec(css)
         expect(match, ".dep-graph-sentences rule not found").not.toBeNull()
         expect(match![1]).toMatch(/max-width:\s*var\(--measure-note\)/)

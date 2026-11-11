@@ -641,7 +641,7 @@ def _build_atomic(record: QCRecord, report: MappingReport) -> tuple[dict, str | 
             # (issue #573). TCKDB has no energy column on a freq result, and
             # the one other place -- an sp sibling in additional_calculations
             # -- would be wired to this freq by a single_point_on edge, a role
-            # whose parent must be an opt (DR-0028; see
+            # whose parent must be an opt (see
             # _DEPENDENCY_ROLE_TO_PARENT_TYPE in the backend's
             # calculation_resolution). The value stays in the raw artifact
             # and is named here instead of being dropped silently.

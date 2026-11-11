@@ -1,11 +1,11 @@
 /**
- * ADR 0012's imaginary-mode noise floor (τ) is resolved from the freq
+ * The imaginary-mode noise floor (τ) is resolved from the freq
  * job's Hessian method, carried on the wire as `imaginary_mode_tau_basis`
  * (`calculationApi.ts`'s `resultsSchema.freq`). This module is the one
  * place that token vocabulary is translated to plain language for the
  * calculation detail page's freq Result block.
  *
- * Vocabulary, as of the 2026-09-04 owner decision:
+ * Vocabulary:
  *
  * - `analytic_tight` / `analytic_default` / `finite_difference_gradient` /
  *   `finite_difference_energy`: the producing protocol's Hessian method

@@ -328,12 +328,11 @@ describe("ThermoCpChart — 'evaluated points', never 'measured', since every re
 })
 
 describe("ThermoCpChart — the temperature axis never goes negative, and both axes tick at round numbers", () => {
-    it("clamps the x domain at 0 K and ticks both axes at nice round numbers, for a record whose own padded domain used to go negative", () => {
-        // `recordAlpha()`'s nasa block runs t_low=100..t_high=1000; the OLD
-        // 4%-padded domain would have started below 100 already, and a
-        // record starting near 0 K (this archive's live data commonly
-        // states t_low around 10 K) used to pad straight through zero into
-        // negative kelvin -- the review finding this test guards.
+    it("clamps the x domain at 0 K and ticks both axes at nice round numbers, for a record whose own padded domain would go negative", () => {
+        // `recordAlpha()`'s nasa block runs t_low=100..t_high=1000; a
+        // 4%-padded domain would start below 100, and a record starting near
+        // 0 K (t_low around 10 K) would pad straight through zero into
+        // negative kelvin -- what this test guards.
         renderChart([recordAlpha()])
         const chart = screen.getByRole("img", { name: /Heat capacity versus temperature/ })
         const tickTexts = Array.from(chart.querySelectorAll(".cp-chart-tick-label--x")).map((el) => el.textContent)
@@ -353,15 +352,12 @@ describe("ThermoCpChart — the temperature axis never goes negative, and both a
     })
 })
 
-// The residual (measured-minus-fitted) panel that used to render beneath
-// the Cp-vs-T panel was REMOVED -- checked against a real record
-// (`thm_5dzg66kvcuslgw6swkuc7gduiu`), this archive's stored "measured"
-// points reproduce the NASA-7 fit to four decimal places everywhere
-// checked (0.000% of Cp), because they were evidently evaluated FROM the
-// fit in the first place -- a residual plot compared a curve with itself
-// and was flat by construction. See `ThermoCpChart.tsx`'s own module
-// comment for the full measurement. This positively asserts the Cp-vs-T
-// chart itself is still here, and that no residual-panel DOM survives.
+// There is no residual (measured-minus-fitted) panel beneath the Cp-vs-T
+// panel: the archive's stored "measured" points reproduce the NASA-7 fit to
+// four decimal places (they were evidently evaluated FROM the fit), so a
+// residual plot would be flat by construction. See `ThermoCpChart.tsx`'s own
+// module comment. This positively asserts the Cp-vs-T
+// chart itself is here, and that no residual-panel DOM exists.
 describe("ThermoCpChart — the residual panel is gone; the Cp-vs-T chart is not", () => {
     it("still renders the Cp-vs-T chart (axes, fitted curve, measured markers) with no residual panel alongside it", () => {
         renderChart([recordAlpha(), recordBeta()])

@@ -51,7 +51,7 @@ const MAX_TICK_DECIMALS = 6
  * regardless of the chart's own value range.
  *
  * Precision is chosen ONCE per axis and applied to EVERY tick on it, never
- * per value -- a review finding caught an axis reading "8.50, 10.0, 100":
+ * per value, which would give an axis reading "8.50, 10.0, 100":
  * three different decimal counts on ticks that should read as one
  * consistent scale.
  *

@@ -84,13 +84,12 @@ describe("shape cards: a list of cards that shrink to fit", () => {
 })
 
 // ---------------------------------------------------------------------------
-// SHOULD-FIX-5 (species-entry/browse/chrome residuals re-review): the
-// linkage connector arrow used to be `align-self: center`, vertically
-// centred against the WHOLE 350px-tall column -- against a short tile it
-// hung ~150px below the number it points away from (MEASURED). It also
-// only hid/rotated below the 880px VIEWPORT breakpoint, which never fired
-// at 1100px where the ToC rail alone narrows the row below the ~836px
-// three steps need -- MEASURED, the third tile wraps with no arrow there.
+// The linkage connector arrow is `align-self: start` (not centred against
+// the WHOLE column, which would hang it ~150px below the number it points
+// away from beside a short tile), and it hides/rotates by container
+// wrap-safety rather than only below the 880px VIEWPORT breakpoint, which
+// does not fire at 1100px where the ToC rail alone narrows the row below the
+// ~836px three steps need.
 // ---------------------------------------------------------------------------
 describe("linkage connector alignment and wrap-safe hiding", () => {
     it(".linkage-flow is a named inline-size container, so a container query can key off its own rendered width rather than the viewport's", () => {
@@ -127,7 +126,7 @@ describe("linkage connector alignment and wrap-safe hiding", () => {
 })
 
 // ---------------------------------------------------------------------------
-// SHOULD-FIX-3 (species-entry/browse/chrome residuals re-review): MEASURED,
+// MEASURED,
 // the entry/statmech/thermo tabs ran 51-68% mono by visible character
 // count -- these rules were most of it: full prose sentences and metric
 // summaries set in monospace, the face this house's own type scale

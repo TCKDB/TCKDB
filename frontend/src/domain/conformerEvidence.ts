@@ -348,11 +348,9 @@ export type ConformerAttribution<T> = {
  * equality, decides `thisConformer`: a record naming the selected ref
  * anywhere in its list belongs there regardless of what else it names. A
  * record that does NOT name the selected ref but names several others is
- * filed under EVERY one of those — never collapsed onto just the first,
- * which was the exact defect here (`statmechConformerGroupRef` used to read
- * only `conformerContext[0]`, so a record naming
- * `[conformer_1, conformer_2, conformer_3]` always filed under
- * "From Conformer Group 1" no matter which conformer was selected).
+ * filed under EVERY one of those — never collapsed onto just the first
+ * (a record naming `[conformer_1, conformer_2, conformer_3]` must not always
+ * file under "From Conformer Group 1" whichever conformer was selected).
  *
  * Thermo's real link (`thermoConformerGroupRef`, PR #285) is genuinely
  * single-valued (one primary calculation, one basin) — its call site wraps
@@ -418,13 +416,10 @@ export type ConformerContextLike = Array<{ conformer_group_ref: string }> | null
  * legitimately span several basins (measured live on
  * `spe_mbdqifmaclaakukr7agxbuq3wa`: one statmech record names all three of
  * that entry's conformer groups). Returns every ref, in the wire's own
- * order — never just the first. An earlier version of this function DID
- * read only `conformerContext[0]`, so a record naming
- * `[conformer_1, conformer_2, conformer_3]` filed under "From Conformer
- * Group 1" under `partitionByConformerLink` no matter which conformer was
- * actually selected; that was the entire bug ("Thermochemistry is bust...
- * it always shows From Conformer Group 1"), not a display-label glitch.
- * `partitionByConformerLink` now does a set-membership test against this
+ * order — never just the first, since reading only `conformerContext[0]`
+ * would file a record naming `[conformer_1, conformer_2, conformer_3]`
+ * under "From Conformer Group 1" no matter which conformer was selected.
+ * `partitionByConformerLink` does a set-membership test against this
  * function's full list, not an equality test against one item from it.
  */
 export function statmechConformerGroupRefs(conformerContext: ConformerContextLike): string[] {

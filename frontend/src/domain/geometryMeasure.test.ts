@@ -14,8 +14,8 @@ describe("distance", () => {
     })
 
     it("6-decimal coordinates from the live record (geom_qcnisbgb4abax5oxym3dtjxu34, C-H1)", () => {
-        // C at the origin, H1 at (-0, 1.078957, 0) — measured live 2026-08-30
-        // against a hosted deployment's /geometries/geom_qcnisbgb4abax5oxym3dtjxu34 page.
+        // C at the origin, H1 at (-0, 1.078957, 0) — from the
+        // /geometries/geom_qcnisbgb4abax5oxym3dtjxu34 page.
         const C = { x: 0.0, y: 0.0, z: 0.0 }
         const H1 = { x: -0.0, y: 1.078957, z: 0.0 }
         expect(distance(C, H1)).toBeCloseTo(1.078957, 12)
@@ -97,8 +97,7 @@ describe("dihedral", () => {
     // (theta=+60 asserted to produce dihedral() === -60) because they
     // were written by recording `dihedral()`'s own output at the time,
     // not derived independently — see `geometryMeasure.ts`'s dihedral()
-    // docstring for the sign-inversion bug this masked (PR #295's
-    // review) and the "external oracle" block below for why a
+    // docstring for the sign-inversion bug this masked and the "external oracle" block below for why a
     // self-consistent suite could not have caught it on its own.
     const p1 = { x: -1, y: 1, z: 0 }
     const p2 = { x: 0, y: 0, z: 0 }
@@ -241,8 +240,7 @@ describe("dihedral", () => {
     describe("external oracle: RDKit-verified fixtures (dihedralOracle.fixture.ts)", () => {
         // Everything above this point was written by observing this
         // module's own output and recording it as "expected" — which
-        // proves self-consistency, not correctness. PR #295's review
-        // demonstrated exactly that gap: a swapped cross-product operand
+        // proves self-consistency, not correctness. A swapped cross-product operand
         // order made dihedral() return the negation of the correct
         // torsion for every input, and the hand-derived tests above
         // (written against that buggy version) still passed, because

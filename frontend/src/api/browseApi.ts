@@ -48,12 +48,8 @@ export const BROWSE_KIND_LABELS: Record<BrowseKind, string> = {
 }
 
 /**
- * Each index's own identity (owner, repeatedly: "Why is the browse reactions
- * with the species/transition/vanderwaals browsing page?" / "there should be
- * separate for reaction and species not slammed together"). Before this, all
- * four kind paths rendered `BrowsePage` with the SAME heading/eyebrow/intro
- * ("Browse the archive" / "Archive index" / "Choose what to browse, then
- * narrow it down…") -- the URL said which kind, but nothing ON the page did.
+ * Each index's own identity: each kind path renders `BrowsePage` with its
+ * own heading/eyebrow/intro, so the page itself says which kind it lists.
  * `heading` names the kind directly (an h1 a reader can screenshot and know
  * which archive they are looking at); `intro` is one line stating what the
  * index actually holds, including the one thing it deliberately excludes
@@ -91,8 +87,7 @@ export const BROWSE_KIND_CONTENT: Record<BrowseKind, { eyebrow: string; heading:
 }
 
 /**
- * Each browse kind's own path (owner decision: one URL per kind, replacing
- * the earlier single `/species?kind=` surface -- see `App.tsx`). The ONE
+ * Each browse kind's own path (one URL per kind -- see `App.tsx`). The ONE
  * place either direction of the kind<->path relationship is spelled out;
  * `App.tsx` builds its four `BrowsePage` routes from this object (kind ->
  * path) and `browseKindForPath` below inverts it (path -> kind) rather than
@@ -227,7 +222,7 @@ export type BrowseFilters = {
     // `direction` (`ReactionDirectionQuery` on the wire -- see
     // `reactions_browse.py`): `""` means "let the backend apply its own
     // default", never a locally-invented default duplicated here. The
-    // backend's default is `forward` (2026-09, PR #418) -- `reactantSmiles`/
+    // backend's default is `forward` -- `reactantSmiles`/
     // `productSmiles` match only the stored side they are named for. `""`
     // is the ONLY value this form ever produces for "named sides" rather
     // than the literal string `"forward"`, specifically so an untouched
@@ -236,8 +231,7 @@ export type BrowseFilters = {
     // "default" means, including if the backend's own default ever changes
     // again. `"either"` is the one other value the control offers (see
     // `ReactionFindabilityFields`'s `CheckField` in `BrowseFilterForm.tsx`)
-    // -- ticking it restores the OLD either-direction matching behaviour
-    // this endpoint used to run unconditionally, now opt-in. `"reverse"` is
+    // -- ticking it selects either-direction matching, which is opt-in. `"reverse"` is
     // a legal wire value too (mirrors `/reactions/search`) but this form has
     // no control that produces it; `seedFiltersFromUrl` still passes any
     // raw value through unvalidated, the same as every other seeded field.
@@ -308,8 +302,7 @@ const FAMILY_DEFAULT = { family: "" }
  * doing nothing, and a stale `has_*`/`status` value surviving a switch back
  * to "Species" would silently do nothing there either.
  */
-// Review follow-up (round 2), decision recorded here rather than left
-// implicit: the six provenance fields are NOT added to any defaults group
+// The six provenance fields are NOT added to any defaults group
 // above, so a value set while on species/vdw/transition_state survives a
 // switch through "reaction" (where the fields are hidden and inert, see
 // `BrowseFilterForm`'s own `!isReaction` guards) and re-applies the moment
@@ -357,7 +350,7 @@ export function clearInapplicableFilters(kind: BrowseKind, filters: BrowseFilter
  * search would have missed, never remove one), so it can never be the reason
  * a listing came back empty -- the same "a widening toggle is not a
  * narrowing filter" rule, applied to the third widening control this kind
- * now has.
+ * has.
  */
 export function hasActiveFilters(kind: BrowseKind, filters: BrowseFilters): boolean {
     if (kind === "reaction") {
@@ -704,7 +697,7 @@ const transitionStateBrowseResponseSchema = z.object({
 }).passthrough()
 
 /**
- * `/reactions/browse` row shape (PR 4b), measured live 2026-09-07 against
+ * `/reactions/browse` row shape (PR 4b), as served by
  * `GET /scientific/reactions/browse?limit=2`. FLAT, unlike the
  * `transition_state`/`reaction` split `TransitionStateBrowseRecord` nests
  * (`transitionStateEntryCoreSchema`/`transitionStateCoreSchema`/
@@ -739,9 +732,8 @@ export const reactionBrowseRecordSchema = z.object({
     reaction_ref: z.string(),
     reaction_entry_ref: z.string(),
     equation: z.string().nullable().optional(),
-    // Review follow-up (round 2): served on every row (measured live,
-    // present even with no smiles filter applied, where it is always
-    // "forward") but previously dropped on the floor. "reverse" means the
+    // Served on every row (present even with no smiles filter applied,
+    // where it is always "forward"). "reverse" means the
     // participant a reactant/product SMILES search matched sits on the
     // OPPOSITE side from where the query named it -- e.g. `product_smiles=O`
     // matching `rxe_ed66mj3ohtyien5rm2x3sb3rdu` ("O + [CH3] <=> C + [OH]",

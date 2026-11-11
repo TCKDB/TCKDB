@@ -80,8 +80,8 @@ describe("RecordIdentityHeader", () => {
         expect(screen.queryByText("Reaction SMILES (unmapped)")).not.toBeInTheDocument()
     })
 
-    // House rule widened 2026-09: no depositor-typed labels on public
-    // pages at all. `TransitionStateIdentity` no longer even carries a
+    // No depositor-typed labels on public
+    // pages at all. `TransitionStateIdentity` does not even carry a
     // `label` field (see that type's own comment), but this asserts the
     // RENDER side directly and defensively -- even if a future caller
     // passes an identity object that still happens to carry a stray
@@ -252,10 +252,9 @@ describe("RecordIdentityHeader", () => {
         })
     })
 
-    // The "Species entry" fact used to fall back to the RAW
+    // The "Species entry" fact does not show the RAW
     // `identity.speciesEntryLabel` string as the link's own visible/
-    // accessible text (MEASURED showing as a bare "R" on the live
-    // calculation and geometry pages). `species_entry_label` is NOT
+    // accessible text (a bare "R"). `species_entry_label` is NOT
     // depositor free text -- it is built server-side (`backend/app/
     // services/scientific_read/species_identity.py:42`'s
     // `species_entry_label()`) as a compact discriminator from the
@@ -323,8 +322,7 @@ describe("RecordIdentityHeader", () => {
     })
 })
 
-// `ownRef` -- the record's OWN public ref, per the owner decision "yes
-// show each record's own ref inline". Deliberately exercised across every
+// `ownRef` -- the record's OWN public ref, shown inline first. Deliberately exercised across every
 // `identity.kind` branch (`species_entry`, `transition_state_entry`,
 // `ambiguous`, `absent`): a mutation that only prepends `ownRef` inside
 // ONE branch's `dl` (e.g. only `species_entry`) would still pass a test

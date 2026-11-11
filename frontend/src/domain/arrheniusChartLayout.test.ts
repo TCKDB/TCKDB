@@ -111,11 +111,8 @@ describe("arrheniusUnitLabel", () => {
     })
 })
 
-// Owner's report, round 3: switching the plotted unit moved the curve, the
-// table, and the caption -- but the y-axis title always read the bare
-// "log₁₀ k" it had before this fix, the one thing on the chart that never
-// said what was actually plotted. `arrheniusLog10AxisTitle` is the fix:
-// the axis states the log of a RATIO (`log₁₀ [k / <unit>]`), the
+// The y-axis title says what is actually plotted, not a bare "log₁₀ k".
+// `arrheniusLog10AxisTitle`: the axis states the log of a RATIO (`log₁₀ [k / <unit>]`), the
 // dimensionally correct form -- `log₁₀ k (<unit>)` reads as "the log
 // itself carries units", which is not a coherent statement (you cannot
 // take the logarithm of a dimensional quantity).
@@ -173,8 +170,8 @@ describe("buildArrheniusChartData -- per-ORDER-FAMILY panel split (defect fix: n
     })
 
     // THE headline fix: a cm3_mol_s record and an m3_mol_s record are the
-    // SAME physical quantity, 1e6 apart -- they must now land in ONE panel
-    // (the old per-raw-token grouping put them in two uncomparable panels).
+    // SAME physical quantity, 1e6 apart -- they must land in ONE panel
+    // (per-raw-token grouping would put them in two uncomparable panels).
     it("a cm3_mol_s record and an m3_mol_s record -- same order family -- share ONE panel", () => {
         const cm3Record = record({ kinetics_ref: "kin_cm3" })
         const m3Record = record({ kinetics_ref: "kin_m3", parameters: { A, n, Ea_kj_mol: Ea, A_units: "m3_mol_s" } })
@@ -489,7 +486,7 @@ describe("convertArrheniusSeriesUnits -- the series-level half of the unit selec
         expect(attempted).toBe(unrecorded)
     })
 
-    // Post-merge review finding: a converted `k` that underflows to EXACTLY
+    // A converted `k` that underflows to EXACTLY
     // 0 (a double cannot represent the true tiny positive value) must be
     // SKIPPED, mirroring `computeArrheniusSeries`'s own `if (!(k > 0))
     // continue` guard on the RAW k -- without it, `Math.log10(0)` is

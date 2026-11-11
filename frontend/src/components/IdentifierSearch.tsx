@@ -25,13 +25,10 @@ import { SectionErrorBoundary } from "./SectionErrorBoundary"
 type SearchMode = "species" | "reactions"
 
 /**
- * The reader states intent up front (owner: "it should do species or you
- * click a button or something to switch it to reaction searching") instead
- * of this component guessing from the shape of what was typed -- the
- * defect the whole redesign exists to fix. Every piece of copy below is
+ * The reader states intent up front (species or reactions) instead
+ * of this component guessing from the shape of what was typed. Every piece of copy below is
  * keyed by mode so the field's label, placeholder, and help text say what
- * THIS mode accepts, not the union of everything the old single field had
- * to explain at once.
+ * THIS mode accepts.
  */
 const MODES: { value: SearchMode; label: string }[] = [
     { value: "species", label: "Molecules" },
@@ -248,7 +245,7 @@ export function IdentifierSearch() {
                 if (isStructureQueryKind(classified.identifier.kind)) {
                     const smilesValues = [...new Set(found.map((match) => match.smiles).filter((value): value is string => Boolean(value)))]
                     if (smilesValues.length > 0) {
-                        // SMILES leads (owner ruling), same order as `MatchHeadline`
+                        // SMILES leads, same order as `MatchHeadline`
                         // below: this names the ONE structure that was searched
                         // for ("Also search reactions involving …"), and a bare
                         // formula is still not the honest identity fact on its
@@ -308,8 +305,8 @@ export function IdentifierSearch() {
      * selected. This is what makes a `rxe_…` ref pasted while "Species" is
      * selected still route to the reaction-entry page instead of being fed
      * to the species/formula grammar and reported invalid -- the exact
-     * defect fixed earlier for the single-field search, now preserved
-     * across BOTH directions of the new mode switch.
+     * defect for the single-field search, preserved
+     * across BOTH directions of the mode switch.
      */
     async function runReferenceLookup(trimmed: string) {
         const classified = classifyIdentifier(trimmed)
@@ -605,11 +602,10 @@ function SearchModeToggle({ mode, onSelect }: { mode: SearchMode; onSelect: (mod
 }
 
 /**
- * What replaced the old "Reactions involving …" group that used to render
- * unconditionally beneath a structure query's species matches (owner
- * brief: that automatic secondary fetch is the exact kind of INFERRED
- * intent this redesign exists to remove -- species mode means "search
- * species", full stop). A reader who typed a structure and got species
+ * The cross-link from a structure query's species matches to reaction mode.
+ * Nothing is fetched automatically: species mode means "search
+ * species", full stop.
+ * A reader who typed a structure and got species
  * matches back is one click from continuing into reaction mode with the
  * SAME structure, pre-filled -- discoverable, but never fetched until
  * asked for. Rendered only when `crossLink` is set, which
@@ -699,10 +695,8 @@ function ReactionFallbackRow({ match }: { match: ReactionParticipationMatch }) {
  * their chemistry -- formula and SMILES carry the row, charge/spin/entry
  * count give context -- without decoding a base32 public reference. The
  * reference stays on the row (visible, selectable, in monospace) but
- * demoted below the chemistry, never standing in for it. See
- * `docs/plans/provenance-first-website.md`'s "stable public references
- * remain visible and copyable" and the sibling defect this project already
- * caught in the opposite direction: a label-or-ref fallback where a
+ * demoted below the chemistry, never standing in for it. The opposite
+ * failure is a label-or-ref fallback where a
  * present label made a real ref appear nowhere on the page. Neither
  * failure is acceptable, so both stay checked by
  * `IdentifierSearch.test.tsx`.
@@ -730,7 +724,7 @@ function spinContext(match: SearchMatch) {
 }
 
 /**
- * The row's headline. SMILES leads (owner ruling: SMILES leads, formula
+ * The row's headline. SMILES leads, formula
  * follows in parentheses), typeset in `code.data` through `SpeciesFace`
  * (`./Formula.tsx`); the formula -- still typeset with subscripts -- is
  * the parenthesised follower, because two isomers can share a formula and

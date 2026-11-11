@@ -34,28 +34,24 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
 /**
  * Record review: every record, and whether a person has judged it.
  *
- * Named "Record review" on screen, not "Review queue". The owner could
- * not tell this page from the other one at a glance, and he was right
- * that the names were the defect: "Review queue" and "Curator queue"
- * are two arbitrary labels for two things that differ in what they
- * ASSERT, not in who opens them. The pair now says what each is about --
- * this one is about records, the other (`/admin/curator-queue`, shown as
+ * Named "Record review" on screen, not "Review queue", because the two
+ * queues differ in what they ASSERT, not in who opens them. This one is
+ * about records, the other (`/admin/curator-queue`, shown as
  * "Machine findings") is about what a machine flagged.
  *
  * This is the **authoritative** review axis, and approving is a one-way
  * door for the data even though the review status is not.
  *
- * MEASURED, because an earlier draft of this page's lede said the opposite
- * and it was wrong in the direction that matters. `_ALLOWED_TRANSITIONS`
+ * `_ALLOWED_TRANSITIONS`
  * does permit `approved -> under_review` and `approved -> deprecated`, so
  * the STATUS can be reopened -- but `set_record_review_status` stamps
  * `first_approved_at` only when it is null and CLEARS it nowhere (one
  * writer in `app/`, plus a one-off migration backfill), and the deployed
  * `tckdb_record_is_accepted` is exactly
  * `EXISTS (... WHERE record_type = $1 AND record_id = $2 AND
- * first_approved_at IS NOT NULL)`. So the ADR 0003 freeze keys off a
+ * first_approved_at IS NOT NULL)`. So the accepted-science freeze keys off a
  * column that only ever goes from null to set: reopening the review does
- * not thaw the record, and ADR 0015's repair ledger is the only way back.
+ * not thaw the record, and the declared-repair ledger is the only way back.
  *
  * A reviewer is entitled to know that before they click approve, which is
  * why the lede says it rather than only this comment.
@@ -79,22 +75,18 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
  *
  * ## Task #269: subject grouping
  *
- * The owner rejected the flat, one-row-per-record table outright: two
- * corrections on one species rendered as two lines with nothing telling
- * them apart, a correction's missing public ref leaked as "cannot be
- * named", nothing on screen said what the chemistry WAS, and a bare "50
- * shown" admitted the page could not say how big the backlog is.
+ * A flat, one-row-per-record table would render two
+ * corrections on one species as two lines with nothing telling
+ * them apart, and say nothing about what the chemistry WAS.
  *
- * This page now reads `GET /api/v1/record-reviews/queue`
+ * This page reads `GET /api/v1/record-reviews/queue`
  * (`listReviewQueue`), which groups every record under the SUBJECT it
  * belongs to -- the species entry or transition-state entry a curator
  * actually judges as one unit, resolved server-side by
  * `app/services/review_queue.py`. Paging counts SUBJECTS, never records,
  * so a page boundary can never fall inside one subject's records. The
  * header reports honest, computed totals (`subject_total`/`record_total`)
- * over the WHOLE filtered backlog, not just the page shown -- the old
- * "there may be more, and this page cannot say how many" hedge is gone
- * because the new route does not need it.
+ * over the WHOLE filtered backlog, not just the page shown.
  *
  * Within one response, a subject's records are never split across a page
  * boundary. Across separate requests that is NOT a promise that paging is
@@ -363,10 +355,8 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
     if (subject.subject_type === "reaction_entry" && subject.reaction) {
         // A reaction_entry is not one molecule, so it has no formula --
         // but it has the fact a reviewer actually wants, the equation
-        // itself. Review #492, finding 6: a kinetics reviewer used to see
-        // "Reaction entry rxe_..." and nothing else, the species-only
-        // half of this page's own naming problem seen from the other
-        // side. `<ReactionEquation>` is the SAME component the reaction
+        // itself, rather than "Reaction entry rxe_..." alone.
+        // `<ReactionEquation>` is the SAME component the reaction
         // entry page renders -- reused, not a second implementation --
         // and `linkParticipants={false}` because every other link in
         // this queue opens in a new tab (see the module docstring on
@@ -607,9 +597,8 @@ export default function ReviewQueuePage() {
      * How to name a record in a message that may outlive its row.
      *
      * Falls back to the container before giving up. "applied_energy_correction
-     * (unnamed)" is what a curator used to be told after a refusal on one of
-     * the 164 correction rows, and with several of them on a page it does not
-     * identify which. "applied_energy_correction on spc_..." does.
+     * (unnamed)" does not identify which row it refers to when several
+     * correction rows are on a page. "applied_energy_correction on spc_..." does.
      */
     function labelOf(row: RecordReview): string {
         if (row.record_public_ref) return row.record_public_ref

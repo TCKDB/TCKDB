@@ -1005,7 +1005,7 @@ class LiteratureLinkedRecord(TypedDict, total=False):
     network_ref: str | None
     network_solve_ref: str | None
     # Whether a linked network solve derived its k(T,P) here ("computed") or
-    # transcribed them from this very publication ("reported") -- see ADR 0010.
+    # transcribed them from this very publication ("reported").
     # Present only for ``record_type == "network_solve"``.
     #
     # Optional here, unlike the server, where the field is required and has no

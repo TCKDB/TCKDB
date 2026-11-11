@@ -82,9 +82,8 @@ WHY NOT BUMP AT MERGE TIME INSTEAD
     author to collide with. It is rejected here for three reasons, and the
     trade is real rather than obvious.
 
-    It contradicts the standing rule that every change to the client bumps
-    the version, which is a rule contributors already follow and which
-    keeps the number reviewable *in the diff that earns it*. It moves the
+    It contradicts the rule that every change to the client bumps
+    the version, which keeps the number reviewable *in the diff that earns it*. It moves the
     decision to a moment when nobody is looking at the change -- the number
     would be chosen by whoever presses merge, or by a bot, and a wrong one
     would land unreviewed. And it needs write access from CI to the

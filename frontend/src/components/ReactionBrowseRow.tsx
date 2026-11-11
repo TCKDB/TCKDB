@@ -33,14 +33,12 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
  * two availability flags.
  *
  * Link target is `/reactions/:reaction_ref` (the CHOOSER), not
- * `/reaction-entries/:reaction_entry_ref` (one deposit) -- owner-reported
- * inconsistency fix: "when we browse the archive for reactions and select
- * a reaction it should not go straight to the entry it should go to the
- * reaction and there the user selects the relevant entry - like how we do
- * with species". `SpeciesBrowseRow.tsx` already does exactly this
+ * `/reaction-entries/:reaction_entry_ref` (one deposit): selecting a
+ * reaction in the browse goes to the reaction, and there the reader selects
+ * the relevant entry, as with species. `SpeciesBrowseRow.tsx` does exactly this
  * (title -> `/species/:species_ref`, the identity/chooser; each entry ->
  * its own `/species-entries/:ref` as a SEPARATE, secondary link) -- this
- * row now mirrors that same identity/entry relationship instead of
+ * row mirrors that same identity/entry relationship instead of
  * skipping straight to the one deposit. `ReactionOverviewPage.tsx`
  * (`/reactions/:reactionRef`) is that chooser: it lists every entry under
  * this reaction identity and lets the reader pick, the same job
@@ -61,28 +59,14 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
  * new elevation rule, since `.reaction-browse-row .browse-row-footer`
  * already paints above the overlay.
  *
- * Owner-reported defect fixed previously (kept as-is here): this row used
- * to render `ReactionEquation` with its participant links left ON (one
- * per participant, to `/species-entries/:ref`) and stack an invisible
- * row-wide `.browse-row-stretched-link` UNDER it for the reaction itself
- * -- almost every pixel of the equation was a species link, and the
- * reaction link only caught the gaps between glyphs. The premise that
- * pattern rested on ("the equation must keep its per-participant links
- * here, so the row link has to be a separate element to avoid nesting
- * `<a>` in `<a>`") was the bug, not the nesting concern itself: a browse
- * row does not need per-species links at all -- a reader who wants a
- * specific participant can already reach it from the reaction entry page
- * this row links to, where `ReactionEquation` still renders them (see
- * `ReactionEntryPage.tsx`/`ReactionOverviewPage.tsx`, both unchanged).
- * So this row still passes `linkParticipants={false}` (the opt-out
- * `ReactionEquation.tsx` added for exactly this caller), turning the
+ * The row renders `ReactionEquation` with `linkParticipants={false}` (the
+ * opt-out `ReactionEquation.tsx` provides for this caller), turning the
  * equation into plain text, and wraps that plain text in ONE real
- * `<Link>` to the reaction identity -- **still one click target for the
- * whole card**, per the owner's own follow-up instruction that this stay
- * true even after the target changes: nested anchors break, and
- * per-participant links made the row nearly unclickable, so that earlier
- * fix is preserved unchanged; only WHERE the title link now points has
- * moved. This is `TransitionStateBrowseRow`'s own `.browse-row-title
+ * `<Link>` to the reaction identity, so the whole card is one click target:
+ * nested anchors break, and per-participant links would leave the row
+ * nearly unclickable. A reader who wants a specific participant reaches it
+ * from the reaction entry page, where `ReactionEquation` renders the links.
+ * This is `TransitionStateBrowseRow`'s own `.browse-row-title
  * ::after` mechanic (shared class, shared selector shape, scoped by
  * `.reaction-browse-row` in `browse.css` instead of `.ts-browse-row`):
  * the `<Link>` wraps the visible title content, and an
@@ -149,15 +133,10 @@ export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) 
                         "click H2N" cannot activate the row, and a screen
                         reader spells out a SMILES string letter by letter
                         instead of reading the formula it corresponds to.
-                        An earlier revision of this component set
-                        `aria-label={record.equation ?? undefined}`
-                        specifically to get an "exact, testable string" the
-                        way `TransitionStateBrowseRow` does -- but that
-                        component's own aria-label is built from the SAME
-                        rendered-equation string its Link displays (plus the
-                        TS label), never a differently-formatted one; there
-                        is no equivalent here to reach for, so the honest
-                        fix is no override at all. */}
+                        `TransitionStateBrowseRow` builds its aria-label from the
+                        same rendered-equation string its Link displays;
+                        there is no equivalent here, so there is no
+                        aria-label override. */}
                     <Link className="browse-row-title" to={target}>
                         <ReactionEquation
                             linkParticipants={false}

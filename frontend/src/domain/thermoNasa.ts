@@ -24,15 +24,9 @@ import type { ThermoRecord } from "../api/thermoApi"
 // actually differ, a wrong branch produces a visibly wrong Cp at a given
 // T, not a silently-close one.
 //
-// This file used to also carry `nasaCpAtTemperature`/`cpResiduals` --
-// single-temperature evaluation feeding a residual (measured-minus-fitted)
-// chart panel. Removed together with that panel (see the comment on
-// `ThermoCpChart.tsx` for why): every stored "measured" point in this
-// archive was evaluated FROM the NASA-7 polynomial itself, so a residual
-// compared a curve with itself and was flat by construction, at the
-// 0.0001-0.0004 level, everywhere it was checked. Nothing here computes a
-// residual any more; re-add it only once a record exists whose measured
-// points are independent of its own fit.
+// Nothing here computes a measured-minus-fitted residual: a stored
+// "measured" point is evaluated FROM the NASA-7 polynomial itself, so a
+// residual would compare a curve with itself.
 // ---------------------------------------------------------------------------
 
 export type NasaBlock = NonNullable<ThermoRecord["nasa"]>

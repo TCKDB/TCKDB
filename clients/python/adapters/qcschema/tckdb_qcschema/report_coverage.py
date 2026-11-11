@@ -1,8 +1,8 @@
 """Every field of an imported document lands in exactly one report bucket (#573).
 
 :mod:`tckdb_qcschema.mapping` classifies the fields its driver branches read.
-Before issue #573 nothing checked that this covered the whole document, and a
-``driver="hessian"`` import dropped ``properties.return_energy``,
+The branches alone do not check that this covers the whole document: a
+``driver="hessian"`` import would otherwise drop ``properties.return_energy``,
 ``extras.qcvars`` and nine other ``properties.*`` fields without naming them.
 This module closes that gap in three steps, run by
 :func:`complete_mapping_report` once the mapping branches are done.

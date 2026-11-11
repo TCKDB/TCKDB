@@ -1495,8 +1495,8 @@ class SharedGroup:
     def key(self) -> str:
         """A name that depends only on which surfaces own the group, not on how many groups there are.
 
-        Groups used to be numbered by size and order, so adding one code that made a new owner set
-        renumbered every later group and moved every link to them in the contract diff (#686). The
+        Numbering groups by size and order would renumber every later group, and move every link to
+        them in the contract diff, whenever one code added a new owner set. The
         owner set is what makes a group one group, so a hash of it is stable under adding or removing
         codes, and changes only when the set of surfaces that share them does. It is a set, so the
         titles are sorted first: the order the surfaces are listed in does not move it.

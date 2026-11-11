@@ -54,13 +54,10 @@ export interface KineticsLevelsFallbackResult {
 /**
  * Client-side mirror of the backend's `_build_kinetics_levels`
  * (`backend/app/services/scientific_read/kinetics.py`) -- used only when
- * a kinetics record's own served `levels` is absent (an API generation
- * older than PR 1's `feat/reaction-full-additions`, #398, deployed
- * 2026-09-07; every live record now serves `levels` directly, so this
- * path is a defensive fallback, not the common case, as of this PR).
+ * a kinetics record's own served `levels` is absent (an older API
+ * generation; a defensive fallback, not the common case).
  *
- * The backend's own finding (PR 398's post-review commit) is the reason
- * this is NOT a simple "look up `ts_opt_calculation_ref`" lookup:
+ * This is NOT a simple "look up `ts_opt_calculation_ref`" lookup:
  * `_KINETICS_ROLE_COMPATIBILITY` (`app/services/kinetics_resolution.py`)
  * permits no kinetics role that accepts an opt-typed calculation at all,
  * so `provenance.ts_opt_calculation_ref` is structurally `null` on every

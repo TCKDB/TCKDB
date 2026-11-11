@@ -73,7 +73,7 @@ button:focus-visible, input:focus-visible, .search-results a:focus-visible { out
 .eyebrow { margin: 0 0 1.35rem; color: var(--accent); font: var(--type-kicker-font); letter-spacing: var(--type-kicker-tracking); text-transform: var(--type-kicker-transform); }
 .record-placeholder h1 { margin: 0; font: var(--type-display-2-font); letter-spacing: var(--type-display-2-tracking); }
 .identifier-search { margin: 0 auto; max-width: 45rem; text-align: left; }
-/* SHOULD-FIX-13 (species-entry/browse/chrome residuals re-review): was
+/* was
    `600 .78rem var(--mono)` -- `--type-label-strong` (mono, uppercase,
    600 .72rem) is the named step for a short, weighted field label like
    this one ("Exact species identifier"). */
@@ -173,7 +173,7 @@ button:focus-visible, input:focus-visible, .search-results a:focus-visible { out
        text; the token fix above (--muted-2) covers contrast, this covered
        the "9-11px" size half of the same finding.
 
-       SHOULD-FIX-10 (species-entry/browse/chrome residuals re-review):
+       
        11px was still its own bespoke size next to `--type-label-strong`
        (.72rem/11.52px), the same "brand/toggle" step item 10 maps this
        chrome onto -- "Light"/"Dark"/"System" render upper-cased now, the
@@ -194,12 +194,10 @@ button:focus-visible, input:focus-visible, .search-results a:focus-visible { out
 }
 
 /*
- * Chemistry-first search result rows (SMILES-leads-formula-in-brackets
- * change: SMILES is now always the primary headline, the formula its
- * parenthesised follower -- swapped from the formula-primary/SMILES-
- * secondary styling this block used to carry, since two isomers sharing a
- * formula is exactly the ambiguity a formula-primary headline could not
- * resolve). Charge/spin/entry-count give supporting context; the public
+ * Chemistry-first search result rows: SMILES is the primary headline and the
+ * formula its parenthesised follower (two isomers sharing a formula is
+ * exactly the ambiguity a formula-primary headline cannot resolve).
+ * Charge/spin/entry-count give supporting context; the public
  * reference stays visible and selectable but demoted below both, in
  * monospace, outside the link.
  */
@@ -295,7 +293,7 @@ button:focus-visible, input:focus-visible, .search-results a:focus-visible { out
 /* The path/ref chip is an identifier, not an accent-tinted UI chip -- data
    step, plain colour, same treatment `.browse-ref` gets. */
 .record-placeholder code { display: inline-block; margin: 1.25rem 0; overflow-wrap: anywhere; color: var(--muted); font: var(--type-data-font); }.record-placeholder p:last-child { max-width: var(--measure-prose); color: var(--ink-2); font: var(--type-body-font); letter-spacing: var(--type-body-tracking); }
-/* SHOULD-FIX-10 (species-entry/browse/chrome residuals re-review): was
+/* was
    `.72rem var(--mono)` (11.52px, mono) -- a mixed-case trail of category
    labels ("Species", "Species entry", "Calculation", …), never a raw
    identifier, so mono here was never earning its "this is an identifier"
@@ -354,7 +352,7 @@ button:focus-visible, input:focus-visible, .search-results a:focus-visible { out
        so that plain-text reads (`.textContent`, screen readers, copy/paste)
        keep a real space -- adding margin on top would double the gap.
 
-       SHOULD-FIX-12 (species-entry/browse/chrome residuals re-review):
+       
        `.92em` shrank the unit BELOW whatever size the value it follows
        already renders at -- on a `--type-data-large` headline number
        (24px) that put the unit under 22px, its own small size next to a
@@ -371,14 +369,7 @@ button:focus-visible, input:focus-visible, .search-results a:focus-visible { out
 @media (max-width: 680px) { .search-row { flex-wrap: wrap; }.search-row input { flex: 1 1 13rem; }.search-row button { padding: .85rem 1.15rem; }.archive-footer { flex-direction: column; } } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
 
 /*
- * Accessibility pass, finding 10 -- font-size floor override, RETIRED
- * (design/foundations PR E, "record-page residuals" re-review,
- * SHOULD-FIX-14). The two classes this used to raise from a distance --
- * `.ref-item-label` (was .6rem/9.6px) and `.copy-button` (was
- * .58rem/9.28px) -- are fixed AT SOURCE now, in `refs-disclosure.css`
- * itself (`--type-label-font` / `--type-ui-font`, both already above the
- * 11px floor this finding asked for), so this specificity-trick override
- * has nothing left to raise. `.refs-disclosure summary` and
- * `.browse-row-ref` were dropped from this same list earlier for the
- * same reason (see git history) -- this was the last of the three.
+ * Font-size floors for `.ref-item-label` and `.copy-button` are set at
+ * source in `refs-disclosure.css` (`--type-label-font` / `--type-ui-font`);
+ * there is no override here.
  */

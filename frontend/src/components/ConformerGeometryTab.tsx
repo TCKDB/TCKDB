@@ -54,14 +54,9 @@ function groupByGeometry(optCalcs: OptCalc[], geometryByCalculationRef: Map<stri
  * Reads straight off the conformer projection already loaded for the
  * picker -- no extra request.
  *
- * One row per deposited observation (never one row per stored geometry with
- * no attribution -- the bug this replaces): each observation's own
+ * One row per deposited observation: each observation's own
  * optimisation calculation(s), the level of theory each ran at, and the
- * geometry it ended at. A geometry a reader could previously only see as a
- * bare ref + truncated hash, with nothing on the page saying which
- * calculation, level of theory, or observation produced it -- "geom_...
- * final · 6 atoms · 427b9a..." repeated across fourteen indistinguishable
- * rows -- now sits directly under the observation and calculation that
+ * geometry it ended at, so a geometry sits directly under the observation and calculation that
  * produced it, each a real link.
  *
  * The summary "N optimization calculation(s)" line per observation is kept
@@ -91,17 +86,12 @@ export function ConformerGeometryTab({ conformer }: { conformer: ConformerProjec
             {observations.length === 0 ? (
                 <p className="empty-projection">No stored geometry is projected for this conformer.</p>
             ) : (
-                // `.checklist` (entry-science.css) is sans/value-weight text now,
-                // not the blanket mono it used to be -- MEASURED: this tab was
-                // 81% monospace before this pass, because that one rule mono'd
-                // every word here indiscriminately (the observation summary
-                // sentence, "N optimization calculations", level-of-theory
-                // labels, atom counts) along with the refs it actually needed
-                // to. Only the genuine identifiers below -- the observation
+                // `.checklist` (entry-science.css) is sans/value-weight text, not
+                // mono. Only the genuine identifiers below -- the observation
                 // ref, calculation refs, geometry refs, the truncated hash --
-                // opt back INTO mono via `.data` (design-system.css) at their
-                // own span; everything else (the sentence fragments around
-                // them) now reads in the same sans face as the rest of the
+                // opt into mono via `.data` (design-system.css) at their
+                // own span; the sentence fragments around
+                // them read in the same sans face as the rest of the
                 // page's prose.
                 <ul className="checklist">
                     {observations.map((observation) => {

@@ -30,12 +30,9 @@ import { LiteratureCitation } from "../components/LiteratureCitation"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 /**
- * `/networks/:networkRef` -- PR 2 (§3: identity, evidence incl. the
- * live-computed energy-coverage fact, reactions, review), PR 3 (§3.3:
- * network diagram) and PR 4 (§2.4/§3.4: k(T,P) chart) of
- * `docs/plans/pressure-dependent-network-surface.md`. Built to the
- * reviewed design mock, `docs/plans/mocks/network-entry.html` (branch
- * `network-page-mock`).
+ * `/networks/:networkRef` -- identity, evidence (incl. the
+ * live-computed energy-coverage fact), reactions, review, the
+ * network diagram and the k(T,P) chart.
  */
 export default function NetworkEntryPage() {
     const { networkRef = "" } = useParams<{ networkRef: string }>()
@@ -110,8 +107,7 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                                 <span className={reviewPillClass(network.review.status)}>{statusLabel(network.review.status)}</span>
                             </div>
                             {/* `network.name` and `network.description` are depositor
-                                prose and are not printed (house rule, owner decision
-                                2026-11-03, reversing plan §7's ruling): the heading is a
+                                prose and are not printed (house rule): the heading is a
                                 TCKDB noun, the network is identified by its ref below. */}
                             <h1 className="t-display-2 record-identity-title">Pressure-dependent network</h1>
                             <div className="record-identity-known">
@@ -364,7 +360,7 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
 type ReactionRow = {
     channelKey: string | null
     /** 1-based position in the served channel list -- what the page prints in place of the
-     *  depositor-typed `channel_key` (house rule, owner decision 2026-11-03). */
+     *  depositor-typed `channel_key` (house rule). */
     channelNumber: number
     pathKind: string
     transitionStateEntryRef: string | null

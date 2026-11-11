@@ -14,8 +14,6 @@ Adding a generator
    ``datetime.now()``-derived value.
 2. Register it below. The name becomes ``expected_outputs/<name>.json`` and
    ``<name>.md`` in the deposit.
-3. Add it to the manuscript correspondence table in
-   ``docs/research/tckdb-phase-b-implementation-plan.md``.
 
 ``hessian_reanalysis`` (work package B4b)
 -----------------------------------------
@@ -40,11 +38,10 @@ GENERATORS: dict[str, Generator] = {
     "candidate_lineage": generators.candidate_lineage,
     "transition_state_evidence": generators.transition_state_evidence,
     "mechanism_fixture_provenance": generators.mechanism_fixture_provenance,
-    # Phase C-E4 (docs/research/tckdb-phase-c-implementation-plan.md C4): the
-    # review-tier external-Cp-comparison demonstration.
+    # The review-tier external-Cp-comparison demonstration.
     "experimental_cp_comparison": generators.experimental_cp_comparison,
     "thermoml_source_provenance": generators.thermoml_source_provenance,
-    # Phase C-Q4 (same plan, C1 "Demonstration"): a Psi4 Hessian through the
+    # A Psi4 Hessian through the
     # QCSchema adapter and back, and its Psi4-vs-Gaussian measurements. Reads
     # committed fixtures; the session only hosts a rolled-back round trip.
     "qcschema_interchange": generators.qcschema_interchange,

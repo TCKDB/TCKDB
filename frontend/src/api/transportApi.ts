@@ -5,7 +5,7 @@ import { pageQuery, parsePagedRef, type PageRequest } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 // ---------------------------------------------------------------------------
-// Shape notes (measured 2026-08-29 against a hosted TCKDB deployment,
+// Shape notes (from
 // backend/app/schemas/reads/scientific_transport.py and
 // backend/app/services/scientific_read/{transport,species_transport}.py):
 //

@@ -114,7 +114,7 @@ afterEach(() => {
 })
 
 // CH3 (planar radical) live record — geom_qcnisbgb4abax5oxym3dtjxu34,
-// measured 2026-08-30. atom_index is 1-based (archive numbering);
+// `atom_index` is 1-based (archive numbering);
 // `serial` in the click callback below is 0-based (3Dmol's own XYZ-parse
 // position) — atoms[0] has atom_index 1, matching the real serial<->index
 // relationship this component's docstring documents.

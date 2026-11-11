@@ -9,9 +9,8 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
  * `backend/app/api/routes/scientific/reactions.py`, schema
  * `backend/app/schemas/reads/scientific_reactions.py`. This is the
  * `/reactions/:reactionRef` CHOOSER page's one request: every
- * `reaction_entry` deposited under one `rxn_...` reaction identity, per the
- * owner's ruling (plan §2) that this site never merges or silently picks
- * between them.
+ * `reaction_entry` deposited under one `rxn_...` reaction identity; the
+ * site never merges or silently picks between them.
  *
  * `formula`/`stoichiometry` on each participant are the SAME §3A-additive
  * fields `reactionEntryApi.ts` marks optional, for the same reason (a

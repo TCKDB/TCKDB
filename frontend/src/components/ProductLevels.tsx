@@ -17,10 +17,7 @@ import { productLevelsAgree, type ProductLevels } from "../domain/productLevels"
 // tables, and the identical-values group's own shared body) so a record
 // with mixed levels reads identically wherever it appears.
 //
-// Owner decision (2026-09): on a page where every level happened to be the
-// same (B3LYP/def2-TZVP throughout), the old rule collapsed all three to
-// one "Level of theory: X" fact — "I don't see the separation in LoT". This
-// module ALWAYS renders three labelled facts/columns, "Geometry"/
+// This module ALWAYS renders three labelled facts/columns, "Geometry"/
 // "Frequencies"/"Energy", each through the same `lotLabel()` compact
 // formatter, whether or not the three actually agree — never collapsed.
 // A muted note sits under Energy explaining WHY it is what it is when
@@ -30,14 +27,12 @@ import { productLevelsAgree, type ProductLevels } from "../domain/productLevels"
 // ---------------------------------------------------------------------------
 
 /**
- * `levelNode`'s output is what every existing caller used to render as
- * plain `lotLabel()` text -- now the SAME text, wrapped in a
+ * `levelNode` renders `lotLabel()` text, wrapped in a
  * `LevelOfTheoryLink` when the level carries a `level_of_theory_ref`, so
  * `EntryStatmechSection.tsx`/`EntryThermoSection.tsx` (this module's two
  * callers) get a working `/methods/:lotRef` link on every Geometry/
  * Frequencies/Energy fact without either file touching `lotLabel()`
- * directly (methods-surface plan §2.4/§6, `plan-methods-surface-v2`, not
- * committed to this repo).
+ * directly.
  */
 function levelNode(level: ProductLevels["geometry"]): ReactNode {
     return level ? <LevelOfTheoryLink levelOfTheory={level} /> : "not recorded"
@@ -128,9 +123,8 @@ export function ProductLevelsFact({ levels }: { levels: ProductLevels }) {
     const energyNode = energyValueNode(levels.energy, levels.energy_source)
     return (
         <>
-            {/* The server's own `energy//geometry` shorthand is the headline
-                (ADR 0021, P7a); the three rows below stay, always, exactly
-                as the owner decided (2026-09). No notation, no headline:
+            {/* The server's own `energy//geometry` shorthand is the headline;
+                the three rows below always render. No notation, no headline:
                 it is never composed here. */}
             {levels.notation && (
                 <div className="kv-list--wide" data-levels-notation="">
@@ -207,17 +201,11 @@ export function ProductLevelsTableHead({ showNotation = false }: { showNotation?
  * (`design-system.css`'s `.data-table td .data` rule), so a level of
  * theory never breaks mid-token inside a scrolling table.
  *
- * The Energy note is a PER-ROW decision that simply follows this row's own
+ * The Energy note is a PER-ROW rule that follows this row's own
  * `energy_source === "sp"` — every sp-sourced row gets it, regardless of
  * whether that row's geometry/frequency/energy happen to agree with each
- * other. (An earlier review fixed a bug where the note was emitted for
- * every sp row in a table forced into three columns by some OTHER row's
- * disagreement, even rows that individually agreed with themselves; the
- * fix at the time was to gate the note on that row's own agreement. Now
- * that every table always shows three columns, "this row's own agreement"
- * is no longer a meaningful distinction for the note — there is no longer
- * a differing row to single out, so the note is just "was this row's own
- * energy sourced from a single point", full stop.)
+ * other: the note is just "was this row's own
+ * energy sourced from a single point", full stop.
  */
 export function ProductLevelsTableCells({ levels, showNotation = false }: { levels: ProductLevels; showNotation?: boolean }) {
     const note = energySourceNote(levels.energy_source)

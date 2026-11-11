@@ -39,9 +39,7 @@ import { channelHandle } from "../domain/publicText"
 import { Disclosure } from "./Disclosure"
 
 /**
- * PR 4 of `docs/plans/pressure-dependent-network-surface.md` (§3.4/§5),
- * extended by the stacked-panel/unit-control follow-up: the network entry
- * page's k(T,P) chart. Fires exactly ONE request per mount -- `POST
+ * The network entry page's k(T,P) chart. Fires exactly ONE request per mount -- `POST
  * /scientific/networks/{ref}/kinetics/evaluate`
  * (`api/networkKineticsEvalApi.ts`) -- covering every stored fit on the
  * network at one shared `(temperature_k, pressure_bar)` grid, never one
@@ -53,16 +51,14 @@ import { Disclosure } from "./Disclosure"
  * component never picks, prefers, averages, or collapses them --
  * `groupKtpFitsByChannel` keeps every fit a channel has.
  *
- * SHAPE (owner's report: "shouldn't they all stack on one graph not
- * create multiple for each clicked? Also why is there no control for
- * changing the y axis to other units like we do with Arrhenius?"). Both
- * were fair, but "stack on one graph" is only TRUE within one unit
+ * SHAPE: one panel per unit family. Channels can only stack on one graph
+ * within one unit
  * FAMILY: on this network `per_s` (isomerization, unimolecular) and
  * `cm3_mol_s` (association/exchange, bimolecular) are different physical
  * DIMENSIONS and cannot share a y-axis without silently comparing two
  * incomparable quantities. `groupKtpChannelsByUnitFamily`
  * (`domain/networkKtpChartLayout.ts`) is the one place that split is
- * decided -- this component renders exactly one panel per family it
+ * made -- this component renders exactly one panel per family it
  * returns (at most two here), overlaying every SELECTED channel that
  * belongs to that family on one shared axis, with its own per-panel unit
  * `<select>` when the family has more than one interchangeable unit
@@ -98,8 +94,7 @@ import { Disclosure } from "./Disclosure"
  * NOT a re-evaluation -- see `domain/networkKtpChartLayout.ts`'s own
  * header comment.
  *
- * X-AXIS (owner: "why can't I change temp to 1/temp" -- the Arrhenius chart
- * already has this control, this one didn't). `KtpXAxisSelect` below is the
+ * X-AXIS: `KtpXAxisSelect` below is the
  * third control of this kind on this chart (after unit selection and family
  * panels): one chart-wide `<select>` (`NetworkKtpChartReady`'s own
  * `xAxisMode` state), governing every family panel's x-axis at once, exactly
@@ -195,8 +190,7 @@ function NetworkKtpChartReady({ fits, channels, states, grid }: {
     const colorIndexByChannelKey = useMemo(() => channelColorIndex(groups), [groups])
     const pressureOptions = grid.pressuresBar
     const [selectedPressureBar, setSelectedPressureBar] = useState(() => pressureOptions[Math.floor(pressureOptions.length / 2)] ?? pressureOptions[0])
-    // Only the FIRST channel is selected by default -- the "sensible
-    // default" the owner asked for (overlaying every selected channel's
+    // Only the FIRST channel is selected by default (overlaying every selected channel's
     // every fit means N channels is already 2N lines before any unit
     // conversion is even in play; opening on all 21 channels at once would
     // be exactly the "42 lines" problem the panel-per-family redesign does

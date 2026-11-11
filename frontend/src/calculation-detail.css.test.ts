@@ -18,8 +18,7 @@ function extractRule(source: string, selector: string): string {
  * `evidenceChecklist.css.test.ts` for the source test covering their
  * actual declarations (single-column grid, `dt`/`dd` deferred to
  * `.kv-list`, no bespoke label/value layout -- the history item 3 used
- * to document here) and their new location. This file, the former sole
- * owner, must not declare either again.
+ * to document here) and their location. This file must not declare either.
  */
 describe(".coverage-checklist / .ledger-summary--single are no longer declared here (moved to conformer-group.css)", () => {
     it("declares no .coverage-checklist rule", () => {
@@ -32,16 +31,12 @@ describe(".coverage-checklist / .ledger-summary--single are no longer declared h
 })
 
 /**
- * The dependency-graph PR retired `.dependency-sentences` from this file
- * entirely -- the sentence list it styled moved into
- * `CalculationDependencyGraph.tsx`, alongside the graph it now sits
- * beneath, styled by that component's OWN sheet
- * (`calculation-dependency-graph.css`'s `.dep-graph-sentences`, which
- * carries the SAME `max-width: var(--measure-note)` cap the retired
- * SHOULD-FIX-4 rule pinned here -- see
- * `calculation-dependency-graph.css.test.ts`'s own "demoted sentence
- * list" tests for the rule's new home). This file, the former sole
- * owner, must not declare `.dependency-sentences` again.
+ * `.dependency-sentences` is not declared in this file: the sentence list
+ * lives in `CalculationDependencyGraph.tsx`, styled by that component's OWN
+ * sheet (`calculation-dependency-graph.css`'s `.dep-graph-sentences`, which
+ * carries the `max-width: var(--measure-note)` cap -- see
+ * `calculation-dependency-graph.css.test.ts`'s "demoted sentence list"
+ * tests).
  */
 describe(".dependency-sentences is no longer declared here (moved to calculation-dependency-graph.css)", () => {
     it("declares no .dependency-sentences rule", () => {
@@ -50,11 +45,11 @@ describe(".dependency-sentences is no longer declared here (moved to calculation
 })
 
 /**
- * SHOULD-FIX-10 (re-review): `.section-note` was a one-off `.8rem` --
+ * `.section-note` was a one-off `.8rem` --
  * mapped onto the shared `--type-note-font` step, matching
  * `geometry-detail.css`'s byte-identical copy of this same rule.
  */
-describe(".section-note uses --type-note-font, not a literal .8rem (SHOULD-FIX-10)", () => {
+describe(".section-note uses --type-note-font, not a literal .8rem", () => {
     it("declares font: var(--type-note-font)", () => {
         const rule = extractRule(css, ".section-note")
         expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
@@ -63,7 +58,7 @@ describe(".section-note uses --type-note-font, not a literal .8rem (SHOULD-FIX-1
 })
 
 /**
- * SHOULD-FIX-2 (re-review, criterion-6 on the second re-review pass): the
+ * the
  * label-less-TS-owner ref fallback in `CalculationDetailPage`'s h1 (`<code
  * className="data calc-headline-ref">`) was rendering at `.data`'s own
  * `--type-data-font` size (13px mono) sitting on the baseline of the
@@ -75,7 +70,7 @@ describe(".section-note uses --type-note-font, not a literal .8rem (SHOULD-FIX-1
  * anything, and emptying this very rule still left it green. This is the
  * guard that closes that gap.
  */
-describe(".calc-headline-ref tracks the surrounding heading's size (SHOULD-FIX-2)", () => {
+describe(".calc-headline-ref tracks the surrounding heading's size", () => {
     it("declares font-size: inherit", () => {
         const rule = extractRule(css, ".calc-headline-ref")
         expect(rule).toMatch(/font-size:\s*inherit/)

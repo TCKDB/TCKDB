@@ -1,7 +1,6 @@
 """Public ``Thermo.kind`` property + summary-collector hygiene.
 
-The ``Thermo._kind`` attribute was previously the only nominally
-private read in the summary layer. This module pins:
+This module pins:
 
 * ``Thermo.scalar(...).kind == "scalar"`` (likewise nasa / points),
 * the bare-constructor sentinel ``"generic"``,

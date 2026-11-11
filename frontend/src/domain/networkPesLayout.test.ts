@@ -183,7 +183,7 @@ describe("computeNetworkPesLayout -- saddle height is source_energy + forward_ba
     })
 
     it("matches the four TS heights independently verified against the live hydrazine archive", () => {
-        // Numbers straight from the owner's brief: 7 states (0.0, 123.7,
+        // Reference numbers: 7 states (0.0, 123.7,
         // 146.7, 180.1, 233.3, 281.8, 380.9) and 4 internally-consistent
         // barriers. This is a sanity check that the formula end-to-end
         // reproduces the archive's own already-verified TS heights, not a
@@ -334,7 +334,7 @@ describe("computeNetworkPesLayout -- width grows with plotted level count, stayi
 
     it("grows by exactly one level gap per added level, once past the base width", () => {
         // Asserts the PROPERTY rather than restating the width formula. The
-        // formula itself now derives the side margins from the outermost
+        // formula itself derives the side margins from the outermost
         // captions, so a test that recomputed it would only be checking the
         // implementation against a copy of itself. Both fixtures here use
         // equal-length captions, so the margins are identical between them
@@ -353,8 +353,7 @@ describe("computeNetworkPesLayout -- width grows with plotted level count, stayi
 })
 
 // ---------------------------------------------------------------------------
-// Connectivity-driven x placement -- the readability rewrite this PR is
-// about. `HYDRAZINE_TREE_*` below is the owner's own verified archive
+// Connectivity-driven x placement. `HYDRAZINE_TREE_*` below is a verified archive
 // shape (module header's ASCII diagram): NN (hub, degree 3) with two
 // direct leaves (N=N(Z)+H2, [H][H]+[N-]=[NH2+]) and one two-deep chain
 // ([NH-][NH3+] then N=N(E)+H2), plus two states ("2 [NH2]",
@@ -577,7 +576,7 @@ describe("computeNetworkPesLayout — captions fit the plot they are drawn in", 
 })
 
 describe("computeNetworkPesLayout — layout mode changes arrangement, never energies", () => {
-    // Both modes are offered so the owner can compare readability. The
+    // Both modes are offered so a reader can compare readability. The
     // guarantee that makes that safe to offer is that NOTHING scientific
     // differs between them: same levels at the same energies, same saddle
     // points at the same heights, same channels drawn.
@@ -619,14 +618,10 @@ describe("computeNetworkPesLayout — layout mode changes arrangement, never ene
 })
 
 describe("computeNetworkPesLayout — a connector leg lands on its own level bar", () => {
-    // The owner reported states "floating on the graph": they were connected,
-    // but the connector never reached the bar. The leg was offset by half the
-    // CAPTION width to avoid drawing through the caption, and a caption is
-    // far wider than its bar, so six of eight legs on the live hydrazine
-    // network landed 19-51px OUTSIDE the level they belonged to. Captions
-    // carry their own opaque backing now, so the leg attaches to the bar.
-    //
-    // This is the assertion that would have caught it on the day it shipped.
+    // A connector leg attaches at the level bar's own end, not offset by the
+    // CAPTION width (a caption is far wider than its bar, so an offset leg
+    // would land outside the level it belongs to). Captions carry their own
+    // opaque backing, so the leg can pass behind them.
     function legsOffTheirBar(layout: NetworkPesLayout): string[] {
         const xByHash = new Map(layout.levels.map((l) => [l.compositionHash, l.x]))
         const off: string[] = []

@@ -65,7 +65,7 @@ const EXPECTED_UNLINKABLE = [
 ]
 
 /**
- * These two lists are the frontend's own record of a decision, and this
+ * These two lists are the frontend's own record of which types have a page, and this
  * suite can only check them against each other.
  *
  * What the checks below DO prove: no type is in both lists, and the two
@@ -75,14 +75,11 @@ const EXPECTED_UNLINKABLE = [
  * What they do NOT prove, and what a reader should not assume: that the
  * backend enum still has exactly those seventeen. A new record type added
  * on the backend appears in neither list and nothing here notices -- its
- * rows would simply render unlinked, which is the safe direction but is a
- * silent decision rather than a made one. Reading the enum from
- * `backend/app/db/models/common.py` was tried and abandoned: vite refuses
- * to load a file from outside its root, and widening `server.fs.allow` to
- * the repo root would let the dev server (which binds 0.0.0.0) serve
- * backend source over the network. A test is not worth that. The guard
- * belongs on the backend side, where reading the frontend's list costs
- * nothing -- raised as its own task.
+ * rows would simply render unlinked, which is the safe direction. The
+ * enum is not read from `backend/app/db/models/common.py` because vite
+ * refuses to load a file from outside its root, and widening
+ * `server.fs.allow` to the repo root would let the dev server (which binds
+ * 0.0.0.0) serve backend source over the network.
  *
  * `EXPECTED_UNLINKABLE` on its own is weak by construction: `recordRoute`
  * returns null for ANY unknown string, so those eight cases and the
@@ -91,7 +88,7 @@ const EXPECTED_UNLINKABLE = [
  */
 const RECORD_TYPE_COUNT_WHEN_WRITTEN = 17
 
-describe("the two lists are a coherent decision", () => {
+describe("the two lists are coherent", () => {
     it("accounts for every record type that existed when this was written", () => {
         expect(EXPECTED_LINKABLE.length + EXPECTED_UNLINKABLE.length).toBe(
             RECORD_TYPE_COUNT_WHEN_WRITTEN,
@@ -184,10 +181,9 @@ describe("the ref goes into the path safely", () => {
 /**
  * #262: where a record can be SEEN, when it has no page of its own.
  *
- * `recordRoute` answers "is there a page for this type", and for 385 of the
- * review queue's 1,299 rows the answer is no. Six of those types are still
- * rendered -- inside their parent -- and the review row now carries which
- * parent. `resolveRecordLocation` is the decision that turns those two facts
+ * `recordRoute` answers "is there a page for this type". Six of the types
+ * without one are still rendered -- inside their parent -- and the review
+ * row carries which parent. `resolveRecordLocation` turns those two facts
  * into a link, or into an honest statement of why there isn't one.
  */
 describe("where a record can be seen", () => {

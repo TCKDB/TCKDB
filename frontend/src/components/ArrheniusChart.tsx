@@ -33,9 +33,9 @@ import { Disclosure } from "./Disclosure"
 // cm³ mol⁻¹ s⁻¹), and overlaying those on one y-axis would silently compare
 // two different quantities on the same scale. Two records that merely
 // differ in WHICH unit of the same family they were deposited in
-// (`cm3_mol_s` vs `m3_mol_s`) now share ONE panel -- that's the whole point
-// of the per-panel unit selector below, and grouping them apart (as this
-// file used to, by the raw `A_units` token) made them uncomparable on a
+// (`cm3_mol_s` vs `m3_mol_s`) share ONE panel -- that's the whole point
+// of the per-panel unit selector below; grouping them by the raw `A_units`
+// token would make them uncomparable on a
 // page whose job is comparing deposits.
 //
 // x = temperature (K) by default, or 1000/T (K⁻¹, high T on the left) when
@@ -74,17 +74,9 @@ import { Disclosure } from "./Disclosure"
 // `arrheniusTermK` maths PR 2 pinned, reused rather than forked, and shown
 // directly beneath the panels in a `Disclosure` per record.
 //
-// CONTROLS (owner's report, round 2 -- pasted the actual rendered text:
-// "Chart controls / X-axis / applies to every panel below / Y-axis / this
-// panel only / A unimolecular rate coefficient is reported in s⁻¹ only —
-// there is no other unit it could be converted to. / s⁻¹", and: "this
-// looks so shit"). An earlier version of this section rendered a titled,
-// bordered "Chart controls" box (X-axis) immediately followed by a SECOND
-// bordered box per panel (Y-axis), each with its own full-sentence scope
-// caption -- on 14 of this archive's 17 live reaction entries there is
-// only ONE panel, so "applies to every panel below" and "this panel only"
-// disambiguate nothing, and the no-alternative-unit reason printed as a
-// standalone sentence in the layout on top of that.
+// CONTROLS: with only ONE panel (the common case), "applies to every
+// panel below" and "this panel only" disambiguate nothing, so a scope
+// caption there would be noise.
 //
 // `onlyPanel` (below) is that common case: when there is EXACTLY one
 // panel, the page-wide X-axis control and that one panel's own Y-axis
@@ -110,12 +102,8 @@ import { Disclosure } from "./Disclosure"
 // HTML excludes from the tab order entirely -- so a sighted keyboard-only
 // user can still reach it, not just a mouse or a screen reader).
 //
-// STYLING (round 3, owner: "the axis thing is still fucked... I would
-// prefer something more visually appealing for this graphing change" /
-// "I do not like the grey style"). Both controls used to be a bare native
-// `<select>` with no styling at all beyond its font -- literally the
-// browser default, sitting directly on the chart. `.arrhenius-chart-
-// control` (arrhenius-chart.css) now wraps label+select in the SAME
+// STYLING: `.arrhenius-chart-
+// control` (arrhenius-chart.css) wraps label+select in the SAME
 // rounded-chip treatment this chart's own legend already uses
 // (`.arrhenius-chart-legend-item`, right above it in the DOM) -- a
 // deliberate echo, not a coincidence: the controls should read as another
@@ -166,8 +154,7 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
     // plog/chebyshev/falloff/`is_third_body` -- so a record excluded from
     // the CHART for one of those reasons is refused a table too, rather
     // than handing out the same T-only numbers one surface lower on the
-    // page (PR 3 review finding: a third-body record used to get exactly
-    // that -- excluded from the plot, then tabulated anyway).
+    // page (a third-body record excluded from the plot is not tabulated either).
     const tableRecords = kinetics
         .map((record) => ({ record, table: computeKineticsTable(record) }))
         .filter((entry): entry is { record: ReactionKineticsRecord; table: NonNullable<ReturnType<typeof computeKineticsTable>> } => entry.table !== null)
@@ -333,10 +320,8 @@ function ArrheniusLegend({ panel, displaySeriesDepositedUnits }: { panel: Arrhen
 /**
  * Why this panel's y-axis (unit) control offers no alternative to switch
  * to -- shown NEXT TO a control that is always rendered, never in place of
- * one (owner's report: 14 of 17 live reaction entries are `per_s`, and the
- * old "fewer than two options -> render nothing" rule left the majority of
- * readers looking at an x-axis control and nothing for y, with no
- * explanation). `null` whenever the panel genuinely offers a choice
+ * one, so a `per_s` panel does not leave an x-axis control and nothing for y
+ * with no explanation. `null` whenever the panel genuinely offers a choice
  * (`availableUnits.length > 1`) -- the control is enabled and no note is
  * shown. The two `null`-`availableUnits`-but-still-rendered cases below are
  * physically different facts and get different, chemist-legible wording:
@@ -364,8 +349,8 @@ function yAxisUnitNote(panel: ArrheniusPanelData): string | null {
  * when given, is the two/three-word disambiguator a row genuinely needs
  * because something ELSE on the page could be confused with it -- omitted
  * entirely for the single-panel combined row, which has nothing else to
- * be confused with (owner's report: "applies to every panel below" /
- * "this panel only" "distinguish nothing" when there is only one panel). */
+ * be confused with ("applies to every panel below" /
+ * "this panel only" distinguish nothing when there is only one panel). */
 function ArrheniusControlsRow({ children, scope }: { children: ReactNode; scope?: string }) {
     return (
         <div className="arrhenius-chart-controls">
@@ -519,22 +504,14 @@ function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits, o
                 displaySeriesDepositedUnits={(ref) => panel.series.find((series) => series.kinetics_ref === ref)?.depositedUnits ?? null}
             />
             <div className="arrhenius-chart-panel">
-                {/* Owner's report (round 3): switching the unit moved the
-                    curve, the table, and the caption, but the y-axis title
-                    stayed the bare "log₁₀ k" it always had -- the one thing
-                    on the chart that never said what was actually plotted.
+                {/* The y-axis title names the plotted unit.
                     `arrheniusLog10AxisTitle` renders the dimensionally
                     correct ratio form (`log₁₀ [k / <unit>]`, never `log₁₀ k
                     (<unit>)` -- a log cannot itself carry units) and READS
                     `displayUnits`, the same selection state the k(T) table
                     below reads via `displayUnitsByRef`, so the two can never
-                    disagree about which unit is shown. This paragraph used
-                    to sit beside a separate `.arrhenius-chart-panel-heading`
-                    stating the unit a second time; once the axis itself
-                    names the unit, that heading said the same thing twice
-                    on a page whose owner had already objected to exactly
-                    that pattern once this round -- removed, not merely
-                    left unstyled. */}
+                    disagree about which unit is shown. There is no separate
+                    panel heading restating the unit. */}
                 <p className="arrhenius-chart-axis-title arrhenius-chart-axis-title--y">{arrheniusLog10AxisTitle(displayUnits ?? null)}</p>
                 <div className="arrhenius-chart-scroll">
                     <svg

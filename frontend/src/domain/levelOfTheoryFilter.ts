@@ -2,9 +2,8 @@ import type { CoreTreatmentValue, LevelOfTheoryRecord } from "../api/methodsApi"
 
 /**
  * The `/methods` index's level-of-theory filter. `coreTreatment` is the one
- * facet the SERVER filters (the API's own `core_treatment` parameter, ADR
- * 0021, P7a), so changing it re-queries; the other facets narrow what is
- * already in the browser, as they always did (see `MethodsIndexPage.tsx`).
+ * facet the SERVER filters (the API's own `core_treatment` parameter), so changing it re-queries; the other facets narrow what is
+ * already in the browser (see `MethodsIndexPage.tsx`).
  */
 export type LevelOfTheoryFilter = {
     query: string

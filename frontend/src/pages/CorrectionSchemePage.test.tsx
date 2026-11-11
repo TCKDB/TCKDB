@@ -108,9 +108,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     /**
      * MUTATION TABLE: titles this page from `scheme.scheme_kind` via the
      * controlled `schemeKindLabel` vocabulary, never from the depositor's
-     * own free-text `energy_correction_scheme.name` (owner: "I kinda
-     * don't want labels almost in general to never appear on the front
-     * end"). `name` here is deliberately something a controlled-vocabulary
+     * own free-text `energy_correction_scheme.name` `name` here is deliberately something a controlled-vocabulary
      * label could never produce, so a regression that reverts the heading
      * to `scheme.name` is unambiguous: this test would then find the
      * literal depositor string on the page instead of the archive's own
@@ -188,9 +186,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     })
 
     /**
-     * PR 4 of `docs/plans/correction-scheme-provenance.md` (§8): since
-     * #459, `software_release_ref` is a real release ref, not measured
-     * empty -- but `GET /api/v1/software-releases/{id}` sits behind
+     * `software_release_ref` is a real release ref, but `GET /api/v1/software-releases/{id}` sits behind
      * `require_auth_for_legacy_reads` and 401s anonymously, so this page
      * NEVER turns it into a link. It still earns its own row, as
      * copyable text.
@@ -243,7 +239,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     })
 })
 
-describe("CorrectionSchemePage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("CorrectionSchemePage -- no depositor-typed text", () => {
     it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
         const planted = plantSentinels(mockResponse(), ["name", "note", "applied_note", "target"])
         expectPlanted(planted)

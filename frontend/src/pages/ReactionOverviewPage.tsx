@@ -38,10 +38,8 @@ function statusLabel(status: string): string {
 
 /**
  * `/reactions/:reactionRef` -- the chooser page between every `rxe_...`
- * entry deposited under one `rxn_...` reaction identity (plan §2). This
- * site never merges or silently picks between matching entries (the
- * owner's ruling, live-data-justified: `rxn_naeqmg4l5wyqex5cl5tir2vt2y`
- * carries four separate deposits), so this page's ONE job is to list them
+ * entry deposited under one `rxn_...` reaction identity This
+ * site never merges or silently picks between matching entries, so this page's ONE job is to list them
  * and let the reader pick.
  *
  * An `rxe_...` handed to this route redirects to `/reaction-entries/:ref`
@@ -244,14 +242,11 @@ function ChooserDocument({ reactionRef, headerRecord, firstPageEntryRefs, total,
 
 /**
  * One reactant/product cell: SMILES-leads-formula-in-brackets link (`../
- * components/Formula.tsx`'s `SpeciesFace` -- owner ruling, applied here
+ * components/Formula.tsx`'s `SpeciesFace`, used here
  * because two entries under the same reaction can legitimately be
  * different isomers of the SAME formula, which a formula-only link could
  * not tell apart), the participant's own `spe_` ref with a copy button,
- * -- the same
- * facts the PR 0 mock's own chooser table rendered for every
- * participant (post-review fix: this row previously showed only the
- * formula link, dropping the ref/copy-button/label the mock had).
+ * and the participant's label.
  */
 function ParticipantCell({ participant, separator }: { participant: ReactionOverviewParticipant; separator: boolean }) {
     return (

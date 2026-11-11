@@ -6,12 +6,11 @@ named program whose ``version`` is NULL, reads each citing calculation's
 stored ``output_log`` (then ``input``) artifact, parses the program's own
 startup banner, and -- with ``--commit`` -- re-points the calculation at the
 release that banner describes, recording the banner on the calculation
-(``observed_software_banner``, ``software_reconciliation_status=enriched``;
-DR-0008). The version-less release is never modified; a recorded version is
+(``observed_software_banner``, ``software_reconciliation_status=enriched``). The version-less release is never modified; a recorded version is
 never overwritten. See ``app/services/software_release_version_fill.py`` for
 why the row is not filled in place.
 
-Attestation mode (``--attest-version``; issue #305, decision (a)): where no
+Attestation mode (``--attest-version``; issue #305): where no
 stored artifact carries a banner, the person who ran the calculations can
 state the version. The statement is recorded verbatim in
 ``software_version_attestation`` (who, when, which release, which version),

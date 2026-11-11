@@ -102,11 +102,8 @@ describe("ConformerEvidenceLinkage", () => {
         expect(document.querySelector(".evidence-linkage .eyebrow")).not.toBeInTheDocument()
     })
 
-    // SHOULD-FIX-7 (species-entry/browse/chrome residuals re-review): this
-    // section used to carry `.card.card--sunken` -- a sunken box between
-    // the bare conformer picker above it and the bare tab strip below it,
-    // the only boxed section on the page. Bare now, matching both
-    // neighbours.
+    // This section is bare (no `.card.card--sunken`), matching
+    // both neighbours: the bare conformer picker above and the bare tab strip below.
     it("renders as a bare section, not a boxed card -- the ONE box was inconsistent with both its neighbours", () => {
         render(<MemoryRouter><ConformerEvidenceLinkage conformer={conformer()} /></MemoryRouter>)
         const section = document.querySelector(".evidence-linkage") as HTMLElement
@@ -385,10 +382,8 @@ describe("ConformerEvidenceLinkage", () => {
         expect(story).not.toHaveTextContent(/sighted/)
     })
 
-    // Finding 3 of the BLOCK review: this test used to assert the SEQUENTIAL
-    // reading ("optimised in three stages") for a 3-row/1-chain observation, and in doing so
-    // ENSHRINED an inference the wire cannot support rather than guarding
-    // against it. The backend's `_feeds_a_refinement_on_the_same_observation`
+    // The wire cannot support the SEQUENTIAL reading ("optimised in three
+    // stages") for a 3-row/1-chain observation. The backend's `_feeds_a_refinement_on_the_same_observation`
     // (backend/app/services/scientific_read/conformers.py:645-666) collapses
     // on ANY `optimized_from` parent without constraining the child, so this
     // exact fixture -- 3 opt rows, 1 chain, 1 observation -- is

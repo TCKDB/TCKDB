@@ -118,10 +118,8 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
-// The owner's own wording for a presence check with nothing recorded --
-// kept in this ONE place (not four separate ternaries) so a future
-// reversal is a one-line edit, not a hunt through the coverage checklist
-// below.
+// The wording for a presence check with nothing recorded --
+// kept in this ONE place (not four separate ternaries).
 /** Anchor of the verification block, which the headline energy's contradiction marker links to. */
 const VERIFICATION_ID = "composite-verification"
 
@@ -153,17 +151,13 @@ function scfStabilityOutcomeLabel(status: string): string {
 }
 
 /**
- * Post-review (owner decision, one rule across every page): a status word
- * is a pill EVERYWHERE, no exception for this page -- the muted case is
+ * A status word is a pill EVERYWHERE, no exception for this page -- the muted case is
  * exactly the two "nothing to report" labels above
  * (`EVIDENCE_ABSENT_LABEL` / `EVIDENCE_NOT_APPLICABLE_LABEL`); every other
  * outcome word this checklist can show (a real recorded verdict --
  * "passed"/"warning"/"fail"/"stable"/"unstable"/...) is a plain, non-muted
  * pill, the SAME axis `ConformerObservationPage.tsx`'s "present"/"recorded"
- * rows already pill. This checklist previously rendered both rows as bare
- * text -- the one place on the app the pill convention didn't reach; see
- * `EvidenceChecklist`'s own docstring for why that was the inconsistency
- * fixed here, not a shape worth preserving.
+ * rows already pill.
  */
 function evidenceTone(label: string): "pill" | "pill-muted" {
     return label === EVIDENCE_ABSENT_LABEL || label === EVIDENCE_NOT_APPLICABLE_LABEL ? "pill-muted" : "pill"
@@ -385,8 +379,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     // when its ref is actually present (a label with nothing to copy is
     // not a reference). The calculation's OWN ref is deliberately NOT in
     // this list -- it renders first, inline, in the identity header via
-    // `RecordIdentityHeader`'s `ownRef` prop below (owner decision: "yes
-    // show each record's own ref inline"); this disclosure carries only
+    // `RecordIdentityHeader`'s `ownRef` prop below; this disclosure carries only
     // RELATED refs, per `RefsDisclosure.tsx`'s own docstring.
     const refs: RefEntry[] = [
         { label: "Level of theory ref", value: lot?.level_of_theory_ref },
@@ -401,8 +394,8 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     // tier uses (subscripted element counts), falling back to the plain
     // canonical SMILES only when no formula was derived.
     //
-    // Deliberately NOT SMILES-leads-formula-in-brackets (owner ruling,
-    // applied everywhere else a species is shown): this h1 is a sentence
+    // Deliberately NOT SMILES-leads-formula-in-brackets (used everywhere
+    // else a species is shown): this h1 is a sentence
     // ("Optimisation of C2H4"), not a bare identity chip, and this
     // calculation belongs to exactly ONE species -- no second participant
     // for a bare formula to be confused with. `identity.canonicalSmiles`
@@ -415,19 +408,14 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     // A TS entry has
     // no formula the way a species does, so it falls back through its own
     // ref instead -- never the depositor's own `transition_state.label`
-    // (e.g. "TS0"), which this page no longer reads at all (house rule
-    // widened 2026-09: no depositor-typed labels on public pages).
-    // SHOULD-FIX-8 ("record-page residuals" re-review): the ref fallback
-    // used to print as plain serif display text ("Optimisation of
-    // tse_aq5…") -- an identifier with no data-run styling at all,
-    // MEASURED as the one raw ref on these pages rendered in the wrong
-    // face. `.data` (mono, the same step every other ref on this page
+    // (e.g. "TS0"), which this page does not read (house rule:
+    // no depositor-typed labels on public pages).
+    // `.data` (mono, the same step every other ref on this page
     // uses) is the honest treatment for a ref, even when it happens to sit
     // inside an h1 -- `font-size: inherit` on `.calc-headline-ref`
     // (`calculation-detail.css`) is what keeps it at the h1's own 52px
     // serif-adjacent scale rather than dropping to `--type-data-font`'s
-    // bare 13px baseline-aligned inside it (post-review fix: MEASURED, a
-    // 13px mono ref sitting on the baseline of a 52px heading).
+    // bare 13px baseline-aligned inside it.
     const titleSubject: ReactNode = identity.kind === "species_entry"
         ? (identity.formula ? <Formula value={identity.formula} /> : identity.canonicalSmiles)
         : identity.kind === "transition_state_entry"
@@ -513,7 +501,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             link lives here instead, right below it. The link
                             text is always the ref itself, never `ownerTS.label`
                             (the depositor's own `transition_state.label`, e.g.
-                            "TS0") -- house rule widened 2026-09: no
+                            "TS0") -- house rule: no
                             depositor-typed labels on public pages. */}
                         {ownerTS && (
                             <p className="note record-identity-note">
@@ -593,13 +581,10 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 with no other home on the page. */}
             <section className="ledger-summary ledger-summary--single" aria-label="Calculation evidence summary">
                 {/* `.card--derived` -- a COMPUTED evidence-completeness summary
-                    (item 8's card decision: `--derived` marks an aggregated
-                    verdict, plain `.card` marks a single deposited record; see
-                    this PR's body for the one rule applied consistently across
-                    every record page). Renders through the shared
-                    `EvidenceChecklist` component (record-summary-row PR) -- this
-                    page's OWN markup was the origin of the shape every other
-                    record page's evidence box now matches. Geometry validation
+                    (`--derived` marks an aggregated
+                    verdict, plain `.card` marks a single deposited record, the
+                    same on every record page). Renders through the shared
+                    `EvidenceChecklist` component. Geometry validation
                     and SCF stability only -- Result and Convergence are dropped
                     from this checklist (review finding: each already has its
                     own headline/Result-section home, so a THIRD "recorded"/
@@ -609,10 +594,9 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                     they exist at all -- and each shows the actual recorded
                     OUTCOME (passed / failed / stable / ...), not just
                     "recorded". `tone: evidenceTone(...)` on both rows
-                    (post-review, owner decision): the muted case is exactly
+                    the muted case is exactly
                     "absent"/"not applicable"; every real outcome word is a
-                    plain pill -- see `evidenceTone`'s own docstring for why
-                    this page no longer keeps a bare-text exception. */}
+                    plain pill -- see `evidenceTone`'s own docstring. */}
                 <EvidenceChecklist
                     heading="Evidence on this calculation"
                     rows={[
@@ -723,7 +707,7 @@ function StageAndConformerNote({ ownRef, stage, conformer }: {
 }
 
 /**
- * Owner ask ("present stages better like they flow"): two boxes, coarse
+ * Two boxes, coarse
  * then fine (the data-flow order -- the coarse pass feeds the fine one),
  * joined by the SAME arrow-connector recipe `.linkage-flow`/
  * `.linkage-connector` (`species-entry.css`) already draws for the
@@ -781,12 +765,9 @@ function ResultsSection({ results, type, availability, contradicted, verificatio
     const legacyText = legacyShapeText(legacyShape)
     return (
         <section className="ledger-section" aria-labelledby="results-heading">
-            {/* No kicker here (SHOULD-FIX-6, "record-page residuals"
-                re-review): it used to repeat this section's own title
+            {/* No kicker here: it would repeat this section's own title
                 verbatim ("Result" / "Result") -- a kicker earns its place
-                only when it adds a category the title lacks, the same
-                rule "Review"'s kicker below satisfies and this one
-                didn't. */}
+                only when it adds a category the title lacks. */}
             <SectionHeading id="results-heading">
                 Result
             </SectionHeading>
@@ -826,8 +807,7 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
         pairs.push(["Uncertainty (hartree)", results.sp.electronic_energy_uncertainty_hartree ?? "not recorded"])
     } else if (results.kind === "opt" && results.opt) {
         // Final energy is dropped here -- it is already the page's own
-        // headline (review finding: it used to appear a third time here,
-        // at the same visual weight as convergence and step count). Steps
+        // headline, so it is not repeated here. Steps
         // is relabelled to say plainly where the number came from.
         pairs.push(["Converged", boolLabel(results.opt.converged)])
         pairs.push(["Optimiser steps (parsed from log)", results.opt.n_steps ?? "not recorded"])
@@ -836,18 +816,18 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
         pairs.push(["Imaginary frequency (cm-1)", results.freq.imag_freq_cm1 ?? "not recorded"])
         pairs.push(["ZPE (hartree)", results.freq.zpe_hartree ?? "not recorded"])
         pairs.push(["Reaction-coordinate mode", results.freq.reaction_coordinate_mode_index ?? "not designated"])
-        // ADR 0012's noise floor (τ) is resolved from this freq job's
+        // The noise floor (τ) is resolved from this freq job's
         // Hessian method (`imaginary_mode_tau_basis`), translated to plain
         // language by `tauBasis.ts`. An `assumed_*` basis means the method
         // was never recorded and TCKDB assumed the program's default for
         // it -- shown with a visible "(assumed: ...)" word, never a bare
-        // asterisk (owner decision, 2026-09-04). Placed directly before
+        // asterisk. Placed directly before
         // the existing "above the noise floor" row so the three read as
         // one thought: what the method was, what τ it implies, and how
         // many imaginary modes clear it.
         pairs.push(["Hessian method", <HessianMethodCell basis={results.freq.imaginary_mode_tau_basis} />])
         pairs.push(["Noise floor τ", <TauValueCell tauCm1={results.freq.imaginary_mode_tau_cm1} basis={results.freq.imaginary_mode_tau_basis} />])
-        // ADR 0012's projection: how many imaginary modes sit above the
+        // The projection: how many imaginary modes sit above the
         // producing protocol's noise floor (tau). Null means the projection
         // was never stored for this record -- that is an absence, so it
         // reads "not recorded" like every other absent value, not
@@ -888,7 +868,7 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
 }
 
 /**
- * What a composite calculation adds beneath its facts (ADR 0021, P7b): how
+ * What a composite calculation adds beneath its facts : how
  * far the energy has been checked, the value of each recipe term, and, for
  * an assembled composite, the calculations it was built from as links. The
  * verification is the server's own (`composite_energy_verification`); a
@@ -968,7 +948,7 @@ function boolLabel(value: boolean | null | undefined) {
 /**
  * "Hessian method" cell -- `tauBasis.ts`'s plain-language translation of
  * `imaginary_mode_tau_basis`, marked with `.tau-assumed` (a value, not a
- * pill -- ADR 0012's τ is a number, and this row states the method that
+ * pill -- τ is a number, and this row states the method that
  * produced it, not a category) when the basis is one of the three
  * `assumed_*` tokens, so the assumption reads distinctly even at a glance.
  */
@@ -1008,8 +988,7 @@ function TauValueCell({ tauCm1, basis }: { tauCm1: number | null | undefined; ba
  * The per-role WORDING both of those read — one sentence per edge, with a
  * FIXED subject (this calculation, or the related one), and a dispatch on
  * `role` that never collapses `freq_on`/`single_point_on`/`irc_start`
- * into "This was optimized from <link>" the way this page's Relationship/
- * Role/Related-calculation columns used to (a `role` names the CHILD's
+ * into "This was optimized from <link>" (a `role` names the CHILD's
  * relation to the parent, so on a parent-side row it describes what the
  * *other* calculation is, not this one) — lives in ONE shared table,
  * `domain/dependencyWording.ts`, not in this function.
@@ -1023,7 +1002,7 @@ function DependenciesSection({ dependencies, ownRef, ownType, availability, cont
 }) {
     return (
         <section className="ledger-section" aria-labelledby="dependencies-heading">
-            {/* No kicker (SHOULD-FIX-6): repeated this section's own title. */}
+            {/* No kicker: repeated this section's own title. */}
             <SectionHeading id="dependencies-heading">
                 Related calculations
             </SectionHeading>
@@ -1062,14 +1041,13 @@ function GeometriesSection({
     const validationRow = geometryValidation.status === "ready" ? (geometryValidation.data?.[0] ?? null) : null
     return (
         <section className="ledger-section" aria-labelledby="geometries-heading">
-            {/* No kicker (SHOULD-FIX-6): repeated this section's own title. */}
+            {/* No kicker: repeated this section's own title. */}
             <SectionHeading id="geometries-heading">
                 Geometries
             </SectionHeading>
             {sameGeometry ? (
                 <div>
-                    {/* Owner complaint: "if we have no input geom for the
-                        coarse, then we just say output geom." A coarse
+                    {/* A coarse
                         optimisation stage stores its input and output as
                         the same geometry row -- either because only ONE
                         geometry was ever deposited for that pass, or
@@ -1175,15 +1153,12 @@ function ReviewHistorySection({ entries, availability }: {
     const neverReviewed = isNeverReviewed(entries)
     return (
         <section className="ledger-section" aria-labelledby="review-heading">
-            {/* No kicker (SHOULD-FIX-6, re-review pass): "Review" is a
+            {/* No kicker: "Review" is a
                 prefix of "Review history" -- the same near-restatement
                 case as "Structure"/"Structure view" and "Raw"/"Raw XYZ",
                 which the component itself now suppresses regardless (see
                 `PageSections.tsx`'s own doc comment), but dropped here at
-                the call site too so this file has no dead prop left over.
-                This was previously the ONE kicker of five on this page's
-                own sections -- an inconsistency the re-review flagged
-                directly ("one stray kicker in five"). */}
+                the call site too so this file has no dead prop left over. */}
             <SectionHeading id="review-heading">Review history</SectionHeading>
             {availability === "populated" && !neverReviewed ? (
                 <div className="table-scroll">
@@ -1232,13 +1207,9 @@ function ReviewHistorySection({ entries, availability }: {
  * (`components/Disclosure.tsx`), which fetches its own token, once, the
  * first time it opens.
  *
- * Design/foundations PR B (item 5): this used to be a page-local bordered
- * `<details>` styled with the same recipe
- * `TransitionStateEntryPage.tsx`'s per-role geometry disclosures used
- * (`.geometry-role-disclosure`) -- both are now the ONE canonical
- * `.disclosure` every disclosure on the app renders through, and the
- * redundant "Show" affordance span is gone (`.disclosure`'s own chevron,
- * `design-system.css`, is the idle-state affordance now). Every
+ * Every disclosure here is the ONE canonical `.disclosure` every disclosure
+ * on the app renders through (`.disclosure`'s own chevron,
+ * `design-system.css`, is the idle-state affordance). Every
  * disclosure below is still grouped under the ONE "Further evidence"
  * section that registers a single ToC entry -- `Disclosure`'s own
  * `summary` prop (not `SectionHeading`) is what keeps it from registering
@@ -1322,7 +1293,7 @@ const ON_DEMAND_SECTION_SPECS: {
     // an imaginary-mode projection presupposes vibrational modes exist at
     // all, so it inherits that same applicability rather than the
     // permissive `() => true` every other always-applicable row above
-    // uses (review finding: this used to claim "missing" even on a
+    // uses (so it does not claim "missing" on a
     // calculation type that cannot have frequency modes in the first
     // place).
     { heading: "Imaginary-mode projections", applicable: (a) => a.freq_modes_applicable, available: (a) => a.has_hessian },
@@ -1350,7 +1321,7 @@ function OnDemandSections({ calculation, available, geometryValidationState, ope
 
     return (
         <section className="ledger-section" aria-labelledby="further-evidence-heading">
-            {/* No kicker (SHOULD-FIX-6): repeated this section's own title. */}
+            {/* No kicker: repeated this section's own title. */}
             <SectionHeading id="further-evidence-heading">
                 Further evidence
             </SectionHeading>
@@ -1577,7 +1548,7 @@ function ParametersSection({ calculationRef, available }: { calculationRef: stri
                                                 <tr key={`param-${index}`}>
                                                     {/* Only a key TCKDB recognised (`canonical_key`, its own vocabulary) is
                                                         printed. `raw_key`, `raw_value`, `section` and `unit` are strings the
-                                                        producer wrote (house rule, owner decision 2026-11-03). The statement
+                                                        producer wrote (house rule). The statement
                                                         is a closed label from the row's source, artifact and statement kind. */}
                                                     <td data-label="Key">{row.canonical_key ?? "unrecognised parameter"}</td>
                                                     <td data-label="Value">{row.canonical_key ? parameterValueText(row.canonical_key, row.canonical_value, publicParameterValue) : "not shown"}</td>

@@ -147,7 +147,7 @@ export function deposited(value: number | null | undefined, unit?: string | null
  * component — see `components/QuantityValue.tsx`) to turn into markup. This is
  * the pure half of `landing.py:2725-2760`'s `fillValue`; that function
  * mutated a DOM node directly, which has no equivalent in a React tree, so
- * the dispatch decision is split out here and stays independently testable
+ * the dispatch is split out here and stays independently testable
  * without mounting anything.
  *
  * The rule that matters, in `landing.py`'s own words: **absence is a

@@ -6,13 +6,13 @@ A required status check that is path-filtered never reports on a pull
 request outside its paths, and GitHub blocks the merge indefinitely
 waiting for it. Every test workflow in this repository is path-filtered
 -- correctly, because the backend suite costs about thirteen minutes of
-runner time and a change to ``paper/`` cannot break it. So none of them
-can be listed in branch protection, and until this script existed the
-only required check was the coverage guard in ``repo-gate.yml``: the one
-workflow with no ``paths:`` filter.
+runner time and a docs-only change cannot break it. So none of them
+can be listed in branch protection; the one check that always reports is
+the coverage guard in ``repo-gate.yml``, the workflow with no ``paths:``
+filter.
 
-The result was a repository whose test suites gated nothing. They ran,
-they went red, and a merge was never blocked by one.
+Without an aggregate check, the test suites would gate nothing. They run,
+they could go red, and a merge would never be blocked by one.
 
 This script is run by a job in ``repo-gate.yml`` -- which always runs --
 and reports, as a single check, whether the filtered gates passed. It has

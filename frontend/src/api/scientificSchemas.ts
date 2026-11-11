@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 /**
- * The composite recipe a level of theory is bound to (ADR 0021): refs and
+ * The composite recipe a level of theory is bound to: refs and
  * names only. `geometry_level_of_theory_ref` is the level the recipe runs
  * its own geometry at, `null` when the recipe states none.
  */
@@ -26,7 +26,7 @@ export const levelOfTheorySchema = z.object({
     level_of_theory_ref: z.string().optional(),
     dispersion: z.string().nullable().optional(),
     solvent: z.string().nullable().optional(),
-    // ADR 0021 / P7a: stated-or-null facts of the level itself and the
+    // Stated-or-null facts of the level itself and the
     // recipe it is bound to. Each is `null`/absent when nothing is stated,
     // and renders as absent -- never as a default (`all_electron`, say).
     solvent_model: z.string().nullable().optional(),
@@ -35,7 +35,7 @@ export const levelOfTheorySchema = z.object({
     core_treatment: z.string().nullable().optional(),
     spin_treatment: z.string().nullable().optional(),
     composite_scheme: compositeSchemeSummarySchema.nullable().optional(),
-    // The level written in full by the server (ADR 0021, P7b): `method/basis`
+    // The level written in full by the server: `method/basis`
     // then each stated part of its identity, e.g. `CCSD(T)/cc-pCVTZ
     // (core=all_electron)`. The same renderer as the notation of a record's
     // levels, so the two never disagree. Not composed on the client.
@@ -57,7 +57,7 @@ export function lotLabel(value: { method: string; basis?: string | null; display
 export type LevelOfTheory = z.infer<typeof levelOfTheorySchema>
 
 /**
- * How far a composite energy has been checked (ADR 0021, P7a). `state` is
+ * How far a composite energy has been checked. `state` is
  * kept a plain string on the wire so a state this client has not met never
  * fails to parse; `domain/compositeVerification.ts` maps the five known
  * ones and degrades an unknown one to a neutral "not recognised" line.
@@ -91,7 +91,7 @@ export const productLevelsSchema = z.object({
     energy_source: z.string().nullable().optional(),
     /** The level the depositor declared for a record's energies; never filled from a linked calculation. */
     declared_energy: levelOfTheorySchema.nullable().optional(),
-    // ADR 0021 / P7a. `notation` is the SERVER's chemist's shorthand
+    // `notation` is the SERVER's chemist's shorthand
     // (`energy//geometry`), never composed on the client; `null` when
     // either level is absent. `geometry_source`/`frequency_source` say
     // when a level is what a composite recipe runs internally

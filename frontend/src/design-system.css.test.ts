@@ -145,10 +145,9 @@ describe("index.css gives code/pre/kbd/samp the mono face, killing the UA fallba
 })
 
 /** Strips `/* ... *\/` comments -- same technique and rationale as
- *  `theme.css.test.ts`'s `stripComments`: this codebase narrates design
- *  history in comments (several stylesheets in this PR literally quote
- *  the old `font-weight: 700` value they replaced), and prose mentioning
- *  a retired literal is not a live declaration of it. */
+ *  `theme.css.test.ts`'s `stripComments`: stylesheet comments mention
+ *  values by name (several quote a literal such as `font-weight: 700`),
+ *  and prose mentioning a literal is not a live declaration of it. */
 function stripComments(source: string): string {
     return source.replace(/\/\*[\s\S]*?\*\//g, "")
 }
@@ -192,7 +191,7 @@ describe("font weights are 400, 600 or 700 only, in every stylesheet", () => {
 })
 
 describe("exactly one .kv-list dt size rule across src/**/*.css", () => {
-    // The finding this guards: `.kv-list dt` used to be defined TWICE
+    // `.kv-list dt` must not be defined twice
     // (`calculation-detail.css` at .6875rem, `entry-science.css`'s scoped
     // `.science-record .kv-list dt` at .64rem) -- two different sizes for
     // the same semantic role, depending on which page happened to load.
@@ -228,15 +227,12 @@ describe("the disclosure primitive", () => {
         expect(rule![1]).not.toMatch(/text-transform/)
     })
 
-    // `.disclosure--inset` -- the third disclosure box style, retired by
-    // NAMING it ("header copy and inset disclosure" PR): a disclosure
-    // inset inside an already-boxed card (border-top only, no radius, no
-    // background). Was `.conformer-card .refs-disclosure` /
-    // `.conformer-card .refs-disclosure[open] summary`, a page-scoped
-    // override in `species-entry.css`; `species-entry.css.test.ts` and
-    // `ConformerSelector.test.tsx` (which pinned the old rule/DOM shape)
-    // now assert THIS modifier and the absence of the page override
-    // instead of being deleted.
+    // `.disclosure--inset` -- the named third disclosure box style: a
+    // disclosure inset inside an already-boxed card (border-top only, no
+    // radius, no background). It replaces a page-scoped override in
+    // `species-entry.css` (`.conformer-card .refs-disclosure`);
+    // `species-entry.css.test.ts` and `ConformerSelector.test.tsx` assert
+    // this modifier and the absence of the page override.
     describe(".disclosure--inset", () => {
         it("is a border-top-only, no-radius, no-background box, using --line-2 (the same token the conformer basin box's own border-top uses)", () => {
             const rule = /\.disclosure\.disclosure--inset\s*\{([^}]*)\}/.exec(designSystemCss)
@@ -263,7 +259,7 @@ describe("the disclosure primitive", () => {
 })
 
 describe("the kv-list primitive is defined exactly once, globally", () => {
-    it("design-system.css declares the base grid with an auto-fit column track, 16rem (SHOULD-FIX-3, widened from 12rem)", () => {
+    it("design-system.css declares the base grid with an auto-fit column track, 16rem (, widened from 12rem)", () => {
         const rule = /\.kv-list\s*\{([^}]*)\}/.exec(designSystemCss)
         expect(rule).not.toBeNull()
         expect(rule![1]).toMatch(/grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(16rem,\s*1fr\)\)/)
@@ -307,11 +303,10 @@ describe("exactly one bare .table-scroll rule across src/**/*.css (post-review)"
     })
 })
 
-describe("the data-table primitive (NOT yet wired to any page -- PR B's job; defined and tested here so PR B has a fixed target)", () => {
-    // Post-review fix: this used to be `font: var(--type-label-font)`
-    // plus a bolted-on `font-weight: 600` -- a 14th ad-hoc style outside
-    // the scale. It now reaches for the named `--type-label-strong` step
-    // instead (added to the scale for exactly this "bold label" case).
+describe("the data-table primitive", () => {
+    // `th` reaches for the named `--type-label-strong` step rather than
+    // `font: var(--type-label-font)` plus a bolted-on `font-weight: 600`
+    // (a 14th ad-hoc style outside the scale).
     it("th uses the named --type-label-strong step, muted colour, left-aligned", () => {
         const rule = /\.data-table\s+th\s*\{([^}]*)\}/.exec(designSystemCss)
         expect(rule).not.toBeNull()
@@ -386,7 +381,7 @@ describe("value-pill--muted matches .value-pill's face and size EXACTLY, includi
     // `.value-pill`'s `/1.3` line-height from the `font:` shorthand --
     // pin the FULL shorthand, not just weight/size/face, so a future
     // edit can't silently drop it again.
-    it("is 600 .72rem/1.3 sans, not the retired mono uppercase form", () => {
+    it("is 600 .72rem/1.3 sans, not a mono uppercase form", () => {
         const rule = /\.value-pill--muted\s*\{([^}]*)\}/.exec(designSystemCss)
         expect(rule).not.toBeNull()
         expect(rule![1]).toMatch(/font:\s*600\s*\.72rem\/1\.3\s*var\(--sans\)/)
@@ -399,11 +394,11 @@ describe("value-pill--muted matches .value-pill's face and size EXACTLY, includi
  * `letter-spacing` inherits as an already-resolved length, not
  * recomputed per descendant font-size, so a `.value-pill` sitting
  * inside a `.t-display-1` heading (`letter-spacing: -.03em`, computed
- * at THAT heading's own ~64px) used to inherit a fixed ~-1.8px tracking
+ * at THAT heading's own ~64px) would inherit a fixed ~-1.8px tracking
  * onto the pill's own 11.52px text -- several characters cramming into
  * the space of one, measured live as illegible overlapping glyphs on
- * `CorrectionSchemePage.tsx`'s level-of-theory pill and (unnoticed,
- * pre-existing) `FrequencyScaleFactorPage.tsx`'s scale-kind pill. Both
+ * `CorrectionSchemePage.tsx`'s level-of-theory pill and
+ * `FrequencyScaleFactorPage.tsx`'s scale-kind pill. Both
  * `.value-pill` and its `--muted` variant reset it explicitly so
  * neither can drift back to inheriting a heading's tracking.
  */
@@ -430,18 +425,11 @@ describe(".kv-list dd falls back to overflow-wrap: anywhere for an unbreakable v
     // pinned separately above, since `code` carries a UA-stylesheet
     // `font-family` that inheritance alone would not override).
     //
-    // Retired: an earlier draft of this fix added a SECOND rule
-    // (`.kv-list dd .data, .kv-list dd code`) carrying `word-break:
-    // keep-all` plus a duplicate `overflow-wrap: anywhere`, on the theory
-    // that a ref should prefer breaking at a `<wbr>` (inserted by a
-    // ref-rendering helper) or hyphen over an arbitrary character.
-    // Reviewer finding: `word-break: keep-all` only ever affects CJK line
-    // breaking -- it changed nothing for these Latin/underscore refs --
-    // and a controlled before/after on the six required routes showed
-    // the `<wbr>` insertion itself was neutral-to-harmful (it split a ref
-    // on `/calculations/calc_mxhadodv3hsdead3rnmofh3xyi` at 680/1100 that
-    // `origin/main` rendered whole). Both the second rule and the helper
-    // are retired.
+    // There is no second rule (`.kv-list dd .data, .kv-list dd code`)
+    // carrying `word-break: keep-all` or a duplicate `overflow-wrap:
+    // anywhere`: `word-break: keep-all` only affects CJK line breaking, so it
+    // does nothing for these Latin/underscore refs, and a `<wbr>` inserted
+    // by a ref-rendering helper can split a ref that has room to sit whole.
     it("declares overflow-wrap: anywhere on the base .kv-list dd rule", () => {
         const rule = /\.kv-list dd \{([^}]*)\}/.exec(designSystemCss)
         expect(rule, ".kv-list dd rule not found").not.toBeNull()
@@ -457,15 +445,14 @@ describe(".kv-list dd falls back to overflow-wrap: anywhere for an unbreakable v
         expect(designSystemCss).not.toMatch(/\.kv-list dd \.data,\s*\n?\s*\.kv-list dd code \{[^}]*overflow-wrap/)
     })
 
-    it("word-break: keep-all does not appear as a live declaration in design-system.css (retired -- inert for Latin/underscore refs)", () => {
-        // stripComments first: this file's own history comment quotes
-        // `word-break: keep-all` by name to explain what was retired and
-        // why -- prose mentioning a retired declaration is not a live one.
+    it("word-break: keep-all does not appear as a live declaration in design-system.css (inert for Latin/underscore refs)", () => {
+        // stripComments first: this file's own comments quote
+        // `word-break: keep-all` by name -- prose mentioning a declaration is not a live one.
         expect(stripComments(designSystemCss)).not.toMatch(/word-break:\s*keep-all/)
     })
 })
 
-describe(".data-table td.num never wraps (SHOULD-FIX-3)", () => {
+describe(".data-table td.num never wraps", () => {
     // MEASURED: a NASA-7 coefficient in scientific notation broke as
     // "-5.91781e- / 8" at 680px -- a numeric column has nothing to
     // legitimately wrap at.

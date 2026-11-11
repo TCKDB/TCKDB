@@ -4,15 +4,14 @@
  * imported by the component itself so every consumer gets it regardless
  * of which page-level stylesheet (if any) is loaded.
  *
- * MEASURED gap this fixed originally: these rules used to live only in
- * `species-entry.css`, which only `SpeciesEntryPage` imports. Any other
+ * These rules live here, not in `species-entry.css`, which only
+ * `SpeciesEntryPage` imports. Any other
  * page rendering `RefsDisclosure` (`TransitionStateEntryPage`,
  * `ConformerObservationPage`, `GeometryDetailPage`-style record pages)
- * got the raw `<details>`/`<summary>` — 11px unstyled sans, ref rows
- * running together ("Transition state entrytse_aq5…"), and UA default
- * outset borders on the Copy buttons.
+ * would get the raw `<details>`/`<summary>` (11px unstyled sans, ref rows
+ * running together, and UA default outset borders on the Copy buttons).
  *
- * design/foundations: `RefsDisclosure` now composes `components/
+ * `RefsDisclosure` composes `components/
  * Disclosure.tsx` (`<Disclosure className="refs-disclosure" …>`), so the
  * box chrome, chevron, and summary typography (review finding: SEVEN
  * different jobs — kicker, field label, table header, disclosure
@@ -20,29 +19,25 @@
  * style; this was one of those seven) all come from `.disclosure` in
  * `design-system.css`. What stays here is the ref-row/copy-button
  * internals, plus the `.conformer-card`-scoped overrides
- * `species-entry.css` still needs (kept, not retired:
- * `species-entry.css.test.ts` and `ConformerSelector.test.tsx` both pin
+ * `species-entry.css` still needs (`species-entry.css.test.ts` and
+ * `ConformerSelector.test.tsx` both pin
  * `.conformer-card .refs-disclosure`'s exact CSS and DOM shape).
  *
- * SF-2 (post-review, "header copy and inset disclosure" PR):
- * `.refs-disclosure` NO LONGER overrides its own border colour. It used
- * to set `border-color: var(--line-2)` here — a slightly different grey
- * from `.disclosure`'s own `--line` — which meant the site still had
- * THREE distinct computed disclosure boxes (the base `.disclosure` box,
- * this `--line-2` variant, and the `.disclosure--inset` modifier) even
- * after the inset modifier was named, one more than the two the owner
- * wants (a standard box, and the inset variant). Dropped: this class now
- * owns only `margin-top`, and gets its border colour — like every other
- * property of the box — entirely from `.disclosure`.
+ * `.refs-disclosure` does not override its own border colour: a different
+ * grey from `.disclosure`'s own `--line` would make a third distinct
+ * disclosure box style beside the base `.disclosure` and the
+ * `.disclosure--inset` modifier. This class owns only `margin-top`, and gets
+ * its border colour, like every other property of the box, from
+ * `.disclosure`.
  */
 
 .refs-disclosure {
     margin-top: 1.75rem;
 }
 
-/* `.refs-disclosure summary`'s own typography rule (the retired
- * uppercase .68rem mono form) is gone — `.disclosure > summary` in
- * `design-system.css` now sets it, since `RefsDisclosure` always
+/* `.refs-disclosure summary` has no typography rule of its own:
+ * `.disclosure > summary` in `design-system.css` sets it, since
+ * `RefsDisclosure` always
  * carries both classes. The base `[open] summary` border-bottom stays
  * here: `species-entry.css.test.ts` reads this exact rule (border drawn
  * in the hero-applicable, non-conformer-card case) directly from this
@@ -63,7 +58,7 @@
     gap: .5rem;
 }
 
-/* SHOULD-FIX-14 ("record-page residuals" re-review): fixed AT SOURCE
+/* fixed AT SOURCE
    instead of `index.css`'s `.archive-shell .ref-item-label,
    .archive-shell .copy-button` accessibility-pass floor override --
    `.ref-item-label` was `.6rem` (9.6px, floored to 11px there),
@@ -73,8 +68,7 @@
    named steps this design system already has for exactly these roles --
    `--type-label`, `--type-data`, `--type-ui` -- so the size is correct
    here rather than patched at a distance by a specificity trick. The
-   `index.css` floor override for these two classes is retired below
-   (this file's own rule wins outright now, nothing left to raise). */
+   `index.css` has no floor override for these two classes. */
 .ref-item-label {
     flex: none;
     color: var(--faint);
@@ -85,17 +79,11 @@
 
 .ref-item a,
 .ref-item-value {
-    /* `overflow-wrap: anywhere` kept as-is (was already declared before
-       this pass, just re-scaled to `--type-data-font` below) -- an
-       earlier version of this comment claimed a `word-break: keep-all`
-       addition was needed to prefer a real break point over an arbitrary
-       one; retired (re-review, same finding as `design-system.css`'s
-       matching `.kv-list dd` fix): `word-break: keep-all` only affects
-       CJK line breaking, so it changed nothing for these refs, and this
-       component's ref values were never run through a `<wbr>`-inserting
-       helper in the first place (`RefsDisclosure.tsx` is shared outside
-       this PR's scope), so there was no break opportunity for `keep-all`
-       to prefer. `anywhere` alone is what a value with no natural break
+    /* `overflow-wrap: anywhere` at the `--type-data-font` size below.
+       `word-break: keep-all` is not used: it only affects CJK line
+       breaking, so it would change nothing for these refs, and this
+       component's ref values are not run through a `<wbr>`-inserting
+       helper. `anywhere` alone is what a value with no natural break
        point wraps at instead of overflowing this box. */
     overflow-wrap: anywhere;
     font: var(--type-data-font);

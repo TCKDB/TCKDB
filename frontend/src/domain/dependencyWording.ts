@@ -10,7 +10,7 @@
  * can never fork — a wording change here is a single edit both surfaces
  * pick up.
  *
- * All eight roles are bespoke here (2026-09 rewrite, below) — a role with
+ * All eight roles are bespoke here — a role with
  * no entry falls back to `roleLabel(role)` (the raw token with underscores
  * replaced by spaces) in every view, never to another role's wording. That
  * fallback exists for a role this backend enum has not shipped yet, not
@@ -19,17 +19,12 @@
  * synthetic `some_future_role` and which this table's fallback path must
  * keep satisfying.
  *
- * Owner complaint (2026-09): the live graph drew the arrow from an
- * optimisation DOWN to its frequency child labelled "RUN ON THIS
- * GEOMETRY" — phrased from the PARENT's own point of view even though the
- * arrow itself is drawn parent -> child, so the owner read it backwards
- * ("the optimisation came from them"). Every `edgeLabel` below now reads
+ * The arrow is drawn parent -> child. Every `edgeLabel` below reads
  * in the direction of the arrow, source -> target, and names what the
- * TARGET is. `childSentence`/`parentSentence` were checked against the
- * actual parent/child semantics in `backend/app/db/models/calculation.py`
+ * TARGET is. `childSentence`/`parentSentence` follow the
+ * parent/child semantics in `backend/app/db/models/calculation.py`
  * (`CalculationDependency.parent_calculation_id` is the geometry/data
- * SOURCE, `.child_calculation_id` is what depends on it) — not just
- * reworded in place — so each sentence names the calc it is template'd
+ * SOURCE, `.child_calculation_id` is what depends on it), so each sentence names the calc it is template'd
  * for correctly as parent or child of the edge.
  *
  * Ground truth for which side is parent and which is child is the
@@ -149,7 +144,7 @@ export const DEPENDENCY_ROLE_WORDING: Record<string, DependencyRoleWording> = {
         edgeLabel: "source for Arkane",
     },
     composite_input: {
-        // ADR 0021 (P5): the PARENT is the single point (or optimisation) an assembled composite
+        // The PARENT is the single point (or optimisation) an assembled composite
         // read an energy from, the CHILD is the composite built from it. The server writes the
         // edge from the composite's inputs; the arrow runs input -> composite.
         childSentence: "This composite energy was assembled using the energy from {link}",

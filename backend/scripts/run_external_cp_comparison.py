@@ -2,8 +2,7 @@
 """CLI: run the review-tier external-Cp-comparison check and record it.
 
 Thin wrapper over :func:`app.services.external_comparison.cp.run_and_record`
-(``docs/research/tckdb-phase-c-implementation-plan.md`` C4). Per ADR 0008
-this check runs only from an explicit trigger like this one -- never from the
+Per the validation-tier rule (an expectation never blocks) this check runs only from an explicit trigger like this one -- never from the
 upload path -- and its only write is one append-only ``record_machine_review``
 row: no ``thermo`` or ``molecular_property_observation`` column is touched,
 no status implying approval is produced, and no threshold judges the

@@ -20,10 +20,9 @@ const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not re
 
 /**
  * `/methods/schemes/:ecsRef` -- the thin standalone scheme page
- * (methods-surface plan §4.3, `plan-methods-surface-v2`, not committed to
- * this repo). This is the link target for the two dead-ref sites §2.4 of
- * that plan found (`CalculationDetailPage.tsx`'s `EnergyCorrectionsSection`,
- * and every LOT page's own "Correction schemes" section), and the only
+ * This is the link target from `CalculationDetailPage.tsx`'s
+ * `EnergyCorrectionsSection` and from every LOT page's own "Correction
+ * schemes" section, and the only
  * home a scheme with `level_of_theory_id IS NULL` (an `atom_hf`/
  * `atom_thermal`/`soc` scheme, none deposited yet) can ever have -- it is
  * not keyed to a level of theory at all, so it has no LOT-page section to
@@ -50,13 +49,9 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
     const scheme = record.energy_correction_scheme
     const usage = record.used_by ?? []
     // Title from the archive's own controlled vocabulary (`scheme_kind`),
-    // never the depositor's free-text `scheme.name` -- owner: "I kinda
-    // don't want labels almost in general to never appear on the front
-    // end". Measured live: both deposited schemes have `name` exactly
-    // equal to `kind` (`atom_energy`/`bac_petersson`), so the old heading
-    // was only ever repeating the kind back in the depositor's own
-    // spelling -- never adding identity information `kind` alone does not
-    // already carry. `schemeKindLabel` is shared with
+    // never the depositor's free-text `scheme.name`, which would
+    // only repeat the kind back in the depositor's own
+    // spelling. `schemeKindLabel` is shared with
     // `LevelOfTheoryPage.tsx`'s own per-LOT scheme heading
     // (`domain/correctionSchemeFormat.ts`) so the two pages can never label
     // the same scheme kind two different ways.
@@ -80,8 +75,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                 own `<h1>` keeps titling from `scheme_kind` plus the
                                 level of theory it is tied to, unchanged. Software
                                 titles the PER-LOT box on `LevelOfTheoryPage.tsx`
-                                instead (owner ruling: those boxes are "the software
-                                or something", never the depositor's `name`) -- a
+                                instead (never the depositor's `name`) -- a
                                 different surface with a different reason to need it:
                                 a LOT page can hold two schemes of different kinds
                                 at once, so software disambiguates two anonymous
@@ -130,11 +124,9 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                         plainly, without narrating a cause it cannot
                                         verify from the API response alone.
 
-                                        PR 4's decision (correction-scheme-provenance plan
-                                        v2 §8, made here rather than left open): NEVER a
-                                        link, even now that `software_release_ref` resolves
-                                        to a real release (the read layer joins one, since
-                                        #459) rather than measuring empty. The route that
+                                        NEVER a
+                                        link, even though `software_release_ref` resolves
+                                        to a real release. The route that
                                         would resolve it, `GET /api/v1/software-releases/
                                         {id}`, sits behind `require_auth_for_legacy_reads`
                                         (`router.py`) -- measured against the live
@@ -202,7 +194,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                                 : "not recorded"}
                                         </dd>
                                     </div>
-                                    {/* No `scheme.note`: depositor free text (house rule, owner decision 2026-11-03). */}
+                                    {/* No `scheme.note`: depositor free text (house rule). */}
                                 </dl>
                             </div>
                         </div>

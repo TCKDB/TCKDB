@@ -54,7 +54,7 @@ const FALLBACK_RETRY_AFTER_SECONDS = 5
  * API sends) OR an HTTP-date (RFC 9110 §10.2.3, e.g. "Wed, 21 Oct 2015
  * 07:28:00 GMT") -- a plain `Number.parseInt` on the date form silently
  * returns `NaN` (`parseInt` on a string starting with a weekday name), so
- * every date-form response used to fall back to
+ * every date-form response would fall back to
  * `FALLBACK_RETRY_AFTER_SECONDS` regardless of what the header actually
  * said. Both forms are parsed here; the date form is converted to a
  * seconds-from-now count so callers only ever deal with one shape.

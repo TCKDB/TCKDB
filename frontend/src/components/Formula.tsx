@@ -24,11 +24,10 @@ export function Formula({ value }: { value: string }) {
 }
 
 /**
- * The shared "how is a species presented" primitive (owner ruling, filed
- * after `/reactions/rxn_fktlilofmrdaylunqva2hbltpq` rendered as
- * "CH3OS <=> CH3OS": a reactant `[CH2]SO` and a product `OC[S]` are two
- * different structures sharing one formula, and formula-only presentation
- * made an isomerisation read as a species reacting to itself).
+ * The shared "how is a species presented" primitive. Two different
+ * structures can share one formula (a reactant `[CH2]SO` and a product
+ * `OC[S]` are both CH3OS), and formula-only presentation would make an
+ * isomerisation read as a species reacting to itself.
  *
  * SMILES leads (a data run, `code.data`, never uppercased -- see
  * `text-transform-scientific-guard.test.ts`); the formula, still typeset

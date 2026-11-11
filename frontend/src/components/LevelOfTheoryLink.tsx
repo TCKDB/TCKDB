@@ -4,11 +4,8 @@ import { levelOfTheoryPath } from "../domain/methodsLinks"
 
 /**
  * The one place `lotLabel()`'s compact "method/basis" text becomes a real
- * link into `/methods/:lotRef` (`LevelOfTheoryPage`) -- see
- * `docs/plans/methods-surface.md` §2.4/§6 (`plan-methods-surface-v2`, not
- * committed to this repo) for the 11-file sweep this replaces (every
- * `lotLabel()` call site rendered its output as plain, unlinked text
- * before this PR).
+ * link into `/methods/:lotRef` (`LevelOfTheoryPage`); every `lotLabel()`
+ * call site renders through it.
  *
  * Falls back to the SAME plain text `lotLabel()` always rendered when
  * `level_of_theory_ref` is absent -- every call site's rendered text stays

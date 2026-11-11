@@ -5,10 +5,9 @@ import { describe, expect, it } from "vitest"
 import css from "./entry-science.css?raw"
 
 /**
- * design/species-entry (PR C of the design-system consolidation) retired
- * this file's own `.stage-table`/`.review-badge`/`.evidence-chip`/
- * `.evidence-full-checklist`/`.section-note`/`.records-note` reskins in
- * favour of `design-system.css`'s shared primitives (`.data-table`,
+ * This file declares no `.stage-table`/`.review-badge`/`.evidence-chip`/
+ * `.evidence-full-checklist`/`.section-note`/`.records-note` reskins;
+ * call sites use `design-system.css`'s shared primitives (`.data-table`,
  * `.value-pill--muted`, `Disclosure`, `.note`) at each call site in
  * `EntryThermoSection.tsx`/`EntryStatmechSection.tsx`/
  * `EntryTransportSection.tsx` -- these tests pin that retirement so it
@@ -73,8 +72,7 @@ describe("block titles (`.model-block-heading`) are a real heading step, never m
 })
 
 describe("`.checklist` reads sans/value-weight now, not a blanket mono rule (mono diet)", () => {
-    // MEASURED finding this guards: the geometry tab's `<ul className="checklist">`
-    // used to mono the ENTIRE row -- the observation summary sentence, "N
+    // The geometry tab's `<ul className="checklist">` must not mono the ENTIRE row -- the observation summary sentence, "N
     // optimization calculations", level-of-theory labels, atom counts --
     // along with the one or two genuine identifiers it actually needed to.
     // A real identifier now opts back into mono via `.data` at its own

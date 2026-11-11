@@ -136,7 +136,7 @@ def species_from_smiles(
     """Build a :class:`ResolvedSpecies` from a SMILES string.
 
     Charge/multiplicity default from the structure (radical count) when not
-    explicitly supplied — the override-allowed policy of DR-0031.
+    explicitly supplied; either can be overridden.
     """
     canonical, default_mult, default_charge, formula = _canonical_from_smiles(smiles)
     return ResolvedSpecies(

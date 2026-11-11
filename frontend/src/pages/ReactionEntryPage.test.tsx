@@ -203,7 +203,7 @@ describe("ReactionEntryPage -- DOM-vs-payload identity", () => {
         }
     })
 
-    // Review finding: `toBeGreaterThanOrEqual(1)` here verifies nothing that
+    // `toBeGreaterThanOrEqual(1)` here would verify nothing that
     // `findByText("kin_test1")` two lines above didn't already establish --
     // `kin_test1` (unlike tse_/calc_, whose multiplicities genuinely vary
     // with how many stages/dependency edges a fixture happens to carry) has
@@ -254,12 +254,10 @@ describe("ReactionEntryPage -- DOM-vs-payload identity", () => {
     })
 })
 
-// Review finding (blocking #3): the ONE call site wiring `ArrheniusChart`
-// into `ReactionKineticsSection.tsx` had no page-level guard -- reverting
-// that file to `main` (which never called the component at all) removed
-// the chart from the page entirely and this whole test file stayed
-// 25/25 green, because nothing here ever asked the page itself for the
-// Arrhenius SVG.
+// The ONE call site wiring `ArrheniusChart`
+// into `ReactionKineticsSection.tsx` needs a page-level guard -- removing the
+// call would drop the chart from the page entirely, so this test asks the page
+// itself for the Arrhenius SVG.
 describe("ReactionEntryPage -- the Arrhenius chart actually renders on the page", () => {
     it("the kinetics section contains an Arrhenius plot SVG for a plottable record", async () => {
         handleFull(mockFull())
@@ -302,8 +300,7 @@ describe("ReactionEntryPage -- three-state network wording", () => {
         // row, not a related-ref citation) -- exactly one mention.
         expect(occurrencesOutsideRefs(container, "net_test1")).toBe(1)
 
-        // `/networks/:ref` is a real page now (PR 2 of
-        // `docs/plans/pressure-dependent-network-surface.md`) -- the ref
+        // `/networks/:ref` is the network record page -- the ref
         // renders as a link to it, in the data face, alongside its own copy
         // button (both, not one instead of the other -- matching every
         // other `Ref` column on this page).
@@ -376,8 +373,7 @@ describe("ReactionEntryPage -- network-only kinetics sentence", () => {
 // `freq_on`/`single_point_on` dependency edges (parent `calc_opt1`), so the
 // fallback derivation's dependency-edge walk has real, matching evidence to
 // resolve `geometry` from -- `ts_opt_calculation_ref: null` is the REAL
-// shape every live record now has (PR 398's post-review commit: no kinetics
-// role ever accepts an opt-typed citation directly).
+// shape (no kinetics role accepts an opt-typed citation directly).
 function kineticsRecordFixture(levels: Record<string, unknown> | undefined) {
     return {
         kinetics_ref: "kin_test1",
@@ -514,10 +510,8 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
         expect(dts).toEqual(["Geometry", "Frequencies", "Energy"])
     })
 
-    // Owner complaint, round 2 (2026-09): an earlier version of the TS
-    // dependency-graph fix put an equation caption ("Reaction: ...") above
-    // the graph -- "This does need repeating what reaction since the top
-    // of the page says which reaction". The page's own `<h1>` (asserted
+    // The TS dependency graph has no equation caption ("Reaction: ...") above
+    // it. The page's own `<h1>` (asserted
     // elsewhere in this file) already states the equation; this section
     // must never restate it, regardless of what `/full` serves for
     // `species`.
@@ -546,14 +540,14 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
     })
 })
 
-// Post-review: the reviewer measured that several facts on this page could
-// be silently hard-coded or swapped without any test noticing, because
-// every existing fixture happened to use the SAME value everywhere (e.g.
+// Several facts on this page could
+// be silently hard-coded or swapped without a test noticing if every
+// fixture used the SAME value everywhere (e.g.
 // "not_reviewed" for every review status, so a mutation hard-coding the
 // pill to a fixed string would still pass). These tests use DISTINCT,
 // non-default values per fact specifically so a hard-coded or swapped
 // render is distinguishable from a correctly wired one.
-describe("ReactionEntryPage -- individual facts are wired, not hard-coded (post-review mutation coverage)", () => {
+describe("ReactionEntryPage -- individual facts are wired, not hard-coded (mutation coverage)", () => {
     it("the header review pill reflects the entry's OWN served status, not a fixed 'approved'/'not reviewed'", async () => {
         handleFull(mockFull({ reaction_entry: { ...mockFull().reaction_entry, review: { status: "under_review" } } }))
         const { container } = page()
@@ -585,11 +579,9 @@ describe("ReactionEntryPage -- individual facts are wired, not hard-coded (post-
         ])
     })
 
-    // Independent review: `EvidenceChecklist`'s "N rows" fallback used to
-    // collapse this card behind a NUMBER THAT NEVER CHANGES (the card
-    // always has 6 category rows), regardless of the real total -- MEASURED
-    // live, `rxe_h3z3f7tjfsj3gbvvh7lmmpikx4` collapsed to "6 rows" while the
-    // true total was 4. This fixture's `total: 39` (distinct from the fixed
+    // `EvidenceChecklist`'s collapsed summary must not be a NUMBER THAT
+    // NEVER CHANGES (the card always has 6 category rows), regardless of the
+    // real total. This fixture's `total: 39` (distinct from the fixed
     // 6-row count) proves the collapsed summary is wired to the real
     // `review_summary.total`, not the row list's own length.
     it("the Review card's collapsed summary is the TRUE total joined records, never the fixed 6-row count", async () => {
@@ -780,9 +772,7 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
     // The live "resolver disagreement" case (plan §7): a kinetics record's
     // OWN cited sp calculation is not among this reaction's TS graph at
     // all. The row still LINKS (the calc is a real, followable archive
-    // record), but carries an inline caveat explaining the discrepancy --
-    // MEASURED gap this closes: the row used to render unlinked with no
-    // explanation at all.
+    // record), but carries an inline caveat explaining the discrepancy.
     it("the TS sp calculation row links even when the ref is not among this entry's own calculations, with an explanatory caveat", async () => {
         const payload = mockFull()
         payload.kinetics[0].provenance.ts_sp_calculation_ref = "calc_unlinked_sp"
@@ -797,14 +787,9 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
     })
 })
 
-// Owner report this fixes: "we should add a 4th column ... that is the
-// reference rather than it being in the same column as Formula" -- the
-// Formula cell used to carry the linked formula PLUS the spe_... ref PLUS
-// its own copy button, rendering as "C₉H₉ spe_... Copy" in one cell.
-// (The old "Formula" and "SMILES" columns were later consolidated into
-// one "Species" column -- SMILES-leads-formula-in-brackets -- but the Ref
-// column this describe block covers is unaffected: it still carries only
-// the ref and its copy button, never folded back into the identity cell.)
+// The Ref column is separate from the "Species" column: the identity cell
+// does not carry the spe_... ref and its copy button (no "C₉H₉ spe_... Copy"
+// in one cell); the Ref column carries only the ref and its copy button.
 describe("ReactionEntryPage -- Participants table: the reference has its own column, not the Species cell", () => {
     it("the Species cell carries only the linked SMILES/formula -- no ref, no copy button", async () => {
         handleFull(mockFull())
@@ -848,7 +833,7 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
         expect(refCell.querySelector(".copy-button")).not.toBeNull()
     })
 
-    // SMILES-leads-formula-in-brackets consolidation (owner ruling):
+    // SMILES-leads-formula-in-brackets:
     // the Species cell renders "O (H2O)", not a bare formula that two
     // different structures sharing a formula could render identically.
     it("the Species cell leads with SMILES and brackets the formula after it", async () => {
@@ -946,8 +931,7 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
     })
 })
 
-// Owner: "these pill boxes like deposited etc. - can they be clickable
-// links to wherever they are meant to go?" -- a row asserting PRESENCE
+// A row asserting PRESENCE
 // links to its own section; "none deposited" (and every other absence)
 // never does.
 describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-only pill links", () => {
@@ -956,7 +940,7 @@ describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-onl
             .find((card) => card.textContent?.includes("Evidence on this reaction entry")) as HTMLElement
     }
 
-    it("the evidence card is collapsed by default (owner: 'Evidence blocks should be expandable rather')", async () => {
+    it("the evidence card is collapsed by default", async () => {
         handleFull(mockFull())
         const { container } = page()
         await screen.findByText("kin_test1")
@@ -972,7 +956,7 @@ describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-onl
         expect(card.querySelector(".coverage-checklist-summary")).toHaveTextContent("3 present, 3 absent")
     })
 
-    it("opening it shows the same rows an always-open card used to", async () => {
+    it("opening it shows every row", async () => {
         handleFull(mockFull())
         const { container } = page()
         await screen.findByText("kin_test1")
@@ -1118,7 +1102,7 @@ describe("ReactionEntryPage -- the References disclosure names every kinetics re
     })
 })
 
-describe("ReactionEntryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("ReactionEntryPage -- no depositor-typed text", () => {
     it("prints none of the network name, the participants' joined labels, or atom-map and kinetics notes", async () => {
         const base = mockFull()
         const planted = plantSentinels(mockFull({

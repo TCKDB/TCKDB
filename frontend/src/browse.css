@@ -1,8 +1,8 @@
 
-/* The 4px accent bar this header used to carry is retired: this is the
+/* No 4px accent bar on this header: it is the
    page's own primary heading, not `.card--derived` content, so a left
-   accent rule was borrowing that primitive's meaning without adopting its
-   semantics -- same call as the record header's. */
+   accent rule would borrow that primitive's meaning without adopting its
+   semantics -- same as the record header. */
 .browse-header {
     max-width: 65rem;
 }
@@ -157,7 +157,7 @@
     gap: .5rem;
 }
 
-/* SHOULD-FIX-11 (re-review): was a bare `.84rem var(--sans)` -- `--type-
+/* was a bare `.84rem var(--sans)` -- `--type-
    value` is the named step for a checkbox's own plain-text label (already
    sans; `text-transform: none`/`letter-spacing: normal` stay explicit so
    this never inherits a `--type-label`-family uppercase/tracking rule by
@@ -169,9 +169,7 @@
     letter-spacing: normal;
 }
 
-/* The seven TS `has_*` selects used to each occupy their own grid cell
-   (19 controls on the row before Status/evidence, first row starting at
-   y=829 at 1920px). Collapsed into one "Show only entries with..." row:
+/* The seven TS `has_*` selects share one "Show only entries with..." row:
    a <fieldset> spanning every grid column (`grid-column: 1 / -1`) rather
    than sitting in one `minmax(11rem, 1fr)` cell like the rest of the
    grid, so the seven checkboxes can lay out in a single wrapping row
@@ -200,7 +198,7 @@
     gap: .5rem 1.1rem;
 }
 
-/* SHOULD-FIX-11 (re-review): was a bare `.84rem var(--sans)`, same fix as
+/* was a bare `.84rem var(--sans)`, same fix as
    `.browse-filter-field-check label` above -- `--type-value`. */
 .browse-filter-evidence-check {
     display: flex;
@@ -211,7 +209,7 @@
     cursor: pointer;
 }
 
-/* SHOULD-FIX-11 (re-review): was a bare `.92rem` on both -- `--type-note`
+/* was a bare `.92rem` on both -- `--type-note`
    is the named step for a short status/empty-state line. `.browse-empty`
    keeps its own wider `line-height` (a dashed box can run to two lines;
    `--type-note`'s own 1.5 is close but this was tuned slightly looser). */
@@ -305,17 +303,13 @@
     position: relative;
 }
 
-/* Stretched-link pattern for the reaction browse row -- now the SAME
-   mechanic as `.ts-browse-row .browse-row-title::after` above, not a
-   separate one. Was a distinct `.browse-row-stretched-link` overlay
-   element in the DOM (see git history) because `ReactionEquation` used to
-   render a real per-participant `<Link>` for every species, and nesting
-   the whole equation inside a second row-level anchor would have nested
-   `<a>` inside `<a>`. `ReactionBrowseRow.tsx` now renders the equation
+/* Stretched-link pattern for the reaction browse row -- the SAME
+   mechanic as `.ts-browse-row .browse-row-title::after` above.
+   `ReactionBrowseRow.tsx` renders the equation
    with `linkParticipants={false}` (plain text, no per-participant links),
    so the equation can sit directly inside a single `<Link
    className="browse-row-title">` to the reaction entry with no nesting
-   hazard -- the shared `.browse-row-title::after` rule above already
+   hazard (`<a>` inside `<a>`) -- the shared `.browse-row-title::after` rule above already
    covers the overlay/stretch mechanics for both rows; only the two rules
    below, scoped to `.reaction-browse-row`, are needed on top of it. */
 .reaction-browse-row {
@@ -431,7 +425,7 @@ span.browse-row-title {
     text-decoration: none;
 }
 
-/* SHOULD-FIX-11 (species-entry/browse/chrome residuals re-review): was
+/* was
    `.76rem var(--mono)` -- "charge 0 · spin doublet (2)" (species rows) and
    the TS row's family/absence text ("family not recorded") are prose
    summaries, not identifiers. `--type-note` (sans) is the named step; a
@@ -458,14 +452,8 @@ span.browse-row-title {
     }
 }
 
-/* `.browse-row-smiles` (a species row's own SMILES line, once separate
-   from its title) was RETIRED here (SMILES-leads-formula-in-brackets
-   change): `SpeciesBrowseRow.tsx` now renders SMILES inside its title
-   itself, through `SpeciesFace`, so a second line repeating the same
-   string had zero consumers left -- the same "grepped, zero `.tsx`
-   consumers" bar `.browse-row-ts-label` was retired against just above in
-   this file's own history (SHOULD-FIX-11/15, species-entry/browse/chrome
-   residuals re-review). */
+/* There is no `.browse-row-smiles` rule: `SpeciesBrowseRow.tsx` renders
+   SMILES inside its title itself, through `SpeciesFace`. */
 
 /* Level-of-theory + software line (item 1): the two headline stages
    (opt/sp, falling back to whichever stages exist) plus the software that
@@ -507,13 +495,10 @@ span.browse-row-title {
     list-style: none;
 }
 
-/* A bare layout wrapper now, not a bordered box of its own -- it used to
-   BE the pill, with the review-status span rendered inside it, which put
-   classification (kind · state) and review status inside one shared
-   border/background ("NOT REVIEWED is part of the same pill as
-   minimum · ground which should not be so"). Review status is a different
-   axis (curation, not classification); the two facts now render as TWO
-   separate `.value-pill`s, and this class only spaces them apart. */
+/* A bare layout wrapper, not a bordered box of its own: classification
+   (kind · state) and review status are different axes (classification vs
+   curation), so the two facts render as TWO separate `.value-pill`s, and
+   this class only spaces them apart. */
 .browse-entry-chip {
     display: flex;
     flex-wrap: wrap;
@@ -546,9 +531,8 @@ span.browse-row-title {
     color: var(--faint);
 }
 
-/* TS row only: the evidence text and the ref code used to be two separate
-   `<p>`s at different sizes; nothing about either needs its own line, so
-   they now share one row. Flex rather than plain inline text so the ref
+/* TS row only: the evidence text and the ref code share one row. Flex
+   rather than plain inline text so the ref
    (`.browse-ref`, reused as-is for its color) can still wrap onto its own
    line at narrow widths without the evidence text truncating. See the
    painting-order comment above `.ts-browse-row .browse-row-footer` for why

@@ -3,7 +3,7 @@ import { z } from "zod"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 // ---------------------------------------------------------------------------
-// Shape notes (measured 2026-08-29 against a hosted TCKDB deployment,
+// Shape notes (from
 // backend/app/schemas/reads/scientific_geometry.py and
 // backend/app/services/scientific_read/geometry.py):
 //

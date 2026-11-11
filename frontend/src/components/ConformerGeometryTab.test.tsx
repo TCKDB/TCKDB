@@ -59,8 +59,7 @@ describe("ConformerGeometryTab", () => {
     it("styles the observation and calculation refs as links -- colour and underline, not plain black monospace", async () => {
         // Asserted on the raw `style` attribute, not `toHaveStyle` --
         // jsdom's default anchor stylesheet already renders `<a>` underlined
-        // with no inline style at all, which made an earlier version of
-        // this test pass against a mutant with NO `textDecoration` in
+        // with no inline style at all, so `toHaveStyle` would pass against a mutant with NO `textDecoration` in
         // `linkStyle` (MEASURED: `toHaveStyle({ textDecoration:
         // "underline" })` is vacuous for an `<a>` in this environment).
         // Reading the attribute string directly requires this component's

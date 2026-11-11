@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import css from "./record-identity-header.css?raw"
 
 /**
- * SHOULD-FIX-7 ("record-page residuals" re-review): `.record-identity-
+ * `.record-identity-
  * note` (`margin: 0`) and the `.kv-list` that follows it inside
  * `.record-identity-known` both own no spacing of their own -- MEASURED
  * 10px baseline-to-cap on calc-freq/geometry pages, tighter than every
@@ -20,7 +20,7 @@ describe(".record-identity-known owns the gap between its children", () => {
 })
 
 /**
- * SF-3 (post-review, "header copy and inset disclosure" PR): this rule
+ * this rule
  * had no source test of its own. It's what lays a copy button beside an
  * identity fact's value (SMILES, InChIKey, ...) -- `flex` + `align-items:
  * baseline` puts the `<code>` value and the `.copy-button` side by side,

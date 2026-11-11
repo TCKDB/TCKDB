@@ -30,11 +30,7 @@ import "./design-system.css"
 afterEach(cleanup)
 
 /**
- * PR B review (BLOCKING-2, "record pages" consolidation): `.record-
- * context a` / `.basin-context a` used to give a link inside a record
- * page's header `dl` the house link treatment (accent colour, an
- * underline in `--accent-underline`); both selectors are retired now
- * that those `dl`s compose the shared `.kv-list` primitive instead, and
+ * Record-page header `dl`s compose the shared `.kv-list` primitive, and
  * neither `.kv-list` nor `.data-table`/`.card`/`.note` carried an `a`
  * rule of their own -- `index.css`'s global default (`a { color: inherit;
  * text-decoration: none }`) made a `calc_…`/`co_…`/RECORD-column link

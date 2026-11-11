@@ -28,7 +28,7 @@ describe("Disclosure", () => {
         expect(screen.queryByText(/\(/)).toBeNull()
     })
 
-    it("never uppercases the summary text -- sentence case, not the retired kicker/label transform", () => {
+    it("never uppercases the summary text -- sentence case, not a kicker/label transform", () => {
         render(<Disclosure summary="References"><p>body</p></Disclosure>)
         const summary = screen.getByText("References", { exact: false })
         const style = window.getComputedStyle(summary)

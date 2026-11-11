@@ -20,7 +20,7 @@ function extractRule(source: string, selector: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// SHOULD-FIX-12 (species-entry/browse/chrome residuals re-review): the Cp
+// the Cp
 // chart carried three more bespoke sizes -- `.74rem`/`.64rem`/`.68rem`,
 // the last two below the site's own 11px accessibility floor and `.64rem`
 // (10.24px) the smallest text anywhere on the site, MEASURED. Each maps

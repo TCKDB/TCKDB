@@ -455,8 +455,8 @@ describe("describeConformerEvidence", () => {
     // equivalent of the aggregate branch's `rawOptCount === 0` guard. A
     // conformer whose loaded observations carry freq/sp but no opt at all
     // satisfies the safety condition (chainCount 0 === coverageOpt 0, every
-    // observation loaded) and used to fall through to an EMPTY `buckets`
-    // map, producing a stray "." sentence fragment.
+    // observation loaded), so it must be guarded against an EMPTY `buckets`
+    // map, which would produce a stray "." sentence fragment.
     it("says plainly that no observation has an optimization calculation, on the per-observation path, rather than a stray '.'", () => {
         const conformer = group({
             observations_summary: { total: 2 },

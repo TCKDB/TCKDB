@@ -7,7 +7,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 import { madeUnderSchema } from "../domain/madeUnder"
 
 // ---------------------------------------------------------------------------
-// Shape notes (measured 2026-08-29 against a hosted TCKDB deployment,
+// Shape notes (from
 // backend/app/schemas/reads/scientific_thermo.py and
 // backend/app/services/scientific_read/thermo.py):
 //
@@ -155,10 +155,9 @@ const calculationEvidenceSummarySchema = z.object({
 // / `thermo.workflow_tool_release_id` server-side -- never backfilled from
 // the primary calculation's software. `primary_calculation.software`
 // (inside `calculationEvidenceSummarySchema` above) is the *calculation's*
-// software (e.g. Gaussian) and is a separate fact. Issue #284: these two
-// were previously collapsed into one field named `software` here, which
-// silently discarded both real keys under `.passthrough()` and rendered
-// every thermo record's software as "not recorded" on the live page.
+// software (e.g. Gaussian) and is a separate fact. The two must stay
+// separate fields: collapsing them into one `software` key would discard both
+// real keys under `.passthrough()`.
 const thermoProvenanceSchema = z.object({
     primary_calculation: calculationEvidenceSummarySchema.nullable().optional(),
     level_of_theory: levelOfTheorySchema.nullable().optional(),
@@ -177,7 +176,7 @@ const thermoProvenanceSchema = z.object({
     conformer_group_ref: z.string().nullable().optional(),
 }).passthrough()
 
-// Additive (owner decision, 2026-09): a thermo record's opt/freq/sp source
+// Additive: a thermo record's opt/freq/sp source
 // calculations, each with its OWN level of theory — the same
 // role/calculation_ref/level_of_theory shape `statmechApi.ts`'s
 // `sourceCalculationSummarySchema` already carries (narrowed here to what
@@ -254,7 +253,7 @@ export const thermoRecordSchema = z.object({
     evidence_completeness: evidenceCompletenessSchema.optional(),
     provenance: thermoProvenanceSchema.optional(),
     group_additivity: groupAdditivitySchema.nullable().optional(),
-    // Additive (owner decision, 2026-09): geometry/frequency/energy can
+    // Additive: geometry/frequency/energy can
     // each be at a different level of theory. Absent on an older API
     // response — `domain/productLevels.ts`'s `resolveProductLevels`
     // derives the same three from `source_calculations` below when this is

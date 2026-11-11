@@ -1312,7 +1312,7 @@ class TCKDBClient:
         filename: str | None = None,
     ) -> Any:
         """POST a standalone ThermoML XML document to
-        ``/api/v1/uploads/thermoml`` (Phase C-E6) — not the NIST bulk
+        ``/api/v1/uploads/thermoml`` — not the NIST bulk
         archive path, which is a backend-only CLI
         (``backend/scripts/thermoml_cp_import.py --archive``).
 
@@ -1333,8 +1333,7 @@ class TCKDBClient:
 
         ``idempotency_key`` is required (unlike every other typed upload
         method's optional key): this route itself requires the
-        ``Idempotency-Key`` header, by the C-E6 decision (2026-09-20) --
-        not by DR-0024, which leaves the header optional in general --
+        ``Idempotency-Key`` header (it is optional on other upload routes)
         and refuses a keyless request at the wire, so a default of
         ``None`` here would just defer that failure to the server for no
         benefit.
@@ -2739,7 +2738,7 @@ class TCKDBClient:
         ``chemkin`` (forward-only, no thermodynamics). ``allow_administrative_choice`` is false on the server unless
         you pass true, and then permits only an unranked leading-front choice. Optional fields that are ``None`` are
         dropped, never sent as JSON null. A solve of kind ``reported`` (rates transcribed from a publication) is written
-        into CHEMKIN only with ``include_reported=True``, and then annotated with its literature (ADR 0010).
+        into CHEMKIN only with ``include_reported=True``, and then annotated with its literature.
         """
         path = _network_export_path(network_ref)
         body: dict[str, Any] = {

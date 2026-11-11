@@ -8,14 +8,14 @@ import { domainWithPadding, linearScale } from "./chartScale"
  * deposited barrier -- see the invariant below, which is the one rule this
  * whole module exists to enforce.
  *
- * INVARIANT (owner's brief, "never draw a barrier that was not deposited"):
+ * INVARIANT (never draw a barrier that was not deposited):
  * a channel with no `NetworkChannelBarrier` row produces no saddle-point
  * element, full stop -- not a peak, not an interpolated hump, not a guessed
  * height. On the live hydrazine archive that is 17 of 21 channels; they
  * are visible only in `NetworkDiagram.tsx`'s own accessible channel table,
  * which already carries all 21 regardless of what this module computes.
  *
- * SADDLE HEIGHT (owner's brief): `source_energy + forward_barrier_kj_mol`,
+ * SADDLE HEIGHT: `source_energy + forward_barrier_kj_mol`,
  * never the reverse-derived figure and never an average of the two. The
  * two are supposed to agree -- `source_energy + forward == sink_energy +
  * reverse` is the physical consistency check a correctly-deposited barrier
@@ -141,9 +141,9 @@ export function pesLevelCaptionWidth(label: string, energyKjMol: number): number
 }
 const Y_DOMAIN_PADDING_FRACTION = 0.14
 /**
- * Owner's brief: "I verified for all four that source_energy +
- * forward_barrier == sink_energy + reverse_barrier to within 0.05 kJ/mol."
- * The same tolerance is the accept/reject boundary here -- a barrier row
+ * A barrier is consistent when source_energy +
+ * forward_barrier == sink_energy + reverse_barrier to within 0.05 kJ/mol.
+ * That tolerance is the accept/reject boundary here -- a barrier row
  * whose two sides disagree by more than this is treated as a data problem,
  * not rendered (never averaged; see the module header comment above).
  */
@@ -282,8 +282,8 @@ export interface NetworkPesLayout {
  * live hydrazine network: 9 proper connector crossings, against 1 for
  * `connectivity`).
  *
- * Both are offered because the choice is a readability judgement the owner
- * wanted a second opinion on, not a correctness one. NEITHER changes a
+ * Both are offered because the choice is a readability judgement,
+ * not a correctness one. NEITHER changes a
  * single energy: y position, saddle heights and which channels are drawn
  * are identical under both.
  */
@@ -341,9 +341,9 @@ export function computeNetworkPesLayout(
     const tieBreak = (hash: string): number => servedIndex.get(hash) ?? Number.MAX_SAFE_INTEGER
 
     // ---- candidate saddles: join each barrier to its channel, then check
-    // the two things that can make a deposited barrier unplaceable. Moved
-    // ahead of x placement (unlike the old ascending-energy layout) because
-    // x now needs the ACCEPTED saddles as graph edges. ----
+    // the two things that can make a deposited barrier unplaceable. This runs
+    // ahead of x placement because
+    // x needs the ACCEPTED saddles as graph edges. ----
     const channelByKey = new Map(
         channels.filter((channel): channel is NetworkChannel & { channel_key: string } => channel.channel_key != null)
             .map((channel) => [channel.channel_key, channel]),
@@ -376,7 +376,7 @@ export function computeNetworkPesLayout(
             })
             continue
         }
-        // Saddle height is ALWAYS source + forward (owner's brief) -- the
+        // Saddle height is ALWAYS source + forward -- the
         // reverse-derived figure below exists only to check agreement,
         // never to compute the plotted value, and never to be averaged in.
         const forwardHeight = sourceEnergy + barrier.forward_barrier_kj_mol
@@ -526,14 +526,10 @@ export function computeNetworkPesLayout(
         // PES for this system draws it: a path leaves the end of a level,
         // not a point in the air beside it.
         //
-        // This used to offset by half the CAPTION width instead, to stop the
-        // line crossing the caption. A caption is far wider than its bar
-        // ("[H][H] + [N-]=[NH2+]" is about 156px against the bar's 68), so
-        // that offset put the leg 19-51px OUTSIDE the bar on six of eight
-        // legs on the live hydrazine network, and the owner reported the
-        // states as "floating on the graph" -- they were connected, but the
-        // line never reached them. The caption no longer needs clearing:
-        // each one carries its own opaque backing rect
+        // The leg is not offset by the CAPTION width: a caption is far wider
+        // than its bar ("[H][H] + [N-]=[NH2+]" is about 156px against the
+        // bar's 68), so that offset would put the leg outside the bar. The
+        // caption needs no clearing: each one carries its own opaque backing rect
         // (`.net-pes-caption-backing`), so a line passing behind it stays
         // legible. Capped by the neighbour clearance so a very close
         // neighbour still wins over the bar edge.
@@ -667,8 +663,7 @@ function assignConnectivityLayout(
 }
 
 /**
- * Root the component at its highest-degree member (owner's suggested
- * approach) and walk outward, giving each leaf the next integer slot and
+ * Root the component at its highest-degree member and walk outward, giving each leaf the next integer slot and
  * each internal node the average of its children's slots. Provably
  * crossing-free for an actual tree: every node's subtree occupies a
  * contiguous slot range disjoint from every sibling subtree's, by
@@ -725,8 +720,8 @@ function layoutComponentAsTree(
 
 // ---------------------------------------------------------------------------
 // Level-caption decluttering -- generalises the saddle-peak decluttering
-// below to level captions, which (unlike the old ascending-energy layout)
-// can now legitimately share an x when they form a vertical chain; see the
+// below to level captions, which
+// can legitimately share an x when they form a vertical chain; see the
 // call site's own comment.
 // ---------------------------------------------------------------------------
 
@@ -804,7 +799,7 @@ function peaksCollide(ax: number, ay: number, bx: number, by: number): boolean {
  * to show and must stay exactly correct regardless of decluttering.
  *
  * Kept as a defensive pass even under the connectivity layout (which
- * mostly avoids the coincidence that motivated this originally -- two
+ * mostly avoids the coincidence this pass guards against -- two
  * states equidistant from a common hub landing two different saddles on
  * the same midpoint): a hub with several symmetric branches can still
  * produce two peaks whose x AND y are both close, and heights are real

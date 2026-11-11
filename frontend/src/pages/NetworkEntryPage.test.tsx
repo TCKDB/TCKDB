@@ -395,7 +395,7 @@ describe("NetworkEntryPage -- structured stereo facets tell isomeric states apar
     })
 })
 
-describe("NetworkEntryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("NetworkEntryPage -- no depositor-typed text", () => {
     it("prints none of the fields a depositor typed, in text, SVG text, ids or any attribute", async () => {
         const detail = networkDetailFixture()
         // The server's state label embeds each participant's `species_entry_label`; plant the typed parts there.
@@ -497,9 +497,7 @@ describe("NetworkEntryPage -- reactions table", () => {
 })
 
 describe("NetworkEntryPage — every ref that has a record page is a link to it", () => {
-    // The page originally rendered these as inert <code>, which is the same
-    // dead-end this PR's own ReactionEntryPage change removed in the opposite
-    // direction. Each assertion names the route the ref must reach, so a
+    // Each assertion names the route the ref must reach, so a
     // wrong-route regression fails here rather than 404ing in a browser.
     it("the reaction entry ref links to /reaction-entries/:ref", async () => {
         handleNetworkDetail(networkDetailFixture())
@@ -766,8 +764,7 @@ describe("NetworkEntryPage -- k(T,P) chart (PR 4)", () => {
 })
 
 // ---------------------------------------------------------------------------
-// k(T,P) x-axis mode (owner: "And why can't I change temp to 1/temp" -- the
-// Arrhenius chart already has this control, this chart did not). Mirrors
+// k(T,P) x-axis mode (the Arrhenius chart has the same control). Mirrors
 // `ArrheniusChart.test.tsx`'s own "the x-axis mode control" describe block,
 // same fixture-independent assertions: default mode, switching re-projects
 // and reverses, switching back restores, and the axis title follows the
@@ -936,10 +933,8 @@ describe("NetworkEntryPage — the k(T,P) y-axis title sits in the grid track bu
 })
 
 // ---------------------------------------------------------------------------
-// k(T,P) stacked-panel / unit-control follow-up (owner: "shouldn't they all
-// stack on one graph... why is there no control for changing the y axis").
-// A network with THREE channels across the two families actually observed
-// on the live archive: `channel_1` isomerization/`per_s`, `channel_2`
+// k(T,P) stacked-panel / unit-control behaviour.
+// A network with THREE channels across two families: `channel_1` isomerization/`per_s`, `channel_2`
 // association/`cm3_mol_s`, `channel_3` exchange/`cm3_mol_s` -- exercises
 // both "same family stacks" and "different families never mix" at once.
 // ---------------------------------------------------------------------------
@@ -1104,9 +1099,7 @@ describe("NetworkEntryPage -- k(T,P) chart stacks selected channels by unit fami
         const axisTitleAfter = assocWrap.querySelector(".arrhenius-chart-axis-title--y")!.textContent
         const lineAfter = assocWrap.querySelector('[data-testid="ktp-line-nk_assoc_cheb"] polyline')!.getAttribute("points")
         // The axis title names the NEW unit -- a mutation that converts the
-        // plotted values but leaves the title reading the old unit (the
-        // exact defect the Arrhenius chart's own owner caught once already)
-        // fails this line.
+        // plotted values but leaves the title reading the old unit fails this line.
         expect(axisTitleAfter).toBe("log₁₀ [k / m³ mol⁻¹ s⁻¹]")
         expect(axisTitleAfter).not.toBe(axisTitleBefore)
         // The plotted line itself actually moved (m3_mol_s = cm3_mol_s *

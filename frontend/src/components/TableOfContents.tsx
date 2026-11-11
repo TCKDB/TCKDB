@@ -110,7 +110,7 @@ export function TableOfContents() {
     const suppressScrollSpyRef = useRef(false)
     // The pending "the programmatic scroll has settled" timer, so a new
     // scroll event arriving mid-burst can re-arm it (extend the
-    // suppression window) instead of leaving an earlier, shorter timer to
+    // suppression window) instead of leaving the pending timer to
     // fire underneath it.
     const settleTimeoutIdRef = useRef<number | null>(null)
 

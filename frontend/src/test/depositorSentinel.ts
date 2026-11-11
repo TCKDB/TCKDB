@@ -1,5 +1,4 @@
-// Helpers for the "no depositor-typed text on a public page" guard tests (owner
-// decision 2026-11-03). A page test plants a unique sentinel in EVERY field the
+// Helpers for the "no depositor-typed text on a public page" guard tests. A page test plants a unique sentinel in EVERY field the
 // depositor typed, renders the real page or component, and asserts that no
 // sentinel reached the DOM -- text, attributes, ids, or SVG text.
 //

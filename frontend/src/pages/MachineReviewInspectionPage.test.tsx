@@ -14,11 +14,11 @@ import {
 } from "../types/machineReviewRun"
 
 /**
- * The record-summaries table used to carry a column headed `record_ref` whose
- * value was a database row id. `record_ref` means the *public* ref everywhere
- * else in this API, so the page promised a handle and delivered a row number.
+ * The record-summaries table does not carry a column headed `record_ref`
+ * whose value is a database row id: `record_ref` means the *public* ref
+ * everywhere else in this API.
  *
- * It now shows `record_public_ref` -- the identifier the archive is addressed
+ * It shows `record_public_ref` -- the identifier the archive is addressed
  * by -- and `record_id`, which an admin-only surface may carry. These tests pin
  * which value lands in which column, and that a record with no public ref shows
  * nothing rather than falling back to its id.
@@ -216,10 +216,8 @@ function showing(id: string): Promise<HTMLElement> {
 /**
  * The page's four live regions, by accessible name.
  *
- * There used to be two, and these helpers could say `getByRole("status")`.
- * The run control added a second pair, so an unqualified query now matches
- * two elements and throws -- which is the test suite noticing, correctly,
- * that "the status region" had stopped naming one thing. The regions carry
+ * An unqualified `getByRole("status")` matches two elements and throws,
+ * because "the status region" does not name one thing. The regions carry
  * `aria-label`s for the same reason a screen-reader user needs them: to
  * tell which button a result answered.
  */
@@ -456,7 +454,6 @@ describe("building curator tasks for a submission", () => {
         // places an id can hide from it -- a `title`, a `data-` attribute,
         // an `aria-label`. A reviewer landed exactly that mutation and the
         // textContent-only check passed with both ids in the DOM.
-        // DR-0028 Req 2.
         const text = document.body.textContent ?? ""
         const markup = document.body.outerHTML
         for (const id of ["4471", "4472"]) {
@@ -606,8 +603,8 @@ describe("building curator tasks for a submission", () => {
     it("does NOT say nothing was built when the build ran unreadably", async () => {
         /**
          * The 2xx-with-an-unparseable-body case. The build HAS run and may
-         * have written rows. The page used to prefix every failure with
-         * "No tasks were built:", which made this one assert a thing and
+         * have written rows. The page must not prefix every failure with
+         * "No tasks were built:", which would assert a thing and
          * its opposite in a single sentence:
          *
          *   "No tasks were built: The build ran, but this page could not
@@ -806,7 +803,6 @@ describe("the schema behind a machine-review run", () => {
          * became. This pins the mechanism that keeps it that way if the
          * server ever sends one anyway. zod strips what the schema does not
          * declare, so the id never reaches the object the page renders from.
-         * DR-0028 Req 2.
          */
         const parsed = MachineReviewRunResultSchema.parse(
             runReply({ findings_count: 2, audit_event_id: 9911 }),
@@ -1018,7 +1014,7 @@ describe("running machine review for a submission", () => {
          * key or an unreachable endpoint fails inside this application, and
          * the runner records exactly that sentence.
          *
-         * The page used to label it "Reason the reviewer gave" and headline
+         * The page must not label it "Reason the reviewer gave" or headline
          * it "the reviewer failed" -- which points an admin at the model when
          * the fault is their own configuration, and blurs the axis between a
          * machine reviewer's judgement and this system's plumbing. Those are
@@ -1188,7 +1184,7 @@ describe("running machine review for a submission", () => {
 
         // `textContent` covers the rendered words; `outerHTML` covers the
         // places an id can hide from it: a `title`, a `data-` attribute, an
-        // `aria-label`. DR-0028 Req 2.
+        // `aria-label`.
         expect(document.body.textContent ?? "").not.toContain("9911")
         expect(document.body.outerHTML).not.toContain("9911")
         expect(document.body.textContent ?? "").toContain("findings recorded: 2")

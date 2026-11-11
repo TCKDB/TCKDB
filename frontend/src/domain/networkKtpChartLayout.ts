@@ -6,10 +6,7 @@ import { seriesColor } from "./thermoCpChartLayout"
 import { type ArrheniusUnitFamily, arrheniusUnitConversionFactor, arrheniusUnitFamily, familyUnits } from "./arrheniusUnits"
 
 /**
- * PR 4 of `docs/plans/pressure-dependent-network-surface.md` (§2.4/§5),
- * extended by the stacked-panel/unit-control follow-up (owner: "shouldn't
- * they all stack on one graph... why is there no control for changing the
- * y axis"): layout/shaping helpers for the k(T,P) chart. This module does
+ * Layout/shaping helpers for the k(T,P) chart. This module does
  * NOT evaluate Chebyshev or PLOG -- it only builds the request grid this
  * page sends to `POST /scientific/networks/{ref}/kinetics/evaluate`
  * (`api/networkKineticsEvalApi.ts`) and shapes the ALREADY-EVALUATED
@@ -197,9 +194,9 @@ export function groupKtpFitsByChannel(
 
 // ---------------------------------------------------------------------------
 // Model-kind labelling. Overlaying channels on one panel (below) means
-// COLOUR is now spent on channel identity, not model kind -- `modelKindColor`
+// COLOUR is spent on channel identity, not model kind -- `modelKindColor`
 // stays as a fixed, kind-only hue used ONLY for the one shared "how to read
-// this" legend swatch (never for an actual plotted line any more); the real
+// this" legend swatch (never for an actual plotted line); the real
 // per-line encoding is `channelSeriesColor` (hue = channel) tinted by
 // `modelKindStrokeColor` and widened/thinned by `modelKindStrokeWidth` (both
 // below), which is what a `<polyline>` actually renders.
@@ -245,8 +242,7 @@ export function modelKindColor(modelKind: string): string {
 /** Stable per-channel hue, indexed by a channel's position in the FULL
  *  (unfiltered) channel-group list -- so a channel's colour never changes
  *  when a DIFFERENT channel is toggled on or off elsewhere in the fieldset
- *  (the same "fixed, not per-panel-index" principle the old per-model-kind
- *  colour followed, now applied to channel identity instead). Cycles
+ *  (a "fixed, not per-panel-index" colour). Cycles
  *  through `seriesColor`'s 8 tokens; a selection carrying more than 8
  *  channels at once reuses hues -- an intentional trade against the
  *  alternative (an unbounded, eventually indistinguishable palette), and

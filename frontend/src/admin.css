@@ -347,8 +347,8 @@
  * Composes `.card` from `design-system.css` for the block itself, which is
  * also what gives every link inside it (the subject's own ref, a nested
  * calculation/conformer-group ref) the house link treatment via `.card a` --
- * this page no longer builds its own link rule the way `.review-container-
- * link` used to, because nothing here sits inside a `.data-table` any more.
+ * this page builds no link rule of its own the way `.review-container-
+ * link` does, because nothing here sits inside a `.data-table`.
  * --------------------------------------------------------------------- */
 
 .review-subject {

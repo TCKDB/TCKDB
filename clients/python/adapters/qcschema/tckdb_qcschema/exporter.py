@@ -93,8 +93,7 @@ mirroring ``backend/app/chemistry/normal_modes.py``'s ``atomic_mass``
 ``resolve_element_symbol`` (~lines 64-95) exactly rather than by
 coincidence: a ``null`` ``isotope_mass_number`` on a ``D``/``T`` atom
 resolves to the mass number the symbol itself names (2/3), and
-``Molecule.symbols`` collapses ``D``/``T`` to ``H`` (measured
-2026-09-20: constructing a ``Molecule`` with a raw ``"D"`` symbol raises
+``Molecule.symbols`` collapses ``D``/``T`` to ``H`` (measured: constructing a ``Molecule`` with a raw ``"D"`` symbol raises
 ``qcelemental.exceptions.NotAnElementError``, even though
 ``to_A("D")`` itself returns ``2`` without complaint) -- the isotope
 stays carried in ``mass_numbers``, never lost by the collapse. An
@@ -169,7 +168,7 @@ def _client_version(client: Any) -> tuple[str, str]:
     """``(version, source)`` -- the API version if the deployment names one,
     else the ``tckdb-client`` package version.
 
-    Measured 2026-09-20: this backend's ``GET /status`` reports only the
+    Measured: this backend's ``GET /status`` reports only the
     Alembic schema revision (``alembic_version``), not an application
     semver, and ``GET /meta`` reports client-compatibility bounds, not its
     own version either. So there is no genuine "API version" this client
@@ -235,8 +234,7 @@ def _resolve_nuclide_symbol(symbol: str) -> str:
     (~lines 64-95) exactly: ``D``/``T`` resolve to ``H``, everything else is
     unchanged. Required because ``qcelemental.models.v2.Molecule.symbols``
     must be real periodic-table element symbols -- constructing one with a
-    raw ``"D"`` raises ``qcelemental.exceptions.NotAnElementError`` (measured
-    2026-09-20) even though ``qcelemental.periodictable.to_A("D")`` happily
+    raw ``"D"`` raises ``qcelemental.exceptions.NotAnElementError`` (measured) even though ``qcelemental.periodictable.to_A("D")`` happily
     returns ``2``. The isotope this atom actually is stays carried
     separately, in ``mass_numbers``.
     """
@@ -382,7 +380,7 @@ def _build_molecule(
         fix_com=fixed_frame,
         fix_orientation=fixed_frame,
         # masses is deliberately never passed: qcelemental.models.v2.Molecule
-        # derives it itself from symbols + mass_numbers (measured 2026-09-20:
+        # derives it itself from symbols + mass_numbers (measured:
         # mass_numbers [16, 2, 1] for O/D/H yields masses
         # [15.99491462, 2.01410178, 1.00782503]) -- inventing it here would
         # risk disagreeing with qcelemental's own tabulated values.
@@ -390,7 +388,7 @@ def _build_molecule(
         # qcelemental rounds Molecule.geometry to GEOMETRY_NOISE=8 decimal
         # places (bohr) by default on every construction -- not merely for
         # its own hashing, see qcelemental.models.v2.molecule.Molecule.__init__
-        # (measured 2026-09-20: constructing with the default noise turned
+        # (measured: constructing with the default noise turned
         # a stored geometry already accurate to ~1e-12 bohr into one only
         # accurate to ~1e-8 bohr, five orders of magnitude past the
         # importer's own ten-decimal-Angstrom bound). 14 decimal places is

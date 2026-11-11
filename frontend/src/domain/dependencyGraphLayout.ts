@@ -169,7 +169,7 @@ const CENTRE_PAD_BOTTOM = 12
 export const CENTRE_H = CENTRE_PAD_TOP + PILL_H + CENTRE_PILL_GAP + CENTRE_REF_LINE_H + CENTRE_PAD_BOTTOM
 
 // The centre node's optional SUBJECT row -- "an optimisation OF WHAT"
-// (owner: "what the fuck is it? a ts? a random ass molecule?"), inserted
+// (a ts? a plain molecule?), inserted
 // BETWEEN the type pill and the ref line rather than replacing either --
 // the pill still answers WHAT KIND of calculation, the ref line still
 // answers WHICH one, and this row alone answers WHOSE. Same small font
@@ -187,7 +187,7 @@ export const CENTRE_SUBJECT_GAP_BOTTOM = 6
  * subject, or `CENTRE_H` widened by the subject row and its own two gaps
  * (replacing the plain `CENTRE_PILL_GAP` the no-subject case uses)
  * otherwise. Exported so `CalculationDependencyGraph.tsx` can re-derive
- * the SAME box height this module used to size the node, rather than
+ * the SAME box height this module uses to size the node, rather than
  * re-deriving a second copy of the split -- mirrors how `CENTRE_PAD_TOP`
  * is already shared this way for the pill's own vertical offset. */
 export function centreContentHeight(hasSubject: boolean): number {

@@ -427,13 +427,10 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             return (
                                 <li key={siblingRef}>
                                     {/* The link text is the sibling's own ref, never
-                                        `sibling.transition_state.label` (house rule
-                                        widened 2026-09: no depositor-typed labels on
-                                        public pages -- three siblings on one reaction
-                                        used to all read "TS4", indistinguishable, and
-                                        a fourth reaction on this same page's own
-                                        MEASURED live data carries the identical label
-                                        "TS1" on every one of its own siblings). Deposit
+                                        `sibling.transition_state.label` (house rule: no depositor-typed labels on
+                                        public pages -- siblings on one reaction can
+                                        all carry the identical label, so it cannot
+                                        tell them apart). Deposit
                                         date + level of theory + software below already
                                         do the differentiating work the label never
                                         could. */}

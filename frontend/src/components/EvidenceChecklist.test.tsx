@@ -23,22 +23,13 @@ describe("EvidenceChecklist", () => {
         expect(heading).toHaveClass("t-label")
     })
 
-    // Independent review: `evidence-checklist.css` used to carry a
-    // `.coverage-card > .t-label { display: block }` rule guarding a ~4px
-    // "heading renders inline, card shrinks" regression from BEFORE this
-    // card was collapsible, when the heading span and the `<dl>` sat as
-    // direct, adjacent siblings inside `.coverage-card` (the heading's own
-    // box height affected where the `<dl>` sat directly below it). Now
-    // RETIRED: the heading lives inside `Disclosure`'s own `<summary>`,
+    // The heading lives inside `Disclosure`'s own `<summary>`,
     // and the `<dl>` lives inside a SEPARATE `.disclosure-body` sibling of
-    // that `<summary>` -- they are no longer adjacent siblings at all, so
+    // that `<summary>` -- they are not adjacent siblings, so
     // the heading's own `display` value cannot affect the `<dl>`'s
-    // position any more, regardless of what it computes to (MEASURED:
-    // still `inline`, same UA default a bare `<span>` always had -- no
-    // blockification rescues it, and none is needed). This is pinned
+    // position, regardless of what it computes to. This is pinned
     // structurally below (heading and checklist are proven to sit in
-    // different disclosure regions) rather than as a `display` assertion
-    // that would just restate an unchanged UA default.
+    // different disclosure regions) rather than as a `display` assertion.
     it("the heading (inside <summary>) and the checklist <dl> (inside .disclosure-body) are separate siblings, not adjacent boxes whose heights interact", () => {
         const { container } = render(
             <EvidenceChecklist heading="Evidence on this thing" rows={[{ label: "Optimisation", value: "present" }]} />,
@@ -76,8 +67,7 @@ describe("EvidenceChecklist", () => {
         expect(ddFor(list, "Optimisation")).toHaveTextContent("present")
         expect(ddFor(list, "Frequency")).toHaveTextContent("absent")
         // Label above value -- a real <dt>/<dd> pair per row, not a run-on
-        // sentence sharing one element (the owner report this whole
-        // component exists to fix).
+        // sentence sharing one element.
         const rows = list.querySelectorAll(":scope > div")
         expect(rows).toHaveLength(2)
         for (const row of rows) {
@@ -144,7 +134,7 @@ describe("EvidenceChecklist", () => {
         expect(screen.getByText(/First sentence\. Second sentence\./)).toHaveClass("note")
     })
 
-    // Owner: "Evidence blocks should be expandable rather" -- built on the
+    // Collapsible -- built on the
     // shared `Disclosure` primitive, collapsed by default, so a reader
     // must open it before its rows become visible.
     describe("collapsible via the shared Disclosure primitive", () => {

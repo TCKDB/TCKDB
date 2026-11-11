@@ -43,8 +43,7 @@ function App() {
           <Route element={<AppShell />}>
             <Route path="/" element={<ArchiveHomePage />} />
             {/* Every browse kind renders the SAME `BrowsePage`, at its own
-                path (owner decision, replacing the earlier single `/species
-                ?kind=` surface) -- built from `BROWSE_KIND_PATHS` rather
+                path -- built from `BROWSE_KIND_PATHS` rather
                 than four literal path strings so this table and
                 `browseKindForPath`'s reverse lookup (which `BrowsePage`
                 itself uses to fix its kind from the route) cannot drift
@@ -118,22 +117,14 @@ function App() {
             <Route path={BROWSE_KIND_PATHS.transition_state} element={<BrowsePage />} />
             <Route path="/transition-state-entries/:entryRef" element={<TransitionStateEntryPage />} />
             <Route path="/reaction-entries/:entryRef" element={<ReactionEntryPage />} />
-            {/* Was `<RecordPlaceholderPage kind="Reactions" />` -- a dead
-                end the site nav's "Reactions" link pointed straight at,
-                while the working reaction browse was reachable only via
-                `/species?kind=reaction`. Now the SAME `BrowsePage` every
+            {/* The reaction browse: the SAME `BrowsePage` every
                 other kind uses. */}
             <Route path={BROWSE_KIND_PATHS.reaction} element={<BrowsePage />} />
             <Route path="/reactions/:reactionRef" element={<ReactionOverviewPage />} />
-            {/* PR 2 of `docs/plans/pressure-dependent-network-surface.md` --
-                the record page a `net_...` ref finally has somewhere to
-                link to. `NetworkSection` on `ReactionEntryPage.tsx` used to
-                render that ref as inert `<code>`, with nothing to click,
-                because this route did not exist; it links here now. */}
+            {/* The record page a `net_...` ref links to
+                (`NetworkSection` on `ReactionEntryPage.tsx` links here). */}
             <Route path="/networks/:networkRef" element={<NetworkEntryPage />} />
-            {/* Was `<RecordPlaceholderPage kind="Methods" />` -- the last
-                consumer of that component (see its own file: every other
-                route that used to render it now has a real page). Three
+            {/* The methods index, with three
                 more routes below it: `/methods/:lotRef` is the real
                 level-of-theory record page (methods-surface plan §4.2);
                 `/methods/schemes/:ecsRef` and
@@ -150,7 +141,7 @@ function App() {
                 the index above it. */}
             <Route path="/methods" element={<MethodsIndexPage />} />
             <Route path="/methods/schemes/:ecsRef" element={<CorrectionSchemePage />} />
-            {/* ADR 0021, P7b: the composite recipe a level of theory is bound to. */}
+            {/* The composite recipe a level of theory is bound to. */}
             <Route path="/methods/composite-schemes/:schemeRef" element={<CompositeSchemePage />} />
             <Route path="/methods/frequency-scale-factors/:fsfRef" element={<FrequencyScaleFactorPage />} />
             <Route path="/methods/:lotRef" element={<LevelOfTheoryPage />} />
@@ -188,8 +179,8 @@ function App() {
 }
 
 // Gate for the one route where "unrecognized" has two different answers.
-// `calculations` is a stale link from the earlier chapter-nav design that
-// `SpeciesEntryPage` itself still knows how to redirect to the default tab
+// `calculations` is a legacy alias (listed in `LEGACY_ENTRY_SECTION_ALIASES`) that
+// `SpeciesEntryPage` itself knows how to redirect to the default tab
 // (see its own effect); every OTHER unrecognized segment -- a mistyped
 // guess like `/single-point`, never a URL this app served -- is finding
 // #12's silent-Geometry-tab bug and gets the not-found page instead.

@@ -83,8 +83,8 @@ export type KnownSeverity = (typeof KNOWN_SEVERITIES)[number]
  * `RecordReview.container_type` / `.container_ref` are (`types/recordReview.ts`).
  * Six of the seventeen record types have no page of their own -- thermo and
  * statmech are tabs on a species entry, kinetics and transition states are
- * sections on a reaction entry -- so a task against one of those used to
- * render as text nobody could open. `resolveRecordLocation` in
+ * sections on a reaction entry -- so a task against one of those has no
+ * page of its own to open. `resolveRecordLocation` in
  * `domain/recordRoute.ts` is what turns this pair, plus `record_type` /
  * `record_public_ref`, into somewhere to click. `.default(null)` on both so
  * a server that predates this field still parses.
@@ -213,7 +213,7 @@ export function severityClass(severity: string): string | null {
  * does not declare, so the ids never reach the object the page renders
  * from: they cannot be printed by accident, and no later edit to the page
  * can print them without coming back here first. They are internal row
- * ids, which DR-0028 Req 2 keeps out of user-facing output. Nothing is
+ * ids, which stay out of user-facing output. Nothing is
  * lost -- `created_count + reused_count` is the same number, and a task is
  * reached through the queue, never by typing its id.
  *

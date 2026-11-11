@@ -69,8 +69,7 @@ function record(overrides: Partial<TransitionStateBrowseRecord> = {}): Transitio
 // depositor's own label ("TS0 · optimized").
 //
 // The depositor's `transition_state.label` is a house-rule-banned
-// depositor-typed label (widened 2026-09: "no labels on the front end,
-// they make no sense like TS0 and TS1") and must never render anywhere on
+// depositor-typed label and must never render anywhere on
 // this row, regardless of whether one was deposited -- there is no
 // fallback text naming the label's absence either, unlike the fields this
 // row DOES claim to state (e.g. "family not recorded"), because the
@@ -321,7 +320,7 @@ describe("TransitionStateBrowseRow: link wraps only the equation", () => {
         // swapped in. The ~170-character accessible name the old
         // whole-row link produced (equation + family + charge/spin + both
         // pills + evidence text + ref) is gone, and so is the depositor
-        // label ("TS0") the accessible name used to carry.
+        // label ("TS0").
         expect(link).toHaveAccessibleName("A <=> B (deposit rxe_deposit_one)")
         expect(link).toHaveAttribute("href", "/transition-state-entries/tse_one")
     })
@@ -409,7 +408,7 @@ describe("TransitionStateBrowseRow: design-system primitive adoption", () => {
         expect(row).toHaveClass("browse-row")
     })
 
-    it("the ref renders through .browse-ref and .data (the shared data step), not the retired .browse-row-ref", () => {
+    it("the ref renders through .browse-ref and .data (the shared data step), not .browse-row-ref", () => {
         renderRow(record())
         const row = document.querySelector(".ts-browse-row") as HTMLElement
         const ref = within(row).getByText("tse_one")
@@ -426,7 +425,7 @@ describe("TransitionStateBrowseRow: design-system primitive adoption", () => {
     })
 })
 
-describe("TransitionStateBrowseRow -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("TransitionStateBrowseRow -- no depositor-typed text", () => {
     it("prints none of the typed label, note or unmapped SMILES, in text or any attribute", () => {
         const planted = plantSentinels(record(), ["label", "note", "unmapped_smiles"])
         expectPlanted(planted)

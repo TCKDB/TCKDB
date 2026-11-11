@@ -28,10 +28,10 @@ import {
 // factor of its own.
 
 // SVG pinned to a FIXED pixel size (both a `width`/`height` attribute on
-// the element, not a percentage) -- the mock's own defect (round 2 review):
-// `width:100%; max-width:720px` on the Cp chart's `<svg>` scales its
+// the element, not a percentage):
+// `width:100%; max-width:720px` on an `<svg>` scales its
 // viewBox-driven text down whenever the container is narrower than 720px,
-// and at a 680px viewport that took tick labels below the 11.52px
+// which can take tick labels below the 11.52px
 // accessibility floor. This chart never shrinks; `ArrheniusChart.tsx`
 // wraps it in a `overflow-x: auto` container instead, so a narrow viewport
 // scrolls the chart horizontally rather than shrinking its text.
@@ -154,10 +154,8 @@ export function arrheniusUnitLabel(units: string | null | undefined): string {
  * (the SAME string the k(T) table's own caption/header show, and the panel
  * legend's "deposited: ..." chip) so the axis, the table, and the legend
  * can never disagree about which unit is meant -- one formatting function,
- * three call sites (owner's report: switching the unit used to move the
- * curve, the table, and the caption, and leave the axis reading the bare
- * "log₁₀ k" it always had, the one thing on the page that never said what
- * was actually plotted).
+ * three call sites (the axis must say what is actually plotted, not a bare
+ * "log₁₀ k").
  */
 export function arrheniusLog10AxisTitle(units: string | null | undefined): string {
     return `log₁₀ [k / ${arrheniusUnitLabel(units)}]`
@@ -265,7 +263,7 @@ function modalDepositedUnit(series: readonly ArrheniusSeries[]): string {
 
 /**
  * Splits `records` into per-ORDER-FAMILY panels (a record in `cm3_mol_s`
- * and one in `m3_mol_s` share ONE panel now -- they are the same physical
+ * and one in `m3_mol_s` share ONE panel -- they are the same physical
  * quantity, 1e6 apart, and the whole point of a per-panel unit selector is
  * to make them directly comparable; only a genuine dimensional difference,
  * e.g. `per_s` beside `cm3_mol_s`, still gets two panels) and an excluded
@@ -326,8 +324,7 @@ export function buildArrheniusChartData(records: readonly ReactionKineticsRecord
  *  `xAxisMode` state maps -- so a panel's own current unit selection
  *  survives a re-render as long as its identity (family, or unrecorded/raw
  *  token) is unchanged. Mirrors the exact grouping key
- *  `buildArrheniusChartData` used to bucket this panel's series in the
- *  first place. */
+ *  `buildArrheniusChartData` uses to bucket this panel's series. */
 export function arrheniusPanelKey(panel: ArrheniusPanel): string {
     if (panel.orderFamily != null) return `family:${panel.orderFamily}`
     const firstDeposited = panel.series[0]?.depositedUnits
@@ -357,7 +354,7 @@ export function arrheniusPanelKey(panel: ArrheniusPanel): string {
  * `-Infinity`: left in, that single point poisons `panelLog10KDomain`'s
  * `Math.min`/`Math.max` into `[-Infinity, Infinity]`, every plotted y
  * becomes `NaN`, and the WHOLE panel renders blank with no error anywhere
- * (post-merge review finding -- the underflow threshold, k < ~1.79e-308 /
+ * (the underflow threshold, k < ~1.79e-308 /
  * factor, is not realistically reachable for a real deposit, but the
  * guard is one line and the failure mode without it is silent).
  */

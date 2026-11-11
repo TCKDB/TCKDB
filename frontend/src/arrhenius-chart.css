@@ -35,12 +35,9 @@
    needs (`ArrheniusControlsRow`): X-axis alone (2+ panels), X+Y together
    (exactly one panel -- the common case, 14 of 17 live reaction entries),
    or Y alone (a single panel among 2+, rendered inside that panel's own
-   `ArrheniusPanelChart`). Owner's report on the previous round of this
-   fix: "Chart controls" (a titled, bordered box) immediately followed by
-   a SECOND bordered box per panel with its own "this panel only" caption
-   -- "this looks so shit". No heading, no per-row border/background any
-   more: a thin inline-flex strip is what "read as one short row" means
-   here. `scope` (`.arrhenius-chart-controls-scope` below) is the only
+   `ArrheniusPanelChart`). No heading and no per-row border/background:
+   a thin inline-flex strip reads as one short row. `scope`
+   (`.arrhenius-chart-controls-scope` below) is the only
    thing that still varies in weight -- two or three words, shown ONLY
    when a second row on the page genuinely needs disambiguating from,
    never a caption at all with a single panel. */
@@ -60,8 +57,8 @@
     color: var(--muted);
 }
 
-/* The considered replacement for "a bare native `<select>` sitting on the
-   chart" (owner, round 3: "I do not like the grey style" / "something more
+/* A rounded chip for the select, not a bare native `<select>` sitting on the
+   chart.
    visually appealing"). A rounded chip -- label, then select, inside one
    bordered pill -- deliberately matching `.arrhenius-chart-legend-item`
    below (same border/radius/background language) so the controls read as
@@ -185,9 +182,7 @@
 
 /* Standard clip-based visually-hidden technique (present in the
    accessibility tree, invisible on screen) -- carries the y-axis unit
-   reason's full sentence for a screen reader / `aria-describedby`
-   without printing it in the layout (owner: "the reason available on
-   demand ... not a full sentence sitting in the layout"). */
+   without printing it in the layout. */
 .arrhenius-chart-visually-hidden {
     position: absolute;
     top: 0;
@@ -202,16 +197,12 @@
     border: 0;
 }
 
-/* `.arrhenius-chart-panel-heading` (a standalone unit-string caption above
-   the legend, e.g. "s⁻¹") is RETIRED as of round 3 of the axis-label fix --
-   once the y-axis title itself states the unit (`log₁₀ [k / <unit>]`,
-   `ArrheniusChart.tsx`'s `arrheniusLog10AxisTitle`), this heading said the
-   exact same fact a second time, which is what the owner's report flagged
-   ("this page stating the same thing twice"). The SCIENTIFIC ERROR fix this
-   rule used to carry (`text-transform: none`, scoped against `S⁻¹` reading
-   as siemens) now lives on `.arrhenius-chart-axis-title--y` below, which
-   carries the same unit string and needed that exact same override
-   already, unchanged by this removal. */
+/* There is no standalone unit-string caption above the legend (e.g. "s⁻¹"):
+   the y-axis title itself states the unit (`log₁₀ [k / <unit>]`,
+   `ArrheniusChart.tsx`'s `arrheniusLog10AxisTitle`). The `text-transform:
+   none` override that keeps `S⁻¹` from reading as siemens lives on
+   `.arrhenius-chart-axis-title--y` below, which carries the same unit
+   string. */
 
 .arrhenius-chart-legend {
     display: flex;
@@ -323,12 +314,7 @@
    dimensionally-honest ratio form (e.g. "log₁₀ [k / cm³ mol⁻¹ s⁻¹]"), and
    upper-casing it renders "LOG₁₀ [K / CM³ MOL⁻¹ S⁻¹]" -- "K" reads as
    kelvin, not as log-base-10 of a rate coefficient, on a plot whose x-axis
-   already reads "TEMPERATURE (K)". MEASURED (original finding, still true
-   of the ratio form): computed `text-transform: uppercase` with
-   `textContent === "log₁₀ k"` on the live page, before the axis carried a
-   unit. The EXACT same defect this file already fixed for the retired
-   `.arrhenius-chart-panel-heading` ("S⁻¹" -- siemens per second) was never
-   applied here. `text-transform: none` is scoped to this ONE (`--y`)
+   already reads "TEMPERATURE (K)". `text-transform: none` is scoped to this ONE (`--y`)
    selector -- the X title keeps the shared uppercase rule, never a
    page-wide override of `--type-label` itself. */
 .arrhenius-chart-axis-title--y {
@@ -359,10 +345,10 @@
     gap: .75rem;
 }
 
-/* SELF-SUFFICIENCY fix (post-merge review finding): `.kinetics-k-table th`
+/* SELF-SUFFICIENCY: `.kinetics-k-table th`
    is rendered ENTIRELY by `ArrheniusChart.tsx` (this file's own component --
-   `.kinetics-k-table` names no element anywhere else in `src/`), but its
-   lowercase header used to depend on `reaction-entry.css:102-104`'s copy of
+   `.kinetics-k-table` names no element anywhere else in `src/`), so its
+   lowercase header must not depend on `reaction-entry.css:102-104`'s copy of
    this exact rule -- a PAGE-scoped stylesheet `ArrheniusChart.tsx` never
    imports (only this file, per this file's own header comment: "a
    component's styling should not depend on another file's stylesheet

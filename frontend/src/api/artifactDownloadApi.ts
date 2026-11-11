@@ -5,8 +5,7 @@ import { artifactDownloadName } from "../domain/artifactDownloadName"
  *
  * Raw artifact bytes are served only to authenticated callers, on every
  * deployment, with no opt-out: unredacted ESS logs can embed
- * producer-side scratch paths, usernames and cluster hostnames
- * (`docs/adr/0004-store-artifacts-verbatim-gate-raw-log-access.md`).
+ * producer-side scratch paths, usernames and cluster hostnames.
  * So `credentials: "include"` is load-bearing here, not boilerplate --
  * without it every download is a 401.
  */
@@ -52,11 +51,8 @@ function messageFor(status: number, code: string | undefined): { message: string
         return { message: "Sign in to download stored files.", retryable: false }
     }
     if (status === 404) {
-        // One reason now. Until 2026-09-14 a 404 here also covered "exists,
-        // but not approved and not yours", so the message had to name both
-        // and the reader could not tell which applied. Authentication is the
-        // whole gate now, so a signed-in reader seeing this can take it
-        // literally: the archive has no file with that digest.
+        // Authentication is the whole gate, so a signed-in reader seeing this
+        // can take it literally: the archive has no file with that digest.
         return { message: "No file with that digest is in the archive.", retryable: false }
     }
     if (status === 502) {

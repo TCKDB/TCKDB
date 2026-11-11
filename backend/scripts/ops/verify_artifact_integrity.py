@@ -5,7 +5,7 @@ Corruption is otherwise found only when a reader stumbles on it, so an
 artifact nobody downloads is checked by nothing. This pass closes that
 gap for a *bounded* set of objects and writes an
 ``artifact_integrity_event`` for every break it finds, which the trust
-evaluator then reads at read time (ADR 0014).
+evaluator then reads at read time.
 
 **This is not a cron job.** It re-reads whole objects, so its cost scales
 with stored volume while its value scales with what someone will
@@ -99,7 +99,7 @@ read of it records ``object_missing``, the trust layer hard-fails a
 correct calculation, and nothing prompts anybody to look. The repair is
 unambiguous -- the object belongs at that key, and a restore refuses an
 occupied one, so it cannot clobber anything -- which is what separates it
-from the remediations ADR 0014 keeps in operators' hands. The objection
+from the remediations this script leaves to operators. The objection
 that automatic repair hides a failed safety argument is answered by the
 recorded row and the ``3`` exit code, not by leaving the damage in place.
 
@@ -612,13 +612,13 @@ def _restore_referenced_holds(
     hand -- which nothing prompts them to do. Refusing leaves a live
     wrong state; the repair is unambiguous, because the object belongs at
     that key and :func:`restore_held_object` refuses an occupied one, so
-    it cannot clobber anything. This is not the class of remediation ADR
-    0014 keeps in operators' hands: nothing here deletes, quarantines or
+    it cannot clobber anything. This is not the class of remediation
+    this script leaves to operators: nothing here deletes, quarantines or
     overwrites evidence, and the corrupt-object case is untouched.
 
     **Why it records.** The real objection to automatic repair is that it
-    hides a safety argument that lost its race. ADR 0014 answers that
-    objection everywhere else by *recording* rather than by refusing, and
+    hides a safety argument that lost its race. Recording the repair
+    answers that objection, and
     an object moved out of the content-addressed namespace and back is a
     change of custody. So each restore appends an observation under
     ``reclaim_restore``, and the observation is a genuine re-read of the
@@ -753,7 +753,7 @@ def _restore_held(session: Session, digest: str, *, client, bucket: str) -> bool
     outcome of somebody re-uploading the same bytes, and the copy sitting
     there is the one every row is reading. Overwriting it would either be
     a no-op or would destroy the evidence of a genuine corruption, and
-    ADR 0014 does not let this script do the second one.
+    this script never does the second one.
     """
     if head_artifact_object(digest, client=client, bucket=bucket):
         print(
@@ -1095,7 +1095,7 @@ def _refuse_empty_scope(args) -> int:
 
     The three ways to land here are a mistyped ref, a release whose cited
     calculations retained no artifacts at all, and a corpus that really is
-    empty. The first two are the failure ADR 0014 names the sweep as the
+    empty. The first two are the failure the sweep is the
     guard against, and the third is indistinguishable from them without
     the operator saying so -- which is what ``--allow-empty`` is for, on
     the same reasoning as the age floors: a guard any invocation may

@@ -2,8 +2,7 @@
 """QCSchema interchange demonstration: a Psi4 Hessian through TCKDB and back,
 and the same molecule's Gaussian record beside it.
 
-Phase C work package C-Q4 (``docs/research/tckdb-phase-c-implementation-plan.md``,
-C1 "Demonstration"). The write-up is ``docs/validation/qcschema_interchange.md``.
+The write-up is ``docs/validation/qcschema_interchange.md``.
 
 Inputs are committed fixtures and nothing else
 ----------------------------------------------
@@ -1139,7 +1138,7 @@ def markdown_summary(report: dict[str, Any]) -> str:
 
 
 def paper_generator(session: Session) -> dict[str, Any]:
-    """Registered in ``backend/scripts/paper/registry.py``.
+    """Registered in the publication-snapshot registry (``registry.py``).
 
     The same report without the checkout commit, which a restored deposit's
     byte comparison could not reproduce from a different checkout. Reads the

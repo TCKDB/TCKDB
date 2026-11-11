@@ -33,7 +33,7 @@ resolves a merged row's ref to the holder
 (``scientific_read.handles.canonical_level_of_theory_id`` and
 ``level_of_theory_ref_clause``). No calculation points at a merged row.
 
-**Declared composite schemes (ADR 0021, P5).** A level of theory that names a
+**Declared composite schemes.** A level of theory that names a
 user-built recipe has ``method`` = a server-generated label and every other
 column ``NULL``, so its hash cannot be recomputed from its columns. The script
 recomputes it **from the bound scheme** instead
@@ -73,7 +73,7 @@ is reported as blocked otherwise:
   triggers (``tckdb_guard_accepted_child`` / ``_via_child``), checked with
   ``tckdb_record_is_accepted``. An approved thermo citing a statmech citing
   the calculation blocks the group. Repointing that science would need a
-  declared accepted-science repair (ADR 0015); this script never declares
+  declared accepted-science repair; this script never declares
   one. The walk also reaches reviewable record types the database does not
   freeze (``molecular_property_observation``): an observation approved on
   the strength of a calculation blocks its group too, even though nothing
@@ -145,7 +145,7 @@ _REPOINTED = {
     ("calculation", "lot_id"),
     ("level_of_theory_merge", "merged_lot_id"),
     ("level_of_theory_merge", "into_lot_id"),
-    # ADR 0021: a duplicate's composite-scheme binding is moved to the holder
+    # A duplicate's composite-scheme binding is moved to the holder
     # (or dropped when the holder is bound already), so a merged level is never
     # bound. Absent on a database older than ``d7a3f1b9c284``.
     ("level_of_theory_composite", "level_of_theory_id"),
@@ -174,7 +174,7 @@ _LOT_COLUMNS = (
     "solvent",
     "solvent_model",
     "spin_treatment",
-    # ADR 0021: part of the identity hash when set, so a regroup that left it
+    # Part of the identity hash when set, so a regroup that left it
     # out would merge a frozen-core level into an all-electron one.
     "core_treatment",
     # The other typed method qualifiers join the hash the same way.

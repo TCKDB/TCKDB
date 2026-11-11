@@ -56,7 +56,7 @@ import {
  *
  * `audit_event_recorded` is a BOOLEAN: the contract says *whether* a run
  * was written to the audit log, never *which* row it became. Nothing here
- * may grow an id field (DR-0028 Req 2), and zod strips undeclared keys, so
+ * may grow an id field, and zod strips undeclared keys, so
  * an id the server starts sending cannot reach the page by accident.
  */
 

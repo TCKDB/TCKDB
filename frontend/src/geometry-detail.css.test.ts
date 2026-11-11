@@ -40,7 +40,7 @@ describe("the viewer's own rules are not declared here", () => {
     })
 })
 
-describe(".validation-card and the metric tile row are retired from this file", () => {
+describe(".validation-card and the metric tile row are not declared in this file", () => {
     it("declares no .validation-card or .geometry-summary rule", () => {
         const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "")
         expect(withoutComments).not.toMatch(/\.validation-card|\.geometry-summary/)

@@ -130,8 +130,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         const softwareTable = screen.getByRole("table", { name: "Software and workflow tools observed at this level of theory" })
         expect(within(softwareTable).getByText("Gaussian")).toBeVisible()
 
-        // Each scheme is now its own collapsible box (owner: "expandable
-        // boxes for AEC and BAC") -- opened here via its own summary,
+        // Each scheme is its own collapsible box -- opened here via its own summary,
         // exactly as a reader would, before asserting the full table
         // underneath is intact and not summarised.
         await user.click(screen.getByText("Atom-energy correction").closest("summary") as HTMLElement)
@@ -146,8 +145,6 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * Owner ruling, verbatim: "should be more like also expandable boxes
-     * for AEC and BAC but their names are the software or something."
      * Each scheme is its own collapsible `<details>` box titled by its
      * kind PLUS its software -- never the depositor's own free-text
      * `energy_correction_scheme.name` (constructed here as something a
@@ -220,8 +217,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * MUTATION TABLE (b): absence wording. `docs/plans/methods-surface.md`
-     * §4.2 item 3 / §2.6's house-rule caution: "no scheme deposited" is a
+     * MUTATION TABLE (b): absence wording: "no scheme deposited" is a
      * fact about the archive, never rendered as "not applicable" (a claim
      * about chemistry this archive cannot make). Constructed fixture: a
      * LOT with `correction_schemes: []` and `has_correction_schemes:
@@ -292,12 +288,8 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * PR 4 of `docs/plans/correction-scheme-provenance.md` (§8): the owner's
-     * fresh objection to #440's shape once two schemes of one kind became
-     * buildable ("I dont know how i feel about the expanding tables when we
-     * may get multiple softwares for AEC. I would think you can change the
-     * software & version and it will change the AEC and BAC instead or
-     * something."). Two `atom_energy` schemes on different software
+     * With two schemes of one kind, changing the software & version changes
+     * the AEC and BAC shown, rather than stacking expanding tables. Two `atom_energy` schemes on different software
      * releases must render as ONE section with a control, not two boxes of
      * the same kind side by side -- and picking the second option must
      * swap which scheme's parameter table is shown. The lone `bac_petersson`
@@ -475,7 +467,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 })
 
-describe("LevelOfTheoryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("LevelOfTheoryPage -- no depositor-typed text", () => {
     it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
         const planted = plantSentinels(baseRecord(), ["name", "note", "target"])
         expectPlanted(planted)

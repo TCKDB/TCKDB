@@ -318,9 +318,8 @@ describe("browse page: kind selection queries the right endpoint with the right 
         // The page's own heading is the honest way to assert which kind is
         // showing (`BROWSE_KIND_CONTENT`, `api/browseApi.ts`).
         expect(screen.getByRole("heading", { name: "Browse molecules" })).toBeVisible()
-        // MUTATION GUARD: no per-page kind switcher may come back. The owner
-        // asked three times for kind buttons not to be repeated on every
-        // browse page; navigation between kinds lives in the top nav only.
+        // MUTATION GUARD: no per-page kind switcher. Navigation between
+        // kinds lives in the top nav only.
         expect(screen.queryByRole("navigation", { name: "Browse a different kind" })).not.toBeInTheDocument()
         expect(screen.queryByRole("radiogroup", { name: "What to browse" })).not.toBeInTheDocument()
         expect(screen.queryByText("Also in this archive")).not.toBeInTheDocument()
@@ -591,10 +590,9 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
         expect(screen.getByLabelText("Method")).toHaveValue("b3lyp")
     })
 
-    // The species->TS direction was the only one previously asserted, and
-    // three params (include_rejected, include_deprecated, min_review_status)
-    // were never checked on the wire at all in EITHER direction -- deleting
-    // the first two, or misnaming the third, was invisible to the suite.
+    // Three params (include_rejected, include_deprecated, min_review_status)
+    // are checked on the wire in BOTH directions -- deleting
+    // the first two, or misnaming the third, would otherwise be invisible.
     it("every shared filter, including include_rejected/include_deprecated/min_review_status, is sent on the wire and survives BOTH switch directions", async () => {
         const user = userEvent.setup()
         let lastSpeciesUrl: URL | undefined
@@ -682,7 +680,7 @@ describe("browse page: the four empty/failure states are distinguishable", () =>
         expect(screen.queryByText(/match these filters/)).not.toBeInTheDocument()
     })
 
-    // Review follow-up (SHOULD-FIX #2): `useBrowse` used to collapse a
+    // `useBrowse` does not collapse a
     // double 429 (both automatic-retry attempts exhausted) into the same
     // generic "archive service could not load this listing" as a real
     // 5xx. Distinct state, plain-language wording -- same as every other
@@ -842,8 +840,8 @@ describe("browse page: a species row and a TS row each render their OWN fields",
     })
 
     it("renders review status in a SEPARATE pill from the kind/state classification, never sharing one box", async () => {
-        // The owner's report, reproduced: "NOT REVIEWED is part of the same
-        // pill as minimum.ground which should not be so." Both facts must
+        // "NOT REVIEWED" must not be part of the same
+        // pill as "minimum.ground". Both facts must
         // still appear exactly once each, but the review-status pill must
         // NOT be a descendant of the same `.value-pill` element the
         // kind/state pill is.
@@ -1006,9 +1004,9 @@ describe("browse page: vocabulary-backed filters reach the real browse query, an
 
 // `/species/browse` (species_browse.py) accepts the same six provenance
 // parameters (method/basis/software(+version)/workflow_tool(+version)) as
-// `/transition-states/browse` -- but the six selects used to be mounted
-// ONLY for kind="transition_state", and `buildSpeciesBrowseQuery` used to
-// drop all six params on the floor even if a caller supplied them. This is
+// `/transition-states/browse` -- so the six selects are mounted for species as well
+// as kind="transition_state", and `buildSpeciesBrowseQuery` sends all six params
+// when a caller supplies them. This is
 // the full-page counterpart to `browseApi.test.ts`'s unit coverage: it
 // exercises the real dropdown -> real outgoing request path, not just the
 // pure query builder in isolation.
@@ -1032,13 +1030,11 @@ describe("browse page: the six provenance selects work on species, not just tran
         await waitFor(() => expect(lastSpeciesUrl?.searchParams.has("method")).toBe(false))
     })
 
-    // Reproduces the review's exact concern for this branch: `hasActiveFilters`
-    // used to only look at the six provenance fields when kind==="transition_state",
-    // so a species query narrowed to zero rows by `method=` alone would report
+    // `hasActiveFilters` must look at the six provenance fields for species too,
+    // not only when kind==="transition_state"; otherwise a species query narrowed to zero rows by `method=` alone would report
     // "no filters active" and render the ARCHIVE-empty message ("nothing of this
     // kind has been deposited") instead of the FILTERED-empty one ("filters
-    // excluded everything") -- exactly backwards, and the mirror image of the
-    // widening-toggle bug fixed earlier on this same page.
+    // excluded everything") -- exactly backwards.
     it("a species query narrowed to zero rows by Method alone reads 'filters excluded everything', never 'nothing deposited'", async () => {
         const user = userEvent.setup()
         server.use(
@@ -1441,8 +1437,7 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         expect(screen.queryByText(/have been deposited in this archive yet/)).not.toBeInTheDocument()
     })
 
-    // Review follow-up (round 2), reproducing the live finding exactly: a
-    // `product_smiles=O` search against the real archive returns
+    // A `product_smiles=O` search returns
     // `rxe_ed66mj3ohtyien5rm2x3sb3rdu` ("O + [CH3] <=> C + [OH]", water on
     // the REACTANT side) with `matched_direction: "reverse"` -- without
     // this note, a reader searching Product SMILES "O" sees water on the

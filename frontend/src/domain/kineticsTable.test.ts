@@ -100,10 +100,9 @@ describe("computeKineticsTable", () => {
         expect(computeKineticsTable(record({ falloff: {} }))).toBeNull()
     })
 
-    // PR 3 review finding: `ArrheniusChart.tsx` refuses to plot a third-body
+    // `ArrheniusChart.tsx` refuses to plot a third-body
     // record ("rate depends on bath-gas concentration, not on temperature
-    // alone") but used to hand the SAME numbers to this table one row lower
-    // on the page -- the same T-only formula (`arrheniusTermK`) is not this
+    // alone"), so this table must not show the SAME numbers either -- the same T-only formula (`arrheniusTermK`) is not this
     // record's actual k(T) either, regardless of which surface renders it.
     it("returns null for a third-body record, the same as a pressure-dependent one", () => {
         expect(computeKineticsTable(record({ is_third_body: true }))).toBeNull()
@@ -152,9 +151,9 @@ describe("log10Text / scientificText", () => {
     })
 })
 
-// Round-2 review finding: a live `A` (per_s-order, `rxe_snamm...`) rendered
-// as a bare 10-digit integer ("9444750000") -- unreadable next to the same
-// record's own k(T) column, which already uses scientific notation.
+// A large `A` (e.g. per_s-order) must not render as a bare 10-digit integer
+// ("9444750000"), which is unreadable next to the same
+// record's own k(T) column, which uses scientific notation.
 describe("formatArrheniusValue", () => {
     it("renders a LARGE value (>= 1e4) in scientific notation, matching the k(T) column's own format", () => {
         expect(formatArrheniusValue(9444750000)).toBe(scientificText(9444750000))

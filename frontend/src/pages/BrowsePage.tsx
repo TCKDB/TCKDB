@@ -102,10 +102,8 @@ export default function BrowsePage() {
     // mounted across a kind change instead of remounting it -- filter state
     // survives the navigation untouched. Without this, a species-only filter
     // (formula, elements, heavy-atom bounds) would stay in state after moving
-    // to /reactions and be shown in a form that cannot send it. The kind
-    // switcher used to call `clearInapplicableFilters` on click; the switcher
-    // is gone (the owner does not want per-page kind buttons), so the clearing
-    // has to key on the resolved kind itself.
+    // to /reactions and be shown in a form that cannot send it. The clearing
+    // keys on the resolved kind itself (there are no per-page kind buttons).
     useEffect(() => {
         setFilters((current) => clearInapplicableFilters(kind, current))
         setOffset(0)
@@ -132,12 +130,8 @@ export default function BrowsePage() {
                 four archives `location.pathname` actually named. */}
             <PageShell contents="none" side={narrow ? undefined : filterForm}>
             {/* Each kind's own identity now (`BROWSE_KIND_CONTENT`,
-                `api/browseApi.ts`) -- was the SAME "Browse the archive" /
-                "Archive index" / "Choose what to browse, then narrow it
-                down…" on all four paths, which is the exact complaint the
-                owner raised three times ("Why is the browse reactions with
-                the species/transition/vanderwaals browsing page?"). The
-                heading now names the kind directly, and the intro states
+                `api/browseApi.ts`). The
+                heading names the kind directly, and the intro states
                 what this specific index holds -- including, for species/
                 vdw, the one thing it deliberately does NOT (they hit the
                 same `/species/browse` endpoint under the hood, a distinction

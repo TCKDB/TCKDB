@@ -183,9 +183,8 @@ describe("ReactionOverviewPage", () => {
         expect(h1.textContent).toContain("⇌")
     })
 
-    // Post-review fix: every participant cell used to render ONLY the
-    // formula link, dropping the ref/copy-button/stereo-label chip the
-    // mock's own chooser table carried for all four facts.
+    // Every participant cell renders the
+    // formula link, the ref, the copy button and the stereo-label chip.
     it("each participant cell carries its own spe_ ref, a copy button, and and its structured stereo chip", async () => {
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
         page(REACTION_REF)
@@ -229,9 +228,8 @@ describe("ReactionOverviewPage", () => {
         expect(dt!.nextElementSibling?.textContent).toBe("NN <=> [H][H] + N=N")
     })
 
-    // Independent review: `EvidenceChecklist`'s old `"N rows"` fallback
-    // collapsed this card behind its own fixed 6-row count regardless of
-    // the real total. This fixture's `review_summary.total: 4` (distinct
+    // `EvidenceChecklist`'s collapsed summary must not be a fixed 6-row
+    // count regardless of the real total. This fixture's `review_summary.total: 4` (distinct
     // from the fixed 6-row count) proves the collapsed summary is wired to
     // the real total, not the row list's own length -- and that opening
     // the card reaches the same rows a reader could always see.
@@ -343,7 +341,7 @@ describe("ReactionOverviewPage: what the page says it chose, and paging", () => 
     })
 })
 
-describe("ReactionOverviewPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("ReactionOverviewPage -- no depositor-typed text", () => {
     it("prints none of the participants' joined species labels, and builds no stereo wording from them", async () => {
         const planted = plantSentinels(searchResponse(), ["species_entry_label"])
         expectPlanted(planted)

@@ -282,8 +282,8 @@ Notes:
 
 Raw artifact bytes are served only to authenticated callers -- always, on
 every deployment. Unredacted ESS logs can carry producer-side scratch
-paths, usernames and cluster hostnames, so the gate has no opt-out
-(ADR 0004). Set your key first:
+paths, usernames and cluster hostnames, so the gate has no opt-out.
+Set your key first:
 
 ```bash
 export TCKDB_API_KEY=tck_...
@@ -386,8 +386,7 @@ Three CLI knobs narrow the output:
   `lot-followup`, `geometry`, `full`), keeping only the primary
   searches.
 
-Two additional flags re-target the species-calculations search itself
-(it previously hard-coded `sp` + `lowest_energy`):
+Two additional flags re-target the species-calculations search itself:
 
 - `--calculation-type <type>` — backend `calculation_type` filter
   (default `sp`; common values: `sp`, `opt`, `freq`, `scan`, `irc`,

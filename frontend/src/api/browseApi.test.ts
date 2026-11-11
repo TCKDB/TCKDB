@@ -33,8 +33,7 @@ describe("hasActiveFilters: widening toggles never count as a narrowing filter",
     })
 })
 
-// The mirror-image bug the design brief calls out by name: `hasActiveFilters`
-// used to check the six provenance fields ONLY when `kind === "transition_state"`,
+// `hasActiveFilters` must check the six provenance fields on species too, not ONLY when `kind === "transition_state"`,
 // so a species query with just `method` set would report "no filters active"
 // -- collapsing a genuine narrowing filter into the archive-empty branch
 // ("nothing of this kind has been deposited") instead of the filtered-empty
@@ -104,8 +103,8 @@ describe("buildSpeciesBrowseQuery: an incomplete integer never reaches the wire"
 // `/species/browse` (species_browse.py) accepts the same six provenance
 // parameters as `/transition-states/browse` -- method/basis/
 // software(+version)/workflow_tool(+version) -- but `buildSpeciesBrowseQuery`
-// used to only ever emit the five composition/shared params, dropping all
-// six on the floor regardless of what `BrowseFilterForm` collected. Checked
+// must emit the six provenance params too, not only the five composition/shared params,
+// regardless of what `BrowseFilterForm` collected. Checked
 // on BOTH "species" and "vdw" (the same builder, see its own doc comment)
 // since a fix scoped to only one of the two kind literals would still leave
 // the other silently broken.
@@ -320,7 +319,7 @@ describe("clearInapplicableFilters: the structure filter is species/vdw-only com
 
 // ---------------------------------------------------------------------------
 // PR 4b: the "reaction" browse kind -- /scientific/reactions/browse.
-// Verified live 2026-09-07: the endpoint accepts EXACTLY `family,
+// The endpoint accepts EXACTLY `family,
 // reactant_smiles, product_smiles, has_kinetics, has_transition_state,
 // min_review_status, include_rejected, include_deprecated, offset, limit`
 // -- no charge, multiplicity, or provenance params, unlike the other three
@@ -601,9 +600,9 @@ describe("clearInapplicableFilters: the reaction-only fields and the shared fami
     })
 })
 
-// Review follow-up (round 2), NIT: the six provenance fields are invisible
+// The six provenance fields are invisible
 // on "reaction" (see `BrowseFilterForm`'s `!isReaction` guards) but not
-// cleared by a switch through it -- a decision, not an oversight, recorded
+// cleared by a switch through it, as documented
 // in `clearInapplicableFilters`'s own comment: the module's established
 // rule for these six fields ("only ever cleared explicitly by a reader
 // picking 'Any'") already applies uniformly, and this test pins that
@@ -622,8 +621,8 @@ describe("clearInapplicableFilters: the six provenance fields round-trip THROUGH
     })
 })
 
-// Each browse kind now lives at its own path (App.tsx) instead of behind
-// `/species?kind=`; `BROWSE_KIND_PATHS`/`browseKindForPath` is the ONE
+// Each browse kind lives at its own path (App.tsx);
+// `BROWSE_KIND_PATHS`/`browseKindForPath` is the ONE
 // place the kind<->path relationship is spelled out (`App.tsx` builds its
 // route table from the former, `BrowsePage` fixes its kind from the
 // latter). This pins the mapping TOTAL in both directions -- every

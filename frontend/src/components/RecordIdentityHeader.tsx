@@ -19,11 +19,8 @@ import type { RecordIdentity } from "../domain/recordIdentity"
  * that order, never reordered per page. See the design brief's "Shared
  * header block on every record page".
  *
- * `kicker`/`title` own the top of the block (design/foundations PR B):
- * every record page used to build its own eyebrow-row/h1 markup with
- * its own font-size rule (`.record-title h1`, `.basin-title h1`,
- * `.tse-equation-heading`, each a different clamp), which is what this
- * header now owns centrally at the shared `--type-display-2` step.
+ * `kicker`/`title` own the top of the block: this header owns the
+ * eyebrow-row/h1 markup of every record page at the shared `--type-display-2` step.
  * `pill` is the record's
  * ONE status/trust pill (a `.value-pill`/`.value-pill--muted` element the
  * caller builds) -- never more than one; a second badge (e.g. a trust
@@ -71,8 +68,7 @@ import type { RecordIdentity } from "../domain/recordIdentity"
  * Rendered as the FIRST fact in the identity tier, unconditionally --
  * before SMILES/InChIKey, before the "no molecular identity" note, even
  * before the ambiguous-owner list -- because it is the one fact that must
- * never need a click to see (the owner's decision this prop exists to
- * satisfy: "yes show each record's own ref inline"). A caller supplying
+ * never need a click to see. A caller supplying
  * `ownRef` is responsible for NOT also repeating the same ref in its own
  * `RefsDisclosure` list below -- see that component's own docstring for
  * the rule this splits: the record's own ref lives here, related refs
@@ -99,13 +95,12 @@ export function RecordIdentityHeader({
     lede?: LedeText
     /** A human label (a name, a formula or an equation), never the record's ref. */
     title: ReactNode
-    /** SHOULD-FIX-7 (PR B review): an optional descriptive sentence
+    /** An optional descriptive sentence
      *  between the h1 and the identity tier -- the same slot/role
      *  `SectionHeading`'s own `intro` prop plays for an in-page section,
-     *  reused here so the canonical order (kicker -> h1 -> intro ->
+     *  so the canonical order (kicker -> h1 -> intro ->
      *  identity -> provenance -> References) is the SAME on every record
-     *  page, not just the three that composed a page-local `<p>` for it
-     *  in three different positions relative to identity. Rendered as
+     *  page. Rendered as
      *  `--type-body` capped to `--measure-prose`, same as `SectionHeading`'s. */
     intro?: ReactNode
     facets?: EntryFacetAxes
@@ -147,10 +142,8 @@ export function RecordIdentityHeader({
                     {ownFacts}
                 </dl>
             )}
-            {/* No pill boxes: a plain, readable phrase built from the same
-                raw axes a pill row used to read one-per-pill -- see
-                `SpeciesEntrySummary.tsx`'s `EntryIdentity` for the report
-                this pattern fixes elsewhere. No caller of this header
+            {/* No pill boxes: a plain, readable phrase built from the raw
+                facet axes. No caller of this header
                 currently supplies `facets` at all (the geometry/conformer
                 surfaces this header serves today don't carry these axes on
                 the wire), so this line has no live duplication to worry
@@ -236,21 +229,11 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
                     {identity.speciesEntryRef && (
                         <IdentityFact label="Species entry">
                             {/* Delegates to `SpeciesEntryLink` (`./SpeciesEntryLink.tsx`)
-                                rather than re-deriving the same link text here --
-                                the reviewer of #375 flagged this exact duplication
-                                (this header, `ConformerGroupPage.tsx`, and
-                                `ConformerObservationPage.tsx` each hand-rolling the
-                                same formula-then-`stereoChip`-label logic with three
-                                different fallbacks for "no formula served"). One
-                                expression now: the entry's own formula (the SAME
-                                `Formula` component the h1 uses, so subscripts
-                                match) when served, falling back to the entry ref
-                                as `<code className="data">` -- never the literal
-                                words "Species entry" (an earlier version of this
-                                header did that; the `<dt>` beside this `<dd>`
-                                already says "Species entry", so repeating it as
-                                the value said nothing a reader didn't already
-                                have). `species_entry_label` is never printed:
+                                rather than re-deriving the same link text here: the entry's own formula (the SAME
+                                `Formula` component the h1 uses, so subscripts match) when served,
+                                falling back to the entry ref as `<code className="data">` -- never the literal
+                                words "Species entry" (the `<dt>` beside this `<dd>` already says
+                                "Species entry"). `species_entry_label` is never printed:
                                 it joins in depositor-typed parts (see
                                 `SpeciesEntryLink`). */}
                             <SpeciesEntryLink
@@ -270,9 +253,8 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
     // does (see `TransitionStateIdentity`'s own docstring), so there is
     // no field that could render as an empty "SMILES" row. Likewise no
     // formula slot: a TS never carries `formula` on this endpoint (see
-    // `TransitionStateEntryCoreBlock`), and the label this used to fall
-    // back to is now a facet on `TransitionStateEntryPage`'s own `<h1>`
-    // row (the reaction equation, per the h1 rework) rather than this
+    // `TransitionStateEntryCoreBlock`); the reaction equation is a facet on
+    // `TransitionStateEntryPage`'s own `<h1>` row rather than this
     // header's job to restate.
     //
     // The transition-state identity note is gated behind `explainTransitionStateIdentity` (default true);
@@ -292,20 +274,16 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
             )}
             <dl className="kv-list record-identity-facts">
                 {ownRefFact}
-                {/* The producer's own `transition_state.label` (e.g. "TS0")
-                    used to render here as a plain "Label" fact -- REMOVED
-                    (house rule widened: no depositor-typed labels on public
-                    pages at all; an arbitrary producer string like "TS0"
-                    tells a reader nothing, and MEASURED live, every one of
-                    four separate deposits of the same reaction 1 saddle
-                    point carries the identical label "TS1"). The entry ref
-                    below and, on the transition-state-entry page itself,
-                    the reaction-deposit context already distinguish the
-                    record; this header never reads `identity.label` for
-                    display any more. */}
+                {/* The producer's own `transition_state.label` (e.g. "TS0") is not
+                    shown: no depositor-typed labels appear on public pages, and an
+                    arbitrary producer string tells a reader nothing (separate deposits of
+                    the same saddle point can carry the identical label). The entry ref
+                    below and, on the transition-state-entry page itself, the
+                    reaction-deposit context distinguish the record; this header never
+                    reads `identity.label` for display. */}
                 {/* No unmapped SMILES: it is stored exactly as the depositor typed it, with no parsing
                     or canonicalisation, so no check on its shape can show it safely. The title
-                    already carries the reaction equation (owner decision 2026-11-03). */}
+                    already carries the reaction equation. */}
                 <IdentityFact label="Charge / multiplicity">
                     {chargeDisplay(identity.charge)} / {spinDisplay(identity.multiplicity)}
                 </IdentityFact>

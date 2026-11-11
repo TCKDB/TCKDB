@@ -19,22 +19,18 @@ import {
  * file is the one place that pins the ACTUAL WORDS, so a change to any
  * of them is a deliberate, visible diff here, not a silent pass-through.
  *
- * Owner complaint (2026-09): the live graph on a real calculation drew
- * the arrow from an optimisation DOWN to its frequency child labelled
- * "RUN ON THIS GEOMETRY" -- phrased from the PARENT's point of view
- * (the parent's own geometry) even though the arrow itself is drawn
- * parent -> child. Every `edgeLabel` below now reads in the direction
+ * Every `edgeLabel` below reads in the direction
  * of the arrow, source -> target, and names what the TARGET is (e.g.
  * "geometry for frequencies" sits on the freq_on arrow and names the
  * frequency calculation it points at, not the geometry it left from).
- * `childSentence`/`parentSentence` were re-checked against the actual
+ * `childSentence`/`parentSentence` follow the
  * parent/child semantics in `backend/app/db/models/calculation.py`
  * (`CalculationDependency.parent_calculation_id` /
- * `.child_calculation_id`) -- not just reworded in place -- each
+ * `.child_calculation_id`): each
  * sentence names the calc it is template'd for correctly as parent or
  * child of the edge.
  *
- * Post-review (blocking): ground truth for parent/child is the ENFORCED
+ * Ground truth for parent/child is the ENFORCED
  * `_DEPENDENCY_ROLE_TO_PARENT_TYPE` constraint in
  * `backend/app/services/calculation_resolution.py`, cross-checked
  * against live deployed edges -- NOT `trust/rubrics.py`'s
@@ -127,7 +123,7 @@ describe("DEPENDENCY_ROLE_WORDING — every one of the eight roles, pinned liter
     })
 })
 
-/** Every role the backend enum can send is bespoke now (all seven), so
+/** Every role the backend enum can send is bespoke (all seven), so
  * only a genuinely unrecognised role -- one this backend enum has never
  * shipped -- exercises the fallback path. Pinned literally through that
  * same fallback, so it stays honest about what a reader actually sees

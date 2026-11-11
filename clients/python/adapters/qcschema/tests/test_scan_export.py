@@ -284,7 +284,7 @@ def test_fractional_grid_spacing_is_refused_not_rounded() -> None:
 
 
 def test_value_past_180_is_wrapped_and_reported() -> None:
-    """-90 stored as 270 is the same physical angle (ADR 0020 allows it)."""
+    """-90 stored as 270 is the same physical angle."""
 
     def edit(stub):
         for point in stub.scan["points"]:

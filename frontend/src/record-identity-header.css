@@ -111,7 +111,7 @@
     margin: 0;
 }
 
-/* SHOULD-FIX-7 ("record-page residuals" re-review): both the "no
+/* both the "no
    canonical SMILES" note and the identity facts `.kv-list` that follows
    it inside `.record-identity-known` own no margin of their own (the
    note: `.record-identity-note { margin: 0 }` above; the `.kv-list`:

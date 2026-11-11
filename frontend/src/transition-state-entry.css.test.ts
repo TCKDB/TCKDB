@@ -69,14 +69,12 @@ describe("data-table first column does not wrap mid-word, scoped to this page on
 })
 
 /**
- * BLOCKING-1 ("record-page residuals" re-review): the IRC point list's
- * grid cells (176px, `minmax(11rem, 1fr)`) were narrower than a 31-char
- * mono ref, printing column 1 over column 2 -- MEASURED `scrollWidth` 714
- * at a 680px viewport. Widened to `minmax(18rem, 1fr)`, plus an explicit
- * single-column breakpoint below 62rem (rather than relying on auto-fill
- * to happen to resolve to one column on its own) and `min-width: 0` on
- * each item so a still-too-wide ref shrinks/wraps inside its own cell
- * instead of widening the grid.
+ * The IRC point list's grid cells use `minmax(18rem, 1fr)` (a 31-char mono
+ * ref is wider than `minmax(11rem, 1fr)` and would print column 1 over
+ * column 2), an explicit single-column breakpoint below 62rem (rather than
+ * relying on auto-fill to resolve to one column) and `min-width: 0` on each
+ * item so a still-too-wide ref shrinks/wraps inside its own cell instead of
+ * widening the grid.
  */
 describe("IRC point list: wide-enough cells, forced single column below 62rem, shrinkable items", () => {
     const stripped = stripComments(css)
@@ -96,7 +94,7 @@ describe("IRC point list: wide-enough cells, forced single column below 62rem, s
 })
 
 /**
- * SHOULD-FIX-2 ("record-page residuals" re-review): the saddle-point
+ * the saddle-point
  * verdict box had a top margin only (`var(--s-4) 0 0`); the `.kv-list`
  * immediately following it owns no top margin of its own (the shared
  * primitive's contract), so the two sat 10px apart -- MEASURED. It also
@@ -122,7 +120,7 @@ describe("saddle-point box: owns spacing on both sides, on-scale typography", ()
 })
 
 /**
- * SHOULD-FIX-4 ("record-page residuals" re-review): 126 characters per
+ * 126 characters per
  * line, no cap -- the IRC summary paragraph never composed the shared
  * `--measure-note` token every other genuine-prose block on this page's
  * ledger vocabulary uses.

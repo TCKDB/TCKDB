@@ -132,7 +132,7 @@ the stored drive, so the exporter's refusals see exactly what the backend
 serves for them: `bond_scan_hand_built` (the coordinate re-declared as the
 O-O bond, values measured from each point's geometry),
 `relative_sweep_hand_built` (values rewritten as a sweep relative to the
-first point, the pre-ADR-0020 convention) and `rigid_scan_hand_built`
+first point) and `rigid_scan_hand_built`
 (`is_relaxed: false`).
 
 ## Identity-resolution case

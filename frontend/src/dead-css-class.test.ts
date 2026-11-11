@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 /**
- * SHOULD-FIX-15 (species-entry/browse/chrome residuals re-review): four
+ * four
  * stylesheets this PR's own brief named as carrying dead classes --
  * `molecule-page.css`, `entry-science.css`, `browse.css`, `index.css` --
  * plus everything else the same re-review's retirement list named
@@ -40,10 +40,10 @@ function stripCssComments(source: string): string {
 }
 
 /** Strips both `/* ... *\/` block comments and `// ...` line comments from
- *  TSX source -- review finding (post-approval): a class name mentioned
- *  only inside a `.tsx` COMMENT (e.g. a docstring citing the class it
- *  used to be, or a "TODO: reach for .foo here" note) used to count as a
- *  live consumer, since the component side was never comment-stripped the
+ *  TSX source: a class name mentioned
+ *  only inside a `.tsx` COMMENT (e.g. a docstring citing a class, or a
+ *  "TODO: reach for .foo here" note) must not count as a
+ *  live consumer, so the component side is comment-stripped the
  *  way the stylesheet side already is. Line-comment stripping is a
  *  pragmatic heuristic (not a full JS tokenizer -- it does not understand
  *  string/template literals or regex literals), guarded against the one

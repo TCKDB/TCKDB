@@ -23,8 +23,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
  * check's own record: its outcome, the calculation it was reconstructed from, and the energies an
  * energy-ordering check compared.
  *
- * `trust` is requested now (it previously was not, despite being legal on
- * this endpoint) -- MEASURED on tse_aq5ktxlu27nvul3hmdwpuyuz4e:
+ * `trust` is requested -- MEASURED on tse_aq5ktxlu27nvul3hmdwpuyuz4e:
  * `include=trust` serves `trust_status: "well_supported"` and
  * `evidence.checks.irc_evidence_present: "passed"` on the SAME entry
  * whose `validation.irc` (already requested, no extra cost) says
@@ -102,8 +101,7 @@ const calculationSchema = z.object({
     // `version` is served alongside the name ('Gaussian' + '16', 'ARC' +
     // '1.1.0') and is load-bearing provenance in this archive -- an ESS/
     // workflow-tool version pins the exact behaviour that produced this
-    // entry. Previously only the name reached this schema, so the page
-    // had no version to show even though the API served one.
+    // entry.
     software_release: z.object({ software: z.string(), version: z.string().nullable().optional() }).passthrough().nullable().optional(),
     workflow_tool_release: z.object({ workflow_tool: z.string(), version: z.string().nullable().optional() }).passthrough().nullable().optional(),
     // Present under `include=calculations` but was left off this table

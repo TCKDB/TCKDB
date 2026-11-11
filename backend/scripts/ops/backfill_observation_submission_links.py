@@ -5,10 +5,8 @@ Closes issue #514. ``app.services.observation_identity_attach`` refuses to
 attach a species-entry identity to a ``molecular_property_observation`` row
 with no ``submission_record_link``
 (``observation_identity_attach_requires_submission``) -- there is nowhere
-honest to record the curation fact. The ThermoML importer has always linked
-every row it writes; the CCCBDB importer only started doing so at Phase
-C-E5 review round 3, so rows it wrote before that change carry no link and
-cannot be curated.
+honest to record the curation fact. Rows written without a link cannot be
+curated.
 
 This script finds every such row on the database it is pointed at, groups
 it by the external source that produced it (``external_source_name``, or

@@ -46,9 +46,7 @@ export function BrowseFilterForm({ kind, filters, onChange }: {
                 {/*
                  * Structure and formula lead the grid -- they are how a
                  * reader FINDS a molecule; charge, review status and the
-                 * rest are refinements applied afterwards ("why isn't
-                 * smiles and formula the first in the filter?" -- the
-                 * owner). `CompositionFields` already opens with Formula
+                 * rest are refinements applied afterwards. `CompositionFields` already opens with Formula
                  * then the structure controls (see its own body below), so
                  * moving the whole group first is enough -- no need to
                  * flatten it.
@@ -108,9 +106,9 @@ function CompositionFields({ filters, onChange }: { filters: BrowseFilters; onCh
  * browse` has no formula/elements/heavy-atom axis of its own (a
  * transition state is identified by the reaction it connects, not a
  * molecular graph -- see `TransitionStatesBrowseRequest`'s docstring), but
- * it DOES now narrow through that reaction's structure -- SMILES first,
+ * it DOES narrow through that reaction's structure -- SMILES first,
  * per the same "SMILES before Formula" ordering `CompositionFields`
- * applies to species (both asked for by the owner in the same breath).
+ * applies to species.
  * `participantSmiles` is exact-match only (no substructure/similarity
  * mode, unlike the species structure filter) and matches EITHER side of
  * the reaction (reactant or product) -- one field, not two, mirroring the
@@ -154,7 +152,7 @@ function TransitionStateFindabilityFields({ filters, onChange }: { filters: Brow
                 {/* `display_name` ("Radical Addition Multiple Bond") is the
                     readable label; `value` ("R_Addition_MultipleBond") is
                     the filter token sent on the wire -- rendering
-                    `token(entry.value)` here used to produce "R Addition
+                    `token(entry.value)` here would give "R Addition
                     MultipleBond", a naive underscore-to-space substitution
                     that mangles the word boundary inside "MultipleBond".
                     Falls back to `token(entry.value)` only if the archive
@@ -189,22 +187,11 @@ function TransitionStateFindabilityFields({ filters, onChange }: { filters: Brow
  * unlike the TS kind's single `participant_smiles`, the reaction browse
  * endpoint filters each side independently.
  *
- * Labeled "Reactant structures" / "Product structures" -- restored from an
- * earlier "...on one side" / "...on the other side" pair. That EARLIER
- * rename existed because the live endpoint used to run `direction=either`
- * unconditionally, so a value typed into the reactant field could also
- * match a reaction where it was deposited as a PRODUCT, and "Reactant
- * SMILES" read as asserting a restriction the query never enforced. The
- * owner (a kineticist) asked for the conventional name back regardless --
- * it is what a chemist scans for, and that is his call to make.
+ * Labeled "Reactant structures" / "Product structures".
  *
- * **Superseded by PR #418 (2026-09), stated here rather than left for a
- * reader to discover by diffing two PRs against each other:** the backend
- * now defaults `direction` to `forward` -- these two fields match ONLY the
- * stored side they are named for unless the reader opts into
- * "Also match the reverse direction" below, which is what actually makes
- * "Reactant structures"/"Product structures" an honest pair of names again,
- * not just a preference. The `DirectionField` control right after the two
+ * The backend defaults `direction` to `forward`: these two fields match
+ * ONLY the stored side they are named for unless the reader opts into
+ * "Also match the reverse direction" below. The `DirectionField` control right after the two
  * fields sends the backend's own `direction` param (`""` when untouched, so
  * this form's default request is byte-identical to a bare API call --
  * `BrowseFilters.direction`'s own comment in `browseApi.ts` has the full
@@ -266,10 +253,10 @@ function ReactionFindabilityFields({ filters, onChange }: { filters: BrowseFilte
 }
 
 /**
- * The `direction` control PR #418 made possible: the backend now defaults
+ * The `direction` control: the backend defaults
  * `reactant_smiles`/`product_smiles` matching to `forward` (only the stored
- * side named), where it used to run `either` unconditionally. This
- * checkbox is the honest choice the owner asked this branch to give back --
+ * side named). This
+ * checkbox offers the choice between
  * "match the sides as named" (unchecked, the backend's own default) or
  * "match either orientation" (checked), in a kineticist's own words for a
  * forward/reverse reaction rather than the wire enum's literal tokens
@@ -279,7 +266,7 @@ function ReactionFindabilityFields({ filters, onChange }: { filters: BrowseFilte
  * `reverse` too: `reverse` alone (stored product side only, matched against
  * `reactant_smiles`) answers a question this form's two side-named fields
  * do not ask -- a reader who wants that already has it, by typing the value
- * into the OTHER field. The only new question PR #418 introduces for this
+ * into the OTHER field. The only question this
  * form is "should a search also reach across the reaction's reverse
  * direction", which is exactly on/off.
  *
@@ -338,12 +325,10 @@ const STRUCTURE_MODES: [string, string][] = [
 ]
 
 /**
- * The browse-page home for structure search ("just make the struct and
- * smiles search part of the browser-filters class" -- the owner, after
- * an earlier pass put it on the front page instead). Reuses
+ * The browse-page home for structure search. Reuses
  * `/scientific/species/structure-search`'s own vocabulary
  * (`query_smiles` / `query_smarts` / `mode` / `similarity_threshold`,
- * now also accepted by `/species/browse` -- see `browseApi.ts`'s
+ * also accepted by `/species/browse` -- see `browseApi.ts`'s
  * `buildSpeciesBrowseQuery`), composed with every other field in this
  * grid rather than a second, separate search box: one text input plus a
  * "treat as SMARTS" checkbox (never both a SMILES box and a SMARTS box
@@ -410,9 +395,7 @@ function recordKindFor(kind: BrowseKind): VocabRecordKind {
  * Workflow tool (+version) -- rendered for EVERY browse kind. Both
  * underlying browse endpoints accept all six query parameters (see
  * `buildSpeciesBrowseQuery` / `buildTransitionStateBrowseQuery` in
- * `api/browseApi.ts`); this section used to be folded into
- * `EvidenceFields` and mount only for "transition_state", which hid a
- * capability `/species/browse` has genuinely had all along.
+ * `api/browseApi.ts`).
  *
  * Software and Workflow tool are further scoped by `record_kind` --
  * narrowing the offered names to ones actually used by a calculation
@@ -486,15 +469,10 @@ function ProvenanceFields({ kind, filters, onChange }: {
  * fields above, which it does accept), so this section stays gated on
  * `kind === "transition_state"` in `BrowseFilterForm`.
  *
- * The seven `has_*` flags used to each be their own tri-state ("Any" /
- * "Yes" / "No") select -- seven grid cells for what a reader almost
- * always uses to say "show me only the ones that have X", never "show me
- * only the ones that DON'T" (19 controls total on this row, first row
- * starting at y=829 at 1920px). Collapsed into one checkbox row
+ * The seven `has_*` flags are one checkbox row
  * (`EvidenceChecks`): a reader can still narrow to entries that carry
  * several kinds of evidence at once (check optimization AND single
- * point), just not to entries that LACK one -- that half of the tri-state
- * is deliberately dropped, not hidden behind another control.
+ * point), just not to entries that LACK one (there is no "No" option).
  */
 function EvidenceFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
     return <>
@@ -539,9 +517,7 @@ function EvidenceChecks({ filters, onChange }: { filters: BrowseFilters; onChang
 }
 
 /**
- * A hint is no longer a permanently-rendered paragraph under the field
- * (owner: "way too much writing under the cells... maybe if they hover the
- * mouse over [the label] it then shows a hover box"). The field's own
+ * A hint is not a permanently-rendered paragraph under the field. The field's own
  * `<label>` becomes the trigger -- hover, keyboard focus, OR a tap all
  * reveal the SAME `InlineExplain` box, and the `<input>` itself carries
  * `aria-describedby` unconditionally, so a screen-reader user hears the

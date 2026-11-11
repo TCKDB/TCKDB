@@ -620,10 +620,7 @@ describe("EntryStatmechSection: linked record on a later page", () => {
 })
 
 describe("EntryStatmechSection conformer-scoped attribution", () => {
-    // The owner's report, reproduced: "Same for Statistical Mechanics [as
-    // Thermochemistry]... it always shows From Conformer Group 1 even if I
-    // click another group." Measured live on
-    // spe_mbdqifmaclaakukr7agxbuq3wa: one statmech record names all three
+    // One statmech record names all three
     // of that entry's conformer groups. Selecting conformer_2 or
     // conformer_3 must file the record under THAT group, never always
     // under conformer_1 -- the exact defect a first-match implementation
@@ -700,8 +697,8 @@ describe("EntryStatmechSection conformer-scoped attribution", () => {
         expect(within(otherDetails).getByText("sm_one")).toBeInTheDocument()
     })
 
-    // Test gap the owner flagged (mirrors the identical gap in
-    // `EntryThermoSection.test.tsx`): `renderStatmechRecords` groups by
+    // Mirrors the identical case in
+    // `EntryThermoSection.test.tsx`: `renderStatmechRecords` groups by
     // scientific fingerprint INSIDE whatever record list it's called
     // with, and `ConformerAttributionGroups` calls it once per bucket
     // (this-conformer / other-conformer / no-link), never once over the
@@ -756,10 +753,7 @@ describe("EntryStatmechSection conformer-scoped attribution", () => {
 // conformer-scoped) -- these prove the READ-TIME DERIVATION from source
 // calculations (`domain/statmechConformerDerivation.ts`), cross-referenced
 // against the already-loaded conformer projections, and specifically the
-// disagreement case: measured live against the archive (2026-09-02), 0 of
-// 101 statmech records with source calculations actually disagree today,
-// which is exactly why this must be tested with a constructed fixture
-// rather than found live.
+// disagreement case, tested with a constructed fixture rather than found live.
 describe("EntryStatmechSection -- conformer derived from source calculations", () => {
     it("shows the single conformer every source calculation agrees on, labelled as derived", async () => {
         const conformers = [conformerGroupWithCalcs("cg_one", "conformer_1", "co_1", ["calc_opt_1", "calc_freq_1", "calc_sp_1"])]
@@ -848,10 +842,8 @@ describe("EntryStatmechSection -- conformer derived from source calculations", (
 
 // ---------------------------------------------------------------------------
 // Finding 6: the vibrational-frequency evidence -- the CONTENT of a
-// statmech record -- used to sit in a global "Frequencies" disclosure
-// ~6000px below every record card, collapsed and request-free until
-// opened. It now renders on each card directly, loaded by default, gated
-// by that record's own `available_sections.has_frequencies`.
+// statmech record -- renders on each card directly, loaded by default,
+// gated by that record's own `available_sections.has_frequencies`.
 // ---------------------------------------------------------------------------
 describe("EntryStatmechSection: frequencies render on the card by default", () => {
     it("shows the source frequency calculation refs on the card itself, without any click, when the record has frequency evidence", async () => {
@@ -982,8 +974,7 @@ describe("EntryStatmechSection: identical-value records group under one card", (
     // the `.table-scroll` edge with no scroll affordance. The structural
     // guarantee this table now keeps is "at most 9 columns (6 original,
     // ALWAYS plus the three Geometry/Frequencies/Energy level-of-theory
-    // columns -- owner decision 2026-09 retired the old single-column
-    // collapse)" -- "Record software"/"Workflow tool" render as a
+    // columns) -- "Record software"/"Workflow tool" render as a
     // provenance row beneath each record's own row instead of two more
     // columns.
     it("keeps the group table to at most 9 columns, with software/workflow tool on a provenance row instead", async () => {
@@ -1084,7 +1075,7 @@ describe("EntryStatmechSection: identical-value records group under one card", (
      * Three clones sharing every fingerprinted field but citing THREE
      * DIFFERENT opt/freq/sp source calculations and three different
      * frequency-calculation refs -- the live bug this fix was written
-     * against: the group card previously printed the representative's
+     * against: the group card must not print the representative's
      * "Record software: Arkane · Workflow: ARC 1.1.0", its own
      * source-calculation count, and its single freq-calculation ref as
      * though they held for the whole group, when the real ethene entry's 7
@@ -1179,7 +1170,7 @@ describe("EntryStatmechSection: design-system adoption (design/species-entry)", 
         expect(headingsInsideSummaries).toHaveLength(0)
     })
 
-    // Review finding (SHOULD-FIX 1, PR 366): this tab's own "N records ·
+    // this tab's own "N records ·
     // review: …" line was missed by the `.note` migration -- it kept
     // `.records-note` (now margin-only) but never gained `.note` itself,
     // so it silently fell back to unstyled 16px body text.
@@ -1208,7 +1199,7 @@ describe("EntryStatmechSection: design-system adoption (design/species-entry)", 
         }
     })
 
-    it("'not reviewed' renders in exactly one pill style -- .value-pill--muted, never the retired .review-badge", async () => {
+    it("'not reviewed' renders in exactly one pill style -- .value-pill--muted, never .review-badge", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("sm_one")
@@ -1220,7 +1211,7 @@ describe("EntryStatmechSection: design-system adoption (design/species-entry)", 
         }
     })
 
-    it("every record table on this tab is the shared .data-table primitive, never the retired .stage-table, and scrolls its own container rather than a page-body stacked fallback", async () => {
+    it("every record table on this tab is the shared .data-table primitive, never .stage-table, and scrolls its own container rather than a page-body stacked fallback", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
             baseRecord({
                 available_sections: { ...baseRecord().available_sections, has_electronic_levels: true },
@@ -1268,11 +1259,8 @@ describe("EntryStatmechSection: design-system adoption (design/species-entry)", 
 })
 
 // ---------------------------------------------------------------------------
-// SHOULD-FIX-6 (species-entry/browse/chrome residuals re-review): "Conformer
-// context" and "Review history" used to each render one FULL card per
-// record -- MEASURED, this page ran 12,700px tall at 1920 with every
-// <details> opened. Both fold into one disclosure, one table, one row per
-// record now (`ConformerAndReviewSection`).
+// "Conformer context" and "Review history" fold into one disclosure, one
+// table, one row per record (`ConformerAndReviewSection`).
 // ---------------------------------------------------------------------------
 describe("EntryStatmechSection: conformer context & review history fold into one table", () => {
     it("renders one combined disclosure, not two, with each record's ref appearing exactly once outside the group table", async () => {
@@ -1306,8 +1294,8 @@ describe("EntryStatmechSection: conformer context & review history fold into one
         const rows = within(table).getAllByRole("row").slice(1)
         expect(rows).toHaveLength(2)
         // The cell shows the conformer group's own ref, never the
-        // depositor's own `label` (e.g. "conformer_1") -- house rule
-        // widened 2026-09: no depositor-typed labels on public pages.
+        // depositor's own `label` (e.g. "conformer_1") -- no depositor-typed
+        // labels on public pages.
         expect(cellAt(rows[0], "Conformer")).toContain("cg_one")
         expect(cellAt(rows[0], "Conformer")).not.toContain("conformer_1")
         expect(cellAt(rows[0], "Review")).toBe("not reviewed")
@@ -1352,12 +1340,11 @@ describe("EntryStatmechSection: conformer context & review history fold into one
 })
 
 // ---------------------------------------------------------------------------
-// Owner decision (2026-09): a statmech record can use different levels of
+// A statmech record can use different levels of
 // theory for its optimised geometry, its frequencies, and its electronic
 // energy. These prove `domain/productLevels.ts`'s rendering rule end to
 // end: ALWAYS three labelled facts -- Geometry/Frequencies/Energy -- never
-// collapsed to one "Level of theory" fact even when all three agree ("I
-// don't see the separation in LoT" retired the old collapse rule), and
+// collapsed to one "Level of theory" fact even when all three agree, and
 // read identically whether the server sends the additive `levels` field
 // directly or this client derives it from `source_calculations[]` roles.
 // ---------------------------------------------------------------------------
@@ -1652,7 +1639,7 @@ describe("EntryStatmechSection: paging", () => {
     })
 })
 
-describe("EntryStatmechSection -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("EntryStatmechSection -- no depositor-typed text", () => {
     it("prints none of the typed fields: point group, torsion top and reasons, notes, joined species label", async () => {
         const withTorsions = baseRecord({
             statmech: { ...baseRecord().statmech, statmech_ref: "sm_two" },

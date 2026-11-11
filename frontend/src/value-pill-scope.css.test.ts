@@ -20,9 +20,8 @@ function stripComments(source: string): string {
 }
 
 /**
- * PR D review finding (design/foundations "record pages" consolidation,
- * PR B): `transition-state-entry.css` used to carry `.tse-siblings-list
- * .value-pill { font-size: .68rem }` -- a descendant selector that reaches
+ * `transition-state-entry.css` must not carry `.tse-siblings-list
+ * .value-pill { font-size: .68rem }`
  * into the shared `.value-pill` primitive (`index.css`) directly, restyling
  * it wherever this page's own markup happens to nest a pill, rather than
  * composing a new modifier class the way `.value-pill--muted` does. Vite
@@ -44,7 +43,7 @@ function stripComments(source: string): string {
  * `.value-pill--muted` are DEFINED there -- that is the primitive itself,
  * not a page restyling it.
  */
-// SHOULD-FIX-6 (PR B review): the original version of this pattern only
+// the original version of this pattern only
 // matched a selector ending directly in `{` (`\.value-pill\s*\{`) -- it
 // missed a `:hover`/`:focus-visible` pseudo-class, a compound selector
 // (`.foo.value-pill`), an attribute selector, a combinator

@@ -45,7 +45,7 @@ describe("SpeciesBrowseRow: design-system primitive adoption", () => {
         expect(row).toHaveClass("browse-row")
     })
 
-    it("the ref renders through .browse-ref and .data (the shared data step), not the retired .browse-row-ref", () => {
+    it("the ref renders through .browse-ref and .data (the shared data step), not .browse-row-ref", () => {
         renderRow(record())
         const row = document.querySelector(".species-browse-row") as HTMLElement
         const ref = within(row).getByText("spc_one")

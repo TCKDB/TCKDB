@@ -24,13 +24,11 @@ export function seriesColor(index: number): string {
  * SHARED x-domain for both panels, computed once regardless of the
  * RAW/FIT/BOTH toggle so switching that toggle never rescales the axes.
  *
- * Clamped at [0, maxT], never padded outward: this used to run through the
- * same `domainWithPadding` helper the Cp axis uses, which pads BOTH ends
- * proportionally to the data's own span — harmless for a value axis, but on
- * a temperature axis starting near 0 K (this archive's NASA-7 fits commonly
- * state `t_low` around 10 K) the padding pushed the low end negative (a
- * review finding: "-110, 698, 1505, 2312, 3120" on a live page). Kelvin has
- * a real zero; the axis honours it rather than an aesthetic pad.
+ * Clamped at [0, maxT], never padded outward: the padding the Cp axis
+ * applies to BOTH ends proportionally to the data's own span is harmless
+ * for a value axis, but on a temperature axis starting near 0 K (NASA-7
+ * fits commonly state `t_low` around 10 K) it would push the low end
+ * negative. Kelvin has a real zero; the axis honours it rather than an aesthetic pad.
  */
 export function computeTemperatureDomain(series: readonly CpChartSeries[]): [number, number] {
     const temperatures: number[] = []
@@ -62,9 +60,7 @@ export function computeCpValueDomain(series: readonly CpChartSeries[]): [number,
 // --- "nice" round-number ticks ---------------------------------------------
 // `chartScale.ts`'s `evenTicks` slices a domain into `count` EQUAL pieces,
 // which is correct for a scale but produces unreadable axis labels whenever
-// the domain itself isn't a round number ("20.8, 49.7, 78.7, 108, 137" was
-// the y-axis half of the same review finding the temperature-domain fix
-// above addresses). This is the standard D3 `tickStep`/`ticks` approach:
+// the domain itself isn't a round number (e.g. "20.8, 49.7, 78.7, 108, 137"). This is the standard D3 `tickStep`/`ticks` approach:
 // pick a step from {1, 2, 5} times a power of ten closest to
 // `span / approxCount`, then emit every multiple of that step that falls
 // inside the domain. Used for BOTH axes so every tick a reader sees is a
@@ -111,9 +107,9 @@ export function niceTicks(domain: readonly [number, number], approxCount = 5): n
 // to the SAME conformer group and share the SAME NASA-7 fit and points (seen
 // live on `spe_5nr24y2ssxokxlhsvymdwbpwmm`: seven `thm_` records, digit-for-
 // digit identical coefficients and points). Drawing each as its own line
-// used to produce seven perfectly overlapping curves and seven legend chips
-// that read "Conformer Group 1 SELECTED", distinguished only by dot colour
-// — a review finding. Grouping runs on the ACTUAL plotted values, never on
+// would produce seven perfectly overlapping curves and seven legend chips
+// that read "Conformer Group 1 SELECTED", distinguished only by dot colour.
+// Grouping runs on the ACTUAL plotted values, never on
 // `thermoRef`/label/conformer link alone, so two records that merely share a
 // conformer but genuinely differ in their fit still render as two lines.
 
@@ -130,8 +126,8 @@ function plotSignature(item: CpChartSeries): string {
     // A series that plots NOTHING (no usable fit, no measured points) must
     // never be grouped with another such series. Its structural signature
     // would otherwise be the same empty shape (`[[],null]`) no matter which
-    // conformer group it traces to — a review finding caught this
-    // collapsing two UNRELATED unplottable records from DIFFERENT conformer
+    // conformer group it traces to — grouping by it would
+    // collapse two UNRELATED unplottable records from DIFFERENT conformer
     // groups into one bogus "N identical records" chip under the first
     // group's label, silently dropping the second group's record from the
     // page entirely. Keyed by `thermoRef` instead (unique per record) so an
@@ -167,8 +163,7 @@ export function groupIdenticalSeries(series: readonly CpChartSeries[]): CpChartR
 
 /**
  * The legend/plot label for one rendered group — always names WHAT
- * distinguishes it, never leaves colour as the only cue (the other half of
- * the same review finding). A collapsed group says how many identical
+ * distinguishes it, never leaves colour as the only cue. A collapsed group says how many identical
  * records it stands for rather than pretending to be one record. A lone
  * record whose label collides with a DIFFERENT group's (same conformer
  * link, genuinely different fit — e.g. a later reprocessing) is
@@ -180,7 +175,7 @@ export function groupLegendLabel(group: CpChartRenderGroup, allGroups: readonly 
     // Collision check applies to EVERY group, not just single-member ones —
     // two different multi-member groups can share both a base label and a
     // member count (e.g. two pairs of re-uploads on two different fits of
-    // the same conformer), which used to render as two colour-only-distinct
+    // the same conformer), which would render as two colour-only-distinct
     // "N identical records" chips.
     const collidesWithAnotherGroup = allGroups.some(
         (other) => other !== group && other.representative.label === group.representative.label,

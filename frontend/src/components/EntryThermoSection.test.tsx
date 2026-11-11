@@ -467,11 +467,10 @@ describe("EntryThermoSection", () => {
         }
     })
 
-    // Finding 16 (block review): a card used to render ALL FOUR model
-    // blocks (NASA-7/NASA-9/Wilhoit/points) regardless of the record's own
-    // `model_kind`, so a `nasa` record also carried an empty "NASA-9
-    // polynomial" box, an empty "Wilhoit form" box, and an empty "Evaluated
-    // points" box beneath its real NASA-7 table -- on every card. Only the
+    // A card renders only the model block matching the record's own
+    // `model_kind` (not all of NASA-7/NASA-9/Wilhoit/points), so a `nasa` record
+    // carries no empty "NASA-9 polynomial", "Wilhoit form" or "Evaluated
+    // points" box beneath its NASA-7 table. Only the
     // ONE block matching the record's own declared `model_kind` renders
     // now; the other three model-kind headings are absent entirely, not
     // present-with-an-absence-line.
@@ -627,7 +626,7 @@ describe("EntryThermoSection", () => {
         expect(within(alphaCard).queryByText("No group-additivity estimation recorded for this record.")).not.toBeInTheDocument()
     })
 
-    // Finding 16: PRIMARY CALCULATION and SINGLE-POINT CALCULATION used to
+    // PRIMARY CALCULATION and SINGLE-POINT CALCULATION must not
     // list the same ref twice, under two separate headings, whenever a
     // record's SP energy came from its own optimization
     // (`feedback_sp_vs_opt_energy`) -- reading as though two different
@@ -892,10 +891,9 @@ describe("EntryThermoSection", () => {
         expect(screen.getByText(/not a ranking or a recommendation/)).toBeVisible()
     })
 
-    // The owner's report, thermo half: "he opened the Thermochemistry tab
-    // having selected conformer_2, and what sits there is another
-    // conformer's record under a heading he has to read carefully to
-    // notice." thm_alpha's own fixture traces to no primary calculation
+    // Selecting conformer_2 must not leave another
+    // conformer's record sitting there under a heading a reader has to read carefully to
+    // notice. thm_alpha's own fixture traces to no primary calculation
     // conformer at all here; give it one that names conformer_1, select
     // conformer_2, and the panel must say plainly that conformer_2 has
     // nothing -- never silently show thm_alpha as though it belonged there.
@@ -932,7 +930,7 @@ describe("EntryThermoSection", () => {
         expect(document.querySelector(".conformer-attribution-other")).toBeNull()
     })
 
-    // Test gap the owner flagged: `renderThermoRecords` (built by
+    // `renderThermoRecords` (built by
     // `makeThermoGroupedRenderer`) groups by scientific fingerprint INSIDE
     // whatever record list it's called with -- and `ConformerAttributionGroups`
     // calls it once per bucket (this-conformer / other-conformer / no-link),
@@ -975,9 +973,9 @@ describe("EntryThermoSection", () => {
 })
 
 // ---------------------------------------------------------------------------
-// SHOULD-FIX-9 (species-entry/browse/chrome residuals re-review): the
-// provenance block used to render "Level of theory ref"/"Statmech ref" as
-// plain 15px sans text, next to `.data` calc refs two rows below on the
+// the
+// provenance block renders "Level of theory ref"/"Statmech ref" as
+// `.data` refs, like the calc refs two rows below on the
 // same card -- a ref is a ref regardless of whether this page happens to
 // link it.
 // ---------------------------------------------------------------------------
@@ -1130,8 +1128,8 @@ describe("EntryThermoSection: provenance refs render as .data, like every other 
 })
 
 // ---------------------------------------------------------------------------
-// The owner: "in Thermochemistry tab, I expect the ToC to show NASA-7 Thermo
-// record (for example) if it exists as a point to go to." `thm_alpha` in
+// The Thermochemistry tab's ToC lists a NASA-7 Thermo
+// record (for example) when it exists. `thm_alpha` in
 // `mockRecords()` is nasa/NASA-7, `thm_beta` is nasa9/NASA-9, `thm_gamma` is
 // wilhoit -- a fixture already shaped so a "which model kind is present"
 // mistake (registering by `model_kind` alone rather than by whether the
@@ -1327,11 +1325,10 @@ describe("EntryThermoSection: identical-value records group under one card", () 
      * Three clones sharing every fingerprinted field (including LoT) but
      * citing THREE DIFFERENT primary/freq/SP calculations and three
      * different statmech refs -- the live bug this fix was written
-     * against: the group card previously rendered `records[0]`'s
+     * against: the group card must not print `records[0]`'s
      * provenance under an unqualified "Provenance" heading as though it
      * held for all three, which is false the moment the records cite
-     * different calculations (as the real ethene entry's 7 thermo records
-     * do).
+     * different calculations.
      */
     function clonesWithDifferentCalculations() {
         const [alpha] = mockRecords()
@@ -1369,7 +1366,7 @@ describe("EntryThermoSection: identical-value records group under one card", () 
             expect(cellAt(row, "Freq calculation")).toBe(`calc_${suffix}_freq`)
             expect(cellAt(row, "SP calculation")).toBe(`calc_${suffix}_sp`)
             expect(cellAt(row, "Statmech ref")).toBe(`sm_${suffix}`)
-            // SHOULD-FIX-9 (re-review): the Statmech ref cell renders as
+            // the Statmech ref cell renders as
             // `.data` now, like every other ref column in this table.
             const statmechCell = row.querySelector('td[data-label="Statmech ref"]') as HTMLElement
             expect(statmechCell.querySelector(".data")).not.toBeNull()
@@ -1384,18 +1381,16 @@ describe("EntryThermoSection: identical-value records group under one card", () 
     })
 
     /**
-     * Owner report: the group-refs table showed the same calculation ref
+     * The group-refs table must not show the same calculation ref
      * twice, once under "Primary calculation" and again under a second
-     * role's column. Measured against the live archive (every deposited
-     * thermo record across every species entry, 65 records / 8
-     * multi-record groups, curled 2026-09-03) before fixing: it is the SP
-     * column that always repeats the Primary ref (an SP-from-optimization
-     * record cites the same job for both roles — 65/65), never the Freq
-     * column (a frequency job is a structurally separate calculation run
-     * — 0/65). The fix is applied to BOTH columns identically rather than
-     * hard-coded to SP, so it stays correct if a future record's Freq ref
+     * role's column. The SP
+     * column repeats the Primary ref (an SP-from-optimization
+     * record cites the same job for both roles), not the Freq
+     * column (a frequency job is a structurally separate calculation run).
+     * The dedup is applied to BOTH columns identically rather than
+     * hard-coded to SP, so it stays correct if a record's Freq ref
      * ever does collapse onto Primary; this fixture exercises that Freq
-     * "same" branch directly since no live record does today.
+     * "same" branch directly.
      */
     function cloneWithMixedCalculationOverlap() {
         const [alpha] = mockRecords()
@@ -1405,7 +1400,7 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         // card with no such table, per the "never wraps a lone record"
         // test above).
         // Also carries a null Freq ref -- the group table's third branch
-        // (NIT: no test previously covered "not recorded" in this table).
+        // (no other test covers "not recorded" in this table).
         const plain = { ...alpha, thermo_ref: "thm_plain", provenance: { ...alpha.provenance, freq_calculation_ref: null } }
         const overlap = {
             ...alpha,
@@ -1507,7 +1502,7 @@ describe("EntryThermoSection: design-system adoption (design/species-entry)", ()
         expect(headingsInsideSummaries).toHaveLength(0)
     })
 
-    // Review finding (SHOULD-FIX 1, PR 366): the "N records · review: …"
+    // the "N records · review: …"
     // line carries `.records-note` (layout-only, entry-science.css) at
     // every call site, but must ALSO carry `.note` (design-system.css) --
     // `.records-note` was stripped down to margin-only, so without `.note`
@@ -1534,7 +1529,7 @@ describe("EntryThermoSection: design-system adoption (design/species-entry)", ()
         }
     })
 
-    it("'not reviewed' renders in exactly one pill style -- .value-pill--muted, never the retired .review-badge", async () => {
+    it("'not reviewed' renders in exactly one pill style -- .value-pill--muted, never .review-badge", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("thm_alpha")
@@ -1546,7 +1541,7 @@ describe("EntryThermoSection: design-system adoption (design/species-entry)", ()
         }
     })
 
-    it("every record table on this tab (NASA-7, NASA-9) is the shared .data-table primitive inside .table-scroll, never the retired .stage-table or a stacked fallback", async () => {
+    it("every record table on this tab (NASA-7, NASA-9) is the shared .data-table primitive inside .table-scroll, never .stage-table or a stacked fallback", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("thm_alpha")
@@ -1561,13 +1556,12 @@ describe("EntryThermoSection: design-system adoption (design/species-entry)", ()
 })
 
 // ---------------------------------------------------------------------------
-// Owner decision (2026-09): a thermo record can use different levels of
+// A thermo record can use different levels of
 // theory for its optimised geometry, its frequencies, and its electronic
 // energy. These prove `domain/productLevels.ts`'s rendering rule end to end
 // on the thermo surface, mirroring `EntryStatmechSection.test.tsx`'s own
 // coverage: ALWAYS three labelled facts -- Geometry/Frequencies/Energy --
-// never collapsed to one "Level of theory" fact even when all three agree
-// ("I don't see the separation in LoT" retired the old collapse rule), and
+// never collapsed to one "Level of theory" fact even when all three agree, and
 // read identically whether the server sends the additive `levels` field
 // directly or this client derives it from `source_calculations[]` roles
 // (thermo's own eager field -- no separate include token, unlike
@@ -1861,7 +1855,7 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
     })
 })
 
-describe("EntryThermoSection -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("EntryThermoSection -- no depositor-typed text", () => {
     it("prints none of the typed fields: group-additivity scheme and group labels, notes, conformer labels", async () => {
         const planted = plantSentinels(mockResponse(), ["scheme_name", "scheme_version", "code_commit", "group_label", "note"])
         expectPlanted(planted)

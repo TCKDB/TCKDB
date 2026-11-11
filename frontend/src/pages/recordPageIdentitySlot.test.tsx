@@ -206,7 +206,7 @@ describe("Every record page routes its header through PageShell's identity slot"
         assertIdentityLeadsContentColumn(container, "Conformer Group 1")
     })
 
-    it("SpeciesEntryPage: EntryIdentity leads the content column (previously rendered entirely outside PageShell)", async () => {
+    it("SpeciesEntryPage: EntryIdentity leads the content column (rendered inside PageShell)", async () => {
         const entryRef = "spe_demo"
         server.use(
             http.get("/api/v1/scientific/species/search", () => HttpResponse.json({

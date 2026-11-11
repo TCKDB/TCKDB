@@ -67,7 +67,7 @@ was called with the exact path the exporter actually builds) and
 mint, for a human re-reading the capture -- never read by the round-trip
 test itself, which only reads the response-body files).
 
-Measured 2026-09-20 against this backend: the default deployment's
+Measured against this backend: the default deployment's
 internal-id visibility policy strips ``calculation_id`` from
 ``GET /scientific/calculations/{id}`` and ``geometry_id`` from
 ``GET /scientific/geometries/{ref}`` even with ``include=internal_ids``
@@ -81,18 +81,15 @@ docstring for how ``export_calculation`` copes with this asymmetry (a
 caller must supply the integer id directly to export a ``freq`` record on
 a deployment that hides it from the scientific read).
 
-Measured again 2026-09-20 (review round 2): ``GET /geometries/{id}`` and
+Also measured: ``GET /geometries/{id}`` and
 ``GET /geometries?geom_hash=...`` are a *different* pair of routes from
 the ones above -- plain, pre-Phase-D ``/geometries/...`` routes (not
 ``/scientific/geometries/...``), gated by the exact same
 ``require_auth_for_legacy_reads`` dependency as
 ``GET /calculations/{id}/hessian`` (see ``backend/app/api/router.py``).
 Both serve ``GeometryAtomRead.isotope_mass_number`` per atom, which the
-scientific geometry read never does. This is why the earlier revision of
-this docstring and of ``exporter.py``'s module docstring, which said
-closing the isotope gap needed a backend schema change, was wrong: the
-field was already being served by a route this adapter already reads
-from (the Hessian route) for a different purpose.
+scientific geometry read never does. The isotope field is therefore served by a route this adapter already
+reads from (the Hessian route) for a different purpose.
 """
 
 from __future__ import annotations

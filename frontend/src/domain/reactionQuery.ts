@@ -19,17 +19,12 @@
  * itself carry `+` (`[NH4+]`) or `.` (a disconnected-component SMILES like
  * `[Na+].[Cl-]`), so neither could divide species without occasionally
  * slicing a real structure in two. `splitSmilesList` (`api/browseApi.ts`,
- * the browse page's OWN reactant/product text-field parser) already made
- * this exact call for the identical reason -- reused here rather than
- * re-decided, so equation entry on this page and on the browse page can
+ * the browse page's OWN reactant/product text-field parser) makes
+ * this same call for the identical reason -- reused here, so equation entry on this page and on the browse page can
  * never quietly disagree about what a comma means.
  *
- * **Every recognized arrow means the same thing** (owner correction,
- * reversing an earlier design here that mapped `<>`/`<=>`/`<->` to
- * `direction=either` and `=>`/`->` to `direction=forward`): "how would the
- * user know there is a forward-only one... you are getting stuck on the
- * look of the arrow". A reader typing `<>` had no way to discover that
- * `->` existed or meant something different -- a hidden mode the syntax
+ * **Every recognized arrow means the same thing**: a
+ * hidden mode (`<>` meaning one direction, `->` another) is one the syntax
  * itself could never teach. The arrow here ONLY separates reactants from
  * products; `IdentifierSearch.tsx` always searches `direction=either`
  * regardless of which arrow was typed, and labels each individual result

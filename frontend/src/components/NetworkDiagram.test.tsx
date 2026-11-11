@@ -596,7 +596,7 @@ describe("NetworkDiagram -- per-channel show/hide works in BOTH layout modes, no
  * checksum of `NetworkDiagram.tsx` taken before mutation #1.
  */
 
-describe("NetworkDiagram -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("NetworkDiagram -- no depositor-typed text", () => {
     it("scans the whole diagram: a typed channel key or state label is in no text, SVG text, id or attribute", () => {
         // Channel keys must stay consistent between channels and barriers (the page joins on them), so each key is
         // replaced everywhere by its own sentinel rather than planted field by field.

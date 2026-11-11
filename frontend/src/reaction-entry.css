@@ -81,11 +81,8 @@
 }
 
 /* The k(T) table's own columns (T (K) / k (unit) / log10 k) need more
-   room than `.data-table`'s default -- MEASURED (post-review): a long
-   caption previously narrowed the rendered table to ~215px at 1920px
-   wide, before the caption text was shortened and moved to a preceding
-   `<p class="note">`; this floor keeps the three numeric columns legible
-   regardless of caption length. */
+   room than `.data-table`'s default; this floor keeps the three numeric
+   columns legible regardless of caption length. */
 .kinetics-k-table {
     min-width: 28rem;
 }

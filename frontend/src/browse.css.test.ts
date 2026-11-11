@@ -18,12 +18,10 @@ function extractRule(source: string, selector: string): string {
     return match[1]
 }
 
-// PR D (design-system adoption on the index/record pages): the browse page
-// used to define its own 57.6px/700 h1, its own row box style, an 11px
-// faint ref, and duplicate label/hint/pagination typography rather than
-// pointing at the shared type scale. Every rule below pins one of those
-// migrations so a later edit that quietly reverts one fails here instead of
-// shipping unnoticed.
+// The browse page uses the shared type scale (no own h1 size, row box
+// style, 11px faint ref, or duplicate label/hint/pagination typography).
+// Every rule below pins one of those so a later edit that quietly reverts
+// one fails here instead of shipping unnoticed.
 describe(".browse-header h1 -- the shared display-2 step", () => {
     it("uses var(--type-display-2-font), not its own literal clamp", () => {
         const rule = extractRule(css, ".browse-header h1")
@@ -39,7 +37,7 @@ describe(".browse-header h1 -- the shared display-2 step", () => {
 
 describe(".browse-row -- box styling comes from the shared .card primitive", () => {
     it("no longer declares its own padding/border/border-radius/background", () => {
-        // `.browse-row` used to be its own rule with a box style; it is now
+        // `.browse-row` has no rule with a box style; it is
         // only ever mentioned in a comment (both row components add `.card`
         // alongside it in `SpeciesBrowseRow.tsx`/`TransitionStateBrowseRow.tsx`).
         // A real `.browse-row {` rule reappearing here would mean the box
@@ -136,7 +134,7 @@ describe(".browse-count -- the shared --type-label step, not a hand-rolled .72re
 })
 
 // ---------------------------------------------------------------------------
-// SHOULD-FIX-11 (species-entry/browse/chrome residuals re-review): the
+// the
 // browse page carried its own bespoke sizes -- `.76rem`/`.78rem`/`.84rem`/
 // `.86rem`/`.92rem`, none matching a named type-scale step -- across the
 // row meta line, the kind selector, the filter checkboxes, and the status/
@@ -150,14 +148,10 @@ describe(".browse-row-meta -- --type-note, not a bare mono .76rem", () => {
     })
 })
 
-// `.browse-row-smiles` (once tested here for its own consolidated rule)
-// was RETIRED alongside `SpeciesBrowseRow.tsx`'s switch to `SpeciesFace`
-// (SMILES-leads-formula-in-brackets change): the SMILES now renders
-// inside the row's own title, so a second line repeating it had zero
-// remaining consumers. See this file's own `.browse-row-smiles` rule
-// removal comment for the fuller history.
-describe(".browse-row-smiles -- retired, no rule left in the stylesheet", () => {
-    it("has no rule of its own any more", () => {
+// `.browse-row-smiles` has no rule: `SpeciesBrowseRow.tsx` renders the
+// SMILES inside the row's own title through `SpeciesFace`.
+describe(".browse-row-smiles -- no rule in the stylesheet", () => {
+    it("has no rule of its own", () => {
         expect(css).not.toMatch(/\.browse-row-smiles\s*\{/)
     })
 })

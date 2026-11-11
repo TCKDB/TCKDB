@@ -50,10 +50,9 @@ Two approximations, stated
    is reported for completeness with that caveat and is never a
    pass/fail quantity.
 
-Two data-access findings, as of this refactor (measured 2026-09-19)
--------------------------------------------------------------------
-The original harness recorded two public-API gaps: per-mode frequencies
-and ``statmech.optical_isomers`` were not served. Both are now on the read
+Data access
+-----------
+Per-mode frequencies and ``statmech.optical_isomers`` are on the read
 surface (``GET /scientific/calculations/{ref}?include=freq_modes``,
 ``app/services/scientific_read/calculations.py``; ``optical_isomers`` on
 ``app/schemas/reads/scientific_statmech.py``). What remains true and is
@@ -69,11 +68,11 @@ not fixed here:
   take the side reachable from the first pivot atom). Deterministic for
   an acyclic single-bond rotor; a ring rotor is refused.
 
-Conventions carried over from the original run
+Conventions of the original run
 ----------------------------------------------
 Principal and reduced moments of inertia use **standard atomic weights**
 (the table below), because that is what rmgpy uses and what the stored
-thermo was originally computed with. This is deliberately *not* the
+thermo was computed with. This is deliberately *not* the
 isotopic convention the Hessian reanalysis applies; the two answer
 different questions. An element outside the table is a skip reason,
 never a guessed mass.

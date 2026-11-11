@@ -44,8 +44,7 @@ export type TransitionStateIdentity = {
     transitionStateRef?: string
     transitionStateEntryRef?: string
     // No `label` field here -- `transition_state.label` (e.g. "TS0") is a
-    // depositor-typed string this app never renders (house rule, widened
-    // 2026-09), so this type carries nothing for `RecordIdentityHeader` to
+    // depositor-typed string this app never renders (house rule), so this type carries nothing for `RecordIdentityHeader` to
     // accidentally read and display.
 }
 

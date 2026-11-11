@@ -7,15 +7,8 @@ import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlan
 afterEach(() => cleanup())
 
 /**
- * Owner report ("record-page residuals" re-review, item 4): the
- * "Species entry" fact used to render `species_entry_label` ALONE as
- * the link text -- a bare "R" on a sampled live entry, no context.
- *
- * Correction mid-fix (see `SpeciesEntryLink.tsx`'s own docstring):
- * `species_entry_label` is not depositor free text, it is a computed
- * discriminator (a stereo descriptor, an electronic state, a term
- * symbol, an isotope key). The fix is not to suppress it -- it is to
- * never let it stand alone: link text is `SpeciesFace` (SMILES leads,
+ * The "Species entry" fact never renders `species_entry_label` ALONE as
+ * the link text (a bare "R", no context): link text is `SpeciesFace` (SMILES leads,
  * formula follows in parentheses), with the label (expanded via
  * `stereoChip`) appended when present, and the ref as a data run only
  * when there is neither SMILES nor formula.
@@ -39,7 +32,7 @@ describe("SpeciesEntryLink", () => {
         expect(link!.querySelector("code.data")?.textContent).toBe("CC1=CC=CC=C1")
     })
 
-    // The owner's own reported defect, applied to this component too:
+    // The distinguishing case:
     // two DIFFERENT species entries (sharing a formula) must render
     // different link text.
     it("two species entries sharing a formula render different link text ([CH2]SO vs OC[S])", () => {
@@ -88,7 +81,7 @@ describe("SpeciesEntryLink", () => {
         expect(code).not.toBeNull()
         expect(code).toHaveClass("data")
         expect(code!.textContent).toBe("se_abc123")
-        // Never the redundant literal text this fallback used to render.
+        // Never the redundant literal text.
         expect(link.textContent).not.toContain("Species entry")
     })
 
@@ -123,7 +116,7 @@ describe("SpeciesEntryLink -- structured facets", () => {
     })
 })
 
-describe("SpeciesEntryLink -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("SpeciesEntryLink -- no depositor-typed text", () => {
     it("scans the whole link: a typed label is never in its text or any attribute", () => {
         const planted = plantSentinels({ speciesEntryRef: "se_abc123", smiles: "CC", formula: "C2H6", speciesEntryLabel: "x" }, ["speciesEntryLabel"])
         expectPlanted(planted)

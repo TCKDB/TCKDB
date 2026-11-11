@@ -80,11 +80,11 @@ function extractBlock(source: string, startPattern: RegExp): string {
 /** Strips `/* ... *\/` comments. Both helpers below run on
  *  comment-stripped text: this project's stylesheets narrate design
  *  history in comments (`geometry-detail.css`'s "this page's own literal
- *  tokens (--control-border/--muted/...)", `entry-science.css`'s retired
+ *  tokens (--control-border/--muted/...)", `entry-science.css`'s
  *  "`var(--product)`" rail), and prose mentioning a token by name is not
  *  a live CSS dependency on it existing -- scanning comments here would
- *  demand every retired-token anecdote in the codebase stay a currently-
- *  defined token forever, which is backwards. */
+ *  demand every token named in a comment stay a currently-
+ *  defined token forever. */
 function stripComments(source: string): string {
     return source.replace(/\/\*[\s\S]*?\*\//g, "")
 }
@@ -263,7 +263,7 @@ describe("--faint and --muted-2 clear 4.5:1 on every background they render on",
 })
 
 /**
- * SHOULD-FIX-15 ("record-page residuals" re-review): dark `--line-2`
+ * dark `--line-2`
  * ("#1c2732" on "#111925"/"#16202c" -- 1.165:1 / 1.085:1) read as
  * near-invisible inside table bodies and around the refs box. Nudged one
  * step lighter to "#212d3a" -- NOT a WCAG 4.5:1 text-contrast claim (this
@@ -273,7 +273,7 @@ describe("--faint and --muted-2 clear 4.5:1 on every background they render on",
  * so a future edit that quietly darkens this token back toward
  * invisibility fails here instead of shipping.
  */
-describe("dark --line-2 is strictly more visible than its pre-fix value (SHOULD-FIX-15)", () => {
+describe("dark --line-2 is strictly more visible than its pre-fix value", () => {
     function hexOf(block: string, name: string): [number, number, number] {
         const match = new RegExp(`(?<!\\()--${name}:\\s*#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\\b`).exec(block)
         if (!match) throw new Error(`--${name} not found as a #rgb/#rrggbb declaration`)
@@ -292,7 +292,7 @@ describe("dark --line-2 is strictly more visible than its pre-fix value (SHOULD-
         return (lighter + 0.05) / (darker + 0.05)
     }
 
-    const PRE_FIX_LINE_2: [number, number, number] = [0x1c, 0x27, 0x32] // #1c2732, the retired value
+    const PRE_FIX_LINE_2: [number, number, number] = [0x1c, 0x27, 0x32] // #1c2732, the pre-fix value
 
     it("[data-theme=dark] and the media-query dark block declare the same --line-2 value", () => {
         const mediaBlock = extractBlock(themeCss, /^@media \(prefers-color-scheme: dark\) \{/m)

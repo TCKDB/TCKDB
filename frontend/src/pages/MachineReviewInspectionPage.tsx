@@ -433,10 +433,9 @@ function failureMessage(error: unknown): string {
  * **A tally must never outlive its submission.** Submission 9's findings
  * under submission 7's tally is a false report, and the more convincing
  * for being half true. `key={submissionId}` at the mount site is what
- * prevents it, and it is load-bearing TODAY -- not insurance, as an
- * earlier version of this comment claimed.
+ * prevents it, and it is load-bearing, not insurance.
  *
- * That earlier claim came from measuring in one direction only. Walking
+ * Walking
  * to a submission this session has not seen, `query.data` goes undefined
  * while it loads, the parent unmounts the whole results block, and this
  * component's state goes with it -- so removing the key changes nothing
@@ -511,7 +510,7 @@ function CuratorTaskBuilder({ submissionId }: { submissionId: number }) {
  * `refreshed_count` is a sub-count of `reused_count`, so a total would
  * exceed the findings considered. And it must not print a task id -- the
  * server sends `task_ids`, and `CuratorTaskBuildResultSchema` drops it
- * before it can reach here (DR-0028 Req 2).
+ * before it can reach here.
  */
 function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
     const made = result.created_count

@@ -19,16 +19,13 @@ import type { AppUserRole } from "../types/auth"
  *
  * ## Why one menu and not a row of links
  *
- * This used to render a flat row -- Review, Admin, the name, Sign out --
- * one more item per role-gated page. That row was already four items
- * wide with four pages to reach, it pushed the primary navigation
- * leftwards on every route, and every new curator or admin surface made
- * it wider. The owner asked for a single control instead ("I don't like
- * we are adding Admin and Review to the top bar. Can we not make it a
- * burger menu instead?").
+ * A flat row -- Review, Admin, the name, Sign out -- would grow by one
+ * item per role-gated page, push the primary navigation
+ * leftwards on every route, and widen with every new curator or admin
+ * surface. A single control avoids that.
  *
  * So: one trigger showing the name, and one popup holding everything.
- * Adding a fifth admin page now costs a line in `pagesFor` and no header
+ * Adding an admin page costs a line in `pagesFor` and no header
  * width at all.
  */
 export function AuthStatus() {
