@@ -186,3 +186,17 @@ def test_the_detector_catches_a_versioned_frontend_literal_and_identifier(tmp_pa
     (tmp_path / "__tests__" / "b.ts").write_text("const Y_V2 = 1;\n")
     found = sorted(f.token for f in scan_frontend(root=tmp_path, repo_root=tmp_path))
     assert found == ["RUBRIC_V2", "computed_thermo_v2"]
+
+
+def test_svg_path_data_in_the_frontend_is_not_a_versioned_name(tmp_path: Path) -> None:
+    (tmp_path / "glyph.tsx").write_text(
+        "const A = 'M2 11.5V8.5h2.6v3Zm3.7 0V5.5h2.6v6Z';\n"
+        'const B = "M7 1.6 12 4.3v5.4L7 12.4 2 9.7V4.3Z M7 7V12.4";\n'
+        "const C = `m0,0V2.5`;\n"
+        "const real = 'profile_v2';\n"
+        "const lookalike = 'V8.5';\n"
+        "const mass = 'mass-v2';\n"
+        "const mz = 'mz-v3';\n"
+    )
+    found = sorted(f.token for f in scan_frontend(root=tmp_path, repo_root=tmp_path))
+    assert found == ["mass-v2", "mz-v3", "profile_v2"]

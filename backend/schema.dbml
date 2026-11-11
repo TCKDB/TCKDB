@@ -3838,6 +3838,8 @@ Table species_name {
   kind SpeciesNameKind [not null]
   source_kind SpeciesNameSourceKind [not null]
   external_source_id bigint [ref: > external_source.id]
+  external_record_key text
+  retrieved_at timestamp
   created_by_user_id bigint [ref: > app_user.id]
   retired_at timestamp
   created_at timestamp [not null, default: 'now']
@@ -3851,8 +3853,10 @@ Table species_name {
   }
 
   checks {
+    `source_kind <> 'curated' OR (external_record_key IS NULL AND retrieved_at IS NULL)` [name: 'ck_species_name_curated_has_no_record']
     `char_length(name_key) BETWEEN 1 AND 128` [name: 'ck_species_name_name_key_length']
     `char_length(name) BETWEEN 1 AND 128` [name: 'ck_species_name_name_length']
+    `source_kind <> 'offline_import' OR (external_source_id IS NOT NULL AND external_record_key IS NOT NULL AND retrieved_at IS NOT NULL)` [name: 'ck_species_name_offline_import_has_source']
   }
 
   Note: 'One name of one species. The same name may belong to several species.'
