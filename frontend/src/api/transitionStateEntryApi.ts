@@ -14,16 +14,14 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
  * only `unmapped_smiles`, and `domain/recordIdentity.ts`'s
  * `TransitionStateIdentity` for the shared header shape this feeds.
  *
- * This client fetches `include=calculations,geometries,review,trust` up
+ * This client fetches `include=calculations,geometries,review,trust,validation_evidence` up
  * front -- mirroring `conformerGroupApi.ts`'s `loadConformerGroup`, which
  * requests every section this page renders in one round trip rather than
  * lazily per disclosure (unlike `CalculationDetailPage`'s heavier
  * per-section fetch, which exists for a 19-section surface this page's
- * extra sections don't need). `validation_evidence` is NOT requested:
- * `available_sections.has_validation_evidence` is false for every entry
- * sampled from the live archive, and `validation.irc` (always present, no
- * include needed) already answers the one question that block exists to
- * detail.
+ * extra sections don't need). `validation_evidence` carries each
+ * check's own record: its outcome, the calculation it was reconstructed from, and the energies an
+ * energy-ordering check compared.
  *
  * `trust` is requested now (it previously was not, despite being legal on
  * this endpoint) -- MEASURED on tse_aq5ktxlu27nvul3hmdwpuyuz4e:
@@ -76,7 +74,11 @@ const evidenceSummarySchema = z.object({
 // "present" | "absent" | "failed" -- kept as a bare string rather than a
 // zod enum so an archive-side vocabulary addition degrades to an unstyled
 // label instead of a validation failure across this whole record.
-const validationSchema = z.object({ irc: z.string() }).passthrough()
+const validationSchema = z.object({
+    irc: z.string(),
+    imaginary_mode: z.string().optional(),
+    energy_ordering: z.string().optional(),
+}).passthrough()
 
 const availableSectionsSchema = z.object({
     has_entries: z.boolean(),
@@ -125,6 +127,19 @@ const geometrySchema = z.object({
     natoms: z.number().nullable().optional(),
     geom_hash: z.string().nullable().optional(),
 }).passthrough()
+
+// Read as plain strings and optional values so a token this client has not been taught never fails the record.
+const validationEvidenceSchema = z.object({
+    kind: z.string(),
+    passed: z.boolean(),
+    reconstruction_calculation_ref: z.string().nullable().optional(),
+    compared_energies: z.array(z.object({
+        participant: z.string(),
+        source_calculation_ref: z.string().nullable().optional(),
+    }).passthrough()).nullable().optional(),
+}).passthrough()
+
+export type ValidationEvidence = z.infer<typeof validationEvidenceSchema>
 
 const reviewHistoryEntrySchema = z.object({
     status: z.string(),
@@ -202,6 +217,7 @@ const responseSchema = z.object({
         calculations: z.array(calculationSchema).nullable().optional(),
         geometries: z.array(geometrySchema).nullable().optional(),
         review_history: z.array(reviewHistoryEntrySchema).nullable().optional(),
+        validation_evidence: z.array(validationEvidenceSchema).nullable().optional(),
         trust: trustSchema.nullable().optional(),
     }).passthrough(),
 }).passthrough()
@@ -210,7 +226,7 @@ export type TransitionStateEntryRecord = z.infer<typeof responseSchema>["record"
 
 export async function loadTransitionStateEntry(ref: string, signal?: AbortSignal): Promise<TransitionStateEntryRecord> {
     const query = new URLSearchParams()
-    for (const include of ["calculations", "geometries", "review", "trust"]) query.append("include", include)
+    for (const include of ["calculations", "geometries", "review", "trust", "validation_evidence"]) query.append("include", include)
     const endpoint = `/api/v1/scientific/transition-state-entries/${encodeURIComponent(ref)}?${query}`
     const payload = await requestScientificJson(endpoint, signal)
     return parseScientificResponse(responseSchema, payload, "transition state entry").record

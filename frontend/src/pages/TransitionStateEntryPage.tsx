@@ -1,25 +1,39 @@
-import type { ReactNode } from "react"
+import { useMemo, type ReactNode } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../transition-state-entry.css"
+import { loadReactionEntryParticipants } from "../api/reactionEntryApi"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import type { StructureAssessment, TransitionStateEntryRecord } from "../api/transitionStateEntryApi"
 import { loadTransitionStateEntry } from "../api/transitionStateEntryApi"
+import { Breadcrumbs } from "../components/Breadcrumbs"
+import { DepositorNote } from "../components/DepositorNote"
 import { Disclosure } from "../components/Disclosure"
+import { EnergyProfile } from "../components/EnergyProfile"
 import { ListPager } from "../components/ListPager"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
+import { ReactionEquation } from "../components/ReactionEquation"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { RefsDisclosure } from "../components/RefsDisclosure"
 import { MadeUnderLine } from "../components/MadeUnderLine"
+import { Term } from "../components/Term"
+import { TransitionStateStage } from "../components/TransitionStateStage"
+import { ValueLink } from "../components/ValueLink"
 import { liveMadeUnder } from "../domain/madeUnder"
 import { SIBLING_SUMMARY_STAGE_NOTE, summariseSiblingStage } from "../domain/transitionStateSiblings"
 import { formatEnergyForDisplay } from "../domain/energyUnits"
+import { formatQuantity } from "../domain/quantityFormat"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import type { TransitionStateIdentity } from "../domain/recordIdentity"
+import { equationNeedsStructure, equationText } from "../domain/reactionEquation"
 import { reviewPillClass } from "../domain/reviewPillFormat"
+import { transitionStateChecks, UNKNOWN_OUTCOME } from "../domain/transitionStateChecks"
+import { stageGeometryRef } from "../domain/transitionStateStage"
+import { transitionStateEntryLede } from "../domain/transitionStateLede"
+import { useLoaded } from "../hooks/useLoaded"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 import { useTransitionStateSiblings } from "../hooks/useTransitionStateSiblings"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
@@ -104,23 +118,7 @@ function softwareCellText(release: { software: string; version?: string | null }
     return softwareLabel(release)
 }
 
-// Splits a reaction equation at its arrow(s) and `+` separators, inserting
-// `<wbr>` right after each -- a long species name either side of one of
-// these tokens should wrap there, not at an arbitrary character
-// `overflow-wrap: anywhere` happens to land on.
-function renderEquationWithBreaks(equation: string): ReactNode {
-    const parts = equation.split(/(<=>|->|\+)/)
-    const nodes: ReactNode[] = []
-    parts.forEach((part, index) => {
-        nodes.push(part)
-        if (part === "<=>" || part === "->" || part === "+") nodes.push(<wbr key={`eq-wbr-${index}`} />)
-    })
-    return nodes
-}
-
-// Three states an include-gated section can be in, kept distinct per the
-// house rule this app already applies on `ConformerObservationPage`:
-// absence describes the request, null/empty describes the data.
+// Three states an include-gated section can be in: absence describes the request, null/empty describes the data.
 type SectionAvailability = "not-requested" | "empty" | "populated"
 
 function sectionAvailability<T>(value: T[] | null | undefined): SectionAvailability {
@@ -130,23 +128,10 @@ function sectionAvailability<T>(value: T[] | null | undefined): SectionAvailabil
 }
 
 /**
- * `/transition-state-entries/:entryRef` -- the record view 34 browsable
- * transition-state entries had no page to land on before this (browse
- * only linked to `/reactions/:ref`, a placeholder). Modeled on
- * `ConformerObservationPage`'s shell (self-contained record, no
- * conformer-picker state to carry), not `SpeciesEntryPage`'s tabbed one --
- * a TS entry has no conformer basin to select between.
- *
- * Renders what `GET /scientific/transition-state-entries/{ref}` serves:
- * identity, the saddle-point (imaginary-frequency) verdict, reaction
- * classification, evidence pills, IRC status (including point counts and
- * the honest "endpoint identity not deposited" state), calculations,
- * geometries, sibling saddle points on the same reaction, and review
- * history. It does NOT render a literature/citations section -- the
- * endpoint (see `TRANSITION_STATE_RECORD_SECTIONS` in
- * `backend/app/api/routes/scientific/_response.py`) has no such include
- * token to ask for one; there is nothing to omit by choice, only nothing
- * on the wire to show.
+ * `/transition-state-entries/:entryRef`: one deposited saddle point. Renders what `GET /scientific/transition-state-entries/{ref}`
+ * serves (identity, imaginary frequency, validation tokens, trust, IRC, calculations, geometries, sibling saddle points,
+ * review history), the energy hill of the parent reaction entry narrowed to this entry, and the 3D picture. The reaction's
+ * participants come from the parent reaction entry, which is named by this entry, never from a sibling.
  */
 export default function TransitionStateEntryPage() {
     const { entryRef = "" } = useParams<{ entryRef: string }>()
@@ -157,14 +142,15 @@ export default function TransitionStateEntryPage() {
         <RecordStatus
             state={state}
             ref={entryRef}
-            kind="transition state entry"
+            kind="transition state"
             loadingDetail="Retrieving the deposited saddle-point entry and its reaction context."
         />
     )
 }
 
+const CHECK_STATUS = { recorded: "Recorded", not_recorded: "Not recorded", unknown: "Not known" } as const
+
 function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
-    useDocumentTitle("Transition state entry", record.reaction.equation)
     const {
         transition_state_entry: entry,
         transition_state: ts,
@@ -173,53 +159,37 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         validation,
         available_sections: available,
     } = record
-    // `record.saddle_point` is passed through to `SaddlePointStatement`
-    // WITHOUT folding to `?? null` here -- `undefined` (field not served by
-    // this deployment yet) and `null` (served, and this entry genuinely has
-    // no freq-result row) are NOT the same claim, and collapsing them was
-    // the BLOCKING #2 defect: every live page has a lit `freq` evidence
-    // pill and a `freq` calculation-table row sitting directly below a
-    // sentence that said "No frequency calculation deposited for this
-    // entry" -- false whenever a freq calc exists but never got a result
-    // row. See `SaddlePointStatement`'s own docstring for the three-way
-    // split this now makes.
     const trust = record.trust ?? null
 
-    // No `transitionStateEntryRef` here -- unlike every OTHER
-    // `RecordIdentityHeader` caller that can render a `transition_state_entry`
-    // identity (which renders an OWNER's ref, e.g. `GeometryDetailPage` on a
-    // TS-owned geometry), this component IS that entry's own page. Its own
-    // ref is supplied separately via the header's `ownRef` prop below and
-    // rendered first; setting it here too would render the exact same ref
-    // twice on one page. Mirrors `SpeciesEntrySummary.tsx`'s identical
-    // `speciesEntryRef` omission for the same reason.
+    const participants = useLoaded(loadReactionEntryParticipants, reaction.reaction_entry_ref ?? null)
+    const species = participants.status === "ready" ? participants.data.species : null
+    const reactants = useMemo(() => species?.reactants ?? [], [species])
+    const products = useMemo(() => species?.products ?? [], [species])
+    const equationKnown = reactants.length > 0 && products.length > 0
+    const reversible = participants.status === "ready" ? participants.data.reaction_entry.reversible : (reaction.reversible ?? false)
+    const formulaOnly = !equationNeedsStructure(reactants, products)
+    const speciesLabels = useMemo(
+        () => new Map([...reactants, ...products].map((participant) => [participant.species_entry_ref, participant.formula ?? participant.smiles])),
+        [reactants, products],
+    )
+    useDocumentTitle("Transition state", equationKnown ? equationText(reactants, products, reversible) : null)
+
+    // No `transitionStateEntryRef`: this page is that entry; its own ref is `ownRef`. The producer's label is not read.
     const identity: TransitionStateIdentity = {
         kind: "transition_state_entry",
-        // Never served on this endpoint (see `TransitionStateEntryCoreBlock`)
-        // -- a TS has no molecular-graph formula the way a species does.
         formula: null,
         charge: entry.charge,
         multiplicity: entry.multiplicity,
         transitionStateRef: ts?.transition_state_ref,
-        // No `label` here any more -- `ts.label` is the depositor's own
-        // `transition_state.label` (e.g. "TS1"), which this page no longer
-        // reads for display (house rule widened 2026-09: no depositor-typed
-        // labels on public pages). See `TransitionStateIdentity`'s own
-        // comment.
     }
 
     const calculationsAvailability = sectionAvailability(record.calculations)
     const calculations = sortCalculationsByStage(record.calculations ?? [])
     const ircCalc = calculations.find((calc) => calc.type === "irc") ?? null
+    const checks = transitionStateChecks(record)
 
     const geometriesAvailability = sectionAvailability(record.geometries)
-    // One geometry object can be linked from several of this entry's
-    // calculations -- on the live archive `tse_4fzvo2qpovgytr5yduytj3mmh4`
-    // returns its single saddle point three times (opt, freq and sp all
-    // cite it), which rendered as three identical "final" cards and three
-    // colliding React keys. Rows are deduplicated by ref, first occurrence
-    // in output order winning, so the count below is of geometries, not of
-    // calculation-to-geometry links.
+    // One geometry can be linked from several calculations; rows are deduplicated by ref, first in output order winning.
     const seenGeometryRefs = new Set<string>()
     const geometries = [...(record.geometries ?? [])]
         .sort((a, b) => (a.output_order ?? a.input_order ?? 0) - (b.output_order ?? b.input_order ?? 0))
@@ -228,14 +198,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
             seenGeometryRefs.add(geometry.geometry_ref)
             return true
         })
-    // On the live record this section serves 1 `final` + 50 `irc_forward` +
-    // 33 `irc_reverse` -- an undifferentiated grid of 84 identical-looking
-    // cards buried the one geometry that matters (the saddle point itself)
-    // in ~1,900px of IRC trajectory points. `final` is split out and led
-    // with, prominently and linked; every other role is grouped and put
-    // behind one collapsed disclosure per role, showing its point count
-    // rather than one card per point. Group order is deterministic:
-    // forward, reverse, then every other role in first-encountered order.
+    // `final` leads; every other role is grouped behind one collapsed disclosure showing its point count.
     const finalGeometries = geometries.filter((geometry) => geometry.role === "final")
     const otherGeometriesByRole = new Map<string, Geometry[]>()
     for (const role of GEOMETRY_ROLE_ORDER) {
@@ -259,14 +222,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         && (reviewHistory[0].reviewed_at ?? null) === null
         && (reviewHistory[0].note ?? null) === null
 
-    // The reaction-record link lives ONCE, in the Reaction section below --
-    // `/reactions/:ref` is a real chooser page now (`ReactionOverviewPage`),
-    // not a placeholder, so the link needs no "record view not yet
-    // available" caveat any more. This entry's
-    // OWN ref is deliberately NOT in this list (owner decision: "yes show
-    // each record's own ref inline") -- it renders first, inline, in the
-    // identity header below via `ownRef`; only RELATED refs stay here, per
-    // `RefsDisclosure.tsx`'s own docstring.
+    // Related refs only; this entry's own ref renders first in the header.
     const refs = [
         ...(ts ? [{ label: "Transition state", value: ts.transition_state_ref }] : []),
         ...(reaction.reaction_entry_ref ? [{ label: "Reaction entry", value: reaction.reaction_entry_ref }] : []),
@@ -275,113 +231,164 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     const { siblings, meta: siblingsMeta, status: siblingsStatus, busy: siblingsBusy, goTo: goToSiblingsPage } = useTransitionStateSiblings(reaction.reaction_ref, entry.transition_state_entry_ref)
     const siblingsFailed = siblingsStatus === "error"
 
+    const equation = equationKnown
+        ? <ReactionEquation reactants={reactants} products={products} reversible={reversible} formulaOnly={formulaOnly} />
+        : null
+    const crumbs = [
+        { label: "Reactions", to: BROWSE_KIND_PATHS.reaction },
+        ...(reaction.reaction_ref
+            ? [{
+                label: equationKnown
+                    ? <ReactionEquation reactants={reactants} products={products} reversible={reversible} formulaOnly={formulaOnly} linkParticipants={false} />
+                    : "This reaction",
+                to: `/reactions/${reaction.reaction_ref}`,
+            }]
+            : []),
+        ...(reaction.reaction_entry_ref ? [{ label: "This deposited version", to: `/reaction-entries/${reaction.reaction_entry_ref}` }] : []),
+        { label: "This transition state" },
+    ]
+
     return (
         <section className="conformer-page tse-page">
-            <nav className="record-breadcrumbs" aria-label="Breadcrumb">
-                <Link to="/">TCKDB</Link>
-                <span aria-hidden="true">/</span>
-                <Link to={BROWSE_KIND_PATHS.transition_state}>Browse</Link>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">Transition state entry</span>
-            </nav>
             <PageShell
+                contents="list"
                 identity={(
-                    <header className="basin-header">
-                        {/* Kicker + h1 (the reaction equation, `titleVariant=
-                            "display-2"`: the shared "wrapping" step, since
-                            this title is a computed sentence-length string,
-                            not a short label) + identity now all live in
-                            `RecordIdentityHeader` (item 1, design/foundations
-                            PR B). The review pill is the header's ONE pill
-                            slot. The producer's own label (e.g. "TS0") is
-                            not rendered anywhere on this page at all any
-                            more (house rule widened 2026-09: no
-                            depositor-typed labels on public pages -- it used
-                            to be a plain identity fact via `identity.label`,
-                            which `RecordIdentityHeader` no longer even
-                            accepts; see that component's own comment). The
-                            trust verdict is likewise NOT a second pill -- it
-                            is a plain fact in the provenance `.kv-list`
-                            below, the same treatment every other computed
-                            verdict on these five pages gets.
-                            explainTransitionStateIdentity=false: the Reaction
-                            section's own lede below is this page's one
-                            "no canonical SMILES" sentence -- see that
-                            section and `RecordIdentityHeader`'s own
-                            docstring for the duplication this avoids. */}
-                        <RecordIdentityHeader
-                            kicker="Transition state entry · deposited scientific record"
-                            glyph="transition-state"
-                            review={entry.review.status}
-                            title={reaction.equation ? renderEquationWithBreaks(reaction.equation) : "Reaction not recorded"}
-                            titleVariant="display-2"
-                            identity={identity}
-                            explainTransitionStateIdentity={false}
-                            ownRef={{ label: "Transition state entry ref", value: entry.transition_state_entry_ref }}
-                        />
-                        <SaddlePointStatement saddlePoint={record.saddle_point} evidence={evidence} />
-                        {/* No "Charge / multiplicity" row here: `RecordIdentityHeader`
-                            above already carries it as one of its identity
-                            facts for every `transition_state_entry` -- see
-                            its own docstring. Restating it here duplicated
-                            the exact same "0 / doublet (2)" text twice on
-                            one page. */}
-                        {/* No "Transition state review" row here: the review pill
-                            beside the h1 above already states this entry's
-                            review status. Restating it here duplicated that status
-                            text twice on one page. */}
-                        <dl className="kv-list">
-                            <div><dt>Entry status</dt><dd>{statusLabel(entry.status)}</dd></div>
-                            <div><dt>Deposited</dt><dd>{isoDate(entry.created_at)}</dd></div>
-                            {/* No `ts.note`: depositor free text (house rule, owner decision 2026-11-03). */}
-                            {/* A plain fact, not a second pill -- see the
-                                comment on `RecordIdentityHeader`'s `pill`
-                                prop above. */}
-                            {trust && (
-                                <div>
-                                    <dt>Trust</dt>
-                                    <dd>
-                                        {statusLabel(trust.trust_status)} · {trust.evidence.passed_count}/{trust.evidence.possible_count}
-                                        {/* Under the Trust fact it describes, not under all four facts: the structure
-                                            assessment beside it is a different procedure and is not covered by this line. */}
+                    <>
+                        <Breadcrumbs crumbs={crumbs} />
+                        <header className="basin-header">
+                            <RecordIdentityHeader
+                                kicker="Transition state · one deposited saddle point"
+                                glyph="transition-state"
+                                review={entry.review.status}
+                                lede={transitionStateEntryLede(entry, record.evidence_summary.calculation_count)}
+                                title={<>Transition state of {equation ?? "this reaction"}</>}
+                                titleVariant="display-2"
+                                identity={identity}
+                                explainTransitionStateIdentity={false}
+                                ownRef={{ label: "Transition state entry ref", value: entry.transition_state_entry_ref }}
+                            />
+                            <dl className="kv-list">
+                                <div><dt>Entry status</dt><dd>{statusLabel(entry.status)}</dd></div>
+                                <div><dt>Deposited</dt><dd>{isoDate(entry.created_at)}</dd></div>
+                            </dl>
+                            <DepositorNote>{ts?.note}</DepositorNote>
+                            <RefsDisclosure refs={refs} />
+                        </header>
+                    </>
+                )}
+            >
+                {reaction.reaction_entry_ref ? (
+                    <EnergyProfile entryRef={reaction.reaction_entry_ref} speciesLabels={speciesLabels} onlyTransitionState={entry.transition_state_entry_ref} />
+                ) : (
+                    <section className="energy-profile" aria-labelledby="energy-heading">
+                        <SectionHeading id="energy-heading" kicker="How the energy changes">Energy hill</SectionHeading>
+                        <p className="empty-projection">This entry does not name its reaction entry, so no energy profile can be drawn for it.</p>
+                    </section>
+                )}
+
+                <section className="ledger-section" aria-labelledby="shape-heading">
+                    <SectionHeading id="shape-heading" kicker="Its 3D structure">Shape</SectionHeading>
+                    <TransitionStateStage transitionStateEntryRef={entry.transition_state_entry_ref} geometryRef={stageGeometryRef(record)} />
+                </section>
+
+                <section className="ledger-section" aria-labelledby="imaginary-heading">
+                    <SectionHeading id="imaginary-heading" kicker="The motion over the hill">Imaginary frequency</SectionHeading>
+                    <p className="note">
+                        The <Term term="imaginary-frequency">imaginary frequency</Term> is the one motion that carries the transition state downhill.
+                    </p>
+                    <SaddlePointStatement saddlePoint={record.saddle_point} evidence={evidence} />
+                </section>
+
+                <section className="ledger-section" aria-labelledby="checks-heading">
+                    <SectionHeading id="checks-heading" kicker="What was recorded" intro="Each check is either recorded with its outcome or not recorded. Not recorded means nobody deposited it; it does not mean the check failed.">
+                        Checks
+                    </SectionHeading>
+                    <div className="table-scroll tse-scroll" tabIndex={0} role="region" aria-label="Checks on this transition state">
+                        <table className="data-table tse-checks-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Check</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Outcome</th>
+                                    <th scope="col">Evidence</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {checks.map((check) => (
+                                    <tr key={check.key}>
+                                        <th scope="row">{check.label}</th>
+                                        <td data-label="Status">{CHECK_STATUS[check.status]}</td>
+                                        <td data-label="Outcome">
+                                            {check.token !== undefined && <><code className="t-preserve-case">{check.token}</code>{": "}</>}
+                                            {check.outcome}
+                                            {check.note && <span className="tse-check-note">{check.note}</span>}
+                                        </td>
+                                        <td data-label="Evidence">
+                                            {check.evidence.length > 0
+                                                ? <ul className="tse-evidence-links">{check.evidence.map((link) => <li key={link.to}><Link to={link.to}>{link.text}</Link></li>)}</ul>
+                                                : <span className="tse-absent">none to link</span>}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section className="ledger-section" aria-labelledby="trust-irc-heading">
+                    <SectionHeading id="trust-irc-heading" kicker="Two separate questions">Trust and IRC</SectionHeading>
+                    <div className="tse-pair">
+                        <section className="tse-pair-card" aria-labelledby="trust-card-heading">
+                            <h3 className="t-heading-2" id="trust-card-heading">Trust</h3>
+                            <p className="note">Asks how much of the evidence TCKDB expects for a saddle point was deposited, by a fixed list of checks.</p>
+                            {trust ? (
+                                <>
+                                    <p>
+                                        <strong>{statusLabel(trust.trust_status)}</strong> · {trust.evidence.passed_count} of {trust.evidence.possible_count} checks passed
                                         {trust.evidence.rubric && trust.evidence.rubric_version != null && (
                                             <MadeUnderLine madeUnder={liveMadeUnder(trust.evidence.rubric, trust.evidence.rubric_version)} />
                                         )}
-                                    </dd>
-                                </div>
+                                    </p>
+                                    {trust.structure_assessment && (
+                                        <p><span className="tse-pair-label">Structure assessment</span> {structureAssessmentSentence(trust.structure_assessment)}</p>
+                                    )}
+                                    <TrustWarnings checks={trust.evidence.checks} />
+                                </>
+                            ) : (
+                                <p className="empty-projection">No trust assessment was served for this entry.</p>
                             )}
-                            {trust?.structure_assessment && (
-                                <div>
-                                    <dt>Structure assessment</dt>
-                                    <dd>{structureAssessmentSentence(trust.structure_assessment)}</dd>
-                                </div>
-                            )}
-                        </dl>
-                        {trust && <TrustWarnings checks={trust.evidence.checks} />}
-                        <RefsDisclosure refs={refs} />
-                    </header>
-                )}
-            >
-            <section className="ledger-section" aria-labelledby="reaction-context">
-                <SectionHeading id="reaction-context" kicker="Reaction context" intro="A transition state is identified by the reaction it connects, not a molecular graph of its own.">
-                    Reaction
-                </SectionHeading>
-                {/* No "Equation" fact here: the h1 above already IS the
-                    rendered equation (see the h1 rework). Restating it
-                    here duplicated the exact same text twice on one page. */}
-                <dl className="kv-list">
-                    <div><dt>Family</dt><dd>{reaction.family ? statusLabel(reaction.family) : "not recorded"}</dd></div>
-                    <div><dt>Reversible</dt><dd>{reaction.reversible === null || reaction.reversible === undefined ? "not recorded" : (reaction.reversible ? "yes" : "no")}</dd></div>
-                    {reaction.reaction_ref && (
-                        <div>
-                            <dt>Reaction record</dt>
-                            <dd>
-                                <Link to={`/reactions/${reaction.reaction_ref}`}>{reaction.reaction_ref}</Link>
-                            </dd>
-                        </div>
-                    )}
-                </dl>
-            </section>
+                        </section>
+                        <section className="tse-pair-card tse-irc-summary" aria-labelledby="irc-card-heading">
+                            <h3 className="t-heading-2" id="irc-card-heading">IRC</h3>
+                            <p className="note">Asks whether a reaction-path calculation connects this saddle point to the reactants and products it was deposited for.</p>
+                            <IrcStatus
+                                validation={validation}
+                                evidence={evidence}
+                                ircCalc={ircCalc}
+                                forwardPointCount={forwardPointCount}
+                                reversePointCount={reversePointCount}
+                            />
+                        </section>
+                    </div>
+                </section>
+
+                <section className="ledger-section" aria-labelledby="reaction-context">
+                    <SectionHeading id="reaction-context" kicker="Reaction context" intro="A transition state is identified by the reaction it connects, not a molecular graph of its own.">
+                        Reaction
+                    </SectionHeading>
+                    <dl className="kv-list">
+                        <div><dt>Family</dt><dd>{reaction.family ? statusLabel(reaction.family) : "not recorded"}</dd></div>
+                        <div><dt>Reversible</dt><dd>{reaction.reversible === null || reaction.reversible === undefined ? "not recorded" : (reaction.reversible ? "yes" : "no")}</dd></div>
+                        {reaction.reaction_ref && (
+                            <div>
+                                <dt>Reaction record</dt>
+                                <dd>
+                                    <Link to={`/reactions/${reaction.reaction_ref}`}>{reaction.reaction_ref}</Link>
+                                </dd>
+                            </div>
+                        )}
+                    </dl>
+                </section>
 
             {(siblings.length > 0 || (siblingsMeta?.pagination.total ?? 0) > 1) && (
                 <section className="ledger-section" aria-labelledby="siblings-ledger">
@@ -492,18 +499,6 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 >
                     Geometry records
                 </SectionHeading>
-                {/* `.card--derived` -- a computed summary (point counts read
-                    from this entry's own geometry rows), the same rule
-                    `.coverage-card`/other pages' aggregate cards follow. */}
-                <div className="card card--derived tse-irc-summary">
-                    <IrcStatus
-                        validation={validation}
-                        evidence={evidence}
-                        ircCalc={ircCalc}
-                        forwardPointCount={forwardPointCount}
-                        reversePointCount={reversePointCount}
-                    />
-                </div>
                 {geometriesAvailability === "populated" ? (
                     <div className="geometry-groups">
                         {finalGeometries.length > 0 ? (
@@ -601,38 +596,10 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     )
 }
 
-
 /**
- * The first evidence statement on the page, directly under identity --
- * MEASURED absent from the live TS0 page entirely ("imaginary" and "768"
- * both zero hits in a `--dump-dom`) despite every freq result serving
- * `n_imag`/`imag_freq_cm1` and the trust rubric reading them.
- *
- * `saddlePoint` is passed through in its RAW, un-folded tri-state on
- * purpose -- `undefined` / `null` / populated are three different facts,
- * not two:
- *
- * - `undefined`: this deployment does not serve `saddle_point` at all
- *   (the field is additive and the live archive predates it as of this
- *   writing). Absence describes the *request* here -- the page asked a
- *   backend that never learned to answer -- so it must not be rendered
- *   the same as a populated backend's honest "nothing recorded".
- * - `null` with `evidence.has_freq === false`: no freq calculation was
- *   deposited at all.
- * - `null` with `evidence.has_freq === true`: a freq-type calculation
- *   IS attached to this entry, but the backend's join found no
- *   `calc_freq_result` row for it (the calc has no parsed result yet).
- *   MEASURED BLOCKING DEFECT this fixes: every live page shows a lit
- *   `freq` evidence pill and a `freq` calculation-table row directly
- *   below what used to be an unconditional "No frequency calculation
- *   deposited for this entry." -- a false claim about deposited data,
- *   not merely an unfinished feature. `evidence_summary.has_freq` (any
- *   freq-type calc) is the one signal already on this page that can
- *   tell those two `null` cases apart; `saddle_point === null` alone
- *   cannot, since the backend returns `None` for both "no freq calc"
- *   and "freq calc with no result row" alike (see
- *   `_build_saddle_point_index`'s own docstring).
- * - populated: the full verdict, as before.
+ * The imaginary-frequency statement. `saddlePoint` stays in its raw tri-state because the three are different facts:
+ * `undefined` is a deployment that does not serve the block, `null` with `has_freq` false is no frequency calculation,
+ * `null` with `has_freq` true is a frequency calculation with no parsed result row, and an object is the verdict.
  */
 function SaddlePointStatement({ saddlePoint, evidence }: {
     saddlePoint: SaddlePoint | null | undefined
@@ -648,7 +615,12 @@ function SaddlePointStatement({ saddlePoint, evidence }: {
         return <p className="tse-saddle-point">No frequency calculation deposited for this entry.</p>
     }
     const lotText = saddlePoint.level_of_theory ? <LevelOfTheoryLink levelOfTheory={saddlePoint.level_of_theory} /> : "level of theory not recorded"
-    const freqText = saddlePoint.imag_freq_cm1 != null ? `${saddlePoint.imag_freq_cm1.toFixed(1)} cm⁻¹` : null
+    // Programs print the mode negative or with an i; TCKDB keeps the depositor's sign, so the magnitude is shown with an i.
+    const stored = saddlePoint.imag_freq_cm1
+    const quantity = formatQuantity("ts_imaginary_frequency_cm1", stored == null ? null : Math.abs(stored))
+    const freq = quantity && stored != null
+        ? <ValueLink value={`${quantity.value}i`} unit={quantity.unit ?? undefined} full={`stored as ${String(stored).replace("-", "\u2212")}`} to={`/calculations/${saddlePoint.calculation_ref}`} />
+        : null
 
     let verdict: ReactNode
     if (saddlePoint.n_imag == null) {
@@ -656,24 +628,24 @@ function SaddlePointStatement({ saddlePoint, evidence }: {
     } else if (saddlePoint.n_imag === 0) {
         verdict = "0 imaginary modes recorded at this level — needs investigation"
     } else if (saddlePoint.n_imag === 1) {
-        verdict = <>1 imaginary mode{freqText ? ` · ${freqText}` : ""}</>
+        verdict = "1 imaginary mode"
     } else if (saddlePoint.reaction_coordinate_mode_index == null) {
         verdict = `${saddlePoint.n_imag} imaginary modes; reaction-coordinate mode not designated`
     } else {
-        verdict = (
-            <>
-                {saddlePoint.n_imag} imaginary modes · reaction-coordinate mode designated (index {saddlePoint.reaction_coordinate_mode_index})
-                {freqText ? ` · ${freqText}` : ""}
-            </>
-        )
+        verdict = `${saddlePoint.n_imag} imaginary modes · reaction-coordinate mode designated (index ${saddlePoint.reaction_coordinate_mode_index})`
     }
 
     return (
-        <p className="tse-saddle-point">
-            <strong>{verdict}</strong> · {lotText} · <Link to={`/calculations/${saddlePoint.calculation_ref}`}>{saddlePoint.calculation_ref}</Link>
-            {saddlePoint.imaginary_mode_structural_flag ? " · flagged as a higher-order saddle point" : ""}
-            {saddlePoint.basis === "declared_curvature_witness" ? " · the frequency result the declared saddle target pins" : ""}
-        </p>
+        <div className="tse-saddle-point">
+            <p><strong>{verdict}</strong></p>
+            <dl className="kv-list">
+                <div><dt>Imaginary frequency</dt><dd>{freq ?? "not recorded"}</dd></div>
+                <div><dt>Level of theory</dt><dd>{lotText}</dd></div>
+                <div><dt>Frequency calculation</dt><dd><Link to={`/calculations/${saddlePoint.calculation_ref}`}>{saddlePoint.calculation_ref}</Link></dd></div>
+            </dl>
+            {saddlePoint.imaginary_mode_structural_flag && <p>Flagged as a higher-order saddle point.</p>}
+            {saddlePoint.basis === "declared_curvature_witness" && <p>This is the frequency result the declared saddle target pins.</p>}
+        </div>
     )
 }
 
@@ -794,6 +766,9 @@ function IrcStatus({ validation, evidence, ircCalc, forwardPointCount, reversePo
     if (validation.irc === "failed") {
         return <p><strong>IRC validation failed</strong> — a structured evidence record was deposited for this entry, but it did not pass.</p>
     }
+    if (validation.irc !== "absent") {
+        return <p>IRC validation record: <code className="t-preserve-case">{validation.irc}</code> — {UNKNOWN_OUTCOME}.</p>
+    }
     if (!evidence.has_irc) {
         return <p className="empty-projection">No IRC calculation was deposited for this entry.</p>
     }
@@ -832,7 +807,7 @@ function SectionEmptyMessage({ availability, emptyText, contradicted }: {
 
 function CalculationTable({ calculations, entryRef }: { calculations: Calculation[]; entryRef: string }) {
     return (
-        <div className="table-scroll">
+        <div className="table-scroll tse-scroll tse-calc-scroll" tabIndex={0} role="region" aria-label="Calculations of this transition state">
         <table className="data-table" aria-label={`Calculations for ${entryRef}`}>
             <thead>
                 <tr>
