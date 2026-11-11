@@ -275,13 +275,7 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
     }
 
     return <section className="entry-page">
-        {/* `EntryIdentity` now routes through `PageShell`'s `identity` slot
-            (previously it rendered directly above `<PageShell>`, spanning
-            full width above the ToC/content flex row -- an earlier version
-            of this comment called that placement intentional; it was
-            superseded by the ToC-top-alignment change, which puts every
-            record page's header through the same slot so the ToC rail
-            starts level with the header, not below it). */}
+        {/* `EntryIdentity` renders through `PageShell`'s `identity` slot, so the side column starts level with the header. */}
         <PageShell side={<SpeciesEntryRelationshipMap entryRef={entryRef} smiles={entry.canonicalSmiles} />} identity={<>
             <Breadcrumbs crumbs={[
                 { label: "Molecules", to: BROWSE_KIND_PATHS.species },

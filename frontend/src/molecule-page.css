@@ -3,7 +3,6 @@
  * theme. Prose keeps its own narrower measure.
  */
 
-
 /* Ties "Transition states for reactions of this species" (item 1/5;
    `.note`, design-system.css, at its call site) to the identity block
    immediately above it, with no bottom margin -- it is the last thing
@@ -198,9 +197,29 @@
 }
 
 .shape-card-3d a {
+    color: var(--accent-700);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .16em;
+}
+
+.shape-card-3d a:hover { text-decoration-color: currentColor; }
+
+.shape-card-3d a:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.shape-card-3d a {
     display: inline-flex;
     align-items: center;
-    min-height: 2.75rem;
+    min-height: 1.5rem;
+}
+
+@media (max-width: 62rem), (pointer: coarse) {
+    .shape-card-3d a {
+        min-height: 2.75rem;
+    }
 }
 
 .shape-card-energy,

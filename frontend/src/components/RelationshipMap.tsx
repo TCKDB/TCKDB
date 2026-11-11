@@ -22,8 +22,9 @@ const nodeAria = (node: NeighbourNode) =>
 
 /**
  * Shows where the record sits, sized for the 14rem side column: this entry on top, what it connects to stacked below.
- * The drawing is a group of links, never one image, and the "Connected records" list says the same in text. On wide
- * screens the list is visually hidden (it shows while focused); below the narrow breakpoint only the list is shown.
+ * The drawing is for the mouse (hidden from assistive technology, its links out of the tab order); the "Connected
+ * records" list says the same in text and is the keyboard and screen-reader twin. On wide screens the list is visually
+ * hidden and replaces the drawing while focus is inside it; below the narrow breakpoint only the list is shown.
  */
 export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This entry" }: {
     selfKind: RecordKind
@@ -52,12 +53,12 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
         <section className="rel-map" aria-labelledby={headingId} ref={innerRef}>
             <h2 id={headingId} className="rel-map-heading">Where this record sits</h2>
             {nodes.length > 0 && (
-                <svg className="rel-map-figure" viewBox={`0 0 ${WIDTH} ${height}`} role="group" aria-labelledby={headingId}>
+                <svg className="rel-map-figure" viewBox={`0 0 ${WIDTH} ${height}`} aria-hidden="true">
                     <line className="rel-map-edge" x1={SPINE_X} y1={PAD + SELF_H} x2={SPINE_X} y2={tops[tops.length - 1] + rows[rows.length - 1].height / 2} />
                     {nodes.map((node, index) => (
                         <line key={node.id} className="rel-map-edge" x1={SPINE_X} y1={tops[index] + rows[index].height / 2} x2={NODE_X} y2={tops[index] + rows[index].height / 2} />
                     ))}
-                    <Link to={pathname} aria-current="page" aria-label={`${selfLabel} (you are here)`} className="rel-map-node rel-map-node--self">
+                    <Link to={pathname} tabIndex={-1} aria-current="page" aria-label={`${selfLabel} (you are here)`} className="rel-map-node rel-map-node--self">
                         <rect className="rel-map-box" x={4} y={PAD} width={WIDTH - 8} height={SELF_H} rx={4} />
                         <g transform={`translate(${NODE_X - 8} ${PAD + SELF_H / 2 - 10})`}><RecordGlyph kind={selfKind} size={20} /></g>
                         <text x={TEXT_X - 8} y={PAD + SELF_H / 2 + 4.5} className="rel-map-label">{selfLabel}</text>
@@ -86,7 +87,7 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
                         return node.to === null ? (
                             <g key={node.id} className="rel-map-node rel-map-node--plain">{body}</g>
                         ) : (
-                            <Link key={node.id} to={node.to} aria-label={nodeAria(node)} className="rel-map-node">{body}</Link>
+                            <Link key={node.id} to={node.to} tabIndex={-1} aria-label={nodeAria(node)} className="rel-map-node">{body}</Link>
                         )
                     })}
                 </svg>
@@ -129,5 +130,16 @@ export function SpeciesRelationshipMap({ species }: { species: SpeciesOverview }
         to: `/species-entries/${version.species_entry_ref}`,
         found: null,
     }))
+    const more = species.entries.length - shown.length
+    if (more > 0) {
+        nodes.push({
+            id: "more-versions",
+            kind: "species-entry",
+            label: `${more} more under Versions`,
+            relation: "Listed under Versions of this molecule",
+            to: "#species-versions",
+            found: null,
+        })
+    }
     return <RelationshipMap selfKind="species" selfLabel="This molecule" state={{ status: "ready", nodes }} />
 }

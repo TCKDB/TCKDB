@@ -71,7 +71,7 @@ export default function MethodsIndexPage() {
 
     return (
         <section className="conformer-page methods-page">
-            <PageShell crumbs={[{ label: "Methods" }]}>
+            <PageShell>
                 <h1 className="t-display-2">Methods</h1>
                 <p className="t-body methods-index-intro">
                     Levels of theory, software and workflow tools behind deposited calculations.

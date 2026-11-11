@@ -140,7 +140,7 @@ export function RecordIdentityHeader({
             ) : (
                 <dl className="kv-list record-identity-facts">
                     {ownRef && (
-                        <IdentityFact label={ownRef.label} copy={ownRef.value}>
+                        <IdentityFact label={ownRef.label} copy={ownRef.value} own>
                             <code className="data">{ownRef.value}</code>
                         </IdentityFact>
                     )}
@@ -183,7 +183,7 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
     // sits outside/above the per-identity-kind branching below rather
     // than being folded into any one branch's `dl`.
     const ownRefFact = ownRef && (
-        <IdentityFact label={ownRef.label} copy={ownRef.value}>
+        <IdentityFact label={ownRef.label} copy={ownRef.value} own>
             <code className="data">{ownRef.value}</code>
         </IdentityFact>
     )
@@ -335,14 +335,15 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
  * recorded" placeholder those facts already show instead of an empty
  * value.
  */
-function IdentityFact({ label, children, wide, copy }: {
+function IdentityFact({ label, children, wide, copy, own }: {
     label: string
     children: ReactNode
     wide?: boolean
     copy?: string
+    own?: boolean
 }) {
     return (
-        <div className={wide ? "record-identity-fact-wide" : undefined}>
+        <div className={wide ? "record-identity-fact-wide" : own ? "record-identity-fact-ref" : undefined}>
             <dt>{label}</dt>
             <dd className={copy ? "record-identity-fact-copyable" : undefined}>
                 {children}

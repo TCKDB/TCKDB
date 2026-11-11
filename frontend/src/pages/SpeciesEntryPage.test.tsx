@@ -1672,7 +1672,7 @@ describe("species-entry page: the stage and the keyboard", () => {
         expect(document.querySelectorAll(".conformer-card svg.mol-poster")).toHaveLength(2)
         expect(screen.queryByRole("button", { name: "Show in 3D" })).toBeNull()
         expect(screen.queryByRole("heading", { name: /in 3D$/ })).toBeNull()
-        const links = screen.getAllByRole("link", { name: "Open in 3D" })
+        const links = screen.getAllByRole("link", { name: /^Open in 3D of Conformer Group [12]$/ })
         expect(links.map((link) => link.getAttribute("href"))).toEqual([`/conformer-groups/${groupOneRef}`, `/conformer-groups/${groupTwoRef}`])
     })
 

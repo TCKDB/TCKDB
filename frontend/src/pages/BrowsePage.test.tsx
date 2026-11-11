@@ -1483,3 +1483,35 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         expect(forwardRows).not.toContain("rxe_ed66mj3ohtyien5rm2x3sb3rdu")
     })
 })
+
+describe("phone filters: one disclosure above the list", () => {
+    afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia })
+
+    function narrowScreen() {
+        window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+            matches: query.includes("62rem"), media: query, addEventListener: () => {}, removeEventListener: () => {},
+        })) as unknown as typeof window.matchMedia
+    }
+
+    it("is closed and plain when no filter is set, and the side column holds no form", async () => {
+        narrowScreen()
+        server.use(...handlers())
+        renderAt("/transition-states")
+        expect(await screen.findByText("A <=> B")).toBeVisible()
+        const summary = screen.getByText("Filters")
+        const details = summary.closest("details") as HTMLDetailsElement
+        expect(details.open).toBe(false)
+        expect(document.querySelectorAll("form.browse-filters")).toHaveLength(1)
+        expect(document.querySelector(".page-shell-side")).toBeNull()
+    })
+
+    it("opens and counts the filters that are set", async () => {
+        narrowScreen()
+        server.use(...handlers())
+        renderAt("/transition-states?participant_smiles=CCO")
+        expect(await screen.findByText("A <=> B")).toBeVisible()
+        const summary = screen.getByText("Filters (1)")
+        expect((summary.closest("details") as HTMLDetailsElement).open).toBe(true)
+        expect(screen.getByLabelText("SMILES")).toHaveValue("CCO")
+    })
+})

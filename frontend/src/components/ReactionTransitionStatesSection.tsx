@@ -139,7 +139,7 @@ function TransitionStateBlock({ ts, calculationsByRef }: {
             <p className="t-label reaction-ts-status-label">Status</p>
             <StatusStages status={ts.status} />
 
-            <p className="reaction-ts-picture-link"><Link to={`/transition-state-entries/${ts.transition_state_entry_ref}`}>Picture and 3D view</Link></p>
+            <p className="reaction-ts-picture-link"><Link to={`/transition-state-entries/${ts.transition_state_entry_ref}`}>Picture and 3D view{" "}<span className="reaction-ts-picture-link-for">of {ts.transition_state_entry_ref}</span></Link></p>
 
             <p className="t-label reaction-ts-stage-label">Calculations by stage</p>
             <div className="table-scroll">

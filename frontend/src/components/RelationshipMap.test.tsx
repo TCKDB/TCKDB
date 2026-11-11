@@ -53,25 +53,25 @@ describe("RelationshipMap", () => {
         expect(drawn[0]).not.toBe(drawn[1])
         expect(lines.join(" ")).not.toContain("A version of this molecule")
         expect(shortRefs([first, second])[0].length - 1).toBeGreaterThan(18)
-        expect(screen.getByRole("link", { name: new RegExp(first) })).toHaveAttribute("href", `/species-entries/${first}`)
+        expect(screen.getByRole("link", { name: new RegExp(first), hidden: true })).toHaveAttribute("href", `/species-entries/${first}`)
         expect(container.querySelector("svg.rel-map-figure title")?.textContent).toContain(first)
         expect(container.querySelector(".rel-map-item-note")?.textContent).toContain(first)
     })
 
-    it("draws a group of links under a heading, never one image around the links", () => {
+    it("draws the figure for the mouse only: hidden from assistive technology, with no tabbable link", () => {
         const { container } = renderMap()
         const svg = container.querySelector("svg.rel-map-figure")!
-        expect(svg).toHaveAttribute("role", "group")
-        expect(svg).toHaveAttribute("aria-labelledby", screen.getByRole("heading", { name: "Where this record sits" }).id)
-        expect(container.querySelector('svg[role="img"].rel-map-figure')).toBeNull()
+        expect(svg).toHaveAttribute("aria-hidden", "true")
         expect(svg.querySelectorAll("a")).toHaveLength(3)
+        for (const link of svg.querySelectorAll("a")) expect(link).toHaveAttribute("tabindex", "-1")
+        expect(screen.getByRole("heading", { name: "Where this record sits" })).toBeInTheDocument()
     })
 
     it("labels the current entry and each linked node", () => {
         renderMap()
-        expect(screen.getByRole("link", { name: "This entry (you are here)" })).toHaveAttribute("aria-current", "page")
-        expect(screen.getByRole("link", { name: "The molecule, All versions of this molecule" })).toHaveAttribute("href", "/species/spc_1")
-        expect(screen.getByRole("link", { name: "Conformer groups, Shapes of this entry, 3 found" })).toBeInTheDocument()
+        expect(screen.getByRole("link", { name: "This entry (you are here)", hidden: true })).toHaveAttribute("aria-current", "page")
+        expect(screen.getByRole("link", { name: "The molecule, All versions of this molecule", hidden: true })).toHaveAttribute("href", "/species/spc_1")
+        expect(screen.getByRole("link", { name: "Conformer groups, Shapes of this entry, 3 found", hidden: true })).toBeInTheDocument()
     })
 
     it("has a Connected records list that carries every node, in the same order", () => {
@@ -94,15 +94,9 @@ describe("RelationshipMap", () => {
         expect(container.querySelector("svg.rel-map-figure g.rel-map-node--plain")).not.toBeNull()
     })
 
-    it("tabs through the drawn nodes in document order, then the list, and Enter on a list link navigates", async () => {
+    it("tabs straight to the list links, skipping the drawing, and Enter on a list link navigates", async () => {
         const user = userEvent.setup()
-        const { container } = renderMap()
-        const drawn = Array.from(container.querySelectorAll("svg.rel-map-figure a")) as Element[]
-        for (const node of drawn) {
-            await user.tab()
-            expect(node).toHaveFocus()
-        }
-        // user-event only activates HTML anchors on Enter; browsers activate SVG anchors too.
+        renderMap()
         const listLink = within(screen.getByRole("list", { name: "Connected records" })).getByRole("link", { name: "The molecule" })
         await user.tab()
         expect(listLink).toHaveFocus()
@@ -139,6 +133,7 @@ describe("RelationshipMap", () => {
     it("hides the drawing and shows the list below 62rem, hides the list visually beside the drawing, and keeps its labels at least 12px", () => {
         expect(mapCss).toMatch(/@media \(max-width: 62rem\) \{\s*\.rel-map-figure \{\s*display: none;/)
         expect(mapCss).toMatch(/\.rel-map-figure \+ \.rel-map-list:not\(:focus-within\) \{[^}]*clip-path:\s*inset\(50%\)/)
+        expect(mapCss).toMatch(/\.rel-map:has\(\.rel-map-list:focus-within\) \.rel-map-figure \{\s*display:\s*none/)
         const sizes = [...mapCss.matchAll(/font(?:-size)?:\s*(?:\d+\s+)?(\d+)px/g)].map((m) => Number(m[1]))
         expect(sizes.length).toBeGreaterThan(1)
         expect(Math.min(...sizes)).toBeGreaterThanOrEqual(12)

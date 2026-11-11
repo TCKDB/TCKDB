@@ -260,21 +260,24 @@ describe("molecule overview: versions", () => {
         expect(rail.querySelector(".rel-map-note:not(svg *)")).toBeNull()
         expect(within(rail).queryByText(/This map shows/)).toBeNull()
         const list = within(rail).getByRole("list", { name: "Connected records" })
-        expect(within(rail).getByRole("link", { name: `minimum · ground state, A version of this molecule, ${entryRef}` })).toHaveAttribute("href", `/species-entries/${entryRef}`)
+        expect(within(rail).getByRole("link", { name: `minimum · ground state, A version of this molecule, ${entryRef}`, hidden: true })).toHaveAttribute("href", `/species-entries/${entryRef}`)
         expect(within(list).getAllByRole("listitem")[1]).toHaveTextContent("A version of this molecule, spe_secondgroundentryrecordabcdefgh")
         const same = within(list).getAllByRole("link", { name: "minimum · ground state" })
         expect(same).toHaveLength(2)
         expect(same[0]).toHaveAccessibleDescription(`A version of this molecule, ${entryRef}`)
         expect(same[1]).toHaveAccessibleDescription("A version of this molecule, spe_secondgroundentryrecordabcdefgh")
-        expect(within(rail).getByRole("link", { name: "This molecule (you are here)" })).toBeVisible()
+        expect(within(rail).getByRole("link", { name: "This molecule (you are here)", hidden: true })).toBeInTheDocument()
     })
 
-    it("draws at most 8 versions in the map", async () => {
+    it("draws at most 8 versions in the map and says how many more are under Versions", async () => {
         const many = Array.from({ length: 10 }, (_, index) => ({ ...groundEntry(), species_entry_ref: `spe_version${index}` }))
         await open(speciesPayload(many))
         const rail = document.querySelector(".page-shell-side") as HTMLElement
-        expect(within(within(rail).getByRole("list", { name: "Connected records" })).getAllByRole("listitem")).toHaveLength(8)
-        expect(rail.querySelectorAll("svg a.rel-map-node:not(.rel-map-node--self)")).toHaveLength(8)
+        const items = within(within(rail).getByRole("list", { name: "Connected records" })).getAllByRole("listitem")
+        expect(items).toHaveLength(9)
+        const more = within(items[8]).getByRole("link", { name: "2 more under Versions" })
+        expect(more.getAttribute("href")).toMatch(/#species-versions$/)
+        expect(rail.querySelectorAll("svg a.rel-map-node:not(.rel-map-node--self)")).toHaveLength(9)
         expect(within(rail).queryByText("spe_version9", { exact: false })).toBeNull()
     })
 

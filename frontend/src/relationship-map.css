@@ -69,6 +69,18 @@ a.rel-map-node:focus-visible {
     list-style: none;
 }
 
+.rel-map:has(.rel-map-list:focus-within) .rel-map-figure {
+    display: none;
+}
+
+.page-shell-side .rel-map {
+    margin-top: 1.5rem;
+}
+
+.page-shell-side .page-toc:empty + .rel-map {
+    margin-top: 0;
+}
+
 .rel-map-figure + .rel-map-list:not(:focus-within) {
     position: absolute;
     width: 1px;

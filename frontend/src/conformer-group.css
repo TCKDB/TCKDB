@@ -3,7 +3,6 @@
  * lists and link rows the record pages (conformer, observation, geometry, calculation, transition state) share.
  */
 
-
 .basin-header {
     max-width: var(--measure-wide);
 }
@@ -153,7 +152,6 @@
     border-color: var(--accent);
     background: var(--accent-50);
 }
-
 
 @media (max-width: 62rem), (pointer: coarse) {
     .conformer-page .copy-button {

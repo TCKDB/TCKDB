@@ -93,7 +93,6 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
     return (
         <section className="conformer-page tse-page">
             <PageShell
-                crumbs={[{ label: "Pressure-dependent network" }]}
                 identity={(
                     <header className="basin-header">
                         <div className="record-identity-header">

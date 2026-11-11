@@ -11,7 +11,6 @@
  * here.
  */
 
-
 /* Was a hard-coded `63rem`, giving the header a different right edge than
    the evidence strip and tables below it (measured: ~1190px vs ~1470px at
    1920). `--measure-wide` (`design-system.css`) is the CONTAINER measure,

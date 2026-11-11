@@ -1,6 +1,5 @@
 import { useParams } from "react-router-dom"
 import { RecordPlaceholder } from "../components/RecordPlaceholder"
-import "../species-overview.css"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
 import { AlsoKnownAs } from "../components/AlsoKnownAs"
