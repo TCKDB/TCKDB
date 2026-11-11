@@ -171,6 +171,7 @@ describe("ConformerObservationPage", () => {
         page()
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         expect(screen.getByText(/One deposit that found this conformer/)).toBeVisible()
+        expect(screen.getByText(/3 calculations: those that found this geometry/)).toBeVisible()
         const kickerRow = document.querySelector(".record-identity-kicker-row") as HTMLElement
         expect(kickerRow.querySelector("svg")).not.toBeNull()
         expect(within(kickerRow).getByText("reviewed")).toBeVisible()
@@ -222,6 +223,16 @@ describe("ConformerObservationPage", () => {
         expect(energy.closest("li")).toHaveTextContent(/Source calc_sp · single-point · at ccsd\(t\)\/cc-pvtz · Molpro 2024 · Review of this record: approved/)
         expect(within(section).getAllByText("b3lyp/def2tzvp").length).toBeGreaterThan(0)
         expect(within(section).getByRole("link", { name: "calc_freq" })).toHaveAttribute("href", "/calculations/calc_freq")
+    })
+
+    it("lists no energy that the read attributes to another observation", async () => {
+        const other = { ...SP_RECORD, calculation: { ...SP_RECORD.calculation, calculation_ref: "calc_sp_other" }, energy: { energy_hartree: -41.5, energy_kind: "electronic" }, conformer: { conformer_observation_ref: "co_two", conformer_group_ref: "cg_demo" } }
+        serve(mockRecord(), { sp: [SP_RECORD, other] })
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        await screen.findByText("−40.123457")
+        expect(screen.queryByText("−41.500000")).toBeNull()
+        expect(screen.queryByRole("link", { name: "calc_sp_other" })).toBeNull()
     })
 
     it("says an energy is not recorded when its read came back without it", async () => {
@@ -474,7 +485,7 @@ describe("ConformerObservationPage", () => {
     // on this surface; their evidence is the observation's own), and a
     // sibling only gets its own pill when its status genuinely differs from
     // this record's.
-    it("shows review status once, in the hero, not per calculation row or per matching sibling", async () => {
+    it("shows the observation's review in the hero, each found-by calculation's own beside it, and a sibling's only when it differs", async () => {
         const siblingObservation = (ref: string) => ({
             conformer_observation: {
                 conformer_observation_ref: ref,
@@ -511,14 +522,11 @@ describe("ConformerObservationPage", () => {
         page()
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
 
-        // All four calculations are still listed; none carries its own review beside the hero's.
-        expect(screen.getAllByRole("link", { name: "calc_opt2" })[0]).toBeVisible()
-        expect(screen.getAllByRole("link", { name: "calc_freq" })[0]).toBeVisible()
-
-        // Exactly one "not reviewed" on the whole page -- the hero pill.
-        // The three siblings all share this observation's own status, so
-        // none of them gets its own pill.
-        expect(screen.getAllByText("not reviewed")).toHaveLength(1)
+        // The three optimisation and frequency calculations each carry their own review; the single point has no
+        // energy record here and is not a found-by row. Siblings share the observation's status, so none shows a chip.
+        expect(screen.getAllByText("not reviewed")).toHaveLength(4)
+        const siblings = screen.getByRole("heading", { name: "Other observations of this conformer" }).closest("section") as HTMLElement
+        expect(within(siblings).queryByText("not reviewed")).toBeNull()
     })
 
     it("gives a sibling its own review pill only when its status differs from this observation's", async () => {

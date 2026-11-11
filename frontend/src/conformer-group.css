@@ -20,27 +20,14 @@
     text-underline-offset: .16em;
 }
 
-/* A row of summary cards. A single card spans the row and owns the gap to the section after it. */
+/* A full-width evidence card; it owns the gap to the section after it. */
 .ledger-summary {
     display: grid;
-    align-items: stretch;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--s-3);
+    grid-template-columns: 1fr;
     margin: var(--s-6) 0 0;
 }
 
-.ledger-summary + .ledger-summary--single {
-    margin-top: var(--s-3);
-}
-
-@media (max-width: 72rem) {
-    .ledger-summary {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
 .ledger-summary--single {
-    grid-template-columns: 1fr;
     margin-bottom: 3.5rem;
 }
 
@@ -172,6 +159,7 @@
     background: var(--accent-50);
 }
 
-@media (max-width: 680px) {
-    .ledger-summary { grid-template-columns: 1fr; }
+
+.conformer-page .copy-button {
+    min-height: 2.75rem;
 }

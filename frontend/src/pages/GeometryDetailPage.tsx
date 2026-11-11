@@ -35,7 +35,7 @@ type ElementDisplayMode = "symbol" | "number"
 function CoordinateValue({ valueAngstrom, unit }: { valueAngstrom: number; unit: CoordinateUnitMode }) {
     const shown = (unit === "angstrom" ? valueAngstrom : angstromToBohr(valueAngstrom)).toFixed(6)
     const text = Number(shown) === 0 ? shown.replace("-", "") : shown
-    return unit === "angstrom" && String(valueAngstrom) !== text
+    return unit === "angstrom" && Number(text) !== valueAngstrom
         ? <Stored full={String(valueAngstrom)}>{text}</Stored>
         : <>{text}</>
 }
@@ -188,7 +188,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
 
                 <ProvenanceSection
                     title="Produced by"
-                    description="Calculations that emitted this geometry as an output. A role, where recorded, says which output this geometry was for that calculation."
+                    description={`${producedBy.length} ${producedBy.length === 1 ? "calculation" : "calculations"} emitted this geometry as an output. A role, where recorded, says which output this geometry was for that calculation.`}
                     links={producedBy}
                     availability={producedByAvailability}
                     showRole
@@ -197,7 +197,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
 
                 <ProvenanceSection
                     title="Used as input by"
-                    description="Calculations that consumed this geometry as an input. This list is never merged with or inferred from the producer list above: the same geometry can appear in both, and a calculation can appear in both lists at once."
+                    description={`${usedAsInputBy.length} ${usedAsInputBy.length === 1 ? "calculation" : "calculations"} consumed this geometry as an input. This list is never merged with or inferred from the producer list above: the same geometry can appear in both, and a calculation can appear in both lists at once.`}
                     links={usedAsInputBy}
                     availability={usedAsInputByAvailability}
                     showRole={false}

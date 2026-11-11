@@ -5,6 +5,7 @@ import "../record-identity-header.css"
 import { loadConformerUsage } from "../api/conformerUsageApi"
 import type { ConformerGroup } from "../api/conformerGroupApi"
 import { Breadcrumbs } from "../components/Breadcrumbs"
+import { CalcLinks } from "../components/CalcLinks"
 import { ConformerStage } from "../components/ConformerStage"
 import { ConformerUsedBy } from "../components/ConformerUsedBy"
 import { DepositorNote } from "../components/DepositorNote"
@@ -22,6 +23,7 @@ import { SpeciesEntryLink } from "../components/SpeciesEntryLink"
 import { conformerGroupName } from "../domain/conformerEvidence"
 import { pictureGeometryFromLinks, shapeRows, spreadLines, type ShapeRow } from "../domain/conformerGallery"
 import { groupLede } from "../domain/conformerLede"
+import { words } from "../domain/provenanceFormat"
 import { hiddenByDefaultNote } from "../domain/paging"
 import { useConformerGroup } from "../hooks/useConformerGroup"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
@@ -119,7 +121,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                 <section className="ledger-section" aria-labelledby="observation-ledger">
                     <SectionHeading
                         id="observation-ledger"
-                        intro="One entry for each time this conformer was deposited: how its geometry was found and every energy computed on it. Methods stay on their own calculations, so different levels stay visible."
+                        intro={`One entry for each time this conformer was deposited: how its geometry was found and every energy computed on it. Methods stay on their own calculations, so different levels stay visible. ${evidence.optimization_chain_count} optimisation ${evidence.optimization_chain_count === 1 ? "chain" : "chains"} in all.`}
                     >
                         Observations
                     </SectionHeading>
@@ -171,6 +173,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                         entryRef={entryRef}
                         groupRef={core.conformer_group_ref}
                         labelOf={() => "another conformer"}
+                        showLabel={false}
                     />
                     {hidden && <p className="note">{hidden}</p>}
                 </section>
@@ -201,7 +204,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                                 <div className="geometry-link" key={geometry.geometry_ref}>
                                     <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
                                     <span>
-                                        produced by {calculationRefs.join(", ")}
+                                        produced by <CalcLinks refs={calculationRefs} />
                                         {geometry.natoms != null ? ` · ${geometry.natoms} atoms` : ""}
                                     </span>
                                 </div>
@@ -242,7 +245,9 @@ function ObservationItem({ observation, position, row, singlePoints, optimisatio
         <li className="observation-item">
             <p className="observation-item-head">
                 <Link to={`/conformer-observations/${core.conformer_observation_ref}`}>Observation {position}</Link>{" "}
-                <ReviewChip status={core.review.status} explain={false} />
+                <code className="data t-preserve-case">{core.conformer_observation_ref}</code>{" "}
+                <ReviewChip status={core.review.status} explain={false} />{" "}
+                <span className="observation-origin">Origin: {words(core.scientific_origin) ?? "not recorded"}</span>
             </p>
             {row ? (
                 <ObservationEvidence row={row} singlePoints={singlePoints} optimisations={optimisations} />
@@ -254,7 +259,7 @@ function ObservationItem({ observation, position, row, singlePoints, optimisatio
                     Geometry output: {geometries.map(({ calculation_ref: calculationRef, geometry }) => (
                         <span key={`${calculationRef}:${geometry.geometry_ref}`}>
                             <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
-                            {` from ${calculationRef}`}
+                            {" from "}<Link to={`/calculations/${calculationRef}`}>{calculationRef}</Link>
                         </span>
                     ))}
                 </p>

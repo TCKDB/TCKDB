@@ -39,57 +39,28 @@ describe(".section-intro owns a bottom gap to whatever follows it (SHOULD-FIX-7)
     })
 })
 
-/**
- * record-summary-row PR, item 1: the owner's evidence/coverage card used
- * to render IN THE SAME `.ledger-summary` grid row as the metric tiles
- * ("the box is in line with the other boxes when I thought it would be
- * underneath them") -- it now renders below the tile row, as its own
- * full-width `.ledger-summary--single` section (see
- * `EvidenceChecklist.test.tsx` and each page's own RTL test for the DOM
- * side of this fix). `.ledger-summary` itself goes back to `align-items:
- * stretch` (the SUPERSEDED `start` behaviour, above, existed only to stop
- * tiles being pulled up to a taller CARD sharing the row -- with only
- * same-shaped tiles left in it, `stretch` is what makes every tile in the
- * row the same height) and drops the trailing `1.8fr` card column
- * entirely, down to `repeat(3, 1fr)`.
- */
-describe(".ledger-summary is the tile row ONLY now, align-items: stretch (record-summary-row PR, item 1)", () => {
-    it("uses align-items: stretch, not start -- every tile in the row is now the same shape", () => {
+describe(".ledger-summary is a single full-width card", () => {
+    it("declares one column and no tile-row grid, media query or sibling rule", () => {
         const rule = extractRule(css, ".ledger-summary")
-        expect(rule).toMatch(/align-items:\s*stretch/)
-        expect(rule).not.toMatch(/align-items:\s*start/)
-    })
-
-    it("no longer reserves a trailing 1.8fr column for the evidence card", () => {
-        const rule = extractRule(css, ".ledger-summary")
-        expect(rule).toMatch(/grid-template-columns:\s*repeat\(3,\s*1fr\)/)
-        expect(rule).not.toMatch(/1\.8fr/)
-    })
-})
-
-/**
- * `.ledger-summary--single` stays in THIS file (a `.ledger-summary`
- * variant used directly in page markup, not a class `EvidenceChecklist`
- * itself renders) -- `.coverage-card`/`.coverage-checklist` moved OUT,
- * to the component's own `evidence-checklist.css` (post-review of
- * 2bd17511: the repo convention is a component owns its own stylesheet,
- * the same as `RecordIdentityHeader`/`RefsDisclosure`/`EnergyDisplay`).
- * See `evidenceChecklist.css.test.ts` for the glob-based source test
- * covering both files' declarations.
- */
-describe("conformer-group.css owns .ledger-summary and its .ledger-summary--single variant (record-summary-row PR)", () => {
-    it("declares .ledger-summary--single as the full-width, one-column variant", () => {
-        const rule = extractRule(css, ".ledger-summary--single")
         expect(rule).toMatch(/grid-template-columns:\s*1fr/)
+        expect(css).not.toMatch(/repeat\(3,\s*1fr\)/)
+        expect(css).not.toMatch(/@media \(max-width: 72rem\)/)
+        expect(css).not.toMatch(/\.ledger-summary\s*\+/)
     })
 
-    it("tightens the gap between a tile row and the evidence card that immediately follows it", () => {
-        expect(css).toMatch(/\.ledger-summary\s*\+\s*\.ledger-summary--single\s*\{[^}]*margin-top:\s*var\(--s-3\)/)
+    it(".ledger-summary--single owns the gap to the section after it", () => {
+        expect(extractRule(css, ".ledger-summary--single")).toMatch(/margin-bottom:\s*3\.5rem/)
     })
 
     it("no longer declares .coverage-card or .coverage-checklist -- moved to evidence-checklist.css", () => {
         expect(css).not.toMatch(/\.coverage-card\s*\{/)
         expect(css).not.toMatch(/\.coverage-checklist\s*\{/)
+    })
+})
+
+describe("copy buttons on the record pages are tap-sized", () => {
+    it("declares min-height 2.75rem", () => {
+        expect(extractRule(css, ".conformer-page .copy-button")).toMatch(/min-height:\s*2\.75rem/)
     })
 })
 

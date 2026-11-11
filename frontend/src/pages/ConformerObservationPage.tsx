@@ -4,6 +4,7 @@ import "../conformer-group.css"
 import "../record-identity-header.css"
 import type { ConformerObservation, ConformerObservationSibling } from "../api/conformerObservationApi"
 import { Breadcrumbs } from "../components/Breadcrumbs"
+import { CalcLinks } from "../components/CalcLinks"
 import { ConformerStage } from "../components/ConformerStage"
 import { DepositorNote } from "../components/DepositorNote"
 import { Disclosure } from "../components/Disclosure"
@@ -159,7 +160,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 <section className="ledger-section" aria-labelledby="calc-ledger">
                     <SectionHeading
                         id="calc-ledger"
-                        intro="The calculations that found this geometry and every energy computed on it, in the order the archive returned them. No dependency order is drawn between them."
+                        intro={`${evidence.calculation_count} ${evidence.calculation_count === 1 ? "calculation" : "calculations"}: those that found this geometry and every energy computed on it, in the order the archive returned them. No dependency order is drawn between them.`}
                     >
                         Calculations and energies
                     </SectionHeading>
@@ -212,7 +213,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                 <div className="geometry-link" key={geometry.geometry_ref}>
                                     <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
                                     <span>
-                                        produced by {calculationRefs.join(", ")}
+                                        produced by <CalcLinks refs={calculationRefs} />
                                         {geometry.natoms != null ? ` · ${geometry.natoms} atoms` : ""}
                                     </span>
                                 </div>

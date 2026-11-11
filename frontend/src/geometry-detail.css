@@ -69,6 +69,7 @@
 }
 
 .coordinate-toggle button {
+    min-width: 2.75rem;
     min-height: 2.75rem;
     padding: .3rem .65rem;
     border: 1px solid var(--control-border);

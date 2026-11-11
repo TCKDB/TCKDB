@@ -46,3 +46,11 @@ describe(".validation-card and the metric tile row are retired from this file", 
         expect(withoutComments).not.toMatch(/\.validation-card|\.geometry-summary/)
     })
 })
+
+describe("coordinate toggle buttons are tap-sized", () => {
+    it("declares min-width and min-height 2.75rem", () => {
+        const rule = extractRule(css, ".coordinate-toggle button")
+        expect(rule).toMatch(/min-width:\s*2\.75rem/)
+        expect(rule).toMatch(/min-height:\s*2\.75rem/)
+    })
+})

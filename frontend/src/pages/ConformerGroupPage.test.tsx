@@ -77,6 +77,7 @@ const payload = {
             conformer_observation: {
                 conformer_observation_ref: "co_one",
                 scientific_origin: "computed",
+                note: null,
                 review: { status: "reviewed" },
             },
             evidence_summary: {
@@ -244,15 +245,58 @@ describe("ConformerGroupPage", () => {
         expect(screen.getAllByText("Could not be read").length).toBeGreaterThan(0)
     })
 
-    it("never states a spread across different levels or programs", async () => {
-        const second = { ...SP_RECORD, calculation: { ...SP_RECORD.calculation, calculation_ref: "calc_sp_two" }, energy: { energy_hartree: -40.1, energy_kind: "electronic" }, software_release: { software: "Psi4", version: "1.9" } }
+    const sp = (ref: string, hartree: number, program: string) => ({
+        calculation: { calculation_ref: ref, calculation_type: "sp", review: { status: "approved" } },
+        energy: { energy_hartree: hartree, energy_kind: "electronic" },
+        conformer: { conformer_observation_ref: "co_one", conformer_group_ref: "cg_demo" },
+        level_of_theory: { method: "ccsd(t)", basis: "cc-pvtz", level_of_theory_ref: "lot_cc" },
+        software_release: { software: program, version: "1" },
+    })
+    const withSps = (...programs: string[]) => {
         const record = structuredClone(payload)
-        record.record.observations[0].calculations.push({ calculation_ref: "calc_sp_two", type: "sp", review: { status: "approved" }, level_of_theory: { method: "ccsd(t)", basis: "cc-pvtz" }, software_release: { software: "Psi4", version: "1.9" } } as never)
-        serve(record, { sp: [SP_RECORD, second] })
+        for (const [index] of programs.entries()) {
+            record.record.observations[0].calculations.push({
+                calculation_ref: `calc_sp_${index}`, type: "sp", review: { status: "approved" },
+                level_of_theory: { method: "ccsd(t)", basis: "cc-pvtz", level_of_theory_ref: "lot_cc" },
+                software_release: { software: programs[index], version: "1" },
+            } as never)
+        }
+        return record
+    }
+
+    it("states no spread between energies of one level computed by different programs", async () => {
+        serve(withSps("Molpro", "Psi4"), { sp: [sp("calc_sp_0", -40.123, "Molpro"), sp("calc_sp_1", -40.1, "Psi4")] })
         page()
         await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
         await screen.findByText("−40.100000")
+        expect(screen.getByText("−40.123000")).toBeVisible()
         expect(screen.queryByText(/differ by up to/)).not.toBeInTheDocument()
+    })
+
+    it("states the spread between energies of one level and one program", async () => {
+        serve(withSps("Molpro", "Molpro"), { sp: [sp("calc_sp_0", -40.123, "Molpro"), sp("calc_sp_1", -40.1, "Molpro")] })
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        const spread = await screen.findByText(/differ by up to/)
+        expect(spread).toHaveTextContent(/at ccsd\(t\)\/cc-pvtz with Molpro 1 differ by up to 60\.39 kJ\/mol across 2 calculations/)
+    })
+
+    it("links each level, names the workflow tool and each found-by review, and gives the origin, ref and chain count", async () => {
+        const record = structuredClone(payload)
+        ;(record.record.observations[0].calculations[0].level_of_theory as { level_of_theory_ref?: string }).level_of_theory_ref = "lot_b3"
+        serve(record)
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        const section = screen.getByRole("heading", { name: "Observations" }).closest("section") as HTMLElement
+        const levelLink = within(section).getAllByRole("link", { name: "b3lyp/def2tzvp" })[0]
+        expect(levelLink.getAttribute("href")).toContain("lot_b3")
+        expect(within(section).getAllByText(/run by/)[0]).toHaveTextContent("run by ARC")
+        const found = within(section).getAllByRole("link", { name: "calc_opt" })[0].closest("li") as HTMLElement
+        expect(within(found).getByText("reviewed")).toBeVisible()
+        const head = within(section).getByRole("link", { name: "Observation 1" }).closest("p") as HTMLElement
+        expect(head).toHaveTextContent("co_one")
+        expect(head).toHaveTextContent("Origin: computed")
+        expect(within(section).getByText(/1 optimisation chain in all/)).toBeVisible()
     })
 
     it("names the thermochemistry and rate coefficients that name this conformer, and where it was merged", async () => {
@@ -314,7 +358,9 @@ describe("ConformerGroupPage", () => {
         serve()
         page()
         await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
-        expect(screen.getByText(/produced by calc_opt, calc_sp/)).toBeVisible()
+        const row = document.querySelector(".geometry-link") as HTMLElement
+        expect(within(row).getByRole("link", { name: "calc_opt" })).toHaveAttribute("href", "/calculations/calc_opt")
+        expect(within(row).getByRole("link", { name: "calc_sp" })).toHaveAttribute("href", "/calculations/calc_sp")
         expect(screen.getAllByRole("link", { name: "geo_one" })[0]).toHaveAttribute("href", "/geometries/geo_one")
         expect(screen.getByText(/This is not a count of conformers/)).toBeVisible()
     })
@@ -498,6 +544,8 @@ describe("ConformerGroupPage -- depositor text", () => {
         expect(await screen.findByRole("heading", { level: 1, name: /^Conformer of CH3/ })).toBeVisible()
         expect(screen.getAllByText("cg_demo").length).toBeGreaterThan(0)
 
+        // The group's label, the group's note and the observation's note, each in its own labelled note.
+        await waitFor(() => expect(document.querySelectorAll(".depositor-note blockquote")).toHaveLength(3))
         expectDepositorTextOnlyInNotes()
         expectNoAdversarialText()
     })

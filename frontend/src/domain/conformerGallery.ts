@@ -5,7 +5,7 @@ import type { RelativeEnergies, RelativeEnergyMember } from "../api/relativeEner
 import type { SpeciesCalculationEnergyRecord } from "../api/speciesCalculationsApi"
 import { lotLabel, type LevelOfTheory } from "../api/scientificSchemas"
 import { KJ_MOL_PER_HARTREE } from "./energyUnits"
-import { softwareLabel } from "./provenanceFormat"
+import { softwareLabel, toolReleaseLabel } from "./provenanceFormat"
 import { calculationTypeCounts, conformerDisplayNumber } from "./conformerEvidence"
 
 type ObservationCalculation = {
@@ -13,6 +13,8 @@ type ObservationCalculation = {
     type: string
     level_of_theory?: LevelOfTheory | null
     software_release?: { software?: string | null; version?: string | null } | null
+    workflow_tool_release?: { workflow_tool?: string | null; version?: string | null } | null
+    review?: { status?: unknown } | null
 }
 /** The observations of a conformer group, from the conformer search or from the group's own read. */
 export type ObservationSource = {
@@ -246,6 +248,8 @@ export type ShapeCalculation = {
     levelRef: string | null
     levelLabel: string | null
     program: string | null
+    workflowTool: string | null
+    review: string | null
 }
 
 export type EnergyKind = "sp" | "opt"
@@ -267,6 +271,8 @@ const describeCalculation = (calculation: ObservationCalculation): ShapeCalculat
         levelRef: level?.level_of_theory_ref ?? null,
         levelLabel: level ? lotLabel(level) : null,
         program: softwareLabel(calculation.software_release),
+        workflowTool: toolReleaseLabel(calculation.workflow_tool_release),
+        review: typeof calculation.review?.status === "string" ? calculation.review.status : null,
     }
 }
 
@@ -276,6 +282,8 @@ const recordCalculation = (record: SpeciesCalculationEnergyRecord): ShapeCalcula
     levelRef: record.level_of_theory?.level_of_theory_ref ?? null,
     levelLabel: record.level_of_theory ? lotLabel(record.level_of_theory) : null,
     program: softwareLabel(record.software_release),
+    workflowTool: null,
+    review: null,
 })
 
 const reviewOf = (record: SpeciesCalculationEnergyRecord | undefined): string | null => {

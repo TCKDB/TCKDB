@@ -723,7 +723,7 @@ describe("GeometryDetailPage", () => {
             }
         })
 
-        it("renders every ångström decimal place the archive sent, never truncated to a fixed precision", async () => {
+        it("rounds an ångström coordinate to six decimal places and keeps the stored number as its hover value", async () => {
             // Every coordinate in the shared `mockRecord()` fixture has at
             // most 2 decimal places, so a mutation that swapped the
             // ångström branch's `String(v)` for `v.toFixed(2)` produces
@@ -737,7 +737,7 @@ describe("GeometryDetailPage", () => {
             // that default's exact literal values (0.11, 0.22, ...).
             const record = mockRecord({
                 atoms: [
-                    { atom_index: 1, element: "C", x: 1.078957, y: 0, z: 0 },
+                    { atom_index: 1, element: "C", x: 1.0789571, y: 0, z: 0 },
                     { atom_index: 2, element: "H", x: 0.11, y: 0.22, z: 0.33 },
                     { atom_index: 3, element: "H", x: -0.63, y: -0.63, z: 0.63 },
                     { atom_index: 4, element: "H", x: -0.63, y: 0.63, z: -0.63 },
@@ -749,7 +749,10 @@ describe("GeometryDetailPage", () => {
             await screen.findByRole("heading", { name: /^Geometry of CH4/ })
             const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
             const firstDataRow = within(table).getAllByRole("row")[1]
-            expect(within(firstDataRow).getByText("1.078957", { selector: "[data-column='x'], [data-column='x'] data" })).toBeVisible()
+            const shown = within(firstDataRow).getByText("1.078957", { selector: "[data-column='x'] data" })
+            expect(shown).toBeVisible()
+            expect(shown).toHaveAttribute("value", "1.0789571")
+            expect(shown).toHaveAttribute("title", "1.0789571")
             // Would read "1.08" under a `.toFixed(2)` mutation of the
             // ångström branch — asserted absent so this test actually
             // fails under that mutation rather than merely not checking.
@@ -956,6 +959,18 @@ describe("GeometryDetailPage -- wording and keyboard", () => {
         page()
         await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         expect(rankingWords(textOf(document.body))).toEqual([])
+    })
+
+    it("gives a hover value only to a coordinate whose rounded text differs from the stored number", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+        // 0.11 stored, 0.110000 shown: the same number, so a `<data>` hover would add nothing.
+        const rows = within(table).getAllByRole("row")
+        expect(rows[1].querySelector("data")).toBeNull()
+        expect(within(rows[2]).getByText("0.110000", { selector: "[data-column='x']" })).toBeVisible()
+        expect(rows[2].querySelector("data")).toBeNull()
     })
 
     it("puts the picture first, directly under the header and before any table", async () => {

@@ -4,21 +4,23 @@ import type { ConformerUsage, ConformerUsageGroup } from "../api/conformerUsageA
 import type { LoadedState } from "../hooks/useLoaded"
 
 /** The thermochemistry and rate coefficients that name one conformer group, and where it was merged; never inferred. */
-export function ConformerUsedBy({ usage, group, entryRef, groupRef, labelOf }: {
+export function ConformerUsedBy({ usage, group, entryRef, groupRef, labelOf, showLabel = true }: {
     usage: LoadedState<ConformerUsage>
     group: ConformerUsageGroup | undefined
     entryRef: string
     groupRef: string
     labelOf: (ref: string) => string
+    /** False under a heading that already says "Used by". */
+    showLabel?: boolean
 }) {
     if (usage.status !== "ready") return null
     if (!group || (group.thermo.length === 0 && group.kinetics.length === 0 && !group.merged_into_conformer_group_ref)) {
-        return <p className="shape-usedby"><span className="shape-usedby-key">Used by</span> No thermochemistry or rate coefficient names this shape.</p>
+        return <p className="shape-usedby">{showLabel && <span className="shape-usedby-key">Used by</span>} No thermochemistry or rate coefficient names this shape.</p>
     }
     const merged = group.merged_into_conformer_group_ref
     return (
         <div className="shape-usedby">
-            <span className="shape-usedby-key">Used by</span>
+            {showLabel && <span className="shape-usedby-key">Used by</span>}
             {group.thermo.length > 0 && (
                 <p>
                     Thermochemistry:{" "}

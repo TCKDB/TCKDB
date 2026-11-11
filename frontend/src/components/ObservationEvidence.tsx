@@ -3,6 +3,8 @@ import "../molecule-page.css"
 import { calculationDid } from "../domain/calculationTypeFormat"
 import { formatHartree, type ShapeCalculation, type ShapeRow } from "../domain/conformerGallery"
 import type { SinglePointsState } from "../hooks/useSpeciesSinglePoints"
+import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
+import { ReviewChip } from "./ReviewChip"
 import { ValueLink } from "./ValueLink"
 import { ValueSource } from "./ValueSource"
 
@@ -11,8 +13,11 @@ const KIND_WORDS = { sp: "single-point energy", opt: "final energy of the optimi
 function Where({ calculation }: { calculation: ShapeCalculation }) {
     return (
         <>
-            {calculation.levelLabel ? <>at <span className="t-preserve-case">{calculation.levelLabel}</span></> : "level not recorded"},{" "}
+            {calculation.levelLabel ? (
+                <>at <span className="t-preserve-case"><LevelOfTheoryLink levelOfTheory={{ method: calculation.levelLabel, label: calculation.levelLabel, level_of_theory_ref: calculation.levelRef ?? undefined }} /></span></>
+            ) : "level not recorded"},{" "}
             {calculation.program ? <>with <span className="t-preserve-case">{calculation.program}</span></> : "program not recorded"}
+            {calculation.workflowTool && <>, run by <span className="t-preserve-case">{calculation.workflowTool}</span></>}
         </>
     )
 }
@@ -52,6 +57,7 @@ export function ObservationEvidence({ row, singlePoints, optimisations }: {
                                 <li key={calculation.ref}>
                                     {calculationDid(calculation.type) ?? calculation.type} <Where calculation={calculation} />{" "}
                                     <Link to={`/calculations/${calculation.ref}`}><code className="t-preserve-case">{calculation.ref}</code></Link>
+                                    {calculation.review && <>{" "}<ReviewChip status={calculation.review} explain={false} /></>}
                                 </li>
                             ))}
                         </ul>
