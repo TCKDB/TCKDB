@@ -923,14 +923,21 @@ CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
     group="Stationary points",
     sort_key=11,
     code=(E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH, E_NETWORK_STATE_ENERGY_SUM_MISMATCH),
-    asserts="A stated energy equals the energy TCKDB stores for the calculation(s) it cites.",
+    asserts=(
+        "A stated energy agrees, within its printed precision, with the energy TCKDB stores "
+        "for the calculation(s) it cites, and an E0 that states no ``zpe_scale_factor`` is "
+        "not refused."
+    ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
     enforced_by=(
         PythonCheck(persist_transition_state_validation_evidence),
         PythonCheck(compare_state_energy_sums),
     ),
-    escape_hatch="State the stored energy, or cite the calculation the number came from.",
+    escape_hatch=(
+        "State the stored energy, or cite the calculation the number came from; an E0 built "
+        "with a scaled ZPE states ``zpe_scale_factor``."
+    ),
 )
 
 

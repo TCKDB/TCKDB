@@ -328,8 +328,10 @@ CHECK_WAVEFUNCTION_RELIABILITY_DIAGNOSTICS = ScientificCheck(
     ),
     asserts=(
         "A wavefunction reliability diagnostic is reported when it is past its conventional "
-        "threshold: closed-shell coupled-cluster T1 above 0.02, a stored <S^2> more than 0.1 "
-        "from S(S+1), or a printed ideal <S^2> that is not S(S+1)."
+        "threshold: closed-shell coupled-cluster T1 above 0.02, a stored <S^2> (not the "
+        "annihilated one) more than 0.1 from S(S+1), or a printed ideal <S^2> more than 1e-3 "
+        "from S(S+1), with S in both taken from the entry's declared multiplicity and never "
+        "from ``s_squared_expected``."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,

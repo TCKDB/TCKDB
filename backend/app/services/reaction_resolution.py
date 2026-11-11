@@ -585,24 +585,6 @@ def validate_transition_state_composition(
             )
 
 
-#: Why this check's pseudo exemption is deliberately narrower than the balance
-#: checks', rather than drifted from them. Recorded on both legs of the
-#: function, because both are scoped to the reactant side.
-_TS_COMPOSITION_PSEUDO_SCOPE = (
-    "The pseudo-species exemption here is narrower than "
-    "``_load_participant_species``'s, and deliberately so. That helper exempts "
-    "elemental balance and charge conservation on a pseudo participant on "
-    "**either** side, because both compare one side against the other and a "
-    "lumped construct makes the side it sits on unknowable. This check compares "
-    "the saddle point against the **reactant side only**, so only a *reactant* "
-    "being pseudo can make it meaningless; a pseudo *product* leaves the "
-    "reactant side fully atom-resolved and is not exempted. Aligning the two "
-    "would discard a guarantee that is still well-defined, and would discard it "
-    "exactly where it is worth most: a reaction with a pseudo product has "
-    "already lost elemental balance and charge conservation, so this is the "
-    "only atom-level statement left about its saddle point."
-)
-
 CHECK_TRANSITION_STATE_COMPOSITION = ScientificCheck(
     group="Conservation across a reaction",
     sort_key=3,
@@ -635,7 +617,10 @@ CHECK_TRANSITION_STATE_CHARGE = ScientificCheck(
     enforced_by=(
         PythonCheck(validate_transition_state_composition),
     ),
-    escape_hatch="Omit the transition state's charge to skip the comparison.",
+    escape_hatch=(
+        "Omit the transition state's charge to skip the comparison, or declare a ``pseudo`` "
+        "reactant, which also exempts it."
+    ),
 )
 
 

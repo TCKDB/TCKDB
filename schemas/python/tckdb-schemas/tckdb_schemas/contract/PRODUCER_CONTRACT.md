@@ -396,7 +396,7 @@ Same check as [`assert_isotopes`](#k-assert-isotopes).
 
 `app.services.calculation_levels:assert_role_consistency` enforces 2 checks. Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
-- **block; codes [`thermo_energy_level_contradiction`](REFUSAL_CODES.md#c-thermo-energy-level-contradiction), [`statmech_energy_level_contradiction`](REFUSAL_CODES.md#c-statmech-energy-level-contradiction), [`kinetics_energy_level_contradiction`](REFUSAL_CODES.md#c-kinetics-energy-level-contradiction), [`thermo_energy_level_ambiguous`](REFUSAL_CODES.md#c-thermo-energy-level-ambiguous), [`statmech_energy_level_ambiguous`](REFUSAL_CODES.md#c-statmech-energy-level-ambiguous), [`thermo_energy_level_requires_sp`](REFUSAL_CODES.md#c-thermo-energy-level-requires-sp), [`statmech_energy_level_requires_sp`](REFUSAL_CODES.md#c-statmech-energy-level-requires-sp).** One record has one energy level, and the declared level matches the level of the energies linked to it.
+- **block; codes [`thermo_energy_level_contradiction`](REFUSAL_CODES.md#c-thermo-energy-level-contradiction), [`statmech_energy_level_contradiction`](REFUSAL_CODES.md#c-statmech-energy-level-contradiction), [`kinetics_energy_level_contradiction`](REFUSAL_CODES.md#c-kinetics-energy-level-contradiction), [`thermo_energy_level_ambiguous`](REFUSAL_CODES.md#c-thermo-energy-level-ambiguous), [`statmech_energy_level_ambiguous`](REFUSAL_CODES.md#c-statmech-energy-level-ambiguous), [`thermo_energy_level_requires_sp`](REFUSAL_CODES.md#c-thermo-energy-level-requires-sp), [`statmech_energy_level_requires_sp`](REFUSAL_CODES.md#c-statmech-energy-level-requires-sp).** One record has one energy level, and the declared level matches the level of the energies linked to it (the optimisations' level when no energy is linked).
   If your chemistry is legitimate: Omit the declaration (the level is then derived from the links at read time), link every energy at one level, or declare the level the linked calculations ran at.
 - **block; codes [`thermo_sp_geometry_mismatch`](REFUSAL_CODES.md#c-thermo-sp-geometry-mismatch), [`statmech_sp_geometry_mismatch`](REFUSAL_CODES.md#c-statmech-sp-geometry-mismatch), [`thermo_role_duplicate`](REFUSAL_CODES.md#c-thermo-role-duplicate), [`statmech_role_duplicate`](REFUSAL_CODES.md#c-statmech-role-duplicate), [`thermo_energy_sp_and_composite_linked`](REFUSAL_CODES.md#c-thermo-energy-sp-and-composite-linked), [`statmech_energy_sp_and_composite_linked`](REFUSAL_CODES.md#c-statmech-energy-sp-and-composite-linked), [`thermo_energy_level_requires_sp`](REFUSAL_CODES.md#c-thermo-energy-level-requires-sp), [`statmech_energy_level_requires_sp`](REFUSAL_CODES.md#c-statmech-energy-level-requires-sp), [`scf_stability_source_geometry_mismatch`](REFUSAL_CODES.md#c-scf-stability-source-geometry-mismatch), [`scf_stability_source_conformer_unanchored`](REFUSAL_CODES.md#c-scf-stability-source-conformer-unanchored).** Energy calculations and optimisations pair one-to-one by geometry: each energy sits on a linked optimisation's geometry, each optimisation has one energy, and an SCF stability source is on the verdict's conformer.
   If your chemistry is legitimate: Link the optimisation whose geometry the energy was computed at, one energy per optimisation.
@@ -407,7 +407,7 @@ Same check as [`assert_isotopes`](#k-assert-isotopes).
 
 `app.services.calculation_levels:collect_composite_link_warnings`. warn; codes `composite_frequency_level_differs_from_recipe` (advisory check flag, not a refusal code), `composite_role_on_non_composite_calculation` (advisory check flag, not a refusal code). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
-A frequency calculation linked beside a composite runs at the level of theory the composite's scheme prescribes for frequencies.
+A frequency calculation linked beside a composite runs at the level of theory the composite's scheme prescribes for frequencies, and the composite role is given only to a calculation of type composite.
 
 If your chemistry is legitimate: The link is stored as stated; link the frequency calculation at the recipe's level to clear the warning.
 
@@ -485,7 +485,7 @@ If your chemistry is legitimate: None; a value the log does not state is treated
 
 `app.services.composite_energy_reconciliation:reconcile_composite_energy`. warn; codes `sp_energy_payload_log_mismatch` (advisory check flag, not a refusal code), `composite_energy_log_mismatch` (advisory check flag, not a refusal code), `composite_log_method_mismatch` (advisory check flag, not a refusal code). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ArtifactsUploadRequest`](#s-artifactsuploadrequest).
 
-The electronic, E0 and zero-point energies a tool states agree with the output log attached to the same calculation.
+The electronic, E0 and zero-point energies a tool states agree with the output log attached to the same calculation, and the log is the composite method the level of theory names.
 
 If your chemistry is legitimate: The deposit is accepted; send the value the log prints, or omit it and let the log speak.
 
@@ -573,7 +573,7 @@ If your chemistry is legitimate: Correct whichever statement is wrong, or omit t
 
 `app.services.parameter_reconciliation:declared_parameter_warnings`. warn; codes `parameter_disagrees_with_artifact` (advisory check flag, not a refusal code), `input_deck_disagrees_with_output_log` (advisory check flag, not a refusal code), `output_log_disagrees_with_earlier_output_log` (advisory check flag, not a refusal code), `reported_setting_differs_from_requested` (advisory check flag, not a refusal code), `level_of_theory_disagrees_with_artifact` (advisory check flag, not a refusal code). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ArtifactsUploadRequest`](#s-artifactsuploadrequest).
 
-What a depositor typed about a calculation's settings and level of theory agrees with the uploaded input deck and output log.
+What a depositor typed about a calculation's settings and level of theory agrees with the uploaded input deck and output log, the deck agrees with the log, a later log agrees with an earlier one, and a setting a log reports agrees with the value requested.
 
 If your chemistry is legitimate: The deposit is accepted; correct the typed value, or attach the right deck.
 
@@ -676,7 +676,7 @@ If your chemistry is legitimate: Declare a participant with ``molecule_kind: pse
 - **block; codes [`transition_state_composition_mismatch`](REFUSAL_CODES.md#c-transition-state-composition-mismatch).** A saddle point is made of exactly the atoms of the reaction it is declared to sit in.
   If your chemistry is legitimate: Declare the extra species as participants, or declare a ``pseudo`` reactant to exempt the reaction.
 - **block; codes [`transition_state_charge_mismatch`](REFUSAL_CODES.md#c-transition-state-charge-mismatch).** A saddle point carries the same total charge as the reactants it sits between.
-  If your chemistry is legitimate: Omit the transition state's charge to skip the comparison.
+  If your chemistry is legitimate: Omit the transition state's charge to skip the comparison, or declare a ``pseudo`` reactant, which also exempts it.
 
 <a id="k-validate-ts-evidence-participant-composition"></a>
 
@@ -816,8 +816,8 @@ Same check as [`assert_statmech_role_compatible`](#k-assert-statmech-role-compat
   If your chemistry is legitimate: None; the check only warns.
 - **warn; codes `transition_state_energy_ordering_mixed_levels` (advisory check flag, not a refusal code).** The energies an energy-ordering record compares should be taken at one level of theory per energy kind.
   If your chemistry is legitimate: Take every energy of a kind at one level of theory.
-- **block; codes [`ts_energy_ordering_stated_energy_mismatch`](REFUSAL_CODES.md#c-ts-energy-ordering-stated-energy-mismatch), [`network_state_energy_sum_mismatch`](REFUSAL_CODES.md#c-network-state-energy-sum-mismatch).** A stated energy equals the energy TCKDB stores for the calculation(s) it cites.
-  If your chemistry is legitimate: State the stored energy, or cite the calculation the number came from.
+- **block; codes [`ts_energy_ordering_stated_energy_mismatch`](REFUSAL_CODES.md#c-ts-energy-ordering-stated-energy-mismatch), [`network_state_energy_sum_mismatch`](REFUSAL_CODES.md#c-network-state-energy-sum-mismatch).** A stated energy agrees, within its printed precision, with the energy TCKDB stores for the calculation(s) it cites, and an E0 that states no ``zpe_scale_factor`` is not refused.
+  If your chemistry is legitimate: State the stored energy, or cite the calculation the number came from; an E0 built with a scaled ZPE states ``zpe_scale_factor``.
 - **warn; codes `transition_state_energy_ordering_not_compared` (advisory check flag, not a refusal code), `network_state_energy_sum_not_compared` (advisory check flag, not a refusal code), `network_energy_zpe_source_absent` (advisory check flag, not a refusal code), `network_state_energy_sources_partial` (advisory check flag, not a refusal code).** Every energy an energy-ordering record or a network state energy states should be comparable with the energy TCKDB stores for the calculation(s) it cites.
   If your chemistry is legitimate: Deposit the cited energy, and the ZPE where one is needed, so the comparison can run.
 
@@ -836,7 +836,7 @@ Same check as [`assert_statmech_role_compatible`](#k-assert-statmech-role-compat
 
 `app.services.wavefunction_reliability_warnings:collect_wavefunction_reliability_warnings`. warn; codes `t1_diagnostic_above_closed_shell_threshold` (advisory check flag, not a refusal code), `spin_contamination_above_conventional_threshold` (advisory check flag, not a refusal code), `spin_expected_contradicts_multiplicity` (advisory check flag, not a refusal code). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
-A wavefunction reliability diagnostic is reported when it is past its conventional threshold: closed-shell coupled-cluster T1 above 0.02, a stored <S^2> more than 0.1 from S(S+1), or a printed ideal <S^2> that is not S(S+1).
+A wavefunction reliability diagnostic is reported when it is past its conventional threshold: closed-shell coupled-cluster T1 above 0.02, a stored <S^2> (not the annihilated one) more than 0.1 from S(S+1), or a printed ideal <S^2> more than 1e-3 from S(S+1), with S in both taken from the entry's declared multiplicity and never from ``s_squared_expected``.
 
 If your chemistry is legitimate: None; the check only warns.
 
@@ -886,7 +886,7 @@ If your chemistry is legitimate: The deposit is accepted; record finite_differen
 
 - **block; codes [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum).** A species entry declared a minimum has no imaginary vibrational mode at or above the tolerance of the protocol that produced it.
   If your chemistry is legitimate: Declare ``species_entry_kind='vdw_complex'``, or deposit the structure as a transition state.
-- **warn; codes [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), `n_imag_higher_order_saddle` (advisory check flag, not a refusal code), `n_imag_suggests_transition_state` (advisory check flag, not a refusal code).** An imaginary mode on a van der Waals complex is recorded with a warning rather than refused, unless the mode is too stiff to be intermolecular.
+- **warn; codes [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), `n_imag_higher_order_saddle` (advisory check flag, not a refusal code), `n_imag_suggests_transition_state` (advisory check flag, not a refusal code).** An imaginary mode on a van der Waals complex is recorded with a warning rather than refused, and a mode too stiff to be intermolecular is also reported as suggesting a transition state.
   If your chemistry is legitimate: None; the check only warns.
 - **warn; codes `minimum_imaginary_modes_below_tau` (advisory check flag, not a refusal code), `transition_state_extra_imaginary_modes_below_tau` (advisory check flag, not a refusal code), `transition_state_extra_imaginary_mode_above_tau` (advisory check flag, not a refusal code), `transition_state_extra_imaginary_modes_not_assessable` (advisory check flag, not a refusal code).** An imaginary mode other than a transition state's reaction coordinate, or any imaginary mode on a declared minimum, is judged by magnitude against the tolerance of the protocol that produced it.
   If your chemistry is legitimate: None; the check never refuses.
@@ -3018,7 +3018,7 @@ Payload model `app.schemas.workflows.network_pdep_upload.NetworkPDepUploadReques
 - [`network_energy_source_type_mismatch`](REFUSAL_CODES.md#c-network-energy-source-type-mismatch) (422): {field}: a '{calculation.type.value}' calculation cannot be the source of an energy stated as {stated}='{stated_value}'.
 - [`network_state_duplicate_composition`](REFUSAL_CODES.md#c-network-state-duplicate-composition) (422): States {first_key} and {state_in.key} have the same composition (network_state_duplicate_composition): their participants resolve to the same species entries, and a network holds one state per composition.
 - [`network_state_duplicate_participant`](REFUSAL_CODES.md#c-network-state-duplicate-participant) (422): State {state_in.key} lists the same species entry more than once (network_state_duplicate_participant): two of its species keys resolve to one entry.
-- [`network_state_energy_sum_mismatch`](REFUSAL_CODES.md#c-network-state-energy-sum-mismatch) (422): A stated energy equals the energy TCKDB stores for the calculation(s) it cites.
+- [`network_state_energy_sum_mismatch`](REFUSAL_CODES.md#c-network-state-energy-sum-mismatch) (422): A stated energy agrees, within its printed precision, with the energy TCKDB stores for the calculation(s) it cites, and an E0 that states no ``zpe_scale_factor`` is not refused.
 - [`atom_map_contradicts_irc_mapping`](REFUSAL_CODES.md#c-atom-map-contradicts-irc-mapping) (422): Transition state '{subject_label}' {field_path} contradicts its own IRC participant mapping: the atom map assigns saddle-point atom(s)…
 - [`atom_map_inferred_requires_note`](REFUSAL_CODES.md#c-atom-map-inferred-requires-note) (422): atom_map.source='inferred' requires atom_map.note naming the algorithm that produced the map.
 - [`statmech_torsion_scan_calculation_owner_mismatch`](REFUSAL_CODES.md#c-statmech-torsion-scan-calculation-owner-mismatch) (422)

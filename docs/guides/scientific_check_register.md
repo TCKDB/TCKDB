@@ -122,7 +122,7 @@ Checks whose guarantee is narrower than their name suggests.
 
 - `validate_transition_state_composition` — `backend/app/services/reaction_resolution.py::validate_transition_state_composition`
 
-**Escape hatch.** Omit the transition state's charge to skip the comparison.
+**Escape hatch.** Omit the transition state's charge to skip the comparison, or declare a `pseudo` reactant, which also exempts it.
 
 ### 5. The saddle-point atoms an IRC mapping assigns to a declared participant are that participant's own atoms, element for element.
 
@@ -276,7 +276,7 @@ Checks whose guarantee is narrower than their name suggests.
 **Enforced at.**
 
 - `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::evaluate_transition_state_frequency`
-- `_check_ts_reaction_coordinate_designated` and `_detect_transition_state_entry_hard_fail` (`backend/app/services/trust/rubrics.py`, `backend/app/services/trust/evaluator.py`) check at read time that the record carries the reaction-coordinate designation.
+- `_check_ts_reaction_coordinate_designated` and `_detect_transition_state_entry_hard_fail` (`backend/app/services/trust/rubrics.py`, `backend/app/services/trust/evaluator.py`) check at read time that a record with more than one imaginary mode carries the designation, without re-judging the frequencies.
 
 **Escape hatch.** Deposit no frequency evidence, or designate the reaction coordinate and give each other imaginary mode a disposition.
 
@@ -305,11 +305,11 @@ Checks whose guarantee is narrower than their name suggests.
   | finite-difference Hessian from energies | 80 |
   | Hessian method not recorded and program or method family not in the assumed-default table | 50 |
 
-  *When the provenance is missing.* Tau is taken from the method an attached output log reports, else the method the input echoed in that log requests, else the recorded `freq.hessian_method` or the method the calculation's input deck states, else the producing program's assumed default for the level of theory's method family, else 50 cm-1 with `protocol_not_recorded` as the basis, which is the conservative row.
+  *When the provenance is missing.* Tau is taken from the method an attached output log reports, else the method the input echoed in that log requests, else the recorded `freq.hessian_method` or the method the calculation's input deck states, else the producing program's assumed default for the level of theory's method family, else 50 cm-1 with `protocol_not_recorded` as the basis, which is the conservative row. A present but unrecognised `freq.hessian_method` keeps `protocol_not_recorded` and skips the assumption.
 
 **Escape hatch.** Declare `species_entry_kind='vdw_complex'`, or deposit the structure as a transition state.
 
-### 16. An imaginary mode on a van der Waals complex is recorded with a warning rather than refused, unless the mode is too stiff to be intermolecular.
+### 16. An imaginary mode on a van der Waals complex is recorded with a warning rather than refused, and a mode too stiff to be intermolecular is also reported as suggesting a transition state.
 
 | Field | Value |
 | --- | --- |
@@ -349,7 +349,7 @@ Checks whose guarantee is narrower than their name suggests.
   | finite-difference Hessian from energies | 80 |
   | Hessian method not recorded and program or method family not in the assumed-default table | 50 |
 
-  *When the provenance is missing.* Tau is taken from the method an attached output log reports, else the method the input echoed in that log requests, else the recorded `freq.hessian_method` or the method the calculation's input deck states, else the producing program's assumed default for the level of theory's method family, else 50 cm-1 with `protocol_not_recorded` as the basis, which is the conservative row.
+  *When the provenance is missing.* Tau is taken from the method an attached output log reports, else the method the input echoed in that log requests, else the recorded `freq.hessian_method` or the method the calculation's input deck states, else the producing program's assumed default for the level of theory's method family, else 50 cm-1 with `protocol_not_recorded` as the basis, which is the conservative row. A present but unrecognised `freq.hessian_method` keeps `protocol_not_recorded` and skips the assumption.
 
 **Escape hatch.** None; the check never refuses.
 
@@ -382,7 +382,7 @@ Checks whose guarantee is narrower than their name suggests.
   | finite-difference Hessian from energies | 80 |
   | Hessian method not recorded and program or method family not in the assumed-default table | 50 |
 
-  *When the provenance is missing.* Tau is taken from the method an attached output log reports, else the method the input echoed in that log requests, else the recorded `freq.hessian_method` or the method the calculation's input deck states, else the producing program's assumed default for the level of theory's method family, else 50 cm-1 with `protocol_not_recorded` as the basis, which is the conservative row.
+  *When the provenance is missing.* Tau is taken from the method an attached output log reports, else the method the input echoed in that log requests, else the recorded `freq.hessian_method` or the method the calculation's input deck states, else the producing program's assumed default for the level of theory's method family, else 50 cm-1 with `protocol_not_recorded` as the basis, which is the conservative row. A present but unrecognised `freq.hessian_method` keeps `protocol_not_recorded` and skips the assumption.
 
 **Escape hatch.** None; the check never refuses.
 
@@ -465,7 +465,7 @@ Checks whose guarantee is narrower than their name suggests.
 
 **Escape hatch.** Take every energy of a kind at one level of theory.
 
-### 24. A stated energy equals the energy TCKDB stores for the calculation(s) it cites.
+### 24. A stated energy agrees, within its printed precision, with the energy TCKDB stores for the calculation(s) it cites, and an E0 that states no `zpe_scale_factor` is not refused.
 
 | Field | Value |
 | --- | --- |
@@ -478,7 +478,7 @@ Checks whose guarantee is narrower than their name suggests.
 - `persist_transition_state_validation_evidence` — `backend/app/services/transition_state_validation.py::persist_transition_state_validation_evidence`
 - `compare_state_energy_sums` — `backend/app/services/network_energy_sources.py::compare_state_energy_sums`
 
-**Escape hatch.** State the stored energy, or cite the calculation the number came from.
+**Escape hatch.** State the stored energy, or cite the calculation the number came from; an E0 built with a scaled ZPE states `zpe_scale_factor`.
 
 ### 25. Every energy an energy-ordering record or a network state energy states should be comparable with the energy TCKDB stores for the calculation(s) it cites.
 
@@ -649,7 +649,7 @@ Checks whose guarantee is narrower than their name suggests.
 
 ## Rate coefficients
 
-### 35. An Arrhenius pre-exponential factor carries the units its reaction order requires: per second, concentration^-1 time^-1 or concentration^-2 time^-1 for order one, two or three.
+### 35. An Arrhenius pre-exponential factor carries the units its reaction order requires: per second, concentration^-1 time^-1 or concentration^-2 time^-1 for order one, two or three, and a coefficient of any other order is refused as `unsupported_reaction_molecularity`.
 
 | Field | Value |
 | --- | --- |
@@ -661,7 +661,7 @@ Checks whose guarantee is narrower than their name suggests.
 
 - `validate_a_units_for_molecularity` — `backend/app/chemistry/units.py::validate_a_units_for_molecularity`
 
-**Escape hatch.** None.
+**Escape hatch.** None; a coefficient of any order other than one, two or three has no accepted units.
 
 ## Statistical mechanics
 
@@ -966,7 +966,7 @@ Checks whose guarantee is narrower than their name suggests.
 
 ## Wavefunction reliability diagnostics
 
-### 52. A wavefunction reliability diagnostic is reported when it is past its conventional threshold: closed-shell coupled-cluster T1 above 0.02, a stored <S^2> more than 0.1 from S(S+1), or a printed ideal <S^2> that is not S(S+1).
+### 52. A wavefunction reliability diagnostic is reported when it is past its conventional threshold: closed-shell coupled-cluster T1 above 0.02, a stored <S^2> (not the annihilated one) more than 0.1 from S(S+1), or a printed ideal <S^2> more than 1e-3 from S(S+1), with S in both taken from the entry's declared multiplicity and never from `s_squared_expected`.
 
 | Field | Value |
 | --- | --- |
@@ -1008,7 +1008,7 @@ Checks whose guarantee is narrower than their name suggests.
 **Thresholds.**
 
 - `bath_gas_mole_fraction_sum_tolerance` = **1e-09 absolute, on the sum** — a constant fixed in code.
-  Fractions are stated, not measured, so a sum off by more than rounding means a component is missing.
+  Fractions are stated, not measured, so a sum off by more than rounding means a component is missing or doubled.
 
 **Escape hatch.** Omit the bath gas (it then reads as not stated), merge repeated components into one with their total mole fraction, or state the pressure context the rate was obtained in.
 
@@ -1045,7 +1045,7 @@ Checks whose guarantee is narrower than their name suggests.
 
 ## Levels and geometries of linked calculations
 
-### 56. One record has one energy level, and the declared level matches the level of the energies linked to it.
+### 56. One record has one energy level, and the declared level matches the level of the energies linked to it (the optimisations' level when no energy is linked).
 
 | Field | Value |
 | --- | --- |
@@ -1149,7 +1149,7 @@ Checks whose guarantee is narrower than their name suggests.
 
 **Escape hatch.** Send the parts the program printed with its energy, or omit the components.
 
-### 62. A frequency calculation linked beside a composite runs at the level of theory the composite's scheme prescribes for frequencies.
+### 62. A frequency calculation linked beside a composite runs at the level of theory the composite's scheme prescribes for frequencies, and the composite role is given only to a calculation of type composite.
 
 | Field | Value |
 | --- | --- |
@@ -1381,7 +1381,7 @@ Checks whose guarantee is narrower than their name suggests.
 
 ## Declared against the uploaded evidence
 
-### 76. What a depositor typed about a calculation's settings and level of theory agrees with the uploaded input deck and output log.
+### 76. What a depositor typed about a calculation's settings and level of theory agrees with the uploaded input deck and output log, the deck agrees with the log, a later log agrees with an earlier one, and a setting a log reports agrees with the value requested.
 
 | Field | Value |
 | --- | --- |
@@ -1399,7 +1399,7 @@ Checks whose guarantee is narrower than their name suggests.
 
 **Escape hatch.** The deposit is accepted; correct the typed value, or attach the right deck.
 
-### 77. The electronic, E0 and zero-point energies a tool states agree with the output log attached to the same calculation.
+### 77. The electronic, E0 and zero-point energies a tool states agree with the output log attached to the same calculation, and the log is the composite method the level of theory names.
 
 | Field | Value |
 | --- | --- |

@@ -62,8 +62,8 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/chemistry/units.py`.
 - The body's `context` names the things involved.
 - Message: "a_units '{a_units.value}' matches neither the reactant side (order {reactant_order}) nor the product side (order {product_order}) of this reaction, and the record states no direction. Expected one of: {expected}. State direction ('forward' or 'reverse') to have the units checked against the side the coefficient is a rate of."
-- Scientific check (block): An Arrhenius pre-exponential factor carries the units its reaction order requires: per second, concentration^-1 time^-1 or concentration^-2 time^-1 for order one, two or three.
-- If your chemistry is legitimate: None.
+- Scientific check (block): An Arrhenius pre-exponential factor carries the units its reaction order requires: per second, concentration^-1 time^-1 or concentration^-2 time^-1 for order one, two or three, and a coefficient of any other order is refused as ``unsupported_reaction_molecularity``.
+- If your chemistry is legitimate: None; a coefficient of any order other than one, two or three has no accepted units.
 
 <a id="c-artifact-empty"></a>
 
@@ -1979,8 +1979,8 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/chemistry/units.py`.
 - Message: 'Unsupported reaction molecularity: {molecularity}. Expected 1 (unimolecular), 2 (bimolecular), or 3 (termolecular).'
-- Scientific check (block): An Arrhenius pre-exponential factor carries the units its reaction order requires: per second, concentration^-1 time^-1 or concentration^-2 time^-1 for order one, two or three.
-- If your chemistry is legitimate: None.
+- Scientific check (block): An Arrhenius pre-exponential factor carries the units its reaction order requires: per second, concentration^-1 time^-1 or concentration^-2 time^-1 for order one, two or three, and a coefficient of any other order is refused as ``unsupported_reaction_molecularity``.
+- If your chemistry is legitimate: None; a coefficient of any order other than one, two or three has no accepted units.
 
 <a id="c-validation-error"></a>
 

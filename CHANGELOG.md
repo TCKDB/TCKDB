@@ -40,7 +40,7 @@ dataset must never require a code release.
 ## Decision narrative removed from the tau modules (Unreleased)
 
 - **Behaviour:** none. Comments and docstrings in the Hessian-method and stationary-point modules of `tckdb-schemas` now state behaviour only.
-- **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-schemas` 0.172.1 
+- **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-schemas` 0.172.1 (within the client's existing `<0.173` window; no client change).
 
 ## Every box in "Where this record sits" opens something (Unreleased)
 

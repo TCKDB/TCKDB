@@ -226,7 +226,8 @@ _TAU_THRESHOLD = ProvenanceThreshold(
         f"method the calculation's input deck states, else the producing program's assumed "
         f"default for the level of theory's method family, else "
         f"{TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1 with ``protocol_not_recorded`` as the "
-        f"basis, which is the conservative row."
+        f"basis, which is the conservative row. A present but unrecognised "
+        f"``freq.hessian_method`` keeps ``protocol_not_recorded`` and skips the assumption."
     ),
     rationale=(
         "The Hessian noise floor is flat in omega-squared, so whether a small imaginary "
@@ -257,7 +258,8 @@ CHECK_TRANSITION_STATE_REACTION_COORDINATE = ScientificCheck(
                 "``_detect_transition_state_entry_hard_fail`` "
                 "(``backend/app/services/trust/rubrics.py``, "
                 "``backend/app/services/trust/evaluator.py``) check at read time "
-                "that the record carries the reaction-coordinate designation."
+                "that a record with more than one imaginary mode carries the designation, "
+                "without re-judging the frequencies."
             )
         ),
     ),
@@ -297,7 +299,8 @@ CHECK_VDW_COMPLEX_IMAGINARY_MODE = ScientificCheck(
     ),
     asserts=(
         "An imaginary mode on a van der Waals complex is recorded with a warning rather than "
-        "refused, unless the mode is too stiff to be intermolecular."
+        "refused, and a mode too stiff to be intermolecular is also reported as suggesting a "
+        "transition state."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
@@ -845,7 +848,7 @@ CHECK_KINETICS_BATH_GAS_IS_A_COMPOSITION = ScientificCheck(
             unit="absolute, on the sum",
             rationale=(
                 "Fractions are stated, not measured, so a sum off by more than rounding means a "
-                "component is missing."
+                "component is missing or doubled."
             ),
         ),
     ),
@@ -912,7 +915,7 @@ CHECK_DECLARED_ENERGY_LEVEL_IS_HONEST = ScientificCheck(
     ),
     asserts=(
         "One record has one energy level, and the declared level matches the level of the "
-        "energies linked to it."
+        "energies linked to it (the optimisations' level when no energy is linked)."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
@@ -1067,7 +1070,8 @@ CHECK_COMPOSITE_FREQUENCY_IS_AT_THE_RECIPE_LEVEL = ScientificCheck(
     ),
     asserts=(
         "A frequency calculation linked beside a composite runs at the level of theory the "
-        "composite's scheme prescribes for frequencies."
+        "composite's scheme prescribes for frequencies, and the composite role is given only "
+        "to a calculation of type composite."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
@@ -1393,7 +1397,9 @@ CHECK_TYPED_SETTINGS_AGREE_WITH_THE_ARTIFACTS = ScientificCheck(
     ),
     asserts=(
         "What a depositor typed about a calculation's settings and level of theory agrees "
-        "with the uploaded input deck and output log."
+        "with the uploaded input deck and output log, the deck agrees with the log, a later "
+        "log agrees with an earlier one, and a setting a log reports agrees with the value "
+        "requested."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
@@ -1417,7 +1423,8 @@ CHECK_STATED_ENERGY_AGREES_WITH_THE_LOG = ScientificCheck(
     ),
     asserts=(
         "The electronic, E0 and zero-point energies a tool states agree with the output log "
-        "attached to the same calculation."
+        "attached to the same calculation, and the log is the composite method the level of "
+        "theory names."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,

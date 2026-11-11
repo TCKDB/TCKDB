@@ -180,10 +180,8 @@ def _render_thresholds(check: ScientificCheck) -> list[str]:
     """Render a check's numeric lines, distinguishing the two kinds.
 
     A constant gets its number. A provenance-derived threshold gets its
-    resolver, the keys it reads, its per-protocol table and — the part a
-    referee will go looking for — what happens when the provenance is
-    absent. Printing a provenance threshold as a single number would
-    state a constant the code does not have.
+    resolver, the keys it reads, its per-protocol table and what happens
+    when the provenance is absent.
     """
     if not check.thresholds:
         return []

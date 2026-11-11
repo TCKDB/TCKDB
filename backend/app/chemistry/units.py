@@ -199,12 +199,13 @@ CHECK_ARRHENIUS_A_UNITS_MATCH_MOLECULARITY = ScientificCheck(
     asserts=(
         "An Arrhenius pre-exponential factor carries the units its reaction order requires: "
         "per second, concentration^-1 time^-1 or concentration^-2 time^-1 for order one, two "
-        "or three."
+        "or three, and a coefficient of any other order is refused as "
+        "``unsupported_reaction_molecularity``."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
     enforced_by=(
         PythonCheck(validate_a_units_for_molecularity),
     ),
-    escape_hatch="None.",
+    escape_hatch="None; a coefficient of any order other than one, two or three has no accepted units.",
 )
