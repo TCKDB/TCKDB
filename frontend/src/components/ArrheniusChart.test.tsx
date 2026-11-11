@@ -141,6 +141,18 @@ describe("ArrheniusChart -- a single plottable record", () => {
     })
 })
 
+describe("ArrheniusChart -- series differ by dash pattern, not only colour", () => {
+    it("gives each series in a panel a distinct dash pattern, on its line and in its legend swatch", () => {
+        const records = ["kin_a", "kin_b", "kin_c"].map((ref) => bimolecularRecord({ kinetics_ref: ref }))
+        render(<ArrheniusChart kinetics={records} />)
+        const dashes = records.map((record) => screen.getByTestId(`arrhenius-line-${record.kinetics_ref}`).getAttribute("stroke-dasharray"))
+        expect(dashes[0]).toBeNull()
+        expect(new Set(dashes).size).toBe(3)
+        const swatches = records.map((record) => screen.getByTestId(`arrhenius-legend-${record.kinetics_ref}`).querySelector("svg line")?.getAttribute("stroke-dasharray") ?? null)
+        expect(swatches).toEqual(dashes)
+    })
+})
+
 describe("ArrheniusChart -- per-unit panel split on a mixed fixture", () => {
     it("a page mixing per_s and cm3_mol_s records renders two panels (two separate SVGs)", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord(), unimolecularRecord()]} />)

@@ -216,6 +216,13 @@ export async function loadTransitionStateEntry(ref: string, signal?: AbortSignal
     return parseScientificResponse(responseSchema, payload, "transition state entry").record
 }
 
+/** The entry with only its geometries (`include=geometries`), for a picture. */
+export async function loadTransitionStateGeometries(ref: string, signal?: AbortSignal): Promise<TransitionStateEntryRecord> {
+    const endpoint = `/api/v1/scientific/transition-state-entries/${encodeURIComponent(ref)}?include=geometries`
+    const payload = await requestScientificJson(endpoint, signal)
+    return parseScientificResponse(responseSchema, payload, "transition state entry").record
+}
+
 // ---------------------------------------------------------------------------
 // Sibling saddle points -- `GET /scientific/transition-states/search
 // ?reaction_ref=...&include=calculations`, one request, confirmed on the

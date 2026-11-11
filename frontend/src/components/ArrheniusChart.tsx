@@ -15,6 +15,7 @@ import {
     convertArrheniusSeriesUnits,
     panelLog10KDomain,
     panelXDomain,
+    seriesDash,
 } from "../domain/arrheniusChartLayout"
 import { arrheniusUnitConversionFactor, FAMILY_NAME } from "../domain/arrheniusUnits"
 import { formatTicks, linearScale } from "../domain/chartScale"
@@ -305,7 +306,9 @@ function ArrheniusLegend({ panel, displaySeriesDepositedUnits }: { panel: Arrhen
         <ul className="arrhenius-chart-legend" aria-label="Kinetics record series">
             {panel.series.map((series, index) => (
                 <li key={series.kinetics_ref} className="arrhenius-chart-legend-item" data-testid={`arrhenius-legend-${series.kinetics_ref}`}>
-                    <span className="arrhenius-chart-swatch" style={{ background: seriesColor(index) }} aria-hidden="true" />
+                    <svg className="arrhenius-chart-swatch" viewBox="0 0 28 8" width="28" height="8" aria-hidden="true" data-dash={seriesDash(index) || "solid"}>
+                        <line x1="0" y1="4" x2="28" y2="4" stroke={seriesColor(index)} strokeWidth="2.5" strokeDasharray={seriesDash(index) || undefined} />
+                    </svg>
                     {/* The ref is folded into ONE text run with the record's
                         OWN deposited unit ("series N — ref (deposited: …)"),
                         never a bare `<code>{series.kinetics_ref}</code>` leaf
@@ -568,6 +571,7 @@ function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits, o
                                 fill="none"
                                 stroke={seriesColor(index)}
                                 strokeWidth={1.75}
+                                strokeDasharray={seriesDash(index) || undefined}
                             />
                         ))}
                     </svg>

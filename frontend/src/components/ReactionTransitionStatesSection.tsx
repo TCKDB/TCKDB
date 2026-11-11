@@ -4,15 +4,11 @@ import type { ReactionFullCalculationEvidence, ReactionTransitionStateInFull } f
 import { CalculationDependencyGraph, type CentreSubject } from "./CalculationDependencyGraph"
 import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
 import { ProductLevelsFact } from "./ProductLevels"
-import { StageFlow, type StageFlowBox } from "./StageFlow"
+import { TransitionStateStage } from "./TransitionStateStage"
+import { ReviewChip } from "./ReviewChip"
 import { deriveProductLevelsFromSourceCalculations } from "../domain/productLevels"
 import { buildCalculationsByRef } from "../domain/reactionKineticsLevels"
 import { softwareLabel } from "../domain/provenanceFormat"
-import { reviewPillClass } from "../domain/reviewPillFormat"
-
-function token(value: string): string {
-    return value.replaceAll("_", " ")
-}
 
 const STAGE_ORDER = ["ts_opt", "ts_freq", "ts_sp", "ts_irc", "ts_guess"]
 const STAGE_LABEL: Record<string, string> = {
@@ -138,11 +134,13 @@ function TransitionStateBlock({ ts, calculationsByRef }: {
         <div className="reaction-ts-block">
             <dl className="kv-list">
                 <div><dt>Entry</dt><dd><Link to={`/transition-state-entries/${ts.transition_state_entry_ref}`}>{ts.transition_state_entry_ref}</Link></dd></div>
-                <div><dt>Review</dt><dd><span className={reviewPillClass(ts.review.status)}>{token(ts.review.status)}</span></dd></div>
+                <div><dt>Review</dt><dd><ReviewChip status={ts.review.status} explain={false} /></dd></div>
             </dl>
 
             <p className="t-label reaction-ts-status-label">Status</p>
-            <StatusStrip status={ts.status} />
+            <StatusStages status={ts.status} />
+
+            <TransitionStateStage transitionStateEntryRef={ts.transition_state_entry_ref} />
 
             <p className="t-label reaction-ts-stage-label">Calculations by stage</p>
             <div className="table-scroll">
@@ -208,15 +206,15 @@ function TransitionStateBlock({ ts, calculationsByRef }: {
     )
 }
 
-function StatusStrip({ status }: { status: string | null | undefined }) {
-    if (status === "rejected") {
-        return <span className="value-pill value-pill--muted">rejected</span>
-    }
-    const boxes: StageFlowBox[] = ENTRY_STATUS_STAGES.map((stage) => ({
-        key: stage.key,
-        label: stage.label,
-        content: null,
-        selected: stage.key === status,
-    }))
-    return <StageFlow boxes={boxes} ariaLabel="Transition-state entry status" testId="ts-status-strip" />
+function StatusStages({ status }: { status: string | null | undefined }) {
+    if (status === "rejected") return <p className="reaction-ts-stages">rejected</p>
+    return (
+        <ol className="reaction-ts-stages" aria-label="Transition-state entry status" data-testid="ts-status-strip">
+            {ENTRY_STATUS_STAGES.map((stage) => (
+                <li key={stage.key} aria-current={stage.key === status ? "step" : undefined} className={stage.key === status ? "reaction-ts-stage--current" : undefined}>
+                    {stage.label}{stage.key === status && <span className="reaction-ts-stage-mark"> (current)</span>}
+                </li>
+            ))}
+        </ol>
+    )
 }
