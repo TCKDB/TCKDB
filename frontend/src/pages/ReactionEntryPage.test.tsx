@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, within, waitFor } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
@@ -16,8 +16,9 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 // rules for a test scoped to this one page.
 import "../design-system.css"
 import ReactionEntryPage from "./ReactionEntryPage"
-import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
+import { ADVERSARIAL, expectDepositorTextOnlyInNotes, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 import { titleHasKind } from "../test/routeTitleKinds"
+import { rankingWords, textOf } from "../test/rankingWords"
 
 const ENTRY_REF = "rxe_test1"
 const server = setupServer()
@@ -136,6 +137,16 @@ function mockFull(overrides: Record<string, unknown> = {}) {
         ...overrides,
     }
 }
+
+/** The energy-profile and transition-state reads every entry page makes; a test that needs them overrides these. */
+function handleSideReads(profile: object = { request: {}, reaction_entry_ref: ENTRY_REF, profiles: [], unavailable: [], cited_by_kinetics: [] }) {
+    server.use(
+        http.get(`/api/v1/scientific/reaction-entries/${ENTRY_REF}/energy-profile`, () => HttpResponse.json(profile)),
+        http.get("/api/v1/scientific/transition-state-entries/:ref", () => HttpResponse.json({ detail: "not found" }, { status: 404 })),
+    )
+}
+
+beforeEach(() => handleSideReads())
 
 function handleFull(payload: object) {
     server.use(http.get(`/api/v1/scientific/reaction-entries/${ENTRY_REF}/full`, () => HttpResponse.json(payload)))
@@ -481,7 +492,7 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
         await screen.findByText("kin_test1")
         expect(screen.queryByText("ts_test1")).not.toBeInTheDocument()
         const strip = screen.getByTestId("ts-status-strip")
-        expect(strip.querySelector(".card--selected")?.textContent).toContain("Optimized")
+        expect(strip.querySelector("[aria-current=step]")?.textContent).toContain("Optimized")
     })
 
     it("renders the guess/optimized/validated status strip with the served status selected", async () => {
@@ -489,8 +500,9 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
         page()
         await screen.findByText("kin_test1")
         const strip = screen.getByTestId("ts-status-strip")
-        const selected = strip.querySelector(".card--selected")
+        const selected = strip.querySelector("[aria-current=step]")
         expect(selected?.textContent).toContain("Optimized")
+        expect(strip.querySelectorAll("li")).toHaveLength(3)
     })
 
     it("renders Geometry/Frequencies/Energy facts for the TS block (ProductLevelsFact is not silently dropped)", async () => {
@@ -1171,6 +1183,115 @@ describe("ReactionEntryPage -- electronic-state labels and term symbols", () => 
         const row = screen.getAllByText("spe_water").map((node) => node.closest("tr")).find(Boolean) as HTMLElement
         expect(row).toHaveTextContent("excited state")
         expect(row.textContent).not.toMatch(/state R|enantiomer/)
+        expectNoDepositorText()
+    })
+})
+
+describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () => {
+    const DEFINITION_WITH_RANKING_WORD = "Each molecule's energy at this level from this program: its lowest single-point energy. Electronic energy, no zero-point correction."
+    const calcPoint = (species: string, calc: string, hartree: number) => ({
+        species_entry_ref: species, count: 1, calculation_ref: calc, energy_type: "single_point", electronic_energy_hartree: hartree,
+        software: { program: "Gaussian", version: "16" }, review_status: "not_reviewed", convergence_unrecorded: false,
+    })
+    const profileRead = {
+        request: { hidden_by_default: null, hidden_by_default_by_scope: {} },
+        reaction_entry_ref: ENTRY_REF,
+        profiles: [{
+            transition_state_entry_ref: "tse_test1",
+            transition_state_entry_review_status: "not_reviewed",
+            level_of_theory: { level_of_theory_ref: "lot_x", method: "b3lyp", basis: "def2tzvp" },
+            program: "Gaussian",
+            energy_types: ["single_point"],
+            versions: ["16"],
+            energy_kind: "electronic",
+            definition: DEFINITION_WITH_RANKING_WORD,
+            reactants: [calcPoint("spe_water", "calc_w", -76.4), calcPoint("spe_ch3", "calc_m", -39.8)],
+            transition_state: {
+                transition_state_entry_ref: "tse_test1", calculation_ref: "calc_sp1", energy_type: "single_point", electronic_energy_hartree: -116.2,
+                software: { program: "Gaussian", version: "16" }, review_status: "approved", convergence_unrecorded: false,
+            },
+            products: [calcPoint("spe_ch4", "calc_c", -40.5), calcPoint("spe_oh", "calc_o", -75.7)],
+            energy_hartree: { reactants: -116.2, transition_state: -116.19, products: -116.2 },
+            relative_kj_mol: { reactants: 0, transition_state: 26.3, products: 0 },
+        }],
+        unavailable: [],
+        cited_by_kinetics: [],
+    }
+
+    it("shows the profile section, with the points linked to their calculations, between the participants and the evidence", async () => {
+        handleFull(mockFull())
+        handleSideReads(profileRead)
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const section = await waitFor(() => {
+            const found = container.querySelector('section[aria-labelledby="energy-heading"]') as HTMLElement
+            expect(within(found).getByRole("group", { name: /no zero-point correction/ })).toBeInTheDocument()
+            return found
+        })
+        expect(section.querySelector('a[href="/calculations/calc_sp1"]')).not.toBeNull()
+        const order = Array.from(container.querySelectorAll("h2")).map((heading) => heading.id)
+        expect(order.indexOf("participants-heading")).toBeLessThan(order.indexOf("energy-heading"))
+        expect(order.indexOf("energy-heading")).toBeLessThan(order.indexOf("evidence-heading"))
+    })
+
+    it("states the numbers' order, links each number to its record and gives each record a source line", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const section = container.querySelector('section[aria-labelledby="kinetics-heading"]') as HTMLElement
+        expect(within(section).getByRole("heading", { name: "Numbers for this entry" })).toBeInTheDocument()
+        expect(section).toHaveTextContent("Listed approved first, then newest deposited first. This order is not a recommendation.")
+        const link = within(section).getAllByRole("link").find((anchor) => anchor.textContent?.includes("3025.44"))
+        expect(link?.getAttribute("href")).toBe(`/reaction-entries/${ENTRY_REF}#kinetics-kin_test1`)
+        expect(section.querySelector(".value-source")).toHaveTextContent("Source kin_test1")
+        expect(section.querySelector(".value-source")).toHaveTextContent("Review of this record: not reviewed")
+    })
+
+    it("spells the equation out for a screen reader and links each molecule of the scheme", async () => {
+        handleFull(mockFull())
+        page()
+        await screen.findByText("kin_test1")
+        const scheme = screen.getByRole("group", { name: "H2O plus CH3 reacts reversibly with CH4 plus HO" })
+        expect(within(scheme).getAllByRole("link")).toHaveLength(4)
+    })
+
+    it("has breadcrumbs through the reaction, a review word and a lede built from codes", async () => {
+        handleFull(mockFull())
+        page()
+        await screen.findByText("kin_test1")
+        const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" })
+        expect(within(crumbs).getByRole("link", { name: "Reactions" })).toHaveAttribute("href", "/reactions")
+        expect(crumbs.querySelector('a[href="/reactions/rxn_test1"]')).not.toBeNull()
+        expect(document.querySelector(".record-lede")).toHaveTextContent("One deposited version of this reaction: reversible, family H Abstraction, 1 rate record and 1 transition-state entry.")
+        expect(screen.getAllByText("not reviewed").length).toBeGreaterThan(0)
+        expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
+    })
+
+    it("uses no ranking word outside the server's own definition, and no literal double hyphen", async () => {
+        handleFull(mockFull())
+        handleSideReads(profileRead)
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        await waitFor(() => expect(container.querySelector(".energy-profile-definition")).not.toBeNull())
+        const clone = container.cloneNode(true) as HTMLElement
+        expect(rankingWords(textOf(clone))).toEqual(["lowest"])
+        clone.querySelector(".energy-profile-definition")?.remove()
+        expect(rankingWords(textOf(clone))).toEqual([])
+        expect(textOf(container)).not.toContain("--")
+    })
+
+    it("prints depositor-typed transition-state labels and notes nowhere", async () => {
+        const base = mockFull()
+        const planted = plantSentinels(mockFull({
+            transition_states: [{ ...base.transition_states[0], label: "x", note: "x" }],
+        }), ["label", "note"])
+        expectPlanted(planted)
+        handleFull(planted.value)
+        handleSideReads({ ...profileRead, profiles: profileRead.profiles.map((item) => ({ ...item, label: "DEPOSITOR_SENTINEL_profile_label" })) })
+        page()
+        await screen.findByText("kin_test1")
+        await waitFor(() => expect(document.querySelector(".energy-profile-definition")).not.toBeNull())
+        expectDepositorTextOnlyInNotes()
         expectNoDepositorText()
     })
 })

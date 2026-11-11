@@ -1,25 +1,22 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ParticipantChips } from "../components/ParticipantChips"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
-// `record-identity-header.css` -- this page hand-builds its identity
-// header markup (see `RecordIdentityHeader`'s own docstring: that shared
-// component has no branch for a `reaction_entry` identity, only
-// `species_entry`/`transition_state_entry`/`ambiguous`/`absent`) rather
-// than composing `RecordIdentityHeader`, so unlike every OTHER import
-// below it is not already brought in by a component this page uses --
-// hence the direct import here, matching the PR 0 mock's own explicit
-// `<link>`. `evidence-checklist.css`/`refs-disclosure.css`/
-// `calculation-dependency-graph.css` are each already self-imported by
-// the component that needs them (`EvidenceChecklist.tsx`/
-// `RefsDisclosure.tsx`/`CalculationDependencyGraph.tsx`) -- see
-// `Disclosure.tsx`'s own file-header comment for why importing them again
-// here would risk a second, later-loaded copy reordering the cascade.
 import "../record-identity-header.css"
 import "../reaction-entry.css"
 import type { NetworkMembership, ReactionEntrySpeciesParticipant, ReactionFullRecord } from "../api/reactionEntryApi"
 import { loadReactionEntry, loadReactionEntryNetworksFallback } from "../api/reactionEntryApi"
 import { SpeciesFace } from "../components/Formula"
+import { BROWSE_KIND_PATHS } from "../api/browseApi"
+import { Breadcrumbs } from "../components/Breadcrumbs"
+import { EnergyProfile } from "../components/EnergyProfile"
+import { Lede } from "../components/Lede"
+import { RecordGlyph } from "../components/RecordGlyph"
+import { ReactionScheme } from "../components/ReactionScheme"
+import { RelationshipMap } from "../components/RelationshipMap"
+import { ReviewChip } from "../components/ReviewChip"
+import { useReactionEntryNeighbours } from "../hooks/useNeighbours"
+import { reactionEntryLede } from "../domain/reactionLede"
 import { ReactionEquation } from "../components/ReactionEquation"
 import { ReactionKineticsSection } from "../components/ReactionKineticsSection"
 import { ReactionTransitionStatesSection } from "../components/ReactionTransitionStatesSection"
@@ -37,24 +34,8 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
 import { equationText } from "../domain/reactionEquation"
 
 /**
- * Reaction entry -- the record page for one deposited `rxe_...` (plan §2).
- * `frontend/mocks/` (deleted by this PR, per the plan's own PR 2 slice)
- * held the design-review mocks this page's section order/classes/wording
- * are built from; its README explained the mocks in one paragraph, kept
- * here verbatim rather than lost with the directory:
- *
- * > `reaction-entry.html`, `reaction-overview.html` and
- * > `reaction-entry-network-only.html` were static, hand-written pages
- * > built for design review of `docs/plans/reaction-entry-page.md` before
- * > any product code existed -- every value on them was either the
- * > literal response from a live `/full`/`reactions/search`/
- * > `networks/search` fetch, or explicitly labelled as computed for the
- * > mock where the live API did not yet serve a field. They linked the
- * > real `src/*.css` stylesheets by relative path and copied the real
- * > components' exact markup shapes so they rendered through the
- * > production design system with no styling of their own. See
- * > `docs/plans/reaction-entry-page.md` (§6 "PR 0") for the full mock
- * > brief and the design-review verdict.
+ * Reaction entry: the record page for one deposited `rxe_` entry. Its identity header builds its own markup because
+ * `RecordIdentityHeader` has no branch for a reaction entry.
  */
 export default function ReactionEntryPage() {
     const { entryRef = "" } = useParams<{ entryRef: string }>()
@@ -69,6 +50,10 @@ export default function ReactionEntryPage() {
             loadingDetail="Retrieving the deposited reaction entry, its participants, kinetics and transition states."
         />
     )
+}
+
+function mapParticipant(participant: ReactionEntrySpeciesParticipant) {
+    return { entryRef: participant.species_entry_ref, formula: participant.formula, smiles: participant.smiles }
 }
 
 function statusLabel(status: string): string {
@@ -123,6 +108,14 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     const kinetics = record.kinetics ?? []
     const transitionStates = record.transition_states ?? []
     const networksState = useReactionEntryNetworks(entry.reaction_entry_ref, record.networks)
+    const equation = <ReactionEquation reactants={species.reactants} products={species.products} reversible={entry.reversible} linkParticipants={false} />
+    const mapReactants = useMemo(() => species.reactants.map(mapParticipant), [species.reactants])
+    const mapProducts = useMemo(() => species.products.map(mapParticipant), [species.products])
+    const neighbours = useReactionEntryNeighbours({ reactionRef: entry.reaction_ref, reactants: mapReactants, products: mapProducts })
+    const speciesLabels = useMemo(
+        () => new Map([...species.reactants, ...species.products].map((participant) => [participant.species_entry_ref, participant.formula ?? participant.smiles])),
+        [species.reactants, species.products],
+    )
 
     // Related-refs disclosure: the reaction identity, every TS ref, and the level-of-theory / software /
     // workflow-tool refs of EVERY kinetics record, each distinct ref once. An entry can carry several kinetics
@@ -157,64 +150,70 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
 
     return (
         <section className="conformer-page tse-page">
-            <nav className="record-breadcrumbs" aria-label="Breadcrumb">
-                <Link to="/">TCKDB</Link>
-                <span aria-hidden="true">/</span>
-                <Link to={`/reactions/${entry.reaction_ref}`}>Reactions</Link>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">Reaction entry</span>
-            </nav>
             <PageShell
+                rail={<RelationshipMap selfKind="reaction" selfLabel="This entry" state={neighbours} />}
                 identity={(
-                    <header className="basin-header">
-                        <div className="record-identity-header">
-                            <div className="record-identity-kicker-row">
-                                <span className="t-kicker record-identity-kicker">Reaction entry · deposited scientific record</span>
-                                <span className={reviewPillClass(entry.review.status)}>{statusLabel(entry.review.status)}</span>
+                    <>
+                        <Breadcrumbs crumbs={[
+                            { label: "Reactions", to: BROWSE_KIND_PATHS.reaction },
+                            { label: equation, to: `/reactions/${entry.reaction_ref}` },
+                            { label: "This deposited version" },
+                        ]} />
+                        <header className="basin-header">
+                            <div className="record-identity-header">
+                                <div className="record-identity-kicker-row">
+                                    <RecordGlyph kind="reaction" size={16} />
+                                    <span className="t-kicker record-identity-kicker">Reaction · one deposited version</span>
+                                    <ReviewChip status={entry.review.status} />
+                                </div>
+                                <h1 className="t-display-2 record-identity-title">
+                                    <ReactionEquation reactants={species.reactants} products={species.products} reversible={entry.reversible} />
+                                </h1>
+                                <Lede>{reactionEntryLede(entry, { kinetics: kinetics.length, transitionStates: transitionStates.length })}</Lede>
+                                <div className="record-identity-known">
+                                    <dl className="kv-list record-identity-facts">
+                                        <div>
+                                            <dt>Reaction entry ref</dt>
+                                            <dd className="record-identity-fact-copyable">
+                                                <code className="data">{entry.reaction_entry_ref}</code>
+                                                <CopyButton value={entry.reaction_entry_ref} label="Reaction entry ref" srLabel="value" />
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt>All versions of this reaction</dt>
+                                            <dd><Link to={`/reactions/${entry.reaction_ref}`}>{entry.reaction_ref}</Link></dd>
+                                        </div>
+                                        <div><dt>Family</dt><dd>{entry.family ? statusLabel(entry.family) : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
+                                        <div><dt>Reversible</dt><dd>{entry.reversible ? "yes" : "no"}</dd></div>
+                                        <div>
+                                            <dt>Atom map</dt>
+                                            <dd>
+                                                {entry.atom_maps.length === 0
+                                                    ? <span className="record-identity-absent-inline">no atom map deposited</span>
+                                                    : `${entry.atom_maps.length} deposited`}
+                                            </dd>
+                                        </div>
+                                        <div className="record-identity-fact-wide">
+                                            <dt>Equation (as deposited)</dt>
+                                            <dd><code className="data">{equationWithEntries(entry.equation, entry.reversible, species.reactants, species.products)}</code></dd>
+                                        </div>
+                                    </dl>
+                                </div>
                             </div>
-                            <h1 className="t-display-2 record-identity-title">
-                                <ReactionEquation reactants={species.reactants} products={species.products} reversible={entry.reversible} />
-                            </h1>
-                            <div className="record-identity-known">
-                                <dl className="kv-list record-identity-facts">
-                                    <div>
-                                        <dt>Reaction entry ref</dt>
-                                        <dd className="record-identity-fact-copyable">
-                                            <code className="data">{entry.reaction_entry_ref}</code>
-                                            <CopyButton value={entry.reaction_entry_ref} label="Reaction entry ref" srLabel="value" />
-                                        </dd>
-                                    </div>
-                                    <div>
-                                        <dt>Reaction identity</dt>
-                                        <dd><Link to={`/reactions/${entry.reaction_ref}`}>{entry.reaction_ref}</Link></dd>
-                                    </div>
-                                    <div><dt>Family</dt><dd>{entry.family ? statusLabel(entry.family) : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
-                                    <div><dt>Reversible</dt><dd>{entry.reversible ? "yes" : "no"}</dd></div>
-                                    <div>
-                                        <dt>Atom map</dt>
-                                        <dd>
-                                            {entry.atom_maps.length === 0
-                                                ? <span className="record-identity-absent-inline">no atom map deposited</span>
-                                                : `${entry.atom_maps.length} deposited`}
-                                        </dd>
-                                    </div>
-                                    <div className="record-identity-fact-wide">
-                                        <dt>Equation (as deposited)</dt>
-                                        <dd><code className="data">{equationWithEntries(entry.equation, entry.reversible, species.reactants, species.products)}</code></dd>
-                                    </div>
-                                </dl>
-                            </div>
-                        </div>
-                        <RefsDisclosure refs={refs} />
-                    </header>
+                            <RefsDisclosure refs={refs} />
+                        </header>
+                    </>
                 )}
             >
                 <section className="ledger-section" aria-labelledby="participants-heading">
                     <p className="t-kicker section-kicker">Species on this entry</p>
                     <SectionHeading id="participants-heading">Participants</SectionHeading>
+                    <ReactionScheme reactants={species.reactants} products={species.products} reversible={entry.reversible} />
                     <ParticipantsTable label="Reactants" participants={species.reactants} />
                     <ParticipantsTable label="Products" participants={species.products} />
                 </section>
+
+                <EnergyProfile entryRef={entry.reaction_entry_ref} speciesLabels={speciesLabels} />
 
                 <section className="ledger-section" aria-labelledby="evidence-heading">
                     <SectionHeading id="evidence-heading">Evidence on this entry</SectionHeading>
@@ -261,7 +260,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
 
                 <section className="ledger-section" aria-labelledby="kinetics-heading">
                     <p className="t-kicker section-kicker">Deposited rate expressions</p>
-                    <SectionHeading id="kinetics-heading">Kinetics</SectionHeading>
+                    <SectionHeading id="kinetics-heading">Numbers for this entry</SectionHeading>
                     <ReactionKineticsSection
                         kinetics={kinetics}
                         calculations={record.calculations}

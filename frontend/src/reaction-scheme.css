@@ -1,0 +1,59 @@
+/* The reaction as a row of molecules with an arrow between the sides. */
+.reaction-scheme {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-3) var(--s-4);
+    margin: var(--s-3) 0;
+}
+
+.reaction-scheme-side {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2) var(--s-3);
+    min-width: 0;
+}
+
+.reaction-scheme-molecule {
+    display: grid;
+    gap: .15rem;
+    min-width: 5.5rem;
+    min-height: 44px;
+    padding: var(--s-2) var(--s-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+
+.reaction-scheme-molecule:hover {
+    border-color: var(--accent);
+}
+
+.reaction-scheme-molecule:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.reaction-scheme-formula {
+    font: var(--type-body-font);
+    font-weight: 600;
+}
+
+.reaction-scheme-smiles {
+    color: var(--muted);
+    font: var(--type-data-font);
+}
+
+.reaction-scheme-plus,
+.reaction-scheme-arrow {
+    color: var(--ink-2);
+    font: var(--type-body-font);
+}
+
+.reaction-scheme-arrow {
+    font-size: 1.5rem;
+}

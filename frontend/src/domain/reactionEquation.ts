@@ -85,3 +85,12 @@ export function equationText(
         .join(" + ")
     return `${side(sides.reactants)} ${reversible ? "⇌" : "→"} ${side(sides.products)}`
 }
+
+const spoken = (participant: EquationParticipant) =>
+    `${participant.coefficient > 1 ? `${participant.coefficient} ` : ""}${participant.formula ?? participant.smiles}`
+
+/** The equation read aloud: formulas, "plus" between molecules and the arrow in words. */
+export function schemeAriaLabel(reactants: EquationParticipant[], products: EquationParticipant[], reversible: boolean): string {
+    const side = (participants: EquationParticipant[]) => participants.map(spoken).join(" plus ")
+    return `${side(reactants)} ${reversible ? "reacts reversibly with" : "reacts to form"} ${side(products)}`
+}

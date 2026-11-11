@@ -7,7 +7,13 @@ import type { ReactionOverviewParticipant, ReactionOverviewRecord } from "../api
 import { loadReactionOverview } from "../api/reactionOverviewApi"
 import type { ListMeta } from "../api/listEnvelope"
 import type { PageRequest } from "../domain/paging"
+import { BROWSE_KIND_PATHS } from "../api/browseApi"
+import { Breadcrumbs } from "../components/Breadcrumbs"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
+import { Lede } from "../components/Lede"
+import { RecordGlyph } from "../components/RecordGlyph"
+import { ReviewChip } from "../components/ReviewChip"
+import { reactionOverviewLede } from "../domain/reactionLede"
 import { ListPager } from "../components/ListPager"
 import { SpeciesFace } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
@@ -16,7 +22,6 @@ import { ReactionEquation } from "../components/ReactionEquation"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
 import { participantChips } from "../domain/participantFacets"
-import { reviewPillClass } from "../domain/reviewPillFormat"
 import { listMetaOf } from "../api/listEnvelope"
 import { chooserHeaderSourceNote } from "../domain/reactionChooser"
 import { usePagedList } from "../hooks/usePagedList"
@@ -106,46 +111,44 @@ function ChooserDocument({ reactionRef, headerRecord, total, records, pageStatus
     useDocumentTitle("Reaction", equationText(first.reactants, first.products, first.reversible))
     return (
         <section className="conformer-page">
-            <nav className="record-breadcrumbs" aria-label="Breadcrumb">
-                <Link to="/">TCKDB</Link>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">Reaction</span>
-            </nav>
             <PageShell
                 identity={(
-                    <header className="basin-header">
-                        <div className="record-identity-header">
-                            <div className="record-identity-kicker-row">
-                                <span className="t-kicker record-identity-kicker">Reaction · chooses between deposited entries</span>
+                    <>
+                        <Breadcrumbs crumbs={[
+                            { label: "Reactions", to: BROWSE_KIND_PATHS.reaction },
+                            { label: <ReactionEquation reactants={first.reactants} products={first.products} reversible={first.reversible} linkParticipants={false} /> },
+                        ]} />
+                        <header className="basin-header">
+                            <div className="record-identity-header">
+                                <div className="record-identity-kicker-row">
+                                    <RecordGlyph kind="reaction" size={16} />
+                                    <span className="t-kicker record-identity-kicker">Reaction · all deposited versions</span>
+                                </div>
+                                <h1 className="t-display-2 record-identity-title">
+                                    <ReactionEquation reactants={first.reactants} products={first.products} reversible={first.reversible} />
+                                </h1>
+                                <Lede>{reactionOverviewLede(total)}</Lede>
+                                <p className="t-body section-intro reaction-header-source">{chooserHeaderSourceNote(first.reaction_entry_ref, total)}</p>
+                                <div className="record-identity-known">
+                                    <dl className="kv-list record-identity-facts">
+                                        <div>
+                                            <dt>Reaction ref</dt>
+                                            <dd className="record-identity-fact-copyable">
+                                                <code className="data">{reactionRef}</code>
+                                                <CopyButton value={reactionRef} label="Reaction ref" srLabel="value" />
+                                            </dd>
+                                        </div>
+                                        <div><dt>Family</dt><dd>{first.family ? statusLabel(first.family) : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
+                                        <div><dt>Reversible</dt><dd>{first.reversible ? "yes" : "no"}</dd></div>
+                                        <div className="record-identity-fact-wide">
+                                            <dt>Equation (as deposited)</dt>
+                                            <dd><code className="data">{first.equation}</code></dd>
+                                        </div>
+                                    </dl>
+                                </div>
                             </div>
-                            <h1 className="t-display-2 record-identity-title">
-                                <ReactionEquation reactants={first.reactants} products={first.products} reversible={first.reversible} />
-                            </h1>
-                            <p className="t-body section-intro">
-                                {total > 1
-                                    ? `${total} separate deposits share this reaction identity. This site never merges or silently chooses between matching entries — pick the record you mean below.`
-                                    : "One deposited entry carries this reaction identity."}
-                            </p>
-                            <p className="t-body section-intro reaction-header-source">{chooserHeaderSourceNote(first.reaction_entry_ref, total)}</p>
-                            <div className="record-identity-known">
-                                <dl className="kv-list record-identity-facts">
-                                    <div>
-                                        <dt>Reaction ref</dt>
-                                        <dd className="record-identity-fact-copyable">
-                                            <code className="data">{reactionRef}</code>
-                                            <CopyButton value={reactionRef} label="Reaction ref" srLabel="value" />
-                                        </dd>
-                                    </div>
-                                    <div><dt>Family</dt><dd>{first.family ? statusLabel(first.family) : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
-                                    <div><dt>Reversible</dt><dd>{first.reversible ? "yes" : "no"}</dd></div>
-                                    <div className="record-identity-fact-wide">
-                                        <dt>Equation (as deposited)</dt>
-                                        <dd><code className="data">{first.equation}</code></dd>
-                                    </div>
-                                </dl>
-                            </div>
-                        </div>
-                    </header>
+                        </header>
+                    </>
                 )}
             >
                 <section className="ledger-section" aria-labelledby="entries-heading">
@@ -180,7 +183,7 @@ function ChooserDocument({ reactionRef, headerRecord, total, records, pageStatus
                                                 <ParticipantCell key={p.species_entry_ref} participant={p} separator={i > 0} />
                                             ))}
                                         </td>
-                                        <td data-label="Review"><span className={reviewPillClass(record.review.status)}>{statusLabel(record.review.status)}</span></td>
+                                        <td data-label="Review"><ReviewChip status={record.review.status} explain={false} /></td>
                                         <td data-label="Has kinetics">
                                             <span className={record.availability.has_kinetics ? "value-pill" : "value-pill value-pill--muted"}>
                                                 {record.availability.has_kinetics ? "yes" : "no"}

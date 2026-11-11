@@ -7,7 +7,11 @@ import { ProductLevelsFact } from "./ProductLevels"
 import { resolveProductLevels } from "../domain/productLevels"
 import { buildCalculationsByRef, buildDependencyEdgesByChildRef, deriveKineticsLevelsFallback } from "../domain/reactionKineticsLevels"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
-import { reviewPillClass } from "../domain/reviewPillFormat"
+import { lotLabel } from "../api/scientificSchemas"
+import { OrderNote } from "./OrderNote"
+import { ReviewChip } from "./ReviewChip"
+import { ValueLink } from "./ValueLink"
+import { ValueSource } from "./ValueSource"
 import { LiteratureCitation } from "./LiteratureCitation"
 
 function token(value: string): string {
@@ -116,6 +120,7 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
 
     return (
         <>
+            <OrderNote order="Listed approved first, then newest deposited first." />
             <div className="kinetics-record-list">
                 {kinetics.map((record) => (
                     <KineticsRecordCard
@@ -173,6 +178,13 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
         : null
 
     const unitLabel = aUnitLabel(record.parameters.A_units)
+    const recordAnchor = `#kinetics-${record.kinetics_ref}`
+    const sourceLevels = [
+        { role: "geometry", label: resolvedLevels.geometry ? lotLabel(resolvedLevels.geometry) : "" },
+        { role: "frequency", label: resolvedLevels.frequency ? lotLabel(resolvedLevels.frequency) : "" },
+        { role: "energy", label: resolvedLevels.energy ? lotLabel(resolvedLevels.energy) : "" },
+    ]
+    const sourceProgram = softwareCellText(record.provenance.primary_software)
 
     // The SP row is the one that can name a calculation not among this
     // page's own `calculations[]` (the plan §7 "resolver disagreement"
@@ -188,25 +200,24 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
         : null
 
     return (
-        <div className="card">
+        <div className="card" id={`kinetics-${record.kinetics_ref}`}>
             <dl className="kv-list">
-                <div><dt>Kinetics ref</dt><dd><code className="data">{record.kinetics_ref}</code></dd></div>
                 <div><dt>Model kind</dt><dd>{token(record.model_kind)}</dd></div>
                 <div><dt>Origin</dt><dd>{token(record.scientific_origin)}</dd></div>
-                <div><dt>Review</dt><dd><span className={reviewPillClass(record.review.status)}>{token(record.review.status)}</span></dd></div>
+                <div><dt>Review</dt><dd><ReviewChip status={record.review.status} explain={false} /></dd></div>
                 {/* `.t-preserve-case` keeps these symbols and units in their own case. */}
                 {record.parameters.A != null && (
-                    <div><dt className="t-preserve-case">A</dt><dd><code className="data">{formatArrheniusValue(record.parameters.A)} {unitLabel}</code></dd></div>
+                    <div><dt className="t-preserve-case">A</dt><dd><code className="data"><ValueLink value={formatArrheniusValue(record.parameters.A)} unit={unitLabel || undefined} to={recordAnchor} /></code></dd></div>
                 )}
                 {record.parameters.n != null && (
-                    <div><dt className="t-preserve-case">n</dt><dd><code className="data">{formatArrheniusValue(record.parameters.n)}</code></dd></div>
+                    <div><dt className="t-preserve-case">n</dt><dd><code className="data"><ValueLink value={formatArrheniusValue(record.parameters.n)} to={recordAnchor} /></code></dd></div>
                 )}
                 {record.parameters.T0_k != null && record.parameters.T0_k !== 1 && (
                     // k = A (T/T0)^n exp(-Ea/RT): A means nothing without the T0 it was fitted at.
                     <div><dt className="t-preserve-case">T0</dt><dd><code className="data">{formatArrheniusValue(record.parameters.T0_k)} K</code></dd></div>
                 )}
                 {record.parameters.Ea_kj_mol != null && (
-                    <div><dt className="t-preserve-case">Ea</dt><dd><code className="data">{formatArrheniusValue(record.parameters.Ea_kj_mol)} kJ/mol</code></dd></div>
+                    <div><dt className="t-preserve-case">Ea</dt><dd><code className="data"><ValueLink value={formatArrheniusValue(record.parameters.Ea_kj_mol)} unit="kJ/mol" to={recordAnchor} /></code></dd></div>
                 )}
                 {tRange && <div><dt>Fitted T range</dt><dd><code className="data">{tRange}</code></dd></div>}
                 {uncertaintyText && <div><dt>Uncertainty</dt><dd>{uncertaintyText}</dd></div>}
@@ -220,6 +231,15 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                 row boundary with "Software" interleaved into the same row
                 as one of them. Each `<dl>` here is its own independent
                 grid, so a group can never spill into an unrelated one. */}
+            <p className="kinetics-record-source">
+                <ValueSource
+                    source={{ recordType: "kinetics", ref: record.kinetics_ref, to: recordAnchor }}
+                    levels={sourceLevels}
+                    programs={sourceProgram ? [sourceProgram] : []}
+                    review={record.review.status}
+                />
+            </p>
+
             <dl className="kv-list reaction-product-levels">
                 <ProductLevelsFact levels={resolvedLevels} />
             </dl>

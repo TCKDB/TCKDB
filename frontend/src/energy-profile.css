@@ -1,0 +1,147 @@
+/* Energy profile: a picture and a table of the same points, plus the energies rate records cite. */
+.energy-profile {
+    margin-top: var(--s-6);
+}
+
+.energy-profile-picker {
+    display: grid;
+    gap: var(--s-2);
+    margin: var(--s-3) 0;
+    max-width: var(--measure-prose);
+}
+
+.energy-profile-picker label {
+    color: var(--ink);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    font-weight: 600;
+}
+
+.energy-profile-picker select {
+    min-height: 44px;
+    padding: .4rem .6rem;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink);
+    font: var(--type-ui-font);
+    max-width: 100%;
+}
+
+.energy-profile-picker select:focus-visible,
+.energy-profile-box:focus-visible,
+.energy-profile-scroll:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.energy-profile-figure {
+    margin: var(--s-4) 0;
+}
+
+.energy-profile-box {
+    overflow-x: auto;
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+
+.energy-profile-svg {
+    display: block;
+    width: 100%;
+    min-width: 34rem;
+    height: auto;
+}
+
+.energy-profile-bar {
+    stroke: var(--ink);
+    stroke-width: 5;
+}
+
+.energy-profile-connector {
+    stroke: var(--divider-strong);
+    stroke-width: 1.5;
+    stroke-dasharray: 5 4;
+}
+
+.energy-profile-value {
+    fill: var(--ink);
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.energy-profile-name {
+    fill: var(--ink-2);
+    font-size: 14px;
+}
+
+.energy-profile-caption {
+    margin-top: var(--s-2);
+    color: var(--ink-2);
+    font: var(--type-body-font);
+    max-width: var(--measure-prose);
+}
+
+.energy-profile-hint {
+    display: none;
+    margin-top: var(--s-2);
+    color: var(--muted);
+    font: var(--type-ui-font);
+}
+
+@media (max-width: 560px) {
+    .energy-profile-hint {
+        display: block;
+    }
+}
+
+.energy-profile-facts {
+    margin-top: var(--s-3);
+}
+
+.energy-profile-scroll {
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+}
+
+.energy-profile-table {
+    width: 100%;
+    min-width: 36rem;
+    border-collapse: collapse;
+}
+
+.energy-profile-caption-table {
+    padding: var(--s-2) var(--s-3);
+    color: var(--muted);
+    font: var(--type-ui-font);
+    text-align: left;
+}
+
+.energy-profile-member {
+    padding-left: var(--s-5);
+    font-weight: 400;
+}
+
+.energy-profile-flag {
+    display: block;
+    color: var(--warning);
+    font: var(--type-ui-font);
+}
+
+.energy-profile-absent {
+    color: var(--muted);
+}
+
+.energy-profile-unavailable,
+.energy-profile-cited {
+    margin-top: var(--s-6);
+}
+
+.energy-profile-unavailable ul {
+    margin: var(--s-2) 0 0;
+    padding-left: 1.25rem;
+}
+
+.energy-profile-unavailable li {
+    margin-bottom: var(--s-2);
+}

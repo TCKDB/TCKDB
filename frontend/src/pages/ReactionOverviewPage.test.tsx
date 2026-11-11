@@ -75,6 +75,20 @@ function searchResponse() {
     }
 }
 
+describe("ReactionOverviewPage -- the header of the page that lists every version", () => {
+    it("says it lists all deposited versions, shows breadcrumbs and a lede, and has no compare link", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
+        page(REACTION_REF)
+        await screen.findByRole("heading", { level: 1, name: /H4N2/ })
+        expect(screen.getByText("Reaction · all deposited versions")).toBeVisible()
+        const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" })
+        expect(crumbs.querySelector('a[href="/reactions"]')).toHaveTextContent("Reactions")
+        expect(document.querySelector(".record-lede")).toHaveTextContent("This reaction has 2 deposited versions. Each is a separate record with its own numbers, and none is chosen for you.")
+        expect(screen.queryByRole("link", { name: /compare/i })).not.toBeInTheDocument()
+        expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
+    })
+})
+
 describe("ReactionOverviewPage", () => {
     it("an rxe_ ref redirects to /reaction-entries/:ref by prefix check alone -- no request issued", async () => {
         // No handler is registered for reactions/search at all; `server.listen`
@@ -229,7 +243,7 @@ describe("ReactionOverviewPage: what the page says it chose, and paging", () => 
         }))
         page(REACTION_REF)
         expect(await screen.findByText("Showing 1\u20131 of 2 reaction entries.")).toBeVisible()
-        expect(screen.getByText(/2 separate deposits share this reaction identity/)).toBeVisible()
+        expect(screen.getByText(/This reaction has 2 deposited versions/)).toBeVisible()
         fireEvent.click(screen.getByRole("button", { name: "Next" }))
         expect(await screen.findByText("Showing 2\u20132 of 2 reaction entries.")).toBeVisible()
         expect(seen).toContain("1:1")
