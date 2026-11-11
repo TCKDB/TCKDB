@@ -128,8 +128,8 @@ describe("geometryNodes", () => {
             typeLabel,
         })
         expect(ids(nodes)).toEqual(["owner", "produced-by", "used-by"])
-        expect(byId(nodes, "produced-by")).toMatchObject({ to: "/calculations/calc_1", sub: "Optimisation" })
-        expect(byId(nodes, "used-by")).toMatchObject({ found: "2 found", to: "#provenance-used-as-input-by" })
+        expect(byId(nodes, "produced-by")).toMatchObject({ to: "/calculations/calc_1", sub: "Optimisation, produced it" })
+        expect(byId(nodes, "used-by")).toMatchObject({ sub: "2 found, takes it as input", to: "#provenance-used-as-input-by" })
     })
 
     it("knows no owner when the geometry is shared, and nothing when the lists were not served", () => {

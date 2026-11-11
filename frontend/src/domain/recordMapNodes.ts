@@ -221,18 +221,21 @@ export function geometryNodes(input: {
             to: `/transition-state-entries/${enc(input.owner.entryRef)}`, found: null,
         })
     }
-    const calculations = (id: string, relation: string, section: string, list: readonly CalcLink[]) => {
+    const calculations = (id: string, phrase: string, relation: string, section: string, list: readonly CalcLink[]) => {
         if (list.length === 1) {
             nodes.push({
-                id, kind: "calculation", label: "Calculation", relation, sub: input.typeLabel(list[0].calculation_type),
+                id, kind: "calculation", label: "Calculation", relation, sub: `${input.typeLabel(list[0].calculation_type)}, ${phrase}`,
                 to: calculationPath(list[0].calculation_ref), found: null,
             })
         } else if (list.length > 1) {
-            nodes.push(countNode(id, "calculation", "Calculations", relation, list.length, section))
+            nodes.push({
+                id, kind: "calculation", label: "Calculations", relation, sub: `${list.length} found, ${phrase}`,
+                to: section, found: `${list.length} found`,
+            })
         }
     }
-    if (input.producedBy) calculations("produced-by", "Produced this geometry", "#provenance-produced-by", input.producedBy)
-    if (input.usedAsInputBy) calculations("used-by", "Took it as input", "#provenance-used-as-input-by", input.usedAsInputBy)
+    if (input.producedBy) calculations("produced-by", "produced it", "Produced this geometry", "#provenance-produced-by", input.producedBy)
+    if (input.usedAsInputBy) calculations("used-by", "takes it as input", "Took it as input", "#provenance-used-as-input-by", input.usedAsInputBy)
     return nodes
 }
 

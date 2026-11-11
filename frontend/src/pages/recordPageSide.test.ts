@@ -1,9 +1,6 @@
-import { readFileSync } from "node:fs"
-import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
-const here = dirname(fileURLToPath(import.meta.url))
+const SOURCES = import.meta.glob("./*Page.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>
 
 /** Every record page. A new record page belongs in this list, so that it too shows "Where this record sits". */
 const RECORD_PAGES = [
@@ -40,7 +37,8 @@ function pageShellTags(source: string): string[] {
 
 describe("record pages", () => {
     it.each(RECORD_PAGES)("%s passes side= to every PageShell it renders", (file) => {
-        const tags = pageShellTags(readFileSync(join(here, file), "utf8"))
+        expect(SOURCES[`./${file}`], `${file} is read`).toBeTypeOf("string")
+        const tags = pageShellTags(SOURCES[`./${file}`])
         expect(tags.length).toBeGreaterThan(0)
         for (const tag of tags) expect(tag).toMatch(/\bside=\{/)
     })
