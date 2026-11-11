@@ -511,6 +511,14 @@ function NameSuggestionList({ suggestions, listId, activeIndex, onHover, onPick 
     onHover: (index: number) => void
     onPick: (ref: string) => void
 }) {
+    const wrapper = useRef<HTMLDivElement>(null)
+    const shown = suggestions.status === "ready" && suggestions.matches.length > 0
+    useEffect(() => {
+        if (shown) wrapper.current?.scrollIntoView?.({ block: "nearest" })
+    }, [shown])
+    useEffect(() => {
+        if (activeIndex >= 0) document.getElementById(`${listId}-${activeIndex}`)?.scrollIntoView?.({ block: "nearest" })
+    }, [activeIndex, listId])
     if (suggestions.status === "limited") {
         return <div className="name-suggest"><p className="name-suggest-note">{rateLimitedMessage(suggestions.retryInSeconds)}</p></div>
     }
@@ -518,7 +526,7 @@ function NameSuggestionList({ suggestions, listId, activeIndex, onHover, onPick 
     if (suggestions.matches.length === 0) {
         return <div className="name-suggest"><p className="name-suggest-note">{NAME_EMPTY_MESSAGE}</p></div>
     }
-    return <div className="name-suggest">
+    return <div className="name-suggest" ref={wrapper}>
         <ul role="listbox" id={listId} aria-label="Molecule names">
             {suggestions.matches.map((match, index) => <li
                 key={match.speciesRef + match.name}
