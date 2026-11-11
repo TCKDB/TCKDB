@@ -145,8 +145,8 @@ def assert_thermo_role_matches_calculation_type(
 
     :raises CodedValueError: if ``role`` is one of opt/freq/sp and the
         calculation's type is none of the ones that role accepts. The
-        detail names the offending field but never a row id (DR-0028
-        Req 2); the id goes to the log instead.
+        detail names the offending field but never a row id; the id goes
+        to the log instead.
     """
     accepted = _THERMO_ROLE_TO_CALC_TYPES.get(role)
     if accepted is None or calculation.type in accepted:
@@ -398,7 +398,7 @@ def persist_thermo_upload(
         warnings_out.extend(composite_input_warnings)
 
     # An inline opt or sp at a named composite method's level is the same
-    # misshapen deposit the bundle routes warn about (ADR 0021, decision 7).
+    # misshapen deposit the bundle routes warn about.
     if warnings_out is not None:
         warnings_out.extend(
             collect_named_composite_deposit_warnings(
@@ -417,7 +417,7 @@ def persist_thermo_upload(
         )
 
     # Resolve source_calculation links. Each entry uses either a local
-    # calculation_key (inline path) or an existing_calculation_id (DR-0028
+    # calculation_key (inline path) or an existing_calculation_id (the
     # path that lets ARC link thermo to calcs already uploaded by the
     # conformer step). Both paths run owner-consistency and role/type
     # compatibility checks before becoming a thermo_source_calculation row.
@@ -520,13 +520,11 @@ def persist_thermo_upload(
     ):
         source_calc_id: int | None = None
         if correction_payload.source_calculation_key is not None:
-            # The last raw lookup in this family. It used to raise a bare
-            # ``ValueError`` -- a generic ``validation_error`` with no
-            # context -- while the request schema one layer earlier and
-            # every sibling seam answered the same mistake with
-            # ``applied_energy_correction_source_key_undeclared``. Its own
-            # comment said "the schema validator normally prevents this",
-            # which is the assumption ADR 0017 exists to stop making: the
+            # The last raw lookup in this family. A bare
+            # ``ValueError`` would be a generic ``validation_error`` with no
+            # context, while the request schema one layer earlier and
+            # every sibling seam answer the same mistake with
+            # ``applied_energy_correction_source_key_undeclared``. The
             # seam is the backstop for exactly the payloads the validator's
             # coverage misses, so it has to answer as well as the validator
             # does, not worse.

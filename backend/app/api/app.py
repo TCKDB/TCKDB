@@ -40,13 +40,13 @@ async def _lifespan(app: FastAPI):
 
     Two boot-time probes write one line each into the container log. Both
     describe faults that are fully detectable from the process's first
-    second and were previously invisible until something downstream broke:
+    second and would otherwise stay invisible until something downstream broke:
     an object store that cannot be reached (503 on the first
     artifact-bearing upload) and a database cluster that is not UTF-8 (an
     aborted transaction on the first non-ASCII character). Neither blocks
     or fails startup — see :mod:`app.api.startup_checks`.
 
-    "Neither blocks" is a bounded claim and both probes now enforce it.
+    "Neither blocks" is a bounded claim and both probes enforce it.
     Each runs against its dependency behind a hard wall-clock deadline of
     a few seconds, so the worst case a dead dependency can impose on boot
     is that pause and a log line. It was true of the storage probe and

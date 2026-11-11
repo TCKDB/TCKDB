@@ -1,4 +1,4 @@
-"""Catalogue of named composite methods (ADR 0021, plan P1).
+"""Catalogue of named composite methods.
 
 A *named composite method* (CBS-QB3, G4, W1U, ...) is a fixed recipe that one
 program run executes: an internal geometry and frequency level, several single

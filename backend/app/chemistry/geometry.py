@@ -13,7 +13,7 @@ from app.schemas.fragments.geometry import GeometryPayload
 #: Raised when a geometry's ``isotopes`` entry contradicts the nuclide its own
 #: element spelling names: ``D`` with mass number 3, ``T`` with 2, ``D`` with 1.
 #: An input-format refusal ("D is 2H" is a definition), so it is in the code
-#: catalogue and not in the scientific check register; see ``docs/adr/0022``.
+#: catalogue and not in the scientific check register.
 W_GEOMETRY_ISOTOPE_SYMBOL_CONFLICT = "geometry_isotope_symbol_conflict"
 
 
@@ -22,8 +22,8 @@ def normalize_element_symbol(symbol: str) -> str:
 
     Electronic-structure codes are not consistent about capitalisation: ``Cl``,
     ``CL`` and ``cl`` are one element written three ways. Comparing those
-    strings raw refuses correct chemistry over a capital letter, which ADR 0008
-    disqualifies a blocking check from doing.
+    strings raw refuses correct chemistry over a capital letter, which a
+    blocking check must not do.
 
     ``str.capitalize`` is the rule: it upper-cases the first character and
     lower-cases the rest, which is exactly the wire schema's
@@ -39,14 +39,12 @@ def normalize_element_symbol(symbol: str) -> str:
     written before it into the same form. That is what makes the column one
     spelling per element in the ordinary case.
 
-    **But no longer at comparison time on that column.** Ingestion
-    canonicalisation used to be a convention held by this module rather than an
-    invariant the schema enforced, so anything **blocking** normalised both
-    sides rather than trusting it: a restore from an older backup, a bulk
-    import, or a write path that did not call :func:`parse_xyz` could put
-    ``CL`` back, and a blocking check has to be correct on rows the running
-    process never wrote. ``ck_geometry_atom_element_canonical``
-    (``c5a1f8e3d074``) makes it an invariant, and a CHECK — unlike a foreign
+    **But not at comparison time on that column.** Ingestion
+    canonicalisation is not only a convention held by this module: a restore
+    from an older backup, a bulk import, or a write path that did not call
+    :func:`parse_xyz` could otherwise put ``CL`` back, and a blocking check
+    has to be correct on rows the running process never wrote.
+    ``ck_geometry_atom_element_canonical`` makes it an invariant, and a CHECK — unlike a foreign
     key or a trigger — is not suspended by ``session_replication_role =
     replica``, so it holds on precisely those paths. The element-conservation
     check in :mod:`app.services.reaction_atom_map` therefore compares
@@ -76,7 +74,7 @@ def resolve_element_symbol(symbol: str) -> str:
     hydrogen. They are also nuclides -- ``D`` is deuterium (mass number 2) and
     ``T`` is tritium (mass number 3), the only meaning either symbol has in
     chemistry (IUPAC Red Book IR-3.3.2) -- and that half of the meaning is
-    carried elsewhere (decided, ``docs/adr/0022``): a ``D``/``T``
+    carried elsewhere: a ``D``/``T``
     element token is read as hydrogen **plus** an implied mass number by
     :func:`parse_xyz`, so every *new* ``geometry_atom`` row holds ``H`` and an
     ``isotope_mass_number``.
@@ -141,8 +139,7 @@ class ParsedXYZ:
         which keeps ``geom_hash`` byte-for-byte identical for every geometry
         already stored — none of which carries isotope data.
 
-        A ``D`` or ``T`` spelling counts as a substitution (decided
-        2026-10-03, ``docs/adr/0022``): its implied mass number is in
+        A ``D`` or ``T`` spelling counts as a substitution: its implied mass number is in
         :attr:`isotopes` and so in this suffix, exactly as an explicit
         ``geometry.isotopes`` entry would be. A redundant explicit entry that
         equals the implied one adds nothing, so ``D`` alone and ``D`` with a
@@ -230,7 +227,7 @@ def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
     it), and ``xyz_text`` still reads ``D``. An explicit ``geometry.isotopes``
     entry for that atom must equal the implied number, and is then redundant;
     anything else contradicts the spelling and is refused with
-    ``geometry_isotope_symbol_conflict``. See ``docs/adr/0022``.
+    ``geometry_isotope_symbol_conflict``.
 
     So ``geometry.xyz_text`` may read ``CL`` while ``geometry_atom.element``
     reads ``Cl`` for the same atom. That is not drift: one is the record of what

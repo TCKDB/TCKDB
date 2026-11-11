@@ -35,8 +35,7 @@ __all__ = [
 #: mass number they stand for. Only hydrogen has them, and only these two:
 #: ``D`` is deuterium (mass number 2) and ``T`` is tritium (mass number 3).
 #:
-#: A ``D``/``T`` element token is an isotope declaration (decided,
-#: ``docs/adr/0022``, issue #672). :func:`app.chemistry.geometry.parse_xyz`
+#: A ``D``/``T`` element token is an isotope declaration. :func:`app.chemistry.geometry.parse_xyz`
 #: reads it as ``H`` plus the mass number below, so a new ``geometry_atom`` row
 #: holds ``H`` and an ``isotope_mass_number``, the isotope identity check sees
 #: ``[2H]``/``[3H]``, and the geometry hash includes the implied isotope

@@ -7,27 +7,25 @@ torsional motion out. No database access, nothing persisted.
 Why this module exists
 ----------------------
 
-ADR 0012 asks for two projections on every imaginary mode -- onto the six
+Two projections are made on every imaginary mode -- onto the six
 rigid-body vectors, and onto a dihedral rotation about each rotatable
-bond -- because "a determination beats a threshold wherever one is
-available". ADR 0013 deferred them on the grounds that TCKDB stores no
-displacement vectors, so there was nothing to project.
+bond -- because a determination beats a threshold wherever one is
+available. TCKDB stores no displacement vectors, so there is nothing to
+project directly; they are recovered from the Hessian.
 
-That premise is false. ``calc_hessian`` stores the packed lower triangle
+``calc_hessian`` stores the packed lower triangle
 of the full symmetric 3N x 3N Cartesian force-constant matrix, in fixed
 units of hartree/bohr^2, bound to a mandatory ``geometry_id``. Mass-weight
 it with the per-atom masses that ``geometry_atom.element`` and
 ``geometry_atom.isotope_mass_number`` already determine, diagonalise, and
-the eigenvectors are the displacements ADR 0012 wants. The frequency list
+the eigenvectors are the displacements the projections need. The frequency list
 comes back with it, which is what makes the recovery checkable: a
 recovered spectrum that does not reproduce the stored one is a recovery
 this module refuses to project.
 
-Nothing here is stored. ADR 0013 itself observes that "it is the
-projection that is the inference, not the vector"; computing the
-projection at read time and storing neither is the reading of that
-sentence which adds a determination without adding an inference to the
-database.
+Nothing here is stored. It is the projection that is the inference, not the
+vector; computing the projection at read time and storing neither adds a
+determination without adding an inference to the database.
 
 Conventions
 -----------
@@ -136,13 +134,13 @@ LINEARITY_SINGULAR_VALUE_TOLERANCE = 1e-6
 #:
 #: The **absolute** floor turns out to carry its own weight, for an
 #: unrelated reason that only real records showed. Across the 18
-#: imaginary-mode records in the live corpus (2026-08-11, ~600 modes) the
+#: imaginary-mode records in the live corpus (~600 modes) the
 #: whole spectrum reproduces to 0.045 cm-1 -- with one exception, the
 #: 20.26 cm-1 mode of calculation 453, which comes back at 22.14. That is
 #: 9% in omega and **79.5 cm-2 in omega squared**, an eighth of the
-#: 625 cm-2 ADR 0012 takes as a representative noise level: negligible
+#: 625 cm-2 taken as a representative noise level: negligible
 #: error, magnified by taking a square root near zero, which is precisely
-#: ADR 0012's "the noise floor is flat in omega squared, not in omega".
+#: why the noise floor is flat in omega squared, not in omega.
 #: A purely relative tolerance would have refused that mode (1% of 20 is
 #: 0.2); the 2.0 floor accepts it, and it is the same mode a relative-only
 #: rule would be most wrong about.
@@ -155,7 +153,7 @@ SPECTRUM_MATCH_RELATIVE_TOLERANCE = 0.01
 #: any rotation of the pair diagonalises the Hessian equally well -- so a
 #: per-mode overlap is a property of the diagonaliser, not of the
 #: molecule. Only the subspace total is well defined, and that is not what
-#: ADR 0012 asks for. Refusing is the honest answer.
+#: is asked for. Refusing is the honest answer.
 #:
 #: The effect is visible in ``Orca_TS_test.hess``: its 173.47/173.53 and
 #: 3186.99/3187.08 pairs agree with ORCA's own eigenvectors to
@@ -164,7 +162,7 @@ SPECTRUM_MATCH_RELATIVE_TOLERANCE = 0.01
 #: degenerate and the split between its members is not determined.
 #:
 #: It is not a fixture-only concern. Sweeping the 18 live imaginary-mode
-#: records on 2026-08-11 tripped it four times -- calculation 237's
+#: records tripped it four times -- calculation 237's
 #: 1430.52/1430.95 pair and calculation 433's 1498.86/1499.38 pair, split
 #: by 0.43 and 0.52 cm-1 and each recovered to better than 0.003 cm-1.
 #: Both are real modes rather than imaginary ones, so no projection was
@@ -207,7 +205,7 @@ DEGENERACY_WINDOW_CM1 = 1.0
 #: it, and refusing there is right for the same reason.
 #:
 #: The live corpus widens the margin rather than narrowing it. Across all
-#: 18 imaginary-mode records (2026-08-11, 6 to 27 atoms) the largest
+#: 18 imaginary-mode records (6 to 27 atoms) the largest
 #: rigid-body curvature of any record is **12.24 cm-1** -- every one
 #: clears the threshold by a factor of eight, and the worst real record is
 #: quieter than the worst correctly framed fixture (49.4). Nothing in the
@@ -217,7 +215,7 @@ FRAME_CONSISTENCY_TOLERANCE_CM1 = 100.0
 #: "more than about 90% overlap means the mode is projection
 #: residue and nothing else".
 #:
-#: Kept at ADR 0012's figure because the measurement says it is not a
+#: Kept at this figure because the measurement says it is not a
 #: tuned parameter. Across the three real ESS Hessians in
 #: ``backend/tests/fixtures`` -- 51 modes, 18 of them rigid-body
 #: directions -- every rigid-body direction scores 0.9985 or above and no
@@ -336,7 +334,7 @@ class TorsionAxis:
 
 @dataclass(frozen=True)
 class ModeProjection:
-    """The ADR 0012 projections for one mode.
+    """The rigid-body and torsion projections for one mode.
 
     :param rigid_body_overlap: Fraction of the mode's squared norm lying in
         the rigid-body subspace, in [0, 1].
@@ -410,7 +408,7 @@ def atomic_mass(element: str, isotope_mass_number: int | None) -> float | None:
     natural isotope -- not "unknown". The element symbols ``D`` and ``T``
     name a nuclide rather than an element and carry their own mass number,
     which an explicit ``isotope_mass_number`` overrides. New rows store ``H``
-    plus the mass number (``docs/adr/0022``), so this branch serves the rows
+    plus the mass number, so this branch serves the rows
     deposited before that, which hold ``D``/``T`` with a NULL mass number; their
     masses are correct and are deliberately left as they are (#672).
 
@@ -709,7 +707,7 @@ def rotatable_bonds(
     axis, and a mode that is 80% rotation about a double bond is a
     torsion-like out-of-plane motion whichever name is preferred. It also
     means a methyl rotor qualifies, which is intended: a methyl torsion is
-    exactly the kind of soft mode ADR 0012 is about.
+    exactly the kind of soft mode the torsion projection is about.
 
     :param natoms: Atom count.
     :param bonds: 1-based bonded pairs, as from :func:`perceive_bonds`.

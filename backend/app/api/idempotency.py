@@ -147,8 +147,8 @@ class IdempotencyContext:
         in the request's own transaction"; the key may well replay. That is
         the safe side: the worst a client does is repeat a write it did not
         need to.
-        Returning a bare success with no signal is the pre-fix behaviour and
-        is exactly what kept the 2026-08-05 incident invisible.
+        Returning a bare success with no signal would keep such a failure
+        invisible.
 
         A concurrent-duplicate ``IntegrityError`` still propagates, so a key
         raced by two in-flight requests still yields ``409``.

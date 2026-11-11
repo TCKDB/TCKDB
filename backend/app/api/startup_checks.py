@@ -144,9 +144,8 @@ def template_encoding(session) -> str | None:
     copies ``template1``, so a cluster can hold a correct ``UTF8`` production
     database and still hand ``SQL_ASCII`` to everything created next to it.
 
-    That is not hypothetical: the live deployment's ``tckdb`` was converted
-    to ``UTF8`` by hand after the 2026-08-04 incident and its ``template1``
-    was not, so on 2026-08-12 the two disagreed. The restore runbooks drop
+    That is not hypothetical: a database converted to ``UTF8`` by hand can
+    sit in a cluster whose ``template1`` was not, so the two disagree. The restore runbooks drop
     and recreate the database, which is exactly the moment the template's
     encoding becomes the production database's encoding -- silently, because
     a ``SQL_ASCII`` database accepts every byte a ``UTF8`` dump contains and
@@ -212,7 +211,7 @@ def report_database_encoding_at_startup() -> str | None:
     A ``SQL_ASCII`` cluster stores whatever bytes it is handed and
     validates nothing, so the damage is delayed and arbitrary: everything
     works until the first non-ASCII character arrives, which is how one
-    em dash came to roll back an entire upload on 2026-08-04, months
+    em dash can roll back an entire upload, months
     after the volume was created.
 
     Does not raise. The database being unreachable at boot is normal --
@@ -290,13 +289,12 @@ def report_database_encoding_at_startup() -> str | None:
 def report_artifact_storage_at_startup() -> dict:
     """Probe the object store once at boot and say so in the log.
 
-    **Why at startup and not only on ``/status``.** On 2026-08-05 the
-    containerised API ran with ``S3_ENDPOINT_URL=http://127.0.0.1:9000``
-    inherited from the earlier host deployment, where inside a container
-    that is the container's own loopback. Every artifact-bearing upload
-    returned 503 for as long as it took someone to try one. The
-    misconfiguration was present and detectable from the first second of
-    the process's life, and nothing looked.
+    **Why at startup and not only on ``/status``.** A containerised API can
+    run with ``S3_ENDPOINT_URL=http://127.0.0.1:9000`` inherited from a host
+    deployment, where inside a container that is the container's own
+    loopback. Every artifact-bearing upload then returns 503 for as long as
+    it takes someone to try one. The misconfiguration is present and
+    detectable from the first second of the process's life.
 
     The first place an operator looks after a deploy is ``docker logs
     tckdb-api`` — the deploy script's own failure message says exactly

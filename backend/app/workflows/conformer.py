@@ -245,16 +245,14 @@ def persist_conformer_upload(
         )
 
     # The name this request gives the conformer it is depositing, which
-    # is now a name chosen to be one: ``conformer_key``, the conformer
+    # is a name chosen to be one: ``conformer_key``, the conformer
     # namespace's counterpart to the ``key`` this request already puts on
     # its calculations, and to the required ``key`` every
     # ``ConformerInBundle`` carries.
     #
-    # It used to be ``label``, because a label was the only string a
-    # conformer upload attached to its conformer. That conflated two
-    # different things. A label is a human tag that also feeds
+    # It is not ``label``: a label is a human tag that also feeds
     # conformer-group matching, so renaming it for grouping reasons
-    # silently broke a correction reference; and a depositor with no
+    # would silently break a correction reference, and a depositor with no
     # label could not point at their own conformer at all. A reference
     # key answers only to references.
     conformers_by_key: dict[str, int] = (
@@ -266,9 +264,9 @@ def persist_conformer_upload(
     applied_corrections: list = []
     for index, correction_payload in enumerate(request.applied_energy_corrections):
         # Resolve local string keys against the namespaces this request
-        # actually declared. Both keys used to be tested for `is not None`
-        # alone, so any string at all resolved to the primary
-        # observation/calculation and a typo attached the correction to
+        # actually declared. Testing a key for `is not None` alone would
+        # resolve any string at all to the primary
+        # observation/calculation, and a typo would attach the correction to
         # something the depositor never named. The calc-key namespace is
         # the one the statmech block already points at.
         source_conf_id = resolve_applied_correction_source_key(

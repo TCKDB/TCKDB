@@ -369,12 +369,12 @@ def _no_result_found_handler(
 # code and sentence, looked up by name in ``_constraint_rejections``
 # below; everything else still falls back to the SQLSTATE bucket.
 #
-# What a bucket may say, settled 2026-08-18
-# -----------------------------------------
+# What a bucket may say
+# ---------------------
 # **A raw database constraint name never appears in a user-facing body.**
 # It is an internal identifier: meaningless to a depositor, unstable
 # across a rename, and a disclosure of schema layout — the same reasoning
-# that keeps row ids out of bodies under DR-0028 Requirement 2. The name
+# that keeps row ids out of bodies. The name
 # goes to the log below, where the operator is.
 #
 # So the sentence is what the bucket owes, and it is written to be acted
@@ -494,17 +494,11 @@ def public_integrity_error(exc: IntegrityError) -> tuple[str, str, dict[str, Any
     # Keyed on the constraint name rather than on the driver's message
     # text: parsing prose is what the typed envelope exists to replace.
     #
-    # The name is the *key*, and it stays on this side of the wire. Until
-    # 2026-08-18 this branch also published it as
-    # ``context["constraint"]``, and the repository held three positions
-    # about whether that was allowed: this one said yes, the unregistered
-    # buckets said no in as many words ("Internal constraint name must not
-    # leak through the public body"), and the foreign-key bucket said
-    # nothing at all. Calvin settled it in the direction the majority
-    # already pointed -- a raw constraint name is an internal identifier
-    # and never appears in a user-facing body -- so what a registered
-    # constraint earns is a *code and a sentence of its own*, which is a
-    # public contract, rather than a schema object name, which is not.
+    # The name is the *key*, and it stays on this side of the wire: a raw
+    # constraint name is an internal identifier and never appears in a
+    # user-facing body, so what a registered constraint earns is a *code and
+    # a sentence of its own*, which is a public contract, rather than a
+    # schema object name, which is not.
     # Looking the rule up in ``docs/guides/scientific_check_register.md``
     # is done by that code; the name reaches the operator through the log
     # line below.
@@ -664,18 +658,17 @@ def _artifact_storage_unavailable_handler(
     caller did — which is why neither code is in the client's
     ``RejectionCode`` enum.
 
-    That was necessary and, until #234, not sufficient. The sentence below
-    says "retrying will not clear it" and no client could act on it: 502
-    sits in ``tckdb_client``'s default retry set, and the one field that
+    That is necessary but not sufficient. The sentence below says
+    "retrying will not clear it" and no client could act on it: 502 sits in
+    ``tckdb_client``'s default retry set, and the one field that
     contradicts the status is the ``code``, which the enum excludes by
-    construction. So a well-behaved client replayed a custody break on a
-    backoff schedule forever. The catalogue now carries a second,
+    construction. The catalogue therefore carries a second,
     *declared* classification -- ``ApiCode.replay`` -- exported beside the
     enum as ``NON_RETRYABLE_CODES``, and the client reads the body's code
     at the point it decides whether to retry. The sentence in this branch
-    is therefore load-bearing twice over: a human reads it, and a machine
-    acts on the code beside it. Changing one without the other is the
-    disagreement #234 removed.
+    is load-bearing twice over: a human reads it, and a machine
+    acts on the code beside it. Changing one without the other makes them
+    disagree.
 
     The public body stays deliberately vague -- it names a subsystem and
     says what to do. That is right for a caller and useless for whoever

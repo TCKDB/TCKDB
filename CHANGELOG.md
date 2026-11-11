@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Decision narrative removed from the API, workflows and chemistry modules (Unreleased)
+
+- **Behaviour:** none. Comments and docstrings in `backend/app/api`, `workflows`, `chemistry`, `importers` and related modules now state behaviour only. Route descriptions in the OpenAPI document and `PRODUCER_CONTRACT.md` are reworded accordingly.
+- **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-schemas` 0.172.2 (within the client's existing `<0.173` window; no client change).
+
 ## Decision narrative removed from the tau modules (Unreleased)
 
 - **Behaviour:** none. Comments and docstrings in the Hessian-method and stationary-point modules of `tckdb-schemas` now state behaviour only.

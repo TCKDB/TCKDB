@@ -455,11 +455,10 @@ def _artifact_storage_status() -> dict:
 
     Artifact storage is a hard dependency: with it down, every
     artifact-bearing upload returns 503 while the database and the worker
-    are perfectly fine. On 2026-08-05 that happened for real -- a
-    containerised API inherited ``S3_ENDPOINT_URL=http://127.0.0.1:9000``
-    from a host deployment, where inside the container it is the
-    container's own loopback -- and ``/status`` reported healthy
-    throughout, so nothing alerted and the deploy verification passed.
+    are perfectly fine. For example, a containerised API that inherits
+    ``S3_ENDPOINT_URL=http://127.0.0.1:9000`` from a host deployment is
+    pointing at the container's own loopback, and a ``/status`` that
+    ignored storage would report healthy throughout.
 
     Three deliberate choices, each of which was a way to get this wrong:
 
@@ -478,9 +477,7 @@ def _artifact_storage_status() -> dict:
       would report healthy too. The authoritative signal therefore comes
       from the real write path's own refusal, recorded durably in
       ``artifact_storage_capacity_event`` and folded in below. It survives
-      a restart, which the process-global it replaced did not: the API
-      used to come back up reporting healthy while every upload still
-      failed.
+      a restart, which a process-global would not.
     * **A free-space probe, but only while already refusing.** MinIO's
       *admin* API does report free space, with the credentials this
       process already holds, and the number predicts refusal (measured:
@@ -735,8 +732,7 @@ def status():
             # ``template_encoding`` is the same hazard one step earlier.
             # ``server_encoding`` describes the database that exists;
             # ``template1`` describes the one the next ``CREATE DATABASE``
-            # will produce, and the two can disagree -- on the live
-            # deployment, on 2026-08-12, they did. A restore drill drops and
+            # will produce, and the two can disagree. A restore drill drops and
             # recreates the database, so a divergent template is how a
             # correctly-converted cluster quietly reverts. Both are reported
             # so an operator can see the drift before the drill, not after.

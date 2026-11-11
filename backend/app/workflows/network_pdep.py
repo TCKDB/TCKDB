@@ -155,8 +155,8 @@ from app.workflows.reaction import persist_reaction_upload
 #: The generic remedy tells a depositor to supply ``atom_map``. The
 #: pressure-dependent network bundle has no such field, so saying that here
 #: would send them looking for something that does not exist — a warning that
-#: cannot be acted on is the kind nobody reads, and ADR 0011 is explicit that a
-#: warning nobody reads leaves the corpus splitting between mapped and unmapped
+#: cannot be acted on is the kind nobody reads, and a warning nobody reads
+#: leaves the corpus splitting between mapped and unmapped
 #: records for no reason. The honest statement is that this path cannot record
 #: a map yet and which path can.
 #:

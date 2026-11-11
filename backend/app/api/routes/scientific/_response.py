@@ -190,7 +190,7 @@ ASSESSMENTS_SECTION = IncludeGatedSections(
 # Every entry below was read off the service module that owns the token
 # vocabulary — the ``if "<token>" in includes:`` that decides whether the
 # field is built — and never off a list of nullable fields on the record
-# schema. That distinction is the whole of decision 2 and it is not
+# schema. That distinction is not
 # stylistic: most of what is ``| None`` on these records is an ungated
 # scientific fact. ``nasa9``, ``chebyshev``, ``plog_entries``, ``wilhoit``,
 # ``group_additivity``, ``assignment_scheme``, ``supersession``,

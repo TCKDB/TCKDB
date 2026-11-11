@@ -156,8 +156,7 @@ def build_standalone_article(xml_bytes: bytes, *, label: str) -> ArticleBytes:
     for a document that did not come from the pinned bulk archive.
 
     Shared by the CLI's ``--file`` mode and the ``POST /uploads/thermoml``
-    route (Phase C-E6 review round 2, F8) -- previously each built its own
-    copy of this four-line construction, which could silently drift (e.g.
+    route, so the construction cannot silently drift between them (e.g.
     one computing ``json_sha256`` over different placeholder bytes than
     the other).
 

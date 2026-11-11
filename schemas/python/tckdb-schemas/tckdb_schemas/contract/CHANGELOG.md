@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.172.2 - 2026-11-11
+
+The producer contract text is reworded to state behaviour only: route descriptions in `PRODUCER_CONTRACT.md` no longer cite decision records or design plans. No refusal, warning, field or behaviour changes.
+
 ## 0.172.1 - 2026-11-11
 
 Comments and docstrings in the Hessian-method and stationary-point modules are reworded to state behaviour only. No refusal, warning, field or behaviour changes.

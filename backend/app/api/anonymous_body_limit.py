@@ -1,7 +1,7 @@
 """Body size allowance for callers with no valid credential, enforced before the body is read.
 
 FastAPI reads and parses a whole request body before dependencies such as authentication run, so an unauthenticated
-``POST`` to any body-taking route used to be buffered and parsed in full before its 401. This is a pure ASGI
+``POST`` to any body-taking route would be buffered and parsed in full before its 401. This is a pure ASGI
 middleware, like :mod:`app.api.bundle_limits` and :mod:`app.api.export_limits`: for ``POST``/``PUT``/``PATCH`` under
 ``/api/`` it refuses a body over ``settings.anonymous_max_body_bytes`` (``413 anonymous_body_too_large``) unless the
 request carries a valid credential.

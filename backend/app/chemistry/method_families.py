@@ -42,8 +42,8 @@ suffix (``b97-d3``) wins over its stem (``b97``). The SQL twin
 (``scientific_read/lot_identity_filters.method_stem_key_sql``) is built from the same suffix rule, and
 ``method_family_matches`` turns the table into a predicate, so a filter and this function cannot disagree.
 
-Decisions the owner may want to check (every entry is in the table below)
--------------------------------------------------------------------------
+Classification choices (every entry is in the table below)
+----------------------------------------------------------
 * Range-separated hybrids (CAM-B3LYP, LC-wPBE, wB97X, HSE) and meta-hybrids (M06, M06-2X, wB97M-V) are rung 4, with the
   global hybrids.
 * B97 itself (Becke 1997) is a global hybrid, rung 4, as are B97-1, B97-2 and B98. The dispersion-corrected B97-D

@@ -146,7 +146,7 @@ def _species_entry_conformer_summary(
     """Aggregate conformer-group and observation counts for a species entry.
 
     Two scalar aggregates, so the top-level species-entry read stays cheap. A count answers what the list endpoint
-    would show (decision D5): the groups and observations the request shows (the default exclusions and the profile's
+    would show: the groups and observations the request shows (the default exclusions and the profile's
     floor), and an observation in a group the floor hides is not counted.
     """
     group_count = session.scalar(

@@ -75,7 +75,7 @@ _STATE_BASIS_BY_PHASE = {
 #: its evident default for a single-component block).
 _SUPPORTED_STANDARD_STATE = "Pure compound"
 
-#: Observed-method-string rule (plan C2 amendment, ``rule
+#: Observed-method-string rule (``rule
 #: id=origin.smethodname_allowlist``): when a Cp property carries
 #: neither ``eMethodName`` nor a ``Prediction`` but does carry a free-text
 #: ``sMethodName``, origin is decided from this EXPLICIT allowlist of

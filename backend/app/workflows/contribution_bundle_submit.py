@@ -97,7 +97,7 @@ def _append_import_audit(
     Lowest failure probability in this workflow, largest blast radius: it runs
     after the biggest payload the API accepts has been fully imported. The
     event's ``summary`` is ``Text`` and its ``details_json`` is ``JSONB`` — the
-    two column types that failed in the 2026-08-05 incident — so it is flushed
+    two column types that can fail at commit — so it is flushed
     inside a ``SAVEPOINT``, after an explicit flush that puts the whole import
     outside the savepoint's reach.
 

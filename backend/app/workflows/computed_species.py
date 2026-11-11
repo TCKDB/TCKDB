@@ -225,8 +225,8 @@ def _to_calc_with_results_payload(
 
     Drops bundle-only fields (``key``, ``depends_on``, ``artifacts``) and
     forwards everything else — including the inline ``literature``
-    fragment, which the shared payload now carries in place of a raw
-    ``literature_id`` (#194) — so the existing
+    fragment, which the shared payload carries in place of a raw
+    ``literature_id`` — so the existing
     ``resolve_and_persist_calculation_with_results`` service can be reused
     unchanged. The citation is resolved there, once, rather than here.
     """
@@ -707,11 +707,10 @@ def persist_computed_species_upload(
     bundle_stored_shas: list[str] = []
 
     # Provenance-presence warnings, the same ones /uploads/thermo and
-    # /uploads/statmech have always returned. They were never wired here,
-    # so a depositor using the bundle route — which is the route the ARC
-    # adapter uses — got neither the refusal nor the annotation ADR 0011
-    # and ADR 0008 promise, and their record was silently less complete
-    # than the identical field-by-field deposit.
+    # /uploads/statmech return. A depositor using the bundle route — which
+    # is the route the ARC adapter uses — must get the same refusal and
+    # annotation, so the record is not silently less complete than the
+    # identical field-by-field deposit.
     #
     # This bundle is one species, so ``thermo.``/``statmech.`` already
     # names its subject unambiguously and matches the real payload path.
@@ -1397,8 +1396,7 @@ def _persist_statmech_block(
             species_entry_id=species_entry_id,
             transition_state_entry_id=transition_state_entry_id,
         )
-        # The third statmech write path, and the third to need DR-0028
-        # Requirement 1: a declared role must match the type of the job it
+        # The third statmech write path, and the third to need it: a declared role must match the type of the job it
         # names. Shared with the conformer and standalone paths through
         # the statmech resolution service so all three refuse alike.
         assert_statmech_role_compatible(

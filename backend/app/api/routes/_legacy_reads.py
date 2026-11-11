@@ -363,7 +363,7 @@ RECORD_MODELS: dict[str, SubmissionRecordType] = {
 
 
 class LegacyPayloadUnplaceable(RuntimeError):
-    """A hidden record is named where it can be neither blanked nor dropped. Fail closed (decision D4)."""
+    """A hidden record is named where it can be neither blanked nor dropped. Fail closed."""
 
 
 def _hidden_ids(session: Session, kind: SubmissionRecordType, ids: set[int], statuses: set[RecordReviewStatus]) -> set[int]:
@@ -486,7 +486,7 @@ def withhold_hidden_records(session: Session, payload: Any, *, request_statuses:
     _collect(body, pointers, records)
     floor = current_read_profile().review_floor is not None
     # Under a floor a nested pointer, and a record embedded in another (a group's observation), is linked
-    # evidence. Only rejected and deprecated evidence is withheld; a not-reviewed one is named as it always was (these
+    # evidence. Only rejected and deprecated evidence is withheld; a not-reviewed one is named (these
     # payloads carry raw ids and no badge field). The floor still decides which TOP-LEVEL rows a list returns, in SQL.
     evidence_statuses = _evidence_statuses()
     hidden_pointers = (

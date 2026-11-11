@@ -8,10 +8,10 @@ Mirrors the layering of ``backend/app/importers/cccbdb/``:
 ``archive.py`` (fetch/snapshot) -> ``validate.py`` (schema) ->
 ``parser.py`` (XML -> dataclasses) -> ``mapping.py`` (dataclasses ->
 TCKDB payloads). **No database writes anywhere in this package** --
-persistence is Phase C-E3 (``backend/app/services/thermoml_cp_import.py``,
-not part of this package).
+persistence is in ``backend/app/services/thermoml_cp_import.py``,
+not part of this package.
 
-Pilot article (Phase C plan amendment, section C0): benzene,
+Pilot article: benzene,
 ``UHOVQNZJYSORNB-UHFFFAOYSA-N``, DOI ``10.1016/j.jct.2013.08.022``, 12
 "Ideal gas" Cp values at 200-1000 K, pressure fixed by a 100 kPa
 Constraint, method carried only as ``sMethodName`` "statistical

@@ -365,7 +365,6 @@ def download_approved_artifact(
     producer-side scratch paths, usernames, and cluster hostnames that
     must never reach anonymous clients. This gate is unconditional (no
     opt-out flag) so no deployment can accidentally re-expose the bytes;
-    see ``docs/adr/0004-store-artifacts-verbatim-gate-raw-log-access.md``.
     The digest is still re-verified against the stored bytes below, on
     every path — an owner's download is verified exactly like anyone
     else's, because integrity is a claim about the store, not about who
@@ -376,20 +375,11 @@ def download_approved_artifact(
     calculation at read time for every subsequent reader. A 502 here is
     therefore not a private incident between one caller and the store —
     it is a recorded break in TCKDB's custody of the evidence
-    (``docs/adr/0014-custody-of-stored-evidence-is-recorded-not-logged.md``).
-
-    *Which* authenticated callers get the bytes has two answers, and
-    until 2026-08-24 it had only one. Curator approval publishes evidence
-    to every authenticated caller, and that is unchanged. But approval is
-    a curator action on a store where curation has barely begun — 563 of
-    563 artifacts on the hosted instance belonged to ``not_reviewed``
-    calculations — so an approval-only gate had never opened for anyone,
-    the depositor of the file included. A depositor may therefore always
-    fetch back what they deposited, judged by the same ownership rule the
-    upload route authorizes attaching with
-    (``app.services.deposit_ownership``). ADR 0004's argument for gating
-    raw logs is not overturned by this; only its unargued choice of
-    *review status* as the gate is.
+    *Which* authenticated callers get the bytes has two answers. Curator
+    approval publishes evidence to every authenticated caller. A depositor
+    may also always fetch back what they deposited, judged by the same
+    ownership rule the upload route authorizes attaching with
+    (``app.services.deposit_ownership``).
 
     A caller who owns nothing here still cannot tell an unapproved digest
     from an unknown one: both are 404.
@@ -412,9 +402,8 @@ def download_approved_artifact(
         )
     # Both are caught for their side effect and then **re-raised typed**, so
     # the handlers in app.api.errors still mint the code and still log with
-    # the request's method and path. The earlier version of these blocks did
-    # the side effect and then raised a bare ``HTTPException``, which is what
-    # made this route answer ``code="http_502"`` where the upload path answers
+    # the request's method and path. Raising a bare ``HTTPException`` would
+    # make this route answer ``code="http_502"`` where the upload path answers
     # ``artifact_integrity_failed`` for the identical condition — one break,
     # two contracts, decided by which route noticed it. A caught exception
     # that must keep its meaning has to leave the handler as itself.
