@@ -137,3 +137,12 @@ def test_an_apostrophe_made_by_nfkc_is_folded():
     # U+0149 decomposes under NFKC to U+02BC + "n"
     assert normalise_name(chr(0x149) + "x") == "'nx"
     assert normalise_name(chr(0x149) + "x") == normalise_name("'nx")
+
+
+def test_a_digits_only_name_is_accepted_and_normalised():
+    assert normalise_name(" 12 ") == "12"
+    assert is_valid_query_key("12", normalise_name("12"))
+    # fullwidth digits fold to ASCII under NFKC
+    fullwidth = chr(0xFF11) + chr(0xFF12)
+    assert normalise_name(fullwidth) == "12"
+    assert is_valid_query_key(fullwidth, normalise_name(fullwidth))
