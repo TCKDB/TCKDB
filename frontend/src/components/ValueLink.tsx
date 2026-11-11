@@ -1,3 +1,4 @@
+import { Stored } from "./QuantityValue"
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 import "../record-blocks.css"
@@ -6,7 +7,7 @@ import "../record-blocks.css"
 export function ValueLink({ value, unit, to, full }: { value: ReactNode; unit?: string; to: string | null; full?: string }) {
     const body = (
         <>
-            <span className="value-link-number" title={full}>{value}</span>
+            <span className="value-link-number"><Stored full={full}>{value}</Stored></span>
             {unit && <> <span className="u t-preserve-case">{unit}</span></>}
         </>
     )

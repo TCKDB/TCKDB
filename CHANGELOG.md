@@ -24,7 +24,7 @@ dataset must never require a code release.
 
 ## Deposited numbers to 6 significant figures (Unreleased)
 
-- **Behaviour:** values shown as deposited (heat capacity, reference pressure, temperature, transport polarizability and rotational relaxation) print at most 6 significant figures with trailing zeros trimmed and no padding (38.92638673392166 shows as 38.9264); integers are never rounded. A rounded value carries the stored number as its hover title. The thermo tab's heat capacity column uses the same rule.
+- **Behaviour:** reference pressure, temperatures (record range, NASA-7 and NASA-9 ends, evaluated points, network solve range, kinetics record range), heat capacity, transport polarizability and rotational relaxation print at most 6 significant figures, trailing zeros trimmed and no padding (38.92638673392166 shows as 38.9264); an integer is never rounded and a non-integer from a million up shows as a whole number. A rounded value is a `<data>` element whose value and hover title are the stored number, and its table or section says "Shown to 6 significant figures; hover a number for the stored value." The molecule compare page and the numbers tables apply this; the compare page marks a setting row as different by stored value (1.01325 against 1.0132500001) and sorts by it. On the thermo tab the evaluated-points table prints heat capacity and temperature this way and enthalpy, entropy and Gibbs energy to 2 decimals; the transport tab prints polarizability and rotational relaxation this way. Heat-capacity compare rows are keyed by their raw temperature.
 - **Schema and migration:** none. No new environment variable.
 
 ## Compare a molecule's values (Unreleased)

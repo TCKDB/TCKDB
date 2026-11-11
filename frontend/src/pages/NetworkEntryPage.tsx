@@ -19,6 +19,7 @@ import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { ReviewNote } from "../components/ReviewNote"
+import { formatQuantity } from "../domain/quantityFormat"
 import { computeSpeciesEnergyCoverage, solveEnergySourceSentence, STATE_ENERGY_ORDER_NOTE } from "../domain/networkEnergyCoverage"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
@@ -121,7 +122,7 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                                         <dt>Solve temperature range</dt>
                                         <dd>
                                             {network.solve_temperature_min_k != null && network.solve_temperature_max_k != null
-                                                ? <code className="data">{`${network.solve_temperature_min_k}–${network.solve_temperature_max_k} K`}</code>
+                                                ? <code className="data">{`${formatQuantity("thermo_temperature_k", network.solve_temperature_min_k)?.value}–${formatQuantity("thermo_temperature_k", network.solve_temperature_max_k)?.value} K`}</code>
                                                 : <span className="record-identity-absent-inline">not recorded</span>}
                                         </dd>
                                     </div>

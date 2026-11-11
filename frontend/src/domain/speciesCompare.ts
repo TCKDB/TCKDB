@@ -126,12 +126,12 @@ export function cpRows(columns: readonly CompareColumn[]): CompareRow[] {
                 const range = column.thermo ? rangeOf(column.thermo) : null
                 return { kind: "absent", words: range && (temperature < range[0] || temperature > range[1]) ? OUTSIDE_RANGE : NOT_RECORDED }
             })
-            return { key: label, label, unit: "J/mol·K", compare: "continuous", cells }
+            return { key: `cp-${temperature}`, label, unit: "J/mol·K", compare: "continuous", cells }
         })
 }
 
 function cellText(cell: CompareCell): string | null {
-    return cell.kind === "value" ? `${cell.value.value}|${cell.value.exponent ?? ""}` : null
+    return cell.kind === "value" ? (cell.value.full ?? `${cell.value.value}|${cell.value.exponent ?? ""}`) : null
 }
 
 /**
@@ -157,6 +157,7 @@ export function displayLabel(label: string): string {
 /** The number a cell sorts by, exponent included; null for words and absent cells. */
 export function sortNumber(cell: CompareCell): number | null {
     if (cell.kind !== "value" || cell.value.kind !== "number" || cell.value.value === null) return null
+    if (cell.value.full !== undefined && Number.isFinite(Number(cell.value.full))) return Number(cell.value.full)
     const mantissa = cell.value.value.replace("−", "-").replace(/\s*±.*$/, "")
     const exponent = (cell.value.exponent ?? "").replace("−", "-")
     const parsed = exponent ? Number(`${mantissa}e${exponent}`) : Number.parseFloat(mantissa)

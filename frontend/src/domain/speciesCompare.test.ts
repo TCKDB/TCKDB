@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { ThermoRecord } from "../api/thermoApi"
-import { cpRows, groupByVersion, rowDiffers, sortNumber, thermoValueRows, valueRows, type CompareCell, type CompareColumn } from "./speciesCompare"
+import { cpRows, groupByVersion, rowDiffers, sortNumber, thermoValueRows, valueRows, type CompareCell, type CompareColumn, type CompareRow } from "./speciesCompare"
 import { statmechRow, thermoRow } from "./entryNumbers"
 
 function record(ref: string, points: [number, number | null][], h298: number | null = 10, range?: [number, number], extra: Record<string, unknown> = {}): ThermoRecord {
@@ -49,6 +49,14 @@ describe("compare rows", () => {
         expect(rows.every((row) => row.compare === "continuous")).toBe(true)
     })
 
+    it("keeps the exponent and the stored value of a small heat capacity, and keys a row by its raw temperature", () => {
+        const [row] = cpRows([column(record("a", [[300.00000001, 1.23456789e-12]])), column(record("b", [[300.00000001, 31]]))])
+        const first = row.cells[0]
+        expect(first.kind === "value" && first.value).toMatchObject({ value: "1.23457", exponent: "−12", full: "1.23456789e-12" })
+        expect(row.key).toBe("cp-300.00000001")
+        expect(row.label).toBe("Heat capacity at 300 K")
+    })
+
     it("rounds a heat capacity to 6 significant figures and keeps the stored value", () => {
         const [row] = cpRows([column(record("a", [[300, 38.92638673392166]])), column(record("b", [[300, 31]]))])
         expect(words(row)).toEqual(["38.9264", "31"])
@@ -91,6 +99,15 @@ describe("compare rows", () => {
 })
 
 describe("rowDiffers", () => {
+    it("compares stored values, so 1.01325 and 1.0132500001 are marked although both show 1.01325", () => {
+        const rows = thermoValueRows([column(record("a", [], 1, undefined, { reference_pressure_bar: 1.01325 })), column(record("b", [], 1, undefined, { reference_pressure_bar: 1.0132500001 }))])
+        const pressure = rows.find((row) => row.label === "Reference pressure") as CompareRow
+        expect(words(pressure)).toEqual(["1.01325", "1.01325"])
+        expect(rowDiffers(pressure, [2])).toBe(true)
+        const same = thermoValueRows([column(record("a", [], 1, undefined, { reference_pressure_bar: 1.01325 })), column(record("b", [], 1, undefined, { reference_pressure_bar: 1.01325 }))])
+        expect(rowDiffers(same.find((row) => row.label === "Reference pressure") as CompareRow, [2])).toBe(false)
+    })
+
     it("marks a setting that is not the same in every record, including a 2-vs-2 split", () => {
         expect(rowDiffers(exact([text("A"), text("A"), text("B"), text("B")]), [4])).toBe(true)
         expect(rowDiffers(exact([text("A"), text("A"), text("A"), { kind: "absent", words: "Not recorded" }]), [4])).toBe(false)
@@ -121,6 +138,7 @@ describe("sortNumber", () => {
         expect(sortNumber(number("1.23", "−3"))).toBeCloseTo(0.00123)
         expect(sortNumber(number("−12.5 ± 0.5"))).toBe(-12.5)
         expect(sortNumber(number("4.5", "5"))).toBe(450000)
+        expect(sortNumber({ kind: "value", value: { label: "x", kind: "number", value: "38.9264", unit: null, full: "38.92638673392166" } })).toBe(38.92638673392166)
         expect(sortNumber({ kind: "absent", words: "Not recorded" })).toBeNull()
         expect(sortNumber(text("A"))).toBeNull()
     })

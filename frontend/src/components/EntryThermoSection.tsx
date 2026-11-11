@@ -629,7 +629,7 @@ function TemperatureCoverageBlock({ coverage, thermoRef, idSuffix = "" }: {
                 <dl className="kv-list">
                     <div>
                         <dt>Record range (K)</dt>
-                        <dd>{coverage.record_min_k ?? "not recorded"}–{coverage.record_max_k ?? "not recorded"}</dd>
+                        <dd><QuantityValue value={formatQuantity("thermo_temperature_k", coverage.record_min_k, null)} />–<QuantityValue value={formatQuantity("thermo_temperature_k", coverage.record_max_k, null)} /></dd>
                     </div>
                     {wasRequested && (
                         <>
@@ -654,9 +654,9 @@ function NasaBlock({ nasa, thermoRef, idSuffix = "" }: { nasa: ThermoRecord["nas
             {nasa ? (
                 <>
                     <dl className="kv-list">
-                        <div><dt>T low (K)</dt><dd>{nasa.t_low ?? "not recorded"}</dd></div>
-                        <div><dt>T mid (K)</dt><dd>{nasa.t_mid ?? "not recorded"}</dd></div>
-                        <div><dt>T high (K)</dt><dd>{nasa.t_high ?? "not recorded"}</dd></div>
+                        <div><dt>T low (K)</dt><dd><QuantityValue value={formatQuantity("thermo_temperature_k", nasa.t_low, null)} /></dd></div>
+                        <div><dt>T mid (K)</dt><dd><QuantityValue value={formatQuantity("thermo_temperature_k", nasa.t_mid, null)} /></dd></div>
+                        <div><dt>T high (K)</dt><dd><QuantityValue value={formatQuantity("thermo_temperature_k", nasa.t_high, null)} /></dd></div>
                     </dl>
                     <div className="table-scroll">
                         <table className="data-table" aria-label={`NASA-7 coefficients for ${thermoRef}`}>
@@ -713,8 +713,8 @@ function Nasa9Block({ nasa9, thermoRef, idSuffix = "" }: { nasa9: ThermoRecord["
                             {nasa9.map((interval) => (
                                 <tr key={`nasa9-${thermoRef}-${interval.interval_index}`}>
                                     <td className="num" data-label="Interval">{interval.interval_index}</td>
-                                    <td className="num" data-label="T min (K)">{interval.t_min_k}</td>
-                                    <td className="num" data-label="T max (K)">{interval.t_max_k}</td>
+                                    <td className="num" data-label="T min (K)"><QuantityValue value={formatQuantity("thermo_temperature_k", interval.t_min_k, null)} /></td>
+                                    <td className="num" data-label="T max (K)"><QuantityValue value={formatQuantity("thermo_temperature_k", interval.t_max_k, null)} /></td>
                                     <td className="num" data-label="a1">{interval.a1}</td>
                                     <td className="num" data-label="a2">{interval.a2}</td>
                                     <td className="num" data-label="a3">{interval.a3}</td>
@@ -774,16 +774,17 @@ function PointsBlock({ points, thermoRef, idSuffix = "" }: { points: ThermoRecor
                             <tbody>
                                 {points.map((point, index) => (
                                     <tr key={`${thermoRef}-point-${index}`}>
-                                        <td className="num" data-label="T (K)">{point.temperature_k}</td>
-                                        <td className="num" data-label="Cp (J/mol·K)">{point.cp_j_mol_k == null ? "not recorded" : <QuantityValue value={{ ...formatQuantity("thermo_cp_j_mol_k", point.cp_j_mol_k)!, unit: null }} />}</td>
-                                        <td className="num" data-label="H (kJ/mol)">{point.h_kj_mol ?? "not recorded"}</td>
-                                        <td className="num" data-label="S (J/mol·K)">{point.s_j_mol_k ?? "not recorded"}</td>
-                                        <td className="num" data-label="G (kJ/mol)">{point.g_kj_mol ?? "not recorded"}</td>
+                                        <td className="num" data-label="T (K)"><QuantityValue value={formatQuantity("thermo_temperature_k", point.temperature_k, null)} /></td>
+                                        <td className="num" data-label="Cp (J/mol·K)"><QuantityValue value={formatQuantity("thermo_cp_j_mol_k", point.cp_j_mol_k, null)} /></td>
+                                        <td className="num" data-label="H (kJ/mol)"><QuantityValue value={formatQuantity("thermo_h298_kj_mol", point.h_kj_mol, null)} /></td>
+                                        <td className="num" data-label="S (J/mol·K)"><QuantityValue value={formatQuantity("thermo_s298_j_mol_k", point.s_j_mol_k, null)} /></td>
+                                        <td className="num" data-label="G (kJ/mol)"><QuantityValue value={formatQuantity("thermo_h298_kj_mol", point.g_kj_mol, null)} /></td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
+                    <p className="note">T and Cp are shown to 6 significant figures (hover a number for the stored value); H, S and G to 2 decimals.</p>
                 </Disclosure>
             ) : <p className="empty-projection">No evaluated points recorded for this record.</p>}
         </section>

@@ -120,11 +120,11 @@ export function significant(value: number | null | undefined, digits: number, un
 /**
  * The number to at most 6 significant figures, trailing zeros trimmed and never padded, in plain digits (never `1e-7`);
  * an integer is never rounded. `full` carries the stored value when the shown one is shorter. `null` for an absent or
- * non-finite value.
+ * non-finite value. A non-integer from a million up is rounded to a whole number.
  */
 export function deposited(value: number | null | undefined, unit?: string | null): Quantity | null {
     if (value === null || value === undefined || !Number.isFinite(value)) return null
-    const shown = Number.isInteger(value) ? value : Number(value.toPrecision(DEPOSITED_FIGURES))
+    const shown = Number.isSafeInteger(value) ? value : Math.abs(value) >= 10 ** DEPOSITED_FIGURES ? Math.round(value) : Number(value.toPrecision(DEPOSITED_FIGURES))
     const full = shown === value ? undefined : String(value)
     const text = String(shown)
     if (!/e/i.test(text)) return { value: text, unit: unit ?? null, ...(full && { full }) }
@@ -192,11 +192,11 @@ export function fillValue(value: FillableValue): Filled {
  * | calculation electronic energy   | 6      | hartree | calculationView headline |
  * | thermo ΔH°(0 K) and uncertainty | 2      | kJ/mol  | (this archive's tables) |
  * | statmech rotational constants   | 4 sf, no trailing zeros | cm⁻¹ | (this archive's tables) |
- * | thermo reference pressure       | as deposited | bar | (this archive's tables) |
- * | thermo temperature range ends   | as deposited | K   | (this archive's tables) |
- * | thermo heat capacity points     | as deposited | J/mol·K | (this archive's tables) |
- * | transport polarizability        | as deposited | Å³  | (this archive's tables) |
- * | transport rotational relaxation | as deposited | (none) | (this archive's tables) |
+ * | thermo reference pressure       | 6 sf, no padding | bar | (this archive's tables) |
+ * | thermo temperatures (ranges, points, NASA ends) | 6 sf, no padding | K | (this archive's tables) |
+ * | thermo heat capacity points     | 6 sf, no padding | J/mol·K | (this archive's tables) |
+ * | transport polarizability        | 6 sf, no padding | Å³  | (this archive's tables) |
+ * | transport rotational relaxation | 6 sf, no padding | (none) | (this archive's tables) |
  * | kinetics activation energy Ea   | 2      | kJ/mol  | kineticsView headline |
  * | kinetics pre-exponential A      | 3 sf (scientific) | per A_units enum | kineticsView headline |
  * | kinetics temperature exponent n | 4 sf (scientific) | (none)  | kineticsView facts   |

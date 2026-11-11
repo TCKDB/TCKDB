@@ -197,6 +197,11 @@ describe("formatQuantity / QUANTITY_SPECS", () => {
         expect(formatQuantity("transport_rotational_relaxation", 1.23456789e-9)).toEqual({ value: "0.00000000123457", unit: null, full: "1.23456789e-9" })
     })
 
+    it("keeps the stored value on the exponent path and rounds a large non-integer to a whole number", () => {
+        expect(formatQuantity("transport_rotational_relaxation", 1.23456789e-12)).toEqual({ value: "1.23457", exponent: "−12", unit: null, full: "1.23456789e-12" })
+        expect(formatQuantity("thermo_reference_pressure_bar", 1234567.891)).toEqual({ value: "1234568", unit: "bar", full: "1234567.891" })
+    })
+
     it("prints deposited quantities in plain digits", () => {
         expect(formatQuantity("thermo_reference_pressure_bar", 1)).toEqual({ value: "1", unit: "bar" })
         expect(formatQuantity("thermo_temperature_k", 298.15)).toEqual({ value: "298.15", unit: "K" })

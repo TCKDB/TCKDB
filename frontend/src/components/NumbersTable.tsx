@@ -1,3 +1,4 @@
+import { ROUNDED_NOTE } from "./QuantityValue"
 import { Fragment, useMemo, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import "../entry-numbers.css"
@@ -100,6 +101,7 @@ export function NumbersTable<R extends NumberRow>({ rows, caption, label, groupL
                     ))}
                 </table>
             </div>
+            {rows.some((row) => row.values.some((value) => value.full !== undefined)) && <p className="note">{ROUNDED_NOTE}</p>}
         </>
     )
 }
