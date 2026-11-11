@@ -1,11 +1,7 @@
-"""Register the first ``review``-tier check: computed Cp against external data.
+"""Register the ``review``-tier checks: comparisons against external or independently derived data.
 
-Every cross-check against an external reference dataset is in the
-``review`` tier: it runs only from an explicit admin/CLI trigger, never from
-the upload path, produces no error-envelope code, and has no approval effect
--- its output is one ``record_machine_review`` row a curator may read. See
-``app.services.external_comparison.cp`` for the runner (the Cantera-based
-Cp(T) evaluation and the finding it writes).
+Each runs only from an explicit admin or CLI trigger, never from the upload path, produces no
+error-envelope code, and has no approval effect.
 """
 
 from __future__ import annotations
@@ -30,85 +26,34 @@ CHECK_EXTERNAL_CP_COMPARISON = ScientificCheck(
     sort_key=1,
     code=None,
     asserts=(
-        "A computed thermo record's heat capacity, evaluated at each "
-        "temperature an independent external observation reports, is "
-        "compared against that observation and the residual is recorded -- "
-        "never judged against a threshold and never fed back into the "
-        "record's trust or review state."
+        "A computed thermo record's heat capacity is compared at each temperature an "
+        "independent external observation reports, and the residual is recorded."
     ),
     tier=CheckTier.review,
     channel=CodeChannel.none,
-    tier_rationale=(
-        "ADR 0008 reserves the review tier for exactly this shape of claim: a "
-        "comparison against reference data TCKDB did not itself compute and "
-        "has no authority to grade. It cannot block -- the upload that "
-        "produced the computed thermo record is long since accepted, and an "
-        "external observation may itself be wrong, superseded, or reported on "
-        "a real-gas basis the computed record was never fit to reproduce. It "
-        "cannot warn either, because a warning annotates the depositor's "
-        "payload at upload time and this check runs later, against data the "
-        "depositor never supplied. So the consequence is the review tier: one "
-        "append-only, rubric-versioned ``record_machine_review`` row "
-        "(rubric ``external_cp_comparison``, version 2) that a curator may "
-        "read and act on, with no accuracy threshold authorized anywhere in "
-        "this check -- picking one is out of scope for this change and is "
-        "recorded as a hold point in the C4 plan."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            compare_thermo_with_cp_observations,
-            note=(
-                "Runs only from the admin/CLI trigger "
-                "(app.services.external_comparison.cp.run_and_record via "
-                "backend/scripts/run_external_cp_comparison.py), never from "
-                "the upload path. Scope is gas phase only "
-                "(app.services.consistency.engine.SUPPORTED_PHASES, decided "
-                "2026-09-23): a record whose phase is recorded as something "
-                "else, or was never recorded at all, is reported unavailable, "
-                "not refused and not assumed gas."
-            ),
-        ),
+        PythonCheck(compare_thermo_with_cp_observations),
     ),
     escape_hatch=None,
 )
 
 __all__ = ["CHECK_EXTERNAL_CP_COMPARISON", "CHECK_THERMO_CONSISTENCY", "CHECK_THERMO_KINETICS_CONSISTENCY"]
 
-# Explicit triggers share the review-only registry, never the upload path.
-
 CHECK_THERMO_CONSISTENCY = ScientificCheck(
     group="Advisory consistency", sort_key=1, code=None,
-    asserts="Compare every supplied NASA Cp/entropy fit with exact points, s298 and explicitly named neighbours.",
+    asserts=(
+        "Compare every supplied NASA Cp/entropy fit with exact points, s298 and explicitly "
+        "named neighbours."
+    ),
     tier=CheckTier.review, channel=CodeChannel.none,
-    tier_rationale="Explicit advisory comparison records residuals or unavailable reasons; no threshold or approval effect.",
-    adr="0008", enforced_by=(PythonCheck(
-        compare_thermo,
-        note=(
-            "Explicit Phase D CLI/service invocation only. Scope is gas "
-            "phase only (app.services.consistency.engine.SUPPORTED_PHASES, "
-            "decided 2026-09-23): a record whose phase is recorded as "
-            "something else, or was never recorded at all, is reported "
-            "unavailable, not refused and not assumed gas."
-        ),
-    ),),
+    enforced_by=(PythonCheck(compare_thermo),),
     escape_hatch=None,
 )
 CHECK_THERMO_KINETICS_CONSISTENCY = ScientificCheck(
     group="Advisory consistency", sort_key=2, code=None,
     asserts="Compare explicitly supplied opposite elementary rates with equilibrium from explicitly mapped NASA thermo.",
     tier=CheckTier.review, channel=CodeChannel.none,
-    tier_rationale="Explicit advisory comparison records residuals or unavailable reasons; no threshold or approval effect.",
-    adr="0008", enforced_by=(PythonCheck(
-        compare_kinetics,
-        note=(
-            "Explicit Phase D CLI/service invocation only. Scope is gas "
-            "phase only (app.services.consistency.engine.SUPPORTED_PHASES, "
-            "decided 2026-09-23): a thermo record whose phase is recorded as "
-            "something else, or was never recorded at all, is reported "
-            "unavailable, not refused and not assumed gas."
-        ),
-    ),),
+    enforced_by=(PythonCheck(compare_kinetics),),
     escape_hatch=None,
 )
 
@@ -121,20 +66,7 @@ CHECK_GIBBS_SELF_CONSISTENCY = ScientificCheck(
         "that record's own representations, H and S always from the same one."
     ),
     tier=CheckTier.review, channel=CodeChannel.none,
-    tier_rationale=(
-        "Explicit advisory comparison records residuals or unavailable reasons; the only flag is "
-        "float precision on the same row's own identity, and there is no threshold or approval effect."
-    ),
-    adr="0008", enforced_by=(PythonCheck(
-        compare_gibbs,
-        note=(
-            "Explicit Phase D CLI/service invocation only (--check gibbs-self). A record whose "
-            "enthalpy_reference_kind was never recorded is excluded, never assumed formation_298k; "
-            "a G on a declared record that follows another convention is reported as its raw "
-            "residual, never relabelled. Reference pressure does not gate this check (g, h and s "
-            "of one record share one state); gas phase only, as the other Phase D checks."
-        ),
-    ),),
+    enforced_by=(PythonCheck(compare_gibbs),),
     escape_hatch=None,
 )
 
@@ -143,25 +75,11 @@ __all__ += ["CHECK_KIRCHHOFF_CONSISTENCY"]
 CHECK_KIRCHHOFF_CONSISTENCY = ScientificCheck(
     group="Advisory consistency", sort_key=4, code=None,
     asserts=(
-        "Compare a thermo record's supplied enthalpies (h298, exact points, NASA-7, NASA-9) at shared "
-        "temperatures, compare each enthalpy change with the exact interval-local Cp integral of a fit, "
-        "and report each fit's own boundary jumps -- residuals only."
+        "Compare a thermo record's supplied enthalpies at shared temperatures, each enthalpy "
+        "change with the Cp integral of a fit, and each fit's own boundary jumps."
     ),
     tier=CheckTier.review, channel=CodeChannel.none,
-    tier_rationale="Explicit advisory comparison records residuals or unavailable reasons; no threshold or approval effect.",
-    adr="0008", enforced_by=(PythonCheck(
-        compare_kirchhoff,
-        note=(
-            "Explicit Phase D CLI/service invocation only (check 'kirchhoff'). Only records that declare "
-            "enthalpy_reference_kind take part; an undeclared record is reported "
-            "enthalpy_reference_unrecorded, never given an inferred basis. Reference pressure never "
-            "gates enthalpy. Cross-record anchors state that the element-reference compilation is not "
-            "recorded and that its cancellation is assumed. Gas phase only, as for D1. Explicit "
-            "temperatures (--temperature) are ADDED to the default grid {298.15} + temperatures of points "
-            "carrying h -- unlike D1's thermo check, where they replace it. A record is never its own "
-            "neighbour."
-        ),
-    ),),
+    enforced_by=(PythonCheck(compare_kirchhoff),),
     escape_hatch=None,
 )
 
@@ -170,26 +88,11 @@ __all__ += ["CHECK_HESS_CONSISTENCY"]
 CHECK_HESS_CONSISTENCY = ScientificCheck(
     group="Advisory consistency", sort_key=5, code=None,
     asserts=(
-        "Compare a kinetics record's stated reaction energy (its tunneling row, forward, separated-species "
-        "zero) with the Hess sum of explicitly mapped formation enthalpies at the matching temperature."
+        "Compare a kinetics record's stated reaction energy with the Hess sum of explicitly "
+        "mapped formation enthalpies."
     ),
     tier=CheckTier.review, channel=CodeChannel.none,
-    tier_rationale="Explicit advisory comparison records residuals or unavailable reasons; no threshold or approval effect.",
-    adr="0008", enforced_by=(PythonCheck(
-        compare_hess,
-        note=(
-            "Explicit Phase D CLI/service invocation only (--check hess). "
-            "thermal_enthalpy_298k pairs with formation enthalpies at "
-            "298.15 K under one declared enthalpy_reference_kind; "
-            "electronic_plus_zpe and atom_and_bond_corrected pair with "
-            "enthalpy_formation_0k_kj_mol. The element-reference "
-            "compilation is not recorded, so cancellation across terms is "
-            "assumed and every finding says so; so is the endpoint "
-            "identity (separated species), which only a separated_reactants "
-            "row's exactly-zero reactant energy partly checks. Gas phase only; ions and "
-            "isotopologues out of scope; pressure never gates enthalpy."
-        ),
-    ),),
+    enforced_by=(PythonCheck(compare_hess),),
     escape_hatch=None,
 )
 
@@ -197,26 +100,9 @@ __all__ += ["CHECK_ISOTOPE_IDENTITY_CONSISTENCY"]
 
 CHECK_ISOTOPE_IDENTITY_CONSISTENCY = ScientificCheck(
     group="Advisory consistency", sort_key=6, code=None,
-    asserts=(
-        "Find, on a protium species entry, calculation geometries that declare a non-standard nuclide of any element -- a D or T "
-        "element symbol deposited before 2026-10-03, or a stored mass number -- and record each as a finding."
-    ),
+    asserts="Find, on a protium species entry, calculation geometries that declare a non-standard nuclide.",
     tier=CheckTier.review, channel=CodeChannel.none,
-    tier_rationale=(
-        "Rows stored before #672 (docs/adr/0022) hold D/T with no mass number, were accepted at the time and "
-        "cannot be rewritten (trg_as_geometry_atom), so the contradiction is observed after acceptance. It "
-        "cannot block; it is one append-only record_machine_review row a curator may read, with no status, "
-        "selection, trust or approval effect."
-    ),
-    adr="0008, 0022", enforced_by=(PythonCheck(
-        compare_isotope_identity,
-        note=(
-            "Explicit CLI/service invocation only (--check isotope-identity, a spe_ ref). Judges only an entry "
-            "whose isotope_key is NULL; a labelled entry is reported as not judged. Reads each atom's own "
-            "stored mass number, or for a legacy row the one its own symbol names. The Pi held no D/T rows "
-            "when measured on 2026-10-03; self-hosted instances are unknown."
-        ),
-    ),),
+    enforced_by=(PythonCheck(compare_isotope_identity),),
     escape_hatch=None,
 )
 
@@ -225,24 +111,10 @@ __all__ += ["CHECK_WIDE_BASIN_CONSISTENCY"]
 CHECK_WIDE_BASIN_CONSISTENCY = ScientificCheck(
     group="Advisory consistency", sort_key=7, code=None,
     asserts=(
-        "Report a conformer group whose converged optimised structures are linked end to end but are not all within "
-        "the matching tolerance of each other (a wide basin), with the largest torsion difference between two of them."
+        "Report a conformer group whose converged structures are linked end to end but are "
+        "not all within the matching tolerance of each other."
     ),
     tier=CheckTier.review, channel=CodeChannel.none,
-    tier_rationale=(
-        "A basin is the connected component of its optimised structures, so a chain can be wider than the tolerance. "
-        "Splitting it automatically would put back an arbitrary threshold or a dependence on the order of deposition, "
-        "so it is reported for curation instead: one append-only record_machine_review row a curator may read, with no "
-        "status, selection, trust or approval effect."
-    ),
-    adr="0008, 0005", enforced_by=(PythonCheck(
-        compare_wide_basin,
-        note=(
-            "Explicit CLI/service invocation only (--check wide-basin, a cg_ ref). Reads the group's stored "
-            "basin_is_clique and basin_span_deg, which the upload path and the reassignment derive from its defining "
-            "members; a group with no defining member is reported as not judged. The reassignment logs a WARNING for "
-            "each wide basin it writes."
-        ),
-    ),),
+    enforced_by=(PythonCheck(compare_wide_basin),),
     escape_hatch=None,
 )

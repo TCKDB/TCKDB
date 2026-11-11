@@ -318,7 +318,7 @@ def reconcile_charge_multiplicity(
 
 CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
     group="A structure against its own label",
-    sort_key=5,  # Shifted from 4 by #143; see CHECK_SMILES_CHARGE_MATCHES_DECLARED.
+    sort_key=5,
     code=(
         W_CHARGE_MISMATCH,
         W_MULTIPLICITY_MISMATCH,
@@ -327,102 +327,18 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
         W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY,
     ),
     asserts=(
-        "The charge and spin multiplicity a depositor declares agree with the "
-        "electronic-structure log of the calculation; the ground-or-excited "
-        "state and term symbol they declare agree with what the calculation's "
-        "declared method, multiplicity and statmech point group and linearity "
-        "imply; and a term symbol agrees with the spin multiplicity declared "
-        "beside it."
+        "The charge, spin multiplicity, electronic state and term symbol a depositor declares "
+        "agree with the calculation's log and with each other."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "**Placed against the ADR's own reasoning, deliberately.** ADR 0008 "
-        "names both findings as direct contradictions between a declaration "
-        "and the parsed evidence, therefore definitional, therefore belonging "
-        "at the blocking tier — and then defers the promotion, because "
-        "promoting a warning to a blocker rejects payloads that are accepted "
-        "today. These checks have never fired on real data, so their "
-        "false-positive rate is unknown and promoting them first would be "
-        "unsafe. The register records the gap rather than hiding it: this is "
-        "the clearest case in TCKDB of a check sitting one tier below where "
-        "its own governing decision puts it. **The two deduction codes are "
-        "warnings for a different reason.** Charge and multiplicity are "
-        "read from the log, so a disagreement is a contradiction between a "
-        "declaration and a parsed statement. The other two compare one "
-        "declaration with another: no log is read; the method and "
-        "multiplicity come from the payload itself and the point group and "
-        "linearity from its statmech block. An EOM, CIS or spin-flip TDDFT "
-        "method (the ``EXCITED_STATE_METHODS`` list) deduces an excited "
-        "state definitively (that rule covers the ``EXCITED_STATE_METHODS`` "
-        "names only); on this path job types are calculation types "
-        "(opt, freq, sp ...) and say nothing, so plain TDDFT is not on the "
-        "list and reads as the ground default, which is only a default for "
-        "a single-reference method (confidence heuristic). Only the method "
-        "names casscf, caspt2, nevpt2, mrci, dlpno-nevpt2 and "
-        "dlpno-steom-ccsd, compared without regard to case (so CASSCF "
-        "counts), deduce nothing. Any other name (for example "
-        "MRCI+Davidson, or Molpro's RS2) is read as single-reference and "
-        "gets the ground default, so a ground state declared for such a "
-        "calculation can read as a contradiction. "
-        "A term symbol is compared "
-        "with the one derived from the multiplicity (and the point group and "
-        "linearity where there are any), a derivation and not a reading. A heuristic "
-        "default cannot block. **The two term-symbol codes are declaration against "
-        "declaration too.** The leading digit of a term symbol is 2S+1, so ``3P`` beside "
-        "``multiplicity=2`` is a contradiction no correct deposit can contain, which the ADR "
-        "would put at the blocking tier; it warns here for the reason above (a species-entry "
-        "payload is shared by every upload route, and promoting a warning is a migration). "
-        "A one-atom entry's term against the NIST ground term is entry 79's."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            reconcile_charge_multiplicity,
-            note=(
-                "Re-reads charge and multiplicity from the uploaded artifact "
-                "using the wired Gaussian, ORCA, Psi4 and Molpro parsers."
-            ),
-        ),
-        PythonCheck(
-            term_symbol_warnings,
-            note=(
-                "The term symbol against the multiplicity beside it (``term_symbol_contradicts_multiplicity``), "
-                "read only from symbols that start with the multiplicity digit. No log is read."
-            ),
-        ),
-        PythonCheck(
-            _reconcile_deduction,
-            note=(
-                "The deduction path, for ``term_symbol_mismatch`` and "
-                "``electronic_state_contradicts_method``: the declared term "
-                "symbol and ground-or-excited state are compared with what "
-                "``deduce_all`` derives from the calculation's own declared "
-                "method and spin multiplicity and, from the "
-                "statmech block, the point group and linearity; no log is "
-                "read. **Only the ground-state default is a heuristic**: an "
-                "EOM, CIS or spin-flip TDDFT method (``EXCITED_STATE_METHODS``) "
-                "deduces an excited state definitively, while any other "
-                "method, plain TDDFT included, deduces the ground state by "
-                "default; only the method names casscf, caspt2, "
-                "nevpt2, mrci, dlpno-nevpt2 and dlpno-steom-ccsd, compared "
-                "without regard to case (so CASSCF counts), deduce nothing; "
-                "any other name (for example MRCI+Davidson, or Molpro's RS2) "
-                "is read as single-reference, so a legitimately excited state computed another "
-                "way reads as a contradiction. The deduction carries its own confidence and "
-                "the evidence it rests on in the warning's context, and a "
-                "stationary-point-kind deduction is not compared here at all "
-                "(Layer 1's n_imag warnings own it)."
-            ),
-        ),
+        PythonCheck(reconcile_charge_multiplicity),
+        PythonCheck(term_symbol_warnings),
+        PythonCheck(_reconcile_deduction),
     ),
     escape_hatch=(
-        "Absence is not contradiction: if the producing program is not one of "
-        "the wired parsers, the artifact is missing, the log is truncated, or "
-        "the declarations inside a single log disagree with each other, the "
-        "value is left unknown and **no** warning is emitted. Only a value "
-        "genuinely read from the log may contradict a declaration — emitting a "
-        "mismatch because parsing failed would fabricate a contradiction out "
-        "of ignorance."
+        "None; a value the log does not state is treated as unknown and never contradicts a "
+        "declaration."
     ),
 )

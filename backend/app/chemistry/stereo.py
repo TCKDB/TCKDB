@@ -2234,79 +2234,20 @@ CHECK_SPECIES_ENTRY_STEREO_AGREES = ScientificCheck(
     sort_key=1,
     code=W_SPECIES_STEREO_CONTRADICTION,
     asserts=(
-        "A species entry states one stereo configuration: where its linked "
-        "geometries, its SMILES marks and a supplied stereo label each state "
-        "the same stereo element (R/S, E/Z or an allene's axis), they agree, "
-        "compared up to the molecule's symmetry."
+        "A species entry states one stereo configuration: its geometries, SMILES marks and "
+        "any supplied stereo label agree wherever they state the same element, up to the "
+        "molecule's symmetry."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional, once the species key is the constitution. A species "
-        "entry is where one configuration is stated, and it is read from up "
-        "to three sources: every linked geometry, the marks in the SMILES, "
-        "and a supplied label. Two of them stating different configurations "
-        "for the same element is a record that cannot describe one "
-        "molecule; resolving it in either direction would invent a "
-        "provenance, so the deposit is refused. Each source is compared "
-        "with the others up to the molecule's symmetry (an alignment over "
-        "the constitution's automorphisms), so a relabelled but identical "
-        "configuration is never a contradiction. **The position a referee "
-        "could dispute is the reading of coordinates:** deciding R/S, E/Z "
-        "and an allene's axis from a geometry needs torsion windows, an "
-        "alignment over automorphisms and an enumeration cap, none of which "
-        "an input-format conflict (#672: D is 2H) needs. The windows below "
-        "are deliberately conservative -- a geometry that falls outside "
-        "them is *not read*, which states nothing and so contradicts "
-        "nothing -- and exceeding a cap costs expressiveness "
-        "(``species_entry_stereo_not_represented``, symmetric elements "
-        "stated as ``?``) and switches the comparison to the conservative "
-        "multiset form. Entries 8 and 9 compare "
-        "a geometry with its SMILES by element and isotope, never by "
-        "configuration, so they do not cover this. Two neighbouring codes "
-        "are not entries of their own: ``species_stereo_label_invalid`` "
-        "(a malformed label, and the chemical branch of it, a label no "
-        "stereoisomer of the molecule has) is input-shape validation, and "
-        "``species_entry_stereo_not_represented`` is the warning that reports "
-        "the automorphism cap's cost."
-    ),
-    adr="DR-0038, 0008",
     enforced_by=(
-        PythonCheck(
-            resolve_stereo,
-            note=(
-                "Reads the entry's stereo from every geometry, then the "
-                "SMILES marks, then a supplied label, and merges them in "
-                "that order. Geometries of one entry are torsional conformers "
-                "of one configuration, so they must agree with one another "
-                "too; one that does not is a contradiction."
-            ),
-        ),
-        PythonCheck(
-            merge_sources,
-            note=(
-                "The comparison: the incoming source is aligned onto the "
-                "current one over every automorphism and must agree wherever "
-                "both state an element. A position that is ambiguous inside "
-                "a symmetry class is refused rather than guessed."
-            ),
-        ),
-        PythonCheck(
-            _refuse_disagreement_past_the_cap,
-            note=(
-                "Past the automorphism cap no alignment is available, so "
-                "symmetry classes are compared as multisets before they are "
-                "collapsed to ``?``. A real disagreement (``R,R`` marks "
-                "against an ``S,S`` label) is still refused instead of being "
-                "hidden by the cap."
-            ),
-        ),
+        PythonCheck(resolve_stereo),
+        PythonCheck(merge_sources),
+        PythonCheck(_refuse_disagreement_past_the_cap),
     ),
     escape_hatch=(
-        "State ``?`` for the element, or omit the label: an unknown element "
-        "contradicts nothing. If two geometries really are different "
-        "stereoisomers, deposit the other isomer as its own species entry; "
-        "one entry states one configuration."
+        "State ``?`` for the element, omit the label, or deposit the other isomer as its own "
+        "species entry."
     ),
     thresholds=(
         ConstantThreshold(
@@ -2314,11 +2255,8 @@ CHECK_SPECIES_ENTRY_STEREO_AGREES = ScientificCheck(
             value=_ALLENE_TORSION_WINDOW[0],
             unit="degree (lower bound; the upper bound is 170)",
             rationale=(
-                "An allene's end-to-end torsion between the CIP-higher "
-                "substituents is read only inside [10, 170] degrees (ideal "
-                "90). A flattened axis outside it is not read, which states "
-                "nothing. Widening it reads more geometries and makes a "
-                "contradiction from a distorted one more likely."
+                "An allene's end-to-end torsion is read only inside this window, because outside it "
+                "the axis is flattened and states nothing."
             ),
         ),
         ConstantThreshold(
@@ -2326,32 +2264,21 @@ CHECK_SPECIES_ENTRY_STEREO_AGREES = ScientificCheck(
             value=_CUMULENE_PLANAR_TOLERANCE,
             unit="degree",
             rationale=(
-                "An odd cumulene (a butatriene and longer) is Z within this "
-                "torsion of planar, E within it of anti-planar, and "
-                "otherwise twisted and unread."
+                "An odd cumulene is Z within this torsion of planar, E within it of anti-planar, and "
+                "otherwise unread."
             ),
         ),
         ConstantThreshold(
             name="automorphism_cap",
             value=_AUTOMORPHISM_CAP,
             unit="automorphisms examined",
-            rationale=(
-                "Most automorphisms of the constitution examined before the "
-                "symmetric elements are stated as ``?``. Past it the "
-                "sources are compared as multisets instead; the cost is "
-                "``species_entry_stereo_not_represented``."
-            ),
+            rationale="Past this many automorphisms the sources are compared as multisets instead.",
         ),
         ConstantThreshold(
             name="enumeration_cap",
             value=_ENUMERATION_CAP,
             unit="potential stereo elements",
-            rationale=(
-                "Above this many potential elements the stereoisomer "
-                "enumeration is skipped: ``-`` is not deduced, a supplied "
-                "label is not tested for realisability and ``stereo_smiles`` "
-                "is left unset."
-            ),
+            rationale="Above this many potential elements the stereoisomer enumeration is skipped.",
         ),
     ),
 )

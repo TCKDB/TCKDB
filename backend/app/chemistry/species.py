@@ -527,9 +527,6 @@ def canonical_species_identity(
 
 CHECK_SMILES_CHARGE_MATCHES_DECLARED = ScientificCheck(
     group="A structure against its own label",
-    # Shifted from 3 to 4 by #143 so that the calculation-geometry composition
-    # rule sits beside the two conformer-geometry rules it mirrors, rather
-    # than after the charge rules that have nothing to do with it.
     sort_key=4,
     code=W_SPECIES_SMILES_CHARGE_MISMATCH,
     asserts=(
@@ -538,36 +535,8 @@ CHECK_SMILES_CHARGE_MATCHES_DECLARED = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional, and the anchor the reaction-level charge law stands on: "
-        "``validate_reaction_charge_conservation`` sums ``Species.charge`` and "
-        "is only meaningful because each value has already been reconciled "
-        "with the structure it labels. Per ADR 0008 the blocking tier owns the "
-        "rule and the others cite it, which is why "
-        "``assert_geometry_composition_matches_identity`` deliberately does "
-        "not re-check charge."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            canonical_species_identity,
-            note=(
-                "Charge is compared against ``formal_charge`` of the sanitized "
-                "identity molecule — the sum of RDKit per-atom formal charges, "
-                "which is a notation convention rather than an electron count. "
-                "A referee may object that formal-charge assignment on "
-                "hypervalent, zwitterionic or dative-bonded SMILES is "
-                "notation-dependent."
-            ),
-        ),
+        PythonCheck(canonical_species_identity),
     ),
-    escape_hatch=(
-        "A free electron short-circuits before the comparison, returning a "
-        "pinned identity pair. Multiplicity is deliberately **not** validated "
-        "against the SMILES at all: standard SMILES does not encode spin "
-        "state, so RDKit's inferred radical count is only a hint and the "
-        "uploaded multiplicity is authoritative — which is what lets singlet "
-        "CH2 (whose SMILES ``[CH2]`` implies a triplet) and the singlet and "
-        "triplet states of O2 be represented."
-    ),
+    escape_hatch="A free electron is exempt from the comparison.",
 )

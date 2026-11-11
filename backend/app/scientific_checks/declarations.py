@@ -1,30 +1,15 @@
 """Collection point for the scientific check register.
 
-Most entries live beside the check they describe, in the service or
-chemistry module that performs it. This module holds the two populations
-that *cannot* declare themselves at the point of definition, plus the
-list of modules the collector walks.
+Most entries live beside the check they describe. This module holds the entries
+that cannot sit beside a Python check, plus the list of modules the collector
+walks:
 
-Why these entries are here rather than beside their checks
-----------------------------------------------------------
-**PostgreSQL constraints and triggers have no Python object.** A check
-constraint is a string in ``__table_args__`` that ``NAMING_CONVENTION``
-expands on the way to the database, and a trigger is raw SQL inside an
-Alembic revision. Neither can hold a declaration, so the register names
-the schema object and the drift guard verifies that name against live
-schema metadata — which is a real guard, where a comment would not be.
-
-**The wire-schema package is forbidden from importing the backend.**
-``schemas/python/tckdb-schemas/tests/test_import_boundaries.py`` bans
-every import rooted at ``app`` from ``tckdb_schemas``, by AST scan and by
-a runtime ``sys.modules`` check in a subprocess. A wire-schema check
-therefore cannot reference :class:`~app.scientific_checks.ScientificCheck`
-where it is defined. Declaring it here keeps the boundary intact and
-still holds the real function object, so renaming
-``evaluate_transition_state_frequency`` breaks the import of this module
-rather than leaving a stale string in a document.
-
-Everything else belongs next to its check. Add it there.
+* PostgreSQL constraints and triggers have no Python object, so the register
+  names the schema object and the drift guard verifies the name against live
+  schema metadata.
+* ``tckdb_schemas`` may not import the backend, so a wire-schema check cannot
+  reference :class:`~app.scientific_checks.ScientificCheck` where it is
+  defined.
 """
 
 from __future__ import annotations
@@ -32,10 +17,48 @@ from __future__ import annotations
 import sys
 from types import ModuleType
 
+from tckdb_schemas.bundle_source_rules import (
+    W_CALCULATION_GEOMETRY_CONFORMER_MISMATCH,
+    W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
+    W_SCF_STABILITY_SOURCE_CONFORMER_UNANCHORED,
+    W_SCF_STABILITY_SOURCE_CYCLE,
+    W_SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH,
+    W_TRANSITION_STATE_CALCULATION_SPECIES_GEOMETRY,
+    W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+    assert_calculation_geometry_matches_conformer,
+    assert_transition_state_calculations_unanchored,
+    owner_mismatch_error,
+    scf_source_cycle_error,
+    scf_source_geometry_error,
+    scf_source_unanchored_error,
+)
+from tckdb_schemas.composite_total import (
+    COMPOSITE_TOTAL_MISMATCH,
+    assert_composite_total_recomputes,
+)
+from tckdb_schemas.enthalpy_reference import (
+    W_ENTHALPY_DECLARATION_ABSENT,
+    W_ENTHALPY_DECLARATION_WITHOUT_CONTENT,
+    W_ENTHALPY_QUANTITY_NOT_STORABLE_HERE,
+    W_ENTHALPY_REFERENCE_KIND_UNRECOGNIZED,
+    enthalpy_reference_error,
+)
 from tckdb_schemas.fragments import reaction_atom_map as wire_atom_map
 from tckdb_schemas.fragments.calculation import (
+    COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE,
+    COMPOSITE_E0_INCONSISTENT,
+    COMPOSITE_TERMS_DO_NOT_SUM,
     W_FREQ_N_IMAG_DISAGREES_WITH_MODES,
     FreqResultPayload,
+    assert_composite_result_arithmetic,
+)
+from tckdb_schemas.fragments.kinetics_bath_gas import (
+    BATH_GAS_SUM_TOLERANCE,
+    W_KINETICS_BATH_GAS_AT_HIGH_PRESSURE_LIMIT,
+    W_KINETICS_BATH_GAS_DUPLICATE_SPECIES,
+    W_KINETICS_BATH_GAS_MOLE_FRACTION_SUM,
+    check_bath_gas_mole_fraction_sum,
+    check_kinetics_bath_gas,
 )
 from tckdb_schemas.frequency_completeness import (
     W_FREQ_LIST_EXCEEDS_GEOMETRY,
@@ -45,6 +68,22 @@ from tckdb_schemas.hessian_method_detection import (
     W_HESSIAN_METHOD_CONTRADICTS_INPUT_DECK,
     check_recorded_method_agrees_with_deck,
 )
+from tckdb_schemas.kinetics_declarations import (
+    W_KINETICS_DECLARATION_CONTRADICTS_RECORD,
+    kinetics_applicability_error,
+    kinetics_protocol_origin_error,
+)
+from tckdb_schemas.network_channel_kind import (
+    W_NETWORK_CHANNEL_KIND_MISMATCH,
+    derive_channel_kind,
+)
+from tckdb_schemas.sp_energy_components import (
+    SP_ENERGY_COMPONENT_DUPLICATE,
+    SP_ENERGY_COMPONENT_TOTAL_MISMATCH,
+    SP_ENERGY_COMPONENTS_DO_NOT_SUM,
+    SUM_TOLERANCE_HARTREE,
+    check_sp_energy_components,
+)
 from tckdb_schemas.stationary_point import (
     TAU_ANALYTIC_DEFAULT_CM1,
     TAU_ANALYTIC_TIGHT_CM1,
@@ -53,6 +92,7 @@ from tckdb_schemas.stationary_point import (
     TAU_PARAMETER_KEYS,
     TAU_PROTOCOL_NOT_RECORDED_CM1,
     TS_IMAGINARY_FREQUENCY_MIN_CM1,
+    W_HESSIAN_METHOD_REFINED,
     W_MINIMUM_IMAGINARY_MODES_BELOW_TAU,
     W_N_IMAG_CONTRADICTS_MINIMUM,
     W_N_IMAG_HIGHER_ORDER_SADDLE,
@@ -64,15 +104,24 @@ from tckdb_schemas.stationary_point import (
     W_TS_NO_IMAGINARY_MODE,
     W_TS_REACTION_COORDINATE_AMBIGUOUS,
     W_TS_REACTION_COORDINATE_NOT_DESIGNATED,
+    _refinement_findings,
     evaluate_species_entry_frequency,
     evaluate_transition_state_frequency,
     raise_for_blocking_findings,
     resolve_tau,
 )
+from tckdb_schemas.thermo_declarations import (
+    W_THERMO_DECLARED_BY_RECORD_INCOHERENT,
+    W_THERMO_DECLARED_BY_TARGET_INCOHERENT,
+    _declared_by_record_error,
+    thermo_target_error,
+)
 
+from app.api.routes import lookup as lookup_routes
 from app.chemistry import species as chemistry_species
 from app.chemistry import stereo as chemistry_stereo
 from app.chemistry import units as chemistry_units
+from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
 from app.scientific_checks import (
     CheckTier,
     CodeChannel,
@@ -84,17 +133,36 @@ from app.scientific_checks import (
     ScientificCheck,
     collect_constraint_rejections,
     collect_registered_checks,
-    gap_declarations,
 )
 from app.scientific_checks import external_comparison as external_comparison_checks
 from app.services import (
+    atomic_electronic_warnings,
     calc_isotopes,
+    calculation_levels,
+    calculation_ownership,
+    calculation_resolution,
     charge_multiplicity_reconciliation,
+    composite_energy_reconciliation,
+    composite_input_resolution,
+    composite_result_resolution,
+    energy_correction_resolution,
     frequency_geometry_linearity,
+    hessian_method_deck_check,
+    kinetics_declaration_resolution,
+    network_energy_sources,
+    observation_identity_attach,
+    parameter_reconciliation,
     reaction_resolution,
     scan_coordinate_conformance,
+    scf_stability_sources,
+    sp_energy_reconciliation,
     species_resolution,
+    statmech_declaration_resolution,
+    statmech_resolution,
+    structure_determination_resolution,
+    thermo_declaration_resolution,
     transition_state_validation,
+    upload_reconciliation,
     wavefunction_reliability_warnings,
 )
 from app.services import geometry_validation as geometry_validation_service
@@ -105,8 +173,16 @@ from app.services.provenance_warnings import (
     W_NETWORK_WIDE_ENERGY_TRANSFER,
     W_REPORTED_NETWORK_SOLVE,
 )
+from app.services.relative_conformer_energy import compare as relative_conformer_energy_compare
+from app.services.scientific_read import species_calculations_search
 from app.services.trust.evaluator import (
     _detect_calculation_hard_fail as detect_calculation_hard_fail,
+)
+from app.workflows import network_pdep
+from app.workflows.thermo import (
+    W_THERMO_SOURCE_ROLE_TYPE_MISMATCH,
+    assert_enthalpy_reference,
+    assert_thermo_role_matches_calculation_type,
 )
 
 # ---------------------------------------------------------------------------
@@ -145,89 +221,16 @@ _TAU_THRESHOLD = ProvenanceThreshold(
     parameter_keys=TAU_PARAMETER_KEYS,
     values=_TAU_VALUES,
     fallback=(
-        f"Tau is resolved in a fixed order (``resolve_tau_with_assumption``, "
-        f"since #864): (1) the method an attached output log reports the "
-        f"frequency job ran; else (2) the method the input echoed in that log "
-        f"requests (what the job read outranks what was recorded about it); else (3) the recorded ``freq.hessian_method`` or the method "
-        f"the calculation's own input deck states; else (4) the producing "
-        f"program's assumed default for the level of theory's method family; "
-        f"else (5) {TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1. A reported method "
-        f"outranks a recorded one because it is what ran; a request only says "
-        f"what was asked for, and the input a log echoes is what the job actually "
-        f"read, so it outranks a method recorded or typed about the job. When no log "
-        f"reports a method, no echoed input requests one and nothing is "
-        f"recorded or stated in a deck — which is the common case, "
-        f"because most outputs do not say — validation resolves tau from the "
-        f"producing program's documented default for the level of theory's "
-        f"method family (ADR 0012's 2026-09-04 amendment, applied at "
-        f"validation since 2026-10-31; the table is "
-        f"``tckdb_schemas.hessian_method_assumption``). Before assuming "
-        f"anything, validation reads the frequency directive of an inline "
-        f"input deck attached to the calculation (Gaussian ``Freq=Numer`` / "
-        f"``EnOnly``, ORCA ``NumFreq`` / ``AnFreq``, where ``NumFreq`` with ``NumGrad`` "
-        f"is a Hessian from energies): a method the deposit "
-        f"states beats an assumed one (a recorded value that contradicts the "
-        f"deck is its own refusal, ``hessian_method_contradicts_input_deck``, "
-        f"declared in register entry 50). A deck that carries no such directive says "
-        f"nothing. Failing that, "
-        f"Gaussian HF, DFT "
-        f"(double-hybrid functionals excepted: only B2PLYP, B2PLYPD, B2PLYPD3, "
-        f"mPW2PLYP and mPW2PLYPD, which the Gaussian manual documents as analytic, "
-        f"are assumed; nothing is assumed for the others), "
-        f"MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic "
-        f"default ({TAU_ANALYTIC_DEFAULT_CM1:.0f} cm-1). ORCA releases before "
-        f"version 5 have no analytic Hessian for meta-GGA functionals and are "
-        f"assumed numerical "
-        f"({TAU_FINITE_DIFFERENCE_GRADIENT_CM1:.0f} cm-1); ORCA double-hybrid "
-        f"and VV10 (non-local) functionals are assumed numerical on any "
-        f"version, because the manuals document numerical frequencies for "
-        f"them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4(DQ), "
-        f"MP4(SDQ), QCISD, CCSD, CISD and CID, and ORCA MP2 (closed-shell DLPNO-MP2 included) and, from ORCA 6, "
-        f"the ``AUTOCI-`` CCSD, CCSD(T), MP2, MP3 and MP4 methods when the level of theory states no "
-        f"frozen core and no RI (otherwise nothing is assumed for them), resolve to finite "
-        f"differences of gradients "
-        f"({TAU_FINITE_DIFFERENCE_GRADIENT_CM1:.0f} cm-1). Gaussian CCSD(T), "
-        f"QCISD(T), MP4(SDTQ) (the bare MP4 keyword) and MP5, and ORCA CCSD, CCSD(T), "
-        f"their F12 variants (F12-MP2 included), every DLPNO coupled-cluster method, and open-shell DLPNO-MP2 and "
-        f"ROHF MP2 (read from the stated spin treatment or a UHF/ROHF prefix), which have no "
-        f"analytic gradient, resolve to finite differences of energies "
-        f"({TAU_FINITE_DIFFERENCE_ENERGY_CM1:.0f} cm-1), which is looser than "
-        f"the conservative row: a minimum at 50 to 80 cm-1 that was refused "
-        f"without a recorded method is now accepted with a warning, and a "
-        f"transition-state extra mode in that band is no longer flagged. Other "
-        f"DLPNO methods (DLPNO-CEPA and the like) assume nothing. The "
-        f"record stores the matching ``assumed_*`` basis so an assumption is "
-        f"never confusable with a recorded statement. An assumption never "
-        f"replaces a statement (a recorded finite difference of gradients on an ORCA ``NumFreq`` deck for a method "
-        f"with no analytic gradient is refined to finite differences of energies and "
-        f"``hessian_method_refined`` says so): a ``freq.hessian_method`` that is present but not "
-        f"recognised is kept at the conservative row rather than replaced by an "
-        f"assumption. "
-        f"Only where the software or the method family is not in that table, "
-        f"or the payload names no software, is tau "
-        f"{TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1 with ``protocol_not_recorded`` "
-        f"as the basis; that fallback is deliberately the *conservative* row, "
-        f"because assuming the better case would flag genuine quadrature noise "
-        f"as a real higher-order saddle. For a transition state tau never "
-        f"decides between blocking and warning — every blocking rule there is "
-        f"a contract about what the record says, not about magnitude — so "
-        f"the resolution changes how loudly a record is flagged and never "
-        f"whether it is accepted. For a declared minimum tau is the line "
-        f"between the warning and the refusal, and it is the same tau that is "
-        f"stored with the record."
+        f"Tau is taken from the method an attached output log reports, else the method the "
+        f"input echoed in that log requests, else the recorded ``freq.hessian_method`` or the "
+        f"method the calculation's input deck states, else the producing program's assumed "
+        f"default for the level of theory's method family, else "
+        f"{TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1 with ``protocol_not_recorded`` as the "
+        f"basis, which is the conservative row."
     ),
     rationale=(
-        "The Hessian noise floor is flat in omega-squared, not in omega, so "
-        "the uncertainty in a frequency diverges as omega goes to zero: at "
-        "300 cm-1 the sign is never in doubt, at 20 cm-1 it is indeterminate. "
-        "Where the crossover sits depends on how the second derivatives were "
-        "built, on what integration grid, and how tightly the geometry was "
-        "converged. The same -42 cm-1 is real negative curvature under an "
-        "analytic Hessian on a tight grid and indistinguishable from zero "
-        "under a numerical one on a default grid, so it cannot be classified "
-        "from the frequency list at all — only against the protocol that "
-        "produced it. A constant here would be a claim about physics that is "
-        "false."
+        "The Hessian noise floor is flat in omega-squared, so whether a small imaginary "
+        "frequency is real depends on how the Hessian was built."
     ),
 )
 
@@ -246,67 +249,21 @@ CHECK_TRANSITION_STATE_REACTION_COORDINATE = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional, and narrower than what it replaced. ADR 0008's worked "
-        "example was ``n_imag == 1``; ADR 0012 retired that, because "
-        "'exactly one negative eigenvalue' is a statement about the exact "
-        "Hessian at the exact stationary point on a smooth surface and a "
-        "deposit contains none of those. Two scientifically correct "
-        "calculations of the same saddle point can return ``n_imag == 1`` and "
-        "``n_imag == 3``, so a gate a depositor passes by switching to "
-        "``Int=UltraFine`` is not a gate on science — and its cheapest "
-        "workaround is deleting a line from the frequency list, which turns "
-        "visible ambiguity into invisible falsehood. What survives the "
-        "translation into a database row is a *contract*: no imaginary mode "
-        "at all means there is no reaction coordinate and the structure is "
-        "not a transition state; more than one with no designation means the "
-        "record cannot answer the question every transition-state-theory code "
-        "asks it; and an undeclared mode at least as stiff as the designated "
-        "one means the designation is an assertion the record does not "
-        "support. None of the three can be produced by a correct calculation "
-        "that has been honestly described."
-    ),
-    adr="0012, 0008",
     enforced_by=(
-        PythonCheck(
-            evaluate_transition_state_frequency,
-            note=(
-                "A transition state carries no ``stationary_point_kind`` "
-                "column — the entity *is* the claim — so the rule needs no "
-                "kind argument. Upload schemas call "
-                "``raise_for_blocking_findings`` from a ``model_validator``, "
-                "so the contradiction becomes a 422 before the route body "
-                "opens a submission. The designation is then persisted on "
-                "``calc_freq_result.reaction_coordinate_mode_index``, which "
-                "is what lets the read-time trust rubric cite this judgement "
-                "instead of re-deriving it."
-            ),
-        ),
+        PythonCheck(evaluate_transition_state_frequency),
         DesignPosition(
             where=(
                 "``_check_ts_reaction_coordinate_designated`` and "
                 "``_detect_transition_state_entry_hard_fail`` "
                 "(``backend/app/services/trust/rubrics.py``, "
-                "``backend/app/services/trust/evaluator.py``) ask at read time "
-                "whether the record carries the designation this blocking tier "
-                "required of it — a question about persisted state, not a "
-                "second opinion about physics. They cannot disagree with the "
-                "verdict above, which is the collapse ADR 0008 section 9 asked "
-                "for."
+                "``backend/app/services/trust/evaluator.py``) check at read time "
+                "that the record carries the reaction-coordinate designation."
             )
         ),
     ),
     escape_hatch=(
-        "Three, and they are the point of the rule. Deposit no frequency "
-        "evidence: ``n_imag=None`` produces no findings at all, because "
-        "absence is never contradiction. Or deposit the extra imaginary "
-        "modes honestly — designate the reaction coordinate and give each "
-        "other mode a disposition (``torsion``, ``rigid_body_residue``, "
-        "``intermolecular``, ``ring_pucker``, ``symmetry_breaking``, or an "
-        "explicit ``unassigned``) — and a genuine higher-order saddle is "
-        "accepted with a warning and a structural flag. Or, if the extra mode "
-        "really is the barrier, designate *it*. What has no door is refusing "
-        "to say which mode is the reaction coordinate."
+        "Deposit no frequency evidence, or designate the reaction coordinate and give each "
+        "other imaginary mode a disposition."
     ),
 )
 
@@ -320,43 +277,13 @@ CHECK_MINIMUM_ZERO_IMAGINARY_MODES = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional above the protocol's tolerance. A covalently bound "
-        "minimum whose own frequency evidence reports an imaginary mode at "
-        "or above tau is mislabelled: at that protocol the negative "
-        "curvature is real, so the correct response is to re-optimise or to "
-        "declare the entry as something else, and refusing the deposit "
-        "rejects no correct calculation. Below tau the protocol cannot tell "
-        "the sign of the curvature from zero, so refusing would reject "
-        "correct published calculations; that case is the warning declared "
-        "next, not a refusal."
-    ),
-    adr="0008, 0012",
     thresholds=(_TAU_THRESHOLD,),
     enforced_by=(
-        PythonCheck(
-            evaluate_species_entry_frequency,
-            note=(
-                "One imaginary mode and two-or-more are folded into a single "
-                "blocking message that names "
-                f"``{W_N_IMAG_HIGHER_ORDER_SADDLE}`` for the higher-order "
-                "case. The refusal stands when any deposited mode is at or "
-                "above tau, and when the magnitudes of the modes were not "
-                "deposited (a mode nobody measured is never assumed soft). "
-                "The same code also refuses a reaction-coordinate "
-                "designation on a minimum, because a minimum has no "
-                "reaction coordinate. "
-                "A stationary-point kind the module has not been taught "
-                "about produces no findings — adding an enum member must be a "
-                "deliberate decision, not a default."
-            ),
-        ),
+        PythonCheck(evaluate_species_entry_frequency),
     ),
     escape_hatch=(
-        "Declare ``species_entry_kind='vdw_complex'``, which records the same "
-        "mode with a warning instead, or deposit the structure through a "
-        "transition-state payload if the single imaginary mode is real. A "
-        "mode below tau needs no escape: it is accepted with a warning."
+        "Declare ``species_entry_kind='vdw_complex'``, or deposit the structure as a "
+        "transition state."
     ),
 )
 
@@ -369,42 +296,15 @@ CHECK_VDW_COMPLEX_IMAGINARY_MODE = ScientificCheck(
         W_N_IMAG_SUGGESTS_TS,
     ),
     asserts=(
-        "A van der Waals complex is formally a minimum, so an imaginary mode "
-        "on one is recorded and flagged rather than refused — unless the mode "
-        "is too stiff to be an intermolecular one, which suggests a genuine "
-        "reaction coordinate."
+        "An imaginary mode on a van der Waals complex is recorded with a warning rather than "
+        "refused, unless the mode is too stiff to be intermolecular."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "The carve-out is the scientific content. A van der Waals complex is "
-        "held together by intermolecular forces and its stretch, bends and "
-        "hindered internal rotations sit below roughly 50 cm-1 — the region "
-        "where numerical noise in a finite-difference or quadrature-grid "
-        "Hessian is comparable to the true curvature. A small imaginary mode "
-        "there is usually a grid artifact, so refusing it would force an "
-        "expensive re-run for a physically meaningless mode. This is what "
-        "earns ``vdw_complex`` a separate enum member: it is the only place "
-        "the two minimum kinds behave differently."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            evaluate_species_entry_frequency,
-            note=(
-                "Same entry point as the blocking minimum rule; the declared "
-                "kind decides the tier while the code names the finding. A "
-                f"mode at or above {TS_IMAGINARY_FREQUENCY_MIN_CM1:.0f} cm-1 "
-                f"additionally raises ``{W_N_IMAG_SUGGESTS_TS}``, because that "
-                "is far too stiff to be intermolecular."
-            ),
-        ),
+        PythonCheck(evaluate_species_entry_frequency),
     ),
-    escape_hatch=(
-        "This *is* the escape hatch for the blocking minimum rule. Its own "
-        "cost is that a genuinely mislabelled saddle point deposited as a van "
-        "der Waals complex is accepted with a warning."
-    ),
+    escape_hatch="None; the check only warns.",
 )
 
 CHECK_TRANSITION_STATE_EXTRA_IMAGINARY_MODES = ScientificCheck(
@@ -417,99 +317,22 @@ CHECK_TRANSITION_STATE_EXTRA_IMAGINARY_MODES = ScientificCheck(
         W_TS_EXTRA_IMAGINARY_MODES_NOT_ASSESSABLE,
     ),
     asserts=(
-        "A transition state's imaginary modes other than the reaction "
-        "coordinate, and every imaginary mode on a species entry declared a "
-        "minimum, are judged by magnitude against a tolerance read from the "
-        "protocol that produced them, not by counting them."
+        "An imaginary mode other than a transition state's reaction coordinate, or any "
+        "imaginary mode on a declared minimum, is judged by magnitude against the tolerance "
+        "of the protocol that produced it."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "The extra modes cannot be classified from the frequency list, so "
-        "refusing the deposit would assert a determination the deposit does "
-        "not contain the information to support — an expectation about "
-        "numerical quality wearing the costume of a definition. They can also "
-        "be simply correct: a harmonic model is inapplicable to a torsion, a "
-        "ring pucker or an intermolecular mode in a loose complex, and a "
-        "transition state can sit at a maximum of a torsional profile while "
-        "being a perfectly correct reactive bottleneck, in which case the "
-        "extra negative eigenvalue is not an artefact but exactly right. "
-        "Warning rather than blocking is also the only choice that preserves "
-        "evidence: a record carrying all three frequencies and the full "
-        "protocol can be reassessed under a better rule in five years, while "
-        "a refused deposit leaves nothing behind."
-    ),
-    adr="0012",
     thresholds=(_TAU_THRESHOLD,),
     enforced_by=(
-        PythonCheck(
-            evaluate_transition_state_frequency,
-            note=(
-                "Above tau the record is flagged as well as warned: the flag "
-                "is ADR 0012's answer to 'warnings get ignored', excluding "
-                "the record from default transition-state consumption without "
-                "creating the incentive to edit the frequency list that a hard "
-                "block creates. Below tau it is warned only. The flag and the "
-                "tau that decided it are persisted on ``calc_freq_result`` "
-                "rather than recomputed, so a later parser improvement cannot "
-                "silently re-label historical records."
-            ),
-        ),
-        PythonCheck(
-            evaluate_species_entry_frequency,
-            note=(
-                "The minimum case of the same judgement, added 2026-10-29. "
-                "When every imaginary mode of a declared minimum is below tau "
-                f"the record is accepted with "
-                f"``{W_MINIMUM_IMAGINARY_MODES_BELOW_TAU}``; at or above tau "
-                "the blocking minimum rule above still refuses it. The tau "
-                "that decided it is persisted on ``calc_freq_result`` "
-                "(``imaginary_mode_tau_cm1`` and its basis) with the "
-                "structural flag stored as false, meaning judged and not "
-                "flagged, rather than recomputed later. The read-time "
-                "imaginary-mode projections report beside the warning and "
-                "never gate it."
-            ),
-        ),
+        PythonCheck(evaluate_transition_state_frequency),
+        PythonCheck(evaluate_species_entry_frequency),
     ),
-    escape_hatch=(
-        "None is needed — the check never refuses. Its cost runs the other "
-        "way: a genuine higher-order saddle, a torsional maximum and a "
-        "valley-ridge inflection are all accepted, and only the structural "
-        "flag separates them from a clean first-order saddle for a consumer "
-        "who reads it."
-    ),
+    escape_hatch="None; the check never refuses.",
     divergence=(
-        "ADR 0012 recommends replacing the threshold with a determination — "
-        "projecting each imaginary eigenvector onto the six rigid-body vectors "
-        "(more than about 90 percent overlap means projection residue) and "
-        "onto dihedral-rotation vectors (more than about 70 percent means a "
-        "torsion) — and says those should be implemented *before* tau is "
-        "tuned, because a determination beats a threshold wherever one is "
-        "available. Tau shipped first, so that ordering was not followed; "
-        "the projections themselves now exist. They are computed at *read* "
-        "time from ``calc_hessian`` -- whose eigenvectors, mass-weighted by "
-        "the per-atom masses ``geometry_atom`` carries, are the displacement "
-        "vectors ADR 0012 wanted -- and nothing about them is stored, so no "
-        "schema change was involved and no historical record was re-decided. "
-        "See ``include=imaginary_mode_projections`` on the scientific "
-        "calculation read, and ADR 0013 as amended. The disposition on each "
-        "extra mode remains *declared by the depositor*; the determination "
-        "is reported beside it and a disagreement is surfaced as one, never "
-        "silently resolved. Under ADR 0008 a projection is an expectation "
-        "about a record, so it informs this check and does not gate it. Where "
-        "no Hessian is stored the projection reads 'not determinable', which "
-        "is not the same answer as 'no residue found' — and is not a shrug "
-        "either: that block carries this check's own stored judgement beside "
-        "the refusal, being the tau applied, the row of the protocol table it "
-        "came from, the recorded parameters that chose that row, the "
-        "structural flag, and every imaginary mode ranked by magnitude "
-        "against the tau. It reports the comparison and stops there. "
-        "Magnitude cannot separate a spurious mode from a real one that is "
-        "not the reaction coordinate — a transition state can sit at a "
-        "maximum of a torsional profile while being a perfectly correct "
-        "reactive bottleneck — so no mode in that block is labelled, and the "
-        "only assignment on it is the one the depositor declared."
+        "The disposition of each extra imaginary mode is declared by the depositor, and "
+        "magnitude alone cannot tell a spurious mode from a real one that is not the reaction "
+        "coordinate."
     ),
 )
 
@@ -523,55 +346,22 @@ CHECK_TRANSITION_STATE_SOFT_REACTION_COORDINATE = ScientificCheck(
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "ADR 0008's worked counter-example, and the sharpest statement of the "
-        "whole rule. A very soft imaginary mode is suspicious — often an "
-        "under-converged geometry or a coarse integration grid — but it can be "
-        "perfectly real, because flat barriers and variational transition "
-        "states genuinely produce them. Magnitude is therefore a quality "
-        "expectation, never a definition, and a check that could fire on a "
-        "correct novel result must not block."
-    ),
-    adr="0008, 0012",
     thresholds=(
         ConstantThreshold(
             name="TS_IMAGINARY_FREQUENCY_MIN_CM1",
             value=TS_IMAGINARY_FREQUENCY_MIN_CM1,
             unit="cm-1",
             rationale=(
-                "A starting point rather than a physical constant: reaction "
-                "coordinates for hydrogen transfers run to thousands of cm-1, "
-                "while genuinely flat barriers fall well under 100. Unlike "
-                "tau it really is fixed in code, because it is a statement "
-                "about chemistry — what a reaction coordinate looks like — "
-                "rather than about numerics. It is also the scale that "
-                "separates a van der Waals complex's soft intermolecular "
-                "modes from a real reaction coordinate, and is reused for "
-                "that judgement."
+                "Reaction coordinates for hydrogen transfers run to thousands of cm-1, while "
+                "genuinely flat barriers fall well under 100."
             ),
         ),
         _TAU_THRESHOLD,
     ),
     enforced_by=(
-        PythonCheck(
-            evaluate_transition_state_frequency,
-            note=(
-                "ADR 0012 changed what this fires *on* without changing what "
-                "it fires at. It used to read the single imaginary mode of a "
-                "record that had passed the ``n_imag == 1`` gate; it now reads "
-                "the designated reaction coordinate of a record that may carry "
-                "several. Both thresholds are declared above because both "
-                "reach the same message: the warning quotes the protocol's "
-                "tau alongside its own constant, so a reader who is told a "
-                "reaction coordinate is soft can see immediately whether that "
-                "calculation could resolve a small mode at all."
-            ),
-        ),
+        PythonCheck(evaluate_transition_state_frequency),
     ),
-    escape_hatch=(
-        "None is needed — the check never refuses. A referee should read the "
-        "threshold as a tunable reporting line, not a claim about physics."
-    ),
+    escape_hatch="None; the check never refuses.",
 )
 
 CHECK_FREQ_N_IMAG_AGREES_WITH_ITS_MODES = ScientificCheck(
@@ -585,61 +375,10 @@ CHECK_FREQ_N_IMAG_AGREES_WITH_ITS_MODES = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "A contract between two fields of one record, not an expectation "
-        "about a result — which is the narrow thing ADR 0008 reserves the "
-        "blocking tier for. Every other entry in this group judges chemistry "
-        "and had to argue that no correct calculation could produce the "
-        "record it refuses; this one does not need that argument, because it "
-        "makes no claim about the potential energy surface at all. It says "
-        "only that ``calc_freq_result.n_imag`` and the ``calc_freq_mode`` "
-        "rows beside it must answer the same question the same way. A deposit "
-        "that says three and shows one is accepted today, after which the "
-        "cheap summary and the evidence table disagree permanently and "
-        "neither reader is told the other exists — the summary-reading "
-        "consumer filters it as a higher-order saddle, the mode-reading "
-        "consumer sees a clean first-order one, and both are quoting the same "
-        "row. No re-run and no better parser can decide which was meant, "
-        "because the payload itself no longer knows."
-    ),
-    adr="0008, 0012",
     enforced_by=(
-        PythonCheck(
-            FreqResultPayload.validate_modes_consistency,
-            note=(
-                "**Absence is deliberately not disagreement.** The rule "
-                "engages only where a frequency list was deposited: "
-                "``modes = null`` with any ``n_imag`` is accepted, because an "
-                "incomplete record is still a true record and ADR 0012's read "
-                "surface already reports ``n_imag_at_or_above_tau = null`` "
-                "rather than ``0`` for exactly that state. An *empty* list is "
-                "a different claim — the depositor handing over a frequency "
-                "list with nothing imaginary in it — and is judged like any "
-                "other list, which is why ``n_imag = 3`` with ``modes = []`` "
-                "is refused while ``n_imag = 3`` with ``modes = null`` is not. "
-                "**Not also held in PostgreSQL, and that is a limit rather "
-                "than a choice.** The rule counts rows in ``calc_freq_mode`` "
-                "and compares the total against a column of "
-                "``calc_freq_result``, which is a cross-table aggregate: a "
-                "CHECK constraint may not contain a subquery, so no constraint "
-                "expresses it and only a deferred constraint trigger could. "
-                "That was not added, for the reason already written on "
-                "``calc_freq_result``'s tau-basis CHECK — a trigger does not "
-                "fire under ``session_replication_role = replica``, which is "
-                "what bulk loaders and restore paths run under, so it would be "
-                "absent from precisely the write paths that do not reach this "
-                "validator. A second guard that holds only where the first one "
-                "already holds is not depth."
-            ),
-        ),
+        PythonCheck(FreqResultPayload.validate_modes_consistency),
     ),
-    escape_hatch=(
-        "Omit ``modes``. A record that deposits only the scalar is "
-        "incomplete, warns nowhere and is refused nowhere — ADR 0012 asks for "
-        "the complete signed frequency list, and asking is as far as this "
-        "tier goes. What has no door is depositing both and letting them "
-        "contradict each other."
-    ),
+    escape_hatch="Omit ``modes``.",
 )
 
 CHECK_FREQ_LIST_WITHIN_GEOMETRY_DEGREES_OF_FREEDOM = ScientificCheck(
@@ -653,108 +392,14 @@ CHECK_FREQ_LIST_WITHIN_GEOMETRY_DEGREES_OF_FREEDOM = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional, and — unusually in this group — arithmetically so. "
-        "``3N`` is the dimension of the nuclear coordinate space, so it is the "
-        "total number of eigenvalues the mass-weighted Hessian of an "
-        "``N``-atom geometry has: not the vibrational count, which is "
-        "``3N - 6`` or ``3N - 5``, but every Cartesian degree of freedom "
-        "including the six translations and rotations ADR 0012 asks a record "
-        "to carry. A longer list is therefore not a short spectrum — it is "
-        "not a spectrum of that geometry at all, under any harmonic "
-        "treatment, integration grid, coordinate system or level of theory. "
-        "That is what separates it from the ``n_imag == 1`` gate ADR 0012 "
-        "retired: there, two scientifically correct calculations of one "
-        "structure legitimately returned different answers and the tier was "
-        "an expectation about numerical quality wearing the costume of a "
-        "definition. Here no protocol takes part, so no correct deposit is "
-        "refused. "
-        "The contrast with the *floor* is the argument, and the floor is "
-        "correctly a warning for precisely the reasons this is not. First, "
-        "the ambiguity a short list carries is one-sided: a partial-Hessian "
-        "job, a frozen-atom or ONIOM Hessian and a lumped ``pseudo`` "
-        "participant all *remove* modes and are honest records of what was "
-        "computed, TCKDB carries no field saying which of them a short list "
-        "is, and nothing whatsoever filters modes *in*. Second, ``modes = "
-        "null`` is accepted and must stay accepted, so the cheapest way past "
-        "a completeness *block* on the floor would be deleting the frequency "
-        "list — converting visible ambiguity into invisible falsehood, which "
-        "ADR 0012 §\"Why not refuse, when refusing is cheaper\" names as worse "
-        "than no rule. Neither reaches the ceiling. Deleting an over-long "
-        "list loses a spectrum the check has already found is not this "
-        "geometry's, which is the repair rather than the evasion; and "
-        "accepting it is the destructive option, because stored it reads as "
-        "this geometry's spectrum and a consumer recomputing a partition "
-        "function from the pair gets a number rather than an error. "
-        "No threshold is declared because there is none to declare: ``3N`` is "
-        "counted from the deposited geometry, not tuned."
-    ),
-    adr="0012",
     enforced_by=(
-        PythonCheck(
-            evaluate_frequency_list_completeness,
-            note=(
-                "Owns the arithmetic and knows no payload shapes; the "
-                "geometry each frequency list is measured against is resolved "
-                "by ``evaluate_deposited_frequency_list`` in the same module "
-                "— the calculation's own first input geometry where the "
-                "producer named one, and otherwise the enclosing conformer's "
-                "or transition state's reference geometry, which is the "
-                "fallback the persistence workflow itself applies for "
-                "``freq``. Written once so the payload shapes that call it "
-                "cannot drift into counting three different sets of atoms. "
-                "**The same function also reports the floor**, "
-                "``freq_list_incomplete_for_geometry``, at the warning tier "
-                "and with a structural flag; that finding is not this entry "
-                "because it is an expectation rather than a definition, for "
-                "the reasons set out above. It is registered under entry 22, "
-                "beside the linearity codes, which make the same kind of "
-                "claim about the same list. This entry is deliberately about "
-                "one of the two codes the function emits."
-            ),
-        ),
-        PythonCheck(
-            raise_for_blocking_findings,
-            note=(
-                "Where the refusal actually happens, and named because the "
-                "deciding module cannot do it. "
-                "``tckdb_schemas.frequency_completeness`` returns findings "
-                "and never raises, so the code reaches the 422 envelope only "
-                "through this shared raiser, which every published upload "
-                "request model calls from a ``model_validator`` before any "
-                "route body opens a submission. It reports whichever code its "
-                "blocking findings agreed on — a payload carrying two "
-                "different contradictions falls back to the generic code and "
-                "names both in the message, because naming either one would "
-                "tell the client the other is not there."
-            ),
-        ),
+        PythonCheck(evaluate_frequency_list_completeness),
+        PythonCheck(raise_for_blocking_findings),
     ),
-    escape_hatch=(
-        "**None, and that absence is the argument for blocking rather than a "
-        "gap in it.** Every other entry in this group needs a door because a "
-        "correct record can trip it: a genuine higher-order saddle is "
-        "deposited by designating its reaction coordinate, a van der Waals "
-        "complex by declaring ``molecule_kind``, a contradictory ``n_imag`` "
-        "by omitting ``modes``. There is no counterpart here because there is "
-        "nothing to let through — no calculation, honest or otherwise, "
-        "produces more modes than the geometry has degrees of freedom, so a "
-        "hatch would exist only to admit a record whose own two halves "
-        "disagree. What looks like a hatch and is not: omitting ``modes`` "
-        "still avoids the refusal, but it is not a door onto legitimate "
-        "chemistry the check would have refused — it deposits a different, "
-        "weaker record, and the thing it drops is a frequency list this check "
-        "has already determined does not belong to the geometry beside it. "
-        "The repair is to attach the calculation to the geometry it ran on, "
-        "or to deposit that geometry."
-    ),
+    escape_hatch="None.",
 )
 
 CHECK_RECORDED_HESSIAN_METHOD_AGREES_WITH_THE_INPUT_DECK = ScientificCheck(
-    # Own group, deliberately: the register numbers by reading order, entry numbers are
-    # identifiers (stored on ``deposit_warning.register_entry`` and cited from docs), and a
-    # new entry must take the next free number rather than shift existing ones. A group that
-    # sorts after every other unlisted group gets #50; "Stationary points" is its subject.
     group="Vibrational frequency provenance",
     sort_key=1,
     code=W_HESSIAN_METHOD_CONTRADICTS_INPUT_DECK,
@@ -766,69 +411,15 @@ CHECK_RECORDED_HESSIAN_METHOD_AGREES_WITH_THE_INPUT_DECK = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "A contract between two statements in one deposit, not an expectation "
-        "about a result, which is the narrow thing ADR 0008 reserves the "
-        "blocking tier for. Tau, the line between a noise-level imaginary mode "
-        "and a real one, is read from the Hessian method, and two statements of "
-        "it that differ give two different taus (50 against 80 for the two "
-        "numerical methods, 30 or less for analytic). Judging a mode against "
-        "either would be a guess, and the record would carry both statements "
-        "forever with nothing saying which was meant. The check makes no claim "
-        "about chemistry and refuses no calculation: it refuses a deposit that "
-        "cannot say what it did. Only a method the input deck (or the input an "
-        "output log echoes) states with an "
-        "explicit directive counts (Gaussian ``Freq=Numer`` or ``EnOnly``, ORCA "
-        "``NumFreq`` or ``AnFreq``); a deck with no such directive says nothing "
-        "and contradicts nothing, and a recorded value TCKDB cannot read is not "
-        "compared. One pair is not a contradiction: ORCA's ``NumFreq`` always differences "
-        "gradients, and for a method with no analytic gradient (coupled cluster, F12, "
-        "open-shell DLPNO-MP2, ROHF MP2) those gradients are themselves numerical, so a recorded "
-        "``finite_difference_gradient`` against such a deck is accepted, stored as "
-        "``finite_difference_energy`` and reported with the warning ``hessian_method_refined``; "
-        "a recorded ``analytic`` against ``NumFreq`` is still refused."
-    ),
-    adr="0012",
     enforced_by=(
-        PythonCheck(
-            check_recorded_method_agrees_with_deck,
-            note=(
-                "Runs on the bundle calculation payloads that carry an inline "
-                "``input`` artifact, or an inline ``output_log`` whose echoed input "
-                "states a method, with ``context.stated_in`` saying which "
-                "(``input`` or ``output_log``) and the message naming the log, never a deck, "
-                "when it was the log (computed-species, computed-reaction and "
-                "network bundles). The standalone calculation, conformer and "
-                "transition-state payloads have no ``artifacts`` field, and a "
-                "deck uploaded later through the artifact route is not seen at "
-                "validation; that case earns the warning "
-                "``hessian_method_disagrees_with_stored_tau_basis`` on the "
-                "calculation instead, and the stored tolerance is never "
-                "relabelled. The message and ``context`` carry only TCKDB's "
-                "method tokens (``analytic``, ``finite_difference_gradient``, "
-                "``finite_difference_energy``), never the recorded string or "
-                "deck text."
-            ),
-        ),
+        PythonCheck(check_recorded_method_agrees_with_deck),
     ),
-    escape_hatch=(
-        "Correct whichever of the two is wrong, or omit the recorded "
-        "``freq.hessian_method`` and let the deck (or the log) speak. A deposit that sends "
-        "only a deck or a log is never refused by this check; both are read before "
-        "the deposit is judged."
-    ),
+    escape_hatch="Correct whichever of the two is wrong, or omit the recorded ``freq.hessian_method``.",
 )
 
 # ---------------------------------------------------------------------------
 # Atom mapping across a reaction
 # ---------------------------------------------------------------------------
-
-_ATOM_MAP_DUAL_ENFORCEMENT = (
-    "Stated twice on purpose: once at the wire boundary, where the payload "
-    "already holds every XYZ block the rule needs so the refusal arrives as a "
-    "clean 422 before anything is written, and once as a database constraint, "
-    "where a second write path cannot get around it."
-)
 
 CHECK_ATOM_MAP_ELEMENT_CONSERVED = ScientificCheck(
     group="Atom mapping across a reaction",
@@ -840,38 +431,13 @@ CHECK_ATOM_MAP_ELEMENT_CONSERVED = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional. A map asserting that an element transmutes is a record "
-        "that cannot be what it says it is, not an unusual result."
-    ),
-    adr="0011, 0008",
     enforced_by=(
-        PythonCheck(wire_atom_map.validate_reaction_atom_map, note=_ATOM_MAP_DUAL_ENFORCEMENT),
+        PythonCheck(wire_atom_map.validate_reaction_atom_map),
         DatabaseConstraint(
             table="reaction_atom_map_pair",
             name="ck_reaction_atom_map_pair_element_matches",
             kind="check",
-            # Plain equality since ``c5a1f8e3d074``. It was
-            # ``upper(element) = upper(ts_element)``, because the two ends
-            # quote two geometries and nothing held them to one spelling of an
-            # element. ``ck_geometry_atom_element_canonical`` and the matching
-            # CHECK on each of this table's own element columns now do, so the
-            # case-blindness could only be a no-op.
-            #
-            # It stays a CHECK rather than collapsing into the foreign keys,
-            # which would enforce the same rule by leaving an element change
-            # unrepresentable. A foreign key is a system trigger and lapses
-            # under ``session_replication_role = replica``; a CHECK does not.
-            # That is also what keeps this refusal *named*: the foreign key
-            # fires for "that geometry has no such atom" as well, so it could
-            # carry neither code unambiguously.
-            definition="element = ts_element",
-            # Deliberately the *same* code the wire check raises. The two
-            # sites enforce one claim, so a client that learned to handle
-            # ``atom_map_element_not_conserved`` from a 422 handles it
-            # identically when a second write path reaches the database
-            # first; only the status differs, and the status is what says
-            # whether the payload was rejected before or after resolution.
+                        definition="element = ts_element",
             rejection_code=wire_atom_map.W_ATOM_MAP_ELEMENT_NOT_CONSERVED,
             rejection_detail=(
                 "An atom map pairs two atoms of different elements. An atom "
@@ -879,22 +445,7 @@ CHECK_ATOM_MAP_ELEMENT_CONSERVED = ScientificCheck(
             ),
         ),
     ),
-    escape_hatch=(
-        "Case is not load-bearing, and no longer needs a special provision to "
-        "stop it becoming so. The comparison used to be case-insensitive on "
-        "both sides, because the two ends quote two different geometries and "
-        "nothing guaranteed they spelled an element the same way — carbon "
-        "becoming nitrogen is a contradiction, while ``Cl`` becoming ``CL`` "
-        "is one program shouting where another did not, and refusing the "
-        "second would have refused correct chemistry. ``b4e7c1d20f83`` "
-        "canonicalised the symbol on the way into ``geometry_atom.element`` "
-        "and ``c5a1f8e3d074`` made that a CHECK, so one element now has one "
-        "spelling in every state the database can be in and both the "
-        "constraint and the service compare the stored values directly. "
-        "Isotope mass number is deliberately *not* carried across the same "
-        "way, because a NULL disables a MATCH SIMPLE foreign key; isotope "
-        "consistency is checked in the service layer instead."
-    ),
+    escape_hatch="None.",
 )
 
 CHECK_ATOM_MAP_IS_A_BIJECTION = ScientificCheck(
@@ -907,13 +458,8 @@ CHECK_ATOM_MAP_IS_A_BIJECTION = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional. A map is a bijection or it is not a map; an atom "
-        "claimed twice describes no mechanism at all."
-    ),
-    adr="0011, 0008",
     enforced_by=(
-        PythonCheck(wire_atom_map.validate_reaction_atom_map, note=_ATOM_MAP_DUAL_ENFORCEMENT),
+        PythonCheck(wire_atom_map.validate_reaction_atom_map),
         DatabaseConstraint(
             table="reaction_atom_map_pair",
             name="uq_reaction_atom_map_pair_ts_atom_index",
@@ -937,13 +483,7 @@ CHECK_ATOM_MAP_IS_A_BIJECTION = ScientificCheck(
             ),
         ),
     ),
-    escape_hatch=(
-        "Per leg, not globally: the reactant and product legs each claim the "
-        "whole saddle point, which is the point of storing two maps both "
-        "pointing at it. A ``side`` column exists on the pair row purely so "
-        "this can be a unique constraint, because SQL cannot dereference the "
-        "participant to find its role."
-    ),
+    escape_hatch="None.",
 )
 
 CHECK_ATOM_MAP_INDICES_ARE_GEOMETRY_RELATIVE = ScientificCheck(
@@ -955,25 +495,13 @@ CHECK_ATOM_MAP_INDICES_ARE_GEOMETRY_RELATIVE = ScientificCheck(
         wire_atom_map.W_ATOM_MAP_WITHOUT_TRANSITION_STATE,
     ),
     asserts=(
-        "Every atom index in a map is counted against a named geometry that "
-        "the participant actually owns, and names an atom that geometry "
-        "actually has; and a map belongs to a reaction that has a saddle "
-        "point and names only participants that reaction declares."
+        "Every atom index in a map names an atom of a geometry the participant owns, and a "
+        "map names only participants of a reaction that has a saddle point."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional, and it is where ADR 0011's central choice is cashed "
-        "out. Atom indices are not a property of a species — "
-        "``geometry_atom.atom_index`` is a property of a *geometry* — so "
-        "'reactant atom 3' is meaningless until the geometry being counted is "
-        "named. An index counted against the wrong geometry silently means "
-        "the wrong atom, which is the failure mode geometry-relative indexing "
-        "was chosen to make impossible."
-    ),
-    adr="0011, 0008",
     enforced_by=(
-        PythonCheck(wire_atom_map.validate_reaction_atom_map, note=_ATOM_MAP_DUAL_ENFORCEMENT),
+        PythonCheck(wire_atom_map.validate_reaction_atom_map),
         DatabaseConstraint(
             table="reaction_atom_map_pair",
             name="fk_reaction_atom_map_pair_geometry_id_geometry_atom",
@@ -1002,16 +530,7 @@ CHECK_ATOM_MAP_INDICES_ARE_GEOMETRY_RELATIVE = ScientificCheck(
             ),
         ),
     ),
-    escape_hatch=(
-        "None, and the cost is stated in ADR 0011: the map is welded to the "
-        "geometries it names, so depositing a second conformer or "
-        "re-optimising at another level of theory does not carry it across. "
-        "Canonical-order-relative indexing would be portable, and was "
-        "rejected because its failure mode is a map that looks fine and "
-        "refers to a different atom order than the depositor intended. "
-        "Portability can be added later as a derived view; correctness cannot "
-        "be retrofitted onto records nobody can verify."
-    ),
+    escape_hatch="None.",
 )
 
 CHECK_ATOM_MAP_ACCOUNTS_FOR_EVERY_ATOM = ScientificCheck(
@@ -1025,31 +544,12 @@ CHECK_ATOM_MAP_ACCOUNTS_FOR_EVERY_ATOM = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional, but only under a precondition that has to be checked "
-        "first. A reactant atom unaccounted for in the products is a "
-        "contradiction *when no species is missing*. When the declared "
-        "reaction is not atom-balanced a species genuinely is missing, and "
-        "the same discrepancy is incompleteness rather than contradiction — "
-        "so the rule is gated on the map being complete over every "
-        "participant and on the reaction balancing, and warns instead "
-        "otherwise."
-    ),
-    adr="0011, 0008",
     enforced_by=(
-        PythonCheck(
-            wire_atom_map.validate_reaction_atom_map,
-            note=(
-                "Wire boundary only. This one has no database counterpart: it "
-                "is a statement about a whole map rather than about one pair "
-                "row, and a per-row constraint cannot see it."
-            ),
-        ),
+        PythonCheck(wire_atom_map.validate_reaction_atom_map),
     ),
     escape_hatch=(
-        "Leave the map incomplete, or deposit an unbalanced reaction — either "
-        "drops the rule to the warning tier by design rather than by "
-        "accident."
+        "Leave the map incomplete, or deposit an unbalanced reaction, which drops the rule to "
+        "a warning."
     ),
 )
 
@@ -1058,37 +558,13 @@ CHECK_ATOM_MAP_PROVENANCE_IS_DECLARED = ScientificCheck(
     sort_key=8,
     code=wire_atom_map.W_ATOM_MAP_INFERRED_REQUIRES_NOTE,
     asserts=(
-        "An atom map records whether a human asserted it or an algorithm "
-        "produced it, an inferred map names the algorithm, and neither "
-        "attribution can be relabelled afterwards."
+        "An atom map records whether a human asserted it or an algorithm produced it, an "
+        "inferred map names the algorithm, and neither attribution can be changed afterwards."
     ),
     tier=CheckTier.structural,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Not a runtime check but a shape. ADR 0011 permits inference only as "
-        "a labelled and separable thing, because an atom map is a scientific "
-        "claim about a mechanism and picking one by algorithm and storing it "
-        "unlabelled would manufacture provenance — the same failure ADR 0009 "
-        "identified when a network-wide energy-transfer value was duplicated "
-        "across wells. The immutability trigger closes the laundering path a "
-        "check constraint cannot see: ``UPDATE reaction_atom_map SET "
-        "source='declared', note=NULL`` satisfies both existing constraints, "
-        "and a CHECK cannot read ``OLD``."
-    ),
-    adr="0011",
     enforced_by=(
-        PythonCheck(
-            wire_atom_map.ReactionAtomMapIn.validate_inferred_names_its_algorithm,
-            note=(
-                "The wire half of the rule, and it was missing from this entry "
-                "until the codes were audited: the register listed only the two "
-                "schema objects, so it read as enforced by the database alone "
-                "when in fact an inferred map with no note is refused at the "
-                "payload boundary first. Only the note half is stated here — "
-                "the immutability of ``source`` is a statement about an UPDATE, "
-                "which no payload validator can see."
-            ),
-        ),
+        PythonCheck(wire_atom_map.ReactionAtomMapIn.validate_inferred_names_its_algorithm),
         DatabaseConstraint(
             table="reaction_atom_map",
             name="ck_reaction_atom_map_inferred_requires_note",
@@ -1107,12 +583,8 @@ CHECK_ATOM_MAP_PROVENANCE_IS_DECLARED = ScientificCheck(
         ),
     ),
     escape_hatch=(
-        "``note`` and ``equivalent_map_count`` stay mutable on purpose, so a "
-        "depositor can correct a description or record newly counted "
-        "symmetry-equivalent maps without touching the attribution. Symmetry "
-        "means a valid map is often not unique; ADR 0011 declines to "
-        "canonicalise among equivalent maps and leaves reaction-path "
-        "degeneracy to a later decision."
+        "Edit the mutable ``note`` and ``equivalent_map_count`` fields, which do not touch "
+        "the attribution."
     ),
 )
 
@@ -1121,13 +593,7 @@ CHECK_ATOM_MAP_PROVENANCE_IS_DECLARED = ScientificCheck(
 # ---------------------------------------------------------------------------
 
 #: 409 codes for the PDep constraints. These are refusal codes, not
-#: :mod:`app.services.provenance_warnings` tokens, and the distinction is
-#: load-bearing: ``network_wide_energy_transfer_scope`` is the *warning*
-#: that says a network-wide <dE>down was declared, which is accepted
-#: science. The code below is the opposite -- a row whose ``scope`` and
-#: whose columns contradict each other, which is not a deposit anyone
-#: meant to make. Reusing the warning token for it would tell a client
-#: that an accepted upload and a refused one were the same event.
+#: :mod:`app.services.provenance_warnings` tokens.
 R_ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE = "energy_transfer_scope_columns_disagree"
 R_NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE = (
     "network_solve_reported_requires_literature"
@@ -1138,24 +604,11 @@ CHECK_NETWORK_SOLVE_KIND_EVIDENCE = ScientificCheck(
     sort_key=1,
     code=W_REPORTED_NETWORK_SOLVE,
     asserts=(
-        "A set of phenomenological k(T,P) declares whether this database holds "
-        "the master-equation derivation behind it; a ``computed`` solve must "
-        "actually carry master-equation evidence, and a ``reported`` one must "
-        "cite the publication it was transcribed from."
+        "A phenomenological k(T,P) declares whether it was computed or reported: a computed "
+        "solve carries master-equation evidence and a reported one cites its publication."
     ),
     tier=CheckTier.structural,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "The blocking half is definitional: a computed solve with *zero* state "
-        "energies contradicts its own kind, and a reported solve with no "
-        "literature would assert rates carrying neither a derivation nor a "
-        "source. The accepting half is why the token exists at all — published "
-        "PLOG and Chebyshev fits are correct, common, citable science, so the "
-        "coverage rules that are right for a solve run here could fire on a "
-        "correct result and must not block. They warn instead, on every read "
-        "path that reaches a rate."
-    ),
-    adr="0010, 0008",
     enforced_by=(
         DatabaseConstraint(
             table="network_solve",
@@ -1182,28 +635,11 @@ CHECK_NETWORK_SOLVE_KIND_EVIDENCE = ScientificCheck(
             ),
         ),
     ),
-    escape_hatch=(
-        "Declare ``kind='reported'`` and cite the literature. That relaxes the "
-        "state-energy, channel-barrier and energy-transfer coverage rules a "
-        "computed solve is held to, which is what makes a paper's "
-        "supplementary table depositable at all — before the token existed "
-        "such rates could not be deposited, so they went into somebody's "
-        "private mechanism file, uncited and unversioned."
-    ),
+    escape_hatch="Declare ``kind='reported'`` and cite the literature.",
     divergence=(
-        "Existence, not coverage — and the trigger must not be read as the "
-        "whole contract. The database guarantees a computed solve carries "
-        "nonzero evidence of each applicable class; the three coverage rules "
-        "(one energy per state, one energy-transfer model per (well, collider) "
-        "pair or a network-wide declaration, one barrier per saddle-point "
-        "path) remain properties of the single wired upload path. A computed "
-        "solve with four energies out of five passes the database and fails "
-        "the validator. ADR 0010's amendment states this deliberately: a "
-        "computed solve with *zero* energies is a contradiction and may block, "
-        "while an incomplete one is a true record to be graded by the trust "
-        "and reproducibility layers. Separately, ``kind`` cannot surface in "
-        "CHEMKIN export, which has no provenance field; a tripwire test guards "
-        "the moment network kinetics first reach mechanism output."
+        "The database guarantees a computed solve carries master-equation evidence, but "
+        "state-energy, energy-transfer and barrier coverage are checked only by the upload "
+        "validator."
     ),
 )
 
@@ -1218,18 +654,6 @@ CHECK_ENERGY_TRANSFER_SCOPE = ScientificCheck(
     ),
     tier=CheckTier.structural,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "A network-wide ⟨ΔE⟩down is correct, common, published science — "
-        "Arkane, RMG and MESS inputs routinely specify a single "
-        "``SingleExponentialDown`` applied network-wide — so a check demanding "
-        "one entry per (well x collider) pair could fire on a correct result "
-        "and must not block. It is an expectation about *resolution*, not a "
-        "definition. What stays definitional still blocks: a ``per_well`` "
-        "entry naming no well contradicts itself, a ``network_wide`` entry "
-        "naming one contradicts itself, and a payload mixing the two is "
-        "genuinely ambiguous."
-    ),
-    adr="0009, 0008",
     enforced_by=(
         DatabaseConstraint(
             table="network_solve_energy_transfer",
@@ -1250,30 +674,14 @@ CHECK_ENERGY_TRANSFER_SCOPE = ScientificCheck(
             ),
         ),
     ),
-    escape_hatch=(
-        "Declare ``scope='network_wide'``. The physics behind the old per-well "
-        "rule was never in dispute — ⟨ΔE⟩down depends on the density of states "
-        "of the excited well and on the collider's ability to accept internal "
-        "energy, so argon and helium do not relax the same well identically. "
-        "The rule was wrong in practice because it confused what the quantity "
-        "*is* with what a calculation *determined*: the only way to satisfy it "
-        "was to paste one number once per well, and the repository's own "
-        "Arkane ingester did exactly that. Those rows are indistinguishable "
-        "from independently determined values — a provenance loss manufactured "
-        "by the validation itself, worse than the gap it closed, because an "
-        "absent value is honest while a duplicated one is a false positive "
-        "every consumer will faithfully propagate."
-    ),
+    escape_hatch="Declare ``scope='network_wide'``.",
 )
 
 # ---------------------------------------------------------------------------
 # Statistical mechanics
 # ---------------------------------------------------------------------------
 
-#: The 409 code for the statmech subject constraint. This entry was the
-#: register's own worked example of the gap #66 closes: it was the one
-#: check declared with no code and no channel *solely* because its claim
-#: was held by PostgreSQL, where nothing could carry a code to a client.
+#: The 409 code for the statmech subject constraint.
 R_STATMECH_SUBJECT_NOT_EXACTLY_ONE = "statmech_subject_not_exactly_one"
 
 CHECK_STATMECH_HAS_EXACTLY_ONE_SUBJECT = ScientificCheck(
@@ -1286,17 +694,6 @@ CHECK_STATMECH_HAS_EXACTLY_ONE_SUBJECT = ScientificCheck(
     ),
     tier=CheckTier.structural,
     channel=CodeChannel.database_constraint,
-    tier_rationale=(
-        "A modelling position rather than an arithmetic bound. Canonical "
-        "transition state theory needs the saddle point's own partition "
-        "function, so a transition state has to be a first-class subject of a "
-        "statmech row. The alternative — encoding a transition state as a "
-        "pseudo-species — would make every partition function's subject "
-        "ambiguous and would put saddle points into a kind reserved for lumped "
-        "and phenomenological constructs that the conservation laws "
-        "deliberately exempt."
-    ),
-    adr="0008",
     emitted=True,
     enforced_by=(
         DatabaseConstraint(
@@ -1324,70 +721,16 @@ CHECK_STORED_ARTIFACT_BYTES_MATCH_THEIR_DIGEST = ScientificCheck(
     sort_key=1,
     code="artifact_integrity_failed",
     asserts=(
-        "The bytes TCKDB serves for a stored artifact are the bytes it "
-        "stored, and a record whose evidence is known not to be is labelled "
-        "as such at read time rather than graded as if it were intact."
+        "The bytes TCKDB serves for a stored artifact are the bytes it stored, and a record "
+        "whose evidence is known not to be is labelled at read time."
     ),
     tier=CheckTier.label,
     channel=CodeChannel.trust_label,
-    tier_rationale=(
-        "It cannot block, because the fact does not exist at upload: the "
-        "artifact hashed correctly when it was accepted, and the break "
-        "happened afterwards, in TCKDB's own custody. It cannot be a warning "
-        "either, because a warning annotates the payload for whoever "
-        "deposited it, while the party who needs to know here is every "
-        "future reader of a record the depositor got right. So the "
-        "consequence is a read-time label. It is a *hard* fail rather than "
-        "an advisory one because the alternative is to keep publishing an "
-        "evidence-completeness score computed over bytes TCKDB cannot "
-        "produce — and note what this reason does not say: unlike every "
-        "other hard fail, it does not claim the record is wrong, only that "
-        "the evidence behind it can no longer be shown. The label fires on "
-        "recorded detections only, so its absence is never a verification "
-        "claim; an artifact nobody has read has been checked by nothing."
-    ),
-    adr="0014, 0004, 0002",
     emitted=True,
     enforced_by=(
-        PythonCheck(
-            load_artifact_bytes,
-            note=(
-                "Recomputes SHA-256 over every retrieval and compares it "
-                "against the content-addressed key, in constant time. This "
-                "is the detection; it is reached by the approved-byte "
-                "download, the ESS-parameter backfill, archive streaming, "
-                "the reproducibility rubric's re-read of a graded output "
-                "log, and the operator verification pass, and by nothing "
-                "else — an object none of those touch is never checked."
-            ),
-        ),
-        PythonCheck(
-            record_integrity_observation,
-            note=(
-                "Turns a detection into an append-only "
-                "``artifact_integrity_event`` row, in its own transaction so "
-                "the record survives the request that discovered it. Carries "
-                "expected-versus-observed digest and size plus the store's "
-                "own ``LastModified`` / ``ETag`` / ``ContentLength``, which "
-                "is what lets an operator separate 'the object was modified "
-                "after write' from 'we never stored what we said we did' "
-                "from 'the store returned wrong bytes on this read'."
-            ),
-        ),
-        PythonCheck(
-            detect_calculation_hard_fail,
-            note=(
-                "Applies the label. Any calculation with a recorded break on "
-                "any of its artifacts hard-fails, ahead of the "
-                "geometry-validation verdict, and the existing "
-                "``source_calculation_hard_failed_for_required_role`` "
-                "propagates that to every product naming the calculation as "
-                "a required source. Reads database rows only — the trust "
-                "rubric's ``artifacts_present`` deliberately does not verify "
-                "bytes, so that a storage outage can never be reported as a "
-                "depositor who failed to upload a log."
-            ),
-        ),
+        PythonCheck(load_artifact_bytes),
+        PythonCheck(record_integrity_observation),
+        PythonCheck(detect_calculation_hard_fail),
         DatabaseConstraint(
             table="artifact_integrity_event",
             name="ck_artifact_integrity_event_observed_digest_present_iff_read",
@@ -1405,17 +748,8 @@ CHECK_STORED_ARTIFACT_BYTES_MATCH_THEIR_DIGEST = ScientificCheck(
         ),
     ),
     escape_hatch=(
-        "Restore the object. There is no legitimate deposit this refuses — "
-        "it refuses nothing — but a label that could never be cleared would "
-        "be a trap, so the door is a later observation rather than an "
-        "edit: the corrupt object is never deleted or overwritten by "
-        "TCKDB, and re-uploading the original bytes under the same digest "
-        "lets the verification pass record a ``verified`` observation that "
-        "supersedes the break. A check constraint requires that row to "
-        "carry a digest matching the key, so the hard fail is cleared by "
-        "bytes that actually hash correctly and never by an operator "
-        "asserting that they do. The break row stays as the account of "
-        "what happened."
+        "Restore the object, or re-upload the original bytes under the same digest so a later "
+        "verification supersedes the break."
     ),
 )
 
@@ -1429,26 +763,11 @@ CHECK_REPRODUCIBILITY_IS_ITS_OWN_JUDGEMENT = ScientificCheck(
     sort_key=1,
     code=None,
     asserts=(
-        "Whether a record's preserved evidence is sufficient to understand, "
-        "audit or repeat it is assessed separately from how far its evidence "
-        "is trusted and from whether a curator approved it, and the three may "
-        "disagree."
+        "Whether a record's preserved evidence is sufficient to understand, audit or repeat "
+        "it is assessed separately from its trust and from curator approval."
     ),
     tier=CheckTier.structural,
     channel=CodeChannel.none,
-    tier_rationale=(
-        "Not a check that fires but a position about what may never be "
-        "collapsed into a single verdict. Reproducibility is graded under "
-        "append-only, rubric-versioned assessments rather than as a field on a "
-        "scientific row or an alias for review status, so a rubric can be "
-        "revised without rewriting history and an old judgement stays "
-        "interpretable. This is the same reasoning that made ADR 0005 record "
-        "execution environments rather than grade them, and it is what lets "
-        "the warning tiers elsewhere in this register be defensible: an "
-        "incomplete record is accepted precisely because a separate layer "
-        "exists to say how incomplete it is."
-    ),
-    adr="0002, 0005",
     emitted=False,
     enforced_by=(
         DesignPosition(
@@ -1463,15 +782,791 @@ CHECK_REPRODUCIBILITY_IS_ITS_OWN_JUDGEMENT = ScientificCheck(
     escape_hatch=None,
 )
 
+# ---------------------------------------------------------------------------
+# Stationary points (declared here because it imports the thermo and statmech modules)
+# ---------------------------------------------------------------------------
+
+CHECK_ENERGY_SOURCE_TYPE = ScientificCheck(
+    group="Stationary points",
+    sort_key=13,
+    code=(
+        transition_state_validation.E_TS_ENERGY_ORDERING_SOURCE_TYPE_MISMATCH,
+        network_energy_sources.W_NETWORK_ENERGY_SOURCE_TYPE_MISMATCH,
+        W_THERMO_SOURCE_ROLE_TYPE_MISMATCH,
+        statmech_resolution.W_STATMECH_SOURCE_ROLE_TYPE_MISMATCH,
+    ),
+    asserts=(
+        "A calculation cited as the source of a stated energy is of a type that carries that "
+        "kind of energy."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(transition_state_validation._assert_energy_sources_are_comparable),
+        PythonCheck(network_energy_sources.assert_network_energy_source_type),
+        PythonCheck(network_energy_sources.assert_network_source_role_type),
+        PythonCheck(assert_thermo_role_matches_calculation_type),
+        PythonCheck(statmech_resolution.assert_statmech_role_compatible),
+    ),
+    escape_hatch="Cite a calculation of a type that carries the energy.",
+)
+
+# ---------------------------------------------------------------------------
+# Bath gas of a rate
+# ---------------------------------------------------------------------------
+
+CHECK_KINETICS_BATH_GAS_IS_A_COMPOSITION = ScientificCheck(
+    group="Bath gas of a rate",
+    sort_key=1,
+    code=(
+        W_KINETICS_BATH_GAS_MOLE_FRACTION_SUM,
+        W_KINETICS_BATH_GAS_DUPLICATE_SPECIES,
+        W_KINETICS_BATH_GAS_AT_HIGH_PRESSURE_LIMIT,
+    ),
+    asserts=(
+        "A bath gas a rate or a network solve states is a composition: its mole fractions sum to one, "
+        "and for a rate each species appears once and no bath gas is given at the high-pressure limit, "
+        "where there is no collider."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(check_kinetics_bath_gas),
+        PythonCheck(check_bath_gas_mole_fraction_sum),
+    ),
+    escape_hatch=(
+        "Omit the bath gas (it then reads as not stated), merge repeated components into one with "
+        "their total mole fraction, or state the pressure context the rate was obtained in."
+    ),
+    thresholds=(
+        ConstantThreshold(
+            name="bath_gas_mole_fraction_sum_tolerance",
+            value=BATH_GAS_SUM_TOLERANCE,
+            unit="absolute, on the sum",
+            rationale=(
+                "Fractions are stated, not measured, so a sum off by more than rounding means a "
+                "component is missing."
+            ),
+        ),
+    ),
+)
+
+# ---------------------------------------------------------------------------
+# Network composition and sources
+# ---------------------------------------------------------------------------
+
+CHECK_NETWORK_CHANNEL_KIND_FOLLOWS_ITS_STATES = ScientificCheck(
+    group="Network composition and sources",
+    sort_key=1,
+    code=W_NETWORK_CHANNEL_KIND_MISMATCH,
+    asserts=(
+        "The kind of a network channel (isomerization, association, dissociation, exchange) is the "
+        "one its source and sink states imply, so a stated kind that disagrees is refused."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(derive_channel_kind),
+        PythonCheck(NetworkPDepUploadRequest.validate_channel_kind_from_states),
+    ),
+    escape_hatch="Omit the kind and it is derived from the states.",
+)
+
+CHECK_NETWORK_STATES_ARE_DISTINCT_COMPOSITIONS = ScientificCheck(
+    group="Network composition and sources",
+    sort_key=2,
+    code=(
+        network_pdep.W_NETWORK_STATE_DUPLICATE_COMPOSITION,
+        network_pdep.W_NETWORK_STATE_DUPLICATE_PARTICIPANT,
+    ),
+    asserts=(
+        "A network state is the multiset of its participants' species entries, a state lists a "
+        "species entry once (with a stoichiometry), and a network holds one state per composition."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(network_pdep.refuse_duplicate_state_compositions),
+    ),
+    escape_hatch=(
+        "Declare each state once, or make two states differ by stereo marks, a stereo label or a "
+        "geometry on the species so they resolve to different entries."
+    ),
+)
+
+# ---------------------------------------------------------------------------
+# Levels and geometries of linked calculations
+# ---------------------------------------------------------------------------
+
+CHECK_DECLARED_ENERGY_LEVEL_IS_HONEST = ScientificCheck(
+    group="Levels and geometries of linked calculations",
+    sort_key=1,
+    code=(
+        calculation_levels.W_THERMO_ENERGY_LEVEL_CONTRADICTION,
+        calculation_levels.W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
+        calculation_levels.W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
+        calculation_levels.W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
+        calculation_levels.W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
+        calculation_levels.W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+        calculation_levels.W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+    ),
+    asserts=(
+        "One record has one energy level, and the declared level matches the level of the "
+        "energies linked to it."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(calculation_levels.assert_role_consistency),
+        PythonCheck(calculation_levels.assert_kinetics_energy_level_consistency),
+    ),
+    escape_hatch=(
+        "Omit the declaration (the level is then derived from the links at read time), link every "
+        "energy at one level, or declare the level the linked calculations ran at."
+    ),
+)
+
+CHECK_ENERGIES_AND_OPTIMISATIONS_PAIR_ONE_TO_ONE_BY_GEOMETRY = ScientificCheck(
+    group="Levels and geometries of linked calculations",
+    sort_key=2,
+    code=(
+        calculation_levels.W_THERMO_SP_GEOMETRY_MISMATCH,
+        calculation_levels.W_STATMECH_SP_GEOMETRY_MISMATCH,
+        calculation_levels.W_THERMO_ROLE_DUPLICATE,
+        calculation_levels.W_STATMECH_ROLE_DUPLICATE,
+        calculation_levels.W_THERMO_ENERGY_SP_AND_COMPOSITE_LINKED,
+        calculation_levels.W_STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED,
+        calculation_levels.W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+        calculation_levels.W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+        W_SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH,
+        W_SCF_STABILITY_SOURCE_CONFORMER_UNANCHORED,
+    ),
+    asserts=(
+        "Energy calculations and optimisations pair one-to-one by geometry: each energy sits on a linked "
+        "optimisation's geometry, each optimisation has one energy, and an SCF stability source is on the "
+        "verdict's conformer."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(calculation_levels.assert_role_consistency),
+        PythonCheck(scf_source_geometry_error),
+        PythonCheck(scf_source_unanchored_error),
+    ),
+    escape_hatch="Link the optimisation whose geometry the energy was computed at, one energy per optimisation.",
+)
+
+CHECK_CALCULATION_GEOMETRY_STATEMENTS_AGREE = ScientificCheck(
+    group="Levels and geometries of linked calculations",
+    sort_key=3,
+    code=(
+        W_CALCULATION_GEOMETRY_CONFORMER_MISMATCH,
+        calculation_resolution.W_CALCULATION_INPUT_GEOMETRY_MISMATCH,
+        W_TRANSITION_STATE_CALCULATION_SPECIES_GEOMETRY,
+    ),
+    asserts=(
+        "A calculation names one conformer and one input geometry: its conformer key and "
+        "geometry key agree, and a transition-state calculation does not run on a species "
+        "minimum's geometry."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(assert_calculation_geometry_matches_conformer),
+        PythonCheck(calculation_resolution.attach_calculation_input_geometries),
+        PythonCheck(assert_transition_state_calculations_unanchored),
+    ),
+    escape_hatch="State one conformer, or omit the redundant key; list the geometry the calculation ran on.",
+)
+
+# ---------------------------------------------------------------------------
+# Composite and single-point arithmetic
+# ---------------------------------------------------------------------------
+
+CHECK_COMPOSITE_STATED_NUMBERS_AGREE = ScientificCheck(
+    group="Composite and single-point arithmetic",
+    sort_key=1,
+    code=(COMPOSITE_E0_INCONSISTENT, COMPOSITE_TERMS_DO_NOT_SUM, COMPOSITE_TOTAL_MISMATCH),
+    asserts="The numbers a composite energy states agree with each other and with its recipe.",
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(assert_composite_result_arithmetic),
+        PythonCheck(assert_composite_total_recomputes),
+    ),
+    escape_hatch="Send the values the program printed, or omit the number you did not read.",
+    thresholds=(
+        ConstantThreshold(
+            name="composite_arithmetic_tolerance",
+            value=COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE,
+            unit="hartree (floor; 5e-7 per rounded quantity above two)",
+            rationale=(
+                "An equation among n numbers printed to six decimals can differ by n half-units of "
+                "the last place without anything being wrong."
+            ),
+        ),
+        ConstantThreshold(
+            name="composite_total_recomputation_tolerance",
+            value=COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE,
+            unit="hartree (floor; 5e-7 times 1 + the summed sensitivity weights)",
+            rationale=(
+                "The tolerance scales with how strongly each stored input is weighted in the "
+                "recomputed total, so inputs printed to six decimals stay inside it."
+            ),
+        ),
+    ),
+)
+
+CHECK_COMPOSITE_INPUTS_ARE_AT_THE_SLOT_LEVEL_AND_ONE_GEOMETRY = ScientificCheck(
+    group="Composite and single-point arithmetic",
+    sort_key=2,
+    code=(
+        composite_input_resolution.COMPOSITE_INPUT_LEVEL_MISMATCH,
+        composite_input_resolution.COMPOSITE_INPUT_GEOMETRY_MISMATCH,
+    ),
+    asserts=(
+        "Each input of an assembled composite ran at the level of theory its slot in the scheme names, "
+        "and the inputs and the composite itself declare one geometry between them."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(composite_input_resolution._finalize_one),
+    ),
+    escape_hatch="Cite the calculation at the slot's level, all computed at the one geometry.",
+)
+
+CHECK_SP_ENERGY_COMPONENTS_ADD_UP = ScientificCheck(
+    group="Composite and single-point arithmetic",
+    sort_key=3,
+    code=(SP_ENERGY_COMPONENT_TOTAL_MISMATCH, SP_ENERGY_COMPONENTS_DO_NOT_SUM, SP_ENERGY_COMPONENT_DUPLICATE),
+    asserts="The parts of a single point's electronic energy agree with the energy they are parts of.",
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(PythonCheck(check_sp_energy_components),),
+    escape_hatch="Send the parts the program printed with its energy, or omit the components.",
+    thresholds=(
+        ConstantThreshold(
+            name="sp_energy_component_sum_tolerance",
+            value=SUM_TOLERANCE_HARTREE,
+            unit="hartree",
+            rationale=(
+                "Tight enough to catch a part from a different run, loose enough for the digits a "
+                "program prints."
+            ),
+        ),
+    ),
+)
+
+CHECK_COMPOSITE_FREQUENCY_IS_AT_THE_RECIPE_LEVEL = ScientificCheck(
+    group="Composite and single-point arithmetic",
+    sort_key=4,
+    code=(
+        calculation_levels.W_COMPOSITE_FREQUENCY_LEVEL_DIFFERS,
+        calculation_levels.W_COMPOSITE_ROLE_ON_NON_COMPOSITE,
+    ),
+    asserts=(
+        "A frequency calculation linked beside a composite runs at the level of theory the "
+        "composite's scheme prescribes for frequencies."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    enforced_by=(PythonCheck(calculation_levels.collect_composite_link_warnings),),
+    escape_hatch="The link is stored as stated; link the frequency calculation at the recipe's level to clear the warning.",
+)
+
+CHECK_NAMED_COMPOSITE_IS_A_COMPOSITE_CALCULATION = ScientificCheck(
+    group="Composite and single-point arithmetic",
+    sort_key=5,
+    code=(
+        composite_result_resolution.W_NAMED_COMPOSITE_DEPOSITED_AS_OPT,
+        composite_result_resolution.W_NAMED_COMPOSITE_DEPOSITED_AS_SP,
+    ),
+    asserts=(
+        "A named composite method (CBS-QB3, G4, W1U) is one program run and is deposited as a "
+        "calculation of type composite, not as an optimisation or a single point at its level."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    enforced_by=(
+        PythonCheck(composite_result_resolution.collect_named_composite_deposit_warnings),
+    ),
+    escape_hatch="The deposit is accepted; send it as type composite with a composite_result block to clear the warning.",
+)
+
+CHECK_COMPOSITE_INPUTS_AND_TOTAL_CAN_BE_CHECKED = ScientificCheck(
+    group="Composite and single-point arithmetic",
+    sort_key=6,
+    code=(
+        composite_input_resolution.W_COMPOSITE_INPUT_GEOMETRY_UNDECLARED,
+        composite_input_resolution.W_COMPOSITE_TOTAL_UNVERIFIABLE,
+    ),
+    asserts=(
+        "An assembled composite's inputs each declare their geometry, and the deposited total "
+        "can be recomputed from them."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    enforced_by=(
+        PythonCheck(composite_input_resolution._unverifiable_warning),
+    ),
+    escape_hatch="The deposit is accepted; declare each input's geometry and state the energies used to clear the warning.",
+)
+
+# ---------------------------------------------------------------------------
+# Subject of a record
+# ---------------------------------------------------------------------------
+
+CHECK_A_CITED_THING_IS_OF_THE_RECORDS_OWN_SUBJECT = ScientificCheck(
+    group="Subject of a record",
+    sort_key=1,
+    code=(
+        network_energy_sources.W_NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH,
+        calculation_ownership.W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+        calculation_ownership.W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
+        W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+        W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
+        calculation_ownership.W_COMPOSITE_INPUT_OWNER_MISMATCH,
+        calculation_ownership.W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH,
+        calculation_ownership.W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
+        calculation_ownership.W_THERMO_STATMECH_OWNER_MISMATCH,
+    ),
+    asserts="What a record cites as evidence belongs to the record's own subject.",
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(calculation_ownership.assert_owned_by),
+        PythonCheck(owner_mismatch_error),
+        PythonCheck(network_energy_sources.assert_state_energy_source_owner),
+        PythonCheck(network_energy_sources.assert_barrier_source_owner),
+        PythonCheck(network_energy_sources.assert_network_role_source_owner),
+        PythonCheck(network_energy_sources.assert_state_participant_source_owner),
+    ),
+    escape_hatch="Cite the calculation or statmech record of the subject the record is about.",
+)
+
+# ---------------------------------------------------------------------------
+# Declarations against the record
+# ---------------------------------------------------------------------------
+
+CHECK_KINETICS_DECLARATION_DOES_NOT_CONTRADICT_THE_RECORD = ScientificCheck(
+    group="Declarations against the record",
+    sort_key=1,
+    code=W_KINETICS_DECLARATION_CONTRADICTS_RECORD,
+    asserts=(
+        "A kinetics applicability or protocol declaration does not contradict the columns the record "
+        "already states (direction, pressure context, bath gas, scientific origin): the stored columns "
+        "stay authoritative."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(kinetics_applicability_error),
+        PythonCheck(kinetics_protocol_origin_error),
+        PythonCheck(kinetics_declaration_resolution.assert_kinetics_declaration_columns),
+    ),
+    escape_hatch="Correct whichever statement is wrong, or omit the declaration.",
+)
+
+CHECK_DECLARATION_IS_ABOUT_THE_RECORD_THAT_CARRIES_IT = ScientificCheck(
+    group="Declarations against the record",
+    sort_key=2,
+    code=(
+        kinetics_declaration_resolution.W_KINETICS_DETERMINATION_MISMATCH,
+        statmech_declaration_resolution.W_STATMECH_MODEL_MISMATCH,
+        structure_determination_resolution.W_STRUCTURE_DETERMINATION_MISMATCH,
+        kinetics_declaration_resolution.W_KINETICS_PROTOCOL_CALCULATION_OWNER_MISMATCH,
+        thermo_declaration_resolution.W_THERMO_PROTOCOL_CALCULATION_OWNER_MISMATCH,
+        calculation_ownership.W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
+        calculation_ownership.W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
+    ),
+    asserts=(
+        "A determination, statistical-model, structure, protocol or interpretation "
+        "declaration describes the record that carries it."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(kinetics_declaration_resolution._mismatch),
+        PythonCheck(thermo_declaration_resolution._resolve_protocol),
+        PythonCheck(statmech_declaration_resolution._mismatch),
+        PythonCheck(structure_determination_resolution._mismatch),
+        PythonCheck(calculation_ownership.assert_statmech_owned_by),
+    ),
+    escape_hatch="Declare it on the record it describes, with the calculations and sources of that record.",
+)
+
+# ---------------------------------------------------------------------------
+# Observation identity
+# ---------------------------------------------------------------------------
+
+CHECK_OBSERVATION_IS_ATTACHED_TO_ITS_OWN_GROUND_STATE = ScientificCheck(
+    group="Observation identity",
+    sort_key=1,
+    code=(
+        observation_identity_attach.W_OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM,
+        observation_identity_attach.W_OBSERVATION_IDENTITY_HINT_CONFLICT,
+    ),
+    asserts=(
+        "A curator attaches an observation of unresolved identity only to a ground-state, minimum-energy "
+        "entry of a species whose connectivity agrees with the observation's own identity hint."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(observation_identity_attach._assert_ground_state_minimum_entry),
+        PythonCheck(observation_identity_attach._assert_no_identity_hint_conflict),
+    ),
+    escape_hatch="Attach it to the ground-state minimum entry of the species it was measured on.",
+)
+
+# ---------------------------------------------------------------------------
+# Corrections and scale factors
+# ---------------------------------------------------------------------------
+
+CHECK_A_BOND_ADDITIVITY_TOTAL_HAS_ITS_COMPONENTS = ScientificCheck(
+    group="Corrections and scale factors",
+    sort_key=1,
+    code=energy_correction_resolution.W_BAC_TOTAL_REQUIRES_COMPONENTS,
+    asserts=(
+        "A Petersson bond-additivity correction applied as a total carries at least one bond component, "
+        "unless its target species has no bonds; a transition state has no bond assignment and so cannot "
+        "take a componentless total."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(PythonCheck(energy_correction_resolution.assert_bac_total_has_required_components),),
+    escape_hatch="Send the bond components, or apply the correction under another role.",
+)
+
+CHECK_A_FREQUENCY_SCALE_FACTOR_IS_OF_THE_PROGRAM_THAT_RAN = ScientificCheck(
+    group="Corrections and scale factors",
+    sort_key=2,
+    code=statmech_resolution.W_STATMECH_FSF_SOFTWARE_MISMATCH,
+    asserts=(
+        "The frequency scale factor a statmech record applies was derived for the program that ran the "
+        "frequency calculation it is applied to."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    enforced_by=(
+        PythonCheck(statmech_resolution.collect_frequency_scale_factor_software_mismatch_warnings),
+    ),
+    escape_hatch="The deposit is accepted; confirm the choice, or attach a factor derived for that program.",
+)
+
+# ---------------------------------------------------------------------------
+# Enthalpy reference
+# ---------------------------------------------------------------------------
+
+CHECK_ENTHALPY_STATES_ITS_REFERENCE = ScientificCheck(
+    group="Enthalpy reference",
+    sort_key=1,
+    code=(
+        W_ENTHALPY_DECLARATION_ABSENT,
+        W_ENTHALPY_REFERENCE_KIND_UNRECOGNIZED,
+        W_ENTHALPY_DECLARATION_WITHOUT_CONTENT,
+        W_ENTHALPY_QUANTITY_NOT_STORABLE_HERE,
+    ),
+    asserts=(
+        "A thermo record that carries an enthalpy declares that it is the standard enthalpy "
+        "of formation at 298.15 K, the only accepted reference, and a record without enthalpy "
+        "content declares none."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(enthalpy_reference_error),
+        PythonCheck(assert_enthalpy_reference),
+    ),
+    escape_hatch=(
+        "Declare ``formation_298k`` when the source states that convention, or deposit increments and "
+        "absolute enthalpies through the molecular property observation route."
+    ),
+)
+
+# ---------------------------------------------------------------------------
+# Calculation graph
+# ---------------------------------------------------------------------------
+
+CHECK_CALCULATION_DEPENDENCIES_ARE_ACYCLIC = ScientificCheck(
+    group="Calculation graph",
+    sort_key=1,
+    code="calculation_dependency_cycle",
+    asserts=(
+        "The graph of which calculation depends on which is acyclic: no calculation depends on itself "
+        "through a chain of others."
+    ),
+    tier=CheckTier.structural,
+    channel=CodeChannel.database_constraint,
+    enforced_by=(
+        DatabaseConstraint(
+            table="calculation_dependency",
+            name="trg_calculation_dependency_acyclic",
+            kind="trigger",
+            definition=(
+                "BEFORE INSERT OR UPDATE FOR EACH ROW: refuse an edge whose parent is already reachable "
+                "from its child"
+            ),
+        ),
+        DatabaseConstraint(
+            table="calculation_dependency",
+            name="ck_calculation_dependency_not_self",
+            kind="check",
+            definition="parent_calculation_id <> child_calculation_id",
+        ),
+    ),
+    escape_hatch="Drop or reverse the dependency that points back.",
+)
+
+CHECK_STABILITY_VERDICTS_DO_NOT_CITE_EACH_OTHER_IN_A_RING = ScientificCheck(
+    group="Calculation graph",
+    sort_key=2,
+    code=W_SCF_STABILITY_SOURCE_CYCLE,
+    asserts=(
+        "SCF stability verdicts do not cite one another as the job that measured them in a ring: some job "
+        "measured each."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(PythonCheck(scf_source_cycle_error),),
+    escape_hatch="Name, as the measuring job, a calculation that is not itself measured by the first.",
+)
+
+# ---------------------------------------------------------------------------
+# Energy comparison
+# ---------------------------------------------------------------------------
+
+CHECK_ENERGIES_AT_DIFFERENT_LEVELS_ARE_NOT_COMPARED = ScientificCheck(
+    group="Energy comparison",
+    sort_key=1,
+    code=(
+        "lowest_energy_across_levels",
+        "unsafe_lowest_energy_comparison",
+        "relative_conformer_energy_compare_identical_protocols",
+    ),
+    asserts=(
+        "A lowest-energy selection compares energies of one level and one species entry, and a "
+        "relative-energy comparison names two different protocols."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(lookup_routes._refuse_mixed_levels),
+        PythonCheck(species_calculations_search._validate_ranking),
+        PythonCheck(relative_conformer_energy_compare.identical_protocols),
+    ),
+    escape_hatch="Filter to one level (method and basis) and one species entry, or use a select endpoint.",
+)
+
+# ---------------------------------------------------------------------------
+# Evidence a result rests on
+# ---------------------------------------------------------------------------
+
+CHECK_A_CONVERGED_OPTIMISATION_HAS_AN_ENERGY_BEHIND_IT = ScientificCheck(
+    group="Evidence a result rests on",
+    sort_key=1,
+    code=calculation_resolution.W_CONVERGED_OPT_NO_USABLE_ENERGY,
+    asserts=(
+        "An optimisation recorded as converged has an energy behind it: a single point of the same owner "
+        "at any level, or its own final energy stated with an artifact."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    enforced_by=(PythonCheck(calculation_resolution.collect_converged_opt_energy_warnings),),
+    escape_hatch="The deposit is accepted; deposit a single point, or the optimisation's final energy with its artifact.",
+)
+
+# ---------------------------------------------------------------------------
+# Declared against the uploaded evidence (warnings)
+# ---------------------------------------------------------------------------
+
+CHECK_TYPED_SETTINGS_AGREE_WITH_THE_ARTIFACTS = ScientificCheck(
+    group="Declared against the uploaded evidence",
+    sort_key=1,
+    code=(
+        parameter_reconciliation.W_PARAMETER_DISAGREES_WITH_ARTIFACT,
+        parameter_reconciliation.W_INPUT_DECK_DISAGREES_WITH_OUTPUT_LOG,
+        parameter_reconciliation.W_OUTPUT_LOG_DISAGREES_WITH_EARLIER_OUTPUT_LOG,
+        parameter_reconciliation.W_REPORTED_SETTING_DIFFERS_FROM_REQUESTED,
+        parameter_reconciliation.W_LEVEL_OF_THEORY_DISAGREES_WITH_ARTIFACT,
+    ),
+    asserts=(
+        "What a depositor typed about a calculation's settings and level of theory agrees "
+        "with the uploaded input deck and output log."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    enforced_by=(
+        PythonCheck(parameter_reconciliation.declared_parameter_warnings),
+        PythonCheck(parameter_reconciliation.merge_artifact_observations),
+        PythonCheck(parameter_reconciliation.level_of_theory_warnings),
+        PythonCheck(parameter_reconciliation.level_of_theory_qualifier_warnings),
+        PythonCheck(parameter_reconciliation.reported_setting_warnings),
+    ),
+    escape_hatch="The deposit is accepted; correct the typed value, or attach the right deck.",
+)
+
+CHECK_STATED_ENERGY_AGREES_WITH_THE_LOG = ScientificCheck(
+    group="Declared against the uploaded evidence",
+    sort_key=2,
+    code=(
+        sp_energy_reconciliation.W_SP_ENERGY_MISMATCH,
+        composite_energy_reconciliation.W_COMPOSITE_ENERGY_LOG_MISMATCH,
+        composite_energy_reconciliation.W_COMPOSITE_LOG_METHOD_MISMATCH,
+    ),
+    asserts=(
+        "The electronic, E0 and zero-point energies a tool states agree with the output log "
+        "attached to the same calculation."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    enforced_by=(
+        PythonCheck(sp_energy_reconciliation.reconcile_sp_energy),
+        PythonCheck(composite_energy_reconciliation.reconcile_composite_energy),
+    ),
+    escape_hatch="The deposit is accepted; send the value the log prints, or omit it and let the log speak.",
+    thresholds=(
+        ConstantThreshold(
+            name="composite_log_tolerance",
+            value=COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE,
+            unit="hartree (max(1e-6, 5e-7 * n), n the rounded quantities compared)",
+            rationale=(
+                "Each log number is printed to six decimals, so a copy can differ by half-units of "
+                "the last place of each term."
+            ),
+        ),
+        ConstantThreshold(
+            name="sp_energy_log_tolerance",
+            value=sp_energy_reconciliation.SP_ENERGY_ABS_TOL_HARTREE,
+            unit="hartree",
+            rationale=(
+                "Tight enough that a wrong line, wrong method or unit slip lies far outside it, loose "
+                "enough for reduced stored precision."
+            ),
+        ),
+    ),
+)
+
+CHECK_HESSIAN_METHOD_OF_A_LATE_ARTIFACT_AGREES_WITH_THE_STORED_BASIS = ScientificCheck(
+    group="Declared against the uploaded evidence",
+    sort_key=3,
+    code=hessian_method_deck_check.W_HESSIAN_METHOD_DISAGREES_WITH_STORED_TAU_BASIS,
+    asserts=(
+        "The Hessian method a deck or log attached after the deposit states is the method the "
+        "calculation's stored imaginary-mode tolerance rests on."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    enforced_by=(PythonCheck(hessian_method_deck_check.try_hessian_method_disagreement_from_input_upload),),
+    escape_hatch="None; the record is annotated, not refused.",
+)
+
+CHECK_ATOMIC_ELECTRONIC_LEVELS_AGREE_WITH_THE_GROUND_TERM = ScientificCheck(
+    group="Declared against the uploaded evidence",
+    sort_key=4,
+    code=(
+        atomic_electronic_warnings.W_ATOMIC_ELECTRONIC_DEGENERACY_CONTRADICTS_TERM,
+        upload_reconciliation.W_TERM_SYMBOL_CONTRADICTS_GROUND_TERM,
+    ),
+    asserts=(
+        "A neutral ground-state atom's term symbol and lowest-level degeneracy agree with the "
+        "NIST ground term of its element."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    enforced_by=(
+        PythonCheck(atomic_electronic_warnings._degeneracy_warnings),
+        PythonCheck(upload_reconciliation.term_symbol_warnings),
+    ),
+    escape_hatch="The deposit is accepted; deposit the levels that match the declared term.",
+)
+
+CHECK_SCF_STABILITY_SOURCE_IS_COMPARABLE = ScientificCheck(
+    group="Declared against the uploaded evidence",
+    sort_key=5,
+    code=(
+        scf_stability_sources.W_SCF_STABILITY_SOURCE_LEVEL_MISMATCH,
+        scf_stability_sources.W_SCF_STABILITY_SOURCE_CONFORMER_UNVERIFIED,
+    ),
+    asserts=(
+        "The job named as having measured an SCF stability verdict ran at the level of theory of the "
+        "calculation carrying the verdict, and the two can be shown to be on one conformer."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    enforced_by=(PythonCheck(scf_stability_sources.link_scf_stability_sources),),
+    escape_hatch="None; the link is stored as stated.",
+)
+
+# ---------------------------------------------------------------------------
+# Thermo declarations
+# ---------------------------------------------------------------------------
+
+CHECK_A_FORMAT_DEFINED_THERMO_DECLARATION_DESCRIBES_WHAT_THE_FORMAT_DEFINES = ScientificCheck(
+    group="Thermo declarations",
+    sort_key=1,
+    code=(W_THERMO_DECLARED_BY_TARGET_INCOHERENT, W_THERMO_DECLARED_BY_RECORD_INCOHERENT),
+    asserts=(
+        "A thermo declaration the file format defines describes what the format defines: a target declared "
+        "by the CHEMKIN format is an equilibrium ensemble, on a gas-phase record that carries a NASA-7 block."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    enforced_by=(
+        PythonCheck(thermo_target_error),
+        PythonCheck(_declared_by_record_error),
+    ),
+    escape_hatch="Declare the target as depositor-defined, or send a gas-phase record with its NASA-7 block.",
+)
+
+# ---------------------------------------------------------------------------
+# Hessian method of a stored tolerance
+# ---------------------------------------------------------------------------
+
+CHECK_A_RECORDED_HESSIAN_METHOD_IS_REFINED_WHEN_IT_CANNOT_HOLD = ScientificCheck(
+    group="Hessian method of a stored tolerance",
+    sort_key=1,
+    code=W_HESSIAN_METHOD_REFINED,
+    asserts=(
+        "A recorded finite difference of gradients on an ORCA NumFreq deck, for a method with no analytic "
+        "gradient, is stored as finite differences of energies, and the record says so."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    enforced_by=(PythonCheck(_refinement_findings),),
+    escape_hatch="The deposit is accepted; record finite_difference_energy to state it directly.",
+)
+
+# ---------------------------------------------------------------------------
+# One-electron participants
+# ---------------------------------------------------------------------------
+
+CHECK_A_ONE_ELECTRON_HARTREE_FOCK_ENERGY_STANDS_FOR_THE_CORRELATED_LEVEL = ScientificCheck(
+    group="One-electron participants",
+    sort_key=1,
+    code=calculation_levels.W_ONE_ELECTRON_HF_SUBSTITUTION,
+    asserts=(
+        "A kinetics record's declared correlated energy level is accepted for a one-electron "
+        "participant's Hartree-Fock energy in the same basis, because with one electron every "
+        "correlation term is zero."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    enforced_by=(
+        PythonCheck(calculation_levels.kinetics_one_electron_hf_substitutions),
+        PythonCheck(calculation_levels.is_one_electron_hf_substitute),
+    ),
+    escape_hatch="The deposit is accepted; link a correlated energy to state a level without the substitution.",
+)
+
 
 # ---------------------------------------------------------------------------
 # Collection
 # ---------------------------------------------------------------------------
 
-#: Every module holding :class:`ScientificCheck` declarations. A guard
-#: test fails if a file in the repository constructs one and is not
-#: listed here, so forgetting to register a module is caught rather than
-#: silently omitted from the register.
+#: Every module holding :class:`ScientificCheck` declarations. A guard test
+#: fails if a file that constructs one is not listed here.
 DECLARING_MODULES: tuple[ModuleType, ...] = (
     calc_isotopes,
     chemistry_species,
@@ -1480,7 +1575,6 @@ DECLARING_MODULES: tuple[ModuleType, ...] = (
     charge_multiplicity_reconciliation,
     external_comparison_checks,
     frequency_geometry_linearity,
-    gap_declarations,
     geometry_validation_service,
     reaction_atom_map_service,
     reaction_resolution,
@@ -1500,11 +1594,7 @@ def register() -> list[ScientificCheck]:
 def constraint_rejections() -> dict[str, tuple[str, str]]:
     """Constraint name to the ``(code, detail)`` a 409 body should carry.
 
-    Consumed by ``app.api.errors._integrity_error_handler``. Kept here
-    rather than in the handler because the register is what the schema
-    drift guard already checks against live ``pg_constraint`` metadata,
-    so the name in this mapping is the name PostgreSQL will report or CI
-    is already red.
+    Consumed by ``app.api.errors._integrity_error_handler``.
     """
     return collect_constraint_rejections(register())
 

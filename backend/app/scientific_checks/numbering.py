@@ -5,8 +5,8 @@ groups in :data:`READING_ORDER` first, in that order, then any other group alpha
 collection order. A new group must be appended to :data:`READING_ORDER` (after every group that already exists), or it
 may sort between two existing groups and renumber everything after it.
 That protects against new *groups* only. A new check added to an existing, earlier group still renumbers every
-entry after it; nothing here catches that, only the pin test does (it pins the opening words of every entry).
-``tests/db/test_scientific_check_register.py::test_existing_entries_keep_their_numbers`` pins the published numbers.
+entry after it; ``tests/db/test_scientific_check_register.py::test_existing_entries_keep_their_numbers`` pins the
+declaration behind each published number.
 
 Shared by ``backend/scripts/generate_scientific_check_register.py`` (the register document) and
 ``backend/scripts/generate_producer_contract.py`` (which names the entry behind each warning code).
@@ -28,16 +28,14 @@ READING_ORDER: tuple[str, ...] = (
     "Pressure-dependent networks",
     "Custody of the evidence",
     "Reproducibility",
-    # Groups added after the register was first numbered, in the order they have always printed (they used to fall
-    # through to the alphabetical tail). Listing them keeps their numbers when a new group is added: a new group
-    # sorting between two of them would renumber everything after it.
+    # Later groups, in print order. Listing them keeps their numbers when a new group is added.
     "Advisory consistency",
     "External reference comparison",
     "Scan coordinates",
     "Vibrational frequency provenance",
     "Stereochemistry of a species entry",
     "Wavefunction reliability diagnostics",
-    # Declared in ``gap_declarations``, appended in this order so no published entry is renumbered.
+    # Appended in this order so no published entry is renumbered.
     "Bath gas of a rate",
     "Network composition and sources",
     "Levels and geometries of linked calculations",

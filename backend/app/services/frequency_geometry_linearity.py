@@ -140,7 +140,6 @@ from app.scientific_checks import (
     CheckTier,
     CodeChannel,
     ConstantThreshold,
-    DesignPosition,
     PythonCheck,
     ScientificCheck,
 )
@@ -716,86 +715,14 @@ CHECK_FREQ_LIST_MODE_COUNT_MATCHES_GEOMETRY_SHAPE = ScientificCheck(
         W_FREQ_LIST_INCOMPLETE,
     ),
     asserts=(
-        "A frequency list's mode count should match the shape of the "
-        "geometry it is attached to: ``3N - 5`` vibrations for a collinear "
-        "molecule and ``3N - 6`` for a non-linear one, so a list carrying "
-        "one count on a geometry of the other shape is one mode wrong in "
-        "whichever direction it leans."
+        "A frequency list's mode count matches the shape of its geometry: 3N - 5 vibrations "
+        "for a collinear molecule and 3N - 6 for a non-linear one."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "An expectation, not a definition, and ADR 0008 is explicit that only "
-        "the latter may block. The verdict rests on a *tolerance* — on where "
-        "the line between collinear and bent is drawn — and a rule whose "
-        "answer moves when a constant moves is an expectation by "
-        "construction. Unlike the ``3N`` ceiling, which no correct deposit "
-        "can trip, both of these can: a genuinely quasi-linear molecule sits "
-        "on no side of the line; a producer who deposited ``3N - 6`` "
-        "vibrations plus one rigid-body eigenvalue on purpose deposited "
-        "something true; and a partial or frozen-atom Hessian on a linear "
-        "molecule produces ``3N - 6`` modes honestly. So the check declines "
-        "to answer in the ambiguous band and annotates rather than refuses "
-        "outside it. It is also the *second* judgement on one list: the wire "
-        "package's ``freq_list_incomplete_for_geometry`` floor keeps exactly "
-        "the strength an atom count can prove, and this adds only the "
-        "strength coordinates can. That is also why the short-list direction "
-        "is a code of its own rather than an extension of that floor — "
-        "``3N - 6`` *is* the floor's threshold and it warns strictly below, "
-        "so the wire package cannot reach this case at all, and emitting its "
-        "code from here would put a coordinate-dependent trigger behind a "
-        "string whose contract is that an atom count proves it."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            evaluate_frequency_list_completeness,
-            note=(
-                "The floor, ``freq_list_incomplete_for_geometry``: fewer modes "
-                "than an atom count alone proves a harmonic analysis of the "
-                "geometry produces (below ``3N - 6``, with a structural flag "
-                "for the unambiguous case). It is the same claim as the two "
-                "linearity codes, the list's mode count against the geometry's "
-                "shape, at the strength an atom count can prove. The ceiling "
-                "(entry 21) is a different claim: ``3N`` is a definition, "
-                "the floor is an expectation. Partial, frozen-atom and ONIOM Hessians remove modes honestly, which "
-                "is why the floor warns and never refuses."
-            ),
-        ),
-        PythonCheck(
-            evaluate_frequency_list_linearity,
-            note=(
-                "Owns the arithmetic and the verdict; the payload walks that "
-                "resolve which geometry each frequency list is measured "
-                "against live in the same module, one per upload shape, and "
-                "restate the wire-side rule — the calculation's own first "
-                "input geometry where the producer named one, otherwise the "
-                "enclosing conformer's or transition state's reference "
-                "geometry. The two checks must count the same atoms to be "
-                "talking about the same record."
-            ),
-        ),
-        DesignPosition(
-            "The collinearity tolerance stays backend-side. "
-            "``tckdb_schemas`` is forbidden from importing ``app`` by an AST "
-            "scan and a runtime ``sys.modules`` check, and it carries no "
-            "numerics; moving a tolerance into it to share one constant "
-            "would put a numerical judgement inside a package whose contract "
-            "is that it holds none. So the wire package keeps the bound it "
-            "can prove from an atom count and the backend adds the sharper "
-            "one where the coordinates are."
-        ),
-        DesignPosition(
-            "``LINEARITY_SINGULAR_VALUE_TOLERANCE`` in "
-            "``app.chemistry.normal_modes`` is *not* reused, though it "
-            "answers the same question. It is an exact-rank test at 1e-6 "
-            "relative, set that tight because admitting a nearly-zero "
-            "direction into a projection basis corrupts the projection. "
-            "Measured on real coordinates, CO2 bent by one thousandth of a "
-            "degree — ordinary optimiser noise — comes out at 4.5e-6 and "
-            "classifies as *not linear*, so reusing it would have fired this "
-            "warning on correct linear molecules."
-        ),
+        PythonCheck(evaluate_frequency_list_completeness),
+        PythonCheck(evaluate_frequency_list_linearity),
     ),
     thresholds=(
         ConstantThreshold(
@@ -803,14 +730,8 @@ CHECK_FREQ_LIST_MODE_COUNT_MATCHES_GEOMETRY_SHAPE = ScientificCheck(
             value=COLLINEAR_MAX_TRANSVERSE_RATIO,
             unit="dimensionless (sigma_2 / sigma_1 of the centred coordinates)",
             rationale=(
-                "At or below this the geometry is treated as linear and "
-                "nothing is reported. Roughly 0.2 degrees of bend for a "
-                "symmetric triatomic — three orders of magnitude looser than "
-                "optimiser convergence noise, so a real linear molecule "
-                "cannot be flagged. Loosening it would silence the check for "
-                "genuinely bent molecules; tightening it risks warning about "
-                "correct ones, which is the failure an advisory check must "
-                "not have."
+                "At or below this the geometry is treated as linear, which is about 0.2 degrees of "
+                "bend for a symmetric triatomic."
             ),
         ),
         ConstantThreshold(
@@ -818,21 +739,12 @@ CHECK_FREQ_LIST_MODE_COUNT_MATCHES_GEOMETRY_SHAPE = ScientificCheck(
             value=BENT_MIN_TRANSVERSE_RATIO,
             unit="dimensionless (sigma_2 / sigma_1 of the centred coordinates)",
             rationale=(
-                "At or above this the geometry is treated as bent and the "
-                "warning may fire. Roughly 6 degrees of bend for a symmetric "
-                "triatomic; water sits fifteen times over it. Between the two "
-                "thresholds the check answers 'undetermined' and says "
-                "nothing, which is what keeps a quasi-linear molecule from "
-                "receiving a confident claim two degrees cannot support."
+                "At or above this the geometry is treated as bent, about 6 degrees for a symmetric "
+                "triatomic, and between the two the check says nothing."
             ),
         ),
     ),
-    escape_hatch=(
-        "None needed — the warning is the accommodation, and the record is "
-        "stored either way. A depositor whose molecule is genuinely "
-        "quasi-linear will usually not see the warning at all, because the "
-        "band between the two thresholds is deliberately silent."
-    ),
+    escape_hatch="None; the check only warns.",
 )
 
 
