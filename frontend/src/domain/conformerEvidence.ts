@@ -19,10 +19,13 @@ const AUTO_NUMBERED_LABEL = /^conformer_(\d+)$/
  *   server's numbering -- falls back to the group's own stable ref, verbatim.
  */
 export function conformerLabel(conformer: ConformerProjection): string {
-    const label = conformer.conformer_group.label
-    if (label === null || label.trim() === "") return conformer.conformer_group.conformer_group_ref
-    const match = label.match(AUTO_NUMBERED_LABEL)
-    return match ? `Conformer Group ${match[1]}` : conformer.conformer_group.conformer_group_ref
+    return conformerGroupName(conformer.conformer_group.label) ?? conformer.conformer_group.conformer_group_ref
+}
+
+/** "Conformer Group N" for the archive's own numbering; `null` for no label or any other label, which is never printed. */
+export function conformerGroupName(label: string | null | undefined): string | null {
+    const match = label?.match(AUTO_NUMBERED_LABEL)
+    return match ? `Conformer Group ${match[1]}` : null
 }
 
 /**

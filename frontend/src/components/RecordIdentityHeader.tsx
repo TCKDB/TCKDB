@@ -87,10 +87,16 @@ import type { RecordIdentity } from "../domain/recordIdentity"
  * (parent species, entry, group, calculation, submission…) stay in the
  * collapsed disclosure.
  */
+type OwnerProps =
+    /** The owner's identity, shown after the record's own ref. */
+    | { identity: RecordIdentity; ownFacts?: never }
+    /** For a page whose owner context does not fit `RecordIdentity`: extra rows after the record's own ref. */
+    | { identity?: never; ownFacts: ReactNode }
+
 export function RecordIdentityHeader({
     kicker, pill, glyph, review, lede, title, titleVariant = "display-1", intro,
-    identity, facets, submissionRef, explainTransitionStateIdentity = true, ownRef,
-}: {
+    identity, facets, submissionRef, explainTransitionStateIdentity = true, ownRef, ownFacts,
+}: OwnerProps & {
     kicker: ReactNode
     pill?: ReactNode
     /** The record kind's glyph, shown before the kicker. */
@@ -111,7 +117,6 @@ export function RecordIdentityHeader({
      *  in three different positions relative to identity. Rendered as
      *  `--type-body` capped to `--measure-prose`, same as `SectionHeading`'s. */
     intro?: ReactNode
-    identity: RecordIdentity
     facets?: EntryFacetAxes
     submissionRef?: string | null
     explainTransitionStateIdentity?: boolean
@@ -139,7 +144,18 @@ export function RecordIdentityHeader({
                 {title}
             </h1>
             {lede ? <Lede>{lede}</Lede> : intro && <p className="t-body section-intro">{intro}</p>}
-            <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} ownRef={ownRef} />
+            {identity ? (
+                <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} ownRef={ownRef} />
+            ) : (
+                <dl className="kv-list record-identity-facts">
+                    {ownRef && (
+                        <IdentityFact label={ownRef.label} copy={ownRef.value}>
+                            <code className="data">{ownRef.value}</code>
+                        </IdentityFact>
+                    )}
+                    {ownFacts}
+                </dl>
+            )}
             {/* No pill boxes: a plain, readable phrase built from the same
                 raw axes a pill row used to read one-per-pill -- see
                 `SpeciesEntrySummary.tsx`'s `EntryIdentity` for the report

@@ -23,6 +23,7 @@
 }
 
 .viewer-poster-action {
+    min-height: 2.75rem;
     padding: .4rem .75rem;
     border: 1px solid var(--control-border);
     border-radius: var(--radius);
@@ -44,6 +45,38 @@
 }
 
 .viewer-poster-stage .empty-projection:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+/* A stage with the sentence that describes its shape, across the content column. */
+.viewer-figure {
+    display: grid;
+    gap: .75rem;
+    margin: 0 0 var(--s-6);
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.viewer-figure figcaption {
+    max-width: var(--measure-prose);
+    margin: 0;
+    font: var(--type-body-font);
+}
+
+.viewer-figure .viewer-poster-note {
+    margin: 0;
+}
+
+.viewer-figure figcaption a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: .16em;
+}
+
+.viewer-figure figcaption a:focus-visible {
     outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
 }
