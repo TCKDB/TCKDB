@@ -45,6 +45,13 @@
     overflow-y: auto;
 }
 
+/* A side column that holds a form grows to its natural height: no inner scroll, not sticky. */
+.page-shell-side:has(.browse-filters) {
+    position: static;
+    max-height: none;
+    overflow: visible;
+}
+
 /* Entries are numbered with CSS counters, so the link text stays the heading text. */
 .page-toc {
     min-width: 0;

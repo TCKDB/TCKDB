@@ -155,6 +155,8 @@
 }
 
 
-.conformer-page .copy-button {
-    min-height: 2.75rem;
+@media (max-width: 62rem), (pointer: coarse) {
+    .conformer-page .copy-button {
+        min-height: 2.75rem;
+    }
 }

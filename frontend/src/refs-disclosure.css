@@ -120,10 +120,14 @@
     color: var(--muted-2);
     font: var(--type-ui-font);
     letter-spacing: var(--type-ui-tracking);
-    min-height: 2.75rem;
-    min-width: 2.75rem;
-    padding: .15rem .6rem;
+    min-height: 1.5rem;
+    padding: .15rem .4rem;
     cursor: pointer;
+}
+
+/* Phones and touch screens: a 44px hit area. */
+@media (max-width: 62rem), (pointer: coarse) {
+    .copy-button { min-height: 2.75rem; min-width: 2.75rem; }
 }
 
 .copy-button:hover { border-color: var(--accent); color: var(--accent); }
