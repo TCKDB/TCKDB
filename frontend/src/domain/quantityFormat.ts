@@ -117,17 +117,23 @@ export function significant(value: number | null | undefined, digits: number, un
     return { ...quantity, value: quantity.value.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") }
 }
 
+function roundDeposited(value: number): number {
+    const magnitude = Math.abs(value)
+    if (magnitude >= 2 ** 53 || magnitude < 10 ** DEPOSITED_FIGURES) return Number(value.toPrecision(DEPOSITED_FIGURES))
+    return Math.sign(value) * Math.round(magnitude)
+}
+
 /**
  * The number to at most 6 significant figures, trailing zeros trimmed and never padded, in plain digits (never `1e-7`);
  * an integer is never rounded. `full` carries the stored value when the shown one is shorter. `null` for an absent or
- * non-finite value. A non-integer from a million up is rounded to a whole number.
+ * non-finite value. A non-integer from a million up to 2^53 is rounded to a whole number; beyond that it keeps 6 figures and an exponent.
  */
 export function deposited(value: number | null | undefined, unit?: string | null): Quantity | null {
     if (value === null || value === undefined || !Number.isFinite(value)) return null
-    const shown = Number.isSafeInteger(value) ? value : Math.abs(value) >= 10 ** DEPOSITED_FIGURES ? Math.round(value) : Number(value.toPrecision(DEPOSITED_FIGURES))
+    const shown = Number.isSafeInteger(value) ? value : roundDeposited(value)
     const full = shown === value ? undefined : String(value)
     const text = String(shown)
-    if (!/e/i.test(text)) return { value: text, unit: unit ?? null, ...(full && { full }) }
+    if (!/e/i.test(text) && Math.abs(shown) < 1e15) return { value: text, unit: unit ?? null, ...(full && { full }) }
     // A very small or very large number would print as `1e-7`; plain digits are used while they stay readable and exact.
     const plain = shown.toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 20 })
     const readable = Number(plain) === shown && plain.replace(/[-.]/g, "").length <= 15
@@ -195,6 +201,7 @@ export function fillValue(value: FillableValue): Filled {
  * | thermo reference pressure       | 6 sf, no padding | bar | (this archive's tables) |
  * | thermo temperatures (ranges, points, NASA ends) | 6 sf, no padding | K | (this archive's tables) |
  * | thermo heat capacity points     | 6 sf, no padding | J/mol·K | (this archive's tables) |
+ * | thermo evaluated-point H, S, G   | 6 sf, no padding | kJ/mol, J/mol·K, kJ/mol | (this archive's tables) |
  * | transport polarizability        | 6 sf, no padding | Å³  | (this archive's tables) |
  * | transport rotational relaxation | 6 sf, no padding | (none) | (this archive's tables) |
  * | kinetics activation energy Ea   | 2      | kJ/mol  | kineticsView headline |
@@ -220,6 +227,9 @@ export const QUANTITY_SPECS = {
     thermo_s298_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
     thermo_s298_uncertainty_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
     thermo_cp_j_mol_k: { kind: "deposited", unit: "J/mol·K" },
+    thermo_point_h_kj_mol: { kind: "deposited", unit: "kJ/mol" },
+    thermo_point_s_j_mol_k: { kind: "deposited", unit: "J/mol·K" },
+    thermo_point_g_kj_mol: { kind: "deposited", unit: "kJ/mol" },
     statmech_frequency_scale_factor: { kind: "fixed", digits: 4, unit: null },
     transport_sigma_angstrom: { kind: "fixed", digits: 3, unit: "Å" },
     transport_epsilon_over_k_k: { kind: "fixed", digits: 1, unit: "K" },
@@ -242,6 +252,9 @@ export const DEPOSITED_SPEC_KEYS = [
     "thermo_reference_pressure_bar",
     "thermo_temperature_k",
     "thermo_cp_j_mol_k",
+    "thermo_point_h_kj_mol",
+    "thermo_point_s_j_mol_k",
+    "thermo_point_g_kj_mol",
     "transport_polarizability_angstrom3",
     "transport_rotational_relaxation",
 ] as const

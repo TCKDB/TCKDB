@@ -28,7 +28,7 @@ import { thermoRecordProductLevels } from "../domain/entryNumbers"
 import { thermoModelKindLabel as modelKindLabel } from "../domain/thermoModelKind"
 import { SettingsBehindValue, SettingsLegend } from "./EffectiveSettings"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
-import { QuantityValue } from "./QuantityValue"
+import { QuantityValue, ROUNDED_NOTE } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { MadeUnderLine } from "./MadeUnderLine"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
@@ -638,7 +638,7 @@ function TemperatureCoverageBlock({ coverage, thermoRef, idSuffix = "" }: {
                                 <dd>{coverage.requested_min_k ?? "?"}–{coverage.requested_max_k ?? "?"}</dd>
                             </div>
                             <div><dt>Covers requested range</dt><dd>{coverage.covers_requested_range ? "Yes" : "No"}</dd></div>
-                            <div><dt>Extrapolation distance (K)</dt><dd>{coverage.extrapolation_distance_k}</dd></div>
+                            <div><dt>Extrapolation distance (K)</dt><dd><QuantityValue value={formatQuantity("thermo_temperature_k", coverage.extrapolation_distance_k, null)} /></dd></div>
                         </>
                     )}
                 </dl>
@@ -753,6 +753,15 @@ function WilhoitBlock({ wilhoit, thermoRef, idSuffix = "" }: { wilhoit: ThermoRe
     )
 }
 
+/** Whether any number of an evaluated point is shown rounded. */
+function pointRounded(point: NonNullable<ThermoRecord["points"]>[number]): boolean {
+    return [
+        formatQuantity("thermo_temperature_k", point.temperature_k), formatQuantity("thermo_cp_j_mol_k", point.cp_j_mol_k),
+        formatQuantity("thermo_point_h_kj_mol", point.h_kj_mol), formatQuantity("thermo_point_s_j_mol_k", point.s_j_mol_k),
+        formatQuantity("thermo_point_g_kj_mol", point.g_kj_mol),
+    ].some((quantity) => quantity?.full !== undefined)
+}
+
 function PointsBlock({ points, thermoRef, idSuffix = "" }: { points: ThermoRecord["points"] | null; thermoRef: string; idSuffix?: string }) {
     return (
         <section aria-labelledby={`points-${thermoRef}${idSuffix}`}>
@@ -776,15 +785,15 @@ function PointsBlock({ points, thermoRef, idSuffix = "" }: { points: ThermoRecor
                                     <tr key={`${thermoRef}-point-${index}`}>
                                         <td className="num" data-label="T (K)"><QuantityValue value={formatQuantity("thermo_temperature_k", point.temperature_k, null)} /></td>
                                         <td className="num" data-label="Cp (J/mol·K)"><QuantityValue value={formatQuantity("thermo_cp_j_mol_k", point.cp_j_mol_k, null)} /></td>
-                                        <td className="num" data-label="H (kJ/mol)"><QuantityValue value={formatQuantity("thermo_h298_kj_mol", point.h_kj_mol, null)} /></td>
-                                        <td className="num" data-label="S (J/mol·K)"><QuantityValue value={formatQuantity("thermo_s298_j_mol_k", point.s_j_mol_k, null)} /></td>
-                                        <td className="num" data-label="G (kJ/mol)"><QuantityValue value={formatQuantity("thermo_h298_kj_mol", point.g_kj_mol, null)} /></td>
+                                        <td className="num" data-label="H (kJ/mol)"><QuantityValue value={formatQuantity("thermo_point_h_kj_mol", point.h_kj_mol, null)} /></td>
+                                        <td className="num" data-label="S (J/mol·K)"><QuantityValue value={formatQuantity("thermo_point_s_j_mol_k", point.s_j_mol_k, null)} /></td>
+                                        <td className="num" data-label="G (kJ/mol)"><QuantityValue value={formatQuantity("thermo_point_g_kj_mol", point.g_kj_mol, null)} /></td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
-                    <p className="note">T and Cp are shown to 6 significant figures (hover a number for the stored value); H, S and G to 2 decimals.</p>
+                    {points.some(pointRounded) && <p className="note">{ROUNDED_NOTE}</p>}
                 </Disclosure>
             ) : <p className="empty-projection">No evaluated points recorded for this record.</p>}
         </section>

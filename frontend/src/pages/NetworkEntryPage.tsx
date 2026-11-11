@@ -12,6 +12,7 @@ import type { NetworkChannel, NetworkFullRecord, ReactionEntryLite } from "../ap
 import { loadNetworkEntry } from "../api/networkEntryApi"
 import { Disclosure } from "../components/Disclosure"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
+import { QuantityValue } from "../components/QuantityValue"
 import { NetworkDiagram } from "../components/NetworkDiagram"
 import { NetworkKtpChart } from "../components/NetworkKtpChart"
 import { PageShell } from "../components/PageShell"
@@ -122,7 +123,7 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                                         <dt>Solve temperature range</dt>
                                         <dd>
                                             {network.solve_temperature_min_k != null && network.solve_temperature_max_k != null
-                                                ? <code className="data">{`${formatQuantity("thermo_temperature_k", network.solve_temperature_min_k)?.value}–${formatQuantity("thermo_temperature_k", network.solve_temperature_max_k)?.value} K`}</code>
+                                                ? <code className="data"><QuantityValue value={formatQuantity("thermo_temperature_k", network.solve_temperature_min_k, null)} />–<QuantityValue value={formatQuantity("thermo_temperature_k", network.solve_temperature_max_k, null)} /> K</code>
                                                 : <span className="record-identity-absent-inline">not recorded</span>}
                                         </dd>
                                     </div>

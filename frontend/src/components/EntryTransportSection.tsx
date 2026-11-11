@@ -20,7 +20,7 @@ import type { PageRequest } from "../domain/paging"
 import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { SectionHeading } from "./PageSections"
-import { QuantityValue } from "./QuantityValue"
+import { QuantityValue, ROUNDED_NOTE } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SourceCalculationsTable } from "./SourceCalculationsTable"
@@ -222,7 +222,7 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
                 <div><dt>Rotational relaxation</dt><dd><QuantityValue value={formatQuantity("transport_rotational_relaxation", core.rotational_relaxation, null)} /></dd></div>
                 <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
             </dl>
-            <p className="note">Polarizability and rotational relaxation are shown to 6 significant figures; hover a number for the stored value.</p>
+            {[formatQuantity("transport_polarizability_angstrom3", core.polarizability_angstrom3), formatQuantity("transport_rotational_relaxation", core.rotational_relaxation)].some((quantity) => quantity?.full !== undefined) && <p className="note">{ROUNDED_NOTE}</p>}
 
             <dl className="kv-list">
                 <div><dt>Source calculations</dt><dd>{record.evidence_summary.source_calculation_count}</dd></div>

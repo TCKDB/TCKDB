@@ -202,6 +202,18 @@ describe("formatQuantity / QUANTITY_SPECS", () => {
         expect(formatQuantity("thermo_reference_pressure_bar", 1234567.891)).toEqual({ value: "1234568", unit: "bar", full: "1234567.891" })
     })
 
+    it("keeps 6 figures and an exponent beyond 2^53, and rounds halves symmetrically", () => {
+        expect(formatQuantity("thermo_reference_pressure_bar", 1.2345678901234567e19)).toEqual({ value: "1.23457", exponent: "19", unit: "bar", full: "12345678901234567000" })
+        expect(formatQuantity("thermo_reference_pressure_bar", -1234567.5)).toEqual({ value: "-1234568", unit: "bar", full: "-1234567.5" })
+        expect(formatQuantity("thermo_reference_pressure_bar", 1234567.5)).toMatchObject({ value: "1234568" })
+    })
+
+    it("gives the evaluated-point H, S and G the same rule as heat capacity", () => {
+        expect(formatQuantity("thermo_point_h_kj_mol", 12.3456789, null)).toEqual({ value: "12.3457", unit: null, full: "12.3456789" })
+        expect(formatQuantity("thermo_point_s_j_mol_k", 200.5, null)).toEqual({ value: "200.5", unit: null })
+        expect(formatQuantity("thermo_point_g_kj_mol", -71.123456789, null)).toEqual({ value: "-71.1235", unit: null, full: "-71.123456789" })
+    })
+
     it("prints deposited quantities in plain digits", () => {
         expect(formatQuantity("thermo_reference_pressure_bar", 1)).toEqual({ value: "1", unit: "bar" })
         expect(formatQuantity("thermo_temperature_k", 298.15)).toEqual({ value: "298.15", unit: "K" })
