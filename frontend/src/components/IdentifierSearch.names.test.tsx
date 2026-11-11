@@ -306,8 +306,8 @@ describe("request budget", () => {
             typeText(text.slice(0, length)); await advance(400)
         }
         const spent = nameCalls().length
-        expect(spent).toBeGreaterThan(5)
-        expect(spent).toBeLessThanOrEqual(14)
+        expect(spent).toBeGreaterThanOrEqual(6)
+        expect(spent).toBeLessThanOrEqual(9)
         fireEvent.submit(box().closest("form") as HTMLFormElement)
         await advance(10)
         const exact = nameCalls().filter((call) => call.url.searchParams.get("match") === "exact")
@@ -323,6 +323,17 @@ describe("request budget", () => {
         }
         await advance(10000)
         expect(nameCalls().some((call) => call.url.searchParams.get("q") === text)).toBe(true)
+    })
+})
+
+describe("case folding", () => {
+    it("filters a complete cached result with the server's fold (Straße matches strasse)", async () => {
+        handler = () => json(nameBody([{ ...water, species_ref: "spc_strasse", name: "Straße" }]))
+        page()
+        typeText("stra"); await advance(300)
+        typeText("strass"); await advance(300)
+        expect(nameCalls()).toHaveLength(1)
+        expect(screen.getAllByRole("option")).toHaveLength(1)
     })
 })
 

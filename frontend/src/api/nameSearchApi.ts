@@ -55,8 +55,8 @@ export function cachedNameSearch(text: string, match: "prefix" | "exact"): NameS
 }
 
 /** Suggestion requests: a client-side bucket well under the server's per-minute limit, so Enter always has room. */
-const SUGGESTION_BURST = 10
-const SUGGESTION_PER_MINUTE = 20
+const SUGGESTION_BURST = 6
+const SUGGESTION_PER_MINUTE = 15
 let suggestionTokens = SUGGESTION_BURST
 let suggestionRefilledAt = Date.now()
 

@@ -6,7 +6,7 @@ export const NAME_QUERY_MAX_LENGTH = 64
 /** Typographic apostrophes and primes the archive folds to ' (as its own name normalisation does). */
 const APOSTROPHES = /[\u2018\u2019\u201a\u201b\u02bc\u02b9\u2032\u02c8`\u00b4\uff07]/g
 const NAME_CHARACTERS = /^[\p{L}\p{M}\p{N} \-,'()[\]+.:]+$/u
-const SMILES_TOKEN = /^(?:Cl|Br|[BCNOPSFI]|[bcnops]|\[[^\]]*\]|[-=#$:/\\.+()@%\d])/
+const SMILES_TOKEN = /^(?:Cl|Br|[BCNOPSFI]|[bcnops]|\[[^\]]*(?:\]|$)|[-=#$:/\\.+()@%\d])/
 
 /** The name-search query rule: 2 to 64 letters, digits, spaces and - , ' ( ) [ ] + . :, with a letter or digit. */
 export function isValidNameQuery(text: string): boolean {
@@ -17,7 +17,7 @@ export function isValidNameQuery(text: string): boolean {
 
 /** The key the session cache and the request use: lower case, single spaces. */
 export function nameQueryKey(text: string): string {
-    return text.replace(APOSTROPHES, "'").normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase()
+    return text.replace(APOSTROPHES, "'").normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase().replace(/\u00df/g, "ss").replace(/\u03c2/g, "\u03c3")
 }
 
 /** True for text that is only the start of a reference prefix: "r", "sp", "rxn", "rxe_". */
@@ -44,7 +44,7 @@ export function looksLikeName(text: string): boolean {
     const value = text.trim()
     if (!value || looksLikeReferenceAttempt(value)) return false
     if (/^(formula|smiles):/i.test(value) || /^InChI=/i.test(value)) return false
-    if (value.includes("[") || /^inch/i.test(value) || startsOfRefPrefix(value)) return false
+    if (value.startsWith("[") || /^inch/i.test(value) || startsOfRefPrefix(value)) return false
     const classified = classifyIdentifier(value)
     if (classified.valid) {
         if (classified.identifier.kind !== "smiles") return false
