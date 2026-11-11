@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Reaction pages with the energy profile (Unreleased)
+
+- **Behaviour:** the reaction entry page has breadcrumbs, a review word, a lede, a scheme row and an "Energy profile" section: reactants, transition state and products as bars in kJ/mol relative to the reactants, a profile picker when there are several (the first in response order is shown), a table of the same points linked to their calculations, unavailable reasons in words, and the energies rate records cite in a separate table. "Numbers for this entry" states its order and gives each record a source line. Each transition state has a picture with an on-request 3D view. The reaction page says "Reaction · all deposited versions".
+- **Schema and migration:** none. No new environment variable.
+
 ## Deposited numbers to 6 significant figures (Unreleased)
 
 - **Behaviour:** quantities deposited as stored numbers print at most 6 significant figures, trailing zeros trimmed and no padding (38.92638673392166 shows as 38.9264). A whole number that JavaScript holds safely is never rounded; a non-integer from a million up to 2^53 shows as a whole number; beyond 2^53 it shows 6 figures and an exponent.

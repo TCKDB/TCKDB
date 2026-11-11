@@ -75,6 +75,43 @@ function searchResponse() {
     }
 }
 
+describe("ReactionOverviewPage -- formulas, with structure only where formulas are ambiguous", () => {
+    it("reads the title and breadcrumb as formulas when they tell the participants apart", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
+        page(REACTION_REF)
+        const h1 = await screen.findByRole("heading", { level: 1, name: /H4N2/ })
+        expect(h1.textContent).not.toMatch(/NN|\[H\]/)
+        expect(screen.getByRole("navigation", { name: "Breadcrumb" }).textContent).not.toMatch(/\[H\]/)
+    })
+
+    it("shows SMILES with the formula when two distinct entries share a formula", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => {
+            const response = searchResponse()
+            response.records[0].reactants = [participant("spe_z", "C4H8", "C/C=C\\C", "Z")]
+            response.records[0].products = [participant("spe_e", "C4H8", "C/C=C/C", "E")]
+            return HttpResponse.json(response)
+        }))
+        page(REACTION_REF)
+        const h1 = await screen.findByRole("heading", { level: 1, name: /C4H8/ })
+        expect(h1.textContent).toContain("C/C=C\\C")
+        expect(h1.textContent).toContain("C/C=C/C")
+    })
+})
+
+describe("ReactionOverviewPage -- the header of the page that lists every version", () => {
+    it("says it lists all deposited versions, shows breadcrumbs and a lede, and has no compare link", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
+        page(REACTION_REF)
+        await screen.findByRole("heading", { level: 1, name: /H4N2/ })
+        expect(screen.getByText("Reaction · all deposited versions")).toBeVisible()
+        const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" })
+        expect(crumbs.querySelector('a[href="/reactions"]')).toHaveTextContent("Reactions")
+        expect(document.querySelector(".record-lede")).toHaveTextContent("This reaction has 2 deposited versions. Each is a separate record with its own numbers, and none is chosen for you.")
+        expect(screen.queryByRole("link", { name: /compare/i })).not.toBeInTheDocument()
+        expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
+    })
+})
+
 describe("ReactionOverviewPage", () => {
     it("an rxe_ ref redirects to /reaction-entries/:ref by prefix check alone -- no request issued", async () => {
         // No handler is registered for reactions/search at all; `server.listen`
@@ -229,7 +266,7 @@ describe("ReactionOverviewPage: what the page says it chose, and paging", () => 
         }))
         page(REACTION_REF)
         expect(await screen.findByText("Showing 1\u20131 of 2 reaction entries.")).toBeVisible()
-        expect(screen.getByText(/2 separate deposits share this reaction identity/)).toBeVisible()
+        expect(screen.getByText(/This reaction has 2 deposited versions/)).toBeVisible()
         fireEvent.click(screen.getByRole("button", { name: "Next" }))
         expect(await screen.findByText("Showing 2\u20132 of 2 reaction entries.")).toBeVisible()
         expect(seen).toContain("1:1")
@@ -250,7 +287,8 @@ describe("ReactionOverviewPage: what the page says it chose, and paging", () => 
         page(REACTION_REF)
         await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
         const titleBefore = document.querySelector("h1")?.textContent
-        expect(titleBefore).toContain("N=N")
+        expect(titleBefore).toContain("H2N2")
+        expect(titleBefore).not.toContain("N=N")
         fireEvent.click(screen.getByRole("button", { name: "Next" }))
         await screen.findByRole("link", { name: "rxe_kftcgjn7zalusaouojwi23z3gy" })
         expect(document.querySelector("h1")?.textContent).toBe(titleBefore)

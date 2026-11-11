@@ -424,3 +424,10 @@ export function panelLog10KDomain(series: readonly ArrheniusSeries[]): [number, 
     const values = series.flatMap((entry) => entry.points.map((point) => point.log10k))
     return domainWithPadding(values, 0.1)
 }
+
+/** Distinct stroke dash patterns per series index, so series differ without colour; the first is solid. */
+export const SERIES_DASH_PATTERNS: readonly string[] = ["", "7 3", "2 3", "9 3 2 3", "4 2 1 2", "12 4"]
+
+export function seriesDash(index: number): string {
+    return SERIES_DASH_PATTERNS[index % SERIES_DASH_PATTERNS.length]
+}

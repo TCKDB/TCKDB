@@ -45,3 +45,13 @@ describe("reaction-entry.css: k(T) table header is not uppercased, and the fix i
         }
     })
 })
+
+describe("reaction-entry.css: transition-state status stages", () => {
+    it("marks the current stage with weight, not only colour", () => {
+        expect(stylesheet).toMatch(/\.reaction-ts-stage--current\s*\{[^}]*font-weight:\s*600/)
+    })
+
+    it("lays the stages out as a wrapping row so they never force sideways scroll", () => {
+        expect(stylesheet).toMatch(/\.reaction-ts-stages\s*\{[^}]*flex-wrap:\s*wrap/)
+    })
+})
