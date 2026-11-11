@@ -1666,21 +1666,23 @@ describe("species-entry page: calculations of the selected shape", () => {
 })
 
 describe("species-entry page: the stage and the keyboard", () => {
-    it("draws pictures on the cards and offers one 3D view, for the selected shape only", async () => {
+    it("draws one picture per shape card, none elsewhere, and links each card to its 3D view", async () => {
         await openEntry()
-        await waitFor(() => expect(document.querySelectorAll(".conformer-card svg.mol-poster")).toHaveLength(2))
-        expect(screen.getAllByRole("button", { name: "Show in 3D" })).toHaveLength(1)
-        expect(screen.getByRole("heading", { name: "Conformer Group 1 in 3D" })).toBeVisible()
+        await waitFor(() => expect(document.querySelectorAll("svg.mol-poster")).toHaveLength(2))
+        expect(document.querySelectorAll(".conformer-card svg.mol-poster")).toHaveLength(2)
+        expect(screen.queryByRole("button", { name: "Show in 3D" })).toBeNull()
+        expect(screen.queryByRole("heading", { name: /in 3D$/ })).toBeNull()
+        const links = screen.getAllByRole("link", { name: /^Open in 3D of Conformer Group [12]$/ })
+        expect(links.map((link) => link.getAttribute("href"))).toEqual([`/conformer-groups/${groupOneRef}`, `/conformer-groups/${groupTwoRef}`])
     })
 
-    it("selects a card with Enter and updates the stage, the calculations and the evidence", async () => {
+    it("selects a card with Enter and updates the calculations and the evidence", async () => {
         const user = userEvent.setup()
         await openEntry()
         const second = within(cardFor("Conformer Group 2")).getByRole("button", { name: /Conformer Group 2/ })
         second.focus()
         await user.keyboard("{Enter}")
         await waitFor(() => expect(second).toHaveAttribute("aria-pressed", "true"))
-        expect(await screen.findByRole("heading", { name: "Conformer Group 2 in 3D" })).toBeVisible()
         expect(await screen.findByRole("heading", { name: "Evidence for Conformer Group 2" })).toBeVisible()
         const region = await screen.findByRole("region", { name: "Table of calculations" })
         expect(within(region).getByRole("link", { name: "co_3" })).toBeVisible()
@@ -1827,8 +1829,8 @@ describe("species-entry page: pictures read geometries only when asked or near",
         render(<App />)
         await screen.findByText(/This entry has 20 deposited shapes/)
         await waitFor(() => expect(cardLabels()).toHaveLength(20))
-        // Only the selected shape's own stage has read its geometry; no card has intersected.
-        await waitFor(() => expect(geometryReads).toEqual(["geom_pic_1"]))
+        // No card has intersected, and no stage reads a geometry: nothing is read yet.
+        expect(geometryReads).toEqual([])
         act(() => intersectAll())
         await waitFor(() => expect(new Set(geometryReads).size).toBe(12))
         const asks = screen.getAllByRole("button", { name: "Show picture" })

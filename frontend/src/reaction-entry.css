@@ -132,3 +132,39 @@
 .kinetics-record-source {
     margin: var(--s-3) 0 0;
 }
+
+.reaction-ts-picture-link a {
+    color: var(--accent-700);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .16em;
+}
+
+.reaction-ts-picture-link a:hover { text-decoration-color: currentColor; }
+
+.reaction-ts-picture-link a:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.reaction-ts-picture-link {
+    margin: 1rem 0 0;
+}
+
+@media (max-width: 62rem), (pointer: coarse) {
+    .reaction-ts-picture-link a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.75rem;
+    }
+}
+
+.reaction-ts-picture-link-for {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}

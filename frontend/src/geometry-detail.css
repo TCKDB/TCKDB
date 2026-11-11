@@ -3,8 +3,6 @@
  * comes from `conformer-group.css` and `design-system.css`; the viewer's own rules are in `geometry-viewer.css`.
  */
 
-.geometry-page { max-width: 100rem; }
-
 .xyz-block {
     max-width: 100%;
     margin: 0;
@@ -26,7 +24,7 @@
 /* The shared copy button, scoped to this page so its look does not depend on another page's stylesheet loading. */
 .geometry-page .copy-button {
     flex: none;
-    min-height: 2.75rem;
+    min-height: 1.5rem;
     border: 1px solid var(--control-border);
     border-radius: var(--radius);
     background: var(--surface);
@@ -35,6 +33,10 @@
     letter-spacing: var(--type-ui-tracking);
     padding: .3rem .6rem;
     cursor: pointer;
+}
+
+@media (max-width: 62rem), (pointer: coarse) {
+    .geometry-page .copy-button { min-height: 2.75rem; min-width: 2.75rem; }
 }
 
 .geometry-page .copy-button:hover { border-color: var(--accent); color: var(--accent); }

@@ -69,22 +69,15 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
 
     return (
         <section className="conformer-page methods-page">
-            <nav className="record-breadcrumbs" aria-label="Breadcrumb">
-                <Link to="/">TCKDB</Link>
-                <span aria-hidden="true">/</span>
-                <Link to="/methods">Methods</Link>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">{title}</span>
-            </nav>
-
             <PageShell
+                crumbs={[{ label: "Methods", to: "/methods" }, { label: title }]}
                 identity={(
                     <header className="basin-header">
                         <div className="record-identity-header">
                             <div className="record-identity-kicker-row">
                                 <span className="t-kicker record-identity-kicker">Level of theory · provenance vocabulary</span>
                             </div>
-                            <h1 className="t-display-1 record-identity-title">{title}</h1>
+                            <h1 className="t-display-2 record-identity-title">{title}</h1>
                             <div className="record-identity-known">
                                 <dl className="kv-list record-identity-facts">
                                     <div>

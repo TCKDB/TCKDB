@@ -197,14 +197,10 @@ describe("RecordIdentityHeader", () => {
         expect(row.querySelector('[data-testid="test-pill"]')).not.toBeNull()
     })
 
-    it("uses --type-display-2 typography for titleVariant='display-2' (the wrapping TS equation), and --type-display-1 by default", () => {
-        const { container: displayOneContainer } = renderHeader({ identity: speciesIdentity })
-        expect(displayOneContainer.querySelector("h1.t-display-1")).not.toBeNull()
-        expect(displayOneContainer.querySelector("h1.t-display-2")).toBeNull()
-
-        const { container: displayTwoContainer } = renderHeader({ identity: speciesIdentity, titleVariant: "display-2" })
-        expect(displayTwoContainer.querySelector("h1.t-display-2")).not.toBeNull()
-        expect(displayTwoContainer.querySelector("h1.t-display-1")).toBeNull()
+    it("sets the title in the one --type-display-2 step", () => {
+        const { container } = renderHeader({ identity: speciesIdentity })
+        expect(container.querySelector("h1.t-display-2")).not.toBeNull()
+        expect(container.querySelector("h1.t-display-1")).toBeNull()
     })
 
     // PR #372 moved the species-entry hero onto this shared header and, in

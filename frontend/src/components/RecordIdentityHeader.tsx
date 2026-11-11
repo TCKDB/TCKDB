@@ -23,9 +23,8 @@ import type { RecordIdentity } from "../domain/recordIdentity"
  * every record page used to build its own eyebrow-row/h1 markup with
  * its own font-size rule (`.record-title h1`, `.basin-title h1`,
  * `.tse-equation-heading`, each a different clamp), which is what this
- * header now owns centrally at the shared `--type-display-1` step (or
- * `--type-display-2` for `TransitionStateEntryPage`'s wrapping reaction
- * equation -- pass `titleVariant="display-2"`). `pill` is the record's
+ * header now owns centrally at the shared `--type-display-2` step.
+ * `pill` is the record's
  * ONE status/trust pill (a `.value-pill`/`.value-pill--muted` element the
  * caller builds) -- never more than one; a second badge (e.g. a trust
  * verdict) is the caller's to omit or fold in, not this header's to
@@ -87,7 +86,7 @@ type OwnerProps =
     | { identity?: never; ownFacts: ReactNode }
 
 export function RecordIdentityHeader({
-    kicker, pill, glyph, review, lede, title, titleVariant = "display-1", intro,
+    kicker, pill, glyph, review, lede, title, intro,
     identity, facets, submissionRef, explainTransitionStateIdentity = true, ownRef, ownFacts,
 }: OwnerProps & {
     kicker: ReactNode
@@ -100,7 +99,6 @@ export function RecordIdentityHeader({
     lede?: LedeText
     /** A human label (a name, a formula or an equation), never the record's ref. */
     title: ReactNode
-    titleVariant?: "display-1" | "display-2"
     /** SHOULD-FIX-7 (PR B review): an optional descriptive sentence
      *  between the h1 and the identity tier -- the same slot/role
      *  `SectionHeading`'s own `intro` prop plays for an in-page section,
@@ -133,7 +131,7 @@ export function RecordIdentityHeader({
                 {review !== undefined && <ReviewChip status={review} />}
                 {pill}
             </div>
-            <h1 className={titleVariant === "display-2" ? "t-display-2 record-identity-title" : "t-display-1 record-identity-title"}>
+            <h1 className="t-display-2 record-identity-title">
                 {title}
             </h1>
             {lede ? <Lede>{lede}</Lede> : intro && <p className="t-body section-intro">{intro}</p>}
@@ -142,7 +140,7 @@ export function RecordIdentityHeader({
             ) : (
                 <dl className="kv-list record-identity-facts">
                     {ownRef && (
-                        <IdentityFact label={ownRef.label} copy={ownRef.value}>
+                        <IdentityFact label={ownRef.label} copy={ownRef.value} own>
                             <code className="data">{ownRef.value}</code>
                         </IdentityFact>
                     )}
@@ -185,7 +183,7 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
     // sits outside/above the per-identity-kind branching below rather
     // than being folded into any one branch's `dl`.
     const ownRefFact = ownRef && (
-        <IdentityFact label={ownRef.label} copy={ownRef.value}>
+        <IdentityFact label={ownRef.label} copy={ownRef.value} own>
             <code className="data">{ownRef.value}</code>
         </IdentityFact>
     )
@@ -337,14 +335,15 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
  * recorded" placeholder those facts already show instead of an empty
  * value.
  */
-function IdentityFact({ label, children, wide, copy }: {
+function IdentityFact({ label, children, wide, copy, own }: {
     label: string
     children: ReactNode
     wide?: boolean
     copy?: string
+    own?: boolean
 }) {
     return (
-        <div className={wide ? "record-identity-fact-wide" : undefined}>
+        <div className={wide ? "record-identity-fact-wide" : own ? "record-identity-fact-ref" : undefined}>
             <dt>{label}</dt>
             <dd className={copy ? "record-identity-fact-copyable" : undefined}>
                 {children}

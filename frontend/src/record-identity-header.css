@@ -51,6 +51,11 @@
     grid-column: 1 / -1;
 }
 
+/* A record's own ref is long: give it two columns on wide screens so Copy stays beside it. */
+@media (min-width: 62.0625rem) {
+    .record-identity-fact-ref { grid-column: span 2; }
+}
+
 /* Copy affordance on an identity fact whose value the header renders as
    `.data` (SMILES, InChIKey, an unmapped reaction SMILES, a TS entry
    ref, and -- since the "own ref inline" change -- every record's own

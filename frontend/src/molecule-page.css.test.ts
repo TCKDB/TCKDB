@@ -66,9 +66,13 @@ describe("shape cards: a list of cards that shrink to fit", () => {
         expect(extractRule(css, '.conformer-card[data-selected="true"]')).toMatch(/border-color:\s*var\(--accent\)/)
     })
 
-    it("keeps the entry page wide enough for three cards beside the contents and rail", () => {
-        const match = /max-width:\s*([\d.]+)rem/.exec(extractRule(css, ".entry-page"))
-        expect(Number(match![1])).toBeGreaterThanOrEqual(123.5)
+    it("lays the cards out three to a row inside the shared page width", () => {
+        expect(extractRule(css, ".conformer-list")).toMatch(/grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/)
+    })
+
+    it("gives each card's 3D link the house link style, and a 44px target on phones and touch screens", () => {
+        expect(css).toMatch(/\.shape-card-3d a \{\s*color: var\(--accent-700\);\s*text-decoration: underline;/)
+        expect(css).toMatch(/@media \(max-width: 62rem\), \(pointer: coarse\) \{\s*\.shape-card-3d a \{\s*min-height:\s*2\.75rem/)
     })
 
     it("defines no rule for a removed selector", () => {

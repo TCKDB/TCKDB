@@ -153,7 +153,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     return (
         <section className="conformer-page tse-page">
             <PageShell
-                rail={<RelationshipMap selfKind="reaction" selfLabel="This entry" state={neighbours} />}
+                side={<RelationshipMap selfKind="reaction" selfLabel="This entry" state={neighbours} />}
                 identity={(
                     <>
                         <Breadcrumbs crumbs={[

@@ -25,6 +25,7 @@ import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import type { BrowseState } from "../hooks/useBrowse"
 import { useBrowse } from "../hooks/useBrowse"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
+import { NARROW_QUERY, useMediaQuery } from "../hooks/useMediaQuery"
 
 const PAGE_SIZE = 20
 
@@ -34,6 +35,11 @@ const PAGE_SIZE = 20
  * ever calling them -- this page is that UI, not a new capability. See the
  * design brief for the full gap measurement.
  */
+/** How many filters differ from the empty form: what the phone "Filters" summary counts. */
+function countActiveFilters(filters: BrowseFilters): number {
+    return (Object.keys(EMPTY_BROWSE_FILTERS) as (keyof BrowseFilters)[]).filter((key) => filters[key] !== EMPTY_BROWSE_FILTERS[key]).length
+}
+
 export default function BrowsePage() {
     const location = useLocation()
     const navigate = useNavigate()
@@ -89,6 +95,7 @@ export default function BrowsePage() {
         ...seedFiltersFromUrl(kind, searchParams),
     }))
     const [offset, setOffset] = useState(0)
+    const [filtersOpen, setFiltersOpen] = useState(() => countActiveFilters(filters) > 0)
 
     // The kind is fixed by the ROUTE, and `BrowsePage` is the same component
     // reference at all four kind paths, so React Router keeps this instance
@@ -113,6 +120,9 @@ export default function BrowsePage() {
     const content = BROWSE_KIND_CONTENT[kind]
     const related = RELATED_BROWSE_KIND[kind]
     useDocumentTitle(content.breadcrumbLabel)
+    const narrow = useMediaQuery(NARROW_QUERY)
+    const filterForm = <BrowseFilterForm filters={filters} kind={kind} onChange={updateFilters} />
+    const activeFilters = countActiveFilters(filters)
 
     return (
         <section className="browse-page">
@@ -120,12 +130,7 @@ export default function BrowsePage() {
                 four paths -- a breadcrumb is supposed to say where you ARE,
                 and "Browse" said the same thing regardless of which of the
                 four archives `location.pathname` actually named. */}
-            <nav aria-label="Breadcrumb" className="record-breadcrumbs">
-                <Link to="/">TCKDB</Link>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">{content.breadcrumbLabel}</span>
-            </nav>
-            <PageShell contents="none">
+            <PageShell contents="none" side={narrow ? undefined : filterForm}>
             {/* Each kind's own identity now (`BROWSE_KIND_CONTENT`,
                 `api/browseApi.ts`) -- was the SAME "Browse the archive" /
                 "Archive index" / "Choose what to browse, then narrow it
@@ -146,7 +151,12 @@ export default function BrowsePage() {
                 </p>
             </header>
 
-            <BrowseFilterForm filters={filters} kind={kind} onChange={updateFilters} />
+            {narrow && (
+                <details className="browse-filters-disclosure" open={filtersOpen} onToggle={(event) => setFiltersOpen(event.currentTarget.open)}>
+                    <summary>{activeFilters > 0 ? `Filters (${activeFilters})` : "Filters"}</summary>
+                    {filterForm}
+                </details>
+            )}
 
             <BrowseResults filters={filters} kind={kind} offset={offset} setOffset={setOffset} state={state} />
             </PageShell>

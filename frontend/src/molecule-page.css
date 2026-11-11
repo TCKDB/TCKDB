@@ -1,13 +1,7 @@
 /*
  * Molecule (species entry) page. Colour tokens come from theme.css; none is redeclared here so the page follows the
- * theme. Prose keeps its own narrower measure; the page itself is capped wide enough for three shape cards per row.
+ * theme. Prose keeps its own narrower measure.
  */
-
-.entry-page {
-    max-width: 126rem;
-    margin: 0 auto;
-    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 6rem;
-}
 
 /* Ties "Transition states for reactions of this species" (item 1/5;
    `.note`, design-system.css, at its call site) to the identity block
@@ -195,6 +189,39 @@
     font: var(--type-note-font);
 }
 
+.shape-card-3d {
+    margin: 0;
+    padding: 0 1.1rem;
+    border-top: 1px solid var(--line-2);
+    font: var(--type-note-font);
+}
+
+.shape-card-3d a {
+    color: var(--accent-700);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .16em;
+}
+
+.shape-card-3d a:hover { text-decoration-color: currentColor; }
+
+.shape-card-3d a:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.shape-card-3d a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.5rem;
+}
+
+@media (max-width: 62rem), (pointer: coarse) {
+    .shape-card-3d a {
+        min-height: 2.75rem;
+    }
+}
+
 .shape-card-energy,
 .shape-usedby {
     margin: 0;
@@ -218,8 +245,6 @@
 .conformer-card .depositor-note { margin: 0; border-radius: 0; }
 
 .shape-energy-table caption { text-align: left; }
-
-.shape-stage { margin-top: 2rem; }
 
 .shape-calculations {
     margin-top: 3rem;

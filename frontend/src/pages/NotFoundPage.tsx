@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
+import { RecordPlaceholder } from "../components/RecordPlaceholder"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 /**
@@ -27,12 +28,12 @@ export default function NotFoundPage() {
     const attemptedPath = `${location.pathname}${location.search}${location.hash}`
 
     return (
-        <section className="record-placeholder" role="alert">
+        <RecordPlaceholder alert>
             <p className="eyebrow">Not found</p>
             <h1>No page at this address</h1>
             <code>{attemptedPath}</code>
             <p>Nothing in this archive is served at this address. Check the link, or go back to the archive home.</p>
             <p><Link to="/">Go to the archive home</Link></p>
-        </section>
+        </RecordPlaceholder>
     )
 }

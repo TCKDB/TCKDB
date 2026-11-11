@@ -1320,7 +1320,7 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
         atoms: [{ atom_index: 1, element: "C", x: 0, y: 0, z: 0 }, { atom_index: 2, element: "O", x: 1.4, y: 0, z: 0 }], xyz_text: null,
     }
 
-    it("draws the transition state's picture from a geometries-only read, naming the entry, and leaks no depositor text from that read", async () => {
+    it("draws no transition-state picture, links to the entry page for it, and reads no geometry", async () => {
         const requested: string[] = []
         const base = mockFull()
         const planted = plantSentinels(mockFull({ transition_states: [{ ...base.transition_states[0], label: "x", note: "x" }] }), ["label", "note"])
@@ -1334,11 +1334,12 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
             }),
             http.get("/api/v1/scientific/geometries/geom_ts1", () => HttpResponse.json(geometry)),
         )
-        page()
+        const { container } = page()
         await screen.findByText("kin_test1")
-        const picture = await screen.findByRole("img", { name: /Ball-and-stick picture of transition state tse_test1/ })
-        expect(picture).toBeInTheDocument()
-        expect(requested).toEqual(["?include=geometries"])
+        const link = await screen.findByRole("link", { name: "Picture and 3D view of tse_test1" })
+        expect(link).toHaveAttribute("href", "/transition-state-entries/tse_test1")
+        expect(container.querySelector("svg.mol-poster")).toBeNull()
+        expect(requested).toEqual([])
         await waitFor(() => expect(document.querySelector(".energy-profile-definition")).not.toBeNull())
         expectDepositorTextOnlyInNotes()
         expectNoDepositorText()
