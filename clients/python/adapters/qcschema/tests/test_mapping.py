@@ -86,8 +86,7 @@ def test_energy_driver_value_is_exactly_return_result_when_both_present():
 #
 # provenance.creator on an OptimizationResult names the OPTIMIZER (geomeTRIC),
 # not the ESS that actually computed the energies/gradients it consumed.
-# Mapping that top-level provenance straight into software_release (the
-# pre-fix behaviour) would silently record "Psi4 optimised this molecule at
+# Mapping that top-level provenance straight into software_release would silently record "Psi4 optimised this molecule at
 # geomeTRIC" -- the software and workflow tool swapped. The real fixtures
 # (built by a real Psi4-via-geomeTRIC run through qcengine) are the primary
 # evidence; the two synthetic cases below cover the trajectory-dropped

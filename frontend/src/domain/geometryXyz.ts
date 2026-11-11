@@ -46,7 +46,7 @@ export function buildXyzBlock(atoms: GeometryAtom[]): string {
  * Rewrites a `D` / `T` element token (either case) to `H` on every atom line
  * of an XYZ block, for the 3D viewer only.
  *
- * Decision #672: in a geometry, `D`/`T` mean the hydrogen isotopes (2H/3H).
+ * In a geometry, `D`/`T` mean the hydrogen isotopes (2H/3H).
  * The backend stores lowercase `d`/`t` as 2H/3H too, and 3Dmol upper-cases the
  * first letter of a symbol, so lowercase is rewritten as well. Only a token that
  * is exactly one letter followed by whitespace is touched, so Ti, Ta, Tb, Tc,
@@ -121,9 +121,9 @@ export const ELEMENT_ATOMIC_NUMBERS: Record<string, number> = {
 /**
  * `D` (deuterium, mass number 2) and `T` (tritium, 3): element-column tokens
  * that name a hydrogen *nuclide*, not an element, so they are not in
- * `ELEMENT_ATOMIC_NUMBERS`. A geometry deposited since #672 stores `H` plus an
- * `isotope_mass_number` and never shows one of these; a row deposited before
- * that decision still holds the symbol, and its atomic number is hydrogen's
+ * `ELEMENT_ATOMIC_NUMBERS`. A geometry stores `H` plus an
+ * `isotope_mass_number` and does not show one of these; a row that still
+ * holds the symbol gets hydrogen's atomic number
  * rather than "unknown (D)".
  */
 export const HYDROGEN_ISOTOPE_SYMBOLS: Record<string, number> = { D: 2, T: 3 }

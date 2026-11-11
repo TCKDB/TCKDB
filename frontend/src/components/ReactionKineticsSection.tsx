@@ -123,9 +123,7 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
                 one unit selector; only a genuine dimensional difference,
                 like per_s beside cm3_mol_s, still gets two panels)
                 spanning every deposited kinetics record, ABOVE its own k(T)
-                table equivalent -- both after the per-record cards, per
-                plan §2's "one card per KineticsRecord ... Then the
-                Arrhenius chart with its table equivalent." A PLOG/
+                table equivalent -- both after the per-record cards. A PLOG/
                 Chebyshev/falloff/third-body record is listed there by ref
                 and reason, never plotted. */}
             <ArrheniusChart kinetics={kinetics} />
@@ -141,10 +139,8 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
     // `resolveProductLevels`'s own fallback path expects `source_calculations[]`
     // rows, a shape kinetics records do not carry — so when the server's
     // own `levels` is absent this record uses ITS OWN fallback
-    // (`deriveKineticsLevelsFallback`, the dependency-edge walk plan §7 and
-    // PR 398's own post-review commit describe) rather than the generic
-    // `source_calculations` derivation. When `levels` IS present (every
-    // live record, as of PR 398's deploy), `resolveProductLevels` is still
+    // (`deriveKineticsLevelsFallback`, the dependency-edge walk) rather than the generic
+    // `source_calculations` derivation. When `levels` IS present, `resolveProductLevels` is still
     // the one normaliser used everywhere else in the app (missing
     // sub-fields -> `null`, never `undefined`), so it stays the single
     // source of truth for "trust the server's own answer as-is".
@@ -173,8 +169,8 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
     const sourceProgram = softwareCellText(record.provenance.primary_software)
 
     // The SP row is the one that can name a calculation not among this
-    // page's own `calculations[]` (the plan §7 "resolver disagreement"
-    // case) — still a REAL, resolvable calc ref in the archive either way,
+    // page's own `calculations[]` (a resolver disagreement)
+    // — still a REAL, resolvable calc ref in the archive either way,
     // so it stays a link the same as opt/freq above it; `spNote` carries
     // the honesty caveat about where the row's ref came from when it
     // genuinely isn't part of this reaction's own TS graph.
@@ -212,7 +208,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
             </dl>
 
             {/* A SEPARATE `<dl>`, not appended to the facts list above --
-                MEASURED (post-review): in one shared grid, the auto-flow
+                In one shared grid, the auto-flow
                 column count let Geometry/Frequencies/Energy split across a
                 row boundary with "Software" interleaved into the same row
                 as one of them. Each `<dl>` here is its own independent

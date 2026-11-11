@@ -114,7 +114,7 @@ afterEach(() => {
 })
 
 // CH3 (planar radical) live record — geom_qcnisbgb4abax5oxym3dtjxu34,
-// measured 2026-08-30. atom_index is 1-based (archive numbering);
+// `atom_index` is 1-based (archive numbering);
 // `serial` in the click callback below is 0-based (3Dmol's own XYZ-parse
 // position) — atoms[0] has atom_index 1, matching the real serial<->index
 // relationship this component's docstring documents.
@@ -132,7 +132,7 @@ const CH3_ATOMS = [
 // permutation of 4 coplanar points still gives a 0/180 dihedral, so a
 // planar fixture cannot tell "clicked in the right order" apart from
 // "clicked in a permuted order" (see this describe block's own tests
-// below, and PR #295's review, which found exactly this gap).
+// below).
 const NONPLANAR_CASE = NAMED_DIHEDRAL_ORACLE_CASES.find((c) => c.label === "butane_gauche_plus_60")!
 const NONPLANAR_ATOMS = [
     { atom_index: 1, element: "C", ...NONPLANAR_CASE.a },
@@ -365,12 +365,11 @@ describe("GeometryViewer — atom-picking measurements", () => {
     })
 })
 
-// R1 (PR #295 review): the atom order at the component's dihedral call
-// site (GeometryViewer.tsx, dihedralOf(atoms[0], atoms[1], atoms[2],
-// atoms[3])) was unverified — permuting it survived the entire suite,
-// because the only component-level dihedral test used planar CH3, where
-// every permutation still gives 0/180. This describe block uses a
-// non-planar fixture with a real signed expected value instead.
+// The atom order at the component's dihedral call site (GeometryViewer.tsx,
+// dihedralOf(atoms[0], atoms[1], atoms[2], atoms[3])) is pinned here. A
+// planar CH3 fixture cannot detect a permuted order, since every
+// permutation still gives 0/180, so this describe block uses a
+// non-planar fixture with a real signed expected value.
 describe("GeometryViewer — component-level dihedral wiring (non-planar fixture)", () => {
     it("wires the 4 clicked atoms into dihedral() in click order — a-b-c-d, not a permutation", async () => {
         render(<GeometryViewer atoms={NONPLANAR_ATOMS} formula="C4" xyzText={null} />)
@@ -398,15 +397,11 @@ describe("GeometryViewer — component-level dihedral wiring (non-planar fixture
     })
 })
 
-// R3 (PR #295 review): claimed the on-canvas label ignores the unit
-// toggle (hardcoded to "angstrom"), citing GeometryViewer.tsx:977. Read
-// against the actual shipped code at commit 838e8474: both the DOM list
-// AND the canvas label call `measurementValueText(m, coordinateUnitMode)`
-// — the SAME variable, not a hardcoded literal — so this specific claim
-// does not reproduce. This is a regression guard, not a fix: it locks in
-// the (already correct) behaviour so a future change can't reintroduce
-// exactly the divergence the review described.
-describe("GeometryViewer — canvas label follows the unit toggle (R3 regression guard)", () => {
+// Both the DOM list AND the canvas label call
+// `measurementValueText(m, coordinateUnitMode)` — the SAME variable, not a
+// hardcoded unit. This guard keeps the on-canvas label from diverging from
+// the unit toggle.
+describe("GeometryViewer — canvas label follows the unit toggle", () => {
     it("the on-canvas label text uses the SAME unit as the DOM panel — bohr, when the page is on bohr", async () => {
         render(<GeometryViewer atoms={CH3_ATOMS} formula="CH3" xyzText={CH3_XYZ} coordinateUnitMode="bohr" />)
         await waitFor(() => expect(calls.setClickable).toHaveLength(1))
@@ -423,13 +418,11 @@ describe("GeometryViewer — canvas label follows the unit toggle (R3 regression
     })
 })
 
-// R5 (PR #295 review): claimed measurementCentroid divides by 2 instead
-// of atoms.length. Read against the actual shipped code: it already
-// divides by `atoms.length`. This is a regression guard, not a fix — a
-// distance (2-atom) measurement can't distinguish /2 from /atoms.length,
-// so this uses a 4-atom dihedral with atoms spread away from the origin,
-// where the two formulas give clearly different results.
-describe("GeometryViewer — measurement label placement (R5 regression guard)", () => {
+// measurementCentroid divides by `atoms.length`. A distance (2-atom)
+// measurement can't distinguish /2 from /atoms.length, so this uses a
+// 4-atom dihedral with atoms spread away from the origin, where the two
+// formulas give clearly different results.
+describe("GeometryViewer — measurement label placement", () => {
     it("the on-canvas value label sits at the average of ALL measured atoms, not the sum divided by 2", async () => {
         render(<GeometryViewer atoms={NONPLANAR_ATOMS} formula="C4" xyzText={null} />)
         await waitFor(() => expect(calls.setClickable).toHaveLength(1))
@@ -474,12 +467,9 @@ describe("GeometryViewer — measurement label placement (R5 regression guard)",
     })
 })
 
-// R9 (PR #295 review): claimed dropping aria-labelledby={headingId} from
-// <section className="viewer-measurements"> survived, since that
-// attribute is the measurement <ol>'s only accessible name. Read against
-// the actual shipped code: it's present. This is a regression guard, not
-// a fix.
-describe("GeometryViewer — measurements section accessible name (R9 guard)", () => {
+// `aria-labelledby={headingId}` on <section className="viewer-measurements">
+// is the measurement <ol>'s only accessible name.
+describe("GeometryViewer — measurements section accessible name", () => {
     it("the measurements section is labelled by its own visible 'Measurements' heading", async () => {
         await renderReady()
         const section = document.querySelector(".viewer-measurements") as HTMLElement

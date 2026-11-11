@@ -29,8 +29,8 @@ describe("EnergyDisplay", () => {
         expect(screen.getByTestId("energy-display-value").textContent).toBe(original)
     })
 
-    it("no longer states the hartree/conversion rule in prose, but every displayed value still carries a unit", () => {
-        // The sentence used to say this in words; removed because the
+    it("does not state the hartree/conversion rule in prose, but every displayed value still carries a unit", () => {
+        // The conversion rule is not stated in prose: the
         // interface already demonstrates it (see `EnergyDisplay.tsx`'s own
         // comment) -- a test that only checked the sentence was gone would
         // pass even if the whole guarantee vanished with it, so this also

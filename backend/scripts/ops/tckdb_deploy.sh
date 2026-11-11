@@ -217,11 +217,9 @@ fi
 #      match for `"status":"ok"` anywhere in the body, which does not even
 #      distinguish the top-level field from one nested inside a component.
 #
-#      This only catches what /status covers. On 2026-08-05 it covered the
-#      database and the worker but not artifact storage, so a deployment whose
-#      object-store endpoint pointed at the container's own loopback reported
-#      ok here while every artifact-bearing upload returned 503. /status now
-#      probes artifact storage, so this loop sees it.
+#      This only catches what /status covers. /status probes the database,
+#      the worker and artifact storage, so a deployment whose object-store
+#      endpoint is unreachable is not reported ok here.
 live_status() {
     if command -v jq >/dev/null 2>&1; then
         jq -r '.status // ""' <<<"$1" 2>/dev/null

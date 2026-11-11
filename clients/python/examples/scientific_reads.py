@@ -6,8 +6,8 @@ reuse-policy, or "best" decisions are applied client-side; everything
 the script prints comes straight from the backend's documented
 deterministic ordering.
 
-Phase B/C: each response carries public ``*_ref`` handles alongside the
-historical integer ``*_id`` fields. Human-readable output prints refs
+Each response carries public ``*_ref`` handles; integer ``*_id`` fields
+appear only when internal ids are requested (``--include-internal-ids``). Human-readable output prints refs
 first; raw JSON (``--json``) is untouched. Follow-up reads
 (``get_reaction_full``, ``get_species_thermo``, repeated
 ``search_species_calculations``) chain on the returned refs.
@@ -544,7 +544,7 @@ def run_thermo_detail_followup(
 
     Demonstrates that the entry-id detail endpoint accepts a public ref
     as the path handle. Falls back to the integer id when the response
-    pre-dates Phase B and has no ``species_entry_ref`` field.
+    has no ``species_entry_ref`` field.
     """
     if not thermo_response:
         return
@@ -623,7 +623,7 @@ def run_lot_ref_followup(
 
     Demonstrates that ``level_of_theory_ref`` works wherever
     ``level_of_theory_id`` works. Skips silently when the previous call
-    returned nothing or pre-dates Phase B (no ``level_of_theory_ref``).
+    returned nothing or has no ``level_of_theory_ref``.
     """
     if not calcs_response:
         return
@@ -778,8 +778,8 @@ def run_full_provenance_followup(
 ) -> None:
     """Composite ``/full`` lookup chained from a search_kinetics result.
 
-    Prefers the public ``reaction_entry_ref`` returned by Phase B
-    responses; falls back to the integer ``reaction_entry_id`` so the
+    Prefers the public ``reaction_entry_ref``;
+    falls back to the integer ``reaction_entry_id`` so the
     script remains useful against older deployments.
     """
     if not kinetics_response:
@@ -809,7 +809,7 @@ def run_full_provenance_followup(
         entry = response.get("reaction_entry") or {}
         review = response.get("review_summary") or {}
         # ``reaction_entry`` uses ``id`` rather than ``reaction_entry_id``;
-        # the ref sibling is ``reaction_entry_ref`` per Phase B.
+        # the ref sibling is ``reaction_entry_ref``.
         ref = entry.get("reaction_entry_ref")
         rid = entry.get("id")
         label_parts = []

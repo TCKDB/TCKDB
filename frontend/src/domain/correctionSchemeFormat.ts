@@ -2,12 +2,10 @@ import { words } from "./provenanceFormat"
 
 /**
  * Human labels for `EnergyCorrectionScheme.scheme_kind`
- * (`backend/app/db/models/common.py`'s `EnergyCorrectionSchemeKind`), moved
- * here from `LevelOfTheoryPage.tsx` (2026-09, live-rule-violation fix) so
- * `CorrectionSchemePage.tsx` can title a scheme from the SAME controlled
- * vocabulary instead of falling back to the depositor's own free-text
- * `name` -- see `schemeKindLabel` below for why that fallback existed and
- * why it is gone.
+ * (`backend/app/db/models/common.py`'s `EnergyCorrectionSchemeKind`), shared
+ * by `LevelOfTheoryPage.tsx` and `CorrectionSchemePage.tsx`, which title a
+ * scheme from this controlled vocabulary instead of the depositor's own
+ * free-text `name` -- see `schemeKindLabel` below.
  */
 export const SCHEME_KIND_LABELS: Record<string, string> = {
     atom_energy: "Atom-energy correction",
@@ -23,16 +21,9 @@ export const SCHEME_KIND_LABELS: Record<string, string> = {
  * never `scheme.name`. `energy_correction_scheme.name` is depositor free
  * text (the create schema accepts any string; on the live archive both
  * seeded rows happen to equal their own `scheme_kind`, `atom_energy`/
- * `bac_petersson`, verbatim) -- rendering it as a page heading is exactly
- * the "depositor label on a public page" the owner ruled out ("I kinda
- * don't want labels almost in general to never appear on the front end").
- * `CorrectionSchemePage.tsx`'s `<h1>` used to render `scheme.name`
- * directly; `LevelOfTheoryPage.tsx`'s own per-LOT scheme heading used
- * `SCHEME_KIND_LABELS[kind] ?? scheme.name` -- a fallback that never fired
- * for either of today's two schemes (both kinds ARE in the map) but stayed
- * a live path straight to depositor text the moment a future scheme kind
- * shipped without a label entry here. Falling back to `words(kind)`
- * instead keeps that same "never leave a kind unlabeled" intent without
+ * `bac_petersson`, verbatim) -- rendering it as a page heading would put a
+ * depositor label on a public page. A scheme kind without a label entry
+ * here falls back to `words(kind)` so no kind is left unlabeled, without
  * ever reading `name` -- e.g. a hypothetical unmapped `foo_bar` kind prints
  * "foo bar", not whatever free text a depositor happened to send.
  */
@@ -51,9 +42,7 @@ export function schemeKindLabel(kind: string): string {
  * -- or answers a fixed, misleading number -- defeats the point of
  * collapsing it. A live scheme here is atom-XOR-bond-XOR-component (never
  * two of the three at once), so the sum is exactly the one table's own
- * row count -- "8 parameters" for `ecs_q5potmkzrmm6ynh2behv5kbfdu`
- * (atom-keyed), "45 parameters" for `ecs_5dzse4an2emubgyxge2dpj4ae4`
- * (bond-keyed), measured live.
+ * row count.
  */
 export function schemeParameterRollup(evidence: {
     atom_param_count: number

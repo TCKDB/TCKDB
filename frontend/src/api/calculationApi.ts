@@ -7,8 +7,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 // Include-token vocabulary
 //
 // Read off `CALCULATION_RECORD_SECTIONS` in
-// backend/app/api/routes/scientific/_response.py:149 (measured 2026-08-29,
-// live against a hosted TCKDB deployment). 19 public tokens; a 20th,
+// backend/app/api/routes/scientific/_response.py:149. 19 public tokens; a 20th,
 // `internal_ids`, exists but must never be requested by this client (it only
 // widens the response when the deployment allows internal ids, which this
 // public client has no use for). `trust` is a further, separate opt-in
@@ -232,7 +231,7 @@ const resultsSchema = z.object({
         n_points: z.number().nullable().optional(),
         note: z.string().nullable().optional(),
     }).passthrough().nullable().optional(),
-    // ADR 0021 / P3a: one composite energy. `assembly` is `program_run` (one
+    // One composite energy. `assembly` is `program_run` (one
     // program printed the number) or `assembled` (built from the energies of
     // other calculations, listed in `inputs`). Every energy is stated-or-null.
     composite: z.object({
@@ -498,7 +497,7 @@ const calculationRecordSchema = z.object({
     provenance: provenanceSchema,
     available_sections: availableSectionsSchema,
     results: resultsSchema.nullable().optional(),
-    // ADR 0021 / P7a. Set only on a composite calculation / a legacy deposit.
+    // Set only on a composite calculation / a legacy deposit.
     composite_energy_verification: compositeEnergyVerificationSchema.nullable().optional(),
     legacy_composite_shape: z.string().nullable().optional(),
     energy_corrections: z.array(energyCorrectionSchema).nullable().optional(),

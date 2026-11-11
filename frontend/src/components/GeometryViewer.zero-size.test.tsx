@@ -5,12 +5,7 @@ import { GeometryViewer } from "./GeometryViewer"
 afterEach(cleanup)
 
 /**
- * CORRECTION (post-review): this file's earlier docstring claimed it was
- * "the one environment that exercises 3Dmol's actual WebGL-unavailable
- * code path for real" — i.e. that jsdom's lack of a real WebGL context
- * made `$3Dmol.createViewer()` throw here. That was never true, and is
- * exactly the kind of stale/wrong coverage claim this repo has been
- * bitten by before: jsdom also never performs layout, so
+ * jsdom never performs layout, so
  * `containerRef.current.offsetWidth`/`offsetHeight` are always 0, and
  * `GeometryViewer`'s size guard (see its module docstring) intercepts
  * *before* `import("3dmol")` is ever reached — `createViewer` is never

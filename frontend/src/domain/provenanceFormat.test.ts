@@ -7,8 +7,7 @@ describe("softwareLabel", () => {
     })
 
     it("does NOT concatenate unconditionally when the version already opens with the name", () => {
-        // This is the exact live defect the brief names: unconditional
-        // concatenation produces "Gaussian Gaussian 16".
+        // Unconditional concatenation would produce "Gaussian Gaussian 16".
         expect(softwareLabel({ software: "Gaussian", version: "Gaussian 16" })).toBe("Gaussian 16")
     })
 

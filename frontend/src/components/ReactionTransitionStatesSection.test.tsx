@@ -7,16 +7,10 @@ import { ReactionTransitionStatesSection } from "./ReactionTransitionStatesSecti
 afterEach(cleanup)
 
 /**
- * Owner complaint, round 1 (2026-09): "in reaction we see Optimisation but
- * no idea what the optimisation is of? and its not clickable link to the
- * calc?". Round 2, on an earlier version of this fix that answered "what
- * is it" with a caption block ABOVE the graph (the equation, plus a
- * subject sentence): "This does need repeating what reaction since the top
- * of the page says which reaction" -- the equation caption is gone
- * entirely, and the subject now lives ON the centre node itself
+ * The subject lives ON the centre node itself
  * (`CalculationDependencyGraph.tsx`'s `centreSubject`), not in prose above
- * it. See `ReactionTransitionStatesSection.tsx`'s own docstring for the
- * full history.
+ * it, and no equation caption renders above the graph (the page's own
+ * <h1> states the reaction). See `ReactionTransitionStatesSection.tsx`'s own docstring.
  *
  * `TS` has an `ts_irc` slot (17 of 34 live TS entries do not -- see
  * `TS_NO_IRC` below for that case, which the honest note must stay silent
@@ -79,7 +73,7 @@ function renderSection(props: Partial<Parameters<typeof ReactionTransitionStates
 }
 
 describe("ReactionTransitionStatesSection — centre node link", () => {
-    it("links the dependency graph's centre node to /calculations/<ts_opt ref> (mutation table item (a))", () => {
+    it("links the dependency graph's centre node to /calculations/<ts_opt ref>", () => {
         renderSection()
         const centreNode = screen.getByTestId("dep-node-centre-calc_opt1")
         const calcLink = within(centreNode).getByRole("link", { name: /Optimisation calc_opt1/ })
@@ -88,7 +82,7 @@ describe("ReactionTransitionStatesSection — centre node link", () => {
 })
 
 describe("ReactionTransitionStatesSection — subject lives on the node, not in a caption", () => {
-    it("names the optimisation's own subject ON the centre node, linking to the TS entry (mutation table item (a))", () => {
+    it("names the optimisation's own subject ON the centre node, linking to the TS entry", () => {
         renderSection()
         const centreNode = screen.getByTestId("dep-node-centre-calc_opt1")
         const subjectLink = within(centreNode).getByTestId("dep-node-subject-calc_opt1")
@@ -97,9 +91,8 @@ describe("ReactionTransitionStatesSection — subject lives on the node, not in 
         expect(subjectLink).toHaveAccessibleName("Transition state tse_test1")
     })
 
-    // Round-2 owner complaint: no caption above the graph should repeat
-    // the reaction (the page's own <h1> already states it) or restate the
-    // subject a second time in prose now that it lives on the node.
+    // No caption above the graph repeats the reaction (the page's own <h1> already
+    // states it) or restates the subject a second time in prose.
     it("renders no equation caption and no separate subject caption above the graph", () => {
         renderSection()
         expect(screen.queryByTestId("dep-graph-equation-caption")).toBeNull()
@@ -136,14 +129,13 @@ describe("ReactionTransitionStatesSection — no dependency edges", () => {
     })
 })
 
-// Owner complaint, round 3 (2026-09): "whats this whole thing about not
-// served by /full?" -- `/full` is internal API vocabulary, meaningless to
-// a scientist-facing reader. The Energy/Review columns that used to print
+// `/full` is internal API vocabulary, meaningless to a scientist-facing
+// reader. The Energy/Review columns that would print
 // it (`TransitionStateCalculationSlot` never carries either field -- see
 // `backend/app/schemas/reads/scientific_provenance.py:227`) are gone
 // entirely, not replaced with softer wording for the same non-answer.
 describe("ReactionTransitionStatesSection — calculations-by-stage table has no unservable columns", () => {
-    it("renders only Stage / Level of theory / Software-workflow / Record -- no Energy or Review column, no /full jargon anywhere (mutation table item (b))", () => {
+    it("renders only Stage / Level of theory / Software-workflow / Record -- no Energy or Review column, no /full jargon anywhere", () => {
         renderSection()
         const table = screen.getByRole("table", { name: "Calculations for tse_test1" })
         const headers = within(table).getAllByRole("columnheader").map((h) => h.textContent)

@@ -264,8 +264,8 @@ fi
 # right"; template1's encoding answers "is the next database created here
 # going to be right" -- and a restore drill recreates the database, so the
 # template's answer becomes the production answer at the worst moment.
-# The live deployment held a UTF8 tckdb beside a SQL_ASCII template1 for
-# eight days after the 2026-08-04 incident, which is how this check exists.
+# A deployment can hold a UTF8 tckdb beside a SQL_ASCII template1, which is
+# why this check exists.
 
 enc_out=""
 if enc_out="$(compose exec -T db psql -U "$DB_USER" -d "$DB_NAME" -tA \

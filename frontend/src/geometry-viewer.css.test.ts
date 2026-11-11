@@ -46,25 +46,18 @@ describe(".viewer-stage (defect 1: accent bar)", () => {
     it("keeps a plain 1px border on all four sides", () => {
         // `#dbe2ea` was tokenised to `var(--line)` in the theme pass (see
         // `theme.css`) -- same colour, now theme-aware. Matching the token
-        // rather than the retired literal keeps this guard aligned with
-        // that rename instead of failing on a colour that never regressed.
+        // rather than the literal keeps this guard aligned with
+        // that rename.
         expect(rule).toMatch(/border:\s*1px solid var\(--line\)/)
     })
 })
 
 /**
- * Item 1 ("record-page residuals" re-review, post-review fix): the
- * measurements panel used to float to the right of and below the 3D
- * picture (see `geometry-measure.layout.css.test.ts`, which pins the
- * panel's own half of this fix). Half of that fix lives HERE: the
- * canvas and toolbar were centred inside `.viewer-stage` (`align-items:
- * center`) rather than left-aligned to the same edge the panel now
- * anchors to. Reverting `align-items` alone (leaving the panel's own
- * `margin: 0` fix in place) is a silent regression: MEASURED (CDP,
- * 1920px) the canvas snaps back to x=228 while the panel sits at
- * x=180 -- no longer sharing a left edge, the exact defect this item
- * exists to fix, just with the panel's OWN half of the bug gone. This
- * guards the other half.
+ * The canvas and toolbar are left-aligned inside `.viewer-stage`
+ * (`align-items: flex-start`, not `center`) so they share one left edge with
+ * the measurements panel (see `geometry-measure.layout.css.test.ts`, which
+ * pins the panel's half: `margin: 0`). Reverting `align-items` alone leaves
+ * the canvas centred while the panel is flush left.
  */
 describe(".viewer-stage (item 1: canvas/toolbar left-alignment)", () => {
     it("uses align-items: flex-start, not center -- the canvas and panel must share one left edge", () => {
@@ -91,19 +84,19 @@ describe(".viewer-canvas (defect 2: only 2 of 4 borders visible)", () => {
 })
 
 /**
- * SHOULD-FIX-11 ("record-page residuals" re-review): `margin: 0 auto`
- * centred the viewer picture and its caption inside the page while every
- * other block on this page sits flush left -- MEASURED ~350px gutter at
- * 1920. Both are left-aligned now (`margin: 0`).
+ * `margin: 0 auto`
+ * would centre the viewer picture and its caption inside the page while every
+ * other block on this page sits flush left (a ~350px gutter at 1920).
+ * Both are left-aligned (`margin: 0`).
  */
-describe(".viewer-stage / .viewer-caption are left-aligned, not centred (SHOULD-FIX-11)", () => {
-    it(".viewer-stage no longer auto-centres", () => {
+describe(".viewer-stage / .viewer-caption are left-aligned, not centred", () => {
+    it(".viewer-stage is not auto-centred", () => {
         const rule = extractRule(css, ".viewer-stage")
         expect(rule).toMatch(/margin:\s*0;/)
         expect(rule).not.toMatch(/margin:\s*0 auto/)
     })
 
-    it(".viewer-caption no longer auto-centres", () => {
+    it(".viewer-caption is not auto-centred", () => {
         const rule = extractRule(css, ".viewer-caption")
         expect(rule).toMatch(/margin:\s*0;/)
         expect(rule).not.toMatch(/margin:\s*0 auto/)
@@ -111,12 +104,12 @@ describe(".viewer-stage / .viewer-caption are left-aligned, not centred (SHOULD-
 })
 
 /**
- * SHOULD-FIX-10 ("record-page residuals" re-review): the viewer's own
+ * the viewer's own
  * button vocabulary (`.72rem uppercase mono`) was used nowhere else on
  * the site -- mapped onto `--type-ui-font`, the sans step every other
  * button/toggle in this app (the chart's own controls included) uses.
  */
-describe("viewer buttons/legends use --type-ui, not a one-off uppercase mono (SHOULD-FIX-10)", () => {
+describe("viewer buttons/legends use --type-ui, not a one-off uppercase mono", () => {
     it(".viewer-controls button / .viewer-style-choice button use --type-ui-font", () => {
         const rule = /\.viewer-controls button,\s*\.viewer-style-choice button \{([^}]*)\}/.exec(css)
         expect(rule, "rule not found").not.toBeNull()

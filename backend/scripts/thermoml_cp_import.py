@@ -1,8 +1,7 @@
 """CLI: fetch-verify -> select -> validate -> parse -> map -> persist one
 ThermoML article's heat-capacity rows -- either selected from the pinned
 NIST bulk archive (``--archive``/``--doi``) or a standalone ThermoML file
-anyone can hand it directly (``--file``, Phase C-E6: "let anyone ingest a
-ThermoML file, not only the NIST archive").
+anyone can hand it directly (``--file``).
 
 Default behavior is a dry-run preview -- the full pipeline runs inside one
 transaction, which is rolled back at the end regardless of outcome. Pass
@@ -174,7 +173,7 @@ def _article_from_file(path: Path) -> ArticleBytes:
 
     Thin wrapper over :func:`~app.importers.thermoml.archive.
     build_standalone_article`, the helper shared with the
-    ``POST /uploads/thermoml`` route (Phase C-E6 review round 2, F8), so
+    ``POST /uploads/thermoml`` route, so
     the two never independently drift on how a from-scratch
     :class:`ArticleBytes` gets built.
     """

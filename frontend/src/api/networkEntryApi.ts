@@ -7,11 +7,8 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 /**
  * `GET /scientific/networks/{ref}?include=states,channels,solves` --
  * `backend/app/api/routes/scientific/networks.py`, schema
- * `backend/app/schemas/reads/scientific_network.py`. See
- * `docs/plans/pressure-dependent-network-surface.md` §3/§4 for the
- * information architecture; this module covers PR 2's slice only
- * (identity, evidence incl. the energy-coverage fact, reactions, review --
- * no diagram, no k(T,P) chart, both later PRs per the plan's §6 slicing).
+ * `backend/app/schemas/reads/scientific_network.py`. This module covers
+ * identity, evidence incl. the energy-coverage fact, reactions and review.
  *
  * `states`/`channels`/`solves` are the three include tokens this page
  * actually needs:
@@ -20,9 +17,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
  *   species entries (there is no lighter "just the species list" include).
  * - `channels` -- `channels[].microreactions[]` is how the Reactions
  *   section is built (`reactions/search?network_ref=...` is NOT a legal
- *   filter on that endpoint -- confirmed against the live archive and
- *   noted in the plan's own PR 0 mock, `docs/plans/mocks/network-entry.md`
- *   "Another gap found while building the Reactions table").
+ *   filter on that endpoint).
  * - `solves` -- `solves[0].network_solve_ref`/`me_method`/
  *   `interpolation_model` feed the identity header and the follow-up
  *   `network-solves/{ref}` fetch for the solve's own state-energy/
@@ -33,8 +28,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
  * say as an equation" on its own -- those need per-species-entry
  * (`/species-entries/{ref}/thermo`) and per-reaction-entry
  * (`/reaction-entries/{ref}/full`) follow-up requests, composed here in
- * `loadNetworkEntry` exactly the way the PR 0 mock's own build process
- * gathered them by hand (see that mock's "What was fetched" section).
+ * `loadNetworkEntry`.
  */
 
 // ---------------------------------------------------------------------------
@@ -287,7 +281,7 @@ type SolveFetch =
 const NETWORK_INCLUDE = ["states", "channels", "solves"]
 
 /**
- * Composes everything `NetworkEntryPage`'s PR 2 sections need into one
+ * Composes everything `NetworkEntryPage`'s sections need into one
  * `useScientificRecord`-shaped load: the network detail itself, the first
  * solve's own state-energy/channel-barrier figures (if a solve exists), a
  * thermo-presence check for every unique participant species entry (the

@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest"
  * `log₁₀ k` read `LOG₁₀ K` (kelvin), `Cp (J/mol·K)` read `CP (J/MOL·K)`.
  * Each incident was fixed with a bespoke, selector-scoped `text-transform:
  * none` in ONE stylesheet -- correct for that one instance, but nothing
- * stopped the next stylesheet from reintroducing the same defect under a
- * selector name none of the earlier fixes could have named in advance.
+ * stops another stylesheet from reintroducing the same defect under a
+ * selector name that was not known in advance.
  *
  * WHAT THIS FILE CANNOT DO: it reads CSS source text, not a rendered page --
  * it cannot know that `.foo-chart-th` will one day render "Cp (J/mol·K)"
@@ -130,8 +130,7 @@ function extractTextTransformDeclarations(file: string, css: string): FlaggedRul
  * eyebrow, a kicker, a field label, a table header, a toggle option, ...)
  * with no unit, quantity symbol, chemical formula, species/conformer
  * label, or public reference ever passing through it, audited directly
- * against every call site in `src/pages/` and `src/components/` (2026-09
- * sweep). A selector belongs here ONLY after that check -- adding an entry
+ * against every call site in `src/pages/` and `src/components/`. A selector belongs here ONLY after that check -- adding an entry
  * "to make the test pass" without checking what text it renders defeats the
  * entire point of this file. Two base primitives (`.data-table th`,
  * `.kv-list dt`, `design-system.css`) are correctly listed here even though
@@ -194,8 +193,7 @@ describe("no CSS rule outside the reviewed allowlist resolves text-transform to 
         ).toEqual([])
     })
 
-    // ADVISORY ONLY, deliberately never a failing assertion (decided 2026-09,
-    // forced by #411): a stale allowlist entry -- a selector that was
+    // ADVISORY ONLY, deliberately never a failing assertion: a stale allowlist entry -- a selector that was
     // rewritten or deleted outright, so it no longer resolves to `uppercase`
     // in the CSS at all -- is INERT, not a risk. The test above only checks
     // selectors that ACTUALLY appear in `flaggedAsUppercase`; an allowlist
@@ -203,23 +201,10 @@ describe("no CSS rule outside the reviewed allowlist resolves text-transform to 
     // there is no rule left for it to hide. Its only cost is a few stale
     // lines in this file.
     //
-    // An earlier version of this test DID fail on a stale entry ("no stale
-    // entries masking a since-removed uppercase declaration") -- reverted
-    // the first time it was actually exercised: PR #411 landed a NEW
-    // uppercasing rule (`.arrhenius-chart-controls-heading`, correctly
-    // caught and allowlisted below, prose "Chart controls"), and a
-    // concurrent agent is already rewriting that same control block and
-    // expected to delete that class entirely shortly after (the owner
-    // called it "a wall of chrome"). Under the old rule, that unrelated
-    // deletion -- carrying zero scientific-text risk -- would have forced
-    // a same-PR edit to THIS file merely to keep CI green, for a change
-    // this guard has no actual stake in. That is precisely the failure
-    // mode this project's own guidance warns about: a check that fires on
-    // work unrelated to what it protects is a check people learn to route
-    // around, and the next genuine violation ships anyway. So: log it,
-    // never fail on it. Someone doing allowlist hygiene can grep this
-    // warning in a verbose run and delete the dead line whenever
-    // convenient -- never urgent, never blocking.
+    // Failing on a stale entry would force an edit to THIS file for an
+    // unrelated deletion of a rule that carries no scientific-text risk, so
+    // the check logs it instead. Someone doing allowlist hygiene can grep
+    // this warning in a verbose run and delete the dead line.
     it("logs (never fails on) any allowlisted selector that no longer resolves to uppercase in the CSS", () => {
         const flaggedKeys = new Set(flaggedAsUppercase.map((r) => `${r.file}::${r.selector}`))
         const stale: string[] = []

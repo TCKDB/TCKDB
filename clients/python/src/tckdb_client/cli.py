@@ -773,8 +773,8 @@ def artifact_download_name(
 
     Why not the recorded filename
     -----------------------------
-    Because on this corpus it identifies nothing. MEASURED on the hosted
-    instance 2026-09-14: 317 artifacts of kind ``output_log`` are all
+    Because on this corpus it identifies nothing. On the hosted
+    instance, 317 artifacts of kind ``output_log`` are all
     called ``input.log``, and 246 of kind ``input`` are all called
     ``input.gjf``. That is Gaussian's own convention -- ``g16 input.gjf``
     writes ``input.log``, so the output is named after the JOB rather
@@ -860,7 +860,7 @@ def _cmd_download_artifact(args: argparse.Namespace) -> int:
     api_key = os.environ.get(args.api_key_env)
     if not api_key:
         # Raw artifact bytes are served only to authenticated callers --
-        # unconditionally, per ADR 0004, because unredacted logs can carry
+        # unconditionally, because unredacted logs can carry
         # producer-side paths and hostnames. Saying so here beats letting
         # the caller discover it as a 401.
         #
@@ -906,9 +906,8 @@ def _cmd_download_artifact(args: argparse.Namespace) -> int:
         return EXIT_FAILURES
     except TCKDBHTTPError as exc:
         if exc.status_code == 404:
-            # One reason since 2026-09-14. A 404 used to also mean "exists,
-            # but not approved and not yours", so the message had to name
-            # both. Authentication is the whole gate now.
+            # One reason: authentication is the whole gate, so a 404 means
+            # only that the archive has no such artifact.
             print(
                 f"error: no artifact {args.sha256} is in the archive.",
                 file=sys.stderr,

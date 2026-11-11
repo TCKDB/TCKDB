@@ -8,7 +8,7 @@ import css from "./transition-state-entry.css?raw"
  *  in prose (this file's own comments mention `.tse-page` and
  *  `.data-table` repeatedly, describing WHY the rule below is scoped the
  *  way it is) can never be mistaken for the live selector itself --
- *  PR B review finding: without this, `match![1]` below could capture text
+ *  Without this, `match![1]` below could capture text
  *  reaching back into the preceding doc comment, which also contains the
  *  literal string `.tse-page` -- the test would keep passing even if the
  *  real selector's `.tse-page` prefix were deleted. Same helper
@@ -22,8 +22,8 @@ function stripComments(source: string): string {
  * jsdom does not lay out or paint anything, so it cannot see the visual
  * defect this file guards: a narrow-viewport table squeezing its first
  * ("Stage") column so tightly that short tokens wrap mid-word ("STAG" /
- * "E", "fre" / "q") -- MEASURED at 1100px on the TS entry page once the
- * Energy column (item 9) gave the table a fifth column to share width
+ * "E", "fre" / "q") at 1100px on the TS entry page, where the
+ * Energy column gives the table a fifth column to share width
  * with. What CAN be checked without a browser is the raw CSS text: that a
  * `white-space: nowrap` rule exists for the first column, and that it is
  * scoped to `.tse-page` rather than a shared (un-owned) table selector --
@@ -32,9 +32,8 @@ function stripComments(source: string): string {
  * may legitimately still need to wrap, so a global edit on the bare
  * `.data-table` selector would risk silently changing their layout too.
  *
- * design/foundations PR B ("record pages" consolidation): this page
- * migrated its own tables from `.stage-table` to the shared `.data-table`
- * primitive (`design-system.css`) -- the selector below moved with it.
+ * This page's tables use the shared `.data-table` primitive
+ * (`design-system.css`).
  */
 describe("data-table first column does not wrap mid-word, scoped to this page only", () => {
     const stripped = stripComments(css)
@@ -63,25 +62,23 @@ describe("data-table first column does not wrap mid-word, scoped to this page on
         expect(match![1]).not.toMatch(/\.tse-page/)
     })
 
-    it("no longer renders the retired .stage-table selector for this page's own first column", () => {
+    it("does not use the .stage-table selector for this page's own first column", () => {
         expect(stripped).not.toMatch(/\.stage-table/)
     })
 })
 
 /**
- * BLOCKING-1 ("record-page residuals" re-review): the IRC point list's
- * grid cells (176px, `minmax(11rem, 1fr)`) were narrower than a 31-char
- * mono ref, printing column 1 over column 2 -- MEASURED `scrollWidth` 714
- * at a 680px viewport. Widened to `minmax(18rem, 1fr)`, plus an explicit
- * single-column breakpoint below 62rem (rather than relying on auto-fill
- * to happen to resolve to one column on its own) and `min-width: 0` on
- * each item so a still-too-wide ref shrinks/wraps inside its own cell
- * instead of widening the grid.
+ * The IRC point list's grid cells use `minmax(18rem, 1fr)` (a 31-char mono
+ * ref is wider than `minmax(11rem, 1fr)` and would print column 1 over
+ * column 2), an explicit single-column breakpoint below 62rem (rather than
+ * relying on auto-fill to resolve to one column) and `min-width: 0` on each
+ * item so a still-too-wide ref shrinks/wraps inside its own cell instead of
+ * widening the grid.
  */
 describe("IRC point list: wide-enough cells, forced single column below 62rem, shrinkable items", () => {
     const stripped = stripComments(css)
 
-    it("widened the grid cell to 18rem (was 11rem)", () => {
+    it("sets the grid cell to 18rem, not 11rem", () => {
         expect(stripped).toMatch(/\.tse-irc-point-list\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(18rem,\s*1fr\)\)/)
         expect(stripped).not.toMatch(/minmax\(11rem,\s*1fr\)/)
     })
@@ -96,11 +93,11 @@ describe("IRC point list: wide-enough cells, forced single column below 62rem, s
 })
 
 /**
- * SHOULD-FIX-2 ("record-page residuals" re-review): the saddle-point
- * verdict box had a top margin only (`var(--s-4) 0 0`); the `.kv-list`
+ * The saddle-point
+ * verdict box owns spacing on both sides: the `.kv-list`
  * immediately following it owns no top margin of its own (the shared
- * primitive's contract), so the two sat 10px apart -- MEASURED. It also
- * carried a one-off `.92rem/1.55 serif` face outside the 13-step scale.
+ * primitive's contract), so a box with a top margin only would sit 10px
+ * from it. Its typography stays on the type scale.
  */
 describe("saddle-point box: owns spacing on both sides, on-scale typography", () => {
     const stripped = stripComments(css)
@@ -122,7 +119,7 @@ describe("saddle-point box: owns spacing on both sides, on-scale typography", ()
 })
 
 /**
- * SHOULD-FIX-4 ("record-page residuals" re-review): 126 characters per
+ * 126 characters per
  * line, no cap -- the IRC summary paragraph never composed the shared
  * `--measure-note` token every other genuine-prose block on this page's
  * ledger vocabulary uses.

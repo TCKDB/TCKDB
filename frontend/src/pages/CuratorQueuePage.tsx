@@ -28,17 +28,13 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
 /**
  * Machine findings: machine-review findings waiting on a person.
  *
- * Named "Machine findings" on screen, not "Curator queue". The old pair
- * of names ("Curator queue" and "Review queue") described who was
- * expected to open each page, which is the one thing the two have in
- * common -- so the owner could not tell them apart, and said so. The
- * names now describe what each page is ABOUT: findings a machine raised
+ * Named "Machine findings" on screen, not "Curator queue". The on-screen
+ * names describe what each page is ABOUT: findings a machine raised
  * here, records a human judged on `/review-queue` ("Record review").
  *
- * The route is still `/admin/curator-queue`, and the file, component and
- * query keys still say "curator task" throughout. That is deliberate:
- * this was a wording defect, and changing a URL breaks every bookmark
- * and every link already sent to somebody. `curator_task` is also the
+ * The route is `/admin/curator-queue`, and the file, component and
+ * query keys say "curator task" throughout, so the URL stays stable for
+ * bookmarks and links. `curator_task` is also the
  * backend's own table name, so the internal spelling still matches the
  * thing it names.
  *
@@ -49,8 +45,8 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
  * endorses any science, writes `record_review`, or changes what a reader
  * is told to trust. Resolving a task says a person dealt with a *finding*;
  * `resolved_human_reviewed` notes that a review happened elsewhere and
- * does not itself perform one. That separation is the whole design (ADR
- * 0016), and it is stated on the page rather than only in a doc, because
+ * does not itself perform one. That separation is the whole design,
+ * and it is stated on the page rather than only in a doc, because
  * a queue with a button labelled "resolve" invites exactly the wrong
  * reading.
  *
@@ -62,10 +58,9 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
  *
  * Everything a row owns is keyed by task id: which row's close form is
  * open, the note typed into it, the state chosen in it, which rows have a
- * write in flight, and which row is showing a refusal. An earlier draft
- * held the note and the chosen state as single page-level values, and
- * that is not a tidiness problem -- it silently attaches one record's
- * written justification to a different record's audit trail. Open the
+ * write in flight, and which row is showing a refusal. Holding the note and
+ * the chosen state as single page-level values would silently attach one
+ * record's written justification to a different record's audit trail. Open the
  * close form on task A, type why A is fine, change your mind, open task
  * B: the form under B came up pre-filled with A's sentence and already
  * submittable. `resolution_note` exists precisely so the next reader
@@ -105,9 +100,8 @@ const PAGE_LIMIT = 50
  * so following a link in place would drop all three. A sighted user sees
  * the new tab open; a screen reader user gets no such cue without this.
  *
- * Kept local rather than imported from `ReviewQueuePage.tsx`, which is not
- * this task's to touch (PR #492 is rewriting that page concurrently) and
- * does not export it. Small enough to duplicate rather than extract a
+ * Kept local rather than imported from `ReviewQueuePage.tsx`, which does
+ * not export it. Small enough to duplicate rather than extract a
  * shared component for one four-line function.
  */
 function NewTabNote() {
@@ -119,10 +113,8 @@ function NewTabNote() {
  *
  * Four outcomes, kept apart -- see `resolveRecordLocation` in
  * `domain/recordRoute.ts`. The wording here is this page's own, not
- * `ReviewQueuePage.tsx`'s: that page still says "this record cannot be
- * named" for the fourth outcome (PR #492 is removing it there), and the
- * owner has already called that phrase rubbish once. It does not appear
- * here.
+ * `ReviewQueuePage.tsx`'s. The phrase "this record cannot be
+ * named" does not appear here.
  */
 function RecordCell({ location }: { location: RecordLocation }) {
     switch (location.kind) {

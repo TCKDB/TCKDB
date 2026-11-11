@@ -436,7 +436,7 @@ def test_the_resolved_profile_echo_is_returned_to_the_caller():
 
 
 def test_release_is_not_a_parameter_on_any_analytics_method():
-    """``?release=`` is a 422 on the whole scientific surface (DR-0026)."""
+    """``?release=`` is a 422 on the whole scientific surface."""
 
     import inspect
 

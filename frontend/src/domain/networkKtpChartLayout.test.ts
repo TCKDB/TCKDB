@@ -237,9 +237,8 @@ describe("ktpLineSegments", () => {
 })
 
 // ---------------------------------------------------------------------------
-// familyUnits(1) -- what this file's brief asked to be CONFIRMED, not
-// assumed: does the unimolecular family offer any interchangeable sibling
-// unit to convert `per_s` to?
+// familyUnits(1) -- does the unimolecular family offer any interchangeable
+// sibling unit to convert `per_s` to?
 // ---------------------------------------------------------------------------
 
 describe("familyUnits(1) -- the per_s (isomerization) family", () => {
@@ -424,8 +423,8 @@ describe("modelKindStrokeColor / modelKindStrokeWidth -- MUTATION TARGET: model 
     })
 })
 
-describe("ktpXDomain -- the k(T,P) chart's own 1000/T axis domain (owner: 'why can't I change temp to 1/temp')", () => {
-    it("temperature mode: pads around the grid's own [min, max] -- unchanged from before this PR", () => {
+describe("ktpXDomain -- the k(T,P) chart's own 1000/T axis domain", () => {
+    it("temperature mode: pads around the grid's own [min, max]", () => {
         const [lo, hi] = ktpXDomain([300, 3000], "temperature")
         // span = 2700, pad = 2700 * 0.12 = 324 (domainWithPadding's own default paddingFraction)
         expect(lo).toBeCloseTo(-24, 9)

@@ -109,7 +109,7 @@ class RetryPolicy:
         Error-body ``code`` values that veto a retry the status would
         otherwise allow. Defaults to
         :data:`DEFAULT_NON_RETRYABLE_CODES`. Pass ``frozenset()`` to
-        restore the pre-#234 behaviour of deciding on the status alone —
+        decide on the status alone —
         which means replaying a lost artifact forever, so there is no
         good reason to.
     respect_retry_after:

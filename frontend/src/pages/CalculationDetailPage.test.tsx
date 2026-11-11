@@ -288,8 +288,8 @@ describe("CalculationDetailPage", () => {
         expect(within(list).getAllByRole("listitem")).toHaveLength(1)
     })
 
-    // The freq Result block used to print the raw field name
-    // "n_imag at or above tau" and, for a null value, "not determinable" --
+    // The freq Result block does not print the raw field name
+    // "n_imag at or above tau" or, for a null value, "not determinable" --
     // a claim about the data where the archive simply holds no projection.
     it("labels the imaginary-mode projection plainly and reads a missing projection as not recorded", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
@@ -313,7 +313,7 @@ describe("CalculationDetailPage", () => {
         expect(within(row).getByText("2")).toBeVisible()
     })
 
-    // 2026-09-04 owner decision: τ is resolved from the freq job's Hessian
+    // τ is resolved from the freq job's Hessian
     // method (`imaginary_mode_tau_basis`). A null basis (never judged) reads
     // "not recorded" on both new rows, same as every other absent value.
     it("reads a null tau basis as not recorded on both the Hessian method and noise floor τ rows", async () => {
@@ -342,7 +342,7 @@ describe("CalculationDetailPage", () => {
         expect(tauCell).not.toContain("assumed")
     })
 
-    // Copy rule (brief item 4): "assumed" must appear whenever an
+    // Copy rule: "assumed" must appear whenever an
     // assumed_* basis is rendered, and never otherwise -- covered from the
     // other direction in `tauBasis.test.ts`; this is the page-level half.
     it("renders an ASSUMED tau basis with a visible 'assumed' word on both rows, same τ as its recorded counterpart", async () => {
@@ -389,7 +389,7 @@ describe("CalculationDetailPage", () => {
     })
 
     // Item 3: identity, then classification, then provenance -- the h1
-    // states WHAT this is (type + the owner's own identity), the eyebrow
+    // states WHAT this is (type + the owning record's identity), the eyebrow
     // states the classification fact ("Frequency calculation"), plain
     // provenance rows come after.
     it("renders the h1 as '<Type> of <species formula>' using the Formula component, and the classification fact in the eyebrow", async () => {
@@ -436,8 +436,7 @@ describe("CalculationDetailPage", () => {
 
         // The calculation's own ref is visible at rest, first in the
         // identity block -- never behind the collapsed References
-        // disclosure any more (owner decision: "yes show each record's own
-        // ref inline").
+        // disclosure.
         const facts = screen.getByText("Calculation ref").closest(".record-identity-facts") as HTMLElement
         expect(facts).not.toBeNull()
         const ownRefValue = within(facts).getByText("calc_freq_one")
@@ -459,17 +458,17 @@ describe("CalculationDetailPage", () => {
         expect(within(refsDisclosure).queryByText("calc_freq_one")).not.toBeInTheDocument()
     })
 
-    // Item 1 (BLOCKING): a TS-owned calculation's owner now links to the
+    // A TS-owned calculation's owner links to the
     // real `/transition-state-entries/:ref` route, plus a breadcrumb
     // branch mirroring `TransitionStateEntryPage`'s own.
     //
     // The fixture's `transition_state_entry.label: "TS0"` is deliberately
-    // populated but MUST NOT appear anywhere -- house rule widened 2026-09:
+    // populated but MUST NOT appear anywhere -- house rule:
     // no depositor-typed labels on public pages. The h1 and the owner link
     // both read the entry ref instead, whether or not a label was
     // deposited (see the sibling test below for the no-label case, kept as
     // a separate fixture so a regression that starts branching on the
-    // wire's `label` field again would only break one of the two, not
+    // wire's `label` field would only break one of the two, not
     // both identically).
     it("links a transition-state owner to its entry page by ref, with a breadcrumb branch, instead of unlinked plain text or the depositor label", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
@@ -512,8 +511,7 @@ describe("CalculationDetailPage", () => {
         expect(within(breadcrumb).queryByRole("link", { name: "Reaction entry" })).not.toBeInTheDocument()
     })
 
-    // SHOULD-FIX-8 (re-review pass): the ref-fallback path, now also the
-    // ONLY path -- `titleSubject` no longer branches on the depositor
+    // The ref-fallback path is the ONLY path -- `titleSubject` does not branch on the depositor
     // label at all, so this and the test above must render identically
     // apart from the ref value itself.
     it("renders the raw ref, wrapped as a data run, when the TS owner has no label either", async () => {
@@ -629,10 +627,9 @@ describe("CalculationDetailPage", () => {
         expect(within(workflowRow).getByText("ARC 1.1.0")).toBeVisible()
     })
 
-    // Review finding (item 4): the "Input geometries / Output geometries /
-    // Dependency edges" count tiles rendered cardinalities at display size
-    // that each duplicated a section directly below. They are gone; the
-    // evidence checklist is the only card left in the summary strip.
+    // There are no "Input geometries / Output geometries /
+    // Dependency edges" count tiles (they would duplicate a section
+    // directly below); the evidence checklist is the only card left in the summary strip.
     it("renders no count tiles -- the summary strip is the evidence checklist alone", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()
@@ -670,7 +667,7 @@ describe("CalculationDetailPage", () => {
         const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
 
         // The section renders the graph itself, not just the sentence
-        // list -- review finding: reverting `CalculationDependencyGraph`
+        // list -- reverting `CalculationDependencyGraph`
         // out of `CalculationDetailPage.tsx` (leaving only the demoted
         // sentence list this test already checks below) left the FULL
         // suite green, since nothing here named the graph specifically.
@@ -696,8 +693,8 @@ describe("CalculationDetailPage", () => {
         expect(within(centreNode).queryByTestId("dep-node-subject-calc_freq_one")).toBeNull()
 
         // Parent-side: the OTHER calculation is the subject, and the
-        // sentence has a verb ("was run on") -- review finding: it used to
-        // read "single point on this geometry" with no verb at all.
+        // sentence has a verb ("was run on"), not just
+        // "single point on this geometry".
         const spItem = within(depSection).getByRole("link", { name: "calc_osrf4pnfcesq6s6somn7nr5hly" }).closest("li") as HTMLElement
         expect(spItem.textContent).toBe("The single point was computed on this geometry by calc_osrf4pnfcesq6s6somn7nr5hly")
 
@@ -730,7 +727,7 @@ describe("CalculationDetailPage", () => {
         expect(item.textContent).toBe("Frequencies were computed on this geometry by calc_rypxkxvsku5x2nk6sqbhhmfcla")
     })
 
-    // Review finding (BLOCKING-1): child-side edges used to say "This was
+    // Child-side edges must not say "This was
     // optimized from <link>" for EVERY role, not only `optimized_from` --
     // the live archive has child-side `freq_on` (a freq calc's edge back to
     // the opt it ran on), `single_point_on`, and `irc_start` edges, and each
@@ -909,8 +906,7 @@ describe("CalculationDetailPage", () => {
         expect(gvDd.textContent).toBe("passed")
     })
 
-    // record-summary-row PR, post-review (owner decision: every status word
-    // is a pill on every page, no exception for this one): this page's
+    // Every status word is a pill on every page, no exception for this one: this page's
     // evidence card renders through the SHARED `components/
     // EvidenceChecklist.tsx` component -- confirmed here via its
     // `data-component="evidence-checklist"` marker (not a page-local class
@@ -954,11 +950,11 @@ describe("CalculationDetailPage", () => {
         expect(scfPill).toHaveTextContent("unstable")
     })
 
-    // Item 3 (post-review): the `<dl>` must carry the shared `kv-list`
+    // The `<dl>` must carry the shared `kv-list`
     // class, not just its own `coverage-checklist` marker class -- without
-    // `kv-list`, this element has NO layout rules of its own any more
-    // (`calculation-detail.css`'s `.coverage-checklist` is bare margin
-    // since this fix), so a revert of the className alone left this suite
+    // `kv-list`, this element has NO layout rules of its own
+    // (`calculation-detail.css`'s `.coverage-checklist` is bare margin),
+    // so a revert of the className alone left this suite
     // green with no visible layout. This assertion is what makes that
     // revert fail.
     it("the evidence checklist <dl> carries the shared kv-list class", async () => {
@@ -1025,14 +1021,12 @@ describe("CalculationDetailPage", () => {
         const section = summary.closest("details") as HTMLDetailsElement
         expect(section).not.toBeNull()
         expect(section.open).toBe(false)
-        // Design/foundations PR B (item 5): every on-demand section now
-        // composes the shared `Disclosure` primitive (`.disclosure`,
+        // Every on-demand section composes the shared `Disclosure` primitive (`.disclosure`,
         // `design-system.css`) instead of a page-local bordered `<details>`
         // -- mutation check: rename this class away and this test fails.
-        // The redundant "SHOW" affordance span is gone with it (the
-        // primitive's own chevron, `.disclosure > summary::before`, is the
-        // idle-state affordance now) -- "Show" must not appear anywhere in
-        // this section.
+        // There is no separate "SHOW" affordance span (the primitive's own
+        // chevron, `.disclosure > summary::before`, is the idle-state
+        // affordance) -- "Show" must not appear anywhere in this section.
         expect(section).toHaveClass("disclosure")
         expect(within(section).queryByText("Show")).not.toBeInTheDocument()
         expect(within(section).queryByText(/The archive returned no parameter rows/)).not.toBeInTheDocument()
@@ -1427,11 +1421,9 @@ describe("CalculationDetailPage", () => {
         expect(within(section).getByText("Looks solid")).toBeVisible()
     })
 
-    // Item 7, design/foundations PR B: every table on this page moved from
-    // the page-local `.stage-table` recipe to the shared `.data-table`
-    // primitive (`design-system.css`), each inside a `.table-scroll`
-    // wrapper. Mutation check: revert one table's className back to
-    // `.stage-table` and this test fails.
+    // Every table on this page uses the shared `.data-table` primitive
+    // (`design-system.css`), each inside a `.table-scroll` wrapper, never
+    // the page-local `.stage-table`.
     it("renders every table on this page as the shared .data-table primitive inside .table-scroll, never .stage-table", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
@@ -1462,8 +1454,7 @@ describe("CalculationDetailPage", () => {
         expect(screen.getByText("not reviewed", { selector: ".review-chip" })).toBeVisible()
     })
 
-    // Item 6, design/foundations PR B: `.review-badge` is retired from this
-    // page's own markup -- the review-status pill is now the ONE shared
+    // The page does not use `.review-badge` -- the review-status pill is the ONE shared
     // `.value-pill` pill primitive, muted for "not reviewed" (an absent
     // verdict), accent for anything else. Mutation check: swap
     // `reviewPillClass`'s branches and this test fails on the muted half.
@@ -1563,9 +1554,9 @@ describe("CalculationDetailPage", () => {
         expect(screen.queryByText("Conformer")).not.toBeInTheDocument()
     })
 
-    // Item 1/2: the title, kicker, and stage strip all name the stage,
+    // The title, kicker, and stage strip all name the stage,
     // reading the SAME wording table (`domain/optimisationStage.ts`).
-    // Owner complaint this replaces: "Coarse pass; refined by …" read as
+    // "Coarse pass; refined by …" would read as
     // if the coarse molecule had been refined BY the other one.
     it("names the coarse pass in the title/kicker and renders the stage strip, from a parent-side optimized_from edge", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
@@ -1625,9 +1616,9 @@ describe("CalculationDetailPage", () => {
         expect(screen.queryByText(/Refinement of/)).not.toBeInTheDocument()
     })
 
-    // Review finding (kept): an absent optimized_from edge is not
-    // evidence of a single pass -- the old "Single-pass optimisation"
-    // text asserted a stage the archive never actually reported.
+    // An absent optimized_from edge is not
+    // evidence of a single pass -- "Single-pass optimisation"
+    // would assert a stage the archive never reported.
     // "Refinement stage: not recorded" says exactly what the page knows.
     it("renders the muted 'not recorded' fact and no strip when no optimized_from edge exists on an opt calculation", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
@@ -1654,9 +1645,8 @@ describe("CalculationDetailPage", () => {
         expect(screen.queryByText("No refinement stage recorded")).not.toBeInTheDocument()
     })
 
-    // Item 3: input == output collapses to one card, now framed as the
-    // output (owner ask: "if we have no input geom for the coarse, then
-    // we just say output geom").
+    // input == output collapses to one card, framed as the
+    // output.
     it("renders 'Output geometry' with the deposited-only note when the input and output geometry are the same stored ref", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
@@ -1676,7 +1666,7 @@ describe("CalculationDetailPage", () => {
         expect(screen.getAllByRole("link", { name: "geom_same" })).toHaveLength(1)
     })
 
-    // Post-review (#384 backfill): the sameGeometry branch used to say
+    // The sameGeometry branch must not say
     // "The starting geometry was not deposited" unconditionally -- false
     // once a coarse pass's extracted starting geometry dedupes to the
     // same row as its output (`input[0].source === "extracted_from_artifact"`).
@@ -1992,7 +1982,7 @@ describe("CalculationDetailPage", () => {
     })
 })
 
-describe("CalculationDetailPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("CalculationDetailPage -- no depositor-typed text", () => {
     it("prints none of the fields a depositor typed, in text or in any attribute, once every section is open", async () => {
         const planted = plantSentinels(mockRecord({
             conformer: {
@@ -2004,7 +1994,7 @@ describe("CalculationDetailPage -- no depositor-typed text (owner decision 2026-
         ])
         expectPlanted(planted)
         const { value } = planted
-        // The owner's joined species label carries a typed state label that reads like a stereo mark.
+        // The owning entry's joined species label carries a typed state label that reads like a stereo mark.
         ;(value.owner as { species_entry: { species_entry_label: string } }).species_entry.species_entry_label = ADVERSARIAL.joinedLabel
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: value })))
         const { container } = page()

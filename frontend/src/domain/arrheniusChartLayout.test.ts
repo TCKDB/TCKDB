@@ -18,8 +18,7 @@ import { convertArrheniusValue } from "./arrheniusUnits"
 // The SAME live values `kineticsTable.test.ts` pins (`kin_spkzatwjlvmmnja3i5im4fl7hq`,
 // A=3025.44 cm³ mol⁻¹ s⁻¹, n=3.11242, Ea=39.9711 kJ/mol, 300-3000 K) --
 // independently hand-computed as k(300 K) = 17028.619287800688, k(3000 K) =
-// 40467390077148.48. Reused here rather than re-derived, per this PR's own
-// "reuse the maths, do not fork it" brief.
+// 40467390077148.48. Reused here rather than re-derived.
 const A = 3025.44
 const n = 3.11242
 const Ea = 39.9711
@@ -111,11 +110,8 @@ describe("arrheniusUnitLabel", () => {
     })
 })
 
-// Owner's report, round 3: switching the plotted unit moved the curve, the
-// table, and the caption -- but the y-axis title always read the bare
-// "log₁₀ k" it had before this fix, the one thing on the chart that never
-// said what was actually plotted. `arrheniusLog10AxisTitle` is the fix:
-// the axis states the log of a RATIO (`log₁₀ [k / <unit>]`), the
+// The y-axis title says what is actually plotted, not a bare "log₁₀ k".
+// `arrheniusLog10AxisTitle`: the axis states the log of a RATIO (`log₁₀ [k / <unit>]`), the
 // dimensionally correct form -- `log₁₀ k (<unit>)` reads as "the log
 // itself carries units", which is not a coherent statement (you cannot
 // take the logarithm of a dimensional quantity).
@@ -138,7 +134,7 @@ describe("arrheniusLog10AxisTitle -- the dimensionally correct ratio form, never
         expect(arrheniusLog10AxisTitle(null)).toBe(`log₁₀ [k / ${arrheniusUnitLabel(null)}]`)
     })
 
-    // MUTATION-CATCHING (mutation table item (b)): pins the exact rendered
+    // MUTATION-CATCHING: pins the exact rendered
     // string, not just a regex shape -- a mutation that reverted to the
     // parenthetical form (`log₁₀ k (cm³ mol⁻¹ s⁻¹)`) would still match a
     // looser "contains the unit somewhere" assertion but fails this one.
@@ -147,7 +143,7 @@ describe("arrheniusLog10AxisTitle -- the dimensionally correct ratio form, never
     })
 })
 
-describe("buildArrheniusChartData -- per-ORDER-FAMILY panel split (defect fix: no longer per raw A_units token)", () => {
+describe("buildArrheniusChartData -- per-ORDER-FAMILY panel split (not per raw A_units token)", () => {
     it("a page mixing per_s and cm3_mol_s records gets two panels (different order families), each holding only its own family's series", () => {
         const perSRecord = record({
             kinetics_ref: "kin_unimolecular",
@@ -173,8 +169,8 @@ describe("buildArrheniusChartData -- per-ORDER-FAMILY panel split (defect fix: n
     })
 
     // THE headline fix: a cm3_mol_s record and an m3_mol_s record are the
-    // SAME physical quantity, 1e6 apart -- they must now land in ONE panel
-    // (the old per-raw-token grouping put them in two uncomparable panels).
+    // SAME physical quantity, 1e6 apart -- they must land in ONE panel
+    // (per-raw-token grouping would put them in two uncomparable panels).
     it("a cm3_mol_s record and an m3_mol_s record -- same order family -- share ONE panel", () => {
         const cm3Record = record({ kinetics_ref: "kin_cm3" })
         const m3Record = record({ kinetics_ref: "kin_m3", parameters: { A, n, Ea_kj_mol: Ea, A_units: "m3_mol_s" } })
@@ -369,14 +365,13 @@ describe("arrheniusPointX / panelXDomain -- the inverse-temperature (1000/T) axi
     })
 })
 
-// Review finding: every fixture elsewhere in this file uses the SAME
+// Every fixture elsewhere in this file uses the SAME
 // 300-3000 K range for every record, so a bug that sampled a record across
 // the PANEL's wider union domain instead of its own range would change
 // nothing observable in any of those tests. This block uses two records
 // with GENUINELY different ranges in the SAME panel and checks the
 // narrower one never extends past its own `record_min_k..record_max_k`,
-// per plan §4: "each curve drawn only within its own
-// record_min_k..record_max_k" -- not the panel's union.
+// not the panel's union.
 describe("computeArrheniusSeries -- per-record range clipping when panelled beside a wider record", () => {
     it("a narrow record (1000-2000 K) sampled beside a wide one (300-3000 K) in the same panel stays entirely within its OWN range", () => {
         const wideRecord = record({ kinetics_ref: "kin_wide", temperature_coverage: { record_min_k: 300, record_max_k: 3000 } })
@@ -489,7 +484,7 @@ describe("convertArrheniusSeriesUnits -- the series-level half of the unit selec
         expect(attempted).toBe(unrecorded)
     })
 
-    // Post-merge review finding: a converted `k` that underflows to EXACTLY
+    // A converted `k` that underflows to EXACTLY
     // 0 (a double cannot represent the true tiny positive value) must be
     // SKIPPED, mirroring `computeArrheniusSeries`'s own `if (!(k > 0))
     // continue` guard on the RAW k -- without it, `Math.log10(0)` is

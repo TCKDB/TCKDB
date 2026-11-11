@@ -1,4 +1,4 @@
-// Sentinel guard (owner decision 2026-11-03): a literature title shows on a public page only when
+// Sentinel guard: a literature title shows on a public page only when
 // the server says it was resolved from DOI/ISBN metadata. Any other title, and any DOI, is depositor text.
 
 import { http, HttpResponse } from "msw"

@@ -3,7 +3,7 @@ import { words } from "./provenanceFormat"
 
 // ---------------------------------------------------------------------------
 // How far a composite energy (CBS-QB3, G4, a CCSD(T)/CBS extrapolation, a
-// focal-point sum) has been checked -- ADR 0021, P7a. The server computes
+// focal-point sum) has been checked. The server computes
 // `composite_energy_verification` on every read; this module only words it.
 //
 // Two rules decide the shape of everything below:

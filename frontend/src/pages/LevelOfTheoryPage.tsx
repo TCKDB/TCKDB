@@ -32,11 +32,10 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
 /**
- * The level-of-theory record page (methods-surface plan §4.2,
- * `plan-methods-surface-v2`, not committed to this repo). This is the
- * object the owner asked for -- "method and basis and the software and
- * version so we can see specific freqs for those params, and corrections
- * of AEC and BAC" -- not a bare identity page: identity, observed
+ * The level-of-theory record page This is the
+ * record for a method and basis with its software and version, specific
+ * frequencies for those params, and corrections
+ * of AEC and BAC -- not a bare identity page: identity, observed
  * software, correction-scheme parameter tables, frequency scale
  * factor(s), and usage, in that order.
  *
@@ -64,7 +63,7 @@ export default function LevelOfTheoryPage() {
 
 function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
     const lot = record.level_of_theory
-    // The server's full label (ADR 0021, P7b) names the level the way its identity reads, so the
+    // The server's full label names the level the way its identity reads, so the
     // all-electron and frozen-core pages of one method and basis are told apart in the heading and
     // the breadcrumb. Older payloads have none: they keep `method/basis`.
     const title = lot.label ?? (lot.basis ? `${lot.method}/${lot.basis}` : lot.method)
@@ -113,13 +112,13 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                                         method choices a calculation can genuinely run without,
                                         unlike `basis` (kept as "not recorded" here, unchanged --
                                         a real gap for methods that do take one) or
-                                        `spin_treatment` below (DR-0034 gave that field an actual
-                                        `unknown` state precisely because it is NOT this kind of
+                                        `spin_treatment` below (which has an actual
+                                        `unknown` state because it is NOT this kind of
                                         optional-and-absent field). */}
                                     <div><dt>Dispersion</dt><dd>{lot.dispersion ?? "none"}</dd></div>
                                     <div><dt>Solvent</dt><dd>{lot.solvent ?? "gas phase"}{lot.solvent_model ? ` (${lot.solvent_model})` : ""}</dd></div>
                                     <div><dt>Spin treatment</dt><dd>{lot.spin_treatment ? words(lot.spin_treatment) : "not recorded"}</dd></div>
-                                    {/* Core treatment is stated-or-absent (ADR 0021, P7a): always
+                                    {/* Core treatment is stated-or-absent: always
                                         a row, like spin treatment, and "not recorded" rather than
                                         "all electron" for a level that does not say. */}
                                     <div><dt>Core treatment</dt><dd>{lot.core_treatment ? words(lot.core_treatment) : "not recorded"}</dd></div>
@@ -226,45 +225,33 @@ function SoftwareSection({ breakdown, available }: {
 }
 
 /**
- * Zero, one, or two parameter tables (§4.2 item 3). Per the task brief's
- * central rule: "no scheme deposited" (a fact about the archive) must
+ * Zero, one, or two parameter tables. "No scheme deposited" (a fact about the archive) must
  * read differently from "no correction is needed" (a claim about
  * chemistry the archive cannot make) -- so an absent scheme is stated
  * plainly, once per possible scheme kind this archive's own vocabulary
  * recognises, never as "not applicable" and never as a blank row.
  *
- * `SCHEME_KIND_LABELS`/`schemeKindLabel` now live in
- * `domain/correctionSchemeFormat.ts` (moved 2026-09, live-rule-violation
- * fix), shared with `CorrectionSchemePage.tsx`'s own heading -- see that
- * module's doc comment for why the old `SCHEME_KIND_LABELS[kind] ??
- * scheme.name` fallback here is gone.
+ * `SCHEME_KIND_LABELS`/`schemeKindLabel` live in
+ * `domain/correctionSchemeFormat.ts`, shared with
+ * `CorrectionSchemePage.tsx`'s own heading; there is no `scheme.name`
+ * fallback.
  *
- * Schemes are grouped by `scheme_kind` (correction-scheme-provenance plan
- * v2 §8, PR 4). A kind with exactly one deposited scheme renders exactly
- * as before -- one collapsible box, titled `{scheme_kind label}
- * {software}` -- via `CorrectionSchemeBox` below, unchanged in appearance.
- * A kind with MORE than one scheme (now buildable: `units`/`version` are
- * gone from the identity, so a software release or a citation are the
- * only axes left to distinguish two schemes of the same kind at this
- * level of theory, correction-scheme-provenance plan v2 §3/§8) renders
- * that same single box plus one small control above it
- * (`CorrectionSchemeSelect`) that swaps which scheme's box is shown --
- * never two boxes of the same kind side by side. This is the shape the
- * owner asked for, verbatim: "I would think you can change the software &
- * version and it will change the AEC and BAC instead or something."
+ * Schemes are grouped by `scheme_kind`. A kind with exactly one deposited
+ * scheme renders one collapsible box, titled `{scheme_kind label}
+ * {software}`, via `CorrectionSchemeBox` below. A kind with MORE than one
+ * scheme (a software release or a citation distinguishes two schemes of the
+ * same kind at this level of theory) renders that same single box plus one
+ * small control above it (`CorrectionSchemeSelect`) that swaps which
+ * scheme's box is shown -- never two boxes of the same kind side by side.
  *
- * Titling never reads `energy_correction_scheme.name` (both live rows
- * carry `name === scheme_kind` verbatim, so a `name` fallback here would
- * silently repeat the kind back in the depositor's own spelling the
- * moment a future scheme deposits a real custom name -- see
+ * Titling never reads `energy_correction_scheme.name` (a `name` fallback
+ * would repeat the kind back in the depositor's own spelling -- see
  * `correctionSchemeFormat.ts` for why this app never titles a public page
- * from `name` at all). Software comes from `scheme.software_release`
- * (#439, deployed; release-grained since correction-scheme-provenance v2
- * §4) via the shared `softwareLabel` formatter, which already prints the
+ * from `name` at all). Software comes from `scheme.software_release` via
+ * the shared `softwareLabel` formatter, which already prints the
  * version the moment the release carries one -- no separate "gains a
  * version" formatting code needed here. `software_release_ref` is a real
- * release ref today (`FrequencyScaleFactor`'s own sibling revision, #464,
- * gave its release the identical grain) but is rendered as copyable text,
+ * release ref, rendered as copyable text,
  * never a link: `GET /api/v1/software-releases/{id}` sits behind
  * `require_auth_for_legacy_reads` (`router.py`), so a link here would 401
  * for exactly the anonymous reader this page serves.
@@ -281,12 +268,8 @@ function SoftwareSection({ breakdown, available }: {
  * separate "version not recorded" text; inventing one would make an
  * honest partial deposit look deficient.
  *
- * **Collapsed by default, per the same owner ask that shaped
- * `EvidenceChecklist.tsx`** ("Evidence blocks should be expandable
- * rather"). A closed box that says nothing but its title answers nothing
- * -- the exact defect that component's own docstring documents fixing
- * elsewhere on this app ("Joined-record review counts" collapsing to "6
- * rows" while the real total was 4) -- so the collapsed summary also
+ * **Collapsed by default**, like `EvidenceChecklist.tsx`. A closed box that
+ * says nothing but its title answers nothing, so the collapsed summary also
  * carries a true roll-up, `schemeParameterRollup(evidence_summary)`
  * ("8 parameters" / "45 parameters" on the live archive), computed from
  * the SAME counts the open parameter table itself renders from.
@@ -302,7 +285,7 @@ function SoftwareSection({ breakdown, available }: {
 const LOT_SCOPED_SCHEME_KINDS = ["atom_energy", "bac_petersson", "bac_melius"] as const
 
 // Groups preserve first-occurrence order of each kind -- the same order
-// the flat `rows.map` used to render in -- rather than sorting kinds
+// as the input rows -- rather than sorting kinds
 // alphabetically or by count, so an archive that always deposits AEC
 // before BAC keeps reading that way.
 function groupSchemesByKind(rows: EnergyCorrectionSchemeRecord[]): [string, EnergyCorrectionSchemeRecord[]][] {
@@ -467,9 +450,8 @@ function CorrectionSchemeBox({ scheme }: { scheme: EnergyCorrectionSchemeRecord 
                         </dd>
                     </div>
                 )}
-                {/* No `energy_correction_scheme.note`: depositor free text (house rule,
-                    owner decision 2026-11-03). */}
-                {/* ADR 0021 / P6: the level the scheme's own frequencies were
+                {/* No `energy_correction_scheme.note`: depositor free text (house rule). */}
+                {/* The level the scheme's own frequencies were
                     computed at is part of its identity. Always a row: an
                     unstated one reads "not recorded", never the scheme's
                     energy level standing in for it. */}

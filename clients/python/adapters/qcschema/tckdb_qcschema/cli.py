@@ -1,4 +1,4 @@
-"""CLI entry point for the QCSchema importer and exporter (C-Q1, C-Q3).
+"""CLI entry point for the QCSchema importer and exporter.
 
     tckdb-qcschema import result.json [--smiles O] \
         [--species-entry-kind minimum] [--upload | --dry-run] \
@@ -326,7 +326,7 @@ def _emit_missing_base_url(*, as_json: bool) -> int:
 
     Checked before the client is built -- ``TCKDBClient`` itself raises a
     bare ``ValueError`` for an empty base URL, which is not a
-    ``TCKDBError`` and used to end in a traceback.
+    ``TCKDBError``, so it would end in a traceback.
     """
     message = (
         "no TCKDB base URL: pass --base-url or set $TCKDB_BASE_URL to the "

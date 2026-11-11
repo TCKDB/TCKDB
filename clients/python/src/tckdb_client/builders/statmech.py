@@ -16,13 +16,10 @@ no ``rotational_constant_{a,b,c}_cm1``, no ``freq_scale_factor`` ref
 object, no ``torsions``). Producers needing those still fall back to the
 raw payload form.
 
-The "common subset" framing is no longer a constraint imposed by the two
-bundle shapes disagreeing: as of tckdb-schemas 0.26.0 the two statmech
-models carry identical field sets, so anything omitted here is omitted by
-this builder's own choice and can be added without a per-endpoint gate.
-Before 0.26.0, ``literature`` / ``software_release`` /
-``workflow_tool_release`` and the rotational constants existed on
-``StatmechInBundle`` only.
+The "common subset" is not a constraint imposed by the two bundle shapes
+disagreeing: the two statmech models carry identical field sets (tckdb-schemas
+0.26.0 onward), so anything omitted here is omitted by this builder's own
+choice and can be added without a per-endpoint gate.
 """
 
 from __future__ import annotations

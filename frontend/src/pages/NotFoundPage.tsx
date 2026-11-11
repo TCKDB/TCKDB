@@ -7,20 +7,15 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
  * `App.tsx`'s trailing wildcard route, and the two narrower wildcards
  * under `/species-entries/:entryRef/*` that route an unknown TAB segment
  * here too, rather than letting `SpeciesEntryPage` silently fall through
- * to its default tab (finding #12: `/species-entries/<ref>/single-point`
- * used to render the Geometry tab with no signal the URL was wrong).
+ * to its default tab (e.g. `/species-entries/<ref>/single-point`
+ * shows this page, not the Geometry tab).
  *
- * Previously the router's catch-all was `<Navigate to="/" replace />`:
- * an unknown URL rendered the home page with no message at all, so a
- * stale or mistyped link looked exactly like a working site. This page
- * says plainly that the address is wrong and names it, rather than
- * pretending it resolved to something.
+ * This page says plainly that the address is wrong and names it, rather
+ * than pretending it resolved to something.
  *
  * Shares `.record-placeholder` with `RecordStatus`'s own `Notice` --
  * both are "the archive did not serve a page here" states, styled the
- * same way. (Formerly also shared with `RecordPlaceholderPage`, deleted
- * once `/methods` -- its last consumer -- got a real page; see
- * `App.tsx`'s own comment on that route.)
+ * same way.
  */
 export default function NotFoundPage() {
     useDocumentTitle("Page not found")

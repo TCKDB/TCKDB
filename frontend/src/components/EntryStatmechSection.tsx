@@ -74,7 +74,7 @@ function statmechRecordProductLevels(
 // every record on the entry (`useEntryListSection`'s whole point) — opening
 // any one record's "Torsions" disclosure loads torsions for every record on
 // this entry in one request, because `include=torsions` is a request-time
-// decision on the LIST endpoint, not an address for one record. Each
+// choice on the LIST endpoint, not an address for one record. Each
 // record's own row still reads only its own key from the resulting map, and
 // a record whose own `available_sections.has_torsions` is false is never
 // silently painted with another record's data.
@@ -179,13 +179,10 @@ function StatmechList({ listKey, meta, onPage, linkedNote, response, conformer, 
         openSourceCalcs()
     }, [openSourceCalcs])
 
-    // Frequencies too, and for the same reason `source_calculations` is
-    // eager: the vibrational-frequency evidence is the CONTENT of a
-    // statmech record, not an optional extra -- the owner's report was
-    // exactly this, seven ~500px cards showing point group and symmetry
-    // while the frequencies sat in a collapsed "Expand to load this
-    // section" disclosure ~6000px below all of them. `FrequenciesBlock`
-    // (on each card, below) now renders this by default, gated per-record
+    // Frequencies are eager, for the same reason `source_calculations` is:
+    // the vibrational-frequency evidence is the CONTENT of a
+    // statmech record, not an optional extra. `FrequenciesBlock`
+    // (on each card, below) renders this by default, gated per-record
     // by that record's own `available_sections.has_frequencies` -- never a
     // separate global disclosure a reader has to find and open first.
     useEffect(() => {
@@ -433,11 +430,11 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesS
  * whole group of scientifically-identical deposits).
  *
  * `showRecordEvidence` is `false` only for the group's own shared body
- * (`IdenticalStatmechRecordsCard`) -- the finding measured live: the
+ * (`IdenticalStatmechRecordsCard`): the
  * representative's "Record software: Arkane · Workflow: ARC 1.1.0", its own
- * source-calculation count, and its single freq-calculation ref were all
- * printed as though they held for the whole group, when in fact six of the
- * seven ethene records cite different freq calculations and different
+ * source-calculation count, and its single freq-calculation ref would read
+ * as though they held for the whole group, when records in a group can cite
+ * different freq calculations and different
  * software. None of `evidence_summary`, `FrequenciesBlock`, or
  * `software_release`/`workflow_tool_release` participates in
  * `statmechRecordFingerprint` -- they are real per-record facts, not shared
@@ -544,10 +541,7 @@ function RecordSettingsBlock({ record }: { record: StatmechRecord }) {
 
 /**
  * The archive's own frequency evidence for this record, on the card itself
- * and loaded by default -- previously this lived ~6000px below all seven
- * record cards, behind a "Expand to load this section" disclosure, while
- * every card showed point group, symmetry, and provenance flags but never
- * the frequencies themselves. `record.available_sections.has_frequencies`
+ * and loaded by default. `record.available_sections.has_frequencies`
  * gates this per record -- `false` means genuinely nothing to show, so
  * this renders nothing at all (never a heading over an empty box).
  *
@@ -624,9 +618,7 @@ const STATMECH_GROUP_ID_SUFFIX = "-group"
 /**
  * One card for N deposited statmech records that report IDENTICAL
  * scientific content (`domain/identicalRecordGroups.ts`'s
- * `statmechRecordFingerprint`) -- the finding measured live: seven ethene
- * statmech records, all D2h, σ=4, 0.9990 fundamental, b3lyp/def2tzvp,
- * rendered as seven full ~500px cards. The shared scientific content
+ * `statmechRecordFingerprint`), instead of one full card per record. The shared scientific content
  * renders ONCE, from the group's first record; every member reports the
  * identical body by construction of the fingerprint -- via the same
  * `StatmechRecordBody` a single-record card uses. "Show all" mounts every
@@ -788,7 +780,7 @@ function StatmechLevelsRowCells({ levels, showNotation = false }: { levels: Prod
  * calculations at different levels of theory while reporting byte-identical
  * scientific values. ALWAYS three columns (Geometry/Frequencies/Energy),
  * agreeing or not -- see `components/ProductLevels.tsx`'s own header
- * comment for why the old one-column collapse was retired.
+ * comment.
  */
 function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesState }: {
     records: StatmechRecord[]
@@ -804,14 +796,10 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
         <section aria-labelledby={headingId}>
             <h4 className="model-block-heading" id={headingId}>Records in this group</h4>
             <div className="table-scroll table-scroll--compact">
-                {/* BLOCKING-2 (species-entry/browse/chrome residuals re-review):
-                    this table used to carry 8 nowrap-ref columns -- at 1920 the
-                    last one clipped at the `.table-scroll` edge ("WORKFL / TOOL",
-                    "not recorde", MEASURED, no scrollbar affordance visible).
-                    "Record software" and "Workflow tool" move to a second row per
+                {/* "Record software" and "Workflow tool" sit in a second row per
                     record (spanning the remaining columns, same `.note` weight
                     as every other secondary provenance line on this page) rather
-                    than a 7th/8th column -- the table itself scrolls, rather than
+                    than a 7th/8th column, so the table scrolls, rather than
                     clips, at 680. */}
                 <table className="data-table" aria-label="Records sharing these identical values">
                     <thead>
@@ -866,11 +854,9 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
 /**
  * The frequency scale factor together with its OWN provenance -- LoT and
  * software (with version), plus the scale kind as a pill and the factor's
- * own ref on its own row. Previously one run-on sentence
- * ("Frequency scale factor <ref>: <value> (<kind>) · <lot> · derived for
- * <software>") that put an identifier inline with everything else -- the
- * owner: "needs to better show the freq scale with the LoT and software
- * (with version) and its weird having the ref on the same line".
+ * own ref on its own row, so the scale factor, its level of theory,
+ * software (with version) and ref are each legible rather than run
+ * together in one sentence.
  *
  * `fsf.software` is the software the scale factor was DERIVED FOR -- a
  * harmonic scale factor is specific to level of theory AND to the
@@ -955,15 +941,11 @@ function FrequencyScaleFactorDetail({ core, fsf, productLevels }: {
  * conformer projections (`domain/statmechConformerDerivation.ts`), and is
  * labelled as derived rather than as a stored fact for exactly that reason.
  *
- * Answers the owner's own confusion directly: "it shows no conformer link -
- * so that means there is no conformer observation or something? kinda
- * confusing where there are source calcs." There IS one, knowable from
- * those very source calculations; it was just never surfaced. Measured
- * live (2026-09-02): all 101 archive statmech records with source
- * calculations resolve to exactly one conformer -- disagreement has never
- * happened here yet, but this still renders that case honestly (naming
+ * Answers "which conformer?" for a record that shows no conformer link:
+ * the conformer is knowable from those very source calculations. When
+ * they disagree this renders that case honestly (naming
  * every conformer involved) rather than picking one, since a silent first-
- * match here would be wrong the moment a real archive disagrees.
+ * match would be wrong the moment a real archive disagrees.
  */
 function DerivedConformerNote({ record, conformers, sourceCalcsState }: {
     record: StatmechRecord
@@ -1062,11 +1044,10 @@ function StatmechLazySection<T>({
     // to the one line, unregistered with the ToC (no `SectionHeading`) --
     // there is no destination behind it to jump to.
     if (!available) return <p className="empty-projection">{notAvailableText}</p>
-    // Renders through the shared `Disclosure` component -- NOT
-    // `SectionHeading` inside `<summary>` the way this used to (a serif h2
-    // measured at 30.4px inside a `<summary>`, drawing the bare UA
-    // triangle on top of `.disclosure`'s own chevron once any box style
-    // was added around it). A `<summary>` is never a valid ToC destination
+    // Renders through the shared `Disclosure` component, not
+    // `SectionHeading` inside `<summary>` (a serif h2 inside a `<summary>`
+    // draws the bare UA triangle on top of `.disclosure`'s own chevron once
+    // any box style is added around it). A `<summary>` is never a valid ToC destination
     // for a shared, cross-record fetch trigger like this one anyway --
     // "Torsions"/"Electronic levels"/etc. name a REQUEST this page can
     // make, not a section of content that exists until requested -- so
@@ -1094,15 +1075,10 @@ function StatmechLazySection<T>({
                 return (
                     <div key={ref} className="science-record card">
                         <div className="science-record-heading">
-                            {/* SHOULD-FIX-9 (species-entry/browse/chrome residuals
-                                re-review): this used to be `<h3>{ref}</h3>` -- the
-                                raw ref alone, at the 20px SERIF heading step, as
-                                though a scientific identifier were a title. A real
-                                title (the same "<origin> statmech record" phrase
-                                `StatmechRecordCard`'s own heading above already
-                                uses for the primary card) plus the ref in `.data`
-                                (mono, muted -- `entry-science.css`'s own rule for
-                                this exact class) matches every other heading on
+                            {/* A real title (the same "<origin> statmech record" phrase
+                                `StatmechRecordCard`'s own heading above uses
+                                for the primary card) plus the ref in `.data`
+                                (mono, muted -- `entry-science.css`) matches every other heading on
                                 this page. */}
                             <h3>{statusLabel(record.statmech.scientific_origin)} statmech record <span className="data">{ref}</span></h3>
                         </div>
@@ -1134,17 +1110,10 @@ function StatmechLazySection<T>({
 }
 
 /**
- * SHOULD-FIX-6 (species-entry/browse/chrome residuals re-review): this used
- * to be two separate `StatmechLazySection`s -- "Conformer context" and
- * "Review history" -- each rendering one FULL `.science-record card` per
- * record (a whole card for one bullet, a whole card for "not reviewed /
- * not recorded / not recorded", seven times over on a seven-record entry;
- * MEASURED, this page ran 12,700px tall at 1920 with every `<details>`
- * open). Neither section carries evidence a reader compares side by side
- * with the record's own full card above -- "which conformer, what review
- * state" is exactly the shape a table row answers, not a card. One
- * disclosure now, opening BOTH `conformers`/`review` include tokens
- * together, with one row per record: ref, conformer, review, reviewed at,
+ * One disclosure opens BOTH `conformers`/`review` include tokens
+ * together, with one row per record (a table row, not a card per record --
+ * "which conformer, what review state" is not evidence compared side by side
+ * with the record's own full card above): ref, conformer, review, reviewed at,
  * note. A record can carry more than one conformer-context row or more
  * than one review-history entry (both are arrays on the wire) -- multiple
  * values join with " · " in the same cell rather than each becoming its
@@ -1214,8 +1183,7 @@ function ConformerAndReviewSection({ records, conformersState, reviewState, onOp
                                                         {index > 0 && " · "}
                                                         {/* The ref, never `row.label` (the depositor's own
                                                             `conformer_group.label`, e.g. "conformer_1") --
-                                                            house rule widened 2026-09: no depositor-typed
-                                                            labels on public pages. */}
+                                                            no depositor-typed labels on public pages. */}
                                                         <Link to={`/conformer-groups/${row.conformer_group_ref}`}>{row.conformer_group_ref}</Link>
                                                     </span>
                                                 ))

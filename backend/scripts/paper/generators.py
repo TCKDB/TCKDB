@@ -1,4 +1,4 @@
-"""One generator per ``[DATA]`` claim in ``paper/19__TCKDB_skeleton/``.
+"""One generator per ``[DATA]`` claim of the publication snapshot.
 
 Each function takes a :class:`~sqlalchemy.orm.Session` on the (restored)
 publication database and returns a plain mapping. Rules, enforced by the byte
@@ -9,9 +9,6 @@ comparison in the deposit round trip rather than by convention:
 * no wall-clock values -- timestamps that appear are *data* (a submission's
   ``submitted_at``), never ``now()``;
 * database primary keys never appear; public refs do.
-
-Correspondence (skeleton line -> generator) is in
-``docs/research/tckdb-phase-b-implementation-plan.md``, section B3.
 """
 
 from __future__ import annotations
@@ -62,7 +59,6 @@ from app.services.machine_review.query import SCIENTIFIC_CHECK_PROVIDER
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
 #: The mechanism the paper deposits: the published formic acid model (Wu and Grinberg Dana 2026), unmodified.
-#: (The ammonia-methane fixture stays in the repository as a test fixture and is no longer reported on.)
 MECHANISM_FIXTURE_DIR = BACKEND_ROOT / "tests" / "integration" / "fixtures" / "rmg_formic_acid_wu2026"
 MECHANISM_FILE = "chem_annotated.inp"
 MECHANISM_FIXTURE_FILES = (
@@ -448,7 +444,7 @@ def transition_state_evidence(session: Session) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Phase C-Q4 demonstration -- QCSchema interchange
+# QCSchema interchange demonstration
 # ---------------------------------------------------------------------------
 
 QCSCHEMA_INTERCHANGE_REPORT = BACKEND_ROOT / "scripts" / "validation" / "qcschema_interchange_report.py"
@@ -514,7 +510,7 @@ def mechanism_fixture_provenance(session: Session) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Phase C-E4 demonstration -- computed Cp against external ThermoML data
+# Computed Cp against external ThermoML data
 # ---------------------------------------------------------------------------
 
 
@@ -531,16 +527,14 @@ def experimental_cp_comparison(session: Session) -> dict[str, Any]:
     fixed :class:`~app.services.machine_review.schemas.MachineReviewFinding`
     shape carries the full per-observation comparison as canonical JSON
     there because it has no free-form numeric field of its own). No
-    accuracy threshold is applied here or anywhere upstream of it (ADR 0008;
-    ``docs/research/tckdb-phase-c-implementation-plan.md`` C4) -- this
+    accuracy threshold is applied here or anywhere upstream of it -- this
     generator reports residuals, never a verdict on them.
     """
     # Discovery only: which thermo records have ever had a Cp-comparison row
     # recorded. "Which one is current for a given thermo" is not decided
     # here -- that is latest_cp_comparison_for_thermo's job, reading its own
     # (scientific_check family, RUNNER) recipe, the same notion the
-    # currency classifier now uses (record_machine_review_policy.md, Phase
-    # C-E4 review round 2).
+    # currency classifier uses.
     thermo_ids = sorted(
         set(
             session.scalars(
@@ -598,7 +592,7 @@ def thermoml_source_provenance(session: Session) -> dict[str, Any]:
     """Every ThermoML article custody row: source, digest, parser/mapping versions.
 
     One row per ``external_source_record`` of kind ``thermoml_article`` --
-    the Phase C-E1 custody chain (C2 design note) an importer attaches
+    the custody chain an importer attaches
     instead of the CCCBDB importer's flattened ``external_source_*``
     columns. Reports the natural per-value ``source_record_key``, never the
     row's internal id.

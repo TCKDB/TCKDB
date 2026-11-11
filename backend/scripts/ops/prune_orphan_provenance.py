@@ -5,8 +5,8 @@ Scope: ``software_release``, ``software``, ``workflow_tool_release`` and
 ``workflow_tool`` (issue #305). These are identity rows -- a program, or one
 exact release of it. A row that no record cites asserts nothing about the
 archive; it only shows up in registry listings as though something had been
-run with it. The deployed playground held two such rows on 2026-09-27 (an
-``Arkane`` release and a version-less ``Gaussian`` release).
+run with it. Such rows occur, for example an ``Arkane`` release or a
+version-less ``Gaussian`` release that nothing cites.
 
 **What "referenced" means is read from the database, not from this file.**
 Every foreign key whose target is one of the four tables is discovered from

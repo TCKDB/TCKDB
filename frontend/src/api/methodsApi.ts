@@ -5,17 +5,14 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 import { compositeSchemeSummarySchema, levelOfTheorySchema } from "./scientificSchemas"
 
 // ---------------------------------------------------------------------------
-// The methods surface (`docs/plans/methods-surface.md` §5.1-5.1,
-// `plan-methods-surface-v2`, not committed to this repo). Three read
-// surfaces this client wraps here:
+// The methods surface. Three read surfaces this client wraps here:
 //
 // - GET /scientific/level-of-theories/browse   (index)
 // - GET /scientific/level-of-theories/{ref}     (record page)
 // - GET /scientific/energy-correction-schemes/{ref}   (already shipped)
 // - GET /scientific/frequency-scale-factors/{ref}     (already shipped)
 //
-// Shapes measured live against a hosted TCKDB deployment, 2026-09-09,
-// cross-checked against `backend/app/schemas/reads/scientific_level_of_
+// Shapes cross-checked against `backend/app/schemas/reads/scientific_level_of_
 // theory.py`, `scientific_level_of_theory_search.py`,
 // `scientific_energy_correction_scheme.py`, `scientific_frequency_scale_
 // factor.py`. All response objects use `.passthrough()` (this project's
@@ -87,12 +84,9 @@ const ecsCoreSchema = z.object({
     energy_correction_scheme_ref: z.string(),
     name: z.string(),
     scheme_kind: z.string(),
-    // No `version`: dropped from the schema entirely (a7d4e2b9c351). It
-    // was nullable free text, in the identity, and null on every live
-    // row -- it versioned nothing. A parameter library that gets refit
-    // is distinguished by its citation or software release, both of
-    // which are identity columns; a counter beside them told a reader
-    // nothing they could act on.
+    // No `version`: the schema carries none. A parameter library that gets
+    // refit is distinguished by its citation or software release, both of
+    // which are identity columns.
     units: z.string().nullable().optional(),
     note: z.string().nullable().optional(),
     created_at: z.string(),
@@ -117,26 +111,18 @@ const ecsAvailableSectionsSchema = z.object({
 export const energyCorrectionSchemeRecordSchema = z.object({
     energy_correction_scheme: ecsCoreSchema,
     level_of_theory: lotSummarySchema.nullable().optional(),
-    // ADR 0021 / P6: the level the scheme's own frequencies were computed
+    // The level the scheme's own frequencies were computed
     // at, part of the scheme's identity. `null`/absent means the deposit did
     // not state one, never "the same as the level above".
     frequency_level_of_theory: lotSummarySchema.nullable().optional(),
-    // Added by #439 (deployed). Release-grained since correction-scheme-
-    // provenance plan v2 §4/#459: the scheme row stores a real
-    // `software_release_id` FK, and `_build_software_release_summary`
+    // Release-grained: the scheme row stores a real `software_release_id`
+    // FK, and `_build_software_release_summary`
     // (`backend/app/services/scientific_read/energy_correction_schemes.py`)
-    // joins an actual release, so `software_release_ref` is no longer
-    // measured empty the way it was pre-#459 -- that was a real backend
-    // limitation at the time (the row stored `software_id`, a vendor, not
-    // a release id), not a stale claim left uncorrected here.
-    // `FrequencyScaleFactor` had the identical vendor-only limitation and
-    // gained the same release grain in its own sibling revision (#464) --
-    // see `frequencyScaleFactorRecordSchema` below, which shares this same
-    // `softwareReleaseSchema`. Even with a real ref here, this app still
-    // never builds a link from it: PR 4
-    // (correction-scheme-provenance plan v2 §8) measured `GET /api/v1/
-    // software-releases/{id}` as sitting behind
-    // `require_auth_for_legacy_reads`, 401ing anonymously while every
+    // joins an actual release. `FrequencyScaleFactor` has the same release
+    // grain -- see `frequencyScaleFactorRecordSchema` below, which shares this
+    // `softwareReleaseSchema`. This app never builds a link from the ref:
+    // `GET /api/v1/software-releases/{id}` sits behind
+    // `require_auth_for_legacy_reads`, so it 401s anonymously while every
     // scientific read on this surface returns 200 -- a link would break
     // for exactly the anonymous reader these pages serve. Render through
     // `softwareLabel` (name/version only) like every other
@@ -226,7 +212,7 @@ const levelOfTheoryCoreSchema = z.object({
     solvent: z.string().nullable().optional(),
     solvent_model: z.string().nullable().optional(),
     spin_treatment: z.string().nullable().optional(),
-    // ADR 0021 / P7a: `frozen_core`/`all_electron`/`window`, or `null` when the
+    // `frozen_core`/`all_electron`/`window`, or `null` when the
     // deposit does not state it (never defaulted to either).
     core_treatment: z.string().nullable().optional(),
     // Method qualifiers: part of the level's identity only when stated, `null` otherwise.
@@ -345,7 +331,7 @@ export type LevelOfTheoryBrowseResult = {
 const LEVEL_OF_THEORY_DETAIL_INCLUDES = ["correction_schemes", "frequency_scale_factors", "software", "used_by"]
 
 /** The server-side filters the `/methods` index sends. `coreTreatment` is the
- *  API's own `core_treatment` filter (ADR 0021, P7a): it matches only levels
+ *  API's own `core_treatment` filter: it matches only levels
  *  that STATE their core treatment, so a level that does not say is listed
  *  under neither value. Anything else the index narrows in the browser. */
 export type CoreTreatmentValue = "frozen_core" | "all_electron"
@@ -423,7 +409,7 @@ export async function loadFrequencyScaleFactor(
     return parseScientificResponse(fsfDetailResponseSchema, payload, "frequency scale factor").record
 }
 
-// --- composite scheme (ADR 0021, P7a) -------------------------------------
+// --- composite scheme -------------------------------------
 //
 // `GET /scientific/composite-schemes/{ref}`. Shapes read from the OpenAPI
 // golden (`ScientificCompositeSchemeRecord`), not guessed. Enum-like fields

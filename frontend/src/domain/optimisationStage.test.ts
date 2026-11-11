@@ -17,7 +17,7 @@ function edge(overrides: Partial<CalculationDependency> = {}): CalculationDepend
 }
 
 describe("OPTIMISATION_STAGE_WORDS", () => {
-    // Literal-pinned: the exact wording the owner asked for
+    // Literal-pinned: the exact wording
     // ("Fine optimisation: <LINK>", "OPTIMISATION CALCULATION · COARSE
     // PASS") must never silently drift — a future edit that changes these
     // strings has to change this test too.

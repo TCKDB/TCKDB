@@ -4,7 +4,7 @@ import { MIN_SECTIONS_FOR_LIST } from "./components/TableOfContents"
 /**
  * Every page that renders `PageShell` declares whether it has a contents list. A page whose section count is
  * fixed below MIN_SECTIONS_FOR_LIST says "none" (the side column stays, without a list); every other page lists
- * its sections. A new PageShell page fails here until it is added with a decision.
+ * its sections. A new PageShell page fails here until it is added with an explicit entry.
  */
 const DECLARED: Record<string, "list" | "none"> = {
     "./pages/BrowsePage.tsx": "none",

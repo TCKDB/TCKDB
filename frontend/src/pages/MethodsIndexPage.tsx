@@ -45,8 +45,7 @@ function useLoad<T>(load: (signal: AbortSignal) => Promise<T>, key = ""): LoadSt
 }
 
 /**
- * `/methods` -- the archive's provenance-vocabulary index (methods-surface
- * plan §4.1, `plan-methods-surface-v2`, not committed to this repo).
+ * `/methods` -- the archive's provenance-vocabulary index.
  * Replaces `RecordPlaceholderPage kind="Methods"`. Three sections, each
  * its own `.data-table`: levels of theory (grouped by
  * `level_of_theory_ref`, per ruling 1 in §0 of that plan -- NEVER by
@@ -117,43 +116,32 @@ export default function MethodsIndexPage() {
 }
 
 /**
- * `dispersion`/`solvent` wording (owner: "the not recorded and solvent not
- * recorded ... like it suggests that someone missed it when rather these
- * are records without, so should be like none instead"):
- *
- * MEASURED before choosing a word, not assumed. The upload-facing
+ * `dispersion`/`solvent` wording: an absent value is a record without that
+ * method choice, not a missing field. The upload-facing
  * `LevelOfTheoryRef` fragment (`schemas/python/tckdb-schemas/tckdb_schemas/
  * fragments/refs.py`) declares `dispersion`/`solvent` as plain optional
  * strings with no separate "explicitly none" sentinel distinct from
- * "omitted" -- unlike `spin_treatment` on that SAME fragment, which DR-0034
- * gave a real `unknown` enum member specifically because every calculation
+ * "omitted" -- unlike `spin_treatment` on that SAME fragment, which has
+ * a real `unknown` enum member specifically because every calculation
  * genuinely runs at SOME spin treatment even when the depositor does not
  * say which, so `NULL` there could not honestly mean "there is none".
  * Dispersion correction and an implicit solvent model are the opposite
  * case: both are OPTIONAL method choices a calculation can genuinely run
- * without, so DR-0034's authors adding a disambiguating enum for spin but
- * not for these two fields is itself evidence "none" was already
- * considered the unambiguous reading here. `calculation_resolution.py`'s
+ * without, so "none" is the unambiguous reading here. `calculation_resolution.py`'s
  * `resolve_level_of_theory_ref` writes `ref.dispersion`/`ref.solvent`
  * straight into the row with no fallback/defaulting logic, matching that.
- * All four levels of theory live on the archive today (measured live,
- * 2026-09-09) are ab initio/DFT gas-phase kinetics levels -- CCSD(T)-F12,
- * MRCI+Davidson, b3lyp -- with `dispersion: null, solvent: null` on every
- * one, consistent with "no correction / vacuum" rather than "forgotten".
  * "None" states the dispersion fact plainly; "gas phase" is the more
  * informative, equally factual reading for an absent solvent (no implicit
- * solvent model means the calculation ran in vacuum) -- chosen over a
- * second "none" so a reader gets the chemistry, not just the negation.
- * `basis` is UNCHANGED here: a method that has no basis set is a real,
- * separate possibility (semi-empirical methods) this brief was not asked
- * to adjudicate, so it keeps the plain absence word.
+ * solvent model means the calculation ran in vacuum), so a reader gets the
+ * chemistry, not just the negation. `basis` keeps the plain absence word: a
+ * method that has no basis set is a real, separate possibility
+ * (semi-empirical methods).
  */
 const NO_DISPERSION_TEXT = "none"
 const NO_SOLVENT_TEXT = "gas phase"
 
 /**
- * Proportionate to what four rows need (owner: "i do wonder the bigger the
- * LoT, how easy is it to search?"): one text field narrowing on method and
+ * Proportionate to what a short list needs: one text field narrowing on method and
  * basis together, plus the two evidence facets that are genuinely useful
  * for finding which levels carry parameters -- not a full faceted-search
  * panel `BrowseFilterForm.tsx` builds for the archive's much larger
@@ -254,11 +242,8 @@ function LevelOfTheoryTable({ state, filter }: { state: LoadState<{ records: Lev
                 <tbody>
                     {records.map((record) => (
                         <tr key={record.level_of_theory.level_of_theory_ref}>
-                            {/* Both method AND basis are now inside the ONE link this row
-                                represents (owner: "the highlighting of the Method but not
-                                basis is weird" -- only Method used to be a `<Link>` while
-                                Basis sat beside it as plain text, reading as though the
-                                method alone were the record). `LevelOfTheoryLink` is the
+                            {/* Both method AND basis are inside the ONE link this row
+                                represents. `LevelOfTheoryLink` is the
                                 app-wide component every OTHER surface already uses to
                                 render a level of theory as one "method/basis" anchor into
                                 `/methods/:lotRef` (`SourceCalculationsTable.tsx`,

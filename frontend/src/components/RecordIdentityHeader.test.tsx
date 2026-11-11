@@ -11,8 +11,8 @@ afterEach(() => {
     Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true })
 })
 
-// `kicker`/`title` became required props in design/foundations PR B (the
-// header now owns the record's own kicker-row/h1, not just identity --
+// `kicker`/`title` are required props (the
+// header owns the record's own kicker-row/h1, not just identity --
 // see the component's own docstring). Every test below that does not
 // care about their exact content gets a stand-in default here so the
 // existing identity/facets/provenance assertions keep testing exactly
@@ -80,8 +80,8 @@ describe("RecordIdentityHeader", () => {
         expect(screen.queryByText("Reaction SMILES (unmapped)")).not.toBeInTheDocument()
     })
 
-    // House rule widened 2026-09: no depositor-typed labels on public
-    // pages at all. `TransitionStateIdentity` no longer even carries a
+    // No depositor-typed labels on public
+    // pages at all. `TransitionStateIdentity` does not even carry a
     // `label` field (see that type's own comment), but this asserts the
     // RENDER side directly and defensively -- even if a future caller
     // passes an identity object that still happens to carry a stray
@@ -203,10 +203,8 @@ describe("RecordIdentityHeader", () => {
         expect(container.querySelector("h1.t-display-1")).toBeNull()
     })
 
-    // PR #372 moved the species-entry hero onto this shared header and, in
-    // doing so, dropped the "Copy SMILES" / "Copy InChIKey" buttons the old
-    // hero had -- only the ref copy button (`RefsDisclosure`'s own
-    // `CopyButton`) survived. This reuses that EXACT component (clipboard
+    // Identity facts rendered as `.data` get a copy button. This reuses
+    // `RefsDisclosure`'s own `CopyButton`, the EXACT component (clipboard
     // write, "Copied" feedback, aria-label pattern) rather than building a
     // second copy button, so every page composing this header (species
     // entry, calculation, geometry, conformer group, observation,
@@ -252,10 +250,9 @@ describe("RecordIdentityHeader", () => {
         })
     })
 
-    // The "Species entry" fact used to fall back to the RAW
+    // The "Species entry" fact does not show the RAW
     // `identity.speciesEntryLabel` string as the link's own visible/
-    // accessible text (MEASURED showing as a bare "R" on the live
-    // calculation and geometry pages). `species_entry_label` is NOT
+    // accessible text (a bare "R"). `species_entry_label` is NOT
     // depositor free text -- it is built server-side (`backend/app/
     // services/scientific_read/species_identity.py:42`'s
     // `species_entry_label()`) as a compact discriminator from the
@@ -323,8 +320,7 @@ describe("RecordIdentityHeader", () => {
     })
 })
 
-// `ownRef` -- the record's OWN public ref, per the owner decision "yes
-// show each record's own ref inline". Deliberately exercised across every
+// `ownRef` -- the record's OWN public ref, shown inline first. Deliberately exercised across every
 // `identity.kind` branch (`species_entry`, `transition_state_entry`,
 // `ambiguous`, `absent`): a mutation that only prepends `ownRef` inside
 // ONE branch's `dl` (e.g. only `species_entry`) would still pass a test

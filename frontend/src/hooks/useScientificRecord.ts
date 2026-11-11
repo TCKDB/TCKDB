@@ -44,16 +44,13 @@ import { ScientificApiError, ScientificRateLimitError } from "../api/scientificT
  *   Distinct from `unavailable`: absence describes the request, null
  *   describes the data, and a rate limit is neither — it needs its own
  *   wording (and `retryAfterSeconds`) rather than the generic "try again
- *   later" that used to be shown here (and was wrong: the record was
- *   never actually unavailable, just throttled).
+ *   later" (wrong here: the record is not unavailable, just throttled).
  * - `unavailable`   — anything else (5xx, network failure, aborted
  *   request that still surfaced an error) — the one case where "try
  *   again later" is honest advice.
  *
- * Originally duplicated near-verbatim inside `useConformerGroup` and
- * `useConformerObservation`; factored out so a fix here reaches every
- * `/scientific/*` detail page instead of needing to be reapplied file by
- * file.
+ * Shared by every `/scientific/*` detail page (e.g. `useConformerGroup` and
+ * `useConformerObservation`), so a fix here reaches all of them.
  */
 export type ScientificRecordState<T> =
     | { ref: string; status: "loading" }

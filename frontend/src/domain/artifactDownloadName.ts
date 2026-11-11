@@ -5,9 +5,8 @@
  *
  * The recorded filename is depositor-typed (and on this corpus it identifies
  * nothing: 317 `output_log` artifacts are all called `input.log`). Only its
- * extension is used, and only when it is one of a known set (owner decision
- * 2026-11-03); its stem never reaches the saved name or the anchor's
- * `download` attribute. This now differs from `artifact_download_name` in
+ * extension is used, and only when it is one of a known set; its stem never reaches the saved name or the anchor's
+ * `download` attribute. This differs from `artifact_download_name` in
  * `clients/python/src/tckdb_client/cli.py`, which still uses the recorded stem.
  */
 const UNSAFE = /[^A-Za-z0-9_-]+/g

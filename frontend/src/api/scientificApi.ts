@@ -164,7 +164,7 @@ export type ReactionParticipationMatch = {
      * `ReactionBrowseRecord`'s own -- see `ReactionBrowseRow.tsx`'s doc
      * comment). `"forward"` or an absent/null value both mean "matched as
      * named, nothing to caveat" and render nothing, the same absent-vs-
-     * asserted rule that component follows. Every search here now runs
+     * asserted rule that component follows. Every search here runs
      * `direction=either` regardless of which arrow was typed (or none), so
      * THIS field -- not the arrow, not a second query mode -- is how a
      * reader learns a given row only matched because the archive also
@@ -190,11 +190,9 @@ export const REACTION_SEARCH_LIMIT = 5
  * can never drift from what the browse page's "See all" link-through
  * actually runs.
  *
- * **Always `direction=either`, never derived from the arrow (owner
- * correction).** An earlier version of this call site branched on which
- * arrow `classifyReactionQuery` saw -- a hidden mode a reader typing `<>`
- * had no way to discover `->` even existed, let alone that it meant
- * something narrower. Every search now asks the archive to check BOTH
+ * **Always `direction=either`, never derived from the arrow.** Branching
+ * on which arrow `classifyReactionQuery` saw would be a hidden mode a
+ * reader could not discover. Every search asks the archive to check BOTH
  * stored sides regardless of syntax, and each returned record's own
  * `matched_direction` (mapped through to `ReactionParticipationMatch.
  * matchedDirection`) says whether THAT row matched as written or in
@@ -204,7 +202,7 @@ export const REACTION_SEARCH_LIMIT = 5
  * The backend match is a literal string comparison against the stored
  * SMILES per participant (not RDKit-canonicalized) and, for `reactants`/
  * `products` with more than one entry, an ALL-of-these-together (AND)
- * match on that one side -- both measured live against
+ * match on that one side -- both against
  * `/scientific/reactions/browse` (`?reactant_smiles=NN&direction=either`
  * -> 20, `?reactant_smiles=NN&reactant_smiles=[H]&direction=either` -> 0).
  * This function does not resolve the reader's typed spelling to the

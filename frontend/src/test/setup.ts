@@ -11,10 +11,9 @@ import { resetAllRequestCaches } from "../api/requestCache"
  *
  * That budget is comfortable on a 20-core workstation and not on a 4-vCPU CI
  * runner. The symptom is a `findBy*` timing out with the page still showing
- * its loading state — the data was on its way, the window closed first. It was
- * observed four times on 2026-08-30 in four different files (`SpeciesEntryPage`,
- * `SpeciesOverviewPage`, and twice under full-suite load), never reproducibly
- * in isolation, and once in CI on a PR whose own tests were unrelated. See
+ * its loading state — the data was on its way, the window closed first. It shows
+ * up under full-suite load (e.g. in `SpeciesEntryPage` and
+ * `SpeciesOverviewPage` tests), not reproducibly in isolation. See
  * issue #286.
  *
  * This raises the window; it does not weaken any assertion. Every query still

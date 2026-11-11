@@ -1312,7 +1312,7 @@ class TCKDBClient:
         filename: str | None = None,
     ) -> Any:
         """POST a standalone ThermoML XML document to
-        ``/api/v1/uploads/thermoml`` (Phase C-E6) — not the NIST bulk
+        ``/api/v1/uploads/thermoml`` — not the NIST bulk
         archive path, which is a backend-only CLI
         (``backend/scripts/thermoml_cp_import.py --archive``).
 
@@ -1333,8 +1333,7 @@ class TCKDBClient:
 
         ``idempotency_key`` is required (unlike every other typed upload
         method's optional key): this route itself requires the
-        ``Idempotency-Key`` header, by the C-E6 decision (2026-09-20) --
-        not by DR-0024, which leaves the header optional in general --
+        ``Idempotency-Key`` header (it is optional on other upload routes)
         and refuses a keyless request at the wire, so a default of
         ``None`` here would just defer that failure to the server for no
         benefit.
@@ -1798,7 +1797,7 @@ class TCKDBClient:
         query strings. Pass ``method_http='GET'`` to force the GET form. Returns
         the parsed ``ScientificReactionSearchResponse`` JSON envelope.
 
-        Phase C: ``reaction_ref`` / ``reaction_entry_ref`` may be supplied
+        ``reaction_ref`` / ``reaction_entry_ref`` may be supplied
         as standalone identity filters (no SMILES required).
 
         ``match`` selects how the supplied species lists are compared with a
@@ -1882,23 +1881,15 @@ class TCKDBClient:
         :meth:`search_reactions` uses (``"forward"``, ``"reverse"``,
         ``"either"``; ``"exact"`` is not legal here or there).
 
-        **Behaviour change (2026-09):** the server default is now
-        ``"forward"``, not ``"either"``. Before this parameter existed,
-        the server always matched with the equivalent of ``either``, so
-        a species supplied via ``reactant_smiles`` could match a
-        reaction where it is stored only as a product, reached in
-        reverse (the returned record then carries ``matched_direction:
-        "reverse"``) -- a parameter named ``reactant_smiles`` could
-        return exclusively reactions where the species is never a
-        stored reactant. With the new default, ``reactant_smiles``
-        matches only the stored reactant side and ``product_smiles``
-        only the stored product side, so the field names mean what they
-        say. **Existing code that relied on the old either-direction
-        default for ``reactant_smiles`` or ``product_smiles`` will see a
-        narrower result set** unless it now passes
-        ``direction="either"`` explicitly to keep the old, broader
-        behaviour; ``matched_direction`` on each record still reports
-        which orientation actually matched. Left ``None`` here, the
+        The server default is ``"forward"``: ``reactant_smiles`` matches
+        only the stored reactant side and ``product_smiles`` only the
+        stored product side, so the field names mean what they say. Pass
+        ``direction="either"`` for the broader match, in which a species
+        supplied via ``reactant_smiles`` can match a reaction where it is
+        stored only as a product, reached in reverse (the returned record
+        then carries ``matched_direction: "reverse"``);
+        ``matched_direction`` on each record reports which orientation
+        actually matched. Left ``None`` here, the
         parameter is not sent and the server default (``"forward"``)
         applies.
 
@@ -1966,7 +1957,7 @@ class TCKDBClient:
         ``check_inputs=True`` (with ``include=['assessments']`` and ``limit`` of at most 10) compares each stored
         assessment's inputs with today's; without it a list reports ``inputs_unchecked``, never ``current``.
 
-        Phase C: ``reaction_entry_id`` accepts the integer
+        ``reaction_entry_id`` accepts the integer
         ``reaction_entry.id`` or a public ref of the form ``rxe_...``.
         Supplying a ``chem_reaction.id`` or a wrong-prefix ref returns
         422 / 404. Returns the parsed ``ScientificReactionKineticsResponse``
@@ -2041,7 +2032,7 @@ class TCKDBClient:
         ``check_inputs=True`` (with ``include=['assessments']`` and ``limit`` of at most 10) compares each stored
         assessment's inputs with today's; without it a list reports ``inputs_unchecked``, never ``current``.
 
-        Phase C: ``species_entry_id`` accepts the integer
+        ``species_entry_id`` accepts the integer
         ``species_entry.id`` or a public ref of the form ``spe_...``.
         Supplying a ``species.id`` or a wrong-prefix ref returns 422 / 404.
         Returns the parsed ``ScientificSpeciesThermoResponse`` JSON
@@ -2739,7 +2730,7 @@ class TCKDBClient:
         ``chemkin`` (forward-only, no thermodynamics). ``allow_administrative_choice`` is false on the server unless
         you pass true, and then permits only an unranked leading-front choice. Optional fields that are ``None`` are
         dropped, never sent as JSON null. A solve of kind ``reported`` (rates transcribed from a publication) is written
-        into CHEMKIN only with ``include_reported=True``, and then annotated with its literature (ADR 0010).
+        into CHEMKIN only with ``include_reported=True``, and then annotated with its literature.
         """
         path = _network_export_path(network_ref)
         body: dict[str, Any] = {
@@ -2850,7 +2841,7 @@ class TCKDBClient:
         identity context, so callers don't have to chain
         ``search_species`` → ``get_species_thermo`` themselves. Defaults to
         POST (mirrors ``search_reactions``); pass ``method_http='GET'`` for the
-        query-string form. Phase C: ``species_ref``, ``species_entry_ref``,
+        query-string form. ``species_ref``, ``species_entry_ref``,
         and ``level_of_theory_ref`` may be supplied as filter handles.
 
 
@@ -4819,7 +4810,7 @@ class TCKDBClient:
     ) -> Any:
         """``GET /scientific/reaction-entries/{reaction_entry_id}/full``.
 
-        Phase C: ``reaction_entry_id`` accepts the integer
+        ``reaction_entry_id`` accepts the integer
         ``reaction_entry.id`` or a public ref of the form ``rxe_...``.
         Composite scientific read joining species, kinetics, transition
         states, calculations, and review summary into one document. Returns
@@ -4856,7 +4847,7 @@ class TCKDBClient:
         Cartesian) plus a compact provenance summary listing every
         calculation that produced or consumed the geometry.
 
-        Phase D: ``geometry_id`` is hidden by default and restored
+        ``geometry_id`` is hidden by default and restored
         only when ``include=internal_ids`` is supplied and the
         deployment allows it.
         """

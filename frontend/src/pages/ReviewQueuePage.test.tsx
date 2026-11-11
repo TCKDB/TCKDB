@@ -324,10 +324,9 @@ describe("the page says which review this is", () => {
 
 describe("what a subject block shows (task #269, defect #4: nothing said what the chemistry was)", () => {
     it("does not print a species entry's own ref twice inside its own block (defect #1)", async () => {
-        // Review #492, finding 1 -- the MUST-fix, and the owner's original
-        // complaint back on the page: a species deposit gets a
+        // A species deposit gets a
         // species_entry review row, that row is its own subject, and it
-        // used to render its OWN ref a second time inside the block whose
+        // must not render its OWN ref a second time inside the block whose
         // heading already shows it:
         //
         //   H2O ...   spe_h2o (opens in a new tab)
@@ -445,8 +444,7 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
     })
 
     it("puts a NAME in the heading even with no formula -- the apology is a caveat, never the name itself", async () => {
-        // The exact defect the owner called "rubbish" once already
-        // ("applied_energy_correction cannot be named"), reappearing in
+        // "applied_energy_correction cannot be named" must not appear in
         // the subject heading: an absence sentence must never occupy the
         // slot where every OTHER subject's name sits.
         meIs(curator)
@@ -524,9 +522,8 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
     })
 
     it("names a reaction_entry subject by its own equation, not a bare ref (defect #6)", async () => {
-        // Review #492, finding 6: a kinetics reviewer used to see "Reaction
-        // entry rxe_..." and nothing else -- the species side of this page
-        // named subjects well and the reaction side named nothing.
+        // A kinetics subject is named by its equation, not "Reaction
+        // entry rxe_..." alone.
         meIs(curator)
         queueIs([
             subject(
@@ -688,11 +685,10 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
     })
 
     it("falls back when one participant has no formula, so it never mixes notations on one line", async () => {
-        // Review #492 (second round), finding 4: with no duplicate at all,
-        // a participant with `formula: null` still forced mixed notation
-        // under the old rule -- "C9H8 <=> CC1=CC=CC=1", formula on one
+        // With no duplicate at all, a participant with `formula: null`
+        // must not give mixed notation -- "C9H8 <=> CC1=CC=CC=1", formula on one
         // side, SMILES on the other, exactly the confusion this page's
-        // own comment already named. A missing formula must force the
+        // own comment names. A missing formula must force the
         // WHOLE equation to the SMILES-leading form, on its own, with no
         // collision required.
         meIs(curator)
@@ -758,7 +754,7 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
     })
 
     it("drops the redundant 'minimum ground state' chips for an ordinary species (defect #8)", async () => {
-        // Review #492, finding 8: "minimum · ground state" on nearly
+        // "minimum · ground state" on nearly
         // every ordinary molecule carries no information there.
         meIs(curator)
         queueIs([H2O])
@@ -1488,12 +1484,9 @@ describe("paging counts subjects, never records", () => {
 })
 
 /**
- * Review #492, finding 4: this file was rewritten wholesale for the new
- * `/queue` wire shape and markup, and several guarantees the OLD suite
- * pinned were never carried over -- not because the behaviour changed, but
- * because nothing re-asserted it against the new DOM. The first two below
- * are #488's own guarantees and are explicitly not negotiable; the rest are
- * the redesign's own regressions-to-avoid, ported to subject/record
+ * Guarantees pinned against the `/queue` wire shape and markup. The first
+ * two below are not negotiable; the rest are
+ * regressions-to-avoid, ported to subject/record
  * fixtures instead of the old flat rows.
  */
 describe("guarantees carried over from the flat queue (review #492, finding 4)", () => {
@@ -1957,7 +1950,7 @@ describe("guarantees carried over from the flat queue (review #492, finding 4)",
     })
 })
 
-describe("ReviewQueuePage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("ReviewQueuePage -- no depositor-typed text", () => {
     it("treats the queue as public: no unmapped SMILES, state label, term symbol or joined label reaches it", async () => {
         meIs(curator)
         const planted = plantSentinels(subject([record()], {

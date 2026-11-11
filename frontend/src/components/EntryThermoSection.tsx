@@ -46,7 +46,7 @@ import { ThermoCpChart } from "./ThermoCpChart"
 // reduced to "the first one" or "the best one". See `api/thermoApi.ts` for
 // the measured wire shape and why nothing here is include-gated.
 //
-// PR #285 gave thermo a REAL per-record conformer link
+// Thermo has a REAL per-record conformer link
 // (`provenance.conformer_group_ref`), resolved server-side through the
 // same primary calculation already used for `primary_calculation`/
 // `level_of_theory`. When a conformer is selected, records partition
@@ -54,12 +54,10 @@ import { ThermoCpChart } from "./ThermoCpChart"
 // `EntryStatmechSection`): traced to the selected conformer, traced to a
 // DIFFERENT named conformer, or carrying no conformer link at all
 // (population B — a record with no resolvable primary calculation). A
-// binary matched/unmatched split previously collapsed the middle case into
-// "no link", which is false of a record the wire does attribute elsewhere
-// — see the review that caught it. An earlier version of this file also
-// tried to INFER the link from calculation-ref intersection before this
-// field existed; that guess mislabeled population-B records as
-// conformer-linked and was removed outright, not patched.
+// binary matched/unmatched split would collapse the middle case into
+// "no link", which is false of a record the wire does attribute elsewhere.
+// The link is taken from the wire field, never inferred from
+// calculation-ref intersection.
 // ---------------------------------------------------------------------------
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
@@ -150,8 +148,7 @@ function hasModelKindData(record: ThermoRecord): boolean {
  *
  * Two records of the SAME model kind get a disambiguating index appended
  * ("NASA-7 thermo record 1" / "NASA-7 thermo record 2") -- a lone record
- * of a kind keeps the plain label ("NASA-7 thermo record"), matching the
- * design brief's own example.
+ * of a kind keeps the plain label ("NASA-7 thermo record").
  */
 function thermoSectionLabels(records: ThermoRecord[]): Map<string, string> {
     const withData = records.filter(hasModelKindData)
@@ -199,7 +196,7 @@ function makeThermoRecordRenderer(sectionLabels: Map<string, string>) {
  * the two report the same numbers -- see `ConformerAttributionGroups.tsx`'s
  * `renderRecords` docstring. `sectionLabels` is looked up against every
  * member of a LOCAL group, not only its first record, so a ToC entry
- * survives even if the record `thermoSectionLabels` originally chose to
+ * survives even if the record `thermoSectionLabels` chose to
  * label lands in a different position within a differently-grouped bucket.
  */
 function makeThermoGroupedRenderer(sectionLabels: Map<string, string>) {
@@ -400,11 +397,9 @@ function ThermoRecordBody({ record, idSuffix = "", showProvenance = true }: {
 
 /**
  * Renders exactly the ONE model-kind block this record's own `model_kind`
- * names -- never all four. A `nasa` (computed) record used to also print
- * an empty "NASA-9 polynomial" box, an empty "Wilhoit form" box, and an
- * empty "Evaluated points" box beneath its real NASA-7 table -- three
- * dashed "not recorded" boxes for model shapes the record was never going
- * to have, on every single card. `model_kind` values this page has no
+ * names -- never all four, so a `nasa` (computed) record shows no empty
+ * "NASA-9 polynomial", "Wilhoit form" or "Evaluated points" box beneath its
+ * NASA-7 table. `model_kind` values this page has no
  * dedicated block for (e.g. `"scalar"`) render nothing here, matching
  * `hasModelKindData`'s own "no ToC-worthy destination" verdict above --
  * still defensive against a declared kind with no matching data (a `nasa`
@@ -430,9 +425,7 @@ const GROUP_ID_SUFFIX = "-group"
 /**
  * One card for N deposited thermo records that report IDENTICAL scientific
  * content (`domain/identicalRecordGroups.ts`'s `thermoRecordFingerprint`)
- * -- the finding measured live: seven ethene thermo records, all H298 =
- * 62.84 kJ/mol, S298 = 218.80 J/mol·K, identical NASA-7 coefficients,
- * rendered as seven full cards. The shared scientific content renders ONCE
+ * -- instead of one full card per record. The shared scientific content renders ONCE
  * -- from the group's first record; every member reports the identical
  * body by construction of the fingerprint -- via the same `ThermoRecordBody`
  * a single-record card uses, so nothing about the science itself is a
@@ -441,8 +434,7 @@ const GROUP_ID_SUFFIX = "-group"
  * summary, it only collapses a default DISPLAY that would otherwise repeat
  * the same numbers N times.
  *
- * Provenance is NOT part of that shared display: the live case this fix
- * was written against is seven ethene records citing SEVEN DIFFERENT
+ * Provenance is NOT part of that shared display: a live case is seven ethene records citing SEVEN DIFFERENT
  * primary/single-point calculations and seven different statmech refs --
  * `showProvenance={false}` below drops the representative's own
  * `ProvenanceBlock` from the shared body (rendering only one record's
@@ -515,8 +507,7 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
  * table is where a group member's genuinely different levels stay visible
  * even when `IdenticalThermoRecordsCard` couldn't safely lift one shared
  * fact above. ALWAYS three columns (Geometry/Frequencies/Energy), agreeing
- * or not -- see `components/ProductLevels.tsx`'s own header comment for
- * why the old one-column collapse was retired.
+ * or not -- see `components/ProductLevels.tsx`'s own header comment.
  */
 function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
     const headingId = `identical-refs-${records[0].thermo_ref}`
@@ -578,11 +569,9 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
  * `primaryRef`, when passed, is the SAME dedup this table's Primary
  * column always shows in full -- if this cell's own ref equals it, the
  * cell says "same as primary" instead of repeating the identical ref a
- * second time. Measured against the live archive (every deposited thermo
- * record across every species entry, 65 records / 8 multi-record groups,
- * curled 2026-09-03): `sp_calculation_ref` equals `primary_calculation
- * .calculation_ref` on EVERY record (an SP-from-optimization record
- * citing its own opt/sp job for both roles, same finding as
+ * second time. `sp_calculation_ref` equals `primary_calculation
+ * .calculation_ref` when the SP comes from the optimization (a record
+ * citing its own opt/sp job for both roles, as
  * `provenanceCalculationRows` below already applies to the single-record
  * provenance block) -- `freq_calculation_ref` never does (a frequency job
  * is structurally a separate calculation run, distinct from the
@@ -958,11 +947,9 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
             </section>
         )
     }
-    // `productLevels` replaces the single "Level of theory" fact this block
-    // used to render straight off `provenance.level_of_theory` -- ALWAYS
-    // three labelled lines now (Geometry/Frequencies/Energy), agreeing or
-    // not; see `components/ProductLevels.tsx`'s own header comment for why
-    // the old collapse-to-one-line-when-they-agree rule was retired.
+    // `productLevels` renders the levels: ALWAYS three labelled lines
+    // (Geometry/Frequencies/Energy), agreeing or not; see
+    // `components/ProductLevels.tsx`'s own header comment.
     // "Level of theory ref" stays a SEPARATE row alongside it, shown ONLY
     // when the three genuinely agree: with three distinct levels there are
     // up to three distinct refs, and no single one of them is "the" ref
@@ -977,10 +964,9 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
             <h4 className="model-block-heading" id={`provenance-${thermoRef}${idSuffix}`}>Provenance</h4>
             <dl className="kv-list">
                 <ProductLevelsFact levels={productLevels} />
-                {/* SHOULD-FIX-9 (species-entry/browse/chrome residuals re-review):
-                    these two rendered as plain 15px sans text next to `.data`
-                    calc refs two rows below -- a ref is a ref regardless of
-                    whether this page happens to link it. */}
+                {/* A ref is a ref regardless of
+                    whether this page happens to link it: these render as `.data`, like the
+                    calc refs two rows below. */}
                 {levelsAgree && (
                     <div>
                         <dt>Level of theory ref</dt>
@@ -1033,8 +1019,7 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef, idSuffix = "" }: {
             <h4 className="model-block-heading" id={`ga-${thermoRef}${idSuffix}`}>Group-additivity estimation</h4>
             <dl className="kv-list">
                 {/* The scheme's name, version and code commit, and each component's group label, are
-                    free text a depositor typed: none of them is printed (house rule, owner decision
-                    2026-11-03). The scheme is identified by its ref. */}
+                    free text a depositor typed: none of them is printed. The scheme is identified by its ref. */}
                 <div><dt>Scheme ref</dt><dd>{groupAdditivity.scheme_ref}</dd></div>
             </dl>
             {groupAdditivity.components && groupAdditivity.components.length > 0 && (

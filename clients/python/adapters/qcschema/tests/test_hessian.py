@@ -1,4 +1,4 @@
-"""Unit tests for the Hessian packing order and symmetry check (C-Q1).
+"""Unit tests for the Hessian packing order and symmetry check.
 
 These pin exact numeric values, not just "did it validate" -- the corpus
 test's length-only check would pass an upper-triangle-packed matrix just
@@ -79,7 +79,7 @@ def test_wrong_length_refuses_hessian_shape_invalid():
 
 
 def test_unpack_is_the_exact_inverse_of_pack():
-    """Pack then unpack a genuinely symmetric matrix -> the original, exactly (C-Q3).
+    """Pack then unpack a genuinely symmetric matrix -> the original, exactly.
 
     Mutation this catches: unpacking in upper-triangle order (or any
     traversal other than ``pack_lower_triangle``'s own) reproduces a

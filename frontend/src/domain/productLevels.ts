@@ -25,7 +25,7 @@ export interface ProductLevels {
     frequency: LevelOfTheory | null
     energy: LevelOfTheory | null
     energy_source: EnergySource | null
-    /** The server's own `energy//geometry` shorthand (ADR 0021, P7a), or
+    /** The server's own `energy//geometry` shorthand, or
      *  `null`/absent when either level is. Never composed on the client:
      *  a partial notation would assert a level the record does not state.
      *  Optional so a record built from `source_calculations[]` (no server
@@ -164,13 +164,12 @@ export function levelsOfTheoryEqual(a: LevelOfTheory | null, b: LevelOfTheory | 
 
 /**
  * Whether `levels`' geometry, frequency and energy are all the SAME level
- * of theory. Owner decision (2026-09): "I don't see the separation in LoT"
- * retired the old rule that used this to COLLAPSE the display to one
- * "Level of theory: X" fact — `ProductLevelsFact`/`ProductLevelsTableHead`/
- * `ProductLevelsTableCells` now always render three labelled
- * facts/columns (Geometry/Frequencies/Energy), agreeing or not. This is
- * kept for the two narrower places that still turn on the SAME-level
- * question rather than the collapse question: `ProductLevelsFact`'s own
+ * of theory. It does not collapse the display:
+ * `ProductLevelsFact`/`ProductLevelsTableHead`/
+ * `ProductLevelsTableCells` always render three labelled
+ * facts/columns (Geometry/Frequencies/Energy), agreeing or not. It is
+ * used by the two narrower places that turn on the SAME-level
+ * question: `ProductLevelsFact`'s own
  * optional "all at the same level" note under an agreeing block, and
  * `EntryThermoSection.tsx`'s `ProvenanceBlock`, which only has a single
  * "Level of theory ref" to report when there's a single level behind it —
@@ -213,7 +212,7 @@ export function anyNotation(levelsList: ProductLevels[]): boolean {
     return levelsList.some((levels) => Boolean(levels.notation))
 }
 
-/** The P7a facts a group's one shared display would otherwise state for
+/** The composite facts a group's one shared display would otherwise state for
  *  every member: the notation, where each level came from, the legacy
  *  annotation, and the composite verification (state, reason, difference).
  *  Two members that differ in any of these are never shown as one. */

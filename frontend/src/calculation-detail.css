@@ -3,44 +3,35 @@
  * already supplies the shared "scientific record ledger" vocabulary this
  * page reuses verbatim: `.ledger-section`, `.ledger-heading`,
  * `.empty-projection`, `.geometry-links` / `.geometry-link`. Design/
- * foundations PR B moved this page's header, pills, disclosures, and
- * tables onto the shared `design-system.css` primitives (`.kv-list`,
- * `.value-pill`/`--muted`, `.card`/`--derived`, `.data-table`,
- * `Disclosure`) -- see this PR's body for the full per-item list. Only
- * the page-root layout and a few calculation-specific patterns live
- * here.
+ * The page's header, pills, disclosures and tables use the shared
+ * `design-system.css` primitives (`.kv-list`, `.value-pill`/`--muted`,
+ * `.card`/`--derived`, `.data-table`, `Disclosure`). Only the page-root
+ * layout and a few calculation-specific patterns live here.
  */
 
-/* Was a hard-coded `63rem`, giving the header a different right edge than
-   the evidence strip and tables below it (measured: ~1190px vs ~1470px at
-   1920). `--measure-wide` (`design-system.css`) is the CONTAINER measure,
+/* The header's right edge matches the evidence strip and tables below it.
+   `--measure-wide` (`design-system.css`) is the CONTAINER measure,
    not the prose one: `--measure-note` covers a line of reading text
-   (narrowed to 44rem in design/foundations) and would put this header's
-   right edge right back out of alignment with the wide content below it
-   -- exactly the bug this rule exists to fix. */
+   and would put this header's right edge out of alignment with the wide
+   content below it. */
 .record-header { max-width: var(--measure-wide); }
 
-/* `.record-eyebrow-row`/`.record-title`/`.record-title h1`/`.has-headline`
-   all retired (design/foundations PR B): the kicker row and the h1 both
-   moved into `RecordIdentityHeader` (`kicker`/`pill`/`title` props), the
-   ONE shared header block every record page renders through now -- see
-   that component's own docstring. The old `.has-headline` media-query
-   clamp existed only because the pre-PR-B h1 had an 88px ceiling wide
-   enough to wrap a long identity string onto two lines; `--type-display-1`
-   (`design-system.css`, `clamp(2.75rem, 5vw, 4rem)`) is already narrow
-   enough that the wrap this clamp worked around does not recur, so the
-   whole mechanism -- not just the rule -- is gone, not replaced. */
+/* The kicker row and the h1 are rendered by `RecordIdentityHeader`
+   (`kicker`/`pill`/`title` props), the ONE shared header block every record
+   page renders through -- see that component's own docstring. No
+   media-query clamp is needed: `--type-display-1`
+   (`design-system.css`, `clamp(2.75rem, 5vw, 4rem)`) is narrow
+   enough that a long identity string does not wrap onto two lines. */
 
 .calc-headline-energy { margin: var(--s-4) 0 0; }
 
-/* Post-review fix (SHOULD-FIX-2 on the re-review pass): the label-less
+/* The label-less
    TS fallback in the h1 (`CalculationDetailPage.tsx`'s `titleSubject`,
-   `<code className="data calc-headline-ref">`) was rendering at
+   `<code className="data calc-headline-ref">`) would otherwise render at
    `.data`'s own `--type-data-font` size (13px mono) sitting on the
-   baseline of the surrounding `--type-display-1` h1 (52px display face) --
-   MEASURED, a mismatched-scale ref inside a display headline. `.data`'s
-   face/weight (mono, 400) is still correct here -- only the size should
-   track the heading around it, not the shared data-run default. */
+   baseline of the surrounding `--type-display-1` h1 (52px display face).
+   `.data`'s face/weight (mono, 400) is still correct here -- only the size
+   should track the heading around it, not the shared data-run default. */
 .calc-headline-ref { font-size: inherit; }
 
 /* The compact stage/conformer note sits between the identity header and
@@ -58,67 +49,53 @@
     border-block: 1px solid var(--line);
 }
 
-/* `.coverage-checklist`/`.ledger-summary--single` moved to
-   `conformer-group.css` (record-summary-row PR): this page's own evidence
-   card used to be the ONE place either selector was declared, but three
-   other record pages now render the identical box through the same
-   `components/EvidenceChecklist.tsx` component -- see that file's own
-   `.coverage-card` block for the consolidated rules and the history
-   (`dt`/`dd` label-above-value via `.kv-list`, one column always, "going
-   down list, not a wrap around text") this comment used to carry here.
-   `calculation-detail.css.test.ts` still pins the underlying behaviour;
+/* `.coverage-checklist`/`.ledger-summary--single` are declared in
+   `conformer-group.css`, not here: several record pages render the identical
+   box through the same `components/EvidenceChecklist.tsx` component -- see
+   that file's own `.coverage-card` block for the rules.
+   `calculation-detail.css.test.ts` pins the underlying behaviour;
    `evidenceChecklist.css.test.ts` guards this file staying empty of a
    second declaration. */
 
-/* `.section-note` stays defined here -- it is NOT retired from this file,
-   even though `CalculationDetailPage.tsx`'s OWN markup now uses `.note`
-   (`design-system.css`) everywhere it used to use this class (see item 9
-   in this PR's body). `EntryStatmechSection`/`EntryThermoSection`/
-   `EntryTransportSection`/`ThermoCpChart`/`ConformerAttributionGroups`
-   (all outside this PR's file scope, owned by a parallel builder) still
-   render `className="section-note"` and rely on THIS rule for it --
-   `geometry-detail.css` carries a byte-identical copy for the same
-   load-order reason (see that file's own comment). Deleting it here would
-   silently unstyle every one of those other pages' notes. Retire this
-   rule once every one of those consumers has migrated to `.note` in its
-   own PR. */
+/* `.section-note` is defined here: `EntryStatmechSection`/
+   `EntryThermoSection`/`EntryTransportSection`/`ThermoCpChart`/
+   `ConformerAttributionGroups` render `className="section-note"` and rely on
+   THIS rule for it -- `geometry-detail.css` carries a byte-identical copy
+   for the same load-order reason (see that file's own comment). Deleting it
+   here would silently unstyle those pages' notes. */
 .section-note {
     margin: .5rem 0 0;
     color: var(--muted);
-    /* Was a one-off `.8rem` (12.8px) -- mapped onto the shared
-       `--type-note-font` step (SHOULD-FIX-10, "record-page residuals"
-       re-review): `--type-note-font` already IS this exact "muted
+    /* The shared `--type-note-font` step: it is the "muted
        explanatory line" register (see `design-system.css`'s `.note`
-       primitive), just never named for this class. `geometry-detail.css`
+       primitive). `geometry-detail.css`
        carries a byte-identical copy of this rule for its own load-order
        reason (see that file's own comment) -- kept in sync here. */
     font: var(--type-note-font);
 }
 
-/* `.lazy-section-affordance` (the redundant "SHOW" span) is retired --
-   `LazySection` now composes `components/Disclosure.tsx`, whose own
+/* There is no text "Show" label on `LazySection`: it composes
+   `components/Disclosure.tsx`, whose own
    chevron (`.disclosure > summary::before`, `design-system.css`) is
-   the idle-state affordance every disclosure on this app now shares; a
-   second, text "Show" label duplicated that signal. */
+   the idle-state affordance every disclosure on this app shares. */
 
 .section-note[aria-busy="true"]::after { content: "…"; }
 
-/* `.kv-list`'s base grid/dt/dd rules moved to `design-system.css` (the
-   ONE canonical definition every page now inherits, loaded before any
-   page stylesheet) -- this page keeps only its own additive rule below. */
+/* `.kv-list`'s base grid/dt/dd rules live in `design-system.css` (the
+   one canonical definition every page inherits, loaded before any page
+   stylesheet) -- this page keeps only its own additive rule below. */
 
 /* Short muted line under a `.kv-list dd` value -- currently just the τ row's
    basis explanation ("analytic, tight convergence" / "assumed from the
    program's default (...)"). */
-/* NIT (PR B review): was `.7rem` (11.2px), under the accessibility-pass
-   11px floor -- raised to the shared `--type-note-font` step. */
+/* Uses the shared `--type-note-font` step. */
 .kv-list dd .kv-note {
     margin-top: .2rem;
     color: var(--muted);
     font: var(--type-note-font);
 }
 
-/* Marks an ADR 0012 Hessian-method/τ value that TCKDB assumed rather than
+/* Marks a Hessian-method/τ value that TCKDB assumed rather than
    read from a recorded protocol (the `assumed_*` tau-basis tokens) -- the
    underline is a secondary visual cue, never a substitute for the "assumed"
    word every such value already carries in its own text. */
@@ -129,9 +106,8 @@
 
 /* ---------------------------------------------------------------------
    Optimisation stage strip -- "Coarse optimisation → Fine optimisation",
-   the current calculation's own box emphasised. Owner ask: "present
-   stages better like they flow" (`StageAndConformerNote`'s docstring in
-   `CalculationDetailPage.tsx` has the full complaint). Deliberately reuses
+   the current calculation's own box emphasised (see `StageAndConformerNote`'s docstring in
+   `CalculationDetailPage.tsx`). Deliberately reuses
    `species-entry.css`'s `.linkage-flow`/`.linkage-connector` PATTERN
    (flex row, an arrow between items, `.value-pill`-adjacent spacing) --
    this is a second, page-local instance of that same shape (two `.card`
@@ -187,15 +163,13 @@
 
 /* No mobile breakpoint override for `.record-context`/`.record-context--
    compact` needed: the canonical `.kv-list` (`design-system.css`) already
-   uses `auto-fit, minmax(12rem, 1fr)`, which collapses to one column on
-   its own once two 12rem columns plus their gap no longer fit -- a fixed
-   breakpoint override is redundant for it now (and would have needed a
-   bare, empty `.kv-list` rule here, which `design-system.css.test.ts`
-   guards against so a second definition of this selector cannot creep
-   back in). */
+   uses `auto-fit, minmax(16rem, 1fr)`, which collapses to one column on
+   its own once two 16rem columns plus their gap no longer fit -- a fixed
+   breakpoint override is redundant (and would need a bare, empty
+   `.kv-list` rule here, which `design-system.css.test.ts` guards against
+   so a second definition of this selector cannot appear). */
 
-/* `.ledger-summary--single` also moved to `conformer-group.css` (see the
-   comment above `.coverage-checklist`'s old home, further up this file) --
+/* `.ledger-summary--single` lives in `conformer-group.css`;
    this page's own evidence card still renders through it (no tile row
    precedes it here, so it keeps the base `.ledger-summary` rule's default
    top/bottom margin unchanged -- see that rule's own comment). */
@@ -225,7 +199,7 @@
 }
 
 /* Shown instead of the button to a signed-out reader. Raw artifact bytes
-   are gated on every deployment (ADR 0004), so a download control here
+   are gated on every deployment, so a download control here
    would be a button whose only outcome is a 401. */
 .artifact-download-note {
     color: var(--muted);

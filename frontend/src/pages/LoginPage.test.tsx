@@ -21,8 +21,7 @@ const meResponse = {
  * `AuthStatus` rides along in every render here so a test can assert the
  * ACTUAL session state ("Sign in" link vs. the signed-in name), not just
  * whatever `LoginPage` itself happens to render on failure -- the exact
- * distinction the brief's red-first criteria call out ("assert the user
- * is not signed in, not merely that an error appeared").
+ * distinction between "the user is not signed in" and "an error appeared".
  */
 function renderLoginPage() {
     return render(

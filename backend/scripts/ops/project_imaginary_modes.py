@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Sweep a corpus's imaginary modes through the ADR 0012 projections.
+"""Sweep a corpus's imaginary modes through the imaginary-mode projections.
 
 The read API answers one calculation at a time. This answers the question
 that decides whether the projections were worth building: across every
@@ -9,11 +9,9 @@ declared a disposition, how often the determination and the declaration
 disagree.
 
 **Read-only, and writes nothing anywhere.** It opens a session, runs
-``SELECT``s, and prints. There is no table for it to write to; ADR 0013's
-objection is precisely that a projection is an inference and TCKDB stores
-observations. Re-running it after a parser or threshold change is how the
-corpus gets re-decided, which is the property ADR 0013 asks a future
-implementation to preserve.
+``SELECT``s, and prints. There is no table for it to write to: a projection is an inference and TCKDB stores
+observations. Re-running it after a parser or threshold change re-derives
+the projections for the whole corpus.
 
 Usage::
 

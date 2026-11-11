@@ -5,7 +5,7 @@ This file replaces the previous ``test_docs_multi_conformer_design.py``.
 It pins three things at once:
 
 - The new policy doc exists at the documented path.
-- The previously-shipped multi-conformer **design** doc and its test
+- The multi-conformer **design** doc and its test
   are gone, and no client doc references them anywhere.
 - The names of the rejected future APIs (``conformers=[…]``,
   ``species_conformers``, ``selected_conformer``) appear **only**

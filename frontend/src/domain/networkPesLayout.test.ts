@@ -71,9 +71,6 @@ function findConnectorCrossings(layout: NetworkPesLayout): string[] {
     return crossings
 }
 
-// See `NetworkPesLayout.test — mutation table` at the bottom of this file
-// for the mutation each behavioural test below was checked against.
-
 function state(hash: string, kind: string, label: string): NetworkState {
     return {
         composition_hash: hash,
@@ -183,7 +180,7 @@ describe("computeNetworkPesLayout -- saddle height is source_energy + forward_ba
     })
 
     it("matches the four TS heights independently verified against the live hydrazine archive", () => {
-        // Numbers straight from the owner's brief: 7 states (0.0, 123.7,
+        // Reference numbers: 7 states (0.0, 123.7,
         // 146.7, 180.1, 233.3, 281.8, 380.9) and 4 internally-consistent
         // barriers. This is a sanity check that the formula end-to-end
         // reproduces the archive's own already-verified TS heights, not a
@@ -334,7 +331,7 @@ describe("computeNetworkPesLayout -- width grows with plotted level count, stayi
 
     it("grows by exactly one level gap per added level, once past the base width", () => {
         // Asserts the PROPERTY rather than restating the width formula. The
-        // formula itself now derives the side margins from the outermost
+        // formula itself derives the side margins from the outermost
         // captions, so a test that recomputed it would only be checking the
         // implementation against a copy of itself. Both fixtures here use
         // equal-length captions, so the margins are identical between them
@@ -353,8 +350,7 @@ describe("computeNetworkPesLayout -- width grows with plotted level count, stayi
 })
 
 // ---------------------------------------------------------------------------
-// Connectivity-driven x placement -- the readability rewrite this PR is
-// about. `HYDRAZINE_TREE_*` below is the owner's own verified archive
+// Connectivity-driven x placement. `HYDRAZINE_TREE_*` below is a verified archive
 // shape (module header's ASCII diagram): NN (hub, degree 3) with two
 // direct leaves (N=N(Z)+H2, [H][H]+[N-]=[NH2+]) and one two-deep chain
 // ([NH-][NH3+] then N=N(E)+H2), plus two states ("2 [NH2]",
@@ -463,7 +459,7 @@ describe("computeNetworkPesLayout -- a component with a cycle falls back to a sp
         // A triangle -- 3 states, 3 accepted barriers among them (edges ==
         // nodes, not nodes - 1) -- is the simplest connected non-tree
         // shape. This is a SYNTHETIC fixture: no live TCKDB network is
-        // known to have a cyclic accepted-barrier graph as of this PR (see
+        // known to have a cyclic accepted-barrier graph (see
         // the module header) -- this test exists so the fallback path is
         // exercised at all, not left as a theoretical claim in a comment.
         const states = [state("a", "well", "A"), state("b", "well", "B"), state("c", "well", "C")]
@@ -505,33 +501,6 @@ describe("computeNetworkPesLayout -- level captions never collide in 2D, even wh
         }
     })
 })
-
-/**
- * MUTATION TABLE (`networkPesLayout.test.ts`)
- *
- * | # | Test | Mutation landed | Result |
- * |---|------|------------------|--------|
- * | 1 | "21 channels, 0 barriers -> 0 saddle points" | In `computeNetworkPesLayout`, changed the `for (const barrier of channelBarriers)` loop to iterate `channels` instead (i.e. synthesised a saddle for every CHANNEL regardless of whether a barrier exists) | RED -- `layout.saddles` had length 1, `toHaveLength(0)` failed |
- * | 2 | "computes the absolute TS height from the source state, not the bare forward barrier" | Changed `accepted.push({ ..., heightKjMol: forwardHeight })` to `heightKjMol: barrier.forward_barrier_kj_mol` (dropping `sourceEnergy +`) | RED -- expected 120, got 100 |
- * | 3 | "matches the four TS heights ... live hydrazine archive" | Same mutation as #2 | RED -- all four `toBeCloseTo` assertions failed (expected 274.7/347.2/350.6/414.4, got the bare forward barriers) |
- * | 4 | "excludes the saddle when forward/reverse disagree past tolerance" | Removed the `disagreementKjMol > NETWORK_PES_BARRIER_TOLERANCE_KJ_MOL` branch (`continue` never reached) so an inconsistent barrier is accepted | RED -- `layout.saddles` had length 1, `toHaveLength(0)` failed |
- * | 5 | "higher energy renders higher on the page" | Swapped the y-scale range from `[plotBottom, plotTop]` to `[plotTop, plotBottom]` | RED -- `high.y` was greater than `low.y`, not less |
- * | 6 | "places the lowest-energy state first" | Removed the `.sort(...)` call, leaving `orderedHashes` in served order | RED -- `byHash.get("low")` (served first... but fixture serves "high" first) no longer preceded "mid"/"high" correctly |
- * | 7 | "grows past the base width" | Changed the width formula's `(n - 1) * NETWORK_PES_LEVEL_GAP` to `n * NETWORK_PES_LEVEL_GAP` | RED -- `expectedWidth` (computed the same broken way in a throwaway check) diverged from the actual `layout.width`; verified directly by comparing the un-mutated formula's literal output, which changed by one `NETWORK_PES_LEVEL_GAP` |
- * | 8 | "NN ... is the component root, not a leaf" (connectivity rewrite) | In `layoutComponentAsTree`, changed `if (degree > rootDegree)` to `if (degree < rootDegree)` (root at LOWEST degree instead of highest) | RED -- `rootHash` was `"s4"` (a leaf), not `"NN"`. The SAME one-line mutation also turned red test #9 (the crossing check) and the 2D caption-collision test below -- a low-degree hub breaks more than just which node is labelled root |
- * | 9 | "no two DIFFERENT saddles' connector segments properly intersect" | In `declutterLevelX`, changed `const cap = direction > 0 ? rightCap : leftCap` to `const cap = Infinity` (removing the neighbour-territory cap) | RED -- reproduced the EXACT original defect this module was built to fix: `["channel_1 x channel_11", "channel_3 x channel_2"]` |
- * | 10 | "lists both barrier-less states in isolatedStateHashes ..." | Changed `const isolatedStateHashes = resolvedInServedOrder.filter(...)` to `const isolatedStateHashes: string[] = []` | RED (and 6 other tests besides -- the isolated-fallback ordering, the captions-fit tests, and the 2D collision test all also depend on this list) |
- * | 11 | "marks the component isTree: false, usedSpanningTree: true ..." | Changed `const isTree = edgeCount === members.length - 1` to `const isTree = true` | RED -- `layout.components[0].isTree` was `true`, `toBe(false)` failed |
- * | 12 | "every pair of levels is separated on x, on y, or on both ..." | Commented out the `declutterLevelX(levels, captionWidthByHash)` call | RED -- two levels landed within both the x and y collision bands |
- * | 13 | "no two DIFFERENT saddles' connector segments properly intersect" (again) | In `connectorLegX`, changed `const direction = Math.sign(peakX - stateX)` to `Math.sign(peakX - stateX) \|\| 1` (restoring an arbitrary +1 for an exact tie, the state THIS PR's own fix removed) | RED -- reproduced `["channel_3 x channel_2"]`, the exact crossing found by screenshotting the live archive after the caption-clearance offset was first added |
- * | 14 | "a connector leg's own clearance never overtakes the very state its peak walks toward" | In `connectorLegX`, changed `Math.min(preferred, direction > 0 ? rightCap : leftCap)` to just `preferred` (dropping the neighbour cap) | RED -- `saddleA.sourceLegX` (418) was not less than `hubX` (411): the leg overtook the very state its own connector points at |
- *
- * Each mutation was landed as a single one-line edit, the named test
- * confirmed red (`npx vitest run src/domain/networkPesLayout.test.ts`),
- * then reverted with `git diff` inspected empty and
- * `sha256sum -c networkPesLayout.ts.sha256` confirmed the restored file is
- * byte-identical to the committed one.
- */
 
 describe("computeNetworkPesLayout — captions fit the plot they are drawn in", () => {
     // The level BAR is 68px wide; the caption under it can be twice that
@@ -577,7 +546,7 @@ describe("computeNetworkPesLayout — captions fit the plot they are drawn in", 
 })
 
 describe("computeNetworkPesLayout — layout mode changes arrangement, never energies", () => {
-    // Both modes are offered so the owner can compare readability. The
+    // Both modes are offered so a reader can compare readability. The
     // guarantee that makes that safe to offer is that NOTHING scientific
     // differs between them: same levels at the same energies, same saddle
     // points at the same heights, same channels drawn.
@@ -619,14 +588,10 @@ describe("computeNetworkPesLayout — layout mode changes arrangement, never ene
 })
 
 describe("computeNetworkPesLayout — a connector leg lands on its own level bar", () => {
-    // The owner reported states "floating on the graph": they were connected,
-    // but the connector never reached the bar. The leg was offset by half the
-    // CAPTION width to avoid drawing through the caption, and a caption is
-    // far wider than its bar, so six of eight legs on the live hydrazine
-    // network landed 19-51px OUTSIDE the level they belonged to. Captions
-    // carry their own opaque backing now, so the leg attaches to the bar.
-    //
-    // This is the assertion that would have caught it on the day it shipped.
+    // A connector leg attaches at the level bar's own end, not offset by the
+    // CAPTION width (a caption is far wider than its bar, so an offset leg
+    // would land outside the level it belongs to). Captions carry their own
+    // opaque backing, so the leg can pass behind them.
     function legsOffTheirBar(layout: NetworkPesLayout): string[] {
         const xByHash = new Map(layout.levels.map((l) => [l.compositionHash, l.x]))
         const off: string[] = []

@@ -27,14 +27,13 @@ only when it *is* one:
 * every coordinate value is the dihedral its own stored geometry holds,
   modulo 360 degrees, within
   :data:`tckdb_qcschema.scan.DIHEDRAL_TOLERANCE_DEGREES`
-  (``export_scan_coordinate_nonconforming``). This is ADR 0020's contract;
-  the scans deposited before it store a sweep relative to the first point
-  and are refused here rather than exported under the wrong angles. The ADR
-  0020 absolute-angle migration would fix their values, but not make them
-  exportable: their angles start at the measured dihedral (not a whole
-  degree) and a full 360-degree sweep repeats its first grid point, so they
-  would still be refused, as ``export_scan_grid_not_integral`` or
-  ``export_scan_point_incomplete``.
+  (``export_scan_coordinate_nonconforming``). A scan whose values are a
+  sweep relative to the first point is refused here rather than exported
+  under the wrong angles. Such a series would also not fit a TorsionDrive
+  after conversion to absolute angles: its angles start at the measured
+  dihedral (not a whole degree) and a full 360-degree sweep repeats its
+  first grid point, so it would still be refused, as
+  ``export_scan_grid_not_integral`` or ``export_scan_point_incomplete``.
 
 Grid keys are torsiondrive's own grid ids (``"-90"``, ``"180,-60"``) with
 each angle wrapped into (-180, 180]; two points that wrap to the same key

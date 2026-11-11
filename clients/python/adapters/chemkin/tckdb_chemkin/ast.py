@@ -119,7 +119,7 @@ class Reaction:
     ``reactants``/``products`` are ordered ``(coefficient, species_name)`` pairs
     with the third body (``M`` / ``(+M)``) already removed — the third-body
     behaviour is carried by ``is_third_body`` / ``is_falloff`` / the collider
-    fields instead, per DR-0032B.
+    fields instead.
     """
 
     reactants: list[tuple[int, str]]

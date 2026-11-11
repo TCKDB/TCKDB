@@ -6,8 +6,7 @@ import { cleanup, render } from "@testing-library/react"
 // pull these rules in on its own the way a page under test does via
 // `main.tsx`.
 //
-// `design-system.css` ONLY, never `index.css` alongside it: MEASURED
-// here (see the worktree's own investigation) -- vitest's `css: true`
+// `design-system.css` ONLY, never `index.css` alongside it: vitest's `css: true`
 // test pipeline injects each imported stylesheet as its OWN, SEPARATE
 // `<style>`/`CSSStyleSheet`, and does not resolve `@import` within
 // either one (a real bundled build does; this test environment does
@@ -30,11 +29,7 @@ import "./design-system.css"
 afterEach(cleanup)
 
 /**
- * PR B review (BLOCKING-2, "record pages" consolidation): `.record-
- * context a` / `.basin-context a` used to give a link inside a record
- * page's header `dl` the house link treatment (accent colour, an
- * underline in `--accent-underline`); both selectors are retired now
- * that those `dl`s compose the shared `.kv-list` primitive instead, and
+ * Record-page header `dl`s compose the shared `.kv-list` primitive, and
  * neither `.kv-list` nor `.data-table`/`.card`/`.note` carried an `a`
  * rule of their own -- `index.css`'s global default (`a { color: inherit;
  * text-decoration: none }`) made a `calc_…`/`co_…`/RECORD-column link
@@ -51,7 +46,7 @@ afterEach(cleanup)
  * reference rather than a computed hex value. That is still a real,
  * mutation-sensitive assertion: it pins WHICH token the rule points at.
  * `text-decoration` (the shorthand property) is asserted instead of the
- * `text-decoration-line` longhand -- ALSO MEASURED: jsdom's `cssstyle`
+ * `text-decoration-line` longhand -- jsdom's `cssstyle`
  * does not expand a `text-decoration: underline` shorthand declaration
  * into the `text-decoration-line` longhand getter (it stays empty),
  * even though it preserves the shorthand's own raw text faithfully.

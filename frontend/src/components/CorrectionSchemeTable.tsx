@@ -5,11 +5,10 @@ import { ENERGY_DISPLAY_UNITS, energyUnitLabel, type EnergyDisplayUnit } from ".
 /**
  * The one rendering of an energy-correction scheme's own parameter table --
  * shared by `LevelOfTheoryPage` (the LOT record page's inline "Correction
- * schemes" section, methods-surface plan §4.2 item 3) and
- * `CorrectionSchemePage` (the standalone scheme page, §4.3), so an atom or
+ * schemes" section) and
+ * `CorrectionSchemePage` (the standalone scheme page), so an atom or
  * bond table cannot silently diverge in shape between the two places it
- * renders (plan §6: "Build one `CorrectionSchemeTable` component ... and
- * use it in both places").
+ * renders.
  *
  * Kind-dispatched on `correction_kind` (`"atom"` / `"bond"` / `"component"`
  * -- the three child tables `EnergyCorrectionTermSummary` uniformly
@@ -22,9 +21,7 @@ import { ENERGY_DISPLAY_UNITS, energyUnitLabel, type EnergyDisplayUnit } from ".
  * `bond_corr_neighbor`/`mol_corr`), each its own `<h4>` sub-heading, since
  * the four sub-types are not comparable rows of one flat table.
  *
- * Every row renders — never summarised, truncated, or paginated (the
- * task brief's own acceptance criterion: "8 atom rows and 45 bond rows …
- * not summarised or truncated").
+ * Every row renders — never summarised, truncated, or paginated.
  */
 export function CorrectionSchemeTable({ corrections, units }: {
     corrections: CorrectionTerm[]

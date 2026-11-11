@@ -10,14 +10,10 @@ committed file does not match what the models render, printing the diff.
 
 Why ``--check`` exists
 ----------------------
-Nothing verified that the committed document described the live models.
-``tests/scripts/test_generate_dbml.py`` tested this generator's *rendering
-logic* -- given a table with these constraints, does it emit the right lines --
-which a stale file passes trivially, because it is never read. So
-``HessianDetectionContext.reclaim_restore`` was added to
-``app/db/models/common.py`` and was absent from ``backend/schema.dbml`` for a
-full day, and the document said, confidently, that the enum did not have that
-member. A schema document that can be wrong without anything noticing is worse
+The rendering logic (given a table with these constraints, does it emit the
+right lines) can pass while the committed document is stale, because the
+document is never read by it. ``--check`` compares the committed document with
+the live models. A schema document that can be wrong without anything noticing is worse
 than no document: people trust it.
 
 ``tests/scripts/test_generate_dbml.py::test_committed_schema_dbml_is_in_sync``
@@ -273,9 +269,9 @@ def _render_indexes(table, pk_col_names: set[str]) -> list[str]:
         # Matching on columns alone loses the constraint: a non-unique index
         # over the same columns is a lookup aid, not a uniqueness guarantee, so
         # suppressing against one drops the guarantee from the document without
-        # dropping it from the database. That is what happened to
-        # ``uq_record_review_record`` once ``ix_record_review_record_lookup``
-        # was added over ``(record_type, record_id)``.
+        # dropping it from the database. Example:
+        # ``uq_record_review_record`` and ``ix_record_review_record_lookup``
+        # over ``(record_type, record_id)``.
         unique_index_cols = {
             frozenset(c.name for c in idx.columns)
             for idx in table.indexes

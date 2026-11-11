@@ -14,19 +14,17 @@ keeps the two in step by construction rather than by discipline.
 What goes in, and what deliberately does not
 --------------------------------------------
 The source is :mod:`app.api.code_catalogue` -- the enumeration of every
-code the API can emit -- and not the scientific check register, which
-this generator used to read.
+code the API can emit -- and not the scientific check register.
 
-That change is the point of the file. The register enumerates positions
+The register enumerates positions
 about chemistry; its inclusion test is "could this check be wrong in an
 interesting way?", and it correctly refuses a role/type mismatch, an
 ownership refusal and ``missing_filter``. Generating the client enum from
-it meant "correctly excluded from the register" also meant "a client
-cannot import this code" -- which was true of two dozen live read-API
-codes. One list cannot be both the scientific claim and the wire
+it would mean "correctly excluded from the register" also meant "a client
+cannot import this code". One list cannot be both the scientific claim and the wire
 contract without one of them being diluted.
 
-Membership is now derived from :attr:`~app.api.code_catalogue.ApiCode.is_client_facing`:
+Membership is derived from :attr:`~app.api.code_catalogue.ApiCode.is_client_facing`:
 a 4xx, and not a generic fallback (which repeats the status) or an
 accidental prefix (a function name that landed in the code position and
 is not a contract at all). ``upload_warning`` codes still do not appear:

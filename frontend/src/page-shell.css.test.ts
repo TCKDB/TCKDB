@@ -6,12 +6,10 @@ import { describe, expect, it } from "vitest"
 import css from "./page-shell.css?raw"
 
 /**
- * Post-review fix (design/foundations): `.page-toc a` used to apply
- * `--type-ui-font` wholesale, which bakes in weight 600 -- the step's
- * own default. That made EVERY ToC link, active or not, render at 600,
- * which made `.page-toc-active`'s own `font-weight: 600` a no-op and
- * left the active item marked only by colour/border, not weight (MEASURED
- * 600/600 across four ToC pages, vs main's 400/600 before this PR). jsdom
+ * `.page-toc a` must not apply `--type-ui-font` wholesale, which bakes in
+ * weight 600 -- the step's own default. That would render EVERY ToC link,
+ * active or not, at 600, making `.page-toc-active`'s own `font-weight: 600`
+ * a no-op and marking the active item only by colour/border, not weight. jsdom
  * cannot compute cascaded font-weight from a raw `font:` shorthand the
  * way a real browser would, so this reads the two rules' raw declaration
  * TEXT and checks that the inactive rule's own weight is NOT 600 while

@@ -91,7 +91,7 @@ def test_demo_exits_zero(demo_run):
 
 def test_demo_prints_payload_summary(demo_run):
     """Pins the migration to ``upload.summary().to_text()`` — the
-    demo no longer formats payload dicts inline."""
+    demo does not format payload dicts inline."""
     out = demo_run.stdout
     assert "== Payload summary ==" in out
     assert "ComputedSpeciesUpload" in out

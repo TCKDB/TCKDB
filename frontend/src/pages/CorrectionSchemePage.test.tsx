@@ -46,7 +46,7 @@ function mockResponse(overrides: Record<string, unknown> = {}) {
                 label: null,
                 display: "b3lyp/def2tzvp",
             },
-            // Measured live shape (#439, deployed): software backfilled
+            // Fixture shape: software backfilled
             // cleanly on both schemes (empty `software_release_ref` --
             // the row stores a vendor, not a release, to point at);
             // workflow_tool_release stayed null (only 10 of 416
@@ -106,11 +106,9 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     })
 
     /**
-     * MUTATION TABLE: titles this page from `scheme.scheme_kind` via the
+     * Mutation check: titles this page from `scheme.scheme_kind` via the
      * controlled `schemeKindLabel` vocabulary, never from the depositor's
-     * own free-text `energy_correction_scheme.name` (owner: "I kinda
-     * don't want labels almost in general to never appear on the front
-     * end"). `name` here is deliberately something a controlled-vocabulary
+     * own free-text `energy_correction_scheme.name`. The `name` here is deliberately something a controlled-vocabulary
      * label could never produce, so a regression that reverts the heading
      * to `scheme.name` is unambiguous: this test would then find the
      * literal depositor string on the page instead of the archive's own
@@ -188,9 +186,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     })
 
     /**
-     * PR 4 of `docs/plans/correction-scheme-provenance.md` (§8): since
-     * #459, `software_release_ref` is a real release ref, not measured
-     * empty -- but `GET /api/v1/software-releases/{id}` sits behind
+     * `software_release_ref` is a real release ref, but `GET /api/v1/software-releases/{id}` sits behind
      * `require_auth_for_legacy_reads` and 401s anonymously, so this page
      * NEVER turns it into a link. It still earns its own row, as
      * copyable text.
@@ -214,11 +210,10 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     })
 
     /**
-     * MUTATION TABLE (d): omit an absent field entirely instead of
-     * stating it. Workflow-tool release is null on every live row today
-     * (the archive could not derive one unambiguously from 10 of 416
-     * calculations); citation is null for an unrelated reason (nobody
-     * recorded one). The task brief's own rule: these are two DIFFERENT
+     * Mutation check: omit an absent field entirely instead of
+     * stating it. Workflow-tool release can be null when the archive could
+     * not derive one unambiguously; citation can be null for an unrelated
+     * reason (nobody recorded one). These are two DIFFERENT
      * absences and the page must not conflate them into one row or one
      * sentence -- so each keeps its OWN `<dt>`/`<dd>` pair, and neither
      * one's copy claims to know why the value is missing (never "not
@@ -243,7 +238,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     })
 })
 
-describe("CorrectionSchemePage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("CorrectionSchemePage -- no depositor-typed text", () => {
     it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
         const planted = plantSentinels(mockResponse(), ["name", "note", "applied_note", "target"])
         expectPlanted(planted)

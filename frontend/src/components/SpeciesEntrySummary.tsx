@@ -18,17 +18,11 @@ function availabilityText(entry: SpeciesEntryProjection) {
 }
 
 /**
- * SHOULD-FIX-4 (species-entry/browse/chrome residuals re-review): this used
- * to build its own bespoke hero -- an off-scale `clamp(3rem, 7.5vw, 5.5rem)`
- * (88px) h1 vs. `--type-display-1`'s 64px everywhere else, SMILES/InChIKey
- * as a second, accent-tinted pill family (`.identifier-chip`) next to
- * `.value-pill`, and "REVIEW not reviewed" folded into a plain kv fact
- * where every other record page shows it as the header's own kicker-row
- * pill. `RecordIdentityHeader` (design/foundations PR B, already used by
+ * `RecordIdentityHeader` (also used by
  * `CalculationDetailPage`/`GeometryDetailPage`/`ConformerGroupPage`/
- * `ConformerObservationPage`/`TransitionStateEntryPage`) now owns the
+ * `ConformerObservationPage`/`TransitionStateEntryPage`) owns the
  * kicker + h1 + review pill + SMILES/InChIKey/charge-multiplicity facts,
- * so this page's hero finally matches every other record page's -- see
+ * so this page's hero matches every other record page's -- see
  * that component's own docstring for the shared header order.
  *
  * What stays local to this page: the four classification axes
@@ -38,19 +32,11 @@ function availabilityText(entry: SpeciesEntryProjection) {
  * calculation owner never carries them), so they render in their own
  * `.entry-facts` list below the shared header, exactly as before.
  *
- * No pill boxes there either. The electronic state used to render three
- * times on this page (a `.state-chip` beside the `<h1>`, the "Entry kind /
- * state" row below, and a `RecordFacetChips` pill row) -- the owner's own
- * complaint: "where do entry kind/state but then have pill boxes as well
- * of the same info? no pill boxes." Every fact here now appears exactly
- * once, as a labelled row in `entry-facts` -- including the three axes
- * (label, term symbol, stereochemistry) that ONLY the pill row used to
- * carry: dropping the pills without adding these back would have silently
- * deleted facts a reader could see nowhere else (the owner caught this on
- * `spe_n5nt4fz3ztsfh2otwlyyvvl2je`: "why ... does it not show ... E isomer
- * like it does for Review etc."). Each of the three is rendered only when
+ * No pill boxes there either. Every fact appears exactly once, as a
+ * labelled row in `entry-facts`, including the three axes (label, term
+ * symbol, stereochemistry). Each of the three is rendered only when
  * the entry actually carries it. The Stereochemistry row is read from the
- * descriptor and its resolution (DR-0038), never from the display
+ * descriptor and its resolution, never from the display
  * `stereo_label` alone: that label is NULL for an entry whose stereo is
  * wholly unknown, so a missing label is NOT "not stereochemically
  * distinguished". "Achiral" is said only for a NULL descriptor; partial and
@@ -75,11 +61,10 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
     // (display `stereo_label` NULL) is shown as that, not as "not distinguished".
     const stereo = stereoDescription(entry)
     return <header className="entry-hero">
-        {/* Deliberately NOT SMILES-leads-formula-in-brackets (owner
-            ruling, applied everywhere else a species is shown): this h1
+        {/* Deliberately NOT SMILES-leads-formula-in-brackets (the form used
+            everywhere else a species is shown): this h1
             IS the species-entry record page's own title, one page's own
-            identity rather than two participants a reader could confuse
-            -- the collision the ruling exists to fix does not arise here.
+            identity rather than two participants a reader could confuse.
             `entry.canonicalSmiles` already renders two lines below, in
             this same header's own identity block (`RecordIdentityHeader`'s
             "SMILES" fact), so a long SMILES string in the h1 too would
@@ -98,8 +83,8 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
         <ul className="entry-facts" aria-label="Record facts">
             <FactItem label="Archive availability" value={availabilityText(entry)} />
             {/* The state label and term symbol only when they are in the grammar the API enforces on write
-                (`electronicState.ts`); anything else is a legacy free-text value and stays hidden (house rule,
-                owner decision 2026-11-03). The term symbol carries a plain-words reading for a screen reader. */}
+                (`electronicState.ts`); anything else is a free-text value and stays hidden (no depositor-typed
+                text is printed). The term symbol carries a plain-words reading for a screen reader. */}
             {publicElectronicStateLabel(entry.electronic_state_label) && (
                 <FactItem label="State label" value={publicElectronicStateLabel(entry.electronic_state_label)!} />
             )}
@@ -110,12 +95,9 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
             {entry.stereo_smiles && <FactItem label="Stereo SMILES" value={entry.stereo_smiles} />}
             {entry.isotope_key && <FactItem label="Isotopologue" value={entry.isotope_key} />}
         </ul>
-        {/* BLOCKING-1 (species-entry/browse/chrome residuals re-review):
-            this used to be a bare `<p><Link>` with no class -- `index.css`'s
-            `a { color: inherit; text-decoration: none }` left it reading as
-            a stray, unstyled 16px heading with ~60px of empty space below
-            (MEASURED). `.note` (design-system.css) gives it the house
-            muted-line treatment, and `.note a` gives the link itself the
+        {/* `index.css`'s `a { color: inherit; text-decoration: none }` would leave
+            a bare link unstyled. `.note` (design-system.css) gives it the
+            muted-line treatment, and `.note a` gives the link the
             same underline/accent every other in-primitive link gets; the
             page-local `entry-ts-browse-note` class below supplies only the
             spacing that ties it to the identity block above, with no
@@ -129,9 +111,8 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
             this page needs to distinguish two species entries at rest; the
             formula/SMILES/InChIKey above already does that job, so every
             ref here can collapse without losing anything a reader needs at
-            a glance. This entry's OWN ref is deliberately NOT in this list
-            any more (owner decision: "yes show each record's own ref
-            inline") -- it now renders first, inline, in the identity
+            a glance. This entry's OWN ref is not in this list: it renders
+            first, inline, in the identity
             header above via `ownRef`; only the RELATED parent-species ref
             stays here, per `RefsDisclosure.tsx`'s own docstring. */}
         <RefsDisclosure refs={[

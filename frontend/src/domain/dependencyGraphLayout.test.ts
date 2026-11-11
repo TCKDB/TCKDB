@@ -13,15 +13,13 @@ import {
 import { DEPENDENCY_ROLE_WORDING, dependencyEdgeLabel } from "./dependencyWording"
 
 /**
- * Geometric verification for both layouts, 1-4 siblings per tier -- the
- * exact range the post-review fix list asked this file to cover. jsdom
+ * Geometric verification for both layouts, 1-4 siblings per tier. jsdom
  * cannot measure real SVG geometry (no `getBBox`), so this tests the
  * LAYOUT MATH directly: every box this module computes, checked against
  * every other box, in plain 2D rectangle/segment arithmetic. No path
- * segment may intersect any label's background rect (review finding:
- * an edge's own connecting line drawing across ANOTHER edge's label
- * text, sometimes dead centre) and no label rect may intersect any node
- * rect (review finding, narrow layout: a lane label landing on top of an
+ * segment may intersect any label's background rect (an edge's own connecting line must not draw across ANOTHER edge's label
+ * text) and no label rect may intersect any node
+ * rect (narrow layout: a lane label must not land on top of an
  * unrelated sibling's node box).
  */
 
@@ -170,17 +168,15 @@ function clearsRoundedCorner(p: { x: number; y: number }, rect: Rect, rx: number
  * Every edge's `path` is drawn FROM `fromRef`'s own node TO `toRef`'s
  * own node (`LayoutEdge`'s own docstring) -- so the path string's FIRST
  * point must sit on `fromRef`'s node border and its LAST point on
- * `toRef`'s, regardless of tier or layout. Review finding (round 2): the
- * narrow layout's centre-side entry/exit points could float outside the
- * centre node's own box (a fixed stagger step exceeding a fixed box
- * height), and a satellite node narrower than the shared column had its
- * own border to the side of where the path actually touched down.
+ * `toRef`'s, regardless of tier or layout. The
+ * narrow layout's centre-side entry/exit points must not float outside the
+ * centre node's own box, and a satellite node narrower than the shared
+ * column must have its own border where the path touches down.
  *
- * Review finding (round 3): the flat rect-border check alone is not
- * enough -- `centreHeightFor`'s round-2 fix put the deepest lane's point
- * exactly AT the flat half-height line, which is INSIDE the
+ * The flat rect-border check alone is not
+ * enough: a point exactly AT the flat half-height line is INSIDE the
  * `rx={NODE_RX}` rounded corner's cut on the RIGHT edge, not on the rect
- * actually drawn (measured 3.31px off the real rounded border). Every
+ * actually drawn. Every
  * endpoint therefore ALSO has to clear whichever corner it's nearest --
  * see `clearsRoundedCorner`'s own docstring for why this is edge-
  * dependent (the wide layout's top/bottom-edge endpoints, always at
@@ -214,8 +210,7 @@ function assertPathEndpointsOnNodeBorders(layout: GraphLayout, label: string) {
 
 // Realistic ref shape (`calc_<24 lowercase-alnum>`, ~29 chars) and every
 // one of the seven roles this app has bespoke wording for (`optimized_from`
-// is the longest label this table produces as of the 2026-09 wording
-// rewrite -- see `dependencyWording.ts` -- but this list is not sorted by
+// is the longest label this table produces -- see `dependencyWording.ts` -- but this list is not sorted by
 // length: it is every role, in enum order, so every role's own geometry
 // gets exercised at every sibling count below, not just the longest one).
 const ROLES = Object.keys(DEPENDENCY_ROLE_WORDING)
@@ -413,10 +408,9 @@ describe("centre node type pill", () => {
 
 describe("longest label fits inside its own background box", () => {
     // Derived from `DEPENDENCY_ROLE_WORDING` itself, not a hardcoded
-    // string -- a wording change (like the 2026-09 rewrite that made
-    // `optimized_from`'s label the longest, not `irc_start`'s) must not
+    // string -- a wording change that alters which label is longest must not
     // silently stop exercising the actual longest label this table
-    // produces today.
+    // produces.
     const longestRole = Object.keys(DEPENDENCY_ROLE_WORDING).reduce((longest, role) =>
         dependencyEdgeLabel(role).length > dependencyEdgeLabel(longest).length ? role : longest,
     )
@@ -424,8 +418,8 @@ describe("longest label fits inside its own background box", () => {
 
     it(`'${label}' (the ${longestRole} label, currently the longest) text width does not exceed its background rect width`, () => {
         // Same estimate the layout module itself uses -- this pins the
-        // CONSTANT, not the layout: a text-vs-box regression (the
-        // pre-fix `LABEL_CHAR_W = 6.6` under-measured a real 7.6px/char
+        // CONSTANT, not the layout: a text-vs-box regression (an
+        // estimate narrower than the real 7.6px/char
         // font) would show up here as `textWidth > bgWidth`.
         const model = buildDependencyGraphModel(
             "calc_own_ref_abcdefghijklmnopqrstuv", "opt",

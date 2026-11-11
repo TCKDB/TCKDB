@@ -1,7 +1,7 @@
 """Dispatch tests for ``TCKDBClient.upload``.
 
 The single ``upload(...)`` method supports two structurally-distinct
-forms: the legacy ``upload(endpoint, payload_dict)`` and the new
+forms: ``upload(endpoint, payload_dict)`` and the
 builder ``upload(builder_object)``. The tests below enforce that the
 two forms stay distinct and that ambiguous inputs are rejected
 loudly rather than silently dispatched to the wrong endpoint.

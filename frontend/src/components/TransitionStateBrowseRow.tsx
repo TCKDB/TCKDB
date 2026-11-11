@@ -115,38 +115,30 @@ function depositedDate(createdAt: string | undefined): string | null {
  * docstring), so this row leads with the rendered equation and reaction
  * family rather than a molecular headline.
  *
- * Link semantics (item 2, reworked from an earlier whole-row `<Link>`):
- * two independent reviewers found that wrapping the ref inside the link
- * made it (a) part of a ~170-character accessible name spelled out letter
+ * Link semantics: wrapping the ref inside the link
+ * would make it (a) part of a ~170-character accessible name spelled out letter
  * by letter (the ref alone is 26 characters) and (b) unselectable --
- * dragging over the ref started a link drag instead of a text selection.
+ * dragging over the ref would start a link drag instead of a text selection.
  * Fixed with a stretched-link overlay (`browse.css`'s `.ts-browse-row
  * .browse-row-title::after`, `inset: 0` against `.ts-browse-row`'s
  * `position: relative`): the `<Link>` wraps ONLY the equation (plus a
  * screen-reader-only mention of the TS label, so the accessible name is
- * "equation (+ label)" rather than the equation alone). Measured against
- * an earlier claim that this pattern was "already used by
- * `SpeciesBrowseRow.tsx`" -- it is not; that row's own title `<Link>` has
- * no stretched-link overlay and no full-row click target at all today.
- * The overlay here is new, scoped to `.ts-browse-row` so it cannot reach
- * the species row.
+ * "equation (+ label)" rather than the equation alone). The overlay is
+ * scoped to `.ts-browse-row`; `SpeciesBrowseRow.tsx`'s title `<Link>` has
+ * no stretched-link overlay.
  *
  * The click target is the row MINUS the footer line (`.browse-row-
  * footer`, evidence text + ref): that element alone carries `position:
  * relative` to paint above the overlay, because the ref is the one thing
  * on the row a reader needs to drag-select. `.browse-row-entries` (the
  * pills) and `.browse-row-provenance` (the level-of-theory/software line)
- * carry no such value and are NOT lifted above the overlay -- an earlier
- * revision lifted both anyway "to be safe", which shrank the actual click
- * target to about 62% of the row's box while this comment still claimed
- * "the full row". See `browse.css`'s comment beside `.ts-browse-row
+ * carry no such value and are NOT lifted above the overlay. See
+ * `browse.css`'s comment beside `.ts-browse-row
  * .browse-row-footer` for the CSS-painting-order mechanics.
  *
- * Earlier revision of this doc comment also claimed the row links to
- * `/reactions/:ref` and that "no such page exists" -- both stale by the
- * time of this pass: the link target is
+ * The link target is
  * `/transition-state-entries/:transition_state_entry_ref` (`tsRowTarget`
- * above), which does exist.
+ * above).
  */
 export function TransitionStateBrowseRow({ record }: { record: TransitionStateBrowseRecord }) {
     const evidence = [
@@ -162,23 +154,19 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
     const equation = record.reaction.equation ?? "Equation not recorded"
     const target = tsRowTarget(record)
 
-    // The depositor's own `transition_state.label` (e.g. "TS0"/"TS1") no
-    // longer renders here at all (house rule widened: no depositor-typed
+    // The depositor's own `transition_state.label` (e.g. "TS0"/"TS1") does
+    // not render here (no depositor-typed
     // labels on public pages -- an arbitrary producer string is meaningless
-    // to a reader and, MEASURED live, four separate deposits of the same
-    // reaction 1 saddle point all carry the identical label "TS1"). The
+    // to a reader, and separate deposits of the same saddle point can carry the identical label). The
     // fact that actually tells same-reaction deposits apart is which
     // REACTION DEPOSIT each one belongs to (`reaction.reaction_entry_ref`,
-    // already served by this endpoint) -- MEASURED against the live
-    // archive 2026-09-08: in all 4 reactions with more than one TS deposit
-    // (16 of 34 rows), at least two members within each group share
-    // identical level-of-theory, software AND deposit date once truncated
-    // to a plain date, so those two signals alone do not fully distinguish
+    // already served by this endpoint). Members of one reaction can share
+    // level-of-theory, software AND deposit date once truncated
+    // to a plain date, so those signals alone do not fully distinguish
     // them; the reaction-entry ref does, because it IS the deposit
     // identity `transition_state.reaction_entry_id` actually points at.
     const depositRef = record.reaction.reaction_entry_ref ?? null
-    // Item 3: the pill is the entry's STATUS only now ("optimized"), not
-    // the label fused onto it ("TS0 · optimized").
+    // The pill is the entry's STATUS only ("optimized"), not
     const entryStatusText = token(record.transition_state_entry.status)
     const entryReviewStatusText = token(record.transition_state_entry.review.status)
     const entryRef = record.transition_state_entry.transition_state_entry_ref

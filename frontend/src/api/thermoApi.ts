@@ -7,7 +7,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 import { madeUnderSchema } from "../domain/madeUnder"
 
 // ---------------------------------------------------------------------------
-// Shape notes (measured 2026-08-29 against a hosted TCKDB deployment,
+// Shape notes (from
 // backend/app/schemas/reads/scientific_thermo.py and
 // backend/app/services/scientific_read/thermo.py):
 //
@@ -16,23 +16,18 @@ import { madeUnderSchema } from "../domain/madeUnder"
 //   standalone thermo detail page in this project (see the module docstring
 //   on `EntryThermoSection.tsx`). The envelope is `{ request,
 //   species_entry_ref, review_summary, records[], pagination }`: no `record`
-//   wrapper, and no `species_entry_id` (Phase D policy-gates the internal id
+//   wrapper, and no `species_entry_id` (the internal id is policy-gated
 //   off every public response; only the `spe_…` ref is present).
 //
 // - `get_species_thermo` (`app/services/scientific_read/thermo.py`) accepts
 //   five public include tokens — `provenance`, `calculations`, `statmech`,
 //   `review`, `artifacts` — that `validate_includes` treats as legal, but
-//   NONE of them is ever tested with `if "<token>" in includes:` anywhere in
-//   the service. They gate nothing. This was verified two ways: reading the
-//   service body (no branch references any of the five), and cross-checking
-//   `INCLUDE_GATED_COMPONENTS["ThermoRecord"]` in
-//   `backend/app/api/routes/scientific/_response.py`, which lists only
-//   `trust` and `assessments` for `ThermoRecord` — the one surface the brief
-//   for this slice flagged as "gates nothing at all". This client therefore
-//   requests NO include tokens for thermo: everything below is either an
-//   always-present field or gated only by `trust`/`assessments`, and this
-//   slice does not request either (trust is out of scope, matching the
-//   precedent `CalculationDetailPage` set for the calculation surface).
+//   none of them is tested with `if "<token>" in includes:` in the
+//   service, so they gate nothing. `INCLUDE_GATED_COMPONENTS["ThermoRecord"]`
+//   in `backend/app/api/routes/scientific/_response.py` lists the gated
+//   tokens: `calculation_settings`, `trust` and `assessments`. This client
+//   requests `assessments` and `calculation_settings` (see
+//   `loadEntryThermo`) and not `trust`.
 //
 // - `nasa` / `nasa9` / `wilhoit` / `points` are UNGATED SCIENTIFIC FACTS,
 //   not sections behind a token. A `null` here means "this record has no
@@ -155,10 +150,9 @@ const calculationEvidenceSummarySchema = z.object({
 // / `thermo.workflow_tool_release_id` server-side -- never backfilled from
 // the primary calculation's software. `primary_calculation.software`
 // (inside `calculationEvidenceSummarySchema` above) is the *calculation's*
-// software (e.g. Gaussian) and is a separate fact. Issue #284: these two
-// were previously collapsed into one field named `software` here, which
-// silently discarded both real keys under `.passthrough()` and rendered
-// every thermo record's software as "not recorded" on the live page.
+// software (e.g. Gaussian) and is a separate fact. The two must stay
+// separate fields: collapsing them into one `software` key would discard both
+// real keys under `.passthrough()`.
 const thermoProvenanceSchema = z.object({
     primary_calculation: calculationEvidenceSummarySchema.nullable().optional(),
     level_of_theory: levelOfTheorySchema.nullable().optional(),
@@ -167,7 +161,7 @@ const thermoProvenanceSchema = z.object({
     statmech_ref: z.string().nullable().optional(),
     freq_calculation_ref: z.string().nullable().optional(),
     sp_calculation_ref: z.string().nullable().optional(),
-    // PR #285: the conformer this record traces to, resolved server-side
+    // The conformer this record traces to, resolved server-side
     // through the SAME primary calculation used for `primary_calculation`/
     // `level_of_theory` above (`calculation.conformer_observation_id`),
     // never an independent pick. `null` on a record with no resolvable
@@ -177,7 +171,7 @@ const thermoProvenanceSchema = z.object({
     conformer_group_ref: z.string().nullable().optional(),
 }).passthrough()
 
-// Additive (owner decision, 2026-09): a thermo record's opt/freq/sp source
+// Additive: a thermo record's opt/freq/sp source
 // calculations, each with its OWN level of theory — the same
 // role/calculation_ref/level_of_theory shape `statmechApi.ts`'s
 // `sourceCalculationSummarySchema` already carries (narrowed here to what
@@ -254,7 +248,7 @@ export const thermoRecordSchema = z.object({
     evidence_completeness: evidenceCompletenessSchema.optional(),
     provenance: thermoProvenanceSchema.optional(),
     group_additivity: groupAdditivitySchema.nullable().optional(),
-    // Additive (owner decision, 2026-09): geometry/frequency/energy can
+    // Additive: geometry/frequency/energy can
     // each be at a different level of theory. Absent on an older API
     // response — `domain/productLevels.ts`'s `resolveProductLevels`
     // derives the same three from `source_calculations` below when this is
@@ -293,17 +287,17 @@ export type ThermoGroupAdditivity = z.infer<typeof groupAdditivitySchema>
 export type ThermoListResponse = z.infer<typeof thermoListResponseSchema>
 
 /**
- * Load every thermo record deposited for this species entry. No include
- * tokens are sent — see the module docstring: nothing on this surface is
- * gated by one. `useScientificRecord`-shaped: `(ref, signal) => Promise<T>`.
+ * Load every thermo record deposited for this species entry, requesting
+ * `include=assessments` and `include=calculation_settings`.
+ * `useScientificRecord`-shaped: `(ref, signal) => Promise<T>`.
  */
 export async function loadEntryThermo(
     entryRef: string,
     signal?: AbortSignal,
     onRateLimited?: (retryAfterSeconds: number) => void,
 ): Promise<ThermoListResponse> {
-    // `include=assessments` is the one token requested: it adds the compact reproducibility assessment and the rubric
-    // it was made under, which the "made under" line states. It is not expanded by `include=all`.
+    // `include=assessments` adds the compact reproducibility assessment and the rubric it was made under, which the
+    // "made under" line states; it is not expanded by `include=all`. `include=calculation_settings` adds the settings.
     // `entryRef` may be a paged ref (`entryRef#offset:limit`, see `domain/paging.ts`) naming one page of the list;
     // a plain ref names the first page.
     const { ref, request } = parsePagedRef(entryRef)
