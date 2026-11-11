@@ -170,3 +170,39 @@ def test_different_components_are_refused(client, changed) -> None:
     body = second.json()
     assert body["code"] == _CODE, body
     assert body["context"]["differs"] == ["components"]
+
+
+@pytest.fixture
+def first_lookup_misses(monkeypatch):
+    """Make the first lookup miss, as when a concurrent upload inserts the row after it."""
+    from app.services import energy_correction_resolution as ecr
+
+    real = ecr._find_applied_correction
+    calls = {"n": 0}
+
+    def _lookup(session, key):
+        calls["n"] += 1
+        return None if calls["n"] == 1 else real(session, key)
+
+    monkeypatch.setattr(ecr, "_find_applied_correction", _lookup)
+    return calls
+
+
+def test_losing_the_insert_race_adopts_the_winner(client, db_session, first_lookup_misses) -> None:
+    # The fixture patches the lookup, so the winner is deposited first and the patch counts from there.
+    first_lookup_misses["n"] = 1
+    assert _post(client, _species_payload(_aec(-0.123))).status_code == 201
+    first_lookup_misses["n"] = 0
+    second = _post(client, _species_payload(_aec(-0.123)))
+    assert second.status_code == 201, second.text[:800]
+    assert first_lookup_misses["n"] >= 2
+    _assert_one_row_linked_twice(db_session)
+
+
+def test_losing_the_insert_race_still_checks_the_value(client, first_lookup_misses) -> None:
+    first_lookup_misses["n"] = 1
+    assert _post(client, _species_payload(_aec(-0.123))).status_code == 201
+    first_lookup_misses["n"] = 0
+    second = _post(client, _species_payload(_aec(-0.2)))
+    assert second.status_code == 422, second.text[:800]
+    assert second.json()["code"] == _CODE
