@@ -197,6 +197,15 @@ def test_bad_queries_are_422_with_the_catalogued_code_and_no_echo(client, q):
             assert fragment not in payload
 
 
+def test_raw_length_is_checked_before_normalising(client):
+    assert _get(client, " " * 300 + "ab").status_code == 422
+    assert _get(client, " " * 20 + "ab").status_code == 200
+
+
+def test_ideographic_zero_is_not_a_digit(client):
+    assert _get(client, "ab" + chr(0x3007)).status_code == 422
+
+
 def test_missing_query_is_422(client):
     assert client.get(URL).status_code == 422
 
@@ -298,17 +307,38 @@ def test_a_merged_species_forwards_to_the_survivor_once(client, db_session):
         charge=0,
         multiplicity=1,
         stereo_kind=survivor.stereo_kind,
-        merged_into_species_id=survivor.id,
     )
     db_session.add(loser)
     db_session.flush()
     _name(db_session, loser, "merged name")
+    # The name predates the merge: a merge does not move it.
+    db_session.execute(text("UPDATE species SET merged_into_species_id = :s WHERE id = :l"), {"s": survivor.id, "l": loser.id})
     body = _get(client, "merged name").json()
     assert [m["species_ref"] for m in body["matches"]] == [survivor.public_ref]
-    assert body["request"]["merged_refs"] == {loser.public_ref: survivor.public_ref}
+    # The request names no ref, so nothing is reported as forwarded.
+    assert body["request"]["merged_refs"] == {} and body["request"]["hidden_by_default"] is None
     # the same name on both rows is one match
     _name(db_session, survivor, "merged name")
     assert [m["species_ref"] for m in _get(client, "merged name").json()["matches"]] == [survivor.public_ref]
+
+
+def test_a_name_cannot_be_attached_to_a_merged_species(db_session):
+    from sqlalchemy.exc import DBAPIError
+
+    survivor = _species(db_session, "MT")
+    loser = Species(
+        kind=survivor.kind,
+        smiles=survivor.smiles + "(C)",
+        inchi_key=next_inchi_key("MU"),
+        charge=0,
+        multiplicity=1,
+        stereo_kind=survivor.stereo_kind,
+        merged_into_species_id=survivor.id,
+    )
+    db_session.add(loser)
+    db_session.flush()
+    with pytest.raises(DBAPIError, match="merged-away"), db_session.begin_nested():
+        _name(db_session, loser, "late name")
 
 
 def test_the_response_carries_no_internal_ids(client, db_session):
@@ -383,19 +413,54 @@ def test_a_timeout_is_the_catalogued_query_timeout_not_a_500(client, db_session,
     assert response.json()["code"] == "query_timeout"
 
 
+def test_the_session_is_usable_and_the_limit_is_back_after_a_timeout(client, db_session, monkeypatch):
+    from app.services.scientific_read import species_name_search as module
+
+    _name(db_session, _species(db_session), "slow again")
+    before = db_session.scalar(text("SELECT current_setting('statement_timeout')"))
+    monkeypatch.setattr(settings, "name_search_statement_timeout_ms", 50)
+    original = module._statement
+    monkeypatch.setattr(module, "_statement", lambda **kw: original(**kw).where(text("length(pg_sleep(1)::text) >= 0")))
+    assert _get(client, "slow again").status_code == 503
+    assert db_session.scalar(text("SELECT 1")) == 1
+    assert db_session.scalar(text("SELECT current_setting('statement_timeout')")) == before
+
+
+def test_a_tighter_session_limit_is_never_loosened(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "name_search_statement_timeout_ms", 5000)
+    _name(db_session, _species(db_session), "tight")
+    db_session.execute(text("SET LOCAL statement_timeout = 700"))
+    seen = []
+
+    def _before(conn, cursor, statement, parameters, context, executemany):
+        seen.append(statement)
+
+    engine = db_session.connection().engine
+    event.listen(engine, "before_cursor_execute", _before)
+    try:
+        assert _get(client, "tight").status_code == 200
+    finally:
+        event.remove(engine, "before_cursor_execute", _before)
+    assert "SET LOCAL statement_timeout = 700" in seen and "SET LOCAL statement_timeout = 5000" not in seen
+
+
 def test_the_read_makes_no_network_connection(client, db_session, monkeypatch):
     sp = _species(db_session)
     _name(db_session, sp, "offline")
+    attempts = []
 
     def refuse(*args, **kwargs):
+        attempts.append(args)
         raise AssertionError("network access attempted")
 
     monkeypatch.setattr(socket, "socket", refuse)
     monkeypatch.setattr(socket, "create_connection", refuse)
     monkeypatch.setattr(socket, "getaddrinfo", refuse)
+    monkeypatch.setattr(socket, "gethostbyname", refuse)
     # The test session already holds its database connection; the read must not open another socket.
     assert _names(_get(client, "offline")) == ["offline"]
     assert _names(_get(client, "off", match="prefix")) == ["offline"]
+    assert attempts == []
 
 
 # --- rate limit bucket ----------------------------------------------------------------------------------------------
@@ -440,3 +505,27 @@ def test_the_bucket_throttles_without_spending_the_general_read_allowance(client
     blocked = _get(client, "water")
     assert blocked.json()["bucket"] == "name_search"
     assert client.get("/api/v1/scientific/species/browse").status_code == 200
+
+
+def test_rotating_api_keys_do_not_beat_the_ip_limit(client, monkeypatch):
+    monkeypatch.setattr(settings, "rate_limit_enabled", True)
+    monkeypatch.setattr(settings, "rate_limit_name_search_ip_per_minute", 3)
+    monkeypatch.setattr(settings, "rate_limit_name_search_auth_per_minute", 100)
+    from app.api.rate_limit import reset_rate_limit_store
+
+    reset_rate_limit_store()
+    codes = [client.get(URL, params={"q": "water"}, headers={"x-api-key": f"made-up-{i}"}).status_code for i in range(5)]
+    assert codes == [200, 200, 200, 429, 429]
+
+
+def test_expired_windows_are_evicted():
+    from app.api import rate_limit
+
+    store = rate_limit._RateLimitStore()
+    for i in range(50):
+        store.hit(bucket="b", identity=f"ip{i}", limit=5, window_seconds=1)
+    assert store.size() == 50
+    store._next_sweep = 0.0
+    rate_limit.time.sleep(1.1)
+    store.hit(bucket="b", identity="fresh", limit=5, window_seconds=1)
+    assert store.size() == 1

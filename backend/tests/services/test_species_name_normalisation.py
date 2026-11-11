@@ -99,3 +99,29 @@ def test_every_string_with_the_prefix_is_in_the_range():
     for tail in ("", "er", "\U0010ffff", "\u0000"):
         assert key <= key + tail < upper
     assert not ("wau" < upper)
+
+
+def test_acute_accent_folds_to_an_apostrophe_before_nfkc():
+    assert normalise_name("n" + chr(0xB4) + "-methyl") == "n'-methyl"
+    assert normalise_name("n" + chr(0xB4) + "-methyl") == normalise_name("n'-methyl")
+
+
+@pytest.mark.parametrize(
+    "ch",
+    [0xFE00, 0xFE0F, 0xE0100, 0xE01EF, 0x34F, 0x115F, 0x1160, 0x3164, 0xFFA0, 0x180B, 0x180F, 0x17B4, 0x17B5, 0x200B, 0xAD, 0xFEFF],
+)
+def test_default_ignorable_code_points_are_refused(ch):
+    raw = "ab" + chr(ch) + "cd"
+    assert not is_valid_query_key(raw, normalise_name(raw))
+
+
+def test_a_key_of_only_combining_marks_is_refused():
+    raw = chr(0x301) + chr(0x302)
+    assert not is_valid_query_key(raw, normalise_name(raw))
+    assert is_valid_query_key("ae" + chr(0x301), normalise_name("ae" + chr(0x301)))
+
+
+def test_only_decimal_digits_count_as_digits():
+    for raw in (chr(0x3007) + chr(0x3007), "ab" + chr(0x3007)):  # ideographic zero
+        assert not is_valid_query_key(raw, normalise_name(raw))
+    assert is_valid_query_key("ab" + chr(0x663), normalise_name("ab" + chr(0x663)))  # Arabic-Indic digit three

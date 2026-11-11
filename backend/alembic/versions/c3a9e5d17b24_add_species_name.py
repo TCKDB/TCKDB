@@ -62,6 +62,11 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_species_name")),
     )
+    # A name is never attached to a merged-away species; a merged species forwards to its survivor.
+    op.execute(
+        "CREATE TRIGGER trg_mt_species_name_species_id BEFORE INSERT OR UPDATE OF species_id ON public.species_name "
+        "FOR EACH ROW EXECUTE FUNCTION public.tckdb_refuse_merged_target('species', 'species_id', 'merged_into_species_id')"
+    )
     op.create_index(op.f("ix_species_name_public_ref"), "species_name", ["public_ref"], unique=True)
     op.create_index("ix_species_name_species_id", "species_name", ["species_id"], unique=False)
     op.create_index(

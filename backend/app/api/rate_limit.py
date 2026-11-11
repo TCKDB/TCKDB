@@ -13,7 +13,8 @@ bucket and chooses an identity:
 - ``/api/v1/auth/register`` → ``register`` bucket (per-hour, IP-keyed).
   Tight: account-spam target.
 - ``GET /api/v1/scientific/species/name-search`` → ``name_search``
-  (per-minute; IP-keyed without a credential, credential-keyed with one).
+  (per-minute; IP-keyed without a credential, credential-keyed with one,
+  and every request is also charged to its IP).
   Matched on the exact path before the generic public-read branch.
 - Public scientific reads (GET ``/api/v1/scientific/...``, POST
   ``/api/v1/scientific/.../search``, POST the relative-energy and
@@ -78,6 +79,7 @@ class _Bucket:
 
     window_start: float
     count: int
+    window_seconds: int = 60
 
 
 class _RateLimitStore:
@@ -91,6 +93,7 @@ class _RateLimitStore:
     def __init__(self) -> None:
         self._store: dict[tuple[str, str], _Bucket] = {}
         self._lock = threading.Lock()
+        self._next_sweep = 0.0
 
     def hit(
         self, *, bucket: str, identity: str, limit: int, window_seconds: int
@@ -105,9 +108,10 @@ class _RateLimitStore:
         now = time.monotonic()
         key = (bucket, identity)
         with self._lock:
+            self._sweep(now)
             entry = self._store.get(key)
             if entry is None or now - entry.window_start >= window_seconds:
-                self._store[key] = _Bucket(window_start=now, count=1)
+                self._store[key] = _Bucket(window_start=now, count=1, window_seconds=window_seconds)
                 return True, 0
             if entry.count >= limit:
                 retry = max(1, int(window_seconds - (now - entry.window_start)))
@@ -115,11 +119,27 @@ class _RateLimitStore:
             entry.count += 1
             return True, 0
 
+    def _sweep(self, now: float) -> None:
+        """Drop expired windows, at most once per ``_SWEEP_INTERVAL``, so memory follows live callers only."""
+        if now < self._next_sweep:
+            return
+        self._next_sweep = now + _SWEEP_INTERVAL
+        for key in [k for k, e in self._store.items() if now - e.window_start >= e.window_seconds]:
+            del self._store[key]
+
+    def size(self) -> int:
+        """Number of held windows (tests)."""
+        with self._lock:
+            return len(self._store)
+
     def reset(self) -> None:
         """Drop all buckets — only used by tests."""
         with self._lock:
             self._store.clear()
 
+
+#: Seconds between sweeps of expired windows.
+_SWEEP_INTERVAL = 60.0
 
 _STORE = _RateLimitStore()
 
@@ -410,6 +430,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             limit=limit,
             window_seconds=window,
         )
+        if allowed and bucket == "name_search":
+            # A credential is only fingerprinted, not checked, so rotating keys would mint a fresh budget each time:
+            # every name search is also charged to the caller's IP.
+            ip = _client_ip(request)
+            if identity != ip:
+                allowed, retry_after = _STORE.hit(
+                    bucket=bucket,
+                    identity=ip,
+                    limit=settings.rate_limit_name_search_ip_per_minute,
+                    window_seconds=window,
+                )
         if not allowed:
             return JSONResponse(
                 status_code=429,

@@ -23,7 +23,6 @@ from app.schemas.reads.scientific_species_name_search import (
     SpeciesNameSearchResponse,
 )
 from app.services.scientific_read.common import molecular_formula_expr, visible_statuses
-from app.services.scientific_read.hidden_by_default import record_forwarded_ref
 from app.services.scientific_read.sql_review import join_review, visible_review_filter
 from app.services.species_name_normalisation import (
     is_valid_query_key,
@@ -85,7 +84,6 @@ def _statement(*, key: str, match: NameMatchMode, visible: set[RecordReviewStatu
             survivor.public_ref.label("species_ref"),
             survivor.smiles.label("smiles"),
             molecular_formula_expr(survivor.smiles).label("formula"),
-            named.public_ref.label("named_ref"),
         )
         .join(named, named.id == SpeciesName.species_id)
         .join(survivor, survivor.id == func.coalesce(named.merged_into_species_id, named.id))
@@ -110,17 +108,20 @@ def _statement(*, key: str, match: NameMatchMode, visible: set[RecordReviewStatu
 def search_species_names(session: Session, *, q: str, match: NameMatchMode, limit: int) -> SpeciesNameSearchResponse:
     key = validate_query(q)
     visible = visible_statuses(min_review_status=None, include_rejected=False, include_deprecated=False)
-    # A bounded statement time for this read only (an integer from settings), put back afterwards so a session that
-    # outlives the read keeps its own limit.
-    previous = session.scalar(text("SELECT current_setting('statement_timeout')"))
-    session.execute(text(f"SET LOCAL statement_timeout = {int(settings.name_search_statement_timeout_ms)}"))
-    rows = session.execute(_statement(key=key, match=match, visible=visible, limit=limit)).all()
-    session.execute(text("SELECT set_config('statement_timeout', :previous, true)"), {"previous": previous})
+    # The read's own time limit, never looser than the session's; the savepoint rollback puts the session's back.
+    session_limit = session.scalar(text("SELECT setting::bigint FROM pg_settings WHERE name = 'statement_timeout'"))
+    limit_ms = int(settings.name_search_statement_timeout_ms)
+    if session_limit:
+        limit_ms = min(limit_ms, int(session_limit))
+    savepoint = session.begin_nested()
+    try:
+        session.execute(text(f"SET LOCAL statement_timeout = {limit_ms}"))
+        rows = session.execute(_statement(key=key, match=match, visible=visible, limit=limit)).all()
+    finally:
+        savepoint.rollback()
     truncated = len(rows) > limit
     matches = []
     for row in rows[:limit]:
-        if row.named_ref != row.species_ref:
-            record_forwarded_ref(row.named_ref, row.species_ref)
         matches.append(
             SpeciesNameMatch(
                 species_ref=row.species_ref,

@@ -84,3 +84,8 @@ def test_length_checks_refuse_an_empty_or_overlong_name(db_session):
     for name, key, ref in (("", "x", "snm_a"), ("x" * 129, "x", "snm_b"), ("x", "", "snm_c")):
         with pytest.raises(DBAPIError), db_session.begin_nested():
             db_session.execute(text(insert), {"s": species_id, "n": name, "k": key, "r": ref})
+
+
+def test_the_merged_target_trigger_is_installed(db_session):
+    names = set(db_session.scalars(text("SELECT tgname FROM pg_trigger WHERE tgrelid = 'species_name'::regclass AND NOT tgisinternal")))
+    assert "trg_mt_species_name_species_id" in names

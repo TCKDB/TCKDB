@@ -57080,7 +57080,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Always null: hidden species are not counted. merged_refs is empty too, as the request names no ref."
           },
           "limit": {
             "title": "Limit",

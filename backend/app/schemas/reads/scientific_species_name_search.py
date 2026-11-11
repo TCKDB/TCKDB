@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.db.models.common import SpeciesNameKind, SpeciesNameSourceKind
-from app.schemas.reads.scientific_common import OrderEcho, ProfiledRequestEcho, ScientificResponse
+from app.schemas.reads.scientific_common import HiddenByDefault, OrderEcho, ProfiledRequestEcho, ScientificResponse
 
 NAME_ORDER_STATEMENT = (
     "Alphabetical by normalised name, then by species reference. This is not a ranking: the first match is not a "
@@ -27,6 +27,10 @@ class SpeciesNameSearchRequestEcho(ProfiledRequestEcho):
     query_key: str
     match: NameMatchMode
     limit: int
+    hidden_by_default: HiddenByDefault | None = Field(
+        None,
+        description="Always null: hidden species are not counted. merged_refs is empty too, as the request names no ref.",
+    )
 
 
 class SpeciesNameMatch(BaseModel):

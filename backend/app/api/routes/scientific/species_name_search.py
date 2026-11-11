@@ -7,6 +7,8 @@ database and travels only as a bound parameter. See :mod:`app.services.scientifi
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -28,7 +30,7 @@ def species_name_search(
     match: NameMatchMode = Query(NameMatchMode.exact),
     limit: int = Query(10, ge=1, le=20),
     session: Session = Depends(get_db),
-) -> SpeciesNameSearchResponse:
+) -> BaseModel | JSONResponse:
     """Species whose name matches ``q`` exactly or begins with it, after normalisation.
 
     Names are curated by TCKDB, so a molecule with no curated name is not found here. Matches are alphabetical by
