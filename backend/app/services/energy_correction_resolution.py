@@ -885,6 +885,31 @@ def _same_components(
     )
 
 
+def _conflict_parts(
+    stored: AppliedEnergyCorrection,
+    payload: AppliedEnergyCorrectionUploadPayload,
+    *,
+    same_total: bool,
+    can_name_source: bool,
+) -> tuple[str, str]:
+    """What differs and the route's remedy, as the two clauses of the refusal sentence."""
+    if same_total:
+        differs = "its component breakdown differs from the one sent."
+    else:
+        differs = (
+            f"its total differs from the one sent (stored {stored.value!r} {stored.value_unit.value}, "
+            f"sent {payload.value!r} {payload.value_unit.value})."
+        )
+    if can_name_source:
+        remedy = (
+            "If the value depends on this deposit's geometry or calculation, name the source "
+            "calculation (source_calculation_key) so each deposit's correction is recorded separately."
+        )
+    else:
+        remedy = "The values for one scheme and role on one transition state must agree."
+    return differs, remedy
+
+
 def _reconcile_reused_correction(
     session: Session,
     stored: AppliedEnergyCorrection,
@@ -892,6 +917,7 @@ def _reconcile_reused_correction(
     *,
     field: str | None,
     warnings_out: list[UploadWarning] | None,
+    can_name_source: bool = True,
 ) -> None:
     """Refuse a payload whose total or components differ from the stored row.
 
@@ -935,14 +961,13 @@ def _reconcile_reused_correction(
             if differs
         ],
     )
+    differs, remedy = _conflict_parts(
+        stored, payload, same_total=same_total, can_name_source=can_name_source
+    )
     raise CodedValueError(
         W_APPLIED_CORRECTION_VALUE_CONFLICT,
         "A correction for this entry, scheme and role is already recorded in the database or "
-        "earlier in this upload, and its total or components differ from the one sent "
-        f"(stored {stored.value!r} {stored.value_unit.value}, sent {payload.value!r} "
-        f"{payload.value_unit.value}). If the value depends on this deposit's geometry or "
-        "calculation, name the source calculation (source_calculation_key) so each deposit's "
-        "correction is recorded separately.",
+        f"earlier in this upload, and {differs} {remedy}",
         context=context,
         message_prefix=False,
     )
@@ -994,6 +1019,7 @@ def create_applied_energy_correction(
     created_by: int | None = None,
     field: str | None = None,
     warnings_out: list[UploadWarning] | None = None,
+    can_name_source: bool = True,
 ) -> AppliedEnergyCorrection:
     """Resolve provenance refs and create or reuse an applied energy correction.
 
@@ -1022,6 +1048,8 @@ def create_applied_energy_correction(
     :param warnings_out: Optional sink for the scheme's non-blocking
         provenance warnings (see :func:`resolve_or_create_scheme`).
         ``None`` (the default) is a no-op, matching every existing caller.
+    :param can_name_source: Whether the route lets a deposit name a source calculation; it selects the remedy in the
+        value-conflict refusal.
     :returns: The new or reused ``AppliedEnergyCorrection`` row.
     """
     scheme_id = None
@@ -1072,11 +1100,13 @@ def create_applied_energy_correction(
             if applied is None:
                 raise
             _reconcile_reused_correction(
-                session, applied, payload, field=field, warnings_out=warnings_out
+                session, applied, payload, field=field, warnings_out=warnings_out,
+                can_name_source=can_name_source,
             )
     else:
         _reconcile_reused_correction(
-            session, applied, payload, field=field, warnings_out=warnings_out
+            session, applied, payload, field=field, warnings_out=warnings_out,
+                can_name_source=can_name_source,
         )
 
     if warnings_out is not None:

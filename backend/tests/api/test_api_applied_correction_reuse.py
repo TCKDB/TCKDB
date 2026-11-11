@@ -427,3 +427,61 @@ def test_conformer_route_reuses_the_shared_correction(client, db_session) -> Non
     second = client.post("/api/v1/uploads/conformers", json=copy.deepcopy(payload))
     assert second.status_code == 201, second.text[:800]
     _assert_one_row_linked_twice(db_session)
+
+
+# ---------------------------------------------------------------------------
+# Refusal wording and per-route remedy
+# ---------------------------------------------------------------------------
+
+
+def test_a_component_only_difference_does_not_print_equal_totals(client) -> None:
+    assert _post(client, _species_payload(_bac(-0.44, [_CH_BOND]))).status_code == 201
+    body = _post(client, _species_payload(_bac(-0.44, [{**_CH_BOND, "multiplicity": 3}]))).json()
+    assert "component breakdown differs" in body["detail"]
+    assert "stored" not in body["detail"]
+    assert body["context"]["stored_value"] == body["context"]["supplied_value"]
+
+
+def test_a_total_difference_prints_both_totals(client) -> None:
+    assert _post(client, _species_payload(_aec(-0.123))).status_code == 201
+    body = _post(client, _species_payload(_aec(-0.2))).json()
+    assert "total differs" in body["detail"]
+    assert "stored -0.123 hartree, sent -0.2 hartree" in body["detail"]
+
+
+def test_the_standalone_transition_state_refusal_does_not_advise_a_source_key(client) -> None:
+    from tests.api.test_api_reads import _ts_upload_payload
+
+    payload = _ts_upload_payload()
+    payload["applied_energy_corrections"] = [_aec(-0.123), _aec(-0.2)]
+    response = client.post("/api/v1/uploads/transition-states", json=payload)
+    assert response.status_code == 422, response.text[:800]
+    body = response.json()
+    assert body["code"] == _CODE
+    assert "source_calculation_key" not in body["detail"]
+    assert "one scheme and role on one transition state must agree" in body["detail"]
+
+
+def test_the_other_routes_still_advise_a_source_key(client) -> None:
+    assert _post(client, _species_payload(_aec(-0.123))).status_code == 201
+    body = _post(client, _species_payload(_aec(-0.2))).json()
+    assert "source_calculation_key" in body["detail"]
+
+
+def test_stored_components_in_kj_mol_are_reused_by_a_hartree_deposit(client, db_session) -> None:
+    kj = 2625.4996394798254
+    in_kj = {**_CH_BOND, "contribution_value": _CH_BOND["contribution_value"] * kj}
+    first = {**_bac(-0.44 * kj, [in_kj]), "value_unit": "kj_mol"}
+    assert _post(client, _species_payload(first)).status_code == 201
+    second = _post(client, _species_payload(_bac(-0.44, [_CH_BOND])))
+    assert second.status_code == 201, second.text[:800]
+    _assert_one_row_linked_twice(db_session)
+
+
+def test_components_in_another_unit_for_the_same_energy_are_reused(client, db_session) -> None:
+    kj = 2625.4996394798254
+    in_kj = {**_CH_BOND, "contribution_value": _CH_BOND["contribution_value"] * kj}
+    assert _post(client, _species_payload(_bac(-0.44, [_CH_BOND]))).status_code == 201
+    second = _post(client, _species_payload({**_bac(-0.44 * kj, [in_kj]), "value_unit": "kj_mol"}))
+    assert second.status_code == 201, second.text[:800]
+    _assert_one_row_linked_twice(db_session)

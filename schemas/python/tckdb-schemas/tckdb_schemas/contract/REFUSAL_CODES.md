@@ -52,7 +52,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/energy_correction_resolution.py`.
 - The body's `context` names the things involved.
-- Message: "A correction for this entry, scheme and role is already recorded in the database or earlier in this upload, and its total or components differ from the one sent (stored {stored.value} {stored.value_unit.value}, sent {payload.value} {payload.value_unit.value}). If the value depends on this deposit's geometry or calculation, name the source calculation (source_calculation_key) so each deposit's correction is recorded separately."
+- Message: 'A correction for this entry, scheme and role is already recorded in the database or earlier in this upload, and {differs} {remedy}'
 - Note: An applied correction with the same target, source, scheme or scale factor, role and temperature is already stored with a different total or component breakdown. context carries the record kind, the role, the target and scheme public refs, and which of value and components differ.
 
 <a id="c-arrhenius-a-units-molecularity-mismatch"></a>
