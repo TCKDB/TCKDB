@@ -28,7 +28,7 @@ class SpeciesNameSearchRequestEcho(ProfiledRequestEcho):
     match: NameMatchMode
     limit: int
     hidden_by_default: HiddenByDefault | None = Field(
-        None,
+        default=None,
         description="Always null: hidden species are not counted. merged_refs is empty too, as the request names no ref.",
     )
 

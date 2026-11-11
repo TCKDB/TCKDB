@@ -61,10 +61,10 @@ Three things are deliberately absent:
 | Kind of token | Count | Read from |
 | --- | --- | --- |
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
-| Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
+| Identifier prefixes | 44 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 370 | `backend/app/api/code_catalogue.py` |
-| **total** | **710** | |
+| Refusal codes a caller can receive | 371 | `backend/app/api/code_catalogue.py` |
+| **total** | **712** | |
 
 ## How a record is named
 
@@ -95,7 +95,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `wfr_` | workflow tool release | yes |
 | `wft_` | workflow tool | yes |
 
-### Opaque prefixes (30)
+### Opaque prefixes (31)
 
 | Prefix | Names a | Same on every instance? |
 | --- | --- | --- |
@@ -122,6 +122,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `sfnd_` | structure evidence finding | no — one row, one database |
 | `sm_` | statmech | no — one row, one database |
 | `smd_` | statmech model declaration | no — one row, one database |
+| `snm_` | species name | no — one row, one database |
 | `spe_` | species entry | no — one row, one database |
 | `sra_` | submission rights attestation | no — one row, one database |
 | `sub_` | submission | no — one row, one database |
@@ -812,7 +813,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `network_export_body_too_large` | a relationship — read `context` |
 | `request_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (300 codes)
+### HTTP 422 (301 codes)
 
 | Code | Names |
 | --- | --- |
@@ -1025,6 +1026,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `species_handle_conflict` | a relationship — read `context` |
 | `species_key_undeclared` | a thing |
 | `species_kind_conflict` | a relationship — read `context` |
+| `species_name_query_invalid` | a thing |
 | `species_smiles_charge_mismatch` | a relationship — read `context` |
 | `species_stereo_contradiction` | a relationship — read `context` |
 | `species_stereo_label_invalid` | a relationship — read `context` |

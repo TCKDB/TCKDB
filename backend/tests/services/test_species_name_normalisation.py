@@ -125,3 +125,15 @@ def test_only_decimal_digits_count_as_digits():
     for raw in (chr(0x3007) + chr(0x3007), "ab" + chr(0x3007)):  # ideographic zero
         assert not is_valid_query_key(raw, normalise_name(raw))
     assert is_valid_query_key("ab" + chr(0x663), normalise_name("ab" + chr(0x663)))  # Arabic-Indic digit three
+
+
+@pytest.mark.parametrize("raw", ["--", chr(0x301) + " " + chr(0x301), chr(0x301) + "-", "()", "+."])
+def test_a_key_needs_a_letter_or_digit(raw):
+    assert not is_valid_query_key(raw, normalise_name(raw))
+    assert is_valid_query_key(raw + "a", normalise_name(raw + "a"))
+
+
+def test_an_apostrophe_made_by_nfkc_is_folded():
+    # U+0149 decomposes under NFKC to U+02BC + "n"
+    assert normalise_name(chr(0x149) + "x") == "'nx"
+    assert normalise_name(chr(0x149) + "x") == normalise_name("'nx")

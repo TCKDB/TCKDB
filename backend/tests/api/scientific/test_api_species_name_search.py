@@ -542,3 +542,30 @@ def test_one_credential_keeps_its_own_limit_under_the_ip_ceiling(client, monkeyp
     reset_rate_limit_store()
     codes = [client.get(URL, params={"q": "water"}, headers={"x-api-key": "one-key"}).status_code for _ in range(5)]
     assert codes == [200, 200, 200, 200, 429]
+
+
+def test_credentialed_searches_do_not_spend_the_anonymous_allowance(client, monkeypatch):
+    monkeypatch.setattr(settings, "rate_limit_enabled", True)
+    monkeypatch.setattr(settings, "rate_limit_name_search_anon_per_minute", 2)
+    monkeypatch.setattr(settings, "rate_limit_name_search_auth_per_minute", 100)
+    monkeypatch.setattr(settings, "rate_limit_name_search_ip_per_minute", 100)
+    from app.api.rate_limit import reset_rate_limit_store
+
+    reset_rate_limit_store()
+    for _ in range(10):
+        assert client.get(URL, params={"q": "water"}, headers={"x-api-key": "k"}).status_code == 200
+    assert [_get(client, "water").status_code for _ in range(3)] == [200, 200, 429]
+
+
+def test_an_ip_refused_request_costs_no_credential_budget(client, monkeypatch):
+    monkeypatch.setattr(settings, "rate_limit_enabled", True)
+    monkeypatch.setattr(settings, "rate_limit_name_search_auth_per_minute", 100)
+    monkeypatch.setattr(settings, "rate_limit_name_search_ip_per_minute", 2)
+    from app.api import rate_limit
+
+    rate_limit.reset_rate_limit_store()
+    codes = [client.get(URL, params={"q": "water"}, headers={"x-api-key": "k"}) for _ in range(5)]
+    assert [r.status_code for r in codes] == [200, 200, 429, 429, 429]
+    assert codes[-1].json()["bucket"] == "name_search_ip"
+    credential = next(k for k in rate_limit._STORE._store if k[0] == "name_search" and k[1].startswith("apikey:"))
+    assert rate_limit._STORE._store[credential].count == 2

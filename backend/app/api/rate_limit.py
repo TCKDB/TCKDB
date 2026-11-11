@@ -14,7 +14,7 @@ bucket and chooses an identity:
   Tight: account-spam target.
 - ``GET /api/v1/scientific/species/name-search`` → ``name_search``
   (per-minute; IP-keyed without a credential, credential-keyed with one,
-  and every request is also charged to its IP).
+  and a credentialed request is first charged to its IP in the separate ``name_search_ip`` bucket).
   Matched on the exact path before the generic public-read branch.
 - Public scientific reads (GET ``/api/v1/scientific/...``, POST
   ``/api/v1/scientific/.../search``, POST the relative-energy and
@@ -424,23 +424,26 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         bucket, limit, window, identity = _classify(request)
-        allowed, retry_after = _STORE.hit(
-            bucket=bucket,
-            identity=identity,
-            limit=limit,
-            window_seconds=window,
-        )
-        if allowed and bucket == "name_search":
+        allowed, retry_after = True, 0
+        if bucket == "name_search" and identity != _client_ip(request):
             # A credential is only fingerprinted, not checked, so rotating keys would mint a fresh budget each time:
-            # every name search is also charged to the caller's IP.
-            ip = _client_ip(request)
-            if identity != ip:
-                allowed, retry_after = _STORE.hit(
-                    bucket=bucket,
-                    identity=ip,
-                    limit=settings.rate_limit_name_search_ip_per_minute,
-                    window_seconds=window,
-                )
+            # the caller's IP is charged first, in its own bucket, so a refused request costs no credential budget.
+            bucket_ip = "name_search_ip"
+            allowed, retry_after = _STORE.hit(
+                bucket=bucket_ip,
+                identity=_client_ip(request),
+                limit=settings.rate_limit_name_search_ip_per_minute,
+                window_seconds=window,
+            )
+            if not allowed:
+                bucket = bucket_ip
+        if allowed:
+            allowed, retry_after = _STORE.hit(
+                bucket=bucket,
+                identity=identity,
+                limit=limit,
+                window_seconds=window,
+            )
         if not allowed:
             return JSONResponse(
                 status_code=429,

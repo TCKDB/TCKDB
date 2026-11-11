@@ -58,13 +58,13 @@ def is_valid_query_key(raw: str, key: str) -> bool:
 
     Control characters in the raw text (a tab aside) are refused before normalisation could turn them into spaces.
     The key must be 2 to 64 characters of letters, marks, decimal digits, space and ``- , ' ( ) [ ] + . :``, with
-    no default-ignorable code point (in the raw text or the key) and at least one character that is not a combining mark.
+    no default-ignorable code point (in the raw text or the key) and at least one letter or decimal digit.
     """
     if any(unicodedata.category(ch) == "Cc" and ch != "\t" for ch in raw):
         return False
     if has_default_ignorable(raw) or has_default_ignorable(key):
         return False
-    if key and all(unicodedata.category(ch)[0] == "M" for ch in key):
+    if not any(unicodedata.category(ch)[0] == "L" or unicodedata.category(ch) == "Nd" for ch in key):
         return False
     if not MIN_QUERY_LENGTH <= len(key) <= MAX_QUERY_LENGTH:
         return False
