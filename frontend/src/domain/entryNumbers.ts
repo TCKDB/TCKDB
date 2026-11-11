@@ -23,6 +23,8 @@ export type NumberValue = {
     value: string | null
     unit: string | null
     exponent?: string
+    /** The stored value, when the shown one is rounded. */
+    full?: string
     absent?: string
 }
 
@@ -95,7 +97,7 @@ function quantity(label: string, spec: QuantitySpecKey, raw: number | null | und
     if (!main) return { label, kind: "number", value: null, unit: null }
     const plus = spread ? formatQuantity(spread.spec, spread.raw) : null
     const value = main.value.replace("-", "−") + (plus ? ` ± ${plus.value}` : "")
-    return { label, kind: "number", value, unit: main.unit, exponent: main.exponent }
+    return { label, kind: "number", value, unit: main.unit, exponent: main.exponent, ...(main.full && !plus && { full: main.full }) }
 }
 
 /** A whole number as stored, which has no rounding to apply. */

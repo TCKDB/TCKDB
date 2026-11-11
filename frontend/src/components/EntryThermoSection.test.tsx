@@ -371,6 +371,17 @@ describe("EntryThermoSection", () => {
         }
     })
 
+    it("shows the evaluated Cp to 6 significant figures with the stored value as its title", async () => {
+        const records = mockRecords()
+        const withPoints = { ...records[0], model_kind: "points", points: [{ temperature_k: 300, cp_j_mol_k: 38.92638673392166, h_kj_mol: 0, s_j_mol_k: 240.1, g_kj_mol: -71.5 }] }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [withPoints, records[1], records[2]] }))))
+        page()
+        const alphaCard = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
+        fireEvent.click(within(alphaCard).getByText(/temperature point/))
+        const shown = within(alphaCard).getByText("38.9264")
+        expect(shown.getAttribute("title")).toBe("38.92638673392166")
+    })
+
     it("binds NASA-7's T-low and T-high scalars to their own labelled row — never swapped", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()

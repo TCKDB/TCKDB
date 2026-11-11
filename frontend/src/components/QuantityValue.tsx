@@ -25,13 +25,15 @@ export function QuantityValue({ value }: { value: FillableValue }) {
     if (filled.kind === "quantity") {
         return (
             <>
-                {filled.value}
-                {filled.exponent && (
-                    <>
-                        {" × 10"}
-                        <sup>{filled.exponent}</sup>
-                    </>
-                )}
+                <span title={filled.full}>
+                    {filled.value}
+                    {filled.exponent && (
+                        <>
+                            {" × 10"}
+                            <sup>{filled.exponent}</sup>
+                        </>
+                    )}
+                </span>
                 {filled.unit && <span className="unit"> {filled.unit}</span>}
             </>
         )

@@ -29,7 +29,7 @@ function ValueCell({ value, to }: { value: NumberValue; to: string | null }) {
     if (value.kind === "code") return <code className="t-preserve-case">{value.value}</code>
     if (value.kind === "text") return <>{value.value}</>
     const number: ReactNode = value.exponent ? <>{value.value} × 10<sup>{value.exponent}</sup></> : value.value
-    return <ValueLink value={number} unit={value.unit ?? undefined} to={to} />
+    return <ValueLink value={number} unit={value.unit ?? undefined} to={to} full={value.full} />
 }
 
 /** The loading, waiting and failure lines of a list that walks every page of a read; nothing once it is ready. */

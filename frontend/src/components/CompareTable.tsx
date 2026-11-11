@@ -26,7 +26,7 @@ export function CompareCellView({ cell, to }: { cell: CompareCell; to: string | 
     if (value.kind === "pointGroup") return <PointGroup value={value.value as string} />
     if (value.kind === "code") return <code className="t-preserve-case">{value.value}</code>
     if (value.kind === "text") return <>{value.value}</>
-    return <ValueLink value={value.exponent ? <>{value.value} × 10<sup>{value.exponent}</sup></> : value.value} to={to} />
+    return <ValueLink value={value.exponent ? <>{value.value} × 10<sup>{value.exponent}</sup></> : value.value} to={to} full={value.full} />
 }
 
 /**

@@ -188,7 +188,16 @@ describe("formatQuantity / QUANTITY_SPECS", () => {
         expect(formatQuantity("statmech_rotational_constant_cm1", 20000)).toEqual({ value: "2", exponent: "4", unit: "cm⁻¹" })
     })
 
-    it("prints deposited quantities exactly as stored, in plain digits", () => {
+    it("shows a deposited quantity to at most 6 significant figures and keeps the stored value in full", () => {
+        expect(formatQuantity("thermo_cp_j_mol_k", 38.92638673392166)).toEqual({ value: "38.9264", unit: "J/mol·K", full: "38.92638673392166" })
+        expect(formatQuantity("thermo_reference_pressure_bar", 1.01325)).toEqual({ value: "1.01325", unit: "bar" })
+        expect(formatQuantity("thermo_temperature_k", 300)).toEqual({ value: "300", unit: "K" })
+        expect(formatQuantity("thermo_temperature_k", 298.1500001)).toEqual({ value: "298.15", unit: "K", full: "298.1500001" })
+        expect(formatQuantity("transport_rotational_relaxation", 1234567)).toEqual({ value: "1234567", unit: null })
+        expect(formatQuantity("transport_rotational_relaxation", 1.23456789e-9)).toEqual({ value: "0.00000000123457", unit: null, full: "1.23456789e-9" })
+    })
+
+    it("prints deposited quantities in plain digits", () => {
         expect(formatQuantity("thermo_reference_pressure_bar", 1)).toEqual({ value: "1", unit: "bar" })
         expect(formatQuantity("thermo_temperature_k", 298.15)).toEqual({ value: "298.15", unit: "K" })
         expect(formatQuantity("transport_polarizability_angstrom3", 2.6)).toEqual({ value: "2.6", unit: "Å³" })

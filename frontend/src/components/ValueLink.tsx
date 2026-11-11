@@ -3,10 +3,10 @@ import { Link } from "react-router-dom"
 import "../record-blocks.css"
 
 /** A value and its unit as a link to the record that evidences it; plain text when no page exists for it. */
-export function ValueLink({ value, unit, to }: { value: ReactNode; unit?: string; to: string | null }) {
+export function ValueLink({ value, unit, to, full }: { value: ReactNode; unit?: string; to: string | null; full?: string }) {
     const body = (
         <>
-            <span className="value-link-number">{value}</span>
+            <span className="value-link-number" title={full}>{value}</span>
             {unit && <> <span className="u t-preserve-case">{unit}</span></>}
         </>
     )

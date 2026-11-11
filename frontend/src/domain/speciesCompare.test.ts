@@ -49,6 +49,14 @@ describe("compare rows", () => {
         expect(rows.every((row) => row.compare === "continuous")).toBe(true)
     })
 
+    it("rounds a heat capacity to 6 significant figures and keeps the stored value", () => {
+        const [row] = cpRows([column(record("a", [[300, 38.92638673392166]])), column(record("b", [[300, 31]]))])
+        expect(words(row)).toEqual(["38.9264", "31"])
+        const [first, second] = row.cells
+        expect(first.kind === "value" && first.value.full).toBe("38.92638673392166")
+        expect(second.kind === "value" && second.value.full).toBeUndefined()
+    })
+
     it("says Not recorded for a temperature inside a record's range that it has no point at", () => {
         const rows = cpRows([
             column(record("a", [[300, 30], [400, 35], [500, 40]])),

@@ -122,7 +122,7 @@ export function cpRows(columns: readonly CompareColumn[]): CompareRow[] {
             const cells = columns.map((column): CompareCell => {
                 const point = pointsInRange(column.thermo).find((candidate) => candidate.temperature_k === temperature)
                 const quantity = formatQuantity("thermo_cp_j_mol_k", point?.cp_j_mol_k)
-                if (quantity) return { kind: "value", value: { label, kind: "number", value: quantity.value.replace("-", "−"), unit: quantity.unit } }
+                if (quantity) return { kind: "value", value: { label, kind: "number", value: quantity.value.replace("-", "−"), unit: quantity.unit, exponent: quantity.exponent, full: quantity.full } }
                 const range = column.thermo ? rangeOf(column.thermo) : null
                 return { kind: "absent", words: range && (temperature < range[0] || temperature > range[1]) ? OUTSIDE_RANGE : NOT_RECORDED }
             })

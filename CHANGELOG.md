@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Deposited numbers to 6 significant figures (Unreleased)
+
+- **Behaviour:** values shown as deposited (heat capacity, reference pressure, temperature, transport polarizability and rotational relaxation) print at most 6 significant figures with trailing zeros trimmed and no padding (38.92638673392166 shows as 38.9264); integers are never rounded. A rounded value carries the stored number as its hover title. The thermo tab's heat capacity column uses the same rule.
+- **Schema and migration:** none. No new environment variable.
+
 ## Compare a molecule's values (Unreleased)
 
 - **Behaviour:** `/species/:speciesRef/compare` puts every thermochemistry and statistical mechanics record of a molecule side by side, one column per record, grouped by version (the molecule's version order, the archive's order inside a version; at most 12 columns per version, the list keeps all), each headed by its levels of theory, programs, review status and a link. Rows give enthalpy of formation, entropy, temperature range, phase, reference pressure, heat capacity at temperatures where two or more records have a deposited point inside their own range (otherwise "Not recorded" or "Outside its range") and the statistical mechanics scalars, with uncertainties and units. A setting (treatment, point group, symmetry number and the like) that is not the same in every record of a version is marked in its row header; measured numbers are never marked, ordered or called best, and the legend says the mark is not a verdict. The same records are also listed one per row, grouped by version, in tables the reader can sort; the note then says the table is sorted by them and is not a recommendation. The molecule page links to it when either kind has two or more records; a version's numbers section also links when another version has that kind of record.

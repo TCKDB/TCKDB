@@ -775,7 +775,7 @@ function PointsBlock({ points, thermoRef, idSuffix = "" }: { points: ThermoRecor
                                 {points.map((point, index) => (
                                     <tr key={`${thermoRef}-point-${index}`}>
                                         <td className="num" data-label="T (K)">{point.temperature_k}</td>
-                                        <td className="num" data-label="Cp (J/mol·K)">{point.cp_j_mol_k ?? "not recorded"}</td>
+                                        <td className="num" data-label="Cp (J/mol·K)">{point.cp_j_mol_k == null ? "not recorded" : <QuantityValue value={{ ...formatQuantity("thermo_cp_j_mol_k", point.cp_j_mol_k)!, unit: null }} />}</td>
                                         <td className="num" data-label="H (kJ/mol)">{point.h_kj_mol ?? "not recorded"}</td>
                                         <td className="num" data-label="S (J/mol·K)">{point.s_j_mol_k ?? "not recorded"}</td>
                                         <td className="num" data-label="G (kJ/mol)">{point.g_kj_mol ?? "not recorded"}</td>

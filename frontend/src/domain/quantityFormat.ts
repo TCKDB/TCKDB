@@ -42,7 +42,10 @@ export { ABSENT }
 const MINUS = "−"
 
 /** A number-and-unit pair, or a number-mantissa-and-exponent-and-unit triple. */
-export type Quantity = { value: string; unit: string | null; exponent?: string }
+export type Quantity = { value: string; unit: string | null; exponent?: string; full?: string }
+
+/** Significant figures a `deposited` quantity shows; the stored value stays in `full`. */
+const DEPOSITED_FIGURES = 6
 
 /** A rendering the page states in its own words, standing in for a missing value. */
 export type NamedAbsence = { sentence: string }
@@ -114,17 +117,23 @@ export function significant(value: number | null | undefined, digits: number, un
     return { ...quantity, value: quantity.value.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") }
 }
 
-/** The number exactly as stored, in plain digits (never `1e-7`); `null` for an absent or non-finite value. */
+/**
+ * The number to at most 6 significant figures, trailing zeros trimmed and never padded, in plain digits (never `1e-7`);
+ * an integer is never rounded. `full` carries the stored value when the shown one is shorter. `null` for an absent or
+ * non-finite value.
+ */
 export function deposited(value: number | null | undefined, unit?: string | null): Quantity | null {
     if (value === null || value === undefined || !Number.isFinite(value)) return null
-    const text = String(value)
-    if (!/e/i.test(text)) return { value: text, unit: unit ?? null }
+    const shown = Number.isInteger(value) ? value : Number(value.toPrecision(DEPOSITED_FIGURES))
+    const full = shown === value ? undefined : String(value)
+    const text = String(shown)
+    if (!/e/i.test(text)) return { value: text, unit: unit ?? null, ...(full && { full }) }
     // A very small or very large number would print as `1e-7`; plain digits are used while they stay readable and exact.
-    const plain = Number(value).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 20 })
-    const readable = Number(plain) === Number(value) && plain.replace(/[-.]/g, "").length <= 15
-    if (readable) return { value: plain, unit: unit ?? null }
-    const [mantissa, exponent] = Number(value).toExponential().split("e")
-    return { value: mantissa, exponent: exponent.startsWith("-") ? `${MINUS}${exponent.slice(1)}` : exponent.replace("+", ""), unit: unit ?? null }
+    const plain = shown.toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 20 })
+    const readable = Number(plain) === shown && plain.replace(/[-.]/g, "").length <= 15
+    if (readable) return { value: plain, unit: unit ?? null, ...(full && { full }) }
+    const [mantissa, exponent] = shown.toExponential().split("e")
+    return { value: mantissa, exponent: exponent.startsWith("-") ? `${MINUS}${exponent.slice(1)}` : exponent.replace("+", ""), unit: unit ?? null, ...(full && { full }) }
 }
 
 /**
@@ -145,7 +154,7 @@ export function deposited(value: number | null | undefined, unit?: string | null
 export type Filled =
     | { kind: "absent"; text: string }
     | { kind: "named-absence"; text: string }
-    | { kind: "quantity"; value: string; unit: string | null; exponent?: string }
+    | { kind: "quantity"; value: string; unit: string | null; exponent?: string; full?: string }
     | { kind: "plain"; text: string }
 
 export function fillValue(value: FillableValue): Filled {
@@ -156,7 +165,7 @@ export function fillValue(value: FillableValue): Filled {
         return { kind: "named-absence", text: value.sentence }
     }
     if (typeof value === "object") {
-        return { kind: "quantity", value: value.value, unit: value.unit, exponent: value.exponent }
+        return { kind: "quantity", value: value.value, unit: value.unit, exponent: value.exponent, full: value.full }
     }
     return { kind: "plain", text: String(value) }
 }
@@ -223,12 +232,12 @@ export const QUANTITY_SPECS = {
     kinetics_n: { kind: "scientific", digits: 4, unit: null },
 } as const satisfies Record<string, QuantitySpec>
 
-/** How a quantity is printed: to a digit count ("fixed", "scientific", "significant"), or exactly as stored ("deposited"). */
+/** How a quantity is printed: to a digit count ("fixed", "scientific", "significant"), or to 6 significant figures ("deposited"). */
 export type QuantitySpec =
     | { kind: "fixed" | "scientific" | "significant"; digits: number; unit: string | null }
     | { kind: "deposited"; unit: string | null }
 
-/** The specs that print the stored number as it is, with no digit count. */
+/** The specs that print the stored number to 6 significant figures with no padding. */
 export const DEPOSITED_SPEC_KEYS = [
     "thermo_reference_pressure_bar",
     "thermo_temperature_k",
