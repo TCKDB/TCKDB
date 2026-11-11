@@ -196,3 +196,25 @@ def test_name_search_finds_an_imported_name_and_says_where_it_came_from(client, 
     (match,) = [m for m in response.json()["matches"] if m["species_ref"] == sp.public_ref]
     assert (match["name"], match["kind"], match["source_kind"]) == ("Ammonia Test Spirit", "common", "offline_import")
     assert normalise_name(match["name"]) == "ammonia test spirit"
+
+
+def test_a_species_whose_inchikey_is_shared_with_another_live_species_is_not_named(db_session):
+    """Singlet and triplet methylene share an InChIKey; PubChem cannot say which one a name belongs to."""
+    key = _key()
+    singlet = make_species(db_session, smiles="[CH2]", inchi_key=key, multiplicity=1)
+    triplet = make_species(db_session, smiles="[CH2]", inchi_key=key, multiplicity=3)
+    other = _species(db_session)
+    report = import_species_names(db_session, _doc(_row(singlet), _row(triplet), _row(other)), dry_run=False)
+    assert _reasons(report) == ["inchikey_shared_by_species", "inchikey_shared_by_species", None]
+    assert _names(db_session, singlet) == [] and _names(db_session, triplet) == []
+
+
+def test_a_merged_away_species_does_not_make_an_inchikey_shared(db_session):
+    survivor, loser = _species(db_session), _species(db_session, entry=False)
+    db_session.execute(
+        text("UPDATE species SET merged_into_species_id = :s, inchi_key = :k WHERE id = :l"),
+        {"s": survivor.id, "l": loser.id, "k": survivor.inchi_key},
+    )
+    db_session.expire_all()
+    report = import_species_names(db_session, _doc(_row(survivor)), dry_run=False)
+    assert [r.outcome for r in report.rows] == ["inserted"]

@@ -26,6 +26,7 @@ def fetch_species_list(
         raise ValueError("base URL must start with http:// or https://")
     root = f"{parts.scheme}://{parts.netloc}{parts.path.rstrip('/')}"
     species: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
     offset = 0
     while True:
         query = urllib.parse.urlencode({"limit": PAGE_SIZE, "offset": offset})
@@ -35,18 +36,27 @@ def fetch_species_list(
         with opener(request, timeout=TIMEOUT_SECONDS) as response:
             payload = json.loads(response.read())
         records = payload.get("records", [])
+        if not isinstance(records, list):
+            raise ValueError("the species browse returned no record list")
         for record in records:
-            species.append(
-                {
-                    "species_ref": record["species_ref"],
-                    "inchi_key": record["inchi_key"],
-                    "formula": record.get("formula"),
-                    "charge": record["charge"],
-                    "multiplicity": record["multiplicity"],
-                }
-            )
+            try:
+                species.append(
+                    {
+                        "species_ref": record["species_ref"],
+                        "inchi_key": record["inchi_key"],
+                        "smiles": record.get("canonical_smiles"),
+                        "formula": record.get("formula"),
+                        "charge": record["charge"],
+                        "multiplicity": record["multiplicity"],
+                    }
+                )
+            except (KeyError, TypeError):
+                ref = record.get("species_ref") if isinstance(record, dict) else None
+                skipped.append(
+                    {"species_refs": [ref] if isinstance(ref, str) else [], "reason": "bad_browse_record"}
+                )
         offset += len(records)
         if not records or offset >= payload.get("pagination", {}).get("total", 0):
             break
         sleep(1.0 / MAX_REQUESTS_PER_SECOND)
-    return {"format": SPECIES_LIST_FORMAT, "species": species}
+    return {"format": SPECIES_LIST_FORMAT, "species": species, "skipped": skipped}

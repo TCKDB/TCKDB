@@ -16,8 +16,12 @@ import json
 import sys
 from pathlib import Path
 
-from app.importers.pubchem_names.fetch import SPECIES_LIST_FORMAT, PubChemClient, build_review
-from app.importers.pubchem_names.species_list import fetch_species_list
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from app.importers.pubchem_names.fetch import SPECIES_LIST_FORMAT, PubChemClient, fetch_to_file  # noqa: E402
+from app.importers.pubchem_names.species_list import fetch_species_list  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -47,9 +51,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit is not None:
         species = species[: args.limit]
 
+    earlier = document.get("skipped", []) if isinstance(document, dict) else []
     client = PubChemClient()
-    review = build_review(species, client.lookup)
-    args.out.write_text(json.dumps(review, indent=2, ensure_ascii=False) + "\n")
+    review = fetch_to_file(species, args.out, client, earlier_skipped=earlier if isinstance(earlier, list) else [])
     print(f"{len(review['rows'])} names, {len(review['skipped'])} skipped, {client.requests_made} requests -> {args.out}")
     return 0
 

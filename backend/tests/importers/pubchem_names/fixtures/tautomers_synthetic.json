@@ -1,0 +1,8 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {"CID": 8871, "IUPACName": "1H-pyridin-2-one", "Charge": 0, "CovalentUnitCount": 1, "Title": "2-Pyridone"},
+      {"CID": 5280522, "IUPACName": "pyridin-2-ol", "Charge": 0, "CovalentUnitCount": 1, "Title": "2-Hydroxypyridine"}
+    ]
+  }
+}

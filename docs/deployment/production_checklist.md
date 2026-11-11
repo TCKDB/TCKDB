@@ -191,11 +191,13 @@ Out of scope here; tracked separately:
 ## Loading species names from PubChem
 
 Name search has no names until some are loaded. The fetch runs on an operator's machine and never at request time; the load runs
-inside the API container with the API's own `DB_*` settings, so it needs no API credential. Run both from `backend/` with
-`PYTHONPATH=.`.
+inside the API container with the API's own `DB_*` settings, so it needs no API credential. The fetch is run from `backend/`
+(`PYTHONPATH` is not needed).
 
-1. **Fetch.** Builds the species list from the public species browse (GET only), asks PubChem for each InChIKey (nothing else is
-   sent; at most 4 requests a second, 10 s timeout, up to 2 retries on 503) and writes a review file:
+1. **Fetch.** Builds the species list from the public species browse (GET only), asks PubChem for each InChIKey together with
+   its charge and covalent-unit count (nothing else is sent; at most 4 requests a second, 10 s timeout, up to 2 retries on
+   503, responses over 1 MB refused) and writes a review file, rewritten every 25 InChIKeys so an interrupted run keeps what it
+   fetched:
 
    ```bash
    python scripts/names/fetch_pubchem_names.py --from-api https://<host> --save-species species.json --out names_review.json
@@ -204,21 +206,28 @@ inside the API container with the API's own `DB_*` settings, so it needs no API 
    ```
 
    Each row of `rows` is one name: species ref, InChIKey, name, kind (`common` from PubChem's Title, `systematic` from its
-   IUPACName), CID and PubChem URL. `skipped` lists what was left out and why: `no_pubchem_match`, `several_cids`,
-   `inchikey_shared_by_species` (PubChem does not know spin state), `lookup_failed`, `name_missing`, `name_length`,
-   `name_characters`, `name_no_letter_or_digit`, `bad_input_row`.
+   IUPACName), CID, PubChem URL and retrieval time. Only a PubChem compound with one covalent unit and the species' charge is
+   a candidate, and exactly one must remain. `skipped` lists what was left out and why: `no_pubchem_match`,
+   `no_matching_cid` (PubChem has compounds, none with one unit and that charge), `several_cids` (for example tautomers),
+   `inchikey_shared_by_species` (PubChem does not know spin state), `smiles_multi_component`, `lookup_failed` (timeout, network
+   error, 503 after retries, oversized or malformed response), `name_missing`, `name_length`, `name_characters`,
+   `name_no_letter_or_digit`, `bad_input_row`, `bad_browse_record`.
 2. **Review.** Read `names_review.json`; delete rows you do not want. Only the `rows` section is loaded.
-3. **Dry run.** Reports every row as `would_insert` or `skipped` with a reason, and writes nothing:
+3. **Dry run.** Reports every row as `would_insert` or `skipped` with a reason, and writes nothing. Run it in the API
+   container, reading the file from standard input (`<api-container>` is the API container's name; the image's entrypoint
+   activates the environment):
 
    ```bash
-   python scripts/names/import_species_names.py names_review.json
+   docker exec -i <api-container> /usr/local/bin/_entrypoint.sh python scripts/names/import_species_names.py /dev/stdin < names_review.json
    ```
 
-4. **Import.** The same command with `--commit`. A name is written only when the species ref exists, is not merged, and still has
-   the row's InChIKey. Names are stored with source kind `offline_import` and an `external_source` row `PubChem` / `CID <n>`.
-   A name the species already has (live, or retired; curated or imported) is skipped, so a re-run writes nothing new and a
-   retired name is never restored. Skip reasons: `bad_row`, `species_not_found`, `inchikey_mismatch`, `species_merged`,
-   `already_present`, `retired_name_not_restored`, plus the name reasons above.
+4. **Import.** The same command with `--commit`. A name is written only when the species ref exists, is not merged, still has
+   the row's InChIKey, and that InChIKey belongs to no other live species. Names are stored with source kind `offline_import`
+   and an `external_source` row `PubChem` / `CID <n>`. A name the species already has (live, or retired; curated or imported)
+   is skipped, so a re-run writes nothing new and a retired name is never restored. Skip reasons: `bad_row`,
+   `species_not_found`, `inchikey_mismatch`, `inchikey_shared_by_species`, `species_merged`, `already_present`,
+   `retired_name_not_restored`, `insert_refused` (the database refused the insert for a reason other than a merged species),
+   plus the name reasons above.
 
 ## See also
 

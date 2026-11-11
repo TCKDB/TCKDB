@@ -12,7 +12,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -20,8 +20,8 @@ from app.db.models.common import SpeciesNameKind, SpeciesNameSourceKind
 from app.db.models.external_source import ExternalSource
 from app.db.models.species import Species
 from app.db.models.species_name import SpeciesName
-from app.importers.pubchem_names.fetch import REVIEW_FORMAT, is_inchikey
 from app.services.species_name_normalisation import name_problem, normalise_name
+from app.services.species_name_review import REVIEW_FORMAT, is_inchikey
 
 SOURCE_NAME = "PubChem"
 SOURCE_TERMS_URL = "https://www.ncbi.nlm.nih.gov/home/about/policies/"
@@ -113,6 +113,14 @@ def _import_row(session: Session, raw: Any, *, dry_run: bool) -> RowOutcome:
         return out
     if _is_merged(species):
         out.reason = "species_merged"
+        return out
+    sharing = session.scalar(
+        select(func.count())
+        .select_from(Species)
+        .where(Species.inchi_key == key, Species.merged_into_species_id.is_(None))
+    )
+    if sharing is not None and sharing > 1:
+        out.reason = "inchikey_shared_by_species"
         return out
     name_key = normalise_name(name)
     stored = session.execute(

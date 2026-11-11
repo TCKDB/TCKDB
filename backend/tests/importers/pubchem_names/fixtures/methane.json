@@ -4,6 +4,8 @@
       {
         "CID": 297,
         "IUPACName": "methane",
+        "Charge": 0,
+        "CovalentUnitCount": 1,
         "Title": "Methane"
       }
     ]

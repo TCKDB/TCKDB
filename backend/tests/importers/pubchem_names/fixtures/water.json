@@ -4,11 +4,15 @@
       {
         "CID": 962,
         "IUPACName": "oxidane",
+        "Charge": 0,
+        "CovalentUnitCount": 1,
         "Title": "Water"
       },
       {
         "CID": 22247451,
         "IUPACName": "hydron hydroxide",
+        "Charge": 0,
+        "CovalentUnitCount": 2,
         "Title": "Water, sterile filtered"
       }
     ]
