@@ -54,11 +54,11 @@ from app.services.calculation_resolution import (
 )
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_declared_key
-from app.services.record_review import get_record_review
 from app.services.provenance_warnings import (
     collect_composite_delta_warnings,
     collect_energy_correction_scheme_provenance_warnings,
 )
+from app.services.record_review import get_record_review
 from app.services.software_resolution import resolve_software_release_ref
 
 #: An applied correction names a source the enclosing upload never declared.
@@ -881,7 +881,7 @@ def _same_components(
             _hartree(r.contribution_value, stored.value_unit),
             _hartree(c.contribution_value, payload.value_unit),
         )
-        for r, c in zip(rows, supplied)
+        for r, c in zip(rows, supplied, strict=True)
     )
 
 
