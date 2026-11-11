@@ -20,7 +20,7 @@ import type { PageRequest } from "../domain/paging"
 import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { SectionHeading } from "./PageSections"
-import { QuantityValue } from "./QuantityValue"
+import { QuantityValue, ROUNDED_NOTE } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SourceCalculationsTable } from "./SourceCalculationsTable"
@@ -218,10 +218,11 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
                 <div><dt className="t-preserve-case">Sigma (Å)</dt><dd><QuantityValue value={formatQuantity("transport_sigma_angstrom", core.sigma_angstrom, null)} /></dd></div>
                 <div><dt className="t-preserve-case">Epsilon / k (K)</dt><dd><QuantityValue value={formatQuantity("transport_epsilon_over_k_k", core.epsilon_over_k_k, null)} /></dd></div>
                 <div><dt className="t-preserve-case">Dipole (Debye)</dt><dd><QuantityValue value={formatQuantity("transport_dipole_debye", core.dipole_debye, null)} /></dd></div>
-                <div><dt className="t-preserve-case">Polarizability (Å³)</dt><dd>{core.polarizability_angstrom3 ?? "not recorded"}</dd></div>
-                <div><dt>Rotational relaxation</dt><dd>{core.rotational_relaxation ?? "not recorded"}</dd></div>
+                <div><dt className="t-preserve-case">Polarizability (Å³)</dt><dd><QuantityValue value={formatQuantity("transport_polarizability_angstrom3", core.polarizability_angstrom3, null)} /></dd></div>
+                <div><dt>Rotational relaxation</dt><dd><QuantityValue value={formatQuantity("transport_rotational_relaxation", core.rotational_relaxation, null)} /></dd></div>
                 <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
             </dl>
+            {[formatQuantity("transport_polarizability_angstrom3", core.polarizability_angstrom3), formatQuantity("transport_rotational_relaxation", core.rotational_relaxation)].some((quantity) => quantity?.full !== undefined) && <p className="note">{ROUNDED_NOTE}</p>}
 
             <dl className="kv-list">
                 <div><dt>Source calculations</dt><dd>{record.evidence_summary.source_calculation_count}</dd></div>

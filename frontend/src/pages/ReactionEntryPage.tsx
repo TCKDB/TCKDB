@@ -28,6 +28,7 @@ import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
+import { formatQuantity } from "../domain/quantityFormat"
 import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { buildEquationSides, type EquationParticipant } from "../domain/reactionEquation"
 import { participantChips } from "../domain/participantFacets"
@@ -427,7 +428,7 @@ function NetworkSection({ state }: { state: NetworksState }) {
                             </td>
                             <td className="num" data-label="Solve T range">
                                 {network.solve_temperature_min_k != null && network.solve_temperature_max_k != null
-                                    ? `${network.solve_temperature_min_k}–${network.solve_temperature_max_k} K`
+                                    ? `${formatQuantity("thermo_temperature_k", network.solve_temperature_min_k)?.value}–${formatQuantity("thermo_temperature_k", network.solve_temperature_max_k)?.value} K`
                                     : "not recorded"}
                             </td>
                             <td className="num" data-label="Solve P range">

@@ -42,7 +42,10 @@ export { ABSENT }
 const MINUS = "−"
 
 /** A number-and-unit pair, or a number-mantissa-and-exponent-and-unit triple. */
-export type Quantity = { value: string; unit: string | null; exponent?: string }
+export type Quantity = { value: string; unit: string | null; exponent?: string; full?: string }
+
+/** Significant figures a `deposited` quantity shows; the stored value stays in `full`. */
+const DEPOSITED_FIGURES = 6
 
 /** A rendering the page states in its own words, standing in for a missing value. */
 export type NamedAbsence = { sentence: string }
@@ -114,17 +117,29 @@ export function significant(value: number | null | undefined, digits: number, un
     return { ...quantity, value: quantity.value.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") }
 }
 
-/** The number exactly as stored, in plain digits (never `1e-7`); `null` for an absent or non-finite value. */
+function roundDeposited(value: number): number {
+    const magnitude = Math.abs(value)
+    if (magnitude >= 2 ** 53 || magnitude < 10 ** DEPOSITED_FIGURES) return Number(value.toPrecision(DEPOSITED_FIGURES))
+    return Math.sign(value) * Math.round(magnitude)
+}
+
+/**
+ * The number to at most 6 significant figures, trailing zeros trimmed and never padded, in plain digits (never `1e-7`);
+ * an integer is never rounded. `full` carries the stored value when the shown one is shorter. `null` for an absent or
+ * non-finite value. A non-integer from a million up to 2^53 is rounded to a whole number; beyond that it keeps 6 figures and an exponent.
+ */
 export function deposited(value: number | null | undefined, unit?: string | null): Quantity | null {
     if (value === null || value === undefined || !Number.isFinite(value)) return null
-    const text = String(value)
-    if (!/e/i.test(text)) return { value: text, unit: unit ?? null }
+    const shown = Number.isSafeInteger(value) ? value : roundDeposited(value)
+    const full = shown === value ? undefined : String(value)
+    const text = String(shown)
+    if (!/e/i.test(text) && Math.abs(shown) < 1e15) return { value: text, unit: unit ?? null, ...(full && { full }) }
     // A very small or very large number would print as `1e-7`; plain digits are used while they stay readable and exact.
-    const plain = Number(value).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 20 })
-    const readable = Number(plain) === Number(value) && plain.replace(/[-.]/g, "").length <= 15
-    if (readable) return { value: plain, unit: unit ?? null }
-    const [mantissa, exponent] = Number(value).toExponential().split("e")
-    return { value: mantissa, exponent: exponent.startsWith("-") ? `${MINUS}${exponent.slice(1)}` : exponent.replace("+", ""), unit: unit ?? null }
+    const plain = shown.toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 20 })
+    const readable = Number(plain) === shown && plain.replace(/[-.]/g, "").length <= 15
+    if (readable) return { value: plain, unit: unit ?? null, ...(full && { full }) }
+    const [mantissa, exponent] = shown.toExponential().split("e")
+    return { value: mantissa, exponent: exponent.startsWith("-") ? `${MINUS}${exponent.slice(1)}` : exponent.replace("+", ""), unit: unit ?? null, ...(full && { full }) }
 }
 
 /**
@@ -145,7 +160,7 @@ export function deposited(value: number | null | undefined, unit?: string | null
 export type Filled =
     | { kind: "absent"; text: string }
     | { kind: "named-absence"; text: string }
-    | { kind: "quantity"; value: string; unit: string | null; exponent?: string }
+    | { kind: "quantity"; value: string; unit: string | null; exponent?: string; full?: string }
     | { kind: "plain"; text: string }
 
 export function fillValue(value: FillableValue): Filled {
@@ -156,7 +171,7 @@ export function fillValue(value: FillableValue): Filled {
         return { kind: "named-absence", text: value.sentence }
     }
     if (typeof value === "object") {
-        return { kind: "quantity", value: value.value, unit: value.unit, exponent: value.exponent }
+        return { kind: "quantity", value: value.value, unit: value.unit, exponent: value.exponent, full: value.full }
     }
     return { kind: "plain", text: String(value) }
 }
@@ -183,11 +198,12 @@ export function fillValue(value: FillableValue): Filled {
  * | calculation electronic energy   | 6      | hartree | calculationView headline |
  * | thermo ΔH°(0 K) and uncertainty | 2      | kJ/mol  | (this archive's tables) |
  * | statmech rotational constants   | 4 sf, no trailing zeros | cm⁻¹ | (this archive's tables) |
- * | thermo reference pressure       | as deposited | bar | (this archive's tables) |
- * | thermo temperature range ends   | as deposited | K   | (this archive's tables) |
- * | thermo heat capacity points     | as deposited | J/mol·K | (this archive's tables) |
- * | transport polarizability        | as deposited | Å³  | (this archive's tables) |
- * | transport rotational relaxation | as deposited | (none) | (this archive's tables) |
+ * | thermo reference pressure       | 6 sf, no padding | bar | (this archive's tables) |
+ * | thermo temperatures (ranges, points, NASA ends) | 6 sf, no padding | K | (this archive's tables) |
+ * | thermo heat capacity points     | 6 sf, no padding | J/mol·K | (this archive's tables) |
+ * | thermo evaluated-point H, S, G   | 6 sf, no padding | kJ/mol, J/mol·K, kJ/mol | (this archive's tables) |
+ * | transport polarizability        | 6 sf, no padding | Å³  | (this archive's tables) |
+ * | transport rotational relaxation | 6 sf, no padding | (none) | (this archive's tables) |
  * | kinetics activation energy Ea   | 2      | kJ/mol  | kineticsView headline |
  * | kinetics pre-exponential A      | 3 sf (scientific) | per A_units enum | kineticsView headline |
  * | kinetics temperature exponent n | 4 sf (scientific) | (none)  | kineticsView facts   |
@@ -211,6 +227,9 @@ export const QUANTITY_SPECS = {
     thermo_s298_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
     thermo_s298_uncertainty_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
     thermo_cp_j_mol_k: { kind: "deposited", unit: "J/mol·K" },
+    thermo_point_h_kj_mol: { kind: "deposited", unit: "kJ/mol" },
+    thermo_point_s_j_mol_k: { kind: "deposited", unit: "J/mol·K" },
+    thermo_point_g_kj_mol: { kind: "deposited", unit: "kJ/mol" },
     statmech_frequency_scale_factor: { kind: "fixed", digits: 4, unit: null },
     transport_sigma_angstrom: { kind: "fixed", digits: 3, unit: "Å" },
     transport_epsilon_over_k_k: { kind: "fixed", digits: 1, unit: "K" },
@@ -223,16 +242,19 @@ export const QUANTITY_SPECS = {
     kinetics_n: { kind: "scientific", digits: 4, unit: null },
 } as const satisfies Record<string, QuantitySpec>
 
-/** How a quantity is printed: to a digit count ("fixed", "scientific", "significant"), or exactly as stored ("deposited"). */
+/** How a quantity is printed: to a digit count ("fixed", "scientific", "significant"), or to 6 significant figures ("deposited"). */
 export type QuantitySpec =
     | { kind: "fixed" | "scientific" | "significant"; digits: number; unit: string | null }
     | { kind: "deposited"; unit: string | null }
 
-/** The specs that print the stored number as it is, with no digit count. */
+/** The specs that print the stored number to 6 significant figures with no padding. */
 export const DEPOSITED_SPEC_KEYS = [
     "thermo_reference_pressure_bar",
     "thermo_temperature_k",
     "thermo_cp_j_mol_k",
+    "thermo_point_h_kj_mol",
+    "thermo_point_s_j_mol_k",
+    "thermo_point_g_kj_mol",
     "transport_polarizability_angstrom3",
     "transport_rotational_relaxation",
 ] as const

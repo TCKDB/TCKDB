@@ -1,3 +1,4 @@
+import { ROUNDED_NOTE } from "./QuantityValue"
 import { Fragment, useMemo, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import "../entry-numbers.css"
@@ -29,7 +30,7 @@ function ValueCell({ value, to }: { value: NumberValue; to: string | null }) {
     if (value.kind === "code") return <code className="t-preserve-case">{value.value}</code>
     if (value.kind === "text") return <>{value.value}</>
     const number: ReactNode = value.exponent ? <>{value.value} × 10<sup>{value.exponent}</sup></> : value.value
-    return <ValueLink value={number} unit={value.unit ?? undefined} to={to} />
+    return <ValueLink value={number} unit={value.unit ?? undefined} to={to} full={value.full} />
 }
 
 /** The loading, waiting and failure lines of a list that walks every page of a read; nothing once it is ready. */
@@ -100,6 +101,7 @@ export function NumbersTable<R extends NumberRow>({ rows, caption, label, groupL
                     ))}
                 </table>
             </div>
+            {rows.some((row) => row.values.some((value) => value.full !== undefined)) && <p className="note">{ROUNDED_NOTE}</p>}
         </>
     )
 }

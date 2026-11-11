@@ -95,4 +95,20 @@ describe("CompareTable", () => {
         document.body.append(planted)
         expect(rankingWords(textOf(document.body))).toEqual(["Best"])
     })
+
+    it("gives a rounded value its stored value as title and data value, with one note, and leaves a plain one bare", () => {
+        const rounded: CompareCell = { kind: "value", value: { label: "x", kind: "number", value: "38.9264", unit: "J/mol·K", full: "38.92638673392166" } }
+        setup([measured("Cp", [rounded, number("31")])], [{ key: "g", header: <span>v</span>, columns: ["a", "b"].map(key) }])
+        const shown = screen.getByText("38.9264")
+        expect(shown).toHaveAttribute("title", "38.92638673392166")
+        expect(shown.tagName).toBe("DATA")
+        expect(shown).toHaveAttribute("value", "38.92638673392166")
+        expect(screen.getByText("31")).not.toHaveAttribute("title")
+        expect(screen.getAllByText("Shown to 6 significant figures; hover a number for the stored value.")).toHaveLength(1)
+    })
+
+    it("has no rounding note when nothing is rounded", () => {
+        setup([measured("Cp", [number("1"), number("2"), number("3"), number("4")])])
+        expect(screen.queryByText(/Shown to 6 significant figures/)).not.toBeInTheDocument()
+    })
 })
