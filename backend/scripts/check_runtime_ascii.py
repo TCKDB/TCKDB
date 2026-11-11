@@ -124,7 +124,7 @@ CLIENT_PACKAGE_TARGET = "../clients/python/src/tckdb_client"
 #: The CHEMKIN importer adapter, which ships and versions separately from
 #: the client (``clients/python/adapters/chemkin/pyproject.toml``).
 CHEMKIN_ADAPTER_TARGET = "../clients/python/adapters/chemkin/tckdb_chemkin"
-#: The QCSchema importer adapter, a sibling of the CHEMKIN one (Phase C).
+#: The QCSchema importer adapter, a sibling of the CHEMKIN one.
 QCSCHEMA_ADAPTER_TARGET = "../clients/python/adapters/qcschema/tckdb_qcschema"
 
 #: The MCP integration. Added at zero violations -- coverage, not repair.

@@ -1797,7 +1797,7 @@ class TCKDBClient:
         query strings. Pass ``method_http='GET'`` to force the GET form. Returns
         the parsed ``ScientificReactionSearchResponse`` JSON envelope.
 
-        Phase C: ``reaction_ref`` / ``reaction_entry_ref`` may be supplied
+        ``reaction_ref`` / ``reaction_entry_ref`` may be supplied
         as standalone identity filters (no SMILES required).
 
         ``match`` selects how the supplied species lists are compared with a
@@ -1957,7 +1957,7 @@ class TCKDBClient:
         ``check_inputs=True`` (with ``include=['assessments']`` and ``limit`` of at most 10) compares each stored
         assessment's inputs with today's; without it a list reports ``inputs_unchecked``, never ``current``.
 
-        Phase C: ``reaction_entry_id`` accepts the integer
+        ``reaction_entry_id`` accepts the integer
         ``reaction_entry.id`` or a public ref of the form ``rxe_...``.
         Supplying a ``chem_reaction.id`` or a wrong-prefix ref returns
         422 / 404. Returns the parsed ``ScientificReactionKineticsResponse``
@@ -2032,7 +2032,7 @@ class TCKDBClient:
         ``check_inputs=True`` (with ``include=['assessments']`` and ``limit`` of at most 10) compares each stored
         assessment's inputs with today's; without it a list reports ``inputs_unchecked``, never ``current``.
 
-        Phase C: ``species_entry_id`` accepts the integer
+        ``species_entry_id`` accepts the integer
         ``species_entry.id`` or a public ref of the form ``spe_...``.
         Supplying a ``species.id`` or a wrong-prefix ref returns 422 / 404.
         Returns the parsed ``ScientificSpeciesThermoResponse`` JSON
@@ -2841,7 +2841,7 @@ class TCKDBClient:
         identity context, so callers don't have to chain
         ``search_species`` → ``get_species_thermo`` themselves. Defaults to
         POST (mirrors ``search_reactions``); pass ``method_http='GET'`` for the
-        query-string form. Phase C: ``species_ref``, ``species_entry_ref``,
+        query-string form. ``species_ref``, ``species_entry_ref``,
         and ``level_of_theory_ref`` may be supplied as filter handles.
 
 
@@ -4810,7 +4810,7 @@ class TCKDBClient:
     ) -> Any:
         """``GET /scientific/reaction-entries/{reaction_entry_id}/full``.
 
-        Phase C: ``reaction_entry_id`` accepts the integer
+        ``reaction_entry_id`` accepts the integer
         ``reaction_entry.id`` or a public ref of the form ``rxe_...``.
         Composite scientific read joining species, kinetics, transition
         states, calculations, and review summary into one document. Returns
@@ -4847,7 +4847,7 @@ class TCKDBClient:
         Cartesian) plus a compact provenance summary listing every
         calculation that produced or consumed the geometry.
 
-        Phase D: ``geometry_id`` is hidden by default and restored
+        ``geometry_id`` is hidden by default and restored
         only when ``include=internal_ids`` is supplied and the
         deployment allows it.
         """

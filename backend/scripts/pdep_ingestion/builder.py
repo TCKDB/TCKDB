@@ -548,7 +548,7 @@ def build_network_pdep_payload(
                     scan_calc["artifacts"] = [art]
             calculations.append(scan_calc)
 
-        # Statmech interpretation (PR #19 added NetworkSpeciesIn.statmech).
+        # Statmech interpretation (`NetworkSpeciesIn.statmech`).
         statmech = _build_statmech(
             inp,
             info,

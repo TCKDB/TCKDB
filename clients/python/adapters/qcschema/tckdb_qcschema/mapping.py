@@ -1,7 +1,6 @@
 """``QCRecord`` -> ``ConformerUploadRequest``-shaped dict.
 
-Implements the C1 mapping table from
-``docs/research/tckdb-phase-c-implementation-plan.md``. One QCSchema
+Implements the QCSchema-to-conformer-upload mapping. One QCSchema
 document (already family-dispatched and strictly validated by
 :mod:`tckdb_qcschema.reader`) becomes exactly one primary calculation:
 

@@ -788,9 +788,9 @@ MIN_HOLD_DAYS = 7
 
 
 #: Exit codes. ``1`` keeps its documented meaning -- a break was recorded
-#: -- so an existing runbook that gates on it is unaffected. ``2`` is the
-#: answer to the question the run raises when it is not a pass, and not because anything was found wrong, but
-#: because part of the scope was never read. A gate on "not zero" catches
+#: -- so an existing runbook that gates on it is unaffected. ``2`` means the
+#: run is not a pass although nothing was found wrong: part of the scope
+#: was never read. A gate on "not zero" catches
 #: both; triage needs them apart, because a corrupt object and a store
 #: that would not answer call for opposite first moves.
 #:

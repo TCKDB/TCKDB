@@ -324,7 +324,7 @@ describe("ArrheniusChart -- a narrower record's curve is clipped to its own rang
     })
 })
 
-describe("ArrheniusChart -- the SVG is pinned to a fixed pixel size (defect (b) regression guard)", () => {
+describe("ArrheniusChart -- the SVG is pinned to a fixed pixel size (regression guard)", () => {
     it("renders real width/height SVG attributes equal to the layout constants, never a percentage", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
         const svg = screen.getByRole("img", { name: /Arrhenius plot/ })
@@ -681,7 +681,7 @@ describe("ArrheniusChart -- the x-axis mode control (temperature vs 1000/T)", ()
 // row below it, naming its scope in two words rather than a sentence
 // -- and only because a second panel actually exists to name it against.
 describe("ArrheniusChart -- the x-axis and y-axis controls read as a compact pair, not a wall of chrome", () => {
-    it("a single panel renders X-axis and Y-axis together in ONE row, with no scope caption at all)", () => {
+    it("a single panel renders X-axis and Y-axis together in ONE row, with no scope caption at all", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
 
         const xSelect = screen.getByRole("combobox", { name: /X-axis/ })

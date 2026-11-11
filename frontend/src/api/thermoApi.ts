@@ -16,23 +16,18 @@ import { madeUnderSchema } from "../domain/madeUnder"
 //   standalone thermo detail page in this project (see the module docstring
 //   on `EntryThermoSection.tsx`). The envelope is `{ request,
 //   species_entry_ref, review_summary, records[], pagination }`: no `record`
-//   wrapper, and no `species_entry_id` (Phase D policy-gates the internal id
+//   wrapper, and no `species_entry_id` (the internal id is policy-gated
 //   off every public response; only the `spe_…` ref is present).
 //
 // - `get_species_thermo` (`app/services/scientific_read/thermo.py`) accepts
 //   five public include tokens — `provenance`, `calculations`, `statmech`,
 //   `review`, `artifacts` — that `validate_includes` treats as legal, but
-//   NONE of them is ever tested with `if "<token>" in includes:` anywhere in
-//   the service. They gate nothing. This was verified two ways: reading the
-//   service body (no branch references any of the five), and cross-checking
-//   `INCLUDE_GATED_COMPONENTS["ThermoRecord"]` in
-//   `backend/app/api/routes/scientific/_response.py`, which lists only
-//   `trust` and `assessments` for `ThermoRecord`, so thermo gates nothing
-//   else. This client therefore
-//   requests NO include tokens for thermo: everything below is either an
-//   always-present field or gated only by `trust`/`assessments`, and this
-//   slice does not request either (trust is out of scope, matching the
-//   precedent `CalculationDetailPage` set for the calculation surface).
+//   none of them is tested with `if "<token>" in includes:` in the
+//   service, so they gate nothing. `INCLUDE_GATED_COMPONENTS["ThermoRecord"]`
+//   in `backend/app/api/routes/scientific/_response.py` lists the gated
+//   tokens: `calculation_settings`, `trust` and `assessments`. This client
+//   requests `assessments` and `calculation_settings` (see
+//   `loadEntryThermo`) and not `trust`.
 //
 // - `nasa` / `nasa9` / `wilhoit` / `points` are UNGATED SCIENTIFIC FACTS,
 //   not sections behind a token. A `null` here means "this record has no
@@ -292,17 +287,17 @@ export type ThermoGroupAdditivity = z.infer<typeof groupAdditivitySchema>
 export type ThermoListResponse = z.infer<typeof thermoListResponseSchema>
 
 /**
- * Load every thermo record deposited for this species entry. No include
- * tokens are sent — see the module docstring: nothing on this surface is
- * gated by one. `useScientificRecord`-shaped: `(ref, signal) => Promise<T>`.
+ * Load every thermo record deposited for this species entry, requesting
+ * `include=assessments` and `include=calculation_settings`.
+ * `useScientificRecord`-shaped: `(ref, signal) => Promise<T>`.
  */
 export async function loadEntryThermo(
     entryRef: string,
     signal?: AbortSignal,
     onRateLimited?: (retryAfterSeconds: number) => void,
 ): Promise<ThermoListResponse> {
-    // `include=assessments` is the one token requested: it adds the compact reproducibility assessment and the rubric
-    // it was made under, which the "made under" line states. It is not expanded by `include=all`.
+    // `include=assessments` adds the compact reproducibility assessment and the rubric it was made under, which the
+    // "made under" line states; it is not expanded by `include=all`. `include=calculation_settings` adds the settings.
     // `entryRef` may be a paged ref (`entryRef#offset:limit`, see `domain/paging.ts`) naming one page of the list;
     // a plain ref names the first page.
     const { ref, request } = parsePagedRef(entryRef)

@@ -19,19 +19,10 @@
  * ---- one absent-value spelling --------------------
  *
  * `chemistryFormat.ts`'s `ABSENT` is `"not recorded"` (lowercase) and is
- * re-exported from here unchanged. Call sites use this one lowercase
- * spelling rather than a capitalized `"Not recorded"`. Lowercase is used, for one
- * concrete reason rather than a style preference: `IdentifierSearch.tsx`
- * already composes `ABSENT` into a mid-sentence context string —
- * `` `charge ${chargeDisplay(match.charge)}` `` reads as "charge not
- * recorded". Capitalizing the shared constant would either read as
- * "charge Not recorded" at that call site, or force every consumer to
- * choose sentence-case-or-not per call. Lowercase is the one spelling that
- * is correct both standalone in a `<dd>` and inline in a sentence, so nothing
- * downstream needs to special-case it. The 40+ existing "Not recorded"
- * literals across the app were changed to match (see the PR diff), not the
- * other way around, since `chemistryFormat.ts` is the newly-audited,
- * pinned-by-test module and the rename is purely mechanical.
+ * re-exported from here unchanged. Lowercase reads correctly both standalone
+ * in a `<dd>` and inline in a sentence: `IdentifierSearch.tsx` composes it
+ * into a mid-sentence string, `` `charge ${chargeDisplay(match.charge)}` ``,
+ * which reads as "charge not recorded".
  */
 
 import { ABSENT } from "./chemistryFormat"

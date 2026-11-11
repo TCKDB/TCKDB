@@ -97,7 +97,7 @@ Gaussian:
 * Hessian symmetry and the element-wise Hessian difference;
 * the rigid-body residue before projection: the six lowest eigenvalues of the
   unprojected mass-weighted Hessian and the curvature along each rigid-body
-  direction, both as signed wavenumbers -- the units of the Phase B frame
+  direction, both as signed wavenumbers -- the units of the frame
   bound ``FRAME_CONSISTENCY_TOLERANCE_CM1`` (100 cm^-1,
   ``backend/app/chemistry/normal_modes.py``), which is reported beside them.
 

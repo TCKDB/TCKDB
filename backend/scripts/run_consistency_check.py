@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Run one Phase D advisory comparison. Defaults to a read-only dry run."""
+"""Run one advisory comparison. Defaults to a read-only dry run."""
 from __future__ import annotations
 
 import argparse

@@ -175,7 +175,7 @@ describe("CalculationDependencyGraph — centreSubject opt-in", () => {
         expect(within(centreNode).queryByTestId("dep-node-subject-calc_own_ref")).toBeNull()
     })
 
-    it("renders the subject's visible label and links it to its own href, separately from the calc link)", () => {
+    it("renders the subject's visible label and links it to its own href, separately from the calc link", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
         ], "calc_own_ref", "opt", true, SUBJECT)
@@ -205,7 +205,7 @@ describe("CalculationDependencyGraph — centreSubject opt-in", () => {
         expect(within(centreNode).getAllByRole("link")).toHaveLength(1)
     })
 
-    it("grows the centre node's own content-block height to fit the subject row)", () => {
+    it("grows the centre node's own content-block height to fit the subject row", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
         ], "calc_own_ref", "opt", true, SUBJECT)

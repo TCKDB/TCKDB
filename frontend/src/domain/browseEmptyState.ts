@@ -8,8 +8,8 @@ const KIND_PLURAL: Record<BrowseKind, string> = {
 }
 
 /**
- * The archive-wide absence message, one per kind. This is the copy path the
- * a zero-row `vdw` result must read as a
+ * The archive-wide absence message, one per kind. A zero-row `vdw` result
+ * must read as a
  * FACT about the archive ("nothing of this kind exists yet"), never as a
  * broken search or a wrong filter. `species` and `transition_state` carry the
  * same honest phrasing for symmetry even though the live corpus (59/34

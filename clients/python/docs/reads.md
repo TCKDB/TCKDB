@@ -232,7 +232,7 @@ Notes:
 
 **Notes**
 
-- **Phase D (default):** scientific read responses expose only public
+- **Default:** scientific read responses expose only public
   refs (``*_ref``). Integer primary keys (``*_id``) and bare
   integer-id arrays (``input_geometry_ids``, ``supporting_calculation_ids``,
   …) are hidden by default. Their ref-bearing object-array siblings
@@ -260,9 +260,7 @@ Notes:
 - Path parameters like ``reaction_entry_id`` / ``species_entry_id``
   accept either an integer PK or a public ref of the matching prefix
   (``rxe_...`` / ``spe_...``). A wrong-prefix ref returns 422
-  (``handle_type_mismatch``); an unknown ref returns 404. The path
-  parameter shape did **not** change in Phase D — only the response.
-- Supplying both ``*_id`` and ``*_ref`` for the same filter is allowed
+  (``handle_type_mismatch``); an unknown ref returns 404. - Supplying both ``*_id`` and ``*_ref`` for the same filter is allowed
   only when they resolve to the same row; otherwise the backend returns
   422 with a stable ``<resource>_handle_conflict`` code.
 - ``reaction_entry_id`` is strictly ``reaction_entry.id`` (not

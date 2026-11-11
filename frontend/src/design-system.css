@@ -297,13 +297,11 @@
 }
 
 /* ---------------------------------------------------------------------
- * Key/value list -- ONE definition, replacing the two competing
- * `.kv-list` definition for every page. A bare
- * `.kv-list` rule elsewhere would risk the SAME route-chunk-CSS-leakage bug
- * `entry-science.css`'s own header comment describes (Vite never
- * unloads a route's CSS, so whichever page loaded last would win the
- * cascade on every route after it) -- defining it once here, always
- * loaded first, removes the reason either page needed its own copy.
+ * Key/value list -- ONE definition, used by every page. A bare
+ * `.kv-list` rule in a page stylesheet would leak across routes (Vite
+ * never unloads a route's CSS, so whichever page loaded last would win
+ * the cascade on every route after it); defining it once here, loaded
+ * globally before any page stylesheet, avoids that.
  * ------------------------------------------------------------------- */
 .kv-list {
     /* A bare `<dl class="kv-list">` would otherwise take the
