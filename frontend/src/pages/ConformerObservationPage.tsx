@@ -154,13 +154,13 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 <ConformerStage
                     geometryRef={pictureGeometryFromLinks(observation.geometries ?? [])}
                     formula={formula}
-                    drawnFrom="Drawn from the first final geometry of this observation."
+                    drawnFrom="Final geometry of this observation."
                 />
 
                 <section className="ledger-section" aria-labelledby="calc-ledger">
                     <SectionHeading
                         id="calc-ledger"
-                        intro={`${evidence.calculation_count} ${evidence.calculation_count === 1 ? "calculation" : "calculations"}: those that found this geometry and every energy computed on it, in the order the archive returned them. No dependency order is drawn between them.`}
+                        intro={`${evidence.calculation_count} ${evidence.calculation_count === 1 ? "calculation" : "calculations"}, in archive order (not dependency order).`}
                     >
                         Calculations and energies
                     </SectionHeading>
@@ -203,7 +203,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 <section className="ledger-section" aria-labelledby="geometry-ledger">
                     <SectionHeading
                         id="geometry-ledger"
-                        intro={`${evidence.geometry_count} stored ${evidence.geometry_count === 1 ? "geometry" : "geometries"} linked from this observation's calculation output. This is not a count of conformers.`}
+                        intro={`${evidence.geometry_count} ${evidence.geometry_count === 1 ? "geometry" : "geometries"}. This is not a count of conformers.`}
                     >
                         Geometries
                     </SectionHeading>
@@ -234,7 +234,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                     <section className="ledger-section" aria-labelledby="sibling-ledger">
                         <SectionHeading
                             id="sibling-ledger"
-                            intro="Each is an independent deposit of this conformer; none of them is this observation. Review status is shown only where it differs from this observation's."
+                            intro={observationsAvailability === "populated" && siblings.length > 0 ? "Review shown only where it differs." : undefined}
                         >
                             Other observations of this conformer
                         </SectionHeading>
@@ -262,9 +262,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
 
                 <section className="ledger-section" aria-labelledby="review-ledger">
                     <SectionHeading
-                        id="review-ledger"
-                        intro={showReviewTable ? "This is the record of how the current status was reached." : undefined}
-                    >
+                        id="review-ledger">
                         Review history
                     </SectionHeading>
                     {showReviewTable ? (

@@ -44,17 +44,10 @@ import type { RecordIdentity } from "../domain/recordIdentity"
  *   exists) and renders NO row at all; `null` means an authenticated
  *   caller was told there is no linked submission, and renders "not
  *   recorded"; a string renders the ref.
- * - `explainTransitionStateIdentity` (default `true`) governs the one
- *   sentence explaining that a transition state has no canonical SMILES
- *   the way a species does -- shown only for a `transition_state_entry`
- *   identity. `TransitionStateEntryPage` passes `false`: its own Reaction
- *   section already states this (see that page's own comment), and
- *   showing the sentence twice ~900px apart on one page was the exact
- *   duplication this override exists to avoid. Every OTHER caller that
- *   can render a `transition_state_entry` identity but has no Reaction
- *   section of its own -- `GeometryDetailPage` on a TS-owned geometry, as
- *   of this writing -- keeps the default `true` and gets the one sentence
- *   this header has always carried for that case.
+ * - `explainTransitionStateIdentity` (default `true`) governs the one note saying a transition
+ *   state is identified by the reaction it connects, not by a SMILES. It is shown only for a
+ *   `transition_state_entry` identity. `TransitionStateEntryPage` passes `false`; a TS-owned
+ *   geometry (`GeometryDetailPage`) keeps the default.
  *
  * `identity`/`facets`/`submissionRef` render as `.kv-list`s (the shared
  * design-system primitive) rather than this header's own bespoke grid --
@@ -282,16 +275,8 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
     // row (the reaction equation, per the h1 rework) rather than this
     // header's job to restate.
     //
-    // The "no canonical SMILES" note is gated behind
-    // `explainTransitionStateIdentity` (default true). It used to
-    // duplicate, almost word for word, `TransitionStateEntryPage`'s own
-    // Reaction-section lede ("A transition state is identified by the
-    // reaction it connects, not a molecular graph of its own.") -- the
-    // two sentences sat ~900px apart on the same page saying the same
-    // thing. That page passes `false` and keeps its own lede as the one
-    // explanation; every other caller (a TS-owned geometry on
-    // `GeometryDetailPage`, which has no Reaction section of its own)
-    // keeps the default and still gets this sentence.
+    // The transition-state identity note is gated behind `explainTransitionStateIdentity` (default true);
+    // `TransitionStateEntryPage` passes `false`, a TS-owned geometry keeps the default.
     // No standalone formula paragraph here either (see the species_entry
     // branch's own comment above): a geometry owned by a transition state
     // that DOES carry a served formula (`GeometryTransitionStateIdentity`,
@@ -302,8 +287,7 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
         <div className="record-identity-known">
             {explainTransitionStateIdentity && (
                 <p className="note record-identity-note">
-                    Transition states have no canonical SMILES the way a species does; the unmapped SMILES below,
-                    where deposited, is a depositor-supplied label, not a deduped identity key.
+                    A transition state has no SMILES identity; it is identified by the reaction it connects.
                 </p>
             )}
             <dl className="kv-list record-identity-facts">

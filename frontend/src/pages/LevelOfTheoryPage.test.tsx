@@ -235,8 +235,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         })))))
         page()
         await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
-        expect(screen.getByText("No atom-energy correction scheme is deposited for this level of theory.")).toBeVisible()
-        expect(screen.getByText("No petersson bond-additivity correction scheme is deposited for this level of theory.")).toBeVisible()
+        expect(screen.getByText(/^Not deposited: atom-energy.*petersson bond-additivity/)).toBeVisible()
         expect(screen.queryByText(/not applicable/i)).not.toBeInTheDocument()
     })
 
@@ -403,10 +402,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
         page()
         await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
-        expect(screen.getByText(
-            "Observed software above names what ran the calculations recorded at this level of theory; "
-            + "a correction scheme's software names who computed its own parameter values, not who applies them.",
-        )).toBeVisible()
+        expect(screen.getByText("A scheme's software computed its parameters; it is not the software that ran these calculations.")).toBeVisible()
         expect(screen.queryByText(/we don't know|not sure|unknown provenance/i)).not.toBeInTheDocument()
     })
 

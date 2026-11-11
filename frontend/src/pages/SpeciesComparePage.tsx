@@ -192,10 +192,7 @@ function CompareDocument({ species }: { species: SpeciesOverview }) {
                         { label: "Compare" },
                     ]} />
                     <h1>Compare values for {name}</h1>
-                    <p className="note" role="note">
-                        Values computed at different levels of theory or with different programs are listed side by side for reading, not ranked.
-                        This page never subtracts values across levels or programs, and never fills a value in from another record.
-                    </p>
+                    <p className="note" role="note">Side by side, not ranked. No differences across levels or programs; nothing is filled in from another record.</p>
                 </>}
             >
                 <WalkStatus
@@ -209,13 +206,13 @@ function CompareDocument({ species }: { species: SpeciesOverview }) {
                         {total > 0 && <OrderNote order="Columns are grouped by version; within a version, the archive's display order." />}
                         <ListNotes
                             lists={[["thermochemistry", data.thermo], ["statistical mechanics", data.statmech]]}
-                            rest={() => "Each version's page lists its own records."}
+                            rest={() => "Each version's page lists its own."}
                         />
-                        {section("thermo", "Enthalpy and entropy as deposited, with their uncertainties. Heat capacity is shown at each temperature where at least two records have a deposited point, and only inside each record's own temperature range.")}
-                        {section("statmech", "The scalar values each statistical mechanics record states. Frequencies, torsions and conformers are on each record's own page.")}
+                        {section("thermo", "As deposited. Heat capacity only where two records have a point, inside each record's range.")}
+                        {section("statmech", "Scalar values only; frequencies and torsions are on each record's page.")}
                         {total > 0 && (
                             <section aria-labelledby="compare-lists">
-                                <SectionHeading id="compare-lists" intro="The same values with one row per record, every record included. Sorting is yours to choose; it does not rank the records.">
+                                <SectionHeading id="compare-lists" intro="One row per record. Sorting does not rank.">
                                     Records as lists
                                 </SectionHeading>
                                 {(["thermo", "statmech"] as const).map((kind) => model[kind].full.length > 0 && (

@@ -212,7 +212,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                 )}
             >
                 <section className="ledger-section" aria-labelledby="ecs-parameters-heading">
-                    <SectionHeading id="ecs-parameters-heading" kicker="Deposited evidence" intro="This scheme's full parameter table, exactly as deposited — never summarised or truncated.">
+                    <SectionHeading id="ecs-parameters-heading">
                         Correction parameters
                     </SectionHeading>
                     {record.available_sections.has_corrections && (record.corrections?.length ?? 0) > 0 ? (
@@ -233,8 +233,7 @@ function UsageSection({ rows, available, total }: { rows: EnergyCorrectionScheme
         <section className="ledger-section" aria-labelledby="ecs-usage-heading">
             <SectionHeading
                 id="ecs-usage-heading"
-                kicker="Deposited evidence"
-                intro={`${total} record${total === 1 ? "" : "s"} carry this scheme's applied value. Up to 50 are listed below.`}
+                intro={`${total} record${total === 1 ? "" : "s"}; first 50 listed.`}
             >
                 Applications
             </SectionHeading>

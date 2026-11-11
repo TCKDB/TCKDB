@@ -194,7 +194,7 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
         ...(group.columns.length === 2 && { delta: { header: <span className="compare-head"><span className="compare-head-key"><span aria-hidden="true">Δ</span> {deltaNames(group)?.join(" − ")}</span><span>Difference within this group</span></span> } }),
     }))
     const difference = model ? groupDifference(model.full) : null
-    const order = `Columns are grouped by energy level of theory and program, in the order each group first appears; within a group, ${orderWords(data?.sort ?? null) ?? "the archive did not state an order"}.`
+    const order = `Grouped by level and program; ${orderWords(data?.sort ?? null) ?? "the archive did not state an order"}.`
     return (
         <section className="species-overview">
             <PageShell
@@ -205,10 +205,7 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
                         { label: "Compare" },
                     ]} />
                     <h1>Compare rate coefficients for {equation}</h1>
-                    <p className="note" role="note">
-                        Rate records computed with different levels of theory or programs are listed side by side for reading, not ranked.
-                        This page forms a difference only between two records of the same group, and never fills a value in from another record.
-                    </p>
+                    <p className="note" role="note">Side by side, not ranked. Differences only within one group; nothing is filled in from another record.</p>
                 </>}
             >
                 <WalkStatus
@@ -220,10 +217,10 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
                     <>
                         {model.total === 0 && <p className="empty-projection">No rate records are deposited for this reaction.</p>}
                         {model.total > 0 && <OrderNote order={order} />}
-                        <ListNotes lists={[["rate", data]]} rest={() => "Each version's page lists its own records."} />
+                        <ListNotes lists={[["rate", data]]} rest={() => "Each version's page lists its own."} />
                         {model.total >= 1 && (
                             <section aria-labelledby="compare-rates">
-                                <SectionHeading id="compare-rates" intro="Arrhenius parameters as deposited, and k at the temperatures two or more records cover, each from the record's own parameters and only inside its own fitted range. k includes tunnelling only if the deposited fit did.">
+                                <SectionHeading id="compare-rates" intro="As deposited; k only inside each fitted range. k includes tunnelling only if the fit did.">
                                     Rate coefficients
                                 </SectionHeading>
                                 {difference && <p className="note" role="note">{BANNER[difference]}</p>}
@@ -241,7 +238,7 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
                         )}
                         {model.total >= 1 && (
                             <section aria-labelledby="compare-profiles">
-                                <SectionHeading id="compare-profiles" intro="Each group has its own energy profile, at its own level of theory and program, on its own axis. Profiles of different groups are never drawn together.">
+                                <SectionHeading id="compare-profiles" intro="One profile per group, each on its own axis. Profiles of different groups are never drawn together.">
                                     Energy profiles by group
                                 </SectionHeading>
                                 {entryOrder.length > readRefs.length && <p className="note" role="note">Profiles were read for the first {readRefs.length} of {entryOrder.length} reaction entries.</p>}
@@ -252,12 +249,12 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
                                 ))}
                             </section>
                         )}
-                        {model.total > 0 && (
+                        {model.total > 1 && (
                             <section aria-labelledby="compare-lists">
-                                <SectionHeading id="compare-lists" intro="The same values with one row per record, every record included. Sorting is yours to choose; it does not rank the records.">
+                                <SectionHeading id="compare-lists" intro="One row per record. Sorting does not rank.">
                                     Records as a list
                                 </SectionHeading>
-                                <DataView entries={model.entries} rows={model.listRows} order={order} />
+                                <DataView entries={model.entries} rows={model.listRows} order="Same as the table above." />
                             </section>
                         )}
                     </>
