@@ -219,7 +219,7 @@ function equationHasFormulaCollision(reaction: ReviewQueueReactionEquation): boo
  * - `species_entry`: formula (from `species.smiles`, via the RDKit
  *   cartridge) plus spin word plus the SAME facet chips
  *   (`domain/recordFacets.ts`) every other species surface renders --
- *   reused, not reinvented, per the brief.
+ *   reused, not reinvented.
  * - `transition_state_entry`: formula from the entry's OWN
  *   `unmapped_smiles` (never the reaction it sits on -- see
  *   `app/services/review_queue.py`'s "naming a transition-state subject")

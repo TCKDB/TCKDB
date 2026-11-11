@@ -99,13 +99,10 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
  * `familyText` follows above -- "forward" is not itself news, so it says
  * nothing, matching the site's "never assert from absence" rule read the
  * other way: an ordinary match gets no caveat. This condition itself
- * (`record.matched_direction === "reverse"`) did not need to change for
- * PR #418 -- `matched_direction` has always reported what genuinely
+ * (`record.matched_direction === "reverse"`) reads what genuinely
  * matched for THIS record, regardless of which `direction` the request
- * asked for, so the note was already truthful under either default; only
- * this comment's description of how often a reader would SEE "reverse"
- * has changed (default `forward` requests now report it only when a
- * reader has explicitly widened the search).
+ * asked for. Default `forward` requests report "reverse" only when a
+ * reader has explicitly widened the search.
  */
 export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) {
     const target = `/reactions/${record.reaction_ref}`

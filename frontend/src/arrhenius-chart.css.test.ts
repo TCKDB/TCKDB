@@ -43,8 +43,7 @@ describe("arrhenius-chart.css uses var(--token) only (also covered globally by t
 })
 
 // ---------------------------------------------------------------------------
-// Defect (b) from this PR's own brief: the design-review mock's SVG scaled
-// down with its container (`width: 100%; max-width: 720px`, the SAME rule
+// The chart's SVG must not scale down with its container (`width: 100%; max-width: 720px`, the SAME rule
 // `thermo-cp-chart.css`'s `.cp-chart-svg` still carries), which at a 680px
 // viewport pushed the viewBox-driven tick-label text below the 11.52px
 // accessibility floor. `.arrhenius-chart-svg` here must set NEITHER a

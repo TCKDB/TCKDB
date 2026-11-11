@@ -1,10 +1,10 @@
-"""Round-trip test for the QCSchema exporter (C-Q3).
+"""Round-trip test for the QCSchema exporter.
 
 original document -> import mapping -> pinned reads -> export -> compare.
 
 No live server, no database: :class:`StubClient` serves the exact JSON
 response bodies a real backend gave for the ``energy_v1`` and ``hessian_v1``
-cases of the C-Q2 backend corpus, captured once by
+cases of the backend corpus, captured once by
 ``scripts/capture_read_fixtures.py`` and pinned under
 ``tests/fixtures/reads/<case>/``.
 
@@ -43,7 +43,7 @@ past the bound above). That default would dominate and break this bound,
 so the exporter passes ``geometry_noise=14`` explicitly (see the comment
 in ``exporter.py``) to keep its own contribution negligible against the
 bound this test derives and checks -- the bound below states only the
-import-side rounding, matching the C-Q3 brief, because the export-side
+import-side rounding, because the export-side
 qcelemental rounding is deliberately suppressed rather than budgeted for.
 """
 
@@ -273,7 +273,7 @@ def test_round_trip(document_case: str, read_case: str) -> None:
         original["molecule"]["molecular_multiplicity"]
     )
 
-    # --- mass_numbers, element-for-element (C-Q3 review round 2) -------
+    # --- mass_numbers, element-for-element ---------------------------
     # Every pinned-read case in this corpus is ordinary water (no recorded
     # isotope on any atom), so this is the standard-nuclide path --
     # test_exporter.py's D2O-style cases cover a recorded non-standard

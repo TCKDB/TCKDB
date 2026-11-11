@@ -55,7 +55,7 @@ import { domainWithPadding, linearScale } from "./chartScale"
  *      that is the documented, honest fallback for a graph shape this
  *      layout was not designed to avoid crossings for, not a crash and not
  *      a silently dropped channel. No live TCKDB network is known to hit
- *      this branch as of this PR (the hydrazine archive's accepted-barrier
+ *      this branch (the hydrazine archive's accepted-barrier
  *      graph is a tree), so it is exercised only by a synthetic fixture.
  *   4. Components are laid out left to right, largest first (ties: lowest
  *      served index of any member), each occupying its own contiguous slot

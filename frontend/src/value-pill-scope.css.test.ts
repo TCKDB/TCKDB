@@ -65,7 +65,7 @@ describe("no page stylesheet restyles the shared .value-pill primitive directly"
         expect(offenders).toEqual([])
     })
 
-    it("transition-state-entry.css no longer overrides .value-pill's font-size via a descendant selector", () => {
+    it("transition-state-entry.css does not override .value-pill's font-size via a descendant selector", () => {
         const css = stripComments(ALL_STYLESHEETS["transition-state-entry.css"] ?? "")
         expect(css).not.toMatch(/\.value-pill/)
     })

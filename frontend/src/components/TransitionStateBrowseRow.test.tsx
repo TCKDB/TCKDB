@@ -396,8 +396,8 @@ describe("TransitionStateBrowseRow: unchanged behaviour", () => {
     })
 })
 
-// PR D (design-system adoption on the index/record pages): the row's box
-// (padding/border/radius/background) now comes from the shared `.card`
+// Design-system adoption: the row's box
+// (padding/border/radius/background) comes from the shared `.card`
 // primitive, and the ref renders through the shared `.data` step instead of
 // its own one-off 11px mono run.
 describe("TransitionStateBrowseRow: design-system primitive adoption", () => {

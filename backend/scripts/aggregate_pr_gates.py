@@ -7,9 +7,9 @@ request outside its paths, and GitHub blocks the merge indefinitely
 waiting for it. Every test workflow in this repository is path-filtered
 -- correctly, because the backend suite costs about thirteen minutes of
 runner time and a docs-only change cannot break it. So none of them
-can be listed in branch protection; the one check that always reports is
-the coverage guard in ``repo-gate.yml``, the workflow with no ``paths:``
-filter.
+can be listed in branch protection. The checks that always report are in
+``repo-gate.yml``, the workflow with no ``paths:`` filter: the coverage
+guard and the ``required-gates`` job that runs this script.
 
 Without an aggregate check, the test suites would gate nothing. They run,
 they could go red, and a merge would never be blocked by one.
@@ -62,14 +62,12 @@ WHEN GITHUB ITSELF IS THE THING THAT FAILED
 -------------------------------------------
 Every state above is read through the Actions API, so an API that will
 not answer is a fourth state: *gate state unknown*. It is not a fourth
-outcome. Until 2026-08-18 a single HTTP error anywhere in the run listing
-exited 2 with the message ``GitHub API error 504``, which on a required
-check reads, to everyone who sees it, as "your code is bad". During the
-2026-08-17 GitHub incident that happened repeatedly: on one pull request
-``Required gates`` went red at 53 seconds with every underlying gate
-green, and re-running the job alone -- no code change -- turned it green.
+outcome. Reporting a single HTTP error such as ``GitHub API error 504`` as a
+failure would, on a required check, read to everyone who sees it as "your
+code is bad", although every underlying gate may be green and re-running
+the job alone would turn it green.
 
-So API failures are now classified rather than lumped:
+API failures are classified rather than lumped:
 
   * ``429``, ``500``, ``502``, ``503``, ``504`` are transient by
     definition and are retried with exponential backoff, honouring

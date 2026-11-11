@@ -259,8 +259,8 @@ describe("GeometryDetailPage", () => {
         expect(within(context).getByText("angstrom")).toBeVisible()
     })
 
-    // Item 1/7, design/foundations PR B: mutation check for header order
-    // (the kicker-row/h1 that `RecordIdentityHeader` now owns, ahead of
+    // Header order
+    // (the kicker-row/h1 that `RecordIdentityHeader` owns, ahead of
     // this page's own provenance `.kv-list`) and the table primitive
     // (`.data-table`, never `.stage-table`) -- see the identical checks on
     // `ConformerGroupPage.test.tsx`/`ConformerObservationPage.test.tsx`.

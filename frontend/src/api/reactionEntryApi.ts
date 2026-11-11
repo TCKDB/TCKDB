@@ -10,16 +10,16 @@ import { parseScientificResponse, requestScientificJson, ScientificApiError } fr
  *
  * Requests `include=species,kinetics,transition_states,calculations,networks`
  * in ONE round trip -- every section this page renders, matching
- * `transitionStateEntryApi.ts`'s own eager-fetch precedent. `networks` is a
- * §3C-additive include token (not deployed as of this PR): a pre-deployment
- * API either 422s on the unknown token or simply omits the key from its
+ * `transitionStateEntryApi.ts`'s own eager-fetch precedent. `networks` is an
+ * additive include token: an API that predates it either 422s on the unknown
+ * token or simply omits the key from its
  * response depending on how strictly it validates `include` -- either way
  * `networks` comes back `undefined` here, and `loadReactionEntryNetworks`
  * below is the documented one-request fallback
  * (`networks/search?reaction_entry_ref=...&include=reactions`) the page
  * falls back to when that happens. `formula`/`stoichiometry` on each
- * participant and `levels` on each kinetics record are likewise §3A/§3B
- * additive fields, marked optional here so today's (pre-PR-1) live API
+ * participant and `levels` on each kinetics record are likewise additive
+ * fields, marked optional here so an API that predates them
  * still parses -- see `domain/reactionEquation.ts` and
  * `domain/productLevels.ts`'s `resolveProductLevels` for the client-side
  * fallbacks each absence triggers.

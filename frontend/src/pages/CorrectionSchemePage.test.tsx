@@ -106,9 +106,9 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     })
 
     /**
-     * MUTATION TABLE: titles this page from `scheme.scheme_kind` via the
+     * Mutation check: titles this page from `scheme.scheme_kind` via the
      * controlled `schemeKindLabel` vocabulary, never from the depositor's
-     * own free-text `energy_correction_scheme.name` `name` here is deliberately something a controlled-vocabulary
+     * own free-text `energy_correction_scheme.name`. The `name` here is deliberately something a controlled-vocabulary
      * label could never produce, so a regression that reverts the heading
      * to `scheme.name` is unambiguous: this test would then find the
      * literal depositor string on the page instead of the archive's own
@@ -210,11 +210,10 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     })
 
     /**
-     * MUTATION TABLE (d): omit an absent field entirely instead of
-     * stating it. Workflow-tool release is null on every live row today
-     * (the archive could not derive one unambiguously from 10 of 416
-     * calculations); citation is null for an unrelated reason (nobody
-     * recorded one). The task brief's own rule: these are two DIFFERENT
+     * Mutation check: omit an absent field entirely instead of
+     * stating it. Workflow-tool release can be null when the archive could
+     * not derive one unambiguously; citation can be null for an unrelated
+     * reason (nobody recorded one). These are two DIFFERENT
      * absences and the page must not conflate them into one row or one
      * sentence -- so each keeps its OWN `<dt>`/`<dd>` pair, and neither
      * one's copy claims to know why the value is missing (never "not

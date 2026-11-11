@@ -1151,7 +1151,7 @@ describe("EntryStatmechSection: identical-value records group under one card", (
 })
 
 describe("EntryStatmechSection: design-system adoption (design/species-entry)", () => {
-    // Four invariants the PR C brief calls out by name -- checked directly
+    // Four invariants, checked directly
     // against the rendered DOM, not inferred from source text, so a future
     // regression that reintroduces the old shape is caught by rendering
     // the real component tree, exactly like every other test in this file.

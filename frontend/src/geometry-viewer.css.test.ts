@@ -90,13 +90,13 @@ describe(".viewer-canvas (defect 2: only 2 of 4 borders visible)", () => {
  * Both are left-aligned (`margin: 0`).
  */
 describe(".viewer-stage / .viewer-caption are left-aligned, not centred", () => {
-    it(".viewer-stage no longer auto-centres", () => {
+    it(".viewer-stage is not auto-centred", () => {
         const rule = extractRule(css, ".viewer-stage")
         expect(rule).toMatch(/margin:\s*0;/)
         expect(rule).not.toMatch(/margin:\s*0 auto/)
     })
 
-    it(".viewer-caption no longer auto-centres", () => {
+    it(".viewer-caption is not auto-centred", () => {
         const rule = extractRule(css, ".viewer-caption")
         expect(rule).toMatch(/margin:\s*0;/)
         expect(rule).not.toMatch(/margin:\s*0 auto/)

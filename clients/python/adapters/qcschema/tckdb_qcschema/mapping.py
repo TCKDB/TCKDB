@@ -1,4 +1,4 @@
-"""``QCRecord`` -> ``ConformerUploadRequest``-shaped dict (C-Q1).
+"""``QCRecord`` -> ``ConformerUploadRequest``-shaped dict.
 
 Implements the C1 mapping table from
 ``docs/research/tckdb-phase-c-implementation-plan.md``. One QCSchema
@@ -33,7 +33,7 @@ this module can make is a whole-document refusal (a raised
 partial per-field drop, so there is never a "mapping produced a payload
 that quietly dropped a fatally-important field" state to report on. The
 bucket exists in the shape because :class:`MappingReport` is shared
-vocabulary with the ThermoML importer (C-E2), which does have partial
+vocabulary with the ThermoML importer, which does have partial
 per-row rejections within one article.
 """
 

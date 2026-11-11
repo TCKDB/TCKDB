@@ -32,8 +32,8 @@ only when it *is* one:
   under the wrong angles. Such a series would also not fit a TorsionDrive
   after conversion to absolute angles: its angles start at the measured
   dihedral (not a whole degree) and a full 360-degree sweep repeats its
-  first grid point, so it would still be refused, as ``export_scan_grid_not_integral`` or
-  ``export_scan_point_incomplete``.
+  first grid point, so it would still be refused, as
+  ``export_scan_grid_not_integral`` or ``export_scan_point_incomplete``.
 
 Grid keys are torsiondrive's own grid ids (``"-90"``, ``"180,-60"``) with
 each angle wrapped into (-180, 180]; two points that wrap to the same key

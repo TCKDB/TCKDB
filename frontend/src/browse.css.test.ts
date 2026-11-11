@@ -29,14 +29,14 @@ describe(".browse-header h1 -- the shared display-2 step", () => {
         expect(rule).not.toMatch(/font-size:\s*clamp/)
     })
 
-    it("no longer carries the 4px accent left-bar on .browse-header", () => {
+    it("does not carry the 4px accent left-bar on .browse-header", () => {
         const rule = extractRule(css, ".browse-header")
         expect(rule).not.toMatch(/border-left/)
     })
 })
 
 describe(".browse-row -- box styling comes from the shared .card primitive", () => {
-    it("no longer declares its own padding/border/border-radius/background", () => {
+    it("does not declare its own padding/border/border-radius/background", () => {
         // `.browse-row` has no rule with a box style; it is
         // only ever mentioned in a comment (both row components add `.card`
         // alongside it in `SpeciesBrowseRow.tsx`/`TransitionStateBrowseRow.tsx`).
@@ -62,12 +62,12 @@ describe(".browse-row-provenance -- --type-value", () => {
 })
 
 describe(".browse-row-evidence -- --type-note", () => {
-    it("is its own rule (no longer grouped with .browse-row-smiles/.browse-row-ts-label) and uses var(--type-note-font)", () => {
+    it("is its own rule (not grouped with .browse-row-smiles/.browse-row-ts-label) and uses var(--type-note-font)", () => {
         const rule = extractRule(css, ".browse-row-evidence")
         expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
     })
 
-    it(".browse-row-smiles/.browse-row-ts-label no longer share a rule with .browse-row-evidence", () => {
+    it(".browse-row-smiles/.browse-row-ts-label do not share a rule with .browse-row-evidence", () => {
         expect(css).not.toMatch(/\.browse-row-smiles,\s*\n?\s*\.browse-row-ts-label,\s*\n?\s*\.browse-row-evidence/)
     })
 })
@@ -79,7 +79,7 @@ describe("the ref is a data run, not an 11px faint one-off", () => {
         expect(rule).not.toMatch(/font-size:/)
     })
 
-    it("the old .browse-row-ref selector no longer has a rule of its own (a comment may still name it for history)", () => {
+    it("the old .browse-row-ref selector has no rule of its own", () => {
         expect(css).not.toMatch(/\.browse-row-ref\s*\{/)
     })
 })
@@ -119,7 +119,7 @@ describe(".browse-pagination button -- --type-ui", () => {
 })
 
 describe("no off-token divider colour", () => {
-    it("--divider is no longer referenced in this file", () => {
+    it("--divider is not referenced in this file", () => {
         expect(css).not.toMatch(/var\(--divider\)/)
     })
 })

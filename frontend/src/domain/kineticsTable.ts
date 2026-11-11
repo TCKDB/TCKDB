@@ -1,6 +1,6 @@
 import type { ReactionKineticsRecord } from "../api/reactionEntryApi"
 
-/** R in kJ mol⁻¹ K⁻¹ -- the same constant plan §4's future `domain/arrhenius.ts` names. */
+/** R in kJ mol⁻¹ K⁻¹. */
 export const GAS_CONSTANT_KJ_MOL_K = 8.314462618e-3
 
 /**

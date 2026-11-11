@@ -1399,7 +1399,7 @@ class TestJobs:
 
 
 # ---------------------------------------------------------------------------
-# Species-entry observations (Phase C-E5 review round 2, F9)
+# Species-entry observations
 # ---------------------------------------------------------------------------
 
 

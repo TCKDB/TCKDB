@@ -166,7 +166,7 @@ describe("EvidenceChecklist", () => {
             expect(ddFor(checklist, "Optimisation")).toHaveTextContent("present")
         })
 
-        // Mutation table (b): dropping `defaultOpen={false}` (or bypassing
+        // Mutation check: dropping `defaultOpen={false}` (or bypassing
         // `Disclosure` to render the body unconditionally) would make this
         // fail.
         it("MUTATION GUARD: a card would fail the closed-by-default assertion if it rendered open", () => {
@@ -215,7 +215,7 @@ describe("EvidenceChecklist", () => {
             expect(container.querySelector(".coverage-checklist-summary")).toHaveTextContent("0 present, 2 absent")
         })
 
-        // Mutation table (c): a summary that stops rendering the computed
+        // Mutation check: a summary that stops rendering the computed
         // roll-up (e.g. reverting to just the bare heading) fails this.
         it("MUTATION GUARD: the summary carries digits from the roll-up, not just the heading text", () => {
             const { container } = render(
@@ -265,7 +265,7 @@ describe("EvidenceChecklist", () => {
                 expect(details.open).toBe(false)
             })
 
-            // MANDATORY guard (independent review): fails if a future
+            // Guard: fails if a future
             // regression ever makes the ROW COUNT the only number in a
             // collapsed summary again, toned or not.
             it("MUTATION GUARD: the collapsed summary's only number is never the row count -- it must come from the data, not the row list's own length", () => {
@@ -309,7 +309,7 @@ describe("EvidenceChecklist", () => {
                 expect(container.querySelector(".coverage-checklist-summary")).toBeNull()
             })
 
-            // Mutation table (d): restoring the old `"N rows"` fallback (or
+            // Mutation check: restoring the old `"N rows"` fallback (or
             // otherwise rendering a numeric summary with no real `summary`
             // and no toned rows) must turn this red.
             it("MUTATION GUARD: no `summary` and no toned rows means no numeric roll-up and an OPEN card", () => {
@@ -362,7 +362,7 @@ describe("EvidenceChecklist", () => {
             expect(container.querySelector(".coverage-checklist .value-pill")?.tagName).toBe("SPAN")
         })
 
-        // MANDATORY per the mutation table: `to` on a `pill-muted` row is
+        // `to` on a `pill-muted` row is
         // silently ignored by THIS component, regardless of what a caller
         // passes -- the enforcement lives here, not in caller discipline.
         it("MUTATION GUARD: 'to' on a pill-muted row is silently ignored, even though the caller supplied it", () => {

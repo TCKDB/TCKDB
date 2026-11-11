@@ -144,7 +144,7 @@ describe("geometryConvergence", () => {
 })
 
 describe("thermoConformerGroupRef", () => {
-    it("reads the real conformer_group_ref off provenance (PR #285)", () => {
+    it("reads the real conformer_group_ref off provenance", () => {
         expect(thermoConformerGroupRef({ provenance: { conformer_group_ref: "cg_one" } })).toBe("cg_one")
     })
 

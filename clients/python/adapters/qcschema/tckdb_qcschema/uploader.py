@@ -1,4 +1,4 @@
-"""Idempotent upload of a mapped QCSchema record via ``tckdb-client`` (C-Q1).
+"""Idempotent upload of a mapped QCSchema record via ``tckdb-client``.
 
 The only stage that touches the network. ``tckdb_client`` is imported
 lazily so stages 1-4 (and their tests) never require it.

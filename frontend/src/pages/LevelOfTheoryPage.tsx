@@ -225,8 +225,7 @@ function SoftwareSection({ breakdown, available }: {
 }
 
 /**
- * Zero, one, or two parameter tables (§4.2 item 3). Per the task brief's
- * central rule: "no scheme deposited" (a fact about the archive) must
+ * Zero, one, or two parameter tables. "No scheme deposited" (a fact about the archive) must
  * read differently from "no correction is needed" (a claim about
  * chemistry the archive cannot make) -- so an absent scheme is stated
  * plainly, once per possible scheme kind this archive's own vocabulary

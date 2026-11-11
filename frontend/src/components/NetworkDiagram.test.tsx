@@ -82,8 +82,7 @@ const HYDRAZINE_CHANNELS: NetworkChannel[] = [
 ]
 
 // source (hash_n2) = 180.1, sink (hash_n1) = 0.0, forward = 94.6 ->
-// TS height = 180.1 + 94.6 = 274.7 (matches the brief's own verified
-// figure for this exact channel). reverse chosen to agree: 274.7 - 0 = 274.7.
+// TS height = 180.1 + 94.6 = 274.7. reverse chosen to agree: 274.7 - 0 = 274.7.
 const HYDRAZINE_ENERGIES: NetworkStateEnergy[] = [
     energy("hash_n1", 0.0),
     energy("hash_n2", 180.1),
@@ -330,8 +329,7 @@ describe("NetworkDiagram -- energy caption sits above a level's bar, species lab
     it("for the NN level, the value (energy) text has a smaller SVG y than the label (species) text", () => {
         // Smaller y is HIGHER on an SVG canvas (y grows downward) -- the
         // reference figure draws the energy above the dash and the species
-        // name below it, the reverse of this component's own layout before
-        // this PR.
+        // name below it.
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
         const level = container.querySelector('.net-pes-svg .net-pes-level-link[href="#state-row-hash_n1"]')!
         const value = level.querySelector(".net-pes-level-value")!
@@ -548,53 +546,6 @@ describe("NetworkDiagram -- per-channel show/hide works in BOTH layout modes, no
         expect((checkbox as HTMLInputElement).checked).toBe(false)
     })
 })
-
-/**
- * MUTATION TABLE (`NetworkDiagram.test.tsx`)
- *
- * | # | Test | Mutation landed | Result |
- * |---|------|------------------|--------|
- * | 1 | "draws exactly one saddle point (channel_1) though three channels exist" | In `NetworkDiagram.tsx`, changed `layout.saddles.map(...)` to `channels.map((c) => ({ ...saddleFromChannelIgnoringBarrier }))`-shaped stand-in: concretely, replaced `layout.saddles` with `layout.saddles.concat(layout.saddles)` (doubling) as a cheap one-line stand-in for "draws a saddle for a channel with no barrier" | RED -- `saddleLinks` had length 2, `toHaveLength(1)` failed |
- * | 2 | "draws no saddle point at all when NO channel carries a deposited barrier" | Passed `HYDRAZINE_BARRIERS` instead of `[]` as the 4th arg in this one test (simulating the component ignoring an empty barrier list) | RED -- `toHaveLength(0)` failed, length was 1 |
- * | 3 | "shows 274.7, never the bare forward barrier" | In `NetworkDiagram.tsx`, changed `{saddle.heightKjMol.toFixed(1)}` to `{(94.6).toFixed(1)}` (hardcoding the bare forward barrier value) | RED -- expected "274.7", got "94.6" |
- * | 4 | "channel_1 appears as a data-channel-key attribute" | Removed `data-channel-key={saddle.channelKey ?? undefined}` from the `<polyline>` | RED -- `querySelector(`polyline[data-channel-key="${channelHandle("channel_1")}"]`)` was null |
- * | 5 | "renders each plotted state's state_label as SVG text, never the composition_hash" | Changed `level.label` to `level.compositionHash` in the level `<text>` | RED -- `svgTexts` no longer contained "NN"/"[NH-][NH3+]"; contained "hash_n1" instead, failing the negative assertion |
- * | 6 | "does not draw a level for hash_n6" | Removed the `resolvedInServedOrder` filter in `networkPesLayout.ts` (placed every state regardless of a deposited energy) | RED -- `levelLabels` contained "2 [NH2]" |
- * | 7 | "still renders both tables when no state carries a deposited energy at all" | Wrapped `<NetworkStatesTable .../>`/`<NetworkChannelsTable .../>` in `{layout && (...)}` in `NetworkDiagram.tsx` (regressing invariant 5) | RED -- `screen.getByRole("table", ...)` threw, element not found |
- * | 8 | "renders one .net-pes-ts-bar line per saddle ..." / "the bar has two distinct x endpoints ..." / "carries channel_1 only as a data attribute on the bar ..." | Removed the `<line className="net-pes-ts-bar" ...>` element from the saddle's `<a>` | RED -- all 3 tests failed together (0 bars found; `bar` was `null`) |
- * | 9 | "for the NN level, the value (energy) text has a smaller SVG y than the label (species) text" | Swapped the two level `<text>` elements' `y` values back (`y-12`/`y+20` reversed) | RED -- `369.94` was not less than `337.94` |
- * | 10 | "marks hash_n3's level data-unconnected and draws the dashed group divider" | Changed `{dividerX != null && (...)}` to `{false && dividerX != null && (...)}` | RED -- `querySelector('[data-testid="net-pes-group-divider"]')` was null |
- * | 11 | "draws no divider ... when every plotted state is connected" | Changed the same condition to `{(dividerX != null \|\| true) && (...)}` (always render) | RED -- the divider `<line>` was found where none should exist |
- * | 12 | "shows the cycle-fallback sentence for a 3-state, 3-barrier triangle" | Changed `{layout.components.some(...) && (...)}` to `{false && layout.components.some(...) && (...)}` | RED -- `screen.getByText(/deposited-barrier connectivity contains a cycle/)` threw, element not found |
- * | 13 | "a connector leg's state-side endpoint is offset from that state's own centre, not launched from it" | Changed `saddle.sourceLegX` back to `saddle.sourceX` in the source-side `<polyline>` | RED -- the leg's first point equalled the hub's own bar centre, `not.toBe` failed |
- * | 14 | "draws two .net-pes-caption-backing rects per plotted level ..." / "sizes a backing rect to its OWN caption string ..." | Removed the label's own `<rect className="net-pes-caption-backing" ...>` element (kept the energy one) | RED -- both tests failed together (3 backings instead of 6; 1 rect instead of 2 for NN) |
- *
- * Each mutation was landed as a single edit, the named test confirmed red
- * (`npx vitest run src/components/NetworkDiagram.test.tsx`), then reverted
- * and confirmed via `git diff --stat` showing no changes and
- * `sha256sum -c` against a pre-mutation checksum of the touched file.
- */
-
-/**
- * MUTATION TABLE (channel show/hide, `network-pes-channel-visibility`)
- *
- * | # | Test | Mutation landed | Result |
- * |---|------|------------------|--------|
- * | 1 | "hiding one channel removes only its own saddle, leaving every level position and the other saddle's height unchanged" | In `NetworkDiagram.tsx`, changed the level `<line>`'s `x1` to `level.x - NETWORK_PES_LEVEL_HALF_WIDTH + (hiddenChannelKeys.size > 0 ? 5 : 0)` -- a relayout keyed off "something is hidden" | RED -- `levelBarAttrs(container, "hub")` no longer equalled its pre-hide value (`x1` shifted `103` -> `108`) |
- * | 2 | "legend and rendered saddle-link count agree, both before and after hiding a channel" | In `NetworkPesChannelFieldset`, changed `shownCount` from the hidden-aware filter to a bare `saddles.length` | RED -- `screen.getByText("Saddle points (1 of 2 shown)")` was not found after hiding one channel (legend still said "2 of 2") |
- * | 3 | "renders one checkbox per ACCEPTED saddle, not one per channel on the network" | Changed `saddles={layout.saddles}` to `saddles={layout.saddles.concat(layout.saddles)}` at the `NetworkPesChannelFieldset` call site | RED -- `.net-pes-channel-option` count was 2, not 1 |
- * | 4 | "renders no channel fieldset at all when no channel carries an accepted barrier" | Changed `{layout && layout.saddles.length > 0 && (...)}` to `{layout && (...)}` | RED -- `.net-pes-channel-fieldset` was found (rendered with "0 of 0 shown") where none should exist |
- * | 5 | "labels each checkbox 'source to sink (kind)', with channel_key only in data-channel-key" | Changed the checkbox label text from `` `${saddle.sourceLabel} to ${saddle.sinkLabel} (${saddle.kind})` `` to `` `${saddle.channelKey}` `` | RED -- rendered texts were `["ch_left", "ch_right"]`, not the chemistry labels |
- * | 6 | "the channel table still lists all 3 channels after the only drawable one is hidden" | In `NetworkChannelsTable`, filtered its own `channels` prop to `channels.filter((c) => c.channel_key !== "channel_1")` before rendering rows -- simulating a table that shrinks along with the diagram | RED -- `channelTable.querySelectorAll("tbody tr")` had length 2, not 3 |
- * | 7 | "states nothing about filtering while every channel is visible" | Changed the filtered-note guard `{shownSaddleCount < layout.saddles.length && (...)}` to `{true && (...)}` | RED -- `screen.queryByText(/This view is filtered/)` found the note even with nothing hidden |
- * | 8 | "renders the same channel fieldset under the 'energy' layout radio" | Changed the fieldset's render guard to `{layout && layout.saddles.length > 0 && layoutMode === "connectivity" && (...)}` -- gating the control to one layout mode, the exact regression the brief warned against | RED -- `.net-pes-channel-option` count was 0 after switching to "By energy" |
- * | 9 | "a hidden channel stays hidden across a layout-mode switch, without re-clicking its checkbox" | In the "By energy" radio's `onChange`, added `setHiddenChannelKeys(new Set())` alongside `setLayoutMode("energy")` -- resetting the filter on every mode switch | RED -- `ch_left`'s `.net-pes-ts-bar` reappeared after switching to "By energy" even though it was hidden first |
- *
- * Each mutation was landed as a single edit, the named test confirmed red
- * (`npx vitest run src/components/NetworkDiagram.test.tsx -t "<test name>"`),
- * then reverted and confirmed via `sha256sum -c` against a pre-mutation
- * checksum of `NetworkDiagram.tsx` taken before mutation #1.
- */
 
 describe("NetworkDiagram -- no depositor-typed text", () => {
     it("scans the whole diagram: a typed channel key or state label is in no text, SVG text, id or attribute", () => {

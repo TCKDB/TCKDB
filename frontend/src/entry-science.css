@@ -8,15 +8,14 @@
  * `<table>`), status pills through `.value-pill--muted`, and notes through
  * `.note` (className at every call site). This file declares none of
  * `.stage-table`, `.review-badge`, `.evidence-chip`, `.section-note`,
- * `.records-note`, `.table-scroll` or `.kv-list`; the canonical rules live in
+ * `.table-scroll` or `.kv-list`; the canonical rules live in
  * `design-system.css`, which loads globally before any page stylesheet.
  *
  * `.data-table` carries no forced width, so a wide table (the 12-column
  * NASA-9 grid) sizes to its natural content width and `.table-scroll`'s
  * `overflow-x: auto` scrolls it. That scroll needs a definite-width
- * ancestor: `page-shell.css`'s narrow media query sets
- * `.page-shell-content { align-self: stretch; width: 100% }` (see that
- * rule's comment).
+ * ancestor: `page-shell.css` makes `.page-shell-content` a grid item with
+ * `min-width: 0` in a `minmax(0, 1fr)` column.
  */
 
 /* Layout-only companion class for the "N records · review: …" line above

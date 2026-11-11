@@ -1,4 +1,4 @@
-"""Stored calculation -> MolSSI QCSchema v2 ``AtomicResult`` document (C-Q3).
+"""Stored calculation -> MolSSI QCSchema v2 ``AtomicResult`` document.
 
 The inverse direction of :mod:`tckdb_qcschema.mapping`: given a client and a
 calculation handle, :func:`export_calculation` reads the calculation's
@@ -93,7 +93,8 @@ mirroring ``backend/app/chemistry/normal_modes.py``'s ``atomic_mass``
 ``resolve_element_symbol`` (~lines 64-95) exactly rather than by
 coincidence: a ``null`` ``isotope_mass_number`` on a ``D``/``T`` atom
 resolves to the mass number the symbol itself names (2/3), and
-``Molecule.symbols`` collapses ``D``/``T`` to ``H`` (measured: constructing a ``Molecule`` with a raw ``"D"`` symbol raises
+``Molecule.symbols`` collapses ``D``/``T`` to ``H`` (constructing a
+``Molecule`` with a raw ``"D"`` symbol raises
 ``qcelemental.exceptions.NotAnElementError``, even though
 ``to_A("D")`` itself returns ``2`` without complaint) -- the isotope
 stays carried in ``mass_numbers``, never lost by the collapse. An
@@ -112,7 +113,7 @@ comes back with an empty ``items`` list), the export is refused
 standard nuclides for every atom.
 
 **The calculation-id gap for ``freq`` export.** ``GET /calculations/{id}/hessian``
-(C-Q2) is a plain, pre-Phase-D route that takes only the integer
+is a plain route that takes only the integer
 ``calculation_id`` -- never a public ref -- yet the scientific calculation
 detail read hides ``calculation_id`` under this backend's internal-id
 visibility policy even with ``include=internal_ids`` requested (also
@@ -234,7 +235,8 @@ def _resolve_nuclide_symbol(symbol: str) -> str:
     (~lines 64-95) exactly: ``D``/``T`` resolve to ``H``, everything else is
     unchanged. Required because ``qcelemental.models.v2.Molecule.symbols``
     must be real periodic-table element symbols -- constructing one with a
-    raw ``"D"`` raises ``qcelemental.exceptions.NotAnElementError`` (measured) even though ``qcelemental.periodictable.to_A("D")`` happily
+    raw ``"D"`` raises ``qcelemental.exceptions.NotAnElementError`` even
+    though ``qcelemental.periodictable.to_A("D")`` happily
     returns ``2``. The isotope this atom actually is stays carried
     separately, in ``mass_numbers``.
     """
@@ -721,7 +723,7 @@ def export_calculation(client: Any, calculation_ref_or_id: str | int) -> dict:
     )
 
     # Validated once at construction by pydantic; re-validate explicitly
-    # from the dict form about to be returned, per the C-Q3 brief -- this
+    # from the dict form about to be returned -- this
     # is what actually catches a round-trip-breaking mistake in the dict
     # shape (e.g. exclude_none stripping something qcelemental requires),
     # not merely the in-memory model qcelemental already accepted.

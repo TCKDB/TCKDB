@@ -67,8 +67,7 @@ import { LiteratureCitation } from "../components/LiteratureCitation"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 // ---------------------------------------------------------------------------
-// Section-loading design (see the brief's "design problem" — recorded here
-// so the choice travels with the code):
+// Section-loading design:
 //
 // The archive advertises 19 public opt-in sections via `include=<token>`
 // (a 20th, `internal_ids`, is never requested by a public client; `trust`
@@ -165,7 +164,7 @@ function evidenceTone(label: string): "pill" | "pill-muted" {
 
 /**
  * The one headline energy figure this page promotes into its header —
- * see the design brief's "Promote the answer". Only `sp` (electronic
+ * the answer is promoted. Only `sp` (electronic
  * energy) and `opt` (final energy) calculations have a single number
  * that answers "what did this calculation compute" — `freq`/`scan`/
  * `irc`/`path_search` results are multi-valued or process-shaped and get
@@ -459,14 +458,13 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 ]}
                 identity={(
                     <header className="record-header">
-                        {/* Kicker + h1 + identity now all live in
-                            `RecordIdentityHeader` (item 1, design/foundations
-                            PR B): the review-status pill is the header's ONE
+                        {/* Kicker + h1 + identity all live in
+                            `RecordIdentityHeader`: the review-status pill is the header's ONE
                             pill slot, and "Optimisation calculation" (the
                             classification fact) is the kicker text, ahead of
                             the h1's own IDENTITY ("Optimisation of C2H4") --
                             see that component's own docstring for the shared
-                            header order every record page now follows. */}
+                            header order every record page follows. */}
                         <RecordIdentityHeader
                             kicker={kickerText}
                             glyph="calculation"
@@ -1752,9 +1750,9 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
                                                 <CopyButton value={row.artifact_ref} label="artifact" srLabel="ref" />
                                             </>
                                         ) : (
-                                            // Every calculation_artifact row now carries a public_ref
+                                            // Every calculation_artifact row carries a public_ref
                                             // (backend/docs/deployment/migrations.md, "Public-ref
-                                            // backfill"), so this branch should no longer be reachable
+                                            // backfill"), so this branch is unreachable
                                             // in practice; the field stays optional in the wire schema.
                                             "no ref"
                                         )}

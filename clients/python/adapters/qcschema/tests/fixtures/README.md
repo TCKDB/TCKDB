@@ -188,8 +188,7 @@ here as hand-derived, never as a Psi4 result.
   shape): **both** `schema_version` (`1` -> `2`) **and** `schema_name`
   (`"qcschema_output"` -> `"qcschema_atomic_result"`) are changed, so the
   document ends up declaring v2's entire pair, not just one field of it
-  (see `meta.json`'s `edit`, which already stated this correctly -- this
-  paragraph previously didn't). That second field is not incidental: a
+  (see `meta.json`'s `edit`). That second field is not incidental: a
   reader that gates on "does the declared pair look internally
   self-consistent?" rather than strictly on shape would see a document
   declaring a fully matched v2 `(schema_name, schema_version)` pair and

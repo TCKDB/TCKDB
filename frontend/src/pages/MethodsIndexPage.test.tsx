@@ -83,7 +83,7 @@ describe("MethodsIndexPage: loads and renders the three provenance-vocabulary ta
     })
 
     /**
-     * MUTATION TABLE (a): grouping key for the index: the index groups by `level_of_theory_ref`,
+     * Mutation check: grouping key for the index: the index groups by `level_of_theory_ref`,
      * never by `(method, basis)` display text -- two distinct levels can
      * share a method and basis while differing only in dispersion,
      * solvent, or spin treatment. This fixture is constructed exactly to
@@ -119,7 +119,7 @@ describe("MethodsIndexPage: loads and renders the three provenance-vocabulary ta
     /**
      * A NULL dispersion/solvent
      * states the chemistry plainly instead of implying a deposit gap.
-     * MUTATION TABLE (a): reverting the solvent cell back to
+     * Mutation check: reverting the solvent cell back to
      * `record.level_of_theory.solvent ?? "not recorded"` must fail this
      * test.
      */
@@ -159,7 +159,7 @@ describe("MethodsIndexPage: the levels-of-theory filter", () => {
     }
 
     /**
-     * MUTATION TABLE (c): making `filterLevelOfTheoryRecords` a no-op (e.g.
+     * Mutation check: making `filterLevelOfTheoryRecords` a no-op (e.g.
      * always returning `records` unfiltered) must fail this test -- both
      * rows would stay visible after typing "b3lyp".
      */

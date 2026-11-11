@@ -5,7 +5,7 @@ Six independently-testable stages, mirroring ``tckdb_chemkin``'s layout:
 1. :mod:`tckdb_qcschema.reader` -- family dispatch (v1 vs v2) and strict
    class validation, producing an internal :class:`~tckdb_qcschema.reader.QCRecord`.
    Also refuses re-import of a document this adapter itself exported
-   (``provenance.creator=="TCKDB"``; C-Q3).
+   (``provenance.creator=="TCKDB"``).
 2. :mod:`tckdb_qcschema.molecule` -- QCSchema ``Molecule`` -> TCKDB geometry
    and identity (bohr->angstrom, isotopes, ghost/fragment refusal).
 3. :mod:`tckdb_qcschema.hessian` -- full-matrix ``return_result`` <-> packed
@@ -16,7 +16,7 @@ Six independently-testable stages, mirroring ``tckdb_chemkin``'s layout:
    which :mod:`tckdb_qcschema.report_coverage` holds to the whole document:
    every field in exactly one bucket.
 5. :mod:`tckdb_qcschema.uploader` -- idempotent POST via ``tckdb-client``.
-6. :mod:`tckdb_qcschema.exporter` (C-Q3) -- a stored ``sp``/``freq``
+6. :mod:`tckdb_qcschema.exporter` -- a stored ``sp``/``freq``
    calculation, read back through ``tckdb-client``, as a QCSchema v2
    ``AtomicResult`` document.
 

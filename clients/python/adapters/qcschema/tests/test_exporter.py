@@ -1,4 +1,4 @@
-"""Unit tests for exporter.py branches the round-trip corpus does not reach (C-Q3).
+"""Unit tests for exporter.py branches the round-trip corpus does not reach.
 
 ``tests/test_round_trip.py`` covers the two pinned-read cases end to end
 (``energy_v1``, ``hessian_v1``, and their v2 siblings). Neither pinned case
@@ -263,7 +263,7 @@ def test_export_refuses_identity_unavailable_when_geometry_owner_is_ambiguous():
 
 
 # ---------------------------------------------------------------------
-# Isotopes (C-Q3 review round 2)
+# Isotopes
 # ---------------------------------------------------------------------
 
 
@@ -376,7 +376,7 @@ def test_export_refuses_geometry_mismatch_on_atom_count_disagreement():
 
 
 # ---------------------------------------------------------------------
-# D/T nuclide symbols (C-Q3 review round 3)
+# D/T nuclide symbols
 # ---------------------------------------------------------------------
 
 

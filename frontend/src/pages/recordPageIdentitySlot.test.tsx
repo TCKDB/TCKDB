@@ -21,8 +21,8 @@ import { conformerReadHandlers } from "../test/conformerReads"
  * begins level with the header on every one of them -- not only on
  * whichever page a reader happened to check.
  *
- * This is the table-driven test the design brief calls for by name: "the
- * assertion that catches 'worked on the one page I checked'". Each entry
+ * This is the table-driven test that catches "worked on the one page I
+ * checked". Each entry
  * below mounts its real page against a minimal-but-schema-valid fixture
  * (borrowed from that page's own test file) and asserts the SAME
  * structural relationship -- `.page-shell-identity` is the first child of

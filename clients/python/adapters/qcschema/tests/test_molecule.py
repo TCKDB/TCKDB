@@ -1,4 +1,4 @@
-"""Unit tests for molecule.py: bohr->angstrom, isotopes, identity (C-Q1)."""
+"""Unit tests for molecule.py: bohr->angstrom, isotopes, identity."""
 
 from __future__ import annotations
 

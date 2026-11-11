@@ -246,7 +246,7 @@ function solvesWithReview(review: { status: string; note?: string | null }) {
 }
 
 describe("NetworkEntryPage -- review note", () => {
-    // MUTATION TABLE (required, brief item 3): a record with no note must
+    // Mutation check: a record with no note must
     // render an empty container nowhere -- there must be no review-note
     // disclosure at all when neither the network's nor the solve's review
     // carries one. The default fixture's reviews are both `{ status:
@@ -259,7 +259,7 @@ describe("NetworkEntryPage -- review note", () => {
         expect(screen.queryByText("Network solve review note", { exact: false })).toBeNull()
     })
 
-    // MUTATION TABLE (required, brief item 2): if the page rendered the
+    // Mutation check: if the page rendered the
     // review status pill but dropped the note, this goes red.
     it("shows the solve's review note -- the real one on the live archive -- once its disclosure is opened", async () => {
         const user = userEvent.setup()
@@ -304,7 +304,7 @@ describe("NetworkEntryPage -- energy coverage is computed live, never hardcoded"
         expect(await screen.findByText(/none of the 2 participant species entries carry a thermo/)).toBeVisible()
     })
 
-    // MUTATION TABLE (a): hardcode the energy-coverage figure instead of
+    // Mutation check: hardcode the energy-coverage figure instead of
     // computing it (e.g. always render "0 of 2" regardless of the fixture).
     // This test lands a DIFFERENT thermo-presence fixture (1 of 2 species
     // entries covered) and asserts the DIFFERENT resulting sentence -- a
@@ -640,7 +640,7 @@ describe("NetworkEntryPage -- k(T,P) chart", () => {
         // for the whole page) is indistinguishable from the correct
         // behaviour on a one-channel fixture, since both produce exactly
         // one call. This is the fixture that actually exercises the
-        // distinction (confirmed via mutation -- see this PR's report).
+        // distinction.
         handleNetworkDetail(networkDetailFixture({
             channels: [
                 {
@@ -1016,8 +1016,8 @@ describe("NetworkEntryPage -- k(T,P) chart stacks selected channels by unit fami
         expect(wraps).toHaveLength(2)
         // Every wrap holds exactly one of the two families' channel(s) --
         // never both `channel_1` and `channel_2` inside the SAME wrap. A
-        // mutation that merges the two into one shared panel (the exact
-        // defect this PR's brief warns against) makes this assertion fail:
+        // mutation that merges the two into one shared panel makes this
+        // assertion fail:
         // one wrap would then carry both data-testids at once.
         for (const wrap of wraps) {
             const hasIso = wrap.querySelector('[data-testid="ktp-line-nk_iso_cheb"]') !== null

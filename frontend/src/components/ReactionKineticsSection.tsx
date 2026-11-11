@@ -123,9 +123,7 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
                 one unit selector; only a genuine dimensional difference,
                 like per_s beside cm3_mol_s, still gets two panels)
                 spanning every deposited kinetics record, ABOVE its own k(T)
-                table equivalent -- both after the per-record cards, per
-                plan §2's "one card per KineticsRecord ... Then the
-                Arrhenius chart with its table equivalent." A PLOG/
+                table equivalent -- both after the per-record cards. A PLOG/
                 Chebyshev/falloff/third-body record is listed there by ref
                 and reason, never plotted. */}
             <ArrheniusChart kinetics={kinetics} />
@@ -171,8 +169,8 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
     const sourceProgram = softwareCellText(record.provenance.primary_software)
 
     // The SP row is the one that can name a calculation not among this
-    // page's own `calculations[]` (the plan §7 "resolver disagreement"
-    // case) — still a REAL, resolvable calc ref in the archive either way,
+    // page's own `calculations[]` (a resolver disagreement)
+    // — still a REAL, resolvable calc ref in the archive either way,
     // so it stays a link the same as opt/freq above it; `spNote` carries
     // the honesty caveat about where the row's ref came from when it
     // genuinely isn't part of this reaction's own TS graph.

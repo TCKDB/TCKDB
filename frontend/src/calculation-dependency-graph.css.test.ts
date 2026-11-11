@@ -7,8 +7,8 @@ import css from "./calculation-dependency-graph.css?raw"
 
 /**
  * "Colours and type from design-system tokens only (`--accent`, `--line`,
- * `--ink`, `--muted`, the type scale); no hard-coded hex" -- the brief's
- * own constraint on this file. jsdom cannot see whether a colour LOOKS
+ * `--ink`, `--muted`, the type scale); no hard-coded hex" is this file's
+ * constraint. jsdom cannot see whether a colour LOOKS
  * right (no real paint), but a hex literal in the raw source is a
  * mechanical fact this test can catch without a browser: any `#rgb` /
  * `#rrggbb` / `#rgba` / `#rrggbbaa` literal anywhere in the file is a

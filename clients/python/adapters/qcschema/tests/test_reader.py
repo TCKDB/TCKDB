@@ -1,4 +1,4 @@
-"""Family dispatch and validation tests (C-Q1)."""
+"""Family dispatch and validation tests."""
 
 from __future__ import annotations
 
@@ -97,13 +97,12 @@ def test_json_array_top_level_is_refused():
 
 @pytest.mark.parametrize("case", ["energy_v1", "energy_v2", "hessian_v1", "hessian_v2"])
 def test_tckdb_export_is_refused_on_reimport(case):
-    """A document whose top-level provenance.creator=='TCKDB' is refused (C-Q3).
+    """A document whose top-level provenance.creator=='TCKDB' is refused.
 
     Mutation this catches: dropping the ``creator == "TCKDB"`` check from
     ``reader.py`` (or its equivalent, e.g. weakening it to a substring
     match that a real ESS name would never trip) turns this red -- see
-    ``exporter.py``'s ``provenance.creator="TCKDB"`` and the "reimport
-    refused" requirement in the C-Q3 brief.
+    ``exporter.py``'s ``provenance.creator="TCKDB"``.
     """
     raw, _meta = load_case(case)
     document = json.loads(raw)

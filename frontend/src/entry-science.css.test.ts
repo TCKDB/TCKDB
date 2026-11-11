@@ -19,38 +19,38 @@ function stripComments(source: string): string {
     return source.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 
-describe("`.stage-table` is fully retired from this file (data-table migration)", () => {
-    it("declares no `.stage-table` rule of its own -- every record table in this file's three tabs renders `.data-table` (design-system.css) now", () => {
+describe("`.stage-table` is not declared in this file", () => {
+    it("declares no `.stage-table` rule of its own -- every record table in this file's three tabs renders `.data-table` (design-system.css)", () => {
         expect(stripComments(css)).not.toMatch(/\.stage-table/)
     })
 
-    it("keeps no narrow-viewport stacked-row reset (`.stage-table`'s old fallback never applied to `.data-table`, so there is nothing left to protect)", () => {
+    it("keeps no narrow-viewport stacked-row reset (a stacked-row fallback does not apply to `.data-table`, so there is nothing to protect)", () => {
         expect(stripComments(css)).not.toMatch(/min-width:\s*0/)
     })
 })
 
-describe("`.review-badge`/`.evidence-chip` are fully retired (one pill style: `.value-pill--muted`)", () => {
+describe("`.review-badge`/`.evidence-chip` are not declared (one pill style: `.value-pill--muted`)", () => {
     it("declares no `.review-badge` override -- every status pill in this file's three tabs renders `.value-pill--muted` (design-system.css) at its own call site", () => {
         expect(stripComments(css)).not.toMatch(/(?<![\w-])\.review-badge\s*\{/)
     })
 
-    it("declares no `.evidence-chip` rule -- the missing-checklist chip is `.value-pill--muted` now too", () => {
+    it("declares no `.evidence-chip` rule -- the missing-checklist chip is `.value-pill--muted` too", () => {
         expect(stripComments(css)).not.toMatch(/(?<![\w-])\.evidence-chip\s*\{/)
     })
 })
 
-describe("`.evidence-full-checklist` keeps only spacing; dead `.section-heading` is retired", () => {
+describe("`.evidence-full-checklist` keeps only spacing; `.section-heading` is not declared", () => {
     // Dropping `.evidence-full-checklist` entirely would leave the
     // disclosure's border sitting flush against `ProvenanceBlock`'s "Level
     // of theory" row immediately below it. The rule stays, margin-only.
-    it("keeps a margin-only `.evidence-full-checklist` rule -- no summary/colour/font styling (that's `Disclosure`'s job now), just the spacing `Disclosure` has no opinion on", () => {
+    it("keeps a margin-only `.evidence-full-checklist` rule -- no summary/colour/font styling (that's `Disclosure`'s job), just the spacing `Disclosure` has no opinion on", () => {
         const rule = /\.evidence-full-checklist\s*\{([^}]*)\}/.exec(stripComments(css))
         expect(rule).not.toBeNull()
         expect(rule![1]).toMatch(/margin:/)
         expect(rule![1]).not.toMatch(/color|font|cursor/)
     })
 
-    it("declares no `.evidence-full-checklist summary` rule -- that chrome is `.disclosure > summary`'s job now, not a page-local override", () => {
+    it("declares no `.evidence-full-checklist summary` rule -- that chrome is `.disclosure > summary`'s job, not a page-local override", () => {
         expect(stripComments(css)).not.toMatch(/\.evidence-full-checklist\s+summary/)
     })
 
@@ -68,7 +68,7 @@ describe("block titles (`.model-block-heading`) are a real heading step, never m
     })
 })
 
-describe("`.checklist` reads sans/value-weight now, not a blanket mono rule (mono diet)", () => {
+describe("`.checklist` reads sans/value-weight, not a blanket mono rule (mono diet)", () => {
     // The geometry tab's `<ul className="checklist">` must not mono the ENTIRE row -- the observation summary sentence, "N
     // optimization calculations", level-of-theory labels, atom counts --
     // along with the one or two genuine identifiers it actually needed to.

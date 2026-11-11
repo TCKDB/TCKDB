@@ -20,7 +20,7 @@ import { parseScientificResponse, requestScientificJsonPost } from "./scientific
  *
  * No Chebyshev/PLOG math lives here or anywhere in this frontend --
  * `points[].k` is the server's own already-evaluated value, rendered
- * as-is (invariant 2 of this PR's brief).
+ * as-is.
  */
 
 const evaluatedPointSchema = z.object({

@@ -73,7 +73,7 @@ function renderSection(props: Partial<Parameters<typeof ReactionTransitionStates
 }
 
 describe("ReactionTransitionStatesSection — centre node link", () => {
-    it("links the dependency graph's centre node to /calculations/<ts_opt ref> (mutation table item (a))", () => {
+    it("links the dependency graph's centre node to /calculations/<ts_opt ref>)", () => {
         renderSection()
         const centreNode = screen.getByTestId("dep-node-centre-calc_opt1")
         const calcLink = within(centreNode).getByRole("link", { name: /Optimisation calc_opt1/ })
@@ -82,7 +82,7 @@ describe("ReactionTransitionStatesSection — centre node link", () => {
 })
 
 describe("ReactionTransitionStatesSection — subject lives on the node, not in a caption", () => {
-    it("names the optimisation's own subject ON the centre node, linking to the TS entry (mutation table item (a))", () => {
+    it("names the optimisation's own subject ON the centre node, linking to the TS entry)", () => {
         renderSection()
         const centreNode = screen.getByTestId("dep-node-centre-calc_opt1")
         const subjectLink = within(centreNode).getByTestId("dep-node-subject-calc_opt1")
@@ -135,7 +135,7 @@ describe("ReactionTransitionStatesSection — no dependency edges", () => {
 // `backend/app/schemas/reads/scientific_provenance.py:227`) are gone
 // entirely, not replaced with softer wording for the same non-answer.
 describe("ReactionTransitionStatesSection — calculations-by-stage table has no unservable columns", () => {
-    it("renders only Stage / Level of theory / Software-workflow / Record -- no Energy or Review column, no /full jargon anywhere (mutation table item (b))", () => {
+    it("renders only Stage / Level of theory / Software-workflow / Record -- no Energy or Review column, no /full jargon anywhere)", () => {
         renderSection()
         const table = screen.getByRole("table", { name: "Calculations for tse_test1" })
         const headers = within(table).getAllByRole("columnheader").map((h) => h.textContent)

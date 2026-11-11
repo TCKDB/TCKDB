@@ -22,9 +22,8 @@
 }
 
 /* Record review and Machine findings each name the other in their lede, and
-   that cross-reference is the whole point: the two were renamed because a
-   reader could not tell them apart, so each has to be able to go and look at
-   the other one.
+   that cross-reference is the whole point: a reader has to be able to tell
+   the two apart and go and look at the other one.
 
    `index.css` resets every anchor to `color: inherit; text-decoration: none`,
    so without this rule that link renders as plain prose:
@@ -274,11 +273,7 @@
 
 
 /* ------------------------------------------------------------------------
- * Record review: where a record can be SEEN (task 262)
- *
- * The task number is written without its hash on purpose: `theme.css.test.ts`
- * scans every non-token stylesheet for hex colour literals, and a hash
- * followed by those three digits is a valid three-digit one.
+ * Record review: where a record can be SEEN
  * --------------------------------------------------------------------- */
 
 /* "shown on species entry spc_..." -- the link a row gets when its record
@@ -339,7 +334,7 @@
 }
 
 /* ---------------------------------------------------------------------------
- * Record review: subject grouping (task 269)
+ * Record review: subject grouping
  * ---------------------------------------------------------------------------
  * One block per subject (a species entry, a transition-state entry, or
  * whatever the record's container resolves to), records nested underneath.
@@ -376,8 +371,7 @@
 
 /* The subject's own public ref -- visible, because it is what a reviewer
    cites, but deliberately quieter than the heading: it is not what the eye
-   should scan the page for. See the brief: "for citation, not for
-   scanning". */
+   should scan the page for: for citation, not for scanning. */
 /* A caveat about missing data (no formula, no reaction SMILES) -- NEVER
    rendered in the heading itself. It sits in its own quiet line, the same
    register as the facet chips, directly under the heading and above the

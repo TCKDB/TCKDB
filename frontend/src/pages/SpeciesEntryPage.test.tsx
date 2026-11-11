@@ -11,8 +11,7 @@ import { expectDepositorTextOnlyInNotes } from "../test/depositorSentinel"
 
 // ---------------------------------------------------------------------------
 // Two DISTINCT conformer groups, each with its own observations and its own
-// non-overlapping calculation/geometry refs -- required by the design brief:
-// a fixture with only one conformer can prove that the selector renders
+// non-overlapping calculation/geometry refs -- a fixture with only one conformer can prove that the selector renders
 // SOMETHING, never that it renders the SELECTED conformer's own evidence.
 // Group "conformer_1" additionally carries two observations (one with no SP
 // calculation, one with TWO), so the "1 / 4 / many" conformer-count story,
@@ -224,7 +223,7 @@ function thermoRecords() {
         {
             // Population B: no resolvable primary calculation, Arkane
             // software, no conformer link -- the real archive shape
-            // (thermo id 4, spe_dfcw4tvy6tkqxnyittmn6d3vdu), per PR #285.
+            // (thermo id 4, spe_dfcw4tvy6tkqxnyittmn6d3vdu).
             thermo_ref: "thm_two",
             scientific_origin: "computed", model_kind: "nasa",
             review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
@@ -385,9 +384,7 @@ function handlers(options: HandlerOptions = {}) {
         // Distinct energies per sp calculation ref -- a fixture where every
         // row shares one value cannot prove this page joins by the row's
         // OWN calculation_ref rather than always showing the first energy
-        // it fetched (see the design brief's recurring-defect list: "a
-        // fixture where every row was identical let a records[0] bug
-        // survive").
+        // it fetched.
         http.get("/api/v1/scientific/species-calculations/search", async ({ request }) => {
             const type = new URL(request.url).searchParams.get("calculation_type")
             if (type === "opt") {

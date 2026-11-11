@@ -219,10 +219,7 @@ describe("site chrome maps onto the named type scale, not bespoke sizes (item 10
         expect(rule).not.toMatch(/var\(--mono\)/)
     })
 
-    // Landed on `main` at --type-label (400 weight, matching the
-    // original's own unweighted `.7rem` rule) before this branch rebased
-    // -- kept as `main` left it rather than re-bolding to
-    // --type-label-strong.
+    // Uses --type-label (400 weight) rather than --type-label-strong.
     it(".home-card .home-card-count uses --type-data, not a bare size", () => {
         const rule = extractRule(homeCss, ".home-card .home-card-count")
         expect(rule).toMatch(/font:\s*var\(--type-data-font\)/)
@@ -237,7 +234,7 @@ describe("site chrome maps onto the named type scale, not bespoke sizes (item 10
  * `refs-disclosure.css`.
  */
 describe("the .archive-shell .ref-item-label / .copy-button floor override is absent", () => {
-    it("index.css no longer declares this rule", () => {
+    it("index.css does not declare this rule", () => {
         expect(css).not.toMatch(/\.archive-shell\s+\.ref-item-label/)
         expect(css).not.toMatch(/\.archive-shell\s+\.copy-button/)
     })

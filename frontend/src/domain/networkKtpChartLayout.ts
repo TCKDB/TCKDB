@@ -224,9 +224,9 @@ export function modelKindColor(modelKind: string): string {
 
 // ---------------------------------------------------------------------------
 // Overlaid-channel series encoding -- colour is CHANNEL identity, model kind
-// is a tint + stroke-width pair layered on that same hue. Chosen over the
-// brief's other option (colour by channel, model kind as weight/opacity
-// alone) because opacity alone reads poorly once dashed (out-of-range)
+// is a tint + stroke-width pair layered on that same hue. Chosen over
+// colour by channel with model kind as weight/opacity
+// alone, because opacity alone reads poorly once dashed (out-of-range)
 // segments are layered on top -- a thin, already-faded PLOG dash becomes
 // very hard to see against a busy multi-channel panel. Tinting the hue
 // toward white keeps every model-kind variant fully opaque (so a dashed
@@ -295,8 +295,7 @@ export function modelKindStrokeWidth(modelKind: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// One panel per UNIT FAMILY -- the scientific constraint this PR's brief
-// leads with: `per_s` (s^-1) and `cm3_mol_s` (cm^3 mol^-1 s^-1) are
+// One panel per UNIT FAMILY -- the scientific constraint: `per_s` (s^-1) and `cm3_mol_s` (cm^3 mol^-1 s^-1) are
 // different DIMENSIONS and can never share a y-axis, so "all selected
 // channels on one graph" is only true WITHIN one family. Mirrors
 // `arrheniusChartLayout.ts`'s own `buildArrheniusChartData` almost exactly
@@ -326,7 +325,7 @@ export interface KtpFamilyPanel {
      *  concentration unit to convert to) this is `["per_s"]`, length ONE,
      *  mirroring `arrheniusChartLayout.ts`'s own `ArrheniusPanel.availableUnits`
      *  verbatim. `NetworkKtpChart.tsx` renders no unit control at all when
-     *  `.length <= 1` -- per this PR's brief, a single-option panel gets no
+     *  `.length <= 1`: a single-option panel gets no
      *  control, not a disabled one (unlike the Arrhenius chart's own
      *  always-shown-disabled convention) -- but that gate lives in the
      *  COMPONENT, not as an extra blanking rule in this field itself. */

@@ -27,8 +27,8 @@ import { madeUnderSchema } from "../domain/madeUnder"
 //   service body (no branch references any of the five), and cross-checking
 //   `INCLUDE_GATED_COMPONENTS["ThermoRecord"]` in
 //   `backend/app/api/routes/scientific/_response.py`, which lists only
-//   `trust` and `assessments` for `ThermoRecord` — the one surface the brief
-//   for this slice flagged as "gates nothing at all". This client therefore
+//   `trust` and `assessments` for `ThermoRecord`, so thermo gates nothing
+//   else. This client therefore
 //   requests NO include tokens for thermo: everything below is either an
 //   always-present field or gated only by `trust`/`assessments`, and this
 //   slice does not request either (trust is out of scope, matching the
@@ -166,7 +166,7 @@ const thermoProvenanceSchema = z.object({
     statmech_ref: z.string().nullable().optional(),
     freq_calculation_ref: z.string().nullable().optional(),
     sp_calculation_ref: z.string().nullable().optional(),
-    // PR #285: the conformer this record traces to, resolved server-side
+    // The conformer this record traces to, resolved server-side
     // through the SAME primary calculation used for `primary_calculation`/
     // `level_of_theory` above (`calculation.conformer_observation_id`),
     // never an independent pick. `null` on a record with no resolvable

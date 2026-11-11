@@ -69,8 +69,8 @@ function narrowRecord(overrides: Record<string, unknown> = {}): ReactionKinetics
 
 // SAME A/n/Ea/range as `bimolecularRecord()`, but deposited in `m3_mol_s`
 // instead of `cm3_mol_s` -- BOTH order 2 (bimolecular), so this shares
-// `bimolecularRecord()`'s own panel (the defect this PR fixes: these used
-// to be two uncomparable panels). Because the underlying A/n/Ea numbers are
+// `bimolecularRecord()`'s own panel (one panel per order family, not two
+// uncomparable ones). Because the underlying A/n/Ea numbers are
 // IDENTICAL, this record's raw (pre-conversion) k(T) curve is numerically
 // identical to `bimolecularRecord()`'s -- so once the panel's default
 // display unit (`cm3_mol_s`, tie-broken to whichever is served first)
@@ -457,7 +457,7 @@ describe("ArrheniusChart -- the table remains the text equivalent", () => {
 })
 
 // ---------------------------------------------------------------------------
-// New in this PR: per-order-family panel merging, the per-panel unit
+// Per-order-family panel merging, the per-panel unit
 // selector, the x-axis mode control, and the k(T) table following the same
 // selection as the chart.
 // ---------------------------------------------------------------------------
@@ -514,8 +514,8 @@ describe("ArrheniusChart -- the per-panel unit selector", () => {
         expect(select.getAttribute("aria-describedby")).toBe(note.id)
     })
 
-    // MUTATION TARGET (d) -- "hide the y control when there is no
-    // alternative": item (d) in the mutation table checks the control's
+    // MUTATION TARGET -- "hide the y control when there is no
+    // alternative": another test checks the control's
     // presence; this checks it looks DELIBERATE rather than broken --
     // visual polish. The disabled chip carries
     // its own modifier class (a quieter fill/border, never a dashed or
@@ -590,7 +590,7 @@ describe("ArrheniusChart -- the per-panel unit selector", () => {
     })
 
     // A record's DEPOSITED unit must remain visible regardless of which
-    // unit the panel is currently showing (this PR's own invariant).
+    // unit the panel is currently showing.
     it("the legend still names the record's OWN deposited unit after switching the panel's display unit away from it", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
         fireEvent.change(screen.getByRole("combobox", { name: /Y-axis/ }), { target: { value: "m3_mol_s" } })
@@ -681,7 +681,7 @@ describe("ArrheniusChart -- the x-axis mode control (temperature vs 1000/T)", ()
 // row below it, naming its scope in two words rather than a sentence
 // -- and only because a second panel actually exists to name it against.
 describe("ArrheniusChart -- the x-axis and y-axis controls read as a compact pair, not a wall of chrome", () => {
-    it("a single panel renders X-axis and Y-axis together in ONE row, with no scope caption at all (mutation table item (d))", () => {
+    it("a single panel renders X-axis and Y-axis together in ONE row, with no scope caption at all)", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
 
         const xSelect = screen.getByRole("combobox", { name: /X-axis/ })

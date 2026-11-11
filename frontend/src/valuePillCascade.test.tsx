@@ -18,7 +18,7 @@ import disclosureSource from "./components/Disclosure.tsx?raw"
 afterEach(cleanup)
 
 /**
- * Regression coverage for a real bug a code review caught in this PR:
+ * Regression coverage for a cascade-order bug:
  * `.value-pill.value-pill--muted` (the "not reviewed" pill on the species
  * overview and both browse rows) computed the BASE pill's accent-50/
  * accent-700 colours instead of its own muted surface-sunken/muted ones,
@@ -31,7 +31,7 @@ afterEach(cleanup)
  *
  * Two independent, class-name-blind checks below: a REAL rendered
  * `getComputedStyle` read (which a `.toHaveClass("value-pill--muted")`
- * assertion cannot see -- that assertion is exactly what shipped this bug,
+ * assertion cannot see -- that assertion passes when the class is present
  * since the class was always present, only its WINNING declaration was
  * wrong), and a source-order/specificity check on the raw CSS. Either one
  * alone would have caught the shipped bug; both are kept because they

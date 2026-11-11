@@ -53,7 +53,7 @@ describe("ReactionEquation", () => {
         expect(link.textContent).toBe("O (H2O)")
     })
 
-    // The brief's own case: formula absent -> the participant's SMILES
+    // Formula absent -> the participant's SMILES
     // stands alone, never the bare species-entry ref, in the data face.
     it("falls back to the SMILES alone (not the ref) in a data-face code element when formula is absent", () => {
         const { container } = renderEquation(

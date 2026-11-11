@@ -18,8 +18,7 @@ import { convertArrheniusValue } from "./arrheniusUnits"
 // The SAME live values `kineticsTable.test.ts` pins (`kin_spkzatwjlvmmnja3i5im4fl7hq`,
 // A=3025.44 cm³ mol⁻¹ s⁻¹, n=3.11242, Ea=39.9711 kJ/mol, 300-3000 K) --
 // independently hand-computed as k(300 K) = 17028.619287800688, k(3000 K) =
-// 40467390077148.48. Reused here rather than re-derived, per this PR's own
-// "reuse the maths, do not fork it" brief.
+// 40467390077148.48. Reused here rather than re-derived.
 const A = 3025.44
 const n = 3.11242
 const Ea = 39.9711
@@ -135,7 +134,7 @@ describe("arrheniusLog10AxisTitle -- the dimensionally correct ratio form, never
         expect(arrheniusLog10AxisTitle(null)).toBe(`log₁₀ [k / ${arrheniusUnitLabel(null)}]`)
     })
 
-    // MUTATION-CATCHING (mutation table item (b)): pins the exact rendered
+    // MUTATION-CATCHING: pins the exact rendered
     // string, not just a regex shape -- a mutation that reverted to the
     // parenthetical form (`log₁₀ k (cm³ mol⁻¹ s⁻¹)`) would still match a
     // looser "contains the unit somewhere" assertion but fails this one.
@@ -372,8 +371,7 @@ describe("arrheniusPointX / panelXDomain -- the inverse-temperature (1000/T) axi
 // nothing observable in any of those tests. This block uses two records
 // with GENUINELY different ranges in the SAME panel and checks the
 // narrower one never extends past its own `record_min_k..record_max_k`,
-// per plan §4: "each curve drawn only within its own
-// record_min_k..record_max_k" -- not the panel's union.
+// not the panel's union.
 describe("computeArrheniusSeries -- per-record range clipping when panelled beside a wider record", () => {
     it("a narrow record (1000-2000 K) sampled beside a wide one (300-3000 K) in the same panel stays entirely within its OWN range", () => {
         const wideRecord = record({ kinetics_ref: "kin_wide", temperature_coverage: { record_min_k: 300, record_max_k: 3000 } })

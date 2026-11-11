@@ -514,7 +514,7 @@ function KtpXAxisSelect({ id, xAxisMode, onSelectXAxisMode }: {
  * has more than one member (`KtpFamilyPanelChart`'s own `hasUnitChoice`
  * gate above). Unlike `ArrheniusChart.tsx`'s own `ArrheniusYAxisSelect`,
  * a single-option panel here gets NO control at all rather than a
- * disabled one -- per this PR's own brief: `per_s` (order-1, isomerization
+ * disabled one: `per_s` (order-1, isomerization
  * on this network) has exactly one member in its family
  * (`familyUnits(1) === ["per_s"]`, confirmed directly against
  * `arrheniusUnits.ts` rather than assumed), so there is nothing to offer a

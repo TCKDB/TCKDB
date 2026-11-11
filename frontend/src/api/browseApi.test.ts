@@ -353,8 +353,7 @@ describe("buildReactionBrowseQuery: only the params the live endpoint accepts ar
         expect(both.get("product_smiles")).toBe("CC=O")
     })
 
-    // The multi-structure search (item 3 of the gap brief): the live
-    // endpoint accepts REPEATED `reactant_smiles`/`product_smiles` params,
+    // The multi-structure search: the endpoint accepts REPEATED `reactant_smiles`/`product_smiles` params,
     // AND-ed by set containment against one side -- verified live,
     // `?reactant_smiles=NN` -> 20 reactions, `?reactant_smiles=NN&
     // reactant_smiles=[H]` -> 0. Comma is the one safe separator (a SMILES
@@ -388,7 +387,7 @@ describe("buildReactionBrowseQuery: only the params the live endpoint accepts ar
             expect(query.has("reactant_smiles")).toBe(false)
         })
 
-        // MUTATION CHECK (mutation table item d): a comma-joined SINGLE
+        // MUTATION CHECK: a comma-joined SINGLE
         // param (the old, wrong shape a naive `query.set` fix would
         // produce) must NOT be what is sent -- `getAll` returning a
         // one-item array whose value still contains a literal comma is
@@ -459,13 +458,13 @@ describe("buildReactionBrowseQuery: only the params the live endpoint accepts ar
         expect(query.get("offset")).toBe("40")
     })
 
-    // PR #418: the backend's own `direction` param now defaults to
+    // The backend's own `direction` param defaults to
     // `forward`. This builder must NOT send `direction` for an untouched
     // filter set -- an omitted param and the backend's own default must
     // stay in agreement, which is only guaranteed by never sending a
     // locally-hardcoded "forward" that could drift from the backend's own
     // default if it ever changes again.
-    describe("buildReactionBrowseQuery: direction (PR #418) is omitted by default and sent verbatim when set", () => {
+    describe("buildReactionBrowseQuery: direction is omitted by default and sent verbatim when set", () => {
         it("an untouched filter set (direction: \"\") sends no direction param -- agrees with a bare API call", () => {
             const query = buildReactionBrowseQuery(EMPTY_BROWSE_FILTERS, 0, 20)
             expect(query.has("direction")).toBe(false)
@@ -476,7 +475,7 @@ describe("buildReactionBrowseQuery: only the params the live endpoint accepts ar
             expect(query.get("direction")).toBe("either")
         })
 
-        // MUTATION CHECK (mutation table item a): a build that silently
+        // MUTATION CHECK: a build that silently
         // drops `direction` even when set would leave the form and the
         // outgoing request disagreeing about which orientation was asked
         // for -- exactly the defect #418's own PR body warns a frontend

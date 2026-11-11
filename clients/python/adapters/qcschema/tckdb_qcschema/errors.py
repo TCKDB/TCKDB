@@ -101,15 +101,14 @@ E_ARTIFACT_TOO_LARGE = "artifact_too_large"
 E_ALREADY_IMPORTED = "already_imported"
 
 # ---------------------------------------------------------------------------
-# Export (C-Q3)
+# Export
 # ---------------------------------------------------------------------------
 
 #: A document whose top-level ``provenance.creator`` is exactly ``"TCKDB"``
 #: -- i.e. one this adapter itself exported -- is refused on import. Without
 #: this, an export could be re-imported and treated as independent evidence
 #: of a second ESS job, which it is not: it is TCKDB's own stored numbers
-#: reformatted. See ``exporter.py``'s ``provenance.creator="TCKDB"`` and the
-#: "reimport refused" note in the C-Q3 brief.
+#: reformatted. See ``exporter.py``'s ``provenance.creator="TCKDB"``.
 E_TCKDB_EXPORT_REIMPORT_REFUSED = "tckdb_export_reimport_refused"
 
 #: The calculation's ``type`` is not one this adapter can export --

@@ -98,7 +98,7 @@ describe("TableOfContents: the reserved column", () => {
     // every other test in this describe block reads the threshold
     // symbolically off the same constant it is testing, which would keep
     // passing unchanged if that constant's VALUE drifted away from 2. This
-    // one pins the actual number the design brief asks for.
+    // one pins the actual number.
     it("renders no list at exactly 1 registered section, and a list at exactly 2", () => {
         const { rerender } = render(<Harness count={1} />)
         expect(screen.queryByRole("navigation", { name: "Sections on this page" })).not.toBeInTheDocument()

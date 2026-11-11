@@ -126,12 +126,11 @@ function App() {
             <Route path="/networks/:networkRef" element={<NetworkEntryPage />} />
             {/* The methods index, with three
                 more routes below it: `/methods/:lotRef` is the real
-                level-of-theory record page (methods-surface plan §4.2);
+                level-of-theory record page;
                 `/methods/schemes/:ecsRef` and
                 `/methods/frequency-scale-factors/:fsfRef` are the thin
-                anchor pages §4.3 gives the two other dead-ref kinds found
-                on this site (an energy-correction-scheme ref, a
-                frequency-scale-factor ref). No ordering hazard between
+                anchor pages for an energy-correction-scheme ref and a
+                frequency-scale-factor ref. No ordering hazard between
                 `/methods/:lotRef` and the two three-segment routes below
                 it -- `/methods/schemes/ecs_…` has one more path segment
                 than `/methods/:lotRef` can ever match, so React Router's
@@ -151,7 +150,7 @@ function App() {
                 `/admin/machine-review-inspection` below is. `LoginPage`
                 gates nothing itself (it just redirects away once
                 `useAuth()` reports signed-in); `AccountPage` is the one
-                page in this PR that DOES require a session, and redirects
+                page that DOES require a session, and redirects
                 to `/login` on its own when there isn't one -- see its own
                 component for why that is not "gating an existing page"
                 (it is a brand-new one). */}

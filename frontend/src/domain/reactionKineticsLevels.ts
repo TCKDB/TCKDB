@@ -43,7 +43,7 @@ export interface KineticsLevelsFallbackResult {
      * Set only when `levels.energy` was substituted from
      * `provenance.primary_level_of_theory` because the record's own cited
      * single-point calculation is not among this page's known
-     * calculations (the plan §7 "resolver disagreement" case) -- names
+     * calculations (the "resolver disagreement" case) -- names
      * which fact was substituted, for an honest caveat at the call site.
      * `null` whenever `energy` was resolved directly (or is itself
      * `null`) -- never set "just in case".
@@ -86,8 +86,8 @@ export interface KineticsLevelsFallbackResult {
  * `energy` prefers the cited `ts_sp_calculation_ref`'s own level; when
  * that calculation is not among `calculationsByRef` (the live "resolver
  * disagreement" case: a kinetics record's own sp citation naming a
- * calculation this reaction's TS graph does not otherwise carry --
- * verified live, plan §7), this falls back to
+ * calculation this reaction's TS graph does not otherwise carry),
+ * this falls back to
  * `provenance.primary_level_of_theory` as a best-effort substitute and
  * says so via `energyFallbackNote` -- the caller must render that note
  * alongside the value; presenting the substituted level as though it

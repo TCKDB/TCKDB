@@ -6,8 +6,8 @@
 # ---------------------------------------------------------------------------
 # Without it the dump carries no CREATE DATABASE, so whoever restores it makes
 # the target database by hand -- and a bare CREATE DATABASE inherits its
-# encoding from template1. On this cluster template1 was SQL_ASCII until
-# 2026-08-12 while the real database was UTF8, so restoring a UTF8 dump into a
+# encoding from template1. If template1 is SQL_ASCII while the real
+# database is UTF8, restoring a UTF8 dump into a
 # hand-made target exited 0, printed no error, and silently mis-counted every
 # multi-byte character: length('em dash: <U+2014>') came back 12 instead of 10.
 #
@@ -29,7 +29,7 @@
 #   (2) does the archive actually restore to identical data?  [round trip]
 #
 # The canary in (2) is length('em dash: <U+2014>') == 10, which is the exact
-# measurement the 2026-08-12 investigation used. It tests the restored
+# measurement that exposes a SQL_ASCII restore. It tests the restored
 # database's encoding rather than its contents, so it fires even on an empty
 # database and cannot be satisfied by accident.
 set -euo pipefail

@@ -16,12 +16,11 @@
  * - A value that is not there says so, on its own row — never a silently
  *   skipped one.
  *
- * ---- one absent-value spelling (brief section E) --------------------
+ * ---- one absent-value spelling --------------------
  *
  * `chemistryFormat.ts`'s `ABSENT` is `"not recorded"` (lowercase) and is
- * re-exported from here unchanged. Before this change, 40+ call sites
- * across the app independently wrote `"Not recorded"` (capitalized) — the
- * inconsistency the brief asked to resolve. Lowercase wins, for one
+ * re-exported from here unchanged. Call sites use this one lowercase
+ * spelling rather than a capitalized `"Not recorded"`. Lowercase is used, for one
  * concrete reason rather than a style preference: `IdentifierSearch.tsx`
  * already composes `ABSENT` into a mid-sentence context string —
  * `` `charge ${chargeDisplay(match.charge)}` `` reads as "charge not
@@ -177,10 +176,10 @@ export function fillValue(value: FillableValue): Filled {
 }
 
 /**
- * ---- the digits-and-units table (brief section B) --------------------
+ * ---- the digits-and-units table --------------------
  *
  * Collected from `landing.py:2472-2479, 2507, 2524-2528, 2597, 3401-3412`
- * into one place, as the brief asks, instead of the precision for each
+ * into one place, instead of the precision for each
  * quantity being a literal re-typed at every call site. This is chemistry
  * judgement about what precision each quantity supports — not a style
  * choice — so a change to any one of these belongs in exactly one place.
@@ -211,8 +210,7 @@ export function fillValue(value: FillableValue): Filled {
  * `kinetics_a`'s unit is not fixed here: `landing.py` resolves it per record
  * from the `A_units` enum token via an `A_UNITS` typeset-unit table, which
  * this port intentionally does not carry forward — no frontend surface
- * currently renders kinetics, so there is nothing to adopt it into yet (see
- * the "Do NOT port" boundary this brief drew around enum→prose tables); a
+ * currently renders kinetics, so there is nothing to adopt it into yet; a
  * caller that gains a kinetics view should pass the resolved unit string in
  * explicitly via `formatQuantity("kinetics_a", value, unitString)`.
  */

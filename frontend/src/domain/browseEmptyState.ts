@@ -9,10 +9,9 @@ const KIND_PLURAL: Record<BrowseKind, string> = {
 
 /**
  * The archive-wide absence message, one per kind. This is the copy path the
- * design brief calls out by name: a zero-row `vdw` result must read as a
+ * a zero-row `vdw` result must read as a
  * FACT about the archive ("nothing of this kind exists yet"), never as a
- * broken search or a wrong filter -- see `docs` for the measured 60/0
- * minimum/vdw_complex split. `species` and `transition_state` carry the
+ * broken search or a wrong filter. `species` and `transition_state` carry the
  * same honest phrasing for symmetry even though the live corpus (59/34
  * records respectively) never exercises this branch for them today; the
  * archive is allowed to become empty of either in the future and the UI

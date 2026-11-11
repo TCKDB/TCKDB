@@ -51,7 +51,6 @@ export function PageSectionsProvider({ children }: { children: ReactNode }) {
  * "Raw XYZ", "Review" / "Review history") adds no information, and a kicker that
  * is just the title's own leading words reads
  * exactly the same as a full restatement once stacked visually. `prefix`
- * exactly the same as a full restatement once stacked visually. `prefix`
  * (not `includes`/substring anywhere) is deliberately narrow: it must
  * catch "Review" ahead of "Review history" without also catching an
  * unrelated kicker that merely shares a word with the title midway

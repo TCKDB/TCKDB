@@ -88,8 +88,7 @@ import "../geometry-measure.css"
  * on the canvas and 3Dmol treats it as drag-to-rotate instead of
  * forwarding it to the page; on desktop, resting the cursor over the
  * canvas while scrolling with a wheel zooms the model instead of
- * scrolling the page. Both are regressions the previous SVG projection
- * scrolling the page.
+ * scrolling the page. Both are unwanted in a scrolling page.
  * 3Dmol's own mouse/touch handling is left enabled in full
  * (`nomouse` is not passed — 3Dmol's own default is
  * `false`), so mouse drag and multi-finger touch gestures reach 3Dmol

@@ -53,8 +53,8 @@ import { Disclosure } from "./Disclosure"
 // (`arrheniusChartLayout.ts`'s `modalDepositedUnit`). Selecting a different
 // unit re-converts every series in the panel via `convertArrheniusSeriesUnits`
 // (`domain/arrheniusUnits.ts`'s conversion factor -- NEVER offered across
-// order families) and, per this PR's own "the k(T) table must follow the
-// same selection" rule, the SAME selection also re-converts that panel's
+// order families) and, since the k(T) table must follow the
+// same selection, the SAME selection also re-converts that panel's
 // records' own k(T) tables (`convertKineticsTableRows`) -- one piece of
 // state (`selectedUnitsByPanel` below) feeds both surfaces, so they cannot
 // drift apart. A record's OWN deposited unit stays visible regardless of
@@ -124,7 +124,7 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
     const { panels, excluded } = buildArrheniusChartData(kinetics)
 
     // ONE control for the whole section (see header comment above) --
-    // default unchanged from before this PR: temperature in K.
+    // defaults to temperature in K.
     const [xAxisMode, setXAxisMode] = useState<ArrheniusXAxisMode>("temperature")
     // Per-panel unit selection, keyed by `arrheniusPanelKey` -- lifted to
     // THIS component (not local to a panel's own sub-component) because the
@@ -302,7 +302,7 @@ function ArrheniusLegend({ panel, displaySeriesDepositedUnits }: { panel: Arrhen
                         ref text breaks `ReactionEntryPage.test.tsx`'s
                         `findByText(ref)` uniqueness assumption. Stating the
                         DEPOSITED unit here (not the panel's currently
-                        SELECTED one) is this PR's own invariant: a record's
+                        SELECTED one) keeps an invariant: a record's
                         deposited units must remain visible somewhere on its
                         own surface regardless of what the panel is
                         currently displaying. */}
@@ -473,7 +473,7 @@ function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits, o
     const refList = panel.series.map((series) => series.kinetics_ref).join(", ")
     // The axis clause names what x actually is, and -- in the inverse mode
     // -- states BOTH the reading convention (high T at the left) and the
-    // straight-line fact this PR's brief calls out explicitly, since the
+    // straight-line fact, since the
     // `aria-label` is this panel's own accessible substitute for seeing
     // the axis drawn.
     const axisDescription = xAxisMode === "temperature"

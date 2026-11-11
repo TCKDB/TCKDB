@@ -24,7 +24,7 @@ function extractRule(source: string, selector: string): string {
 describe(".viewer-measurements (defect: floats right of/below the picture)", () => {
     const rule = extractRule(css, ".viewer-measurements")
 
-    it("no longer carries `margin: 0 auto` (which centred it in the wrong column)", () => {
+    it("does not carry `margin: 0 auto` (which centred it in the wrong column)", () => {
         expect(rule).not.toMatch(/margin:\s*0\s+auto/)
     })
 

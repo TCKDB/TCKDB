@@ -1,4 +1,4 @@
-"""Parametrized corpus test over ``tests/fixtures/<case>/`` (C-Q1).
+"""Parametrized corpus test over ``tests/fixtures/<case>/``.
 
 Every case is one real or hand-derived QCSchema document plus a
 ``meta.json`` naming its expected outcome. This is the mutation-checked

@@ -16,11 +16,11 @@ import type { RecordIdentity } from "../domain/recordIdentity"
  * calculation, conformer group, conformer observation) renders through:
  * a kicker + status pill row, then the h1, then identity, then
  * classification facets, then provenance -- top to bottom, always in
- * that order, never reordered per page. See the design brief's "Shared
- * header block on every record page".
+ * that order, never reordered per page.
  *
  * `kicker`/`title` own the top of the block: this header owns the
- * eyebrow-row/h1 markup of every record page at the shared `--type-display-2` step.
+ * eyebrow-row/h1 markup of every record page at the shared
+ * `--type-display-2` step.
  * `pill` is the record's
  * ONE status/trust pill (a `.value-pill`/`.value-pill--muted` element the
  * caller builds) -- never more than one; a second badge (e.g. a trust
@@ -210,15 +210,14 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
     if (identity.kind === "species_entry") {
         return (
             <div className="record-identity-known">
-                {/* No standalone formula paragraph here any more (design/
-                    foundations PR B): every caller of this header already
+                {/* No standalone formula paragraph here: every caller of this header already
                     renders the same formula (or the canonical SMILES
                     fallback) as the record's own `title`/h1 above, via
                     `Formula`/`identity.formula` -- a second, large serif
-                    restatement of it here duplicated the page's own title
+                    restatement of it here would duplicate the page's own title
                     immediately beneath it. The full identity facts
-                    (SMILES, InChIKey, charge/multiplicity) still render
-                    below unchanged. */}
+                    (SMILES, InChIKey, charge/multiplicity) render
+                    below. */}
                 <dl className="kv-list record-identity-facts">
                     {ownRefFact}
                     <IdentityFact label="SMILES" copy={identity.canonicalSmiles}><code>{identity.canonicalSmiles}</code></IdentityFact>
@@ -299,10 +298,8 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
  * `copy`, when given a truthy value, adds a small copy button beside the
  * fact's own rendered value -- reusing `RefsDisclosure`'s `CopyButton`
  * (same clipboard write / "Copied" feedback / aria-label pattern) rather
- * than a second, bespoke button (PR #372 dropped the species-entry
- * hero's old "Copy SMILES"/"Copy InChIKey" buttons when that hero moved
- * onto this shared header; only the ref copy button survived -- this
- * brings the affordance back for every identifier value the header
+ * than a second, bespoke button, so the affordance is available for every
+ * identifier value the header
  * renders as `.data`: SMILES, InChIKey, an unmapped reaction SMILES, a
  * TS entry ref). Deliberately NOT wired for `children` generally -- only
  * a caller passing `copy` gets the button, so a plain fact like "Charge

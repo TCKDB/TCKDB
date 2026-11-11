@@ -1,4 +1,4 @@
-"""QCSchema driver-hessian ``return_result`` -> packed lower triangle (C-Q1).
+"""QCSchema driver-hessian ``return_result`` -> packed lower triangle.
 
 QCSchema's Hessian ``return_result`` is the *full* symmetric 3N x 3N
 matrix, flattened row-major (a flat list of length ``(3N)**2``, confirmed
@@ -10,7 +10,7 @@ against a real Psi4/qcengine hessian document -- see
 module reshapes and packs to that same order, and applies the same
 symmetry check ORCA parsing does before trusting the result.
 
-:func:`unpack_lower_triangle` (C-Q3) is the exact inverse, used by the
+:func:`unpack_lower_triangle` is the exact inverse, used by the
 exporter to rebuild the full symmetric matrix QCSchema's driver-``hessian``
 ``return_result`` expects from the packed lower triangle TCKDB stores.
 """

@@ -741,8 +741,8 @@ def _extract_computed_reaction_calc_keys(
 ) -> dict[str, int]:
     """Read ``calculation_keys`` off a ``ComputedReactionUploadResult``.
 
-    Response-only field added alongside this PR. Servers older than
-    that change won't have the field and the builder raises clearly.
+    Response-only field. Servers that predate it do not send it, and the
+    builder raises clearly.
     """
     if not isinstance(upload_result, dict):
         raise TCKDBBuilderValidationError(

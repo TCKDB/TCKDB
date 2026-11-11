@@ -304,9 +304,8 @@ export function IdentifierSearch() {
      * it means the same thing regardless of which mode is currently
      * selected. This is what makes a `rxe_…` ref pasted while "Species" is
      * selected still route to the reaction-entry page instead of being fed
-     * to the species/formula grammar and reported invalid -- the exact
-     * defect for the single-field search, preserved
-     * across BOTH directions of the mode switch.
+     * to the species/formula grammar and reported invalid. The check
+     * runs before the mode is consulted, so it holds in every mode.
      */
     async function runReferenceLookup(trimmed: string) {
         const classified = classifyIdentifier(trimmed)

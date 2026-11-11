@@ -342,7 +342,7 @@ describe("CalculationDetailPage", () => {
         expect(tauCell).not.toContain("assumed")
     })
 
-    // Copy rule (brief item 4): "assumed" must appear whenever an
+    // Copy rule: "assumed" must appear whenever an
     // assumed_* basis is rendered, and never otherwise -- covered from the
     // other direction in `tauBasis.test.ts`; this is the page-level half.
     it("renders an ASSUMED tau basis with a visible 'assumed' word on both rows, same τ as its recorded counterpart", async () => {
@@ -1021,14 +1021,12 @@ describe("CalculationDetailPage", () => {
         const section = summary.closest("details") as HTMLDetailsElement
         expect(section).not.toBeNull()
         expect(section.open).toBe(false)
-        // Design/foundations PR B (item 5): every on-demand section now
-        // composes the shared `Disclosure` primitive (`.disclosure`,
+        // Every on-demand section composes the shared `Disclosure` primitive (`.disclosure`,
         // `design-system.css`) instead of a page-local bordered `<details>`
         // -- mutation check: rename this class away and this test fails.
-        // The redundant "SHOW" affordance span is gone with it (the
-        // primitive's own chevron, `.disclosure > summary::before`, is the
-        // idle-state affordance now) -- "Show" must not appear anywhere in
-        // this section.
+        // There is no separate "SHOW" affordance span (the primitive's own
+        // chevron, `.disclosure > summary::before`, is the idle-state
+        // affordance) -- "Show" must not appear anywhere in this section.
         expect(section).toHaveClass("disclosure")
         expect(within(section).queryByText("Show")).not.toBeInTheDocument()
         expect(within(section).queryByText(/The archive returned no parameter rows/)).not.toBeInTheDocument()
@@ -1423,11 +1421,9 @@ describe("CalculationDetailPage", () => {
         expect(within(section).getByText("Looks solid")).toBeVisible()
     })
 
-    // Item 7, design/foundations PR B: every table on this page moved from
-    // the page-local `.stage-table` recipe to the shared `.data-table`
-    // primitive (`design-system.css`), each inside a `.table-scroll`
-    // wrapper. Mutation check: revert one table's className back to
-    // `.stage-table` and this test fails.
+    // Every table on this page uses the shared `.data-table` primitive
+    // (`design-system.css`), each inside a `.table-scroll` wrapper, never
+    // the page-local `.stage-table`.
     it("renders every table on this page as the shared .data-table primitive inside .table-scroll, never .stage-table", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({

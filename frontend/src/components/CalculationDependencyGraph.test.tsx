@@ -111,7 +111,7 @@ describe("CalculationDependencyGraph — nodes", () => {
 // since ITS centre node (the TS's own `ts_opt`) is NOT the page the reader
 // is on, unlike `CalculationDetailPage.tsx`. The default-false case is
 // already covered by the "does not render the centre node as a link" test
-// above (mutation table item (b): flip the default to `true` and that
+// above: flip the default to `true` and that
 // exact test goes red, catching a regression on `CalculationDetailPage`'s
 // own call site, which never passes this prop at all).
 describe("CalculationDependencyGraph — centreLinked opt-in", () => {
@@ -175,7 +175,7 @@ describe("CalculationDependencyGraph — centreSubject opt-in", () => {
         expect(within(centreNode).queryByTestId("dep-node-subject-calc_own_ref")).toBeNull()
     })
 
-    it("renders the subject's visible label and links it to its own href, separately from the calc link (mutation table item (a))", () => {
+    it("renders the subject's visible label and links it to its own href, separately from the calc link)", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
         ], "calc_own_ref", "opt", true, SUBJECT)
@@ -205,7 +205,7 @@ describe("CalculationDependencyGraph — centreSubject opt-in", () => {
         expect(within(centreNode).getAllByRole("link")).toHaveLength(1)
     })
 
-    it("grows the centre node's own content-block height to fit the subject row (mutation table item (a))", () => {
+    it("grows the centre node's own content-block height to fit the subject row)", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
         ], "calc_own_ref", "opt", true, SUBJECT)

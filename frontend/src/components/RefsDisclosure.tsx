@@ -144,13 +144,9 @@ export function CopyButton({ value, label, srLabel = "reference" }: { value: str
     </>
 }
 
-// FLAGGED GAP, not fixed here (out of scope on this branch — see the
-// worktree brief): `[data-copy-unavailable="true"]` has a rule only in
+// Known gap: `[data-copy-unavailable="true"]` has a rule only in
 // `geometry-detail.css:83` (`.geometry-page .copy-button[...]`, a warm
 // amber `#a15c00`), a stylesheet the species-entry page never loads.
 // The SAME "unavailable" state renders amber on the geometry
 // page and idle grey (no visual change at all) on the entry page — this
-// shared component grew a state one of its two consumers cannot render.
-// `species-entry.css` is owned by a parallel branch
-// (`frontend/evidence-in-prose`) and is off-limits here; route this gap
-// there rather than editing it from this branch.
+// shared component has a state one of its two consumers cannot render.

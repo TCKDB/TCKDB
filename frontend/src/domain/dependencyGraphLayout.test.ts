@@ -418,8 +418,8 @@ describe("longest label fits inside its own background box", () => {
 
     it(`'${label}' (the ${longestRole} label, currently the longest) text width does not exceed its background rect width`, () => {
         // Same estimate the layout module itself uses -- this pins the
-        // CONSTANT, not the layout: a text-vs-box regression (the
-        // pre-fix `LABEL_CHAR_W = 6.6` under-measured a real 7.6px/char
+        // CONSTANT, not the layout: a text-vs-box regression (an
+        // estimate narrower than the real 7.6px/char
         // font) would show up here as `textWidth > bgWidth`.
         const model = buildDependencyGraphModel(
             "calc_own_ref_abcdefghijklmnopqrstuv", "opt",

@@ -1,4 +1,4 @@
-"""Uploader tests against a stub client -- no network (C-Q1)."""
+"""Uploader tests against a stub client -- no network."""
 
 from __future__ import annotations
 

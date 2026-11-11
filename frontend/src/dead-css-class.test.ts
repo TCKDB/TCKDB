@@ -72,8 +72,7 @@ function hasComponentConsumer(className: string): boolean {
     return pattern.test(COMPONENT_TEXT)
 }
 
-// Explicit allowlist, with a REASON for each entry -- per the brief
-// ("allow an explicit allowlist with reasons"). A `Set` here (the
+// Explicit allowlist, with a REASON for each entry. A `Set` here (the
 // plain list) would let an entry get added with no reason at all, silently.
 // `Map<className, reason>` makes a reason-less addition a type error, and
 // the tests below additionally enforce that the reason actually SAYS

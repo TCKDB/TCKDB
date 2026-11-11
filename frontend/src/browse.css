@@ -334,8 +334,7 @@
    deliberately excluded, matching the TS row's own choice: neither pill
    carries a value a reader needs to select or click through on its own,
    so lifting it would only shrink the row's actual click target for no
-   benefit. `.browse-row-headline` itself needs no lift here (unlike the
-   old full-row-overlay version of this rule) -- the overlay now lives
+   benefit. `.browse-row-headline` itself needs no lift here -- the overlay lives
    INSIDE the headline, on the title's own `<Link>`, so there is nothing
    later-in-tree-order within the headline that still needs elevating. */
 .reaction-browse-row .browse-row-footer {
@@ -515,13 +514,9 @@ span.browse-row-title {
 
 /* The row's own stable ref -- an identifier, styled at the shared data step
    (`.data`, applied alongside this class in both row components) rather
-   than its own one-off 11px mono run. Named apart from the old ref class on
-   purpose: `index.css`'s accessibility-floor pass sets a floor font-size on
-   that exact old class name (prefixed `.archive-shell`, targeting the same
-   element), and this PR does not own that section of `index.css` to
-   retarget it -- a fresh class name means the migrated ref actually renders
-   at the data step instead of being pulled back down to the old floor by a
-   rule this PR cannot edit. */
+   than its own one-off mono run. Its class name is distinct from the one
+   `index.css`'s accessibility-floor pass targets (prefixed `.archive-shell`),
+   so the ref renders at the data step rather than at that floor. */
 .browse-ref {
     display: block;
     margin-top: .6rem;

@@ -30,7 +30,7 @@ function extractRule(source: string, selector: string): string {
  * a distance by an `index.css` floor override.
  */
 describe("refs-disclosure.css: on-scale typography", () => {
-    it(".ref-item-label uses --type-label (was .6rem, under the 11px floor)", () => {
+    it(".ref-item-label uses --type-label", () => {
         const rule = extractRule(css, ".ref-item-label")
         expect(rule).toMatch(/font:\s*var\(--type-label-font\)/)
         expect(rule).not.toMatch(/\.6rem/)
@@ -42,7 +42,7 @@ describe("refs-disclosure.css: on-scale typography", () => {
         expect(refItemValueRule, ".ref-item a, .ref-item-value rule not found").not.toBeNull()
     })
 
-    it(".ref-item a / .ref-item-value use --type-data (was .72rem, off-scale)", () => {
+    it(".ref-item a / .ref-item-value use --type-data", () => {
         expect(refItemValueRule![1]).toMatch(/font:\s*var\(--type-data-font\)/)
         expect(refItemValueRule![1]).not.toMatch(/\.72rem/)
     })
@@ -51,12 +51,11 @@ describe("refs-disclosure.css: on-scale typography", () => {
         // `word-break: keep-all` is not used: it only
         // affects CJK line breaking, so it would change nothing for these
         // refs, and this component's ref values are not run through a
-        // <wbr>-inserting helper (`RefsDisclosure.tsx` is shared outside
-        // this PR's scope) for it to have preferred anyway. `overflow-
+        // <wbr>-inserting helper for it to have preferred anyway. `overflow-
         // wrap: anywhere` stays -- it is what a value with no break
         // opportunity wraps at instead of overflowing this box; switching
-        // it to `normal` was the caught regression `design-system.css`'s
-        // matching `.kv-list dd` test also guards.
+        // it to `normal` is guarded against, as `design-system.css`'s
+        // matching `.kv-list dd` test also does.
         expect(refItemValueRule![1]).toMatch(/overflow-wrap:\s*anywhere/)
         expect(refItemValueRule![1]).not.toMatch(/overflow-wrap:\s*normal/)
     })
@@ -65,7 +64,7 @@ describe("refs-disclosure.css: on-scale typography", () => {
         expect(css).not.toMatch(/word-break:\s*keep-all/)
     })
 
-    it(".copy-button uses --type-ui (was .58rem, under the 11px floor)", () => {
+    it(".copy-button uses --type-ui", () => {
         const rule = extractRule(css, ".copy-button")
         expect(rule).toMatch(/font:\s*var\(--type-ui-font\)/)
         expect(rule).not.toMatch(/\.58rem/)

@@ -4,10 +4,9 @@
  * record page that renders it. Own stylesheet per this project's
  * convention (see the header comment in `entry-science.css`).
  *
- * design/foundations PR B ("record pages" consolidation): the identity
- * facts and the (optional) submission-provenance row now render through
- * the shared `.kv-list` primitive (`design-system.css`) rather than this
- * file's own bespoke grid/dt/dd rules -- this file keeps only what
+ * The identity facts and the (optional) submission-provenance row render
+ * through the shared `.kv-list` primitive (`design-system.css`); this file
+ * keeps only what
  * `.kv-list` does not already cover: the kicker/pill row, the h1's own
  * spacing, the wide-fact override, and the three prose states (absent /
  * ambiguous / the TS "no canonical SMILES" note).

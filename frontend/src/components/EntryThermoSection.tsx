@@ -46,7 +46,7 @@ import { ThermoCpChart } from "./ThermoCpChart"
 // reduced to "the first one" or "the best one". See `api/thermoApi.ts` for
 // the measured wire shape and why nothing here is include-gated.
 //
-// PR #285 gave thermo a REAL per-record conformer link
+// Thermo has a REAL per-record conformer link
 // (`provenance.conformer_group_ref`), resolved server-side through the
 // same primary calculation already used for `primary_calculation`/
 // `level_of_theory`. When a conformer is selected, records partition
@@ -148,8 +148,7 @@ function hasModelKindData(record: ThermoRecord): boolean {
  *
  * Two records of the SAME model kind get a disambiguating index appended
  * ("NASA-7 thermo record 1" / "NASA-7 thermo record 2") -- a lone record
- * of a kind keeps the plain label ("NASA-7 thermo record"), matching the
- * design brief's own example.
+ * of a kind keeps the plain label ("NASA-7 thermo record").
  */
 function thermoSectionLabels(records: ThermoRecord[]): Map<string, string> {
     const withData = records.filter(hasModelKindData)

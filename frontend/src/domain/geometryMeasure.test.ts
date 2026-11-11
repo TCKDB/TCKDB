@@ -182,7 +182,7 @@ describe("dihedral", () => {
     })
 
     describe("collinear-guard: an undefined torsion must read NaN, never a confident 0°", () => {
-        // The only pre-fix guard was b2Length === 0 (b coincides with c).
+        // A b2Length === 0 guard (b coincides with c) alone does not cover this.
         // If any THREE of the four points are collinear, n1 or n2 (the
         // plane normals the "praxeolitic" formula needs) is a zero
         // vector, so x = 0 and y = 0, and `Math.atan2(0, 0)` is exactly

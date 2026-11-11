@@ -20,7 +20,7 @@ function extractRule(source: string, selector: string): string {
  * `.kv-list`, no bespoke label/value layout -- the history item 3 used
  * to document here) and their location. This file must not declare either.
  */
-describe(".coverage-checklist / .ledger-summary--single are no longer declared here (moved to conformer-group.css)", () => {
+describe(".coverage-checklist / .ledger-summary--single are not declared here (conformer-group.css declares them)", () => {
     it("declares no .coverage-checklist rule", () => {
         expect(css).not.toMatch(/\.coverage-checklist\s*\{/)
     })
@@ -38,7 +38,7 @@ describe(".coverage-checklist / .ledger-summary--single are no longer declared h
  * `calculation-dependency-graph.css.test.ts`'s "demoted sentence list"
  * tests).
  */
-describe(".dependency-sentences is no longer declared here (moved to calculation-dependency-graph.css)", () => {
+describe(".dependency-sentences is not declared here (calculation-dependency-graph.css declares it)", () => {
     it("declares no .dependency-sentences rule", () => {
         expect(css).not.toMatch(/\.dependency-sentences\s*\{/)
     })

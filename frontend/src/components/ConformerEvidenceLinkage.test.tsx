@@ -266,7 +266,7 @@ describe("ConformerEvidenceLinkage", () => {
         expect(screen.getByRole("heading", { name: "Evidence for cg_blank" })).toBeVisible()
     })
 
-    // --- The CH3 case from the brief, verbatim -- the safe per-observation
+    // --- The CH3 case, verbatim -- the safe per-observation
     // attribution path (chainCount === coverageOpt AND every observation's
     // own calculation list is loaded), matching the live archive's own
     // spe_bcbdjwkip75yoziblpntwzblzu / cg_rsoqvj37biuvkucdr6dpaba6iy. ---

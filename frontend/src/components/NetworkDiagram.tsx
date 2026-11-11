@@ -61,13 +61,12 @@ export function NetworkDiagram({ states, channels, stateEnergies, channelBarrier
     const [layoutMode, setLayoutMode] = useState<NetworkPesLayoutMode>("connectivity")
     const layout = computeNetworkPesLayout(states, stateEnergies ?? [], channels, barriers, layoutMode)
 
-    // Per-channel show/hide -- a VIEW filter only (invariant 2 of the
-    // channel-visibility brief): keyed by `channel_key`, never by index or
+    // Per-channel show/hide -- a VIEW filter only: keyed by `channel_key`, never by index or
     // position, so it survives a layout-mode switch untouched even though
     // every saddle's x/y is recomputed for the new mode. Empty by default
     // -- every drawable saddle starts visible. Lives at THIS level (not
     // inside `NetworkPesSvg`) because both the control (rendered as a
-    // sibling of the layout fieldset, per the brief) and the SVG need it.
+    // sibling of the layout fieldset) and the SVG need it.
     const [hiddenChannelKeys, setHiddenChannelKeys] = useState<Set<string>>(() => new Set())
 
     function toggleChannelVisibility(channelKey: string) {
@@ -115,10 +114,9 @@ export function NetworkDiagram({ states, channels, stateEnergies, channelBarrier
                 and a control that appears/disappears with the mode radio
                 above it would be more surprising than useful). Offers
                 EXACTLY `layout.saddles` -- the channels that actually got a
-                deposited barrier and a drawn saddle point (invariant 1 of
-                the channel-visibility brief) -- never the full channel
+                deposited barrier and a drawn saddle point -- never the full channel
                 list, which stays in `NetworkChannelsTable` below
-                regardless of what is hidden here (invariant 3). */}
+                regardless of what is hidden here. */}
             {layout && layout.saddles.length > 0 && (
                 <NetworkPesChannelFieldset
                     saddles={layout.saddles}
@@ -265,8 +263,8 @@ function NetworkPesSection({ layout, states, channels, barrierTotal, hiddenChann
             <NetworkPesLegend layout={layout} />
             {/* Invariant 1: 17 of 21 channels on the live archive carry no
                 deposited barrier and draw NO saddle point at all -- this is
-                the explicit statement of that count the brief asks for,
-                not a silently smaller diagram. */}
+                the explicit statement of that count, not a silently
+                smaller diagram. */}
             <p className="t-body" style={{ margin: ".6rem 0 0" }}>
                 {`${barrierTotal} of ${channels.length} channel${channels.length === 1 ? "" : "s"} `
                     + `carr${barrierTotal === 1 ? "ies" : "y"} a deposited barrier and appear${barrierTotal === 1 ? "s" : ""} below as a saddle point; `
@@ -298,7 +296,7 @@ function NetworkPesSection({ layout, states, channels, barrierTotal, hiddenChann
                 </p>
             )}
             {shownSaddleCount < layout.saddles.length && (
-                // Invariant 5 of the channel-visibility brief: a filtered
+                // A filtered
                 // view must say so, and how many of how many are actually
                 // shown, so it is never mistaken for the whole picture.
                 // Only rendered once at least one channel is hidden --
@@ -377,7 +375,7 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels, hiddenCha
     const plotLeft = NETWORK_PES_MARGIN.left
     const plotRight = layout.width - NETWORK_PES_MARGIN.right
 
-    // Invariant 2 of the channel-visibility brief: hiding is a VIEW filter,
+    // Hiding is a VIEW filter,
     // never a relayout -- this is the ONLY place a hidden channel changes
     // anything. `layout.saddles` itself, and every level's x/y, are left
     // completely untouched; a hidden saddle's own height and position are
@@ -443,6 +441,7 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels, hiddenCha
                         // (the one `channelIndexByKey`'s fallback and every other
                         // saddle keyed off), not the position in this filtered
                         // array -- otherwise hiding an earlier channel would shift
+                        // the fallback row index of every later saddle.
                         const index = layout.saddles.indexOf(saddle)
                         const rowIndex = channelIndexByKey.get(saddle.channelKey) ?? index
                         // Saddles are drawn as a short horizontal BAR (like

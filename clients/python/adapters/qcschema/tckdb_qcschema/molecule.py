@@ -1,4 +1,4 @@
-"""QCSchema ``Molecule`` -> TCKDB geometry and identity (C-Q1).
+"""QCSchema ``Molecule`` -> TCKDB geometry and identity.
 
 Bohr-to-angstrom conversion, atom-resolved isotope labelling, ghost/fragment
 refusal, integer charge/multiplicity, and SMILES identity resolution with no

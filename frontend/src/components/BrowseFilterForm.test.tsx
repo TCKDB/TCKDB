@@ -125,7 +125,7 @@ afterAll(() => server.close())
  * value pass even if the underlying filter value was never actually
  * cleared -- exactly the bug this form must not have (a stale
  * `software_version` surviving a `software` change and reaching the
- * outgoing browse query, see the design brief's walkthrough). Reading
+ * outgoing browse query). Reading
  * the state directly, not just what the browser happens to render,
  * is what makes that mutation actually fail a test.
  *
@@ -442,7 +442,7 @@ describe("the six provenance selects render on EVERY browse kind that accepts th
 // they rendered for "species"/"vdw" a filled-in value would be silently
 // dropped on the way to the request rather than doing anything. Asserted
 // as an ABSENCE on the two kinds that must not have them, not just a
-// presence check on transition_state, per the design brief: a component
+// presence check on transition_state: a component
 // that renders both sections unconditionally would still pass any test
 // that only checks transition_state.
 describe("Status and the has_* evidence fields render ONLY on transition state", () => {
@@ -975,8 +975,8 @@ describe("reaction kind: the two structure fields are independent, and the evide
 })
 
 // ---------------------------------------------------------------------------
-// PR #418's own follow-up: the reaction browse endpoint's `direction`
-// param now defaults to `forward` server-side. This form must offer the
+// The reaction browse endpoint's `direction`
+// param defaults to `forward` server-side. This form must offer the
 // honest choice (match the named sides, or match either orientation) and
 // its own untouched default must agree with a bare API call -- i.e. it
 // must NOT send `direction` at all until the reader opts in.

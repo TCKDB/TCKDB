@@ -64,8 +64,8 @@ const conformerGroups = [conformerGroup("cg_one", "conformer_1"), conformerGroup
  * Deliberately NOT a copy of the live 3-records-all-identical-model-kind
  * fixture measured against spe_bcbdjwkip75yoziblpntwzblzu — a fixture that
  * faithfully mirrored production would make every mutation this file tests
- * for unobservable (lesson 2 in the brief: "a realistic fixture inherits
- * production's accidental regularities"). Three records that differ in
+ * for unobservable (a realistic fixture inherits
+ * production's accidental regularities). Three records that differ in
  * every field under test:
  *
  * - thm_alpha: nasa, computed, supersession null, nasa present / nasa9 null.
@@ -1185,8 +1185,8 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         // polynomial recorded for this record."). Checking `model_kind`
         // alone (ignoring whether the data is actually there) would
         // register this as a ToC entry pointing at that exact empty
-        // message -- an empty destination, which the design brief
-        // explicitly forbids.
+        // message -- an empty destination, which a ToC entry must
+        // never be.
         const [alpha] = mockRecords()
         const claimsNasaButEmpty = { ...alpha, thermo_ref: "thm_empty_nasa", nasa: null }
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [claimsNasaButEmpty] }))))

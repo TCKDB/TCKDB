@@ -20,7 +20,7 @@ The target database name must match ``tckdb_bench_[a-z0-9_]*``. Anything else
 connection is opened. The script only ever talks to the host in ``DB_HOST``,
 which the caller must point at a local Postgres.
 
-Measured production inventory (2026-07-30, 55 species) and the per-species
+Measured production inventory (55 species) and the per-species
 ratios derived from it are in :data:`PRODUCTION_INVENTORY`. Deviations from
 those ratios are declared in :data:`DEVIATIONS` and are written into the
 corpus manifest, so a number quoted from this corpus can always be traced back
@@ -57,7 +57,7 @@ _BENCH_DB_NAME = re.compile(r"^tckdb_bench_[a-z0-9_]+$")
 # Production inventory — measured, not invented
 # ---------------------------------------------------------------------------
 
-#: Row counts measured on the deployed Raspberry Pi database on 2026-07-30.
+#: Row counts measured on the deployed Raspberry Pi database.
 #: Every ratio this script scales by is derived from these numbers; nothing
 #: here is a guess. Tables absent from this dict were **not** measured, and the
 #: assumption used in their place is recorded in :data:`DEVIATIONS`.

@@ -94,8 +94,7 @@ describe("buildBasinRotors -- never the bin index, only the range", () => {
         expect(buildBasinRotors(rigid)).toEqual([])
     })
 
-    // The exact assertion the brief calls "the assertion that catches a
-    // zip/index bug": rotor keys NOT in sorted order, angles distinguishable
+    // The assertion that catches a zip/index bug: rotor keys NOT in sorted order, angles distinguishable
     // enough that a swapped pairing is unmistakable.
     it("preserves rotor/angle pairing even when rotor keys are not in sorted order", () => {
         const fp: ConformerGroupFingerprint = {

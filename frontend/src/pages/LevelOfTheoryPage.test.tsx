@@ -137,7 +137,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         await user.click(screen.getByText("Petersson bond-additivity correction").closest("summary") as HTMLElement)
 
         const atomTable = screen.getByRole("table", { name: "Element correction parameters" })
-        expect(within(atomTable).getAllByRole("row")).toHaveLength(1 + 8) // header + 8 elements, per the task brief's own acceptance criterion
+        expect(within(atomTable).getAllByRole("row")).toHaveLength(1 + 8) // header + 8 elements
         expect(within(atomTable).getByText("Br")).toBeVisible()
 
         const bondTable = screen.getByRole("table", { name: "Bond correction parameters" })
@@ -152,7 +152,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
      * `CorrectionSchemePage.test.tsx`'s own mutation-table test uses, so a
      * regression that reverts to `name` is unambiguous).
      *
-     * MUTATION TABLE (a): title a box from the depositor `name` --
+     * Mutation check: title a box from the depositor `name` --
      * `git stash` the fix, this test fails because "Bob's atom energy
      * hack" appears on the page (or the software-titled query below finds
      * nothing).
@@ -172,7 +172,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * MUTATION TABLE (b): drop the roll-up from the collapsed summary.
+     * Mutation check: drop the roll-up from the collapsed summary.
      * Each box's `<summary>` carries a true parameter-count roll-up
      * (`schemeParameterRollup`, computed from the same `evidence_summary`
      * counts the open table itself renders from) alongside its title, so
@@ -217,7 +217,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * MUTATION TABLE (b): absence wording: "no scheme deposited" is a
+     * Mutation check: absence wording: "no scheme deposited" is a
      * fact about the archive, never rendered as "not applicable" (a claim
      * about chemistry this archive cannot make). Constructed fixture: a
      * LOT with `correction_schemes: []` and `has_correction_schemes:
@@ -249,13 +249,11 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * MUTATION TABLE (c): frequency-scale-factor dedup. §4.2 item 4: 10
+     * Mutation check: frequency-scale-factor dedup. 10
      * distinct `frequency_scale_factor_ref`s that all evaluate to the same
      * `(fundamental, 0.999)` render as ONE visible value with a disclosure
      * listing the 10 refs -- never 10 visible value rows. This test counts
-     * the rendered value nodes directly (the exact mutation the task
-     * brief's own mutation table names: "remove the dedup step, watch a
-     * test counting rendered FSF value nodes fail").
+     * the rendered value nodes directly, so removing the dedup step fails it.
      */
     it("renders 10 near-duplicate frequency-scale-factor rows as ONE visible value with a provenance disclosure", async () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))

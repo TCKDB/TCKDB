@@ -9,7 +9,7 @@ import { seedFiltersFromUrl } from "../api/browseApi"
 // ---------------------------------------------------------------------------
 // Fixtures. Two DISTINCT rows per kind, each with different chemistry/
 // evidence, so a component that reads `records[0]` for every row (the exact
-// mutation the design brief calls out) fails on the SECOND row's assertions
+// mutation) fails on the SECOND row's assertions
 // -- checking only the first row would let that bug through. `twoSpecies`
 // additionally gives its first record a SECOND entry with a different
 // electronic state and review status, and `twoTs` gives its two records
@@ -225,7 +225,7 @@ describe("seedFiltersFromUrl: reads the initial URL into filter state, per kind"
     // silently keep only the first and understate what the link promised.
     //
     // Every reaction-kind case below also carries `direction: ""` in its
-    // expected shape (PR #418's own follow-up): a link that carries
+    // expected shape: a link that carries
     // structures but no `direction` must seed the backend's own default
     // ("" -- omitted on the next request, per `buildReactionBrowseQuery`),
     // not silently drop the field from the seeded object.
@@ -261,12 +261,12 @@ describe("seedFiltersFromUrl: reads the initial URL into filter state, per kind"
         })
     })
 
-    // PR #418 follow-up: a link built with an explicit `direction` (e.g.
+    // A link built with an explicit `direction` (e.g.
     // `?reactant_smiles=NN&direction=either`, the shape a future "reactions
     // involving X, either side" linker would use) must seed that value into
     // the form -- a shared link that carries structures but silently loses
     // `direction` would return a DIFFERENT result set from the one the
-    // sender saw, which is exactly the gap this branch closes.
+    // sender saw.
     it("reaction: an explicit direction param is seeded verbatim", () => {
         expect(seedFiltersFromUrl("reaction", new URLSearchParams("reactant_smiles=NN&direction=either"))).toEqual({
             reactantSmiles: "NN", productSmiles: "", direction: "either",
@@ -1257,11 +1257,9 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         expect(await screen.findByText("1 record · showing 1–1")).toBeVisible()
     })
 
-    // MUTATION CHECK (the coordinator's own addition): reverting
-    // `seedFiltersFromUrl`'s reaction branch back to seeding nothing (the
-    // pre-fix state) must fail on the RESULT COUNT, not merely on the
-    // field's displayed value -- landing this test file with the seed
-    // reverted is the mutation-table entry for this fix.
+    // Mutation check: if `seedFiltersFromUrl`'s reaction branch seeded
+    // nothing, this must fail on the RESULT COUNT, not merely on the
+    // field's displayed value.
     it("MUTATION-SHAPED: without the seed, the field would be empty and the count would be the FULL unfiltered total -- this is what the fix prevents", async () => {
         server.use(
             ...handlers(),

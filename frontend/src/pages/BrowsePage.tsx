@@ -32,8 +32,7 @@ const PAGE_SIZE = 20
 /**
  * The archive index: /species/browse and /transition-states/browse have
  * always existed on the backend (composition filters included) with no UI
- * ever calling them -- this page is that UI, not a new capability. See the
- * design brief for the full gap measurement.
+ * ever calling them -- this page is that UI, not a new capability.
  */
 /** How many filters differ from the empty form: what the phone "Filters" summary counts. */
 function countActiveFilters(filters: BrowseFilters): number {

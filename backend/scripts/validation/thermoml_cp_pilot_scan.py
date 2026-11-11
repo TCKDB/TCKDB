@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """Scan the pinned NIST ThermoML bulk archive for the ideal-gas Cp pilot.
 
-This is a read-only measurement, not a guess: find every single-component ``PureOrMixtureData`` block in the archive whose property is
+This is a read-only measurement, not a guess: find every single-component
+``PureOrMixtureData`` block in the archive whose property is
 "Molar heat capacity at constant pressure, J/K/mol", whose phase is "Ideal gas" or "Gas", whose
 method is experimental (an ``eMethodName`` element -- not a ``Prediction`` and not an
 ``sMethodName``-only or ``CriticalEvaluation`` block), and whose compound's standard InChIKey is
@@ -38,7 +39,9 @@ a ``DataReport`` holds ``Compound`` elements (``RegNum/nOrgNum`` -> ``sStandardI
 ``sCommonName``) and ``PureOrMixtureData`` blocks. A block is single-component when it has exactly
 one ``Component``. Each ``Property`` carries ``Property-MethodID/PropertyGroup/*/ePropName`` and,
 as a ``choice``, one of ``eMethodName`` (an enumerated, genuinely experimental method label),
-``sMethodName`` (free-text, free text; in this archive the strings are 'statistical thermodynamics' and 'Predicted', never a calorimetric method but not what this scan's brief asks for),
+``sMethodName`` (free text; in this archive the strings are 'statistical
+thermodynamics' and 'Predicted', never a calorimetric method, so it is not
+experimental for this scan),
 ``CriticalEvaluation`` or ``Prediction``. Phase comes from ``PropPhaseID/ePropPhase`` when present,
 else the block's ``PhaseID/ePhase``. ``NumValues`` entries carry the temperature (via a
 ``Variable``/``VariableValue`` pair whose ``VariableType`` is ``eTemperature``) and the Cp value
@@ -91,7 +94,7 @@ EXIT_DIGEST_MISMATCH = 2
 EXIT_ARCHIVE_NOT_FOUND = 3
 
 #: NIST records API entry for ark:/88434/mds2-2422, component ``ThermoML.v2020-09-30.tgz``,
-#: cross-checked against ``ThermoML.v2020-09-30.tgz.sha256`` -- both read 2026-09-19.
+#: cross-checked against ``ThermoML.v2020-09-30.tgz.sha256``.
 PINNED_ARCHIVE_SHA256 = "231161b5e443dc1ae0e5da8429d86a88474cb722016e5b790817bb31c58d7ec2"
 PINNED_ARCHIVE_SIZE = 189433115
 

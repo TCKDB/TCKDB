@@ -32,9 +32,8 @@ function stripComments(source: string): string {
  * may legitimately still need to wrap, so a global edit on the bare
  * `.data-table` selector would risk silently changing their layout too.
  *
- * design/foundations PR B ("record pages" consolidation): this page
- * migrated its own tables from `.stage-table` to the shared `.data-table`
- * primitive (`design-system.css`) -- the selector below moved with it.
+ * This page's tables use the shared `.data-table` primitive
+ * (`design-system.css`).
  */
 describe("data-table first column does not wrap mid-word, scoped to this page only", () => {
     const stripped = stripComments(css)
@@ -63,7 +62,7 @@ describe("data-table first column does not wrap mid-word, scoped to this page on
         expect(match![1]).not.toMatch(/\.tse-page/)
     })
 
-    it("no longer renders the retired .stage-table selector for this page's own first column", () => {
+    it("does not use the .stage-table selector for this page's own first column", () => {
         expect(stripped).not.toMatch(/\.stage-table/)
     })
 })
@@ -79,7 +78,7 @@ describe("data-table first column does not wrap mid-word, scoped to this page on
 describe("IRC point list: wide-enough cells, forced single column below 62rem, shrinkable items", () => {
     const stripped = stripComments(css)
 
-    it("widened the grid cell to 18rem (was 11rem)", () => {
+    it("sets the grid cell to 18rem, not 11rem", () => {
         expect(stripped).toMatch(/\.tse-irc-point-list\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(18rem,\s*1fr\)\)/)
         expect(stripped).not.toMatch(/minmax\(11rem,\s*1fr\)/)
     })

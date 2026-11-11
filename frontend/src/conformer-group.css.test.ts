@@ -19,7 +19,7 @@ function extractRule(source: string, selector: string): string {
 
 describe("conformer-group.css: geometry groups let grid items shrink", () => {
     // Grid items default to min-width: auto; an opened disclosure with a wide
-    // table widened the page at 680 instead of scrolling (PR B review).
+    // table would widen the page at 680 instead of scrolling.
     it("sets min-width: 0 on every direct child of .geometry-groups", () => {
         expect(css).toMatch(/\.geometry-groups > \* \{ min-width: 0; \}/)
     })
@@ -51,7 +51,7 @@ describe(".ledger-summary is a single full-width card", () => {
         expect(extractRule(css, ".ledger-summary--single")).toMatch(/margin-bottom:\s*3\.5rem/)
     })
 
-    it("no longer declares .coverage-card or .coverage-checklist -- moved to evidence-checklist.css", () => {
+    it("does not declare .coverage-card or .coverage-checklist -- evidence-checklist.css declares them", () => {
         expect(css).not.toMatch(/\.coverage-card\s*\{/)
         expect(css).not.toMatch(/\.coverage-checklist\s*\{/)
     })
@@ -83,7 +83,7 @@ describe(".empty-projection: capped width, on-scale typography", () => {
  * not a bordered `.78rem mono` box per sibling.
  */
 describe(".observation-list > li is a plain divided row, not a bordered card", () => {
-    it("no longer declares its own border/background/font shorthand", () => {
+    it("does not declare its own border/background/font shorthand", () => {
         const rule = extractRule(css, ".observation-list > li")
         expect(rule).not.toMatch(/\bborder:\s*1px solid var\(--line\);/)
         expect(rule).not.toMatch(/background:/)

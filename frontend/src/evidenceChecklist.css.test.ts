@@ -76,8 +76,8 @@ function declaredIn(className: string): string[] {
  * checklist.css.test.ts`'s `data-component` marker, and every page-level
  * test's `.card.card--derived.coverage-card` query hook).
  */
-describe("evidence checklist card: each selector has exactly one CSS home (or none, for the retired one)", () => {
-    it(".coverage-card is declared nowhere -- retired as a styled selector, survives only as a marker class", () => {
+describe("evidence checklist card: each selector has exactly one CSS home (or none, for the unstyled one)", () => {
+    it(".coverage-card is declared nowhere -- it is only a marker class", () => {
         expect(declaredIn(".coverage-card")).toEqual([])
     })
 
@@ -89,7 +89,7 @@ describe("evidence checklist card: each selector has exactly one CSS home (or no
         expect(declaredIn(".ledger-summary--single")).toEqual(["conformer-group.css"])
     })
 
-    it(".validation-card is declared nowhere -- retired outright", () => {
+    it(".validation-card is declared nowhere", () => {
         expect(declaredIn(".validation-card")).toEqual([])
     })
 })

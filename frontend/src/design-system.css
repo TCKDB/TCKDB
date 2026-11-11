@@ -1,19 +1,9 @@
 /*
- * Design-system foundations (PR A of a four-PR frontend consolidation).
- *
- * Two measured reviews of the live site (headless Chrome, computed styles
- * over 25 routes) found 49 distinct font sizes, 87 face/size/weight
- * combinations, 16 sizes in the 8.8-13.8px "label" band, and monospace
- * carrying 58% of all text (41% of all text mono at <=12px) -- the result
- * of every page inventing its own type and spacing choices independently.
- * This file is the one place those choices are made from now on: a type
- * scale (13 steps, weights 400/600 only -- no more browser-synthesised
- * 700, no more 9px mono labels), a 4px spacing scale, and the handful of
- * class primitives (`.kv-list`, `.card`, `.note`, `.data`, `.data-table`,
- * `.disclosure`, `.value-pill--muted`) that consolidate what review found
- * as 7 disclosure-summary styles, 5 box styles with no chevron anywhere,
- * two competing `.kv-list` definitions, and a pill rendered five different
- * ways for the same "not reviewed" fact.
+ * Design-system foundations: the one place type and spacing choices are
+ * made. A type scale (13 steps, weights 400/600 only, no browser-synthesised
+ * 700), a 4px spacing scale, and the shared class primitives (`.kv-list`,
+ * `.card`, `.note`, `.data`, `.data-table`, `.disclosure`,
+ * `.value-pill--muted`).
  *
  * Imported FIRST from `index.css` (`@import` at the very top) so every
  * page-level stylesheet -- loaded later, in whatever order a reader
@@ -28,14 +18,6 @@
  * hex/rgba literal of its own (`theme.css.test.ts` enforces this file the
  * same as every other non-token stylesheet).
  *
- * This PR defines the primitives and, where the canonical component is
- * ALREADY in use (`RefsDisclosure`, the ToC), wires them in. It does not
- * migrate `.stage-table`, `.review-badge`, `.tse-trust-badge`,
- * `.evidence-chip`, `.browse-entry-chip`, or `.identifier-chip-label` --
- * those are PR B/C's job; the "to retire" list below exists so that work
- * has a fixed target. (`.entry-review` migrated in PR D --
- * `SpeciesOverviewPage.tsx` now renders `.value-pill.value-pill--muted`,
- * same as the browse rows.)
  */
 
 :root {
@@ -166,10 +148,8 @@
 
     /* ---------------------------------------------------------------
      * Spacing scale -- 4px base (.25rem), eight steps: .25 .5 .75 1 1.5
-     * 2 3 4 rem. Replaces 42 distinct spacing literals measured across
-     * the app with one shared vocabulary; existing per-page spacing is
-     * NOT migrated in this PR (that is page-restructuring work, out of
-     * scope here) -- these tokens back only the new primitives below.
+     * 2 3 4 rem. These tokens back the primitives below; per-page spacing
+     * may still use its own values.
      * ------------------------------------------------------------- */
     --s-1: .25rem;
     --s-2: .5rem;
@@ -226,11 +206,8 @@
    that references it. */
 
 /* ---------------------------------------------------------------------
- * Disclosure primitive -- see `components/Disclosure.tsx`. Consolidates
- * what review measured as 7 different `<summary>` styles and 5 different
- * box styles with NO chevron anywhere (the bare UA triangle, sized by
- * whatever font the summary happened to inherit, 11px to 30px across
- * those 7) into one box, one chevron, one summary typography.
+ * Disclosure primitive -- see `components/Disclosure.tsx`: one box, one
+ * chevron, one summary typography.
  *
  * `RefsDisclosure.tsx` composes this primitive (passing its own
  * `refs-disclosure` class alongside `.disclosure`). The border-top-only,
@@ -321,10 +298,8 @@
 
 /* ---------------------------------------------------------------------
  * Key/value list -- ONE definition, replacing the two competing
- * `.kv-list` rules this PR deletes (`calculation-detail.css:186-207`,
- * bare `.kv-list` at .6875rem; `entry-science.css:102-120`, scoped
- * `.science-record .kv-list` at .64rem). Both existed because a bare
- * `.kv-list` rule risked the SAME route-chunk-CSS-leakage bug
+ * `.kv-list` definition for every page. A bare
+ * `.kv-list` rule elsewhere would risk the SAME route-chunk-CSS-leakage bug
  * `entry-science.css`'s own header comment describes (Vite never
  * unloads a route's CSS, so whichever page loaded last would win the
  * cascade on every route after it) -- defining it once here, always
@@ -397,11 +372,8 @@
  * Pill -- `.value-pill` is the site-wide convention for a categorical,
  * bounded-vocabulary value (entry kind, electronic state, review status,
  * scale kind): a rounded pill REPLACING a value's plain-text form, never
- * sitting alongside it. Originated in `calculation-detail.css` for
- * `CalculationDetailPage.tsx`, then moved to `index.css` (the one
- * stylesheet every route loads) once a second page needed it, then here
- * once BOTH it and `.value-pill--muted` needed to live
- * in the same file for the cascade below to hold.
+ * sitting alongside it. `.value-pill` and `.value-pill--muted` live in
+ * this one file for the cascade below to hold.
  *
  * `.value-pill--muted` is a DIFFERENT axis shown as its own, visually
  * distinct pill next to a `.value-pill` -- e.g. curation/review status
@@ -409,15 +381,15 @@
  * kind of fact do not also look like the same kind of fact.
  *
  * Both classes live in ONE file, `.value-pill` declared BEFORE
- * `.value-pill--muted`, and the muted rule's own selector,
- * `.value-pill.value-pill--muted`, carries HIGHER specificity than a bare
- * `.value-pill` regardless of source order. If `.value-pill` were declared in
- * `index.css` (loaded after this file's `@import`), its equal-specificity
- * rule would win on an element carrying both classes and the "muted" pill
- * would render like the base pill; likewise a second copy of this file
- * emitted into a route chunk would land after `index.css` in the document
- * and flip the cascade. `Disclosure.tsx` therefore does not import this file
- * (`index.css` already does, once, globally).
+ * `.value-pill--muted`, and the muted rule's selector,
+ * `.value-pill.value-pill--muted`, has HIGHER specificity than a bare
+ * `.value-pill`. Both safeguards matter: the single file keeps another
+ * `.value-pill` rule (e.g. in `index.css`, loaded after this file's
+ * `@import`) or a second copy of this file in a route chunk from landing
+ * later in the document, and the higher specificity keeps the muted rule
+ * winning over the base rule on an element carrying both classes.
+ * `Disclosure.tsx` therefore does not import this file (`index.css`
+ * already does, once, globally).
  * ------------------------------------------------------------------- */
 /* `letter-spacing: normal`: `letter-spacing` is
    inherited as an already-resolved LENGTH, not recomputed per descendant
@@ -454,11 +426,6 @@
     white-space: nowrap;
 }
 
-/* Pill classes NOT migrated in this PR -- PR B/C's job. Listed here so
-   the consolidation has a fixed target rather than needing rediscovery:
-   `.review-badge`, `.tse-trust-badge`, `.evidence-chip`,
-   `.browse-entry-chip`, `.identifier-chip-label`. */
-
 /* One chip of a participant's facet chips (`ParticipantChips`). An inline-block is atomic: the chip moves to the
    next line as a unit when it fits there, and wraps inside itself (anywhere, so a long isotopologue SMILES cannot
    push the page wider) only when it is wider than the line. `text-decoration: inherit` keeps a link's underline
@@ -472,8 +439,8 @@
 }
 
 /* ---------------------------------------------------------------------
- * Note -- a short muted explanatory line, capped to the (now narrower)
- * note measure rather than running the full page width.
+ * Note -- a short muted explanatory line, capped to the note
+ * measure rather than running the full page width.
  * ------------------------------------------------------------------- */
 .note {
     max-width: var(--measure-note);
@@ -524,8 +491,8 @@
 }
 
 /* ---------------------------------------------------------------------
- * Data table -- NOT yet wired to any page (`.stage-table` migrates in
- * PR B); defined and tested here so PR B has a fixed target.
+ * Data table -- `.data-table` and `.table-scroll`, used by the record
+ * tables across pages.
  * ------------------------------------------------------------------- */
 .table-scroll {
     overflow-x: auto;
@@ -563,8 +530,8 @@
     /* Inside a table the wrapper already scrolls, so an identifier must not
        be breakable: with `.data`'s `overflow-wrap: anywhere` in force, auto
        table layout shrank ref columns to min-content and a `calc_…` cell
-       wrapped into three-character lines twelve rows tall at 680 (PR C
-       review). Refs stay whole; the table scrolls. */
+       wrapped into three-character lines. Refs stay whole; the table
+       scrolls. */
     overflow-wrap: normal;
     white-space: nowrap;
 }
@@ -632,11 +599,11 @@
  * (0,1,0) loses that fight on specificity alone, before `!important` even
  * enters into it -- doubling the class raises this rule to (0,2,0), which
  * beats (0,1,1) outright, in any spec-correct cascade. Declaring it last
- * additionally covers this project's actual TEST environment: this repo's jsdom/`vite.config.ts`'s `test.css: true` setup resolves
+ * additionally covers this project's TEST environment: the jsdom/`vite.config.ts` `test.css: true` setup resolves
  * `getComputedStyle` by LAST DECLARATION WINS, full stop -- ignoring both
- * specificity and `!important` entirely. A same-specificity `!important`
- * rule declared earlier in a file LOST to a later, non-important,
- * LOWER-specificity rule in that probe. `!important` is kept anyway (a
+ * specificity and `!important` entirely. In that probe a same-specificity `!important`
+ * rule declared earlier in a file loses to a later, non-important,
+ * lower-specificity rule. `!important` is kept anyway (a
  * real browser's cascade does honour it, and it costs nothing here), but
  * "declared after everything it needs to beat, in this same file" is the
  * only property that is provably reachable by this project's own

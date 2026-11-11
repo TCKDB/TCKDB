@@ -352,7 +352,7 @@ export type ConformerAttribution<T> = {
  * (a record naming `[conformer_1, conformer_2, conformer_3]` must not always
  * file under "From Conformer Group 1" whichever conformer was selected).
  *
- * Thermo's real link (`thermoConformerGroupRef`, PR #285) is genuinely
+ * Thermo's real link (`thermoConformerGroupRef`) is genuinely
  * single-valued (one primary calculation, one basin) — its call site wraps
  * the single ref in a one-element array rather than this function growing
  * a second, singular code path.
@@ -391,7 +391,7 @@ export type ThermoConformerLinkLike = {
 }
 
 /**
- * Thermo's REAL conformer link (PR #285): `provenance.conformer_group_ref`
+ * Thermo's REAL conformer link: `provenance.conformer_group_ref`
  * resolves through the SAME primary calculation already used for
  * `primary_calculation`/`level_of_theory`, sourced server-side via
  * `calculation.conformer_observation_id`. `null` for a record with no

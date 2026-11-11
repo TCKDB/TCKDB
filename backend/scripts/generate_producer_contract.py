@@ -22,11 +22,10 @@ printing the diff and the exact fix.
 Why this exists
 ---------------
 A producer adapter lives in another repository and is written against the
-contract it was told about. On 2026-09-23 (#520) a thermo block carrying an
-enthalpy began to require ``enthalpy_reference_kind: "formation_298k"``, and
-on 2026-09-24 (#536) ``reference_pressure_bar`` stopped being defaulted.
-The ARC adapter learned neither, and every thermo deposit it made was
-refused -- because the only places either rule was written down were a
+contract it was told about. A thermo block carrying an enthalpy requires
+``enthalpy_reference_kind: "formation_298k"`` and ``reference_pressure_bar``
+is not defaulted; a producer that does not know either rule has every thermo
+deposit refused, if the only places the rules are written down are a
 workflow function and a code comment. This file is the producer-facing
 place, and it cannot fall behind because it is rendered from the code that
 enforces the rules and compared against the committed copy in CI.

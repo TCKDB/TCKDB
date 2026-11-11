@@ -4,7 +4,7 @@
  * on `/calculations/{ref}`, the species entry's own fields) into one
  * small union `RecordIdentityHeader.tsx` knows how to render.
  *
- * Three absences this module keeps textually distinct, per the brief:
+ * Three absences this module keeps textually distinct:
  *
  * - `{ kind: "species_entry" | "transition_state_entry", ... }` -- a
  *   known, unambiguous owner. A transition-state owner NEVER carries

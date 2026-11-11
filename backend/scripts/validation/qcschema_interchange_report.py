@@ -74,7 +74,7 @@ read needs it; see the exporter's "calculation-id gap"). Then:
 The raw-artifact POST that ``tckdb-qcschema import --upload`` also makes is not
 repeated: it writes to the object store, which this script never contacts. The
 backend corpus test ``backend/tests/api/test_api_qcschema_fixtures.py`` covers
-it for the C-Q2 corpus.
+it for that corpus.
 
 The cross-program comparison (measured, never judged)
 -----------------------------------------------------

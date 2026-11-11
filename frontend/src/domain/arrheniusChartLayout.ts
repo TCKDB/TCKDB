@@ -67,9 +67,8 @@ export interface ArrheniusSeries {
     /** The record's OWN deposited `A_units` token, exactly as served (or
      *  `null` when unrecorded) -- kept on every series regardless of which
      *  unit its panel is CURRENTLY displaying, so a reader can always
-     *  recover what was actually deposited (this PR's own invariant: "a
-     *  record's deposited units remain visible somewhere on its own
-     *  surface"). `ArrheniusChart.tsx`'s legend states it explicitly. */
+     *  recover what was actually deposited (a record's deposited units
+     *  remain visible somewhere on its own surface). `ArrheniusChart.tsx`'s legend states it explicitly. */
     depositedUnits: string | null
     /** k(T) points, ALWAYS in `depositedUnits` -- never pre-converted. This
      *  is the one ground-truth array every display-unit conversion starts
@@ -98,8 +97,7 @@ export interface ArrheniusPanel {
      *  `<select>` offers, regardless of which of them any record in this
      *  panel actually happens to be deposited in. Empty when `orderFamily`
      *  is `null`: there is no known convertible sibling unit to offer, and
-     *  (per plan §4) a control with fewer than two options is never
-     *  rendered at all. */
+     *  a control with fewer than two options is never rendered at all. */
     availableUnits: readonly string[]
     /** The selector's initial value -- the unit MOST of this panel's own
      *  series were deposited in. Tie-break (deliberately NOT alphabetical
@@ -125,10 +123,9 @@ export interface ArrheniusChartData {
 // string -- the SAME mapping `ReactionKineticsSection.tsx`'s private
 // `aUnitLabel` uses (duplicated here, not imported: that helper is
 // module-private and this file must not reach into a page-scoped component
-// module for a formatting table; plan §4's own PR-slicing note sanctions
-// "otherwise duplicate one function and note it" for exactly this case).
+// module for a formatting table).
 // The k(T) TABLE'S own header text (`ReactionEntryPage.test.tsx:521`'s "the
-// k(T) table header names the unit" test, unmoved by this PR) must keep
+// k(T) table header names the unit" test) must keep
 // reading the same string, so this map is kept byte-identical to that one.
 const A_UNIT_LABELS: Record<string, string> = {
     per_s: "s⁻¹",
@@ -164,8 +161,8 @@ export function arrheniusLog10AxisTitle(units: string | null | undefined): strin
 /**
  * ~60-point k(T) curve for one plain `arrhenius`/`modified_arrhenius`
  * (single `A`) or `multi_arrhenius` (summed) record, sampled evenly across
- * ITS OWN `record_min_k..record_max_k` -- never a shared/union range, per
- * plan §4: "each curve drawn only within its own record_min_k..record_max_k".
+ * ITS OWN `record_min_k..record_max_k` -- never a shared/union range: each curve is drawn only within its own
+ * record_min_k..record_max_k.
  * `null` when the record lacks a usable fitted range or rate parameters
  * (same absence contract as `kineticsTable.ts`'s `computeKineticsTable`).
  * A non-positive `k` (pathological parameters) is skipped rather than
@@ -210,9 +207,9 @@ export function computeArrheniusSeries(
     }
 }
 
-/** Why a record is never plotted -- named per plan §4: "records carrying
+/** Why a record is never plotted: records carrying
  *  `plog_entries`, `chebyshev`, `falloff`, or a third-body flag are
- *  EXCLUDED with a note naming the ref and the reason". A record can carry
+ *  EXCLUDED with a note naming the ref and the reason. A record can carry
  *  more than one of these at once; every applicable reason is named, none
  *  silently dropped in favour of "the first match". */
 function exclusionReasons(record: Pick<ReactionKineticsRecord, "plog_entries" | "chebyshev" | "falloff" | "is_third_body">): string[] {
@@ -372,8 +369,8 @@ export function convertArrheniusSeriesUnits(series: ArrheniusSeries, toUnits: st
 }
 
 /** x-domain for one panel -- the UNION of every plotted series' own fitted
- *  range (plan §4: "x = T in K, linear, over the union of the fitted
- *  ranges"), unpadded: padding outward would draw axis space beyond any
+ *  range (x = T in K, linear, over the union of the fitted
+ *  ranges), unpadded: padding outward would draw axis space beyond any
  *  curve's own stated validity. Takes the panel's SERIES directly (not the
  *  whole `ArrheniusPanel`) so it composes with a panel's current unit
  *  selection without needing to know about it -- the temperature domain

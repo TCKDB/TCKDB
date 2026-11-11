@@ -273,7 +273,7 @@ describe("--faint and --muted-2 clear 4.5:1 on every background they render on",
  * so a future edit that quietly darkens this token back toward
  * invisibility fails here instead of shipping.
  */
-describe("dark --line-2 is strictly more visible than its pre-fix value", () => {
+describe("dark --line-2 is strictly more visible than the earlier #1c2732 value", () => {
     function hexOf(block: string, name: string): [number, number, number] {
         const match = new RegExp(`(?<!\\()--${name}:\\s*#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\\b`).exec(block)
         if (!match) throw new Error(`--${name} not found as a #rgb/#rrggbb declaration`)
@@ -292,7 +292,7 @@ describe("dark --line-2 is strictly more visible than its pre-fix value", () => 
         return (lighter + 0.05) / (darker + 0.05)
     }
 
-    const PRE_FIX_LINE_2: [number, number, number] = [0x1c, 0x27, 0x32] // #1c2732, the pre-fix value
+    const PRE_FIX_LINE_2: [number, number, number] = [0x1c, 0x27, 0x32] // #1c2732, the earlier value
 
     it("[data-theme=dark] and the media-query dark block declare the same --line-2 value", () => {
         const mediaBlock = extractBlock(themeCss, /^@media \(prefers-color-scheme: dark\) \{/m)

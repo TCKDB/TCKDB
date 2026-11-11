@@ -31,10 +31,9 @@ function customProperty(css: string, name: string): string {
 }
 
 /**
- * The type scale -- 13 steps, weights 400/600 only. Pins every value in
- * the brief's table exactly, so a future edit that quietly drifts a size
- * (the same failure mode that produced 49 distinct font sizes across the
- * live site before this file existed) fails here instead of shipping.
+ * The type scale -- 13 steps, weights 400/600 only. Pins every value
+ * exactly, so a future edit that quietly drifts a size fails here instead
+ * of shipping.
  */
 describe("type scale: every step declares the exact font/tracking/transform", () => {
     const STEPS: Record<string, { font: string; tracking: string; transform: string }> = {
@@ -109,10 +108,10 @@ describe("spacing scale: 4px base, eight steps", () => {
 })
 
 describe("measures narrowed for a readable line length", () => {
-    it("--measure-prose is 40rem (was 64rem)", () => {
+    it("--measure-prose is 40rem", () => {
         expect(customProperty(indexCss, "measure-prose")).toBe("40rem")
     })
-    it("--measure-note is 44rem (was 92rem)", () => {
+    it("--measure-note is 44rem", () => {
         expect(customProperty(indexCss, "measure-note")).toBe("44rem")
     })
 })
@@ -256,7 +255,7 @@ describe("the disclosure primitive", () => {
 })
 
 describe("the kv-list primitive is defined exactly once, globally", () => {
-    it("design-system.css declares the base grid with an auto-fit column track, 16rem (, widened from 12rem)", () => {
+    it("design-system.css declares the base grid with an auto-fit column track, 16rem", () => {
         const rule = /\.kv-list\s*\{([^}]*)\}/.exec(designSystemCss)
         expect(rule).not.toBeNull()
         expect(rule![1]).toMatch(/grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(16rem,\s*1fr\)\)/)
@@ -270,11 +269,11 @@ describe("the kv-list primitive is defined exactly once, globally", () => {
         expect(rule![1]).toMatch(/margin:\s*0\b/)
     })
 
-    it("calculation-detail.css no longer defines its own bare .kv-list rule", () => {
+    it("calculation-detail.css does not define its own bare .kv-list rule", () => {
         expect(ALL_STYLESHEETS["calculation-detail.css"]).not.toMatch(/(?<![\w.-])\.kv-list\s*\{/)
     })
 
-    it("entry-science.css no longer defines its own scoped .science-record .kv-list rule", () => {
+    it("entry-science.css does not define its own scoped .science-record .kv-list rule", () => {
         expect(ALL_STYLESHEETS["entry-science.css"]).not.toMatch(/\.science-record\s+\.kv-list\s*\{/)
     })
 })
@@ -432,7 +431,7 @@ describe(".kv-list dd falls back to overflow-wrap: anywhere for an unbreakable v
         expect(rule![1]).not.toMatch(/overflow-wrap:\s*normal/)
     })
 
-    it("no longer declares a separate .kv-list dd .data, .kv-list dd code overflow-wrap/word-break override", () => {
+    it("does not declare a separate .kv-list dd .data, .kv-list dd code overflow-wrap/word-break override", () => {
         expect(designSystemCss).not.toMatch(/\.kv-list dd \.data,\s*\n?\s*\.kv-list dd code \{[^}]*overflow-wrap/)
     })
 
@@ -458,7 +457,7 @@ describe(".data inside .data-table stays unbreakable", () => {
     // `.data` is breakable (`overflow-wrap: anywhere`) so a long ref wraps
     // inside a narrow key/value cell; inside a table the `.table-scroll`
     // wrapper scrolls instead, and a breakable ref let auto table layout
-    // shrink its column to three characters wide (PR C review).
+    // shrink its column to three characters wide.
     it("overrides overflow-wrap and forbids wrapping for td .data / td code", () => {
         const m = designSystemCss.match(/\.data-table td code,\s*\.data-table td \.data \{([^}]*)\}/)
         expect(m, ".data-table td code, .data-table td .data rule").not.toBeNull()

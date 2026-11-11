@@ -146,10 +146,8 @@ const reviewHistoryEntrySchema = z.object({
 
 // `saddle_point` (schema `TransitionStateSaddlePointEvidence`) -- the
 // imaginary-frequency verdict, always computed server-side, null only
-// when the entry has no freq result to report. NOT served by the live
-// deployment as of this branch (additive, unit-tested backend-side only
-// so far -- see the PR body); a client hitting an older backend gets
-// `undefined` here, which this schema's `.nullable().optional()` and the
+// when the entry has no freq result to report. A client hitting an older
+// backend that omits it gets `undefined` here, which this schema's `.nullable().optional()` and the
 // page's own `?? null` treat identically to a served `null`.
 // `basis` (read as a plain string, so a future token never breaks the page) says which frequency result this is:
 // `latest_direct_frequency` (the newest attached) or `declared_curvature_witness` (the one a declared saddle target pins).

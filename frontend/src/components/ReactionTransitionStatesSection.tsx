@@ -25,7 +25,7 @@ const ENTRY_STATUS_STAGES: { key: string; label: string }[] = [
 ]
 
 /**
- * The Transition states section (plan §2 item 5): one block per
+ * The Transition states section: one block per
  * `TransitionStateInFull`. Renders the entry's own ref/review, its status
  * as the guess -> optimized -> validated stage strip (a single muted pill
  * for `rejected`, which is not a step on that flow), a calculations-by-

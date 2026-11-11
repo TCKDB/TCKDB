@@ -511,7 +511,7 @@ export function splitSmilesList(value: string): string[] {
  * (verified live -- `GET /reactions/browse` answers exactly `family,
  * reactant_smiles, product_smiles, direction, has_kinetics,
  * has_transition_state, min_review_status, include_rejected,
- * include_deprecated, offset, limit`, PR #418 having added `direction`).
+ * include_deprecated, offset, limit`).
  * Sending an inapplicable param would not 422 (the route ignores unknown
  * query keys) but would silently do nothing, which is the same "looks
  * active while doing nothing" failure `clearInapplicableFilters` exists to
@@ -570,7 +570,7 @@ export function buildReactionBrowseQuery(filters: BrowseFilters, offset: number,
  *   this reads with `getAll` and rejoins with a comma (`splitSmilesList`'s
  *   own on-the-wire shape, above) rather than `.get`.
  *
- * `direction` (PR #418 / #419 follow-up) belongs here alongside the two
+ * `direction` belongs here alongside the two
  * SMILES fields for the same reason they do: a shared or bookmarked link
  * that carries `reactant_smiles`/`product_smiles` but silently drops
  * `direction` would re-run as a DIFFERENT query than the one the sender

@@ -376,7 +376,7 @@ _ACCUMULATOR_RECEIVERS = frozenset({"warnings", "errors", "messages", "notes"})
 #: Keyword arguments carrying human-readable text that gets stored or
 #: returned. ``message`` is the one that mattered: ``UploadWarning(message=...)``
 #: rows are written to the database and served back to clients, and an
-#: ``UploadWarning`` message is what the 2026-08-04 rollback was carrying.
+#: ``UploadWarning`` message is such text.
 _TEXT_KEYWORDS = frozenset({"message", "detail", "reason", "msg"})
 
 

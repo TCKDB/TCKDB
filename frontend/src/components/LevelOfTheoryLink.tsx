@@ -4,8 +4,9 @@ import { levelOfTheoryPath } from "../domain/methodsLinks"
 
 /**
  * The one place `lotLabel()`'s compact "method/basis" text becomes a real
- * link into `/methods/:lotRef` (`LevelOfTheoryPage`); every `lotLabel()`
- * call site renders through it.
+ * link into `/methods/:lotRef` (`LevelOfTheoryPage`). Call sites that show
+ * a level of theory as a link use it; some call `lotLabel()` directly for
+ * plain text.
  *
  * Falls back to the SAME plain text `lotLabel()` always rendered when
  * `level_of_theory_ref` is absent -- every call site's rendered text stays

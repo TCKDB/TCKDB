@@ -78,8 +78,7 @@ function beginScrollSuppression(
  * the same width as a 6-section one and renders an empty column, not a
  * missing one -- see `page-shell.css`'s `.page-toc:empty` rule for how
  * that empty column stays visually silent (no stray border/padding) while
- * still holding its place. This is what item 2/3 of the design brief asks
- * for directly: switching from the Geometry tab (1 section) to Statistical
+ * still holding its place. Switching from the Geometry tab (1 section) to Statistical
  * Mechanics (usually 4+) must never mount or unmount the column and must
  * never shift the content pane sideways.
  *
@@ -225,9 +224,9 @@ export function TableOfContents() {
         if (!target) return
         target.scrollIntoView?.()
         beginScrollSuppression(suppressScrollSpyRef, settleTimeoutIdRef)
-        // This is the one case the design brief calls out by name ("make an
-        // explicit click or a #fragment land on that section immediately
-        // rather than waiting for a scroll event to correct it"). Deferring
+        // An explicit click or a #fragment must land on that section
+        // immediately rather than waiting for a scroll event to correct it.
+        // Deferring
         // to the scroll-driven `computeActive` effect instead would be
         // exactly that wrong behaviour -- `scrollIntoView` does not
         // synchronously fire a `scroll` event (and does nothing at all in

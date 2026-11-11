@@ -156,8 +156,8 @@ function handleFull(payload: object) {
  * Refs that have no structural reason to repeat -- `spe_`/`net_` -- must
  * appear EXACTLY once outside the References disclosure. `tse_`/`calc_`/
  * `kin_` refs are excluded from the strict count: the approved design
- * (plan §2's mock, and the brief's own "dependency-graph child nodes link
- * to /calculations/{ref}" + "SpeciesEntryLink per participant" rules)
+ * (the "dependency-graph child nodes link to /calculations/{ref}" and
+ * "SpeciesEntryLink per participant" rules)
  * deliberately re-surfaces a calculation ref in BOTH the "Calculations by
  * stage" table AND the dependency graph that draws the same calculations
  * as nodes -- a real, intentional second mention, not a duplication bug.
@@ -296,8 +296,8 @@ describe("ReactionEntryPage -- three-state network wording", () => {
         expect(document.body.innerHTML).not.toContain("hydrazine")
         expect(screen.getByText("21")).toBeVisible()
         // `net_` refs are never cited in this page's References disclosure
-        // (plan §2's non-goal: no network page yet, so a network is a plain
-        // row, not a related-ref citation) -- exactly one mention.
+        // (a network is a plain row, not a related-ref citation) -- exactly
+        // one mention.
         expect(occurrencesOutsideRefs(container, "net_test1")).toBe(1)
 
         // `/networks/:ref` is the network record page -- the ref
@@ -769,7 +769,7 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
         expect(fitSoftwareRow?.nextElementSibling?.textContent).toBe("Arkane (version not recorded)")
     })
 
-    // The live "resolver disagreement" case (plan §7): a kinetics record's
+    // The "resolver disagreement" case: a kinetics record's
     // OWN cited sp calculation is not among this reaction's TS graph at
     // all. The row still LINKS (the calc is a real, followable archive
     // record), but carries an inline caveat explaining the discrepancy.
@@ -805,7 +805,7 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
         expect(waterCell?.querySelector("a")).not.toBeNull()
     })
 
-    // MUTATION GUARD (mandatory mutation table item a): putting the ref
+    // MUTATION GUARD: putting the ref
     // back into the Species cell must turn this red.
     it("MUTATION GUARD: the participant's own species_entry_ref never appears inside a Species cell", async () => {
         handleFull(mockFull())
@@ -987,7 +987,7 @@ describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-onl
         expect(tsLink).toHaveAttribute("href", "#ts-heading")
     })
 
-    // MUTATION GUARD (mandatory mutation table item b): guards THIS PAGE's
+    // MUTATION GUARD: guards THIS PAGE's
     // own conditional -- it only ever passes `to` alongside `tone: "pill"`
     // on the Kinetics/TS-entries/network rows (see the `...(x.length ? {
     // to: "..." } : {})` spreads above). It does NOT independently prove

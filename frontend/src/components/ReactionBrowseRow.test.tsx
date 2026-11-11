@@ -221,7 +221,7 @@ describe("ReactionBrowseRow: ref, link targets, and the stretched-link/selectabl
         expect(ref).toHaveClass("data")
     })
 
-    // MUTATION CHECK (mutation table item a): pointing the title back at
+    // MUTATION CHECK: pointing the title back at
     // `/reaction-entries/:ref` directly is what this test
     // guards against.
     it("the title links to /reactions/:reaction_ref (the chooser), never /reaction-entries/:ref directly", () => {

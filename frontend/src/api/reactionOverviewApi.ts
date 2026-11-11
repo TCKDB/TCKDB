@@ -15,8 +15,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
  * `formula`/`stoichiometry` on each participant are the SAME §3A-additive
  * fields `reactionEntryApi.ts` marks optional, for the same reason (a
  * pre-deployment API omits them). `reactions/search` serves no
- * `created_at`/deposited-date field for a reaction-entry row (verified live,
- * plan §2/§8) -- this schema does not invent one; the chooser's own table
+ * `created_at`/deposited-date field for a reaction-entry row -- this schema does not invent one; the chooser's own table
  * omits a "Deposited" column rather than show a fabricated value.
  */
 

@@ -100,9 +100,8 @@ const PAGE_LIMIT = 50
  * so following a link in place would drop all three. A sighted user sees
  * the new tab open; a screen reader user gets no such cue without this.
  *
- * Kept local rather than imported from `ReviewQueuePage.tsx`, which is not
- * this task's to touch (PR #492 is rewriting that page concurrently) and
- * does not export it. Small enough to duplicate rather than extract a
+ * Kept local rather than imported from `ReviewQueuePage.tsx`, which does
+ * not export it. Small enough to duplicate rather than extract a
  * shared component for one four-line function.
  */
 function NewTabNote() {
