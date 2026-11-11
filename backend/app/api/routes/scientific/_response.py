@@ -1,6 +1,6 @@
 """Response-boundary helpers for scientific read routes.
 
-Two things happen at this boundary. The Phase D internal-ID policy is
+Two things happen at this boundary. The internal-ID policy is
 applied (``apply_internal_ids_visibility``), and **include-gated sections
 the caller did not ask for are dropped from the serialized payload**.
 This module owns the second one.
@@ -190,7 +190,7 @@ ASSESSMENTS_SECTION = IncludeGatedSections(
 # Every entry below was read off the service module that owns the token
 # vocabulary — the ``if "<token>" in includes:`` that decides whether the
 # field is built — and never off a list of nullable fields on the record
-# schema. That distinction is the whole of decision 2 and it is not
+# schema. That distinction is not
 # stylistic: most of what is ``| None`` on these records is an ungated
 # scientific fact. ``nasa9``, ``chebyshev``, ``plog_entries``, ``wilhoit``,
 # ``group_additivity``, ``assignment_scheme``, ``supersession``,
@@ -443,7 +443,7 @@ ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS = IncludeGatedSections(
 )
 
 # ``/level-of-theories/{ref}``, ``/level-of-theories/search``. ``software``
-# (methods-surface plan §5.3) is the LOT-scoped software/workflow-tool
+# is the LOT-scoped software/workflow-tool
 # usage breakdown -- see ``app/services/scientific_read/level_of_theory.py``.
 LEVEL_OF_THEORY_RECORD_SECTIONS = IncludeGatedSections(
     surface="/api/v1/scientific/level-of-theories",

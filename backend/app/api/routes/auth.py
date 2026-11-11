@@ -51,7 +51,7 @@ router = APIRouter(route_class=ServerFaultRoute)
 #: Two codes rather than one is the whole point. A taken username and a
 #: taken email address raise the same SQLSTATE (23505), so anything
 #: derived from the SQLSTATE alone can only say ``unique_conflict`` --
-#: which is *less* than the English sentence this replaced, because a
+#: which is *less* than a sentence naming the field, because a
 #: form has two fields and no way to tell which one to highlight. The
 #: constraint name is the only thing in the error that distinguishes
 #: them.

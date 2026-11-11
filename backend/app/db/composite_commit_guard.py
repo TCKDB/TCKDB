@@ -1,4 +1,4 @@
-"""Refuse to commit an assembled composite whose inputs were never written (ADR 0021, P5).
+"""Refuse to commit an assembled composite whose inputs were never written.
 
 ``app.services.composite_input_resolution`` stores an assembled composite's result
 when the calculation is created and writes its inputs later, once every

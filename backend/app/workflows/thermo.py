@@ -126,7 +126,7 @@ def assert_thermo_role_matches_calculation_type(
     source_calculations``, at which point three copies of one rule could
     disagree about the same deposit.
 
-    DR-0028 Requirement 1: a single typo in ``existing_calculation_id`` (or
+    A single typo in ``existing_calculation_id`` (or
     a mis-keyed inline calc) would otherwise silently link thermo to the
     wrong supporting calc within the same species. ``opt``/``freq``
     require exact ``CalculationType`` match. ``composite`` and ``imported``
@@ -145,8 +145,8 @@ def assert_thermo_role_matches_calculation_type(
 
     :raises CodedValueError: if ``role`` is one of opt/freq/sp and the
         calculation's type is none of the ones that role accepts. The
-        detail names the offending field but never a row id (DR-0028
-        Req 2); the id goes to the log instead.
+        detail names the offending field but never a row id; the id goes
+        to the log instead.
     """
     accepted = _THERMO_ROLE_TO_CALC_TYPES.get(role)
     if accepted is None or calculation.type in accepted:
@@ -192,11 +192,10 @@ def _resolve_source_calculation(
     ``existing_calculation_id`` is set. Inline keys are looked up in the
     map of just-persisted calculations. Existing ids are loaded from the
     database; missing rows produce 404, cross-species or role/type
-    mismatches produce 422 (DR-0028 Requirement 2).
+    mismatches produce 422.
 
-    Since #230 the 404 carries ``unknown_calculation_ref`` and a
-    ``context`` naming this field, rather than the generic
-    ``resource_not_found`` with nothing in it. Same code as the public-ref
+    The 404 carries ``unknown_calculation_ref`` and a
+    ``context`` naming this field. Same code as the public-ref
     spelling on ``/uploads/kinetics``, on purpose: the row that is missing
     is the same kind of row and the repair is the same, so making the code
     depend on the spelling would rebuild the defect #195 removed from the
@@ -251,11 +250,11 @@ def _resolve_statmech_id(
     """Resolve an optional ``existing_statmech_id`` to a statmech row id.
 
     Mirrors the ``existing_calculation_id`` handling for source
-    calculations (DR-0028): a missing row produces 404, a row owned by a
+    calculations: a missing row produces 404, a row owned by a
     different species entry produces 422. The error detail names the field
     but does not leak internal identifiers.
 
-    The 404 carries ``unknown_statmech_ref`` since #230 — the same code
+    The 404 carries ``unknown_statmech_ref`` — the same code
     ``/uploads/kinetics`` uses for a ``statmech_ref`` that names nothing,
     because the missing row and its repair are identical and only the
     spelling differs. ``context['field']`` is what tells the two apart.
@@ -386,8 +385,8 @@ def persist_thermo_upload(
         calculations_by_key[calc_in.key] = calc_row
 
     # An assembled composite's inputs are written, and its total checked, now
-    # that every inline calculation exists and the key namespace is complete
-    # (ADR 0021, P5). Always run: the write is not optional when the caller
+    # that every inline calculation exists and the key namespace is complete.
+    # Always run: the write is not optional when the caller
     # collects no warnings.
     composite_input_warnings = finalize_composite_inputs(
         session,
@@ -398,7 +397,7 @@ def persist_thermo_upload(
         warnings_out.extend(composite_input_warnings)
 
     # An inline opt or sp at a named composite method's level is the same
-    # misshapen deposit the bundle routes warn about (ADR 0021, decision 7).
+    # misshapen deposit the bundle routes warn about.
     if warnings_out is not None:
         warnings_out.extend(
             collect_named_composite_deposit_warnings(
@@ -417,7 +416,7 @@ def persist_thermo_upload(
         )
 
     # Resolve source_calculation links. Each entry uses either a local
-    # calculation_key (inline path) or an existing_calculation_id (DR-0028
+    # calculation_key (inline path) or an existing_calculation_id (the
     # path that lets ARC link thermo to calcs already uploaded by the
     # conformer step). Both paths run owner-consistency and role/type
     # compatibility checks before becoming a thermo_source_calculation row.
@@ -520,13 +519,11 @@ def persist_thermo_upload(
     ):
         source_calc_id: int | None = None
         if correction_payload.source_calculation_key is not None:
-            # The last raw lookup in this family. It used to raise a bare
-            # ``ValueError`` -- a generic ``validation_error`` with no
-            # context -- while the request schema one layer earlier and
-            # every sibling seam answered the same mistake with
-            # ``applied_energy_correction_source_key_undeclared``. Its own
-            # comment said "the schema validator normally prevents this",
-            # which is the assumption ADR 0017 exists to stop making: the
+            # The last raw lookup in this family. A bare
+            # ``ValueError`` would be a generic ``validation_error`` with no
+            # context, while the request schema one layer earlier and
+            # every sibling seam answer the same mistake with
+            # ``applied_energy_correction_source_key_undeclared``. The
             # seam is the backstop for exactly the payloads the validator's
             # coverage misses, so it has to answer as well as the validator
             # does, not worse.
@@ -571,7 +568,7 @@ def persist_thermo_upload(
 
     # Group-additivity estimation provenance (estimated thermo only; the
     # upload schema enforces the origin match). Reifies which GA scheme +
-    # per-group contributions produced the estimated H298/S298 (DR-0035).
+    # per-group contributions produced the estimated H298/S298.
     if request.group_additivity is not None:
         create_applied_group_additivity(
             session,

@@ -1,4 +1,4 @@
-"""Bundle workflow for ``POST /api/v1/uploads/computed-species`` (DR-0029).
+"""Bundle workflow for ``POST /api/v1/uploads/computed-species``.
 
 Self-contained: identity + conformers + per-conformer calcs + artifacts +
 optional thermo, persisted in one SQL transaction with bundle-level
@@ -225,8 +225,8 @@ def _to_calc_with_results_payload(
 
     Drops bundle-only fields (``key``, ``depends_on``, ``artifacts``) and
     forwards everything else — including the inline ``literature``
-    fragment, which the shared payload now carries in place of a raw
-    ``literature_id`` (#194) — so the existing
+    fragment, which the shared payload carries in place of a raw
+    ``literature_id`` — so the existing
     ``resolve_and_persist_calculation_with_results`` service can be reused
     unchanged. The citation is resolved there, once, rather than here.
     """
@@ -455,7 +455,7 @@ def persist_computed_species_upload(
             ),
         )
 
-        # FOLLOW-UP (DR-0029): the additional-calc anchor logic below
+        # FOLLOW-UP: the additional-calc anchor logic below
         # (output-geometry link + auto-edge to primary opt) duplicates
         # ``app.services.calculation_resolution.persist_additional_calculations``.
         # Inline here because the bundle needs to thread observation_id
@@ -707,11 +707,10 @@ def persist_computed_species_upload(
     bundle_stored_shas: list[str] = []
 
     # Provenance-presence warnings, the same ones /uploads/thermo and
-    # /uploads/statmech have always returned. They were never wired here,
-    # so a depositor using the bundle route — which is the route the ARC
-    # adapter uses — got neither the refusal nor the annotation ADR 0011
-    # and ADR 0008 promise, and their record was silently less complete
-    # than the identical field-by-field deposit.
+    # /uploads/statmech return. A depositor using the bundle route — which
+    # is the route the ARC adapter uses — must get the same refusal and
+    # annotation, so the record is not silently less complete than the
+    # identical field-by-field deposit.
     #
     # This bundle is one species, so ``thermo.``/``statmech.`` already
     # names its subject unambiguously and matches the real payload path.
@@ -839,7 +838,7 @@ def persist_computed_species_upload(
         # An assembled composite's inputs are written, and its total checked,
         # now that every calculation exists, every ``depends_on`` edge is wired
         # and every artifact has had the chance to fill a single-point energy
-        # the payload left out (ADR 0021, P5). Before the review policy, which
+        # the payload left out. Before the review policy, which
         # can freeze them.
         upload_warnings.extend(
             finalize_composite_inputs(
@@ -1397,10 +1396,9 @@ def _persist_statmech_block(
             species_entry_id=species_entry_id,
             transition_state_entry_id=transition_state_entry_id,
         )
-        # The third statmech write path, and the third to need DR-0028
-        # Requirement 1: a declared role must match the type of the job it
-        # names. Shared with the conformer and standalone paths through
-        # the statmech resolution service so all three refuse alike.
+        # A declared role must match the type of the job it names. Shared
+        # with the conformer and standalone paths through the statmech
+        # resolution service so all three refuse alike.
         assert_statmech_role_compatible(
             calc_row,
             role=sc.role,

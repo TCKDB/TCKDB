@@ -1,4 +1,4 @@
-"""ThermoML Cp importer (Phase C-E2).
+"""ThermoML Cp importer.
 
 Turns a NIST TRC ThermoML Archive article (XML + JSON twin) into
 :class:`~app.schemas.entities.molecular_property_observation.MolecularPropertyObservationCreate`
@@ -8,10 +8,10 @@ Mirrors the layering of ``backend/app/importers/cccbdb/``:
 ``archive.py`` (fetch/snapshot) -> ``validate.py`` (schema) ->
 ``parser.py`` (XML -> dataclasses) -> ``mapping.py`` (dataclasses ->
 TCKDB payloads). **No database writes anywhere in this package** --
-persistence is Phase C-E3 (``backend/app/services/thermoml_cp_import.py``,
-not part of this package).
+persistence is in ``backend/app/services/thermoml_cp_import.py``,
+not part of this package.
 
-Pilot article (Phase C plan amendment, section C0): benzene,
+Pilot article: benzene,
 ``UHOVQNZJYSORNB-UHFFFAOYSA-N``, DOI ``10.1016/j.jct.2013.08.022``, 12
 "Ideal gas" Cp values at 200-1000 K, pressure fixed by a 100 kPa
 Constraint, method carried only as ``sMethodName`` "statistical
@@ -47,18 +47,18 @@ SOURCE_NAME = "NIST TRC ThermoML Archive"
 SOURCE_RELEASE = "mds2-2422 v1.2.6 / ThermoML.v2020-09-30"
 
 #: Dataset DOI (NOT the article DOI -- this identifies the archive
-#: itself). Confirmed 2026-09-20 via the NIST PDR record API
+#: itself). Confirmed via the NIST PDR record API
 #: (``https://data.nist.gov/rmm/records/mds2-2422``), field ``doi``.
 SOURCE_DATABASE_DOI = "10.18434/mds2-2422"
 
 #: The single URL ``archive.py:fetch_archive`` is allowed to fetch.
-#: Confirmed 2026-09-20 against the NIST PDR record API's
+#: Confirmed against the NIST PDR record API's
 #: ``components`` list (``downloadURL`` for the ``ThermoML.v2020-09-30.tgz``
 #: component) -- NOT ``trc.nist.gov/ThermoML/``, which is a client-side
 #: JS application with no stable per-file download endpoint.
 ARCHIVE_URL = "https://data.nist.gov/od/ds/mds2-2422/ThermoML.v2020-09-30.tgz"
 
-#: SHA-256 of the pinned archive, confirmed 2026-09-20 against the same
+#: SHA-256 of the pinned archive, confirmed against the same
 #: PDR record API response (``components[].checksum.hash`` for the
 #: ``ThermoML.v2020-09-30.tgz`` component).
 ARCHIVE_SHA256 = (
@@ -71,7 +71,7 @@ ARCHIVE_SIZE = 189433115
 #: Canonical XSD download location NIST/TRC documents alongside the
 #: archive (the schema is also mirrored at the PDR download endpoint
 #: used above for ``ARCHIVE_URL``; both serve byte-identical content --
-#: verified 2026-09-20, both hash to ``XSD_SHA256`` below). The
+#: verified, both hash to ``XSD_SHA256`` below). The
 #: committed copy at ``schema/ThermoML.xsd`` is what every validation
 #: actually runs against; this URL is provenance metadata only, never
 #: fetched at runtime.
@@ -103,7 +103,7 @@ MAPPING_VERSION = str(PARSERS.get(MAPPING_NAME).version)
 TERMS_URL = "https://www.nist.gov/open/license"
 
 #: NIST/TRC terms text for the ThermoML Archive. The first two
-#: paragraphs are verbatim, from two fetches taken 2026-09-20; the
+#: paragraphs are verbatim, from two fetches of the NIST page; the
 #: THIRD is author-composed, not a verbatim quote of any single fetched
 #: page -- see below for exactly which is which:
 #:

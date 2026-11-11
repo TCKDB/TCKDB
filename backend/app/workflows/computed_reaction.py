@@ -421,11 +421,9 @@ def _collect_bundle_provenance_warnings(
     """Report provenance this bundle's products could carry and do not.
 
     The same warnings ``/uploads/thermo``, ``/uploads/statmech`` and
-    ``/uploads/kinetics`` have always returned, which this route returned
-    none of. A bundle deposit was therefore silently less complete than
-    the identical field-by-field deposit, with nothing saying so —
-    contrary to ADR 0011 and ADR 0008, under which absence is
-    incompleteness and incompleteness is annotated rather than refused.
+    ``/uploads/kinetics`` return, so a bundle deposit is not silently less
+    complete than the identical field-by-field deposit: absence is
+    incompleteness, and incompleteness is annotated rather than refused.
 
     Three things this has to get right that the standalone routes do not:
 
@@ -634,7 +632,7 @@ def _assignments_in_canonical_order(assignments, fit_reactants, fit_products, ca
 
 
 def _fit_is_for_reaction(kin, species_key_to_entry, reactant_entries, product_entries) -> bool:
-    """Whether a bundle kinetics fit is for the bundle's own reaction (DR-0038 null-reaction evidence).
+    """Whether a bundle kinetics fit is for the bundle's own reaction (null-reaction evidence).
 
     True when the fit's reactant and product entries equal the reaction's, as multisets and in any order.
     Bundle fits are not tied to the bundle's reaction, so a fit for another reaction must not count as
@@ -1161,8 +1159,8 @@ def persist_computed_reaction_upload(
 
     # An assembled composite's inputs are written, and its total checked, now
     # that every calculation exists, every ``depends_on`` edge is wired and
-    # every inline artifact has been through single-point reconciliation
-    # (ADR 0021, P5). Before the review policy, which can freeze them.
+    # every inline artifact has been through single-point reconciliation,
+    # and before the review policy, which can freeze them.
     sp_energy_warnings.extend(
         finalize_composite_inputs(
             session,
@@ -1189,7 +1187,7 @@ def persist_computed_reaction_upload(
     )
 
     # ------------------------------------------------------------------
-    # 3b-bis. Atom map (ADR 0011)
+    # 3b-bis. Atom map
     #
     # Sits outside the transition-state branch on purpose: the map belongs
     # to the micro reaction, and the *absence* of one has to be reported
@@ -1676,7 +1674,7 @@ def persist_computed_reaction_upload(
                     species_entry_id=species_entry.id,
                 )
                 # The fourth statmech write path, and the one ARC actually
-                # deposits through. Same DR-0028 Requirement 1 as the other
+                # deposits through: the same role/type rule as the other
                 # three, from the same shared service.
                 assert_statmech_role_compatible(
                     calc_row,

@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Decision narrative removed from the API, workflows and chemistry modules (Unreleased)
+
+- **Behaviour:** none. Comments and docstrings in `backend/app/api`, `workflows`, `chemistry`, `importers` and related modules now state behaviour only. Route descriptions in the OpenAPI document and `PRODUCER_CONTRACT.md` are reworded accordingly.
+- **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-schemas` 0.173.1 (no client change).
+
 ## A one-electron participant's Hartree-Fock energy under a correlated kinetics level (Unreleased)
 
 - **Behaviour:** a kinetics record's declared energy level is now accepted when a linked reactant or product energy has the method `hf` (any case; `uhf`, `rhf`, `rohf` and `hartree-fock` are other methods and are not exempt) for a participant with exactly one electron (atomic numbers of the stored SMILES minus the stored charge; H, D, T and He+ count, H- does not) and every other identity field but spin equals the declared level's, where it was refused as `kinetics_energy_level_contradiction`. The accepted record carries the warning `one_electron_hf_substitution`, naming the calculations and, for an F12 declared level, that the CABS singles correction is absent from them. `/uploads/kinetics` and bundle import find such a calculation as the participant's energy at the declared level. The exemption needs at least one link at the declared method: when every link is such a Hartree-Fock energy the ordinary rule applies. The declared method must be a wavefunction or multireference method (a density functional, a composite recipe such as G4, or an unclassified method such as `ccsd(t)-f12/ri` gets no exemption). A declared composite scheme is never exempted. On `/uploads/kinetics`, the Hartree-Fock calculation of a one-electron species is used only when none of its calculations matches the declared level exactly. A two-electron participant, another basis, auxiliary basis or CABS basis, or another method at one electron is still a contradiction.

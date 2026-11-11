@@ -2,8 +2,7 @@
 
 Statmech and thermo both link supporting calculations to the record by
 **role** (``opt`` / ``freq`` / ``sp`` / ``composite`` / ``imported``), and
-both need to answer the same questions from those links. Owner decision,
-2026-09 ("statmech-level-roles"): a depositor may legitimately run the
+both need to answer the same questions from those links. A depositor may legitimately run the
 optimisation and the single point at two different levels of theory, and
 TCKDB must both *display* that split honestly and *catch* the deposit that
 forgets half of it -- on every upload shape, including the multi-conformer
@@ -20,8 +19,8 @@ already follow for role/type compatibility:
   from the record's role links alone: which level of theory governs the
   geometry (an ``opt``'s), the frequencies (a ``freq``'s, or an ``opt``'s
   own when no ``freq`` is linked but the ``opt`` calculation itself
-  carries frequency results), and the energy (ADR 0021, decision 4:
-  a linked ``composite``'s level when exactly one level is linked,
+  carries frequency results), and the energy (a linked ``composite``'s
+  level when exactly one level is linked,
   ``"ambiguous"`` when linked ``composite``s disagree; else the linked
   ``sp``s' shared level when they agree, ``"ambiguous"`` when they
   disagree; else an ``opt``'s; else ``imported``). When no ``opt`` /
@@ -68,7 +67,7 @@ already follow for role/type compatibility:
   or every linked ``opt``'s level when none are (R5: opt-only is valid
   exactly when there is nothing to contradict).
 
-Composite energies (ADR 0021, decision 4). A ``composite`` calculation is one
+Composite energies. A ``composite`` calculation is one
 energy, so R2', R3', Coverage and R4' apply to it exactly as to an ``sp``, with
 three additions:
 
@@ -84,8 +83,8 @@ three additions:
 Only a calculation whose *type* is ``composite`` takes part in those checks. A
 calculation of another type linked under the role ``composite`` is the legacy
 shape: it is accepted, answered with a ``composite_role_on_non_composite_calculation``
-warning (owner decision 7: warn now, refuse once the ARC adapter ships), and
-otherwise ignored here exactly as it was before the type existed.
+warning, and
+otherwise ignored here.
 
 Enforced by default on every write path that links role-tagged source
 calculations -- there is no longer an ensemble-vs-standalone split, because
@@ -174,8 +173,8 @@ W_ONE_ELECTRON_HF_SUBSTITUTION = "one_electron_hf_substitution"
 W_STATMECH_ENERGY_LEVEL_AMBIGUOUS = "statmech_energy_level_ambiguous"
 W_THERMO_ENERGY_LEVEL_AMBIGUOUS = "thermo_energy_level_ambiguous"
 
-#: A record links both an 'sp' and a 'composite' as its energy (ADR 0021,
-#: decision 4). Two energies for one record is the ambiguity R2' exists to remove.
+#: A record links both an 'sp' and a 'composite' as its energy. Two energies
+#: for one record is the ambiguity R2' exists to remove.
 W_STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED = "statmech_energy_sp_and_composite_linked"
 W_THERMO_ENERGY_SP_AND_COMPOSITE_LINKED = "thermo_energy_sp_and_composite_linked"
 
@@ -251,7 +250,7 @@ def derive_levels(
     element of ``sps`` and of ``composites`` is used -- to detect
     disagreement, not only to pick one.
 
-    **Energy** (ADR 0021, decision 4): composite > sp > opt > imported. More
+    **Energy**: composite > sp > opt > imported. More
     than one distinct composite level is ``"ambiguous"``.
 
     **Geometry and frequency**: an ``opt`` / ``freq`` as ever. When there is no
@@ -417,7 +416,7 @@ def withhold_levels_from_calculations(
     importeds: "Sequence[tuple[int, RoleCalcInfo]]" = (),
     legacy_composites: "Sequence[tuple[int, RoleCalcInfo]]" = (),
 ) -> DerivedLevels:
-    """Null each derived level whose supplying calculations are ALL withheld (the evidence rule, ADR 0023).
+    """Null each derived level whose supplying calculations are ALL withheld (the evidence rule).
 
     ``derived`` is the answer :func:`derive_levels` gave for the record's FULL set of links, and the role lists here are
     the same links with their calculation ids. A level is a fact about the calculation that supplied it, so when every
@@ -563,8 +562,8 @@ def _atom_nuclide(atom: GeometryAtom) -> tuple[str, int | None]:
     ``element`` is CHAR(2), so a one-letter symbol comes back blank-padded, and
     ``D``/``T`` are hydrogen for any element comparison (the composition check
     reads them so), hence ``resolve_element_symbol``. The isotope is the stored
-    mass number, which ``parse_xyz`` sets for every row written since
-    ``docs/adr/0022``; a row written before it holds ``D``/``T`` with a NULL
+    mass number, which ``parse_xyz`` sets for every newly written row; an older
+    row holds ``D``/``T`` with a NULL
     mass number and cannot be rewritten, so its own symbol is read, and a legacy
     deuterium atom and a new one are one atom.
     """
@@ -580,7 +579,7 @@ def _structure_key(geometry: Geometry) -> tuple[str | int | None, ...]:
     A **single atom** has no geometry to differ in -- every position is the
     same structure -- so it is keyed by its element (D and T resolve to
     hydrogen) and its isotope mass number (stated, or implied by a D/T spelling
-    on a row written before ``docs/adr/0022``), and a copy of the atom moved to
+    on an older row), and a copy of the atom moved to
     another coordinate is the same structure, not a second one (#623).
 
     A polyatomic geometry is keyed by its row id *here*, and
@@ -881,7 +880,7 @@ def _match_energy_to_opts(
 
 
 def collect_composite_link_warnings(links: list[RoleLink], *, subject: str) -> list[UploadWarning]:
-    """The warn-tier findings about a record's composite links (ADR 0021, decision 7).
+    """The warn-tier findings about a record's composite links.
 
     * ``composite_role_on_non_composite_calculation`` -- a calculation whose type is
       not ``composite`` is linked under the role ``composite``. The legacy

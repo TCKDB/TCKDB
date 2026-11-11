@@ -115,7 +115,7 @@ def get_species(species_id: int, session: Session = Depends(get_db), marker=Depe
     species = session.get(Species, species_id)
     if species is None:
         raise NotFoundError("Species not found")
-    # A species merged into another is kept for its ref and answers as the one it was merged into (DR-0038).
+    # A species merged into another is kept for its ref and answers as the one it was merged into.
     if species.merged_into_species_id is not None:
         marker.headers[MERGED_FROM_HEADER] = species.public_ref
         species = session.get(Species, species.merged_into_species_id)
@@ -146,7 +146,7 @@ def _species_entry_conformer_summary(
     """Aggregate conformer-group and observation counts for a species entry.
 
     Two scalar aggregates, so the top-level species-entry read stays cheap. A count answers what the list endpoint
-    would show (decision D5): the groups and observations the request shows (the default exclusions and the profile's
+    would show: the groups and observations the request shows (the default exclusions and the profile's
     floor), and an observation in a group the floor hides is not counted.
     """
     group_count = session.scalar(

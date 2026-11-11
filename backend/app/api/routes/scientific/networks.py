@@ -351,7 +351,7 @@ def scientific_network_solves_search_get(
     filter required. Explicit ``False`` bool filter values count as
     meaningful. ``kind`` selects by origin — ``computed`` for rates this
     database can re-derive, ``reported`` for rates transcribed from a
-    publication (ADR 0010). ``solve_method`` filters
+    publication. ``solve_method`` filters
     ``NetworkSolve.me_method`` (the master-equation algorithm);
     ``method`` / ``basis`` filter through the source-calculation
     level-of-theory join.

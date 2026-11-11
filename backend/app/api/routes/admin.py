@@ -104,7 +104,7 @@ class AdminUserResponse(BaseModel):
     alone frequently cannot tell two people apart.
 
     ``id`` is a raw row id, which the read layer otherwise sweeps out of
-    responses (DR-0028). It is correct here and not an exception being
+    responses. It is correct here and not an exception being
     smuggled in: this is an explicitly admin-only schema, and the route
     that acts on the result -- ``PATCH /admin/users/{user_id}/role`` --
     is keyed on exactly this id. Withholding it would leave that route
@@ -272,25 +272,10 @@ class AdminMachineReviewRecordInspection(BaseModel):
     ``record_id`` remains the internal id, acceptable on an admin-only surface
     (spec §3).
 
-    **A field was removed here, not renamed.** Until 2026-09-14 this carried
-    ``record_ref``, holding the machine-review stack's private *matching key*.
-    That name reads as the public ref -- which is what ``record_ref`` means
-    everywhere else in this API, across six scientific read schemas and the
-    release-admin request bodies -- so the admin page rendered a database row
-    id under a column promising a handle.
-
-    The first fix renamed it to ``record_match_key``. Review showed that field
-    was redundant: on this surface the matching key is **always**
-    ``str(record_id)``. ``audit_adapter`` keys every linked record by
-    ``str(record_id)`` and drops links that have no id, and ``mapping`` gives a
-    matched record its id from that same link -- so a finding citing its own
-    ``record_ref`` reaches ``record_summaries`` only by *equalling* the link
-    key. The two can never differ here. Publishing it would have put a second
-    row-id-shaped value on a page whose point is to stop presenting row ids as
-    handles, and no test could tell the two columns apart.
-
-    So the surface now carries one identifier of each kind: ``record_id`` for
-    the machine, ``record_public_ref`` for the reader. A maintainer chasing a
+    The surface carries one identifier of each kind: ``record_id`` for
+    the machine, ``record_public_ref`` for the reader. On this surface the
+    matching key is always ``str(record_id)``, so it is not published as a
+    second row-id-shaped value. A maintainer chasing a
     finding that did *not* map is served elsewhere -- unmapped findings never
     reach ``record_summaries``, and ``mapping`` already quotes the offending
     ref in ``mapping_warnings``.
@@ -525,7 +510,7 @@ class AdminCuratorTaskResponse(BaseModel):
     from "task #12 concerns calculation 431" to the record itself, and 431 is
     not something any read route answers to -- ``calc_...`` is. Without it the
     only way across is an internal id a curator cannot use and a UI must not
-    show (DR-0028 Req 2).
+    show.
 
     It is ``null`` when the record cannot be named: ``applied_energy_correction``
     has no ``public_ref`` column, and a record may have been deleted since the
@@ -549,8 +534,7 @@ class AdminCuratorTaskResponse(BaseModel):
     the eighteen ``SubmissionRecordType`` members (``thermo``, ``statmech``,
     ``kinetics``, ``transition_state``, ``network_solve``,
     ``applied_energy_correction``) name a table with no page of its own; a
-    curator task against one of those used to render as inert text, exactly
-    the defect PR #488 fixed on the record-review queue. Both are ``null``
+    curator task against one of those would render as inert text. Both are ``null``
     together, for the same four reasons documented on
     :func:`~app.services.record_containers.resolve_record_containers` --
     never a partial pair a client could not address.
@@ -782,11 +766,8 @@ def get_curator_task(
 ) -> AdminCuratorTaskResponse:
     """Return one curator task by id (admin only); 404 ``curator_task_not_found``.
 
-    The 404 comes from the same service helper the four write routes use.
-    It used to come from a private copy in this module that raised a bare
-    ``HTTPException``, so reading a missing task said ``http_404`` while
-    assigning the same missing task said ``curator_task_not_found`` — one
-    condition with two contracts, and a client could branch on only one.
+    The 404 comes from the same service helper the four write routes use,
+    so a missing task is ``curator_task_not_found`` on read and write alike.
     """
     return _curator_task_response(session, get_curator_task_or_404(session, task_id))
 
@@ -856,8 +837,8 @@ class AdminMachineReviewRunResponse(BaseModel):
     """Result of one explicit machine-review run (advisory; endorses nothing).
 
     ``extra="forbid"`` so it can carry no mutation instruction. It deliberately
-    does **not** expose the id of the audit event that was written (DR-0028
-    Requirement 2): whether the run was journalled is actionable,
+    does **not** expose the id of the audit event that was written:
+    whether the run was journalled is actionable,
     which internal row it landed in is not.
 
     ``failure_reason`` is non-``null`` only when ``status`` is
@@ -1041,7 +1022,7 @@ class StorageCapacityStateResponse(BaseModel):
     """Whether a refusal is outstanding, after whatever was just appended.
 
     Carries no row ids, no digests and no bucket names — this is an
-    operational report, and DR-0028 Req. 2 applies to it as much as to an
+    operational report, and row ids are as unwelcome in it as in an
     error body.
     """
 
@@ -1115,7 +1096,7 @@ def clear_artifact_storage_capacity(
 # Energy-correction-scheme provenance attach (admin-only, append-only)
 # ---------------------------------------------------------------------------
 #
-# correction-scheme-provenance plan §4.3: the only path that can add a
+# The only path that can add a
 # citation or software identity to a scheme deposited before it had one.
 # ``resolve_or_create_scheme`` (the upload path) never mutates an
 # existing row's identity fields -- a differing citation/software makes
@@ -1141,14 +1122,11 @@ class AdminEnergyCorrectionSchemeProvenanceRequest(BaseModel):
 
     ``software`` is ``SoftwareReleaseRef`` -- the same release-grained
     reference ``EnergyCorrectionSchemeRef.software`` already accepts on
-    the upload path (correction-scheme-provenance plan §5.2, PR 3). An
-    admin can now correct a row at the same grain the column has carried
-    since PR 1 (``software_release_id``): "Gaussian 16, Revision C.02",
-    not merely "Gaussian". ``SoftwareReleaseRef`` is a superset of the
-    old name-only ``SoftwareRef`` -- ``{"software": {"name": "Gaussian"}}``
-    still resolves to the version-less release row for that program
-    (§3.2); that is a complete, honest value on its own, not a degraded
-    one.
+    the upload path. An admin can correct a row at the same grain the
+    column carries (``software_release_id``): "Gaussian 16, Revision C.02",
+    not merely "Gaussian". ``{"software": {"name": "Gaussian"}}``
+    resolves to the version-less release row for that program; that is a
+    complete, honest value on its own, not a degraded one.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1327,7 +1305,7 @@ def attach_energy_correction_scheme_provenance(
 
 
 # ---------------------------------------------------------------------------
-# Molecular-property observation identity attach (Phase C-E5)
+# Molecular-property observation identity attach
 # ---------------------------------------------------------------------------
 
 
@@ -1335,12 +1313,11 @@ class AdminObservationIdentityAttachRequest(BaseModel):
     """Body for ``POST /admin/observations/{ref}/identity``.
 
     ``species_entry_ref`` must be a ground-state, minimum-energy entry of
-    its species; it no longer has to be the *unique* such entry -- see
+    its species; it need not be the *unique* such entry -- see
     ``app/services/observation_identity_attach.py`` for the target rule
     and its rationale. The observation must also be linked to a submission,
     so the attach has somewhere to record the curation fact -- every
-    observation either importer writes from Phase C-E5 review round 3
-    onward is linked; a pre-existing unlinked row refuses with
+    observation either importer writes is linked; an unlinked row refuses with
     ``observation_identity_attach_requires_submission`` until an operator
     backfills a submission for it.
     """
@@ -1374,7 +1351,7 @@ def attach_observation_identity_endpoint(
 
     Curator or admin only. Refuses (422) when the observation already
     carries an identity -- correction is supersession, not update, see
-    ADR 0003 and the service's module docstring -- when the target species
+    the service's module docstring -- when the target species
     entry is not a ground-state minimum entry of its species, or when the
     observation is linked to no submission (nowhere to record the curation
     fact). 404 for an unknown observation or species entry.

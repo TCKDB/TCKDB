@@ -72,7 +72,7 @@ def get_reaction(reaction_id: int, session: Session = Depends(get_db), marker=De
     reaction = session.get(ChemReaction, reaction_id)
     if reaction is None:
         raise NotFoundError("Reaction not found")
-    # A reaction merged into another is kept for its ref and answers as the one it was merged into (DR-0038).
+    # A reaction merged into another is kept for its ref and answers as the one it was merged into.
     if reaction.merged_into_chem_reaction_id is not None:
         marker.headers[MERGED_FROM_HEADER] = reaction.public_ref
         reaction = session.get(ChemReaction, reaction.merged_into_chem_reaction_id)

@@ -89,13 +89,13 @@ _STRONG_FORMULA_ENTRY_PATTERNS = (
     "rules for chemical formula",
 )
 
-# Hallmarks of an actual molecule data page. We no longer accept
-# "all data for one species" as a sufficient heading — CCCBDB's
+# Hallmarks of an actual molecule data page. "All data for one species"
+# is not a sufficient heading — CCCBDB's
 # form-entry page *also* carries that title. Instead, a real
 # molecule-data page must show evidence of *populated identifier
 # values*: a real InChI string, a real InChIKey (14-10-1 caps), or
 # a real CAS-number pattern. Identifier *labels* like the bare word
-# "CAS" no longer count.
+# "CAS" do not count.
 _MOLECULE_DATA_HEADINGS = (
     "all data for one species",
     "all experimental data for one molecule",

@@ -2,8 +2,8 @@
 
 Entry point for ``backend/scripts/thermoml_cp_extract.py``. Writes
 payload JSON, the mapping report and the archive snapshot to
-``--out``; never touches the database. Persisting the payloads is
-Phase C-E3.
+``--out``; never touches the database. Persisting the payloads is done by
+``app.services.thermoml_cp_import``.
 """
 
 from __future__ import annotations

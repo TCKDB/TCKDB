@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.173.1 - 2026-11-11
+
+The producer contract text is reworded to state behaviour only: route descriptions in `PRODUCER_CONTRACT.md` no longer cite decision records or design plans. No refusal, warning, field or behaviour changes.
+
 ## 0.173.0 - 2026-11-11
 
 One warning code is added: `one_electron_hf_substitution`, returned when a kinetics record's declared correlated energy level is accepted for a one-electron participant whose linked energy was computed at Hartree-Fock. Context: `declared_level_of_theory_ref`, `energy_calculation_refs` and `cabs_singles_absent` (true when the declared method is an F12 method). It is scientific check register entry 83. No model or payload shape changed.

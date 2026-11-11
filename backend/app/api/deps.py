@@ -43,8 +43,7 @@ def statement_timeout_connect_args(timeout_ms: int | None) -> dict[str, str]:
     option is not part of any transaction and a rollback cannot reach it.
 
     ``None``, ``0`` or a negative value means "no app-level timeout" and
-    returns ``{}``: the role or server default then applies, as it always
-    did. Nothing else in this module sets ``statement_timeout``.
+    returns ``{}``: the role or server default then applies. Nothing else in this module sets ``statement_timeout``.
 
     Not pgbouncer-safe: a pooler in transaction mode rejects unknown startup
     parameters unless ``ignore_startup_parameters = options`` is set, and

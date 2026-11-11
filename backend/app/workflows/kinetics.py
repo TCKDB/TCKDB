@@ -132,7 +132,7 @@ def _calculations_at_declared_level(
     Spin, when the declaration states one: a calculation that ran with it is eligible, and so is one
     that is closed-shell exempt for its species
     (:func:`~app.services.calculation_levels.kinetics_closed_shell_exempt`; a singlet run restricted).
-    A radical with no calculation at the declared spin therefore finds none, as it always did. Calculations
+    A radical with no calculation at the declared spin therefore finds none. Calculations
     at the declared spin are preferred. With no spin declared, the calculation on the declared level's own
     row is preferred, then every field match; the cross-participant spin rule is then applied to the links by
     :func:`~app.services.calculation_levels.kinetics_energy_level_violation`.
@@ -214,9 +214,9 @@ def _find_energy_calculation_for_species(
 ) -> Calculation:
     """Find the one energy calculation for a species entry at a given level of theory.
 
-    Same priority as every other energy-level rule (ADR 0021, decision 4):
+    Same priority as every other energy-level rule:
     a ``composite`` calculation at the level wins; only when the species entry
-    has none there is the single point looked for, exactly as before. A level of
+    has none there is the single point looked for. A level of
     theory bound to a composite scheme (``CBS-QB3``) carries composite
     calculations, so this is what makes ``energy_level_of_theory: CBS-QB3``
     resolve to the program-run composite instead of failing for want of an
@@ -1064,7 +1064,7 @@ def persist_kinetics_upload(
     )
     kinetics = persist_kinetics(session, kinetics_create, created_by=created_by)
 
-    # 2b. Pressure-dependent falloff + third-body efficiencies (DR-0032 B).
+    # 2b. Pressure-dependent falloff + third-body efficiencies.
     if request.falloff is not None:
         f = request.falloff
         session.add(
@@ -1104,7 +1104,7 @@ def persist_kinetics_upload(
             for bg in request.bath_gas
         ],
     )
-    # 2c. Standalone PLOG / Chebyshev fits (DR-0032 Part C).
+    # 2c. Standalone PLOG / Chebyshev fits.
     for entry in request.plog_entries:
         session.add(
             KineticsPlog(
@@ -1117,7 +1117,7 @@ def persist_kinetics_upload(
                 ea_kj_mol=entry.ea_kj_mol,
             )
         )
-    # 2d. Sum-of-Arrhenius (Chemkin DUPLICATE) terms (DR-0036).
+    # 2d. Sum-of-Arrhenius (Chemkin DUPLICATE) terms.
     for term in request.arrhenius_entries:
         session.add(
             KineticsArrheniusEntry(
