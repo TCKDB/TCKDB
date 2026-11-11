@@ -644,10 +644,7 @@ class ScientificTransitionStateRecord(BaseModel):
     review_history: list[TransitionStateReviewEntry] | None = None
 
     #: IRC validation evidence for the concept's entries, one list per
-    #: entry, populated under ``include=validation_evidence``. The token was
-    #: legal on this surface before the field existed, so it was accepted,
-    #: echoed, and produced nothing — while ``available_sections``
-    #: advertised ``has_validation_evidence`` on the same record.
+    #: entry, populated under ``include=validation_evidence``.
     validation_evidence: (
         list[TransitionStateEntryValidationEvidence] | None
     ) = None

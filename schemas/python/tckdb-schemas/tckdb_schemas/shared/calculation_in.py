@@ -74,14 +74,12 @@ class CalculationIn(SchemaBase):
         in the payload. For species calculations, typically points to a
         conformer's geometry. For TS calculations, defaults to the TS geometry.
 
-        This names **this calculation's geometry** and nothing else. It used
-        to carry a second job -- deciding which conformer observation a
-        species calculation is anchored to -- and the two questions come
-        apart for any calculation whose geometry is not a declared conformer
+        This names **this calculation's geometry** and nothing else. Which
+        conformer observation a species calculation is anchored to is a
+        separate question, and the two come apart for any calculation whose geometry is not a declared conformer
         geometry. A coarse pre-optimisation is the worked example: its output
         geometry is genuinely not the basin's geometry, so a producer
-        correctly omits ``geometry_key``, and until ``conformer_key`` existed
-        that silently cost the calculation its anchor. Use ``conformer_key``
+        correctly omits ``geometry_key``. Use ``conformer_key``
         to say which basin a calculation belongs to.
     :param conformer_key: Local key of the conformer, declared by this
         calculation's own species, whose observation this calculation is
@@ -90,8 +88,7 @@ class CalculationIn(SchemaBase):
 
         Optional, and resolved server-side against the request's own
         conformer namespace -- never a database id. When it is absent the
-        workflow still falls back to ``geometry_key``, so payloads written
-        before this field existed keep anchoring exactly as they did. When
+        workflow falls back to ``geometry_key`` for the anchor. When
         neither field resolves, the calculation is stored unanchored and the
         upload reports a warning rather than dropping the anchor silently.
 

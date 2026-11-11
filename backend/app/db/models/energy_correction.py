@@ -75,8 +75,7 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     #:
     #: Part of identity (migration ``c5e1a8d3f6b9``), under ``NULLS NOT
     #: DISTINCT`` like every other nullable member: NULL is "no frequency
-    #: level stated", which is what every row that predates the column
-    #: holds, so those rows keep their identity and their public ref.
+    #: level stated".
     frequency_level_of_theory_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -133,8 +132,7 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     #: ``(kind, name, level_of_theory_id, source_literature_id,
     #: software_release_id, data_revision)`` and the tool build is
     #: provenance only (the first depositor's build is what this row
-    #: keeps). NULL is "not stated", never "the same as any revision", so
-    #: every row that predates the column keeps its identity and ref.
+    #: keeps). NULL is "not stated", never "the same as any revision".
     data_revision: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     #: How ``atom_params`` enter the corrected energy, one answer for the

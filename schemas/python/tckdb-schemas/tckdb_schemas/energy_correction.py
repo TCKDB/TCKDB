@@ -95,8 +95,7 @@ class EnergyCorrectionSchemeRef(SchemaBase):
 
     ``frequency_level_of_theory`` is part of identity in both forms, and an
     absent value is a value of its own: a scheme sent without one never
-    matches a scheme that has one, and keeps exactly the identity it had
-    before the field existed.
+    matches a scheme that has one.
 
     A scheme deposited without ``data_revision`` never matches one
     deposited with it, even when the tables are identical: absence says

@@ -277,8 +277,9 @@ class ConformerObservationGroupSummary(BaseModel):
     review history or its own evidence summary: a full
     :class:`ScientificConformerObservationRecord` per observation would
     duplicate every include token onto every observation, at a cost that
-    multiplies with basin size. A
-    caller that genuinely needs an observation's own calculations and
+    multiplies with basin size.
+
+    A caller that genuinely needs an observation's own calculations and
     geometries inline — the group page's own use — asks for both
     explicitly: ``include=observations,observation_details,calculations,
     geometries``, which builds :class:`ScientificConformerObservationRecord`

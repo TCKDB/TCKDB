@@ -85,8 +85,10 @@ class LevelOfTheoryCoreBlock(BaseModel):
     ``aux_basis``/``cabs_basis`` are part of ``lot_hash``'s
     identity inputs alongside the fields already served
     elsewhere; a page whose whole point is showing what distinguishes one
-    level of theory from another should not silently drop two of them. ``label`` is computed from the identity fields; there is no
-    stored label column.
+    level of theory from another should not silently drop two of them.
+
+    ``label`` is computed from the identity fields; there is no stored label
+    column.
     """
 
     level_of_theory_id: int | None = None

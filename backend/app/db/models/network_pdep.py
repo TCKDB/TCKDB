@@ -403,7 +403,7 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     # Versioned declarations (``tckdb_schemas.network_declarations``): what the outputs are
     # outputs of, the recipe, and the evidence cited. Attributed claims, stored in their
     # resolved form (states by composition hash, determinations by public ref) and never
-    # inferred: NULL on every solve deposited before the columns or without them, and then
+    # inferred: NULL on a solve deposited without them, and then
     # the solve's scientific meaning reads as unresolved. ``none_as_null``: Python ``None`` is
     # SQL NULL ("not stated"), never the JSON value ``null``.
     target_declaration: Mapped[Optional[dict]] = mapped_column(JSONB(none_as_null=True), nullable=True)
@@ -908,8 +908,8 @@ class NetworkKinetics(Base, TimestampMixin, PublicRefMixin):
     stores_log10_k: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # The determination this fit is one representation of, its role there and its own
-    # declared identity (network selection). Attributed claims, never inferred: NULL on every
-    # fit that predates the columns or was deposited without them, and then its relationship to
+    # declared identity (network selection). Attributed claims, never inferred: NULL on a
+    # fit deposited without them, and then its relationship to
     # the channel's other fits reads as unresolved. Set together or not at all
     # (``ck_network_kinetics_determination_iff_role`` and ``..._iff_representation``). That the
     # determination is of this fit's channel and solve is enforced where the row is written.

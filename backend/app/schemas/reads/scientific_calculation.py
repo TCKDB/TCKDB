@@ -1555,7 +1555,7 @@ class ScientificCalculationRecord(BaseModel):
     #: Eager, like ``owner`` — never gated behind an ``include`` token.
     #: ``None`` when this calculation has no recorded conformer
     #: observation (every transition-state-owned calculation, and any
-    #: species-owned one that predates or skipped conformer linkage).
+    #: species-owned one with no conformer linkage).
     conformer: CalculationConformerSummary | None = None
     level_of_theory: LevelOfTheorySummary | None = None
     software_release: SoftwareReleaseSummary | None = None

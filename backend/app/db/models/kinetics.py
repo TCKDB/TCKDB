@@ -202,8 +202,8 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     )
 
     # The determination this record is one representation of, and its role there
-    # (kinetics selection). Attributed claims, never inferred: NULL on every record
-    # that predates the columns or was deposited without them, and then the record's
+    # (kinetics selection). Attributed claims, never inferred: NULL on a record
+    # deposited without them, and then the record's
     # scientific meaning is reported as unresolved rather than guessed. Set together
     # or not at all (``ck_kinetics_determination_iff_role``). That the determination
     # is of this record's reaction entry and direction is a cross-table fact no CHECK
@@ -235,8 +235,7 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     # (``energy_level_of_theory`` on the upload). Stored as declared, after the
     # upload's consistency check: it is the depositor's claim, separate from
     # the level the read layer derives from the linked calculations. NULL means
-    # nothing was declared (every row that predates the column, and any upload
-    # that omitted it); it is never back-filled from the linked calculations.
+    # nothing was declared (an upload that omitted it); it is never back-filled from the linked calculations.
     # Follows ``level_of_theory_merge`` at read time. Same shape as
     # ``thermo.energy_level_of_theory_id``.
     energy_level_of_theory_id: Mapped[Optional[int]] = mapped_column(
@@ -282,8 +281,7 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     n: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
     # Reference temperature of the Arrhenius expression, in K:
     # ``k = A * (T / T0)**n * exp(-Ea / (R * T))``. 1 K is the plain
-    # ``A * T**n`` form, which is what every row stored before this column
-    # existed meant. Applies to this row's own ``a``/``n``/``ea_kj_mol`` only
+    # ``A * T**n`` form. Applies to this row's own ``a``/``n``/``ea_kj_mol`` only
     # of a modified-Arrhenius rate; falloff, PLOG, sum-of-Arrhenius
     # and Chebyshev records are at 1 K (upload refuses another value).
     t0_k: Mapped[float] = mapped_column(

@@ -168,8 +168,7 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     # the upload's role-consistency check: it is the depositor's claim, not
     # a derived value, and it is separate from the level the read layer
     # derives from the linked calculations (``ScientificLevelsSummary``).
-    # NULL means nothing was declared (every row that predates the column,
-    # and any upload that omitted it); it is never back-filled from the
+    # NULL means nothing was declared (an upload that omitted it); it is never back-filled from the
     # linked calculations. Follows ``level_of_theory_merge`` at read time.
     energy_level_of_theory_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
@@ -185,8 +184,7 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     # Thermodynamic target declaration: what the values are claimed to describe
     # (the equilibrium ensemble, or one conformer group of this species entry).
     # An attributed claim, never inferred from ``statmech_id`` or a conformer
-    # selection; NULL on every row that predates the column and on any deposit
-    # that omitted it. ``target_conformer_group_id`` is set exactly when the
+    # selection; NULL on a deposit that omitted it. ``target_conformer_group_id`` is set exactly when the
     # kind is ``single_conformer`` (``ck_thermo_target_group_iff_single_conformer``);
     # that the group belongs to this row's species entry is a cross-table fact
     # no CHECK can state, and is enforced where the row is written
