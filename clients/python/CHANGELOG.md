@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.203.0 - 2026-11-11
+
+The `tckdb-schemas` requirement is widened to `>=0.158,<0.172`. No client code changed.
+
 ## 0.202.0 - 2026-11-11
 
 `RejectionCode` gains `SPECIES_NAME_QUERY_INVALID`. The parity ledger lists `GET /api/v1/scientific/species/name-search` as raw-only (reachable with `get_json()`).
