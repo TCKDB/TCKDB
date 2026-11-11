@@ -1,6 +1,6 @@
 /*
  * Atom-picking measurements (GeometryViewer.tsx). Kept as its own
- * stylesheet rather than folded into `geometry-detail.css`: this feature
+ * stylesheet rather than folded into `geometry-viewer.css`: this feature
  * and the theme pass were built on parallel branches, and a separate file
  * is what let neither branch edit the other's.
  *
@@ -28,7 +28,7 @@
    `GeometryViewer.tsx`'s return) -- MEASURED at x=536 w=576 while the
    stage sat at x=180 w=576, a ~40px gap below the canvas but no shared
    left edge with it. `.viewer-stage` is now `align-items: flex-start`
-   (see that rule's comment in `geometry-detail.css`), so the canvas and
+   (see that rule's comment in `geometry-viewer.css`), so the canvas and
    toolbar left-align inside their box instead of centring in it --
    `margin: 0` here (was `0 auto`) makes this panel left-align to that
    SAME box: same `max-width: 36rem`, no auto margin, so both elements
@@ -65,7 +65,7 @@
 
 /* SHOULD-FIX-10: was `.68rem` (10.88px), under the accessibility-pass
    11px floor, and mono/uppercase -- mapped onto `--type-ui-font`, the
-   same step every other button on this page (`geometry-detail.css`'s
+   same step every other button on this page (`geometry-viewer.css`'s
    `.viewer-controls button` et al.) now uses. */
 .measure-clear-button {
     padding: .35rem .75rem;

@@ -76,7 +76,7 @@ describe("GeometryDetailPage — GeometryViewer prop wiring", () => {
         const record = mockRecord()
         server.use(http.get(ENDPOINT, () => HttpResponse.json(record)))
         page()
-        await screen.findByRole("heading", { name: "CH geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH/ })
         fireEvent.click(screen.getByRole("button", { name: "Show in 3D" }))
         expect(captured).toHaveLength(1)
         expect(captured[0].xyzText).toBe(record.xyz_text)
@@ -87,7 +87,7 @@ describe("GeometryDetailPage — GeometryViewer prop wiring", () => {
     it("passes null (not undefined, not an empty string) when the archive did not return xyz_text", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ xyz_text: null }))))
         page()
-        await screen.findByRole("heading", { name: "CH geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH/ })
         fireEvent.click(screen.getByRole("button", { name: "Show in 3D" }))
         expect(captured).toHaveLength(1)
         expect(captured[0].xyzText).toBeNull()

@@ -1,55 +1,9 @@
 /*
- * GeometryDetailPage. Imported alongside `conformer-group.css`, which
- * supplies the shared "scientific record ledger" vocabulary this page
- * reuses verbatim: `.basin-header`, `.ledger-section`, `.ledger-heading`,
- * `.ledger-summary`, `.metric`, `.empty-projection`, `.record-
- * breadcrumbs`. Design/foundations PR B moved this page's header,
- * evidence card, and tables onto the shared `design-system.css`
- * primitives (`.kv-list`, `.card`, `.data-table`) -- see this PR's body
- * for the full per-item list. Only the viewer, raw-XYZ block, and
- * coordinate-table controls below are new here.
+ * GeometryDetailPage. The shared record vocabulary (`.ledger-section`, `.empty-projection`, `.kv-list`, `.data-table`)
+ * comes from `conformer-group.css` and `design-system.css`; the viewer's own rules are in `geometry-viewer.css`.
  */
 
 .geometry-page { max-width: 100rem; }
-
-/* `.section-note` is otherwise defined only in `calculation-detail.css`,
-   which this page does not import — `GeometryViewer` used the class
-   without it, so the bond-inference disclaimer (the one sentence on this
-   page disclaiming fabricated-for-display data) rendered unstyled on a
-   cold load, and inconsistently styled if a reader had `calculation-
-   detail.css` cached from a prior page. Defined here so this page's
-   styling does not depend on load order or navigation history.
-   NOT retired in design/foundations PR B, even though this page's OWN
-   markup now uses `.note` (`design-system.css`) wherever it used to use
-   this class: `GeometryViewer.tsx`'s bond-inference caption is outside
-   this PR's file scope (owned by a parallel builder) and still renders
-   `className="section-note"` -- see `calculation-detail.css`'s matching
-   copy of this same comment for the fuller reasoning. */
-.section-note {
-    margin: .5rem 0 0;
-    color: var(--muted);
-    /* Was a one-off `.8rem` (12.8px) -- mapped onto the shared
-       `--type-note-font` step (SHOULD-FIX-10, "record-page residuals"
-       re-review), matching `calculation-detail.css`'s byte-identical
-       copy of this same fix (kept in sync for the same load-order
-       reason the header comment above describes). */
-    font: var(--type-note-font);
-}
-
-/* `.table-scroll { overflow-x: auto }` used to be redefined here (byte-
-   identical to `entry-science.css`'s own copy) because this project's
-   stated convention was that a page's own styling should not depend on
-   another page's stylesheet having loaded first -- see `entry-
-   science.css`'s file header for the fuller version of that reasoning.
-   Post-review (design/foundations): that reasoning does not apply to a
-   rule defined in `design-system.css`, which loads globally BEFORE any
-   page stylesheet (`index.css`'s `@import` at the top, itself imported
-   first in `main.tsx`) regardless of route-visit order -- there is no
-   "whichever page loaded last wins" race for it to lose. Removed here
-   in favour of that one definition; the coordinate table's own
-   `.stage-table` mobile rule additionally stacks it into label/value
-   rows below 680px, so scrolling only matters between that breakpoint
-   and a genuinely narrow desktop window either way. */
 
 .xyz-block {
     max-width: 100%;
@@ -57,6 +11,7 @@
     padding: 1rem 1.2rem;
     overflow-x: auto;
     border: 1px solid var(--line);
+    border-radius: var(--radius);
     background: var(--surface-sunken);
     font: .78rem/1.55 var(--mono);
     white-space: pre;
@@ -68,27 +23,12 @@
     margin: 0 0 .5rem;
 }
 
-/* `.copy-button` itself is defined in `species-entry.css` (owned by a
-   parallel agent, off-limits here). This page gives the same shared
-   `CopyButton` component (`components/RefsDisclosure.tsx`) its own scoped
-   styling rather than depending on that other stylesheet happening to
-   load first. Theming pass: the colours below (`--control-border`,
-   `--muted`, `--accent`, `--accent-700`) used to be literal hex repeated
-   in this rule for exactly that reason — no shared token source existed
-   yet. They are now `theme.css`'s global tokens, loaded once for the
-   whole app before any page, so the load-order concern that justified
-   the duplication is gone; what is left is still deliberately its own
-   rule (matching `.viewer-controls button` etc. below) rather than a
-   reference to `species-entry.css`'s `.copy-button`, since this page
-   still should not depend on that file loading at all. */
-/* NIT (PR B review): was `.64rem` (10.24px), under the accessibility-pass
-   11px floor -- raised to the shared `--type-ui-font` step, the same one
-   this page's other interactive controls (the energy-display unit
-   toggle, item 11) use. */
+/* The shared copy button, scoped to this page so its look does not depend on another page's stylesheet loading. */
 .geometry-page .copy-button {
     flex: none;
+    min-height: 2.75rem;
     border: 1px solid var(--control-border);
-    border-radius: .3rem;
+    border-radius: var(--radius);
     background: var(--surface);
     color: var(--muted);
     font: var(--type-ui-font);
@@ -99,252 +39,10 @@
 
 .geometry-page .copy-button:hover { border-color: var(--accent); color: var(--accent); }
 .geometry-page .copy-button[data-copied="true"] { border-color: var(--accent); color: var(--accent-700); }
-/* Clipboard access is unavailable outside a secure context (plain http,
-   not localhost) or can be denied even inside one — previously this was
-   a silent no-op. `CopyButton` now surfaces it as its own visible state
-   (button text flips to "Unavailable") rather than doing nothing, and
-   this is that state's colour — a warm amber, not the page's blue accent,
-   so it does not read as a second "success" colour. */
+/* Clipboard access can be denied; the button says so in its own words and colour. */
 .geometry-page .copy-button[data-copy-unavailable="true"] { border-color: var(--warning); color: var(--warning); }
 
-/* This page's own `.ledger-summary` tile row (record-summary-row PR) now
-   renders exactly 2 `Metric` cards -- the Validation card that used to
-   share this SAME grid as a 3rd column moved out, below it, into its own
-   full-width `.ledger-summary.ledger-summary--single` section (see
-   `GeometryDetailPage.tsx`'s comment on that section, and `conformer-
-   group.css`'s consolidated `.coverage-card` block). `repeat(2, 1fr)`,
-   not the shared `repeat(3, 1fr)` `.ledger-summary` in `conformer-
-   group.css` now uses (sized for the OTHER two pages' 3-tile rows) --
-   this page only ever has 2 tiles. */
-.geometry-summary {
-    grid-template-columns: repeat(2, 1fr);
-}
-
-@media (max-width: 680px) {
-    .geometry-summary { grid-template-columns: 1fr; }
-}
-
-/* `.validation-card` is RETIRED (record-summary-row PR): this page's
-   evidence box now renders through the shared `.coverage-card` structure
-   every other record page uses (`components/EvidenceChecklist.tsx`,
-   consolidated styling in `conformer-group.css`) rather than its own
-   bespoke class -- see that page's JSX comment for why it now also
-   carries `--derived` (a computed verdict, not a single deposited
-   field, the same axis the OTHER three pages' cards are on). Guarded by
-   `evidenceChecklist.css.test.ts`: this file may not declare
-   `.validation-card` again. */
-
-/* Owns no width of its own any more — the caption (`.viewer-caption`)
-   and the picture+controls (`.viewer-stage`) size and centre
-   independently below, since sharing one narrow column between a
-   three-sentence caption and a square picture was exactly why the
-   caption used to read as "too long for too short a column". */
-.geometry-viewer {
-    display: flex;
-    flex-direction: column;
-    gap: .9rem;
-}
-
-/* SHOULD-FIX-11 ("record-page residuals" re-review): `margin: 0 auto`
-   centred this caption AND the picture below it (`.viewer-stage`) inside
-   the page while every OTHER block on this page (identity header,
-   `.kv-list`s, `.ledger-section`s) sits flush left -- MEASURED as a
-   ~350px gutter at 1920 with no other content ever using it. Left-
-   aligned now, like everything around it; `max-width` still caps the
-   caption's own line length. */
-.viewer-caption {
-    max-width: 46rem;
-    margin: 0;
-}
-
-/* Centred mid-page ("i also expect the struct view to may be middle"),
-   not left-anchored inside the 76rem `.geometry-page` column.
-
-   MEASURED regression, now reverted: this card briefly reused the
-   accent-left-border card treatment `.geometry-ledger` and
-   `.observation-card > header` use elsewhere in this app
-   (`border-left: 3px solid var(--accent)`). That treatment reads correctly on
-   those two — a left-aligned card inside a text column, where the 3px
-   bar sits flush with the text edge and reads as a margin rule. This
-   card is centred (`max-width: 36rem; margin: 0 auto`), floating
-   mid-page with no text edge to align to, so the same bar read instead
-   as a stray thick blue ruler line down the middle of the page (owner
-   report: "why is the structure view box with a big thick blue ruler
-   line"). Plain 1px border on all four sides instead — do not
-   reintroduce the accent bar here, and do not carry this fix backward
-   into `.geometry-ledger` or `.observation-card > header`, where the
-   treatment is correct. Independently, this app's design guidance
-   lists "accent bar/rail on cards" as a generic default to avoid, so
-   even setting the centring issue aside this treatment should not have
-   been reused. */
-/* Left-aligned (`margin: 0`, was `0 auto`), same SHOULD-FIX-11 fix as
-   `.viewer-caption` just above -- see that rule's comment.
-
-   Owner report ("record-page residuals" re-review, item 1): `align-items:
-   center` here centred the canvas (and the toolbar/display-controls rows
-   above it) INSIDE this 36rem card, while `.viewer-measurements` below
-   (a sibling of this element, not a descendant -- see
-   `GeometryViewer.tsx`'s return) used its own `max-width: 36rem; margin:
-   0 auto` to centre itself in the full ~1288px content column instead.
-   MEASURED at 1920 on the unpatched build: this box at x=180 w=576
-   (canvas centred inside it at x=228 w=480), the panel at x=536 w=576 --
-   floating to the right of and below the picture, not under it. Now
-   `flex-start`: the canvas (and every row above it -- toolbar, display
-   controls) left-aligns to this card's own padding edge instead, the
-   same edge `.viewer-measurements` now anchors to (see that rule in
-   `geometry-measure.css`) -- toolbar, canvas and measurements panel
-   share one left edge and one 36rem-wide box, stacked top to bottom. */
-.viewer-stage {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: .9rem;
-    max-width: 36rem;
-    margin: 0;
-    padding: 1.5rem;
-    border: 1px solid var(--line);
-    background: var(--surface);
-}
-
-/* 3Dmol sizes its canvas from this element's offsetWidth/offsetHeight
-   (see node_modules/3dmol/src/GLViewer.ts getWidth/getHeight) — it does
-   not size itself from CSS on the canvas it creates, only from the
-   container it is given. A fixed aspect-ratio box keeps that size stable
-   across the "loading" -> "ready"/"unavailable" status swap above it, so
-   nothing else on the page reflows once the viewer resolves either way.
-   Widened from an earlier 22rem (352px measured as the DESKTOP maximum,
-   not a mobile constraint) to 30rem: this page's own column tops out at
-   76rem, well short of the 100rem page the earlier cap was never
-   reconsidered against, but 352px still read as small on it — 30rem
-   (480px) is a proportionally sized middle ground, still comfortably
-   inside `.viewer-stage`'s 36rem card.
-
-   `outline`, not `border` — MEASURED (real Chromium, live geometry
-   record proxied into a dev server): with `border: 1px solid`, this
-   element's own `offsetWidth`/`offsetHeight` (global `box-sizing:
-   border-box`, `index.css:8`) already INCLUDE the 1px border on each
-   side, so 3Dmol sized the injected `<canvas>` to that border-inclusive
-   figure (480x480) and then positioned it flush with the CONTENT box
-   (478x478 origin) — 1px larger than the box it was placed inside on
-   every axis. Anchored top-left, the overflow spilled over the right
-   and bottom edges only, painting over exactly those two border sides
-   while leaving top and left alone (owner report: "only got 2/4
-   outlines of the box"). `outline` sits outside the border box
-   entirely — it is never part of `offsetWidth`/`offsetHeight` and
-   never part of layout at all, so there is no border thickness left
-   for 3Dmol to both measure into its size and get placed inside of.
-   Chosen over moving the border to a wrapper element or insetting the
-   canvas because it is a one-line fix that touches neither the DOM
-   structure GeometryViewer.tsx relies on (`containerRef` is this
-   element) nor the 480px figure 3Dmol zooms the molecule to — the
-   border-box width this element resolves to (`width: 100%` up to
-   `max-width: 30rem`, still under `box-sizing: border-box`) is
-   unchanged by outline having zero width, so the rendered molecule's
-   size does not change either. */
-.viewer-canvas {
-    position: relative;
-    width: 100%;
-    max-width: 30rem;
-    aspect-ratio: 1 / 1;
-    outline: 1px solid var(--line);
-    background: var(--surface);
-}
-
-/* Keyboard-operable buttons: rotate, zoom and reset the camera. Mouse drag and wheel work on the canvas too, and these
-   are the only way to rotate on a touchscreen. Always visible; shown once the viewer is ready. */
-.viewer-controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .5rem;
-}
-
-.viewer-controls:focus-visible {
-    outline: 3px solid var(--focus-ring);
-    outline-offset: 2px;
-}
-
-/* SHOULD-FIX-10 ("record-page residuals" re-review): was `.72rem
-   uppercase var(--mono)` -- a button vocabulary used nowhere else on
-   this page (the chart-style toggles elsewhere use sans `--type-ui`).
-   Mapped onto `--type-ui-font` (600 .8125rem sans, no transform): the
-   button labels are already sentence case in JSX ("Rotate left", "Zoom
-   in", "Reset view", `components/GeometryViewer.tsx`), so dropping the
-   forced uppercase/letter-spacing renders them as written rather than
-   fighting the markup with CSS. */
-.viewer-controls button,
-.viewer-style-choice button {
-    padding: .4rem .75rem;
-    border: 1px solid var(--control-border);
-    background: var(--surface);
-    color: var(--accent);
-    font: var(--type-ui-font);
-    letter-spacing: var(--type-ui-tracking);
-    cursor: pointer;
-}
-
-.viewer-controls button:hover,
-.viewer-style-choice button:hover {
-    border-color: var(--accent);
-    background: var(--accent-50);
-}
-
-/* Style (ball & stick / spacefill / wireframe) and atom-label controls —
-   a second control group, kept visually distinct from the camera
-   controls above since it changes what is drawn rather than how it is
-   viewed. */
-.viewer-display-controls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .9rem;
-}
-
-.viewer-style-choice {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .5rem;
-    margin: 0;
-    padding: 0;
-    border: 0;
-}
-
-.viewer-style-choice legend {
-    padding: 0;
-    font: var(--type-ui-font);
-    letter-spacing: var(--type-ui-tracking);
-    color: var(--muted);
-}
-
-.viewer-style-choice button[aria-pressed="true"] {
-    border-color: var(--accent);
-    background: var(--accent);
-    color: var(--surface);
-}
-
-.viewer-label-choice {
-    display: flex;
-    align-items: center;
-    gap: .4rem;
-    font: var(--type-ui-font);
-    letter-spacing: var(--type-ui-tracking);
-    color: var(--muted);
-}
-
-.viewer-label-choice select {
-    padding: .3rem .5rem;
-    border: 1px solid var(--control-border);
-    background: var(--surface);
-    color: var(--accent);
-    font: var(--type-ui-font);
-    letter-spacing: var(--type-ui-tracking);
-}
-
-/* Coordinate table display controls: unit (Å/bohr) and element (symbol/
-   atomic number) toggles. Reuses the exact button/fieldset/aria-pressed
-   visual language `.viewer-style-choice` above already established
-   (same colours, same pressed-state treatment) rather than inventing a
-   second toggle style for the same page. */
+/* Display controls for the coordinate table: unit and element. */
 .coordinate-controls {
     display: flex;
     flex-wrap: wrap;
@@ -362,8 +60,6 @@
     border: 0;
 }
 
-/* NIT (PR B review): was `.64rem` (10.24px), under the accessibility-pass
-   11px floor -- raised to the shared `--type-label-font` step. */
 .coordinate-toggle legend {
     padding: 0;
     font: var(--type-label-font);
@@ -372,14 +68,12 @@
     color: var(--muted);
 }
 
-/* SHOULD-FIX-10: was `.72rem uppercase var(--mono)`, the same retired
-   button vocabulary `.viewer-controls button` above used to carry --
-   mapped onto `--type-ui-font` for the same reason. Button text ("Å" /
-   "bohr" / "Symbol", `GeometryDetailPage.tsx`) is already written the
-   way it should display. */
 .coordinate-toggle button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
     padding: .3rem .65rem;
     border: 1px solid var(--control-border);
+    border-radius: var(--radius);
     background: var(--surface);
     color: var(--accent);
     font: var(--type-ui-font);
@@ -398,16 +92,7 @@
     color: var(--surface);
 }
 
-/* Never lets the bohr column read as "this is how the archive stores
-   it" — the owner's own words were "plain toggle but starts with
-   angstrom cause that's how it's stored", so this says exactly that
-   (and names the exact CODATA factor used) rather than a "(converted)"
-   badge floating near the values themselves. */
-/* Typography now comes from `.note` (`design-system.css`) -- this page
-   composes `className="note coordinate-toggle-note"` -- this rule keeps
-   only the layout behaviour `.note` does not own: this paragraph is a
-   full-width row inside the `.coordinate-controls` flex toolbar, not a
-   text block capped to `--measure-note` alongside the toggle buttons. */
+/* A full-width row inside the toolbar saying the bohr column is a display conversion. */
 .coordinate-toggle-note {
     flex-basis: 100%;
     max-width: none;
@@ -417,38 +102,8 @@
     font: inherit;
 }
 
-/* Right-aligned, tabular-figure numeric columns so decimal points line
-   up column-wise instead of the ragged left-aligned digits every other
-   `.stage-table` column uses — scoped to `.coordinate-table` specifically
-   (a modifier on this one table, not `.stage-table` generally) since the
-   provenance tables sharing `.stage-table` have no numeric columns to
-   align.
-
-   Applies to BOTH `td` and `th`: MEASURED, an earlier version of this
-   rule right-aligned only the `td`s, leaving `X (Å)` sitting far left of
-   its own right-aligned column while `0.934405` sat far right — ~250px
-   apart at 1440px on a real 4-atom record — which made associating a
-   number with its heading harder than before this rule existed.
-
-   Selects on `data-column` ("x"/"y"/"z"), a hook that never changes, NOT
-   `data-label` — `data-label` on this table's `td`s now carries the
-   active unit (`x (Å)` / `x (bohr)`, see GeometryDetailPage.tsx) so the
-   mobile stacked-row view (`conformer-group.css`'s `td::before { content:
-   attr(data-label) }`) shows a reader which unit a value is in instead of
-   a bare axis letter with the unit only in a note above the table. A rule
-   keyed to `data-label="x"` would silently stop matching the moment that
-   label's text includes a unit, which is exactly the bug this hook
-   avoids reintroducing.
-
-   Confined to the desktop table layout: below the breakpoint
-   `.stage-table` stacks into label/value rows (see `conformer-group.css`),
-   where a right-aligned value sitting under a left-aligned label looks
-   worse, not better. The stacking breakpoint is `(max-width: 680px)`; this
-   query starts at `680.02px`, not `681px` — a bare `681px` left a
-   ~0.5px band (fractional device-pixel-ratio, browser zoom) matching
-   NEITHER query: not stacked, but also not right-aligned/tabular. `.02px`
-   is comfortably below any real viewport's resolution, so the two queries
-   now abut with no observable gap. */
+/* Right-aligned tabular numbers on desktop. Keyed on `data-column`, which never changes with the unit; the stacked phone
+   layout (below 680px) keeps values left under their labels. The `.02px` stops the two queries leaving a gap between them. */
 @media (min-width: 680.02px) {
     .coordinate-table th[data-column],
     .coordinate-table td[data-column] {
@@ -458,11 +113,5 @@
 }
 
 @media (max-width: 680px) {
-    /* `.viewer-stage`/`.viewer-caption` already shrink to the available
-       width below their `max-width` caps (flex-column cross-axis auto
-       margins, not a fixed width) — nothing extra needed here for width.
-       `.coordinate-controls` still wants to stack, though: side-by-side
-       fieldsets plus the always-visible caption note is tight below
-       680px. */
     .coordinate-controls { flex-direction: column; align-items: flex-start; }
 }
