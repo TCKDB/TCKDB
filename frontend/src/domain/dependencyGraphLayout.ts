@@ -30,30 +30,10 @@
  * `maxWidth` still caps it from scaling UP past that).
  *
  * ---------------------------------------------------------------------
- * Band ordering (wide layout) -- why a sibling's OWN distance from the
- * centre column decides how deep its band is, not array order:
- *
- * Every edge in a tier shares the SAME vertical "trunk" segment near the
- * centre (`centreX`) for the run from ITS OWN band down to the centre's
- * own edge -- which means edge i's trunk passes through every band
- * DEEPER than its own (every `j >= i`), never a shallower one. Band 1
- * (nearest the sibling row) is therefore the only band nothing ever
- * shares a trunk through; every deeper band is crossed by every
- * shallower edge's trunk. A label is placed at the SIBLING end of its
- * own run (`labelX = box.x`, not the midpoint), which keeps it clear of
- * `centreX` for any sibling whose box is far enough from centre -- but a
- * sibling positioned AT (or very near) `centreX` -- the middle box of an
- * odd-count row, or any row whose per-tier label is wide relative to how
- * far that sibling sits from centre -- still has a label that reaches
- * `centreX` regardless of which band it draws in. `assignBandOrder`
- * computes each edge's own CLEARANCE (`|box.x - centreX| -
- * ownLabelWidth / 2`, how far its label falls short of reaching
- * `centreX`) and gives the edge with the WORST (most negative) clearance
- * band 1 -- the one band no other edge's trunk ever crosses. Every
- * deeper band IS crossed, by every shallower edge, but only a sibling
- * with bad clearance has a label anywhere near `centreX` to be hit --
- * assigning the worst clearance to the one uncrossed position is what
- * keeps every crossing outside every label.
+ * Band ordering (wide layout): an edge's band depth comes from how far
+ * its sibling sits from the centre column, not array order, so the shared
+ * trunk at `centreX` never crosses a label. Each label sits beside its
+ * sibling-end drop (or above its run) and never on any edge line.
  * ---------------------------------------------------------------------
  */
 
@@ -378,9 +358,84 @@ function outerLabelOverhang(tierEdges: DependencyGraphEdgeSpec[], refs: string[]
     if (refs.length === 0) return 0
     const labelWidthFor = (ref: string) =>
         Math.max(0, ...tierEdges.filter((e) => e.otherRef === ref).map((e) => smallTextBoxWidth(e.label)))
-    const leftOverhang = labelWidthFor(refs[0]) / 2 - widths[0] / 2
-    const rightOverhang = labelWidthFor(refs[refs.length - 1]) / 2 - widths[widths.length - 1] / 2
+    const leftOverhang = labelWidthFor(refs[0]) + LABEL_GAP - widths[0] / 2
+    const rightOverhang = labelWidthFor(refs[refs.length - 1]) + LABEL_GAP - widths[widths.length - 1] / 2
     return Math.max(0, leftOverhang, rightOverhang)
+}
+
+const LABEL_GAP = 10
+const LABEL_CLEAR = 3
+
+interface Pt { x: number; y: number }
+interface Box { x: number; y: number; w: number; h: number }
+
+function pathPoints(d: string): Pt[] {
+    const t = d.split(/\s+/)
+    const pts: Pt[] = []
+    for (let i = 0; i < t.length; i++) {
+        if (t[i] === "M" || t[i] === "L") { pts.push({ x: Number(t[i + 1]), y: Number(t[i + 2]) }); i += 2 }
+    }
+    return pts
+}
+
+function boxesOverlap(a: Box, b: Box): boolean {
+    return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+}
+
+/** Puts each label beside its sibling-end vertical drop (right, then left) or above its horizontal run, at
+ * the first spot `LABEL_CLEAR` px clear of every edge segment, node and earlier label. */
+function placeWideLabels(edges: LayoutEdge[], nodes: LayoutNode[], centreRef: string, width: number): void {
+    const segs: Box[] = []
+    for (const e of edges) {
+        const p = pathPoints(e.path)
+        for (let i = 0; i < p.length - 1; i++) {
+            segs.push({
+                x: Math.min(p[i].x, p[i + 1].x), y: Math.min(p[i].y, p[i + 1].y),
+                w: Math.max(0.02, Math.abs(p[i].x - p[i + 1].x)), h: Math.max(0.02, Math.abs(p[i].y - p[i + 1].y)),
+            })
+        }
+    }
+    const obstacles: Box[] = [
+        ...segs,
+        ...nodes.map((n) => ({ x: n.x - n.width / 2, y: n.y - n.height / 2, w: n.width, h: n.height })),
+    ]
+    const placed: Box[] = []
+    for (const e of edges) {
+        const p = pathPoints(e.path)
+        const parentTier = e.toRef === centreRef
+        // Sibling-end drop and the run beside it.
+        const [v1, v2] = parentTier ? [p[0], p[1]] : [p[2], p[3]]
+        const runEnd = parentTier ? p[2] : p[1]
+        const w = e.labelWidth
+        const h = e.labelHeight
+        const top = Math.min(v1.y, v2.y)
+        const bottom = Math.max(v1.y, v2.y)
+        const mid = (top + bottom) / 2
+        const cands: Box[] = []
+        for (const x0 of [v1.x + LABEL_GAP, v1.x - LABEL_GAP - w]) {
+            for (let d = 0; d <= bottom - top; d += 2) {
+                for (const sign of d === 0 ? [1] : [1, -1]) {
+                    const cy = mid + sign * d
+                    if (cy - h / 2 >= top && cy + h / 2 <= bottom) cands.push({ x: x0, y: cy - h / 2, w, h })
+                }
+            }
+        }
+        const dir = runEnd.x > v1.x ? 1 : -1
+        for (let off = 0; off <= 160; off += 8) {
+            const x0 = dir > 0 ? v1.x + LABEL_GAP + off : v1.x - LABEL_GAP - off - w
+            cands.push({ x: x0, y: runEnd.y - 5 - h, w, h })
+        }
+        const fits = (c: Box) => {
+            const inflated = { x: c.x - LABEL_CLEAR, y: c.y - LABEL_CLEAR, w: c.w + 2 * LABEL_CLEAR, h: c.h + 2 * LABEL_CLEAR }
+            return c.x >= 0 && c.x + c.w <= width
+                && !obstacles.some((o) => boxesOverlap(inflated, o))
+                && !placed.some((o) => boxesOverlap(inflated, o))
+        }
+        const chosen = cands.find(fits) ?? cands[0]
+        placed.push(chosen)
+        e.labelX = chosen.x + w / 2
+        e.labelY = chosen.y + h / 2
+    }
 }
 
 export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
@@ -399,8 +454,8 @@ export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
     // app's own minimum node box (140px).
     const maxParentLabelW = Math.max(0, ...parentEdges.map((e) => smallTextBoxWidth(e.label)))
     const maxChildLabelW = Math.max(0, ...childEdges.map((e) => smallTextBoxWidth(e.label)))
-    const parentGapX = Math.max(WIDE_GAP_X_MIN, maxParentLabelW / 2 + 16)
-    const childGapX = Math.max(WIDE_GAP_X_MIN, maxChildLabelW / 2 + 16)
+    const parentGapX = Math.max(WIDE_GAP_X_MIN, maxParentLabelW + 2 * LABEL_GAP - NODE_MIN_W)
+    const childGapX = Math.max(WIDE_GAP_X_MIN, maxChildLabelW + 2 * LABEL_GAP - NODE_MIN_W)
 
     const parentWidths = parentRefs.map(nodeWidth)
     const childWidths = childRefs.map(nodeWidth)
@@ -508,6 +563,7 @@ export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
         }
     }
 
+    placeWideLabels(edgesOut, nodes, ownRef, svgWidth)
     return { width: svgWidth, height: svgHeight, nodes, edges: edgesOut }
 }
 
@@ -537,7 +593,7 @@ const NARROW_LANE_GUTTER = 20
 // (post-review): with a FIXED centre height, lane 2's point sat 8px
 // below the box and lane 3's 30px below it -- the box was never resized
 // for lane count at all.
-const NARROW_ENTRY_STAGGER = LABEL_H + 2
+const NARROW_ENTRY_STAGGER = LABEL_H + 10
 
 /** The centre node's own height in the narrow layout -- at least the
  * base `CENTRE_H` (room for the pill + ref line), but grown so the
@@ -589,7 +645,7 @@ export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
     // The SVG's own width still has to reach past the LAST lane's own
     // label (left-anchored there, extending further right by its own
     // width) -- `maxLabelWidth`, not just the lane positions themselves.
-    const svgWidth = gutterX + laneStep * laneCount + maxLabelWidth + NARROW_MARGIN
+    const svgWidth = gutterX + laneStep * laneCount + LABEL_GAP + maxLabelWidth + NARROW_MARGIN
 
     const centreH = centreHeightFor(Math.max(parentEdges.length, childEdges.length), Boolean(centreSubjectLabel))
 
@@ -667,7 +723,7 @@ export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
             const width = smallTextBoxWidth(edge.label)
             edgesOut.push({
                 role: edge.role, label: edge.label, fromRef: edge.otherRef, toRef: ownRef, path,
-                labelX: laneX + width / 2, labelY: entryY, labelWidth: width, labelHeight: LABEL_H, laneX,
+                labelX: laneX + LABEL_GAP + width / 2, labelY: entryY - LABEL_H / 2 - 5, labelWidth: width, labelHeight: LABEL_H, laneX,
             })
         } else {
             childLane += 1
@@ -678,7 +734,7 @@ export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
             const width = smallTextBoxWidth(edge.label)
             edgesOut.push({
                 role: edge.role, label: edge.label, fromRef: ownRef, toRef: edge.otherRef, path,
-                labelX: laneX + width / 2, labelY: exitY, labelWidth: width, labelHeight: LABEL_H, laneX,
+                labelX: laneX + LABEL_GAP + width / 2, labelY: exitY + LABEL_H / 2 + 5, labelWidth: width, labelHeight: LABEL_H, laneX,
             })
         }
     }

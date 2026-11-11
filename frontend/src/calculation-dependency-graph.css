@@ -184,9 +184,7 @@
     fill: var(--muted);
 }
 
-/* Sits behind an edge's label text so the connecting line never crosses
-   through the letters -- filled with the page surface colour, the same
-   "punch a hole in the line" trick a chart axis label uses. */
+/* Page-coloured box behind a label; the layout keeps it off every edge line. */
 .dep-graph-edge-label-bg {
     fill: var(--surface);
 }

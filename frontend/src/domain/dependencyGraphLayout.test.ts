@@ -88,21 +88,12 @@ function pathSegments(layout: GraphLayout): { key: string; p1: { x: number; y: n
     return segments
 }
 
-/**
- * An edge's OWN label sits directly ON its OWN path (deliberately -- the
- * label's opaque background "punches a hole" in its own connecting line
- * at the bend where the two meet, `calculation-dependency-graph.css`'s
- * `.dep-graph-edge-label-bg`), so a label always touches at least its own
- * two adjoining segments. What the review's fix asked this test to catch
- * is a DIFFERENT edge's line crossing through -- self-intersection is
- * excluded here by edge identity, not by geometry.
- */
+/** No edge segment, its own included, may touch any label rect. */
 function assertNoPathLabelIntersections(layout: GraphLayout, label: string) {
     const labels = labelRects(layout)
     const segments = pathSegments(layout)
     for (const [labelIndex, { key: labelKey, rect }] of labels.entries()) {
         for (const [segIndex, { key: segKey, p1, p2 }] of segments.entries()) {
-            if (segKey === labelKey) continue
             expect(
                 segmentIntersectsRect(p1, p2, rect),
                 `${label}: path segment ${segIndex} (edge ${segKey}: ${JSON.stringify(p1)} -> ${JSON.stringify(p2)}) `

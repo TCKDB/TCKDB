@@ -106,20 +106,9 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * rather than re-computed) to place the subject row between the pill and
  * the ref line without a second, drifting copy of that arithmetic.
  *
- * Paint order inside the `<svg>` is ALL edge paths, then ALL edge labels,
- * then ALL nodes -- never one edge's path/label/rect interleaved with
- * the next's. MEASURED (post-review): with each edge rendered as its own
- * self-contained group (path, then its label, in DOM/array order), a
- * LATER edge's path painted on top of an visually EARLIER edge's label
- * wherever the two geometrically crossed (the `<path>` has no fill, but
- * is still opaque along its stroked line) -- e.g. a 3-child graph's
- * middle child's own connecting line crossing dead through another
- * child's label text. `domain/dependencyGraphLayout.ts`'s band/lane
- * placement keeps every DIFFERENT edge's path geometrically clear of
- * every OTHER edge's label rect (see that module's own tests); this
- * paint order is what ALSO keeps an edge's path from ever visually
- * covering its OWN label where the two deliberately meet (the label's
- * opaque background "punches a hole" in its own line at the bend).
+ * Paint order inside the `<svg>`: all edge paths, then all edge labels,
+ * then all nodes. Labels are placed clear of every edge line, their own
+ * included (see `domain/dependencyGraphLayout.ts`).
  */
 /** See `CalculationDependencyGraph`'s own docstring for what this answers
  * and why it lives inside the node rather than a caption above it. */

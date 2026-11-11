@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Dependency graph edges are continuous lines (Unreleased)
+
+- **Behaviour:** in the calculation dependency graph, edge labels no longer cover any part of a line, so every edge reads as one line from parent to child with its arrowhead at the child, in both the wide and the narrow layout.
+- **Schema and migration:** none. No new environment variable.
+
 ## The "Where this record sits" map on every record page (Unreleased)
 
 - **Behaviour:** calculation, conformer group, conformer observation, geometry, transition state, reaction, level-of-theory and network pages show the same "Where this record sits" map in the side column as the molecule, molecule version and reaction entry pages, with the same drawing for the mouse and the same list for keyboards, screen readers and phones. Each page names only what it already holds: a calculation shows its molecule version or transition state (and reaction version), conformer group and observation, geometries, related calculations and level of theory; a conformer group its molecule version, observations, calculations, geometries and the thermochemistry and rate records that use it; an observation its group, molecule version, calculations and geometries; a geometry its owner and the calculations that produced or took it as input; a transition state its reaction version, the molecule versions on either side and its calculations; a reaction two of its reaction entries (and how many more) with the molecule versions of the first; a level of theory the calculations run at it, its composite recipe, correction schemes and frequency scale factors; a pressure-dependent network its molecule versions, reaction versions and solves. Counts open the section of the page that lists them. The map makes no extra requests.
