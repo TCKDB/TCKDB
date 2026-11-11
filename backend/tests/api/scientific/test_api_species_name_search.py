@@ -486,6 +486,8 @@ def test_name_search_has_its_own_bucket_before_the_generic_read_branch():
     assert bucket == "name_search" and limit == settings.rate_limit_name_search_auth_per_minute
     assert identity.startswith("apikey:")
     assert (settings.rate_limit_name_search_anon_per_minute, settings.rate_limit_name_search_auth_per_minute) == (30, 120)
+    # The IP ceiling never cuts a credentialed caller below their own limit.
+    assert settings.rate_limit_name_search_ip_per_minute >= settings.rate_limit_name_search_auth_per_minute
 
 
 def test_neighbouring_species_reads_keep_their_buckets():
@@ -529,3 +531,14 @@ def test_expired_windows_are_evicted():
     rate_limit.time.sleep(1.1)
     store.hit(bucket="b", identity="fresh", limit=5, window_seconds=1)
     assert store.size() == 1
+
+
+def test_one_credential_keeps_its_own_limit_under_the_ip_ceiling(client, monkeypatch):
+    monkeypatch.setattr(settings, "rate_limit_enabled", True)
+    monkeypatch.setattr(settings, "rate_limit_name_search_auth_per_minute", 4)
+    monkeypatch.setattr(settings, "rate_limit_name_search_ip_per_minute", 4)
+    from app.api.rate_limit import reset_rate_limit_store
+
+    reset_rate_limit_store()
+    codes = [client.get(URL, params={"q": "water"}, headers={"x-api-key": "one-key"}).status_code for _ in range(5)]
+    assert codes == [200, 200, 200, 200, 429]

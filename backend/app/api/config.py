@@ -99,7 +99,7 @@ class Settings(BaseSettings):
     rate_limit_name_search_anon_per_minute: int = 30
     rate_limit_name_search_auth_per_minute: int = 120
     # Every name search is also charged to the caller's IP, whatever credential it carries.
-    rate_limit_name_search_ip_per_minute: int = 30
+    rate_limit_name_search_ip_per_minute: int = 120
     # ``SET LOCAL statement_timeout`` (milliseconds) applied to the name-search read.
     name_search_statement_timeout_ms: int = 300
 
