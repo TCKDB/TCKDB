@@ -219,7 +219,7 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
                         <ListNotes lists={[["rate", data]]} rest={() => "Each version's page lists its own."} />
                         {model.total >= 1 && (
                             <section aria-labelledby="compare-rates">
-                                <SectionHeading id="compare-rates" intro="As deposited; k only inside each fitted range. k includes tunnelling only if the fit did.">
+                                <SectionHeading id="compare-rates" intro="As deposited; k only within each fitted range, tunnelling only if the fit had it.">
                                     Rate coefficients
                                 </SectionHeading>
                                 {difference && <p className="note" role="note">{BANNER[difference]}</p>}
@@ -237,7 +237,7 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
                         )}
                         {model.total >= 1 && (
                             <section aria-labelledby="compare-profiles">
-                                <SectionHeading id="compare-profiles" intro="One profile per group, each on its own axis. Profiles of different groups are never drawn together.">
+                                <SectionHeading id="compare-profiles" intro="Each group's profile has its own axis. Profiles of different groups are never drawn together.">
                                     Energy profiles by group
                                 </SectionHeading>
                                 {entryOrder.length > readRefs.length && <p className="note" role="note">Profiles were read for the first {readRefs.length} of {entryOrder.length} reaction entries.</p>}

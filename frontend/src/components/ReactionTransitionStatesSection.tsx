@@ -182,9 +182,7 @@ function TransitionStateBlock({ ts, calculationsByRef }: {
                     <>
                         {hasIrc && (
                             <p className="note dep-graph-irc-note" data-testid="dep-graph-context-note">
-                                This graph shows calculations and how data flows between them — it does not show
-                                which species the IRC connects. That evidence, when deposited, lives on the
-                                transition-state entry.
+                                Calculations only; what the IRC connects is on the transition-state entry.
                             </p>
                         )}
                         <CalculationDependencyGraph

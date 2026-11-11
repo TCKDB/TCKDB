@@ -180,11 +180,6 @@ describe("calculations table and page-wide guards", () => {
         expect(phone).toMatch(/\.shape-calculations-table th,[^{]*\{[^}]*display:\s*block/)
     })
 
-    it("styles the next-steps links as links, with a focus ring", () => {
-        expect(extractRule(css, ".next-steps a")).toMatch(/text-decoration:\s*underline/)
-        expect(extractRule(css, ".next-steps a:focus-visible")).toMatch(/outline:\s*3px solid var\(--focus-ring\)/)
-    })
-
     it("scopes the hidden-text utility to this page instead of defining a global class", () => {
         expect(code).not.toMatch(/(^|[\s,}])\.visually-hidden\b/)
         expect(code).toMatch(/\.molecule-page-visually-hidden\s*\{/)

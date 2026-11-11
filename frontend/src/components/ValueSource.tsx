@@ -46,8 +46,11 @@ export function ValueSource({ source, did, levels, programs, review, compact = f
     const parts: ReactNode[] = []
     const didWords = did ? calculationDid(did) : null
     if (didWords) parts.push(didWords)
-    for (const level of levels ?? []) {
-        if (level.label) parts.push(<>{level.role} <span className="t-preserve-case">{level.label}</span></>)
+    const labelled = (levels ?? []).filter((level) => level.label)
+    if (labelled.length > 1 && labelled.every((level) => level.label === labelled[0].label)) {
+        parts.push(<>{labelled.map((level) => level.role).join(", ")} at <span className="t-preserve-case">{labelled[0].label}</span></>)
+    } else {
+        for (const level of labelled) parts.push(<>{level.role} <span className="t-preserve-case">{level.label}</span></>)
     }
     const shownPrograms = (programs ?? []).filter(Boolean)
     if (shownPrograms.length > 0) parts.push(<span className="t-preserve-case">{shownPrograms.join(", ")}</span>)

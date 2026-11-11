@@ -114,7 +114,7 @@ export function displayOrderSentence(sort: OrderEcho | null | undefined): string
     const words = orderWords(sort)
     if (!words || !sort) return null
     if (sort.requested_by) return `Order requested (${sort.requested_by}): ${words}.`
-    return `Display order: ${words}. An order for browsing, not a ranking or a recommendation.`
+    return `Order: ${words}; not a ranking or a recommendation.`
 }
 
 /** The list is longer than the window on screen, or the window is not the first: what is shown is not "every" record. */

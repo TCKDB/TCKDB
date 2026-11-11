@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react"
 import { RecordPlaceholder } from "../components/RecordPlaceholder"
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import "../molecule-page.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { useSpeciesOptimisations, useSpeciesSinglePoints, type SinglePointsState } from "../hooks/useSpeciesSinglePoints"
@@ -338,27 +338,8 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
         ) : (
             <EmptyEntryEvidence />
         )}
-        <NextSteps entry={entry} />
         </PageShell>
     </section>
-}
-
-function NextSteps({ entry }: { entry: SpeciesEntryProjection }) {
-    return (
-        <section className="next-steps" aria-labelledby="next-steps">
-            <SectionHeading id="next-steps">Where to go next</SectionHeading>
-            <ul>
-                <li><Link to={`/species/${entry.speciesRef}`}>All versions of this molecule</Link></li>
-                <li>
-                    <Link to={`${BROWSE_KIND_PATHS.transition_state}?participant_smiles=${encodeURIComponent(entry.canonicalSmiles)}`}>
-                        Transition states for reactions of this molecule
-                    </Link>
-                </li>
-                <li><Link to="/methods">Levels of theory and methods</Link></li>
-                <li><Link to="/guide">How to read a record</Link></li>
-            </ul>
-        </section>
-    )
 }
 
 // The tab itself already carries the section's name (`EntryTabs`, id

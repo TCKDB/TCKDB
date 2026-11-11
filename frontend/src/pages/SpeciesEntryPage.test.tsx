@@ -788,7 +788,12 @@ describe("species-entry page: conformer picker", () => {
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         expect(await screen.findByRole("heading", { name: "Its 3D shapes" })).toBeVisible()
-        expect(screen.getByText("This entry has one deposited shape. Its evidence is shown below.")).toBeVisible()
+        expect(document.querySelector(".conformer-picker-note")).toBeNull()
+        expect(document.querySelector(".shape-energy-controls")).toBeNull()
+        expect(document.querySelector(".shape-card-energy")).toBeNull()
+        expect(document.querySelector(".shape-energy-table")).toBeNull()
+        expect(screen.queryByText(/Not shown until you choose a level/)).not.toBeInTheDocument()
+        expect(document.querySelectorAll(".conformer-card")).toHaveLength(1)
     })
 })
 
@@ -1371,10 +1376,10 @@ describe("species-entry page: paging the conformer basins", () => {
         await screen.findByRole("heading", { name: "Its 3D shapes" })
         expect(await screen.findByText("Showing 1–50 of 120 shapes.")).toBeVisible()
         expect(document.querySelectorAll(".conformer-card")).toHaveLength(50)
-        expect(screen.getByText(/This entry has 120 deposited shapes/)).toBeVisible()
+        expect(screen.getByText(/120 shapes\. Choose one\./)).toBeVisible()
         // What the server said about the list is passed on, not dropped.
         expect(screen.getByText("Not listed by default: 3 rejected shapes.")).toBeVisible()
-        expect(screen.getByText(/^Pages follow the archive's display order: approved first\./)).toBeVisible()
+        expect(screen.getByText(/^Approved first\./)).toBeVisible()
         // One note states both orders; the pager adds no second one.
         const section = document.querySelector(".conformer-picker")!
         expect(section.querySelectorAll(".order-note, .list-pager-order")).toHaveLength(1)
@@ -1416,7 +1421,7 @@ describe("species-entry page: what the conformer picker says about its own order
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         await screen.findByRole("heading", { name: "Its 3D shapes" })
-        expect(screen.getByText(/the cards within a page are listed by conformer number, then label, then reference\./i)).toBeVisible()
+        expect(screen.getByText(/cards by conformer number\./i)).toBeVisible()
         expect(screen.getAllByText(/This order is not a recommendation\./).length).toBeGreaterThan(0)
     })
 
@@ -1538,8 +1543,8 @@ describe("species-entry page: relative energies on the shape cards", () => {
         expect(await within(cardFor("Conformer Group 2")).findByText("+12.35")).toBeVisible()
         expect(within(cardFor("Conformer Group 2")).getByRole("link", { name: "calc_sp_3" })).toHaveAttribute("href", "/calculations/calc_sp_3")
         expect(within(cardFor("Conformer Group 1")).getByText(/the reference shape/)).toBeVisible()
-        expect(screen.getByText(/is the only level with energies here, so it is filled in/)).toBeVisible()
-        expect(screen.getByText(/Conformer Group 1 is the reference only because it is the first card listed/)).toBeVisible()
+        expect(screen.getByText(/Only level with energies\./)).toBeVisible()
+        expect(screen.getByText(/Conformer Group 1 is the reference only because it is listed first/)).toBeVisible()
         expect(relativeEnergyBodies).toEqual([{
             reference_conformer_ref: groupOneRef, energy_kind: "electronic_energy",
             level: { level_of_theory_ref: "lot_a" }, certificate: "local_minimum_any_surface",
@@ -1732,7 +1737,7 @@ describe("species-entry page: depositor text and request counts", () => {
         )
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText(/This entry has 50 deposited shapes/)
+        await screen.findByText(/50 shapes\. Choose one\./)
         await waitFor(() => expect(cardLabels()).toHaveLength(50))
         await waitFor(() => expect(seen.geometry.size).toBeGreaterThan(0))
         expect(seen.usage).toBe(1)
@@ -1827,7 +1832,7 @@ describe("species-entry page: pictures read geometries only when asked or near",
         )
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        await screen.findByText(/This entry has 20 deposited shapes/)
+        await screen.findByText(/20 shapes\. Choose one\./)
         await waitFor(() => expect(cardLabels()).toHaveLength(20))
         // No card has intersected, and no stage reads a geometry: nothing is read yet.
         expect(geometryReads).toEqual([])

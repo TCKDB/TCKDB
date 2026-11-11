@@ -235,10 +235,10 @@ describe("ArchiveHomePage: browse cards", () => {
         expect(screen.getByRole("link", { name: "Methods" })).toHaveAttribute("href", "/methods")
     })
 
-    it("says methods are listed in no particular order of quality", () => {
+    it("says methods are not ranked", () => {
         server.use(...countHandlers())
         page()
-        expect(document.querySelector(".home-cards")).toHaveTextContent("no particular order of quality")
+        expect(document.querySelector(".home-cards")).toHaveTextContent("Not ranked")
     })
 })
 
@@ -262,7 +262,7 @@ describe("ArchiveHomePage: how to read a value", () => {
 })
 
 describe("ArchiveHomePage: the example record", () => {
-    const COPY = "An example record, chosen by the site editors to show how a record reads. It is not a recommendation."
+    const COPY = "Chosen by the editors as an example. It is not a recommendation."
 
     async function settled() {
         await waitFor(() => expect(document.querySelector(".home-counts")).not.toBeNull())

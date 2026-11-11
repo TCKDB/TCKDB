@@ -3,7 +3,6 @@ import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
 import type { ConformerProjection } from "../api/speciesEntryApi"
-import { conformerLabel } from "../domain/conformerEvidence"
 import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
 import { SectionHeading } from "./PageSections"
 
@@ -87,12 +86,7 @@ export function ConformerGeometryTab({ conformer }: { conformer: ConformerProjec
     return (
         <section className="ledger-section" aria-labelledby="geometry-heading">
             <div className="ledger-heading">
-                <p className="eyebrow">Evidence for this conformer</p>
                 <SectionHeading id="geometry-heading">Geometry</SectionHeading>
-                <p>
-                    One row per deposited observation for {conformerLabel(conformer)}: each optimisation
-                    calculation it carries, the level of theory it ran at, and the geometry it ended at.
-                </p>
             </div>
             {observations.length === 0 ? (
                 <p className="empty-projection">No stored geometry is projected for this conformer.</p>

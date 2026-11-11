@@ -1,3 +1,4 @@
+import { GuideLink } from "../components/GuideLink"
 import { useEffect, useMemo, useState } from "react"
 import "../browse.css"
 import "../conformer-group.css"
@@ -74,7 +75,7 @@ export default function MethodsIndexPage() {
             <PageShell>
                 <h1 className="t-display-2">Methods</h1>
                 <p className="t-body methods-index-intro">
-                    Levels of theory, software and workflow tools behind deposited calculations.
+                    Levels of theory, software and workflow tools behind deposited calculations.<GuideLink to="level-of-theory" />
                 </p>
 
                 <section className="ledger-section" aria-labelledby="methods-lot-heading">
