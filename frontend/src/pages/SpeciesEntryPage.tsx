@@ -248,12 +248,13 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
     // link, `SpeciesEntryPage`'s canonicalization had already replaced the
     // URL with `/geometry` when this page first rendered, but this render
     // still saw `/calculations` and wrote it straight back (#562).
+    const location = useLocation()
     function writeConformerParam(conformerGroupRef: string, byPage: boolean) {
         const next = new URLSearchParams(searchParams)
         next.set("conformer", conformerGroupRef)
         if (byPage) next.set("selection", "default")
         else next.delete("selection")
-        navigate({ pathname: entryPath, search: `?${next}` }, { replace: true })
+        navigate({ pathname: entryPath, search: `?${next}`, hash: byPage ? location.hash : "" }, { replace: true })
     }
 
     // Self-heal the URL to name what's actually selected, and say when the page chose it: a missing `conformer` param,

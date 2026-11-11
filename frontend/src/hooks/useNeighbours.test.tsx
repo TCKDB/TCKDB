@@ -72,7 +72,9 @@ describe("species entry neighbours", () => {
         expect(list.textContent).toContain("2 reaction entries")
         expect(list.textContent).not.toContain("Calculations")
         for (const link of screen.getAllByRole("link", { name: /^Networks/ })) expect(link).toHaveAttribute("href", "/networks/net_1")
-        expect(screen.queryAllByRole("link", { name: /^Reactions with this molecule/ })).toHaveLength(0)
+        for (const link of screen.getAllByRole("link", { name: /^Reactions with this molecule/ })) {
+            expect(link).toHaveAttribute("href", "/reactions?reactant_smiles=CCO&direction=either")
+        }
     })
 
     it("sends the molecule's SMILES as reactants with direction either", async () => {
@@ -132,7 +134,7 @@ describe("species entry neighbours", () => {
         expect(screen.queryAllByRole("link", { name: /Conformer groups/ })).toHaveLength(0)
     })
 
-    it("shows Calculations as plain text with its count, never as a link", async () => {
+    it("links Calculations to the shape calculations section and says they are listed by shape", async () => {
         mockReads()
         server.use(http.get("/api/v1/scientific/species-calculations/search", () => HttpResponse.json({
             records: [{ calculation: { calculation_ref: "calc_1" } }], pagination: { total: 12 },
@@ -140,8 +142,8 @@ describe("species entry neighbours", () => {
         render(map())
         act(() => observers[0].callback([{ isIntersecting: true }]))
         const list = await screen.findByRole("list", { name: "Connected records" })
-        await waitFor(() => expect(list.textContent).toContain("12 found"))
-        expect(screen.queryAllByRole("link", { name: /^Calculations/ })).toHaveLength(0)
-        expect(within(list).getByText("Calculations")).toBeInTheDocument()
+        await waitFor(() => expect(list.textContent).toContain("12 found, listed by shape"))
+        for (const link of screen.getAllByRole("link", { name: /^Calculations/ })) expect(link.getAttribute("href")).toMatch(/#shape-calculations$/)
+        expect(within(list).getByRole("link", { name: "Calculations" })).toBeInTheDocument()
     })
 })

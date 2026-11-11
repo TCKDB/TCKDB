@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Every box in "Where this record sits" opens something (Unreleased)
+
+- **Behaviour:** on a molecule version page, "Calculations" opens the "Calculations of this shape" section (it says "N found, listed by shape"), and "Reactions with this molecule" opens the reactions list filtered to the molecule when there are several. Several networks have no list yet, so that box stays text and says "not listed yet". On the other record pages, a level of theory without a page and a "more molecule versions" box the entry cannot list say "no page yet" or "not listed yet" instead of looking clickable.
+- **Schema and migration:** none. No new environment variable.
+
 ## Search molecules by name (Unreleased)
 
 - **Behaviour:** the home search and the header search accept a name such as "water". Text that is not a formula, SMILES, InChI, InChIKey or TCKDB reference is searched by name. While typing (after 300 ms, 2 or more characters) the molecule box lists up to 8 prefix matches, each as name and formula with "from PubChem" on an imported name, followed by "Alphabetical, not a ranking"; the list follows the combobox pattern (arrow keys, Enter opens the highlighted molecule, Esc closes) and the count is announced. Enter without choosing an option runs an exact name search: one hit opens that molecule, several are listed, none says so. Text the name rules reject is never sent, a changed query cancels the request before it, results are kept for the session, and after a 429 no name request is sent until the retry time. The "Try" examples include "water".
