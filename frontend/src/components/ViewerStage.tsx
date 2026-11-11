@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react"
-import "../geometry-detail.css"
+import "../geometry-viewer.css"
 import "../viewer-stage.css"
 import { GeometryViewer, type ViewerStatus } from "./GeometryViewer"
 import { MolPoster } from "./MolPoster"

@@ -1,10 +1,12 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ConformerObservationPage from "./ConformerObservationPage"
-import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { conformerReadHandlers } from "../test/conformerReads"
+import { ADVERSARIAL, expectDepositorTextOnlyInNotes, expectNoAdversarialText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { rankingWords, textOf } from "../test/rankingWords"
 
 /** Reads the `<dd>` text for a `.kv-list`-shaped `<dt>` term inside `container` --
  *  the same helper `CalculationDetailPage.test.tsx` uses on its own coverage
@@ -15,17 +17,9 @@ function ddFor(container: HTMLElement, term: string): string {
     return dt.nextElementSibling?.textContent ?? ""
 }
 
-/** Reads the `.value-pill` span inside the `<dd>` for a `<dt>` term. */
-function ddPillFor(container: HTMLElement, term: string): HTMLElement {
-    const dt = Array.from(container.querySelectorAll("dt")).find((el) => el.textContent === term)
-    if (!dt) throw new Error(`No <dt> with text "${term}" found in this container`)
-    const pill = dt.nextElementSibling?.querySelector("span")
-    if (!pill) throw new Error(`No pill span found in the <dd> for "${term}"`)
-    return pill as HTMLElement
-}
-
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
+beforeEach(() => server.use(...conformerReadHandlers({ entryRef: "spe_demo" })))
 afterEach(() => {
     server.resetHandlers()
     cleanup()
@@ -115,6 +109,14 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
                 workflow_tool_release: { workflow_tool: "ARC" },
             },
             {
+                calculation_ref: "calc_sp",
+                type: "sp",
+                quality: "raw",
+                review: { status: "approved" },
+                level_of_theory: { method: "ccsd(t)", basis: "cc-pvtz" },
+                software_release: { software: "Molpro", version: "2024" },
+            },
+            {
                 calculation_ref: "calc_freq",
                 type: "freq",
                 quality: "raw",
@@ -136,423 +138,230 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
 }
 
 describe("ConformerObservationPage", () => {
-    it("renders without a basin link or row when a curated read withholds the group (conformer_group is null)", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({ record: mockRecord({ conformer_group: null }) })
-        )))
+    const SP_RECORD = {
+    calculation: { calculation_ref: "calc_sp", calculation_type: "sp", review: { status: "approved" } },
+    energy: { energy_hartree: -40.123456789, energy_kind: "electronic" },
+    conformer: { conformer_observation_ref: "co_one", conformer_group_ref: "cg_demo" },
+    level_of_theory: { method: "ccsd(t)", basis: "cc-pvtz" },
+    software_release: { software: "Molpro", version: "2024" },
+}
 
+    function serve(record: unknown = mockRecord(), energies: { sp?: unknown[]; opt?: unknown[] } = { sp: [SP_RECORD] }) {
+        server.use(
+            ...conformerReadHandlers({ entryRef: "spe_demo", energies }),
+            http.get("/api/v1/scientific/conformer-observations/co_one", ({ request }) => {
+                expect(new URL(request.url).searchParams.getAll("include")).toEqual([
+                    "observations", "selections", "calculations", "geometries", "review",
+                ])
+                return HttpResponse.json({ record })
+            }),
+        )
+    }
+
+    it("titles the record by what it is, never by a ref", async () => {
+        serve()
+        page()
+        const h1 = await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        expect(h1.textContent).toBe("Observation of Conformer Group 1 of CH3")
+        expect(h1.textContent).not.toMatch(/co_|cg_/)
+    })
+
+    it("says what the page is in one sentence, with a glyph and the review status as a word", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        expect(screen.getByText(/One deposit that found this conformer/)).toBeVisible()
+        const kickerRow = document.querySelector(".record-identity-kicker-row") as HTMLElement
+        expect(kickerRow.querySelector("svg")).not.toBeNull()
+        expect(within(kickerRow).getByText("reviewed")).toBeVisible()
+    })
+
+    it("carries Molecules, the molecule, its version, the conformer and this observation as breadcrumbs", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" })
+        const links = within(breadcrumb).getAllByRole("link")
+        expect(links.map((link) => link.getAttribute("href"))).toEqual([
+            "/species", "/species/spc_demo", "/species-entries/spe_demo", "/conformer-groups/cg_demo",
+        ])
+        expect(links[3]).toHaveTextContent("Conformer Group 1")
+        expect(within(breadcrumb).getByText("Observation")).toHaveAttribute("aria-current", "page")
+    })
+
+    it("renders without a conformer link or list when a curated read withholds the group", async () => {
+        serve(mockRecord({ conformer_group: null }))
         const { container } = page()
-        expect(await screen.findByRole("heading", { name: "Computed observation" })).toBeVisible()
-
-        // Neither the breadcrumb nor the identity block names a basin, and no link points at one.
-        expect(screen.queryByRole("link", { name: "Conformer basin" })).toBeNull()
-        expect(Array.from(container.querySelectorAll("dt")).some((el) => el.textContent === "Conformer basin")).toBe(false)
+        expect(await screen.findByRole("heading", { level: 1, name: /^Conformer observation of CH3/ })).toBeVisible()
         expect(container.querySelector('a[href^="/conformer-groups/"]')).toBeNull()
-        // The basin tile is withheld too: its count would describe a basin the page does not name.
-        expect(screen.queryByText("Other observations in this basin")).toBeNull()
-        // ... and so is the sibling ledger: its rows are the withheld basin's other members.
-        expect(screen.queryByRole("heading", { name: "Sibling observations" })).toBeNull()
+        expect(Array.from(container.querySelectorAll("dt")).some((el) => el.textContent === "Conformer")).toBe(false)
+        expect(screen.queryByRole("heading", { name: "Other observations of this conformer" })).toBeNull()
         expect(screen.queryByText("co_two")).toBeNull()
-        // The rest of the page is intact: the observation's own ref and the species entry are still there.
         expect(screen.getAllByText("co_one").length).toBeGreaterThan(0)
-        expect(screen.getByRole("link", { name: "Species entry" })).toBeVisible()
+        expect(container.querySelector('a[href="/species-entries/spe_demo"]')).not.toBeNull()
     })
 
-    it("keeps observation, calculation-row and geometry counts in their own metric", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", ({ request }) => {
-            expect(new URL(request.url).searchParams.getAll("include")).toEqual([
-                "observations", "selections", "calculations", "geometries", "review",
-            ])
-            return HttpResponse.json({ record: mockRecord() })
-        }))
-
+    it("draws the observation's first final geometry with a Show in 3D button and a sentence about its shape", async () => {
+        serve()
         page()
-        expect(await screen.findByRole("heading", { name: "Computed observation" })).toBeVisible()
-
-        // Each count lives in its own metric card — scoping the query to the
-        // card catches a swap between "Calculation rows" and "Distinct
-        // stored geometries" that a page-wide getByText("3") would miss.
-        const calcMetric = screen.getByText("Calculation rows").closest(".metric")
-        const geomMetric = screen.getByText("Distinct stored geometries").closest(".metric")
-        const siblingMetric = screen.getByText("Other observations in this basin").closest(".metric")
-        expect(calcMetric).not.toBeNull()
-        expect(geomMetric).not.toBeNull()
-        expect(siblingMetric).not.toBeNull()
-        expect(within(calcMetric as HTMLElement).getByText("3")).toBeVisible()
-        expect(within(geomMetric as HTMLElement).getByText("2")).toBeVisible()
-        expect(within(siblingMetric as HTMLElement).getByText("1")).toBeVisible()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        const figure = await screen.findByRole("figure", { name: "Picture of this conformer" })
+        expect(await within(figure).findByRole("img", { name: /Ball-and-stick picture of CH3/ })).toBeVisible()
+        expect(within(figure).getByRole("button", { name: "Show in 3D" })).toBeVisible()
+        expect(within(figure).getByText(/2 atoms, O and H, 0\.98 Å apart\./)).toBeVisible()
     })
 
-    // Item 1/6/7, design/foundations PR B: mutation check for header order,
-    // the review pill's `.value-pill` primitive, and the calculation
-    // table's `.data-table` primitive -- see the identical check on
-    // `ConformerGroupPage.test.tsx`.
-    it("renders the kicker row before the h1, the review pill as .value-pill, and the calculation table as .data-table", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({ record: mockRecord() })
-        )))
+    it("shows each energy with its level, program and review beneath it, and the calculations that found the geometry", async () => {
+        serve()
         page()
-        const h1 = await screen.findByRole("heading", { name: "Computed observation" })
-        // SHOULD-FIX-7 (PR B review): same `.record-identity-header`
-        // wrapper `RecordIdentityHeader` itself renders -- see the
-        // identical check/comment on `ConformerGroupPage.test.tsx`.
-        const wrapper = h1.closest(".record-identity-header") as HTMLElement
-        expect(wrapper).not.toBeNull()
-        const kickerRow = wrapper.querySelector(".record-identity-kicker-row") as HTMLElement
-        expect(kickerRow).not.toBeNull()
-        const order = Array.from(wrapper.children)
-        expect(order.indexOf(kickerRow)).toBeLessThan(order.indexOf(h1))
-
-        const pill = within(kickerRow).getByText("reviewed")
-        expect(pill).toHaveClass("value-pill")
-        expect(pill).not.toHaveClass("value-pill--muted")
-        expect(document.querySelector(".review-badge")).toBeNull()
-
-        expect(document.querySelector(".stage-table")).toBeNull()
-        const table = screen.getByRole("table", { name: "Calculations for co_one" })
-        expect(table).toHaveClass("data-table")
-        expect(table.closest(".table-scroll")).not.toBeNull()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        const section = screen.getByRole("heading", { name: "Calculations and energies" }).closest("section") as HTMLElement
+        const energy = await within(section).findByText("−40.123457")
+        expect(energy.closest("a")).toHaveAttribute("href", "/calculations/calc_sp")
+        expect(energy).toHaveAttribute("title", "-40.123456789")
+        expect(energy.closest("li")).toHaveTextContent(/Source calc_sp · single-point · at ccsd\(t\)\/cc-pvtz · Molpro 2024 · Review of this record: approved/)
+        expect(within(section).getAllByText("b3lyp/def2tzvp").length).toBeGreaterThan(0)
+        expect(within(section).getByRole("link", { name: "calc_freq" })).toHaveAttribute("href", "/calculations/calc_freq")
     })
 
-    it("states each stage's level of theory once, in the calculation table, not in a separate by-stage block", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({ record: mockRecord() })
-        )))
-
+    it("says an energy is not recorded when its read came back without it", async () => {
+        serve(mockRecord(), { sp: [] })
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        expect((await screen.findAllByText("Energy not recorded")).length).toBeGreaterThan(0)
+    })
 
-        // The standalone "Levels of theory by stage" section is gone -- it
-        // duplicated the Stage/Level-of-theory columns of the calculation
-        // table immediately below it.
-        expect(screen.queryByRole("heading", { name: "Levels of theory by stage" })).not.toBeInTheDocument()
-
-        // The calculation table is still the one place carrying this: each
-        // row pairs its own stage with its own level of theory.
-        const calcTable = screen.getByRole("table", { name: "Calculations for co_one" })
-        const optRow = within(calcTable).getByText("opt").closest("tr")
-        const freqRow = within(calcTable).getByText("freq").closest("tr")
-        expect(optRow).not.toBeNull()
-        expect(freqRow).not.toBeNull()
-        expect(within(optRow as HTMLElement).getByText("b3lyp/def2tzvp")).toBeVisible()
-        expect(within(freqRow as HTMLElement).getByText("wb97xd/def2tzvp")).toBeVisible()
+    it("says the energies could not be read when that read fails", async () => {
+        server.use(
+            http.get("/api/v1/scientific/species-calculations/search", () => HttpResponse.json({}, { status: 500 })),
+            ...conformerReadHandlers({ entryRef: "spe_demo" }),
+            http.get("/api/v1/scientific/conformer-observations/co_one", () => HttpResponse.json({ record: mockRecord() })),
+        )
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        expect(await screen.findByText("The single-point energies could not be read.")).toBeVisible()
     })
 
     it("links breadcrumbs and provenance rows, and surfaces stable public refs", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({ record: mockRecord() })
-        )))
-
+        serve()
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
-
-        const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" })
-        expect(within(breadcrumb).getByRole("link", { name: "Species" }))
-            .toHaveAttribute("href", "/species/spc_demo")
-        expect(within(breadcrumb).getByRole("link", { name: "Species entry" }))
-            .toHaveAttribute("href", "/species-entries/spe_demo")
-        expect(within(breadcrumb).getByRole("link", { name: "Conformer basin" }))
-            .toHaveAttribute("href", "/conformer-groups/cg_demo")
-
-        // Item 4/5 ("record-page residuals" re-review): the species-entry
-        // body link no longer shows the deposited label ("ground state" in
-        // this fixture) ALONE. This endpoint's `species` context now
-        // carries `formula` (backend fix), so `SpeciesEntryLink`'s base
-        // text is the formula -- with the label (unrecognised by
-        // `stereoChip`, so rendered unchanged) riding along after it --
-        // see `SpeciesEntryLink.test.tsx` for the component-level version
-        // of this assertion, and that component's own docstring for why
-        // `species_entry_label` is a computed discriminator, not free
-        // text, and is not suppressed. A sibling test below covers the
-        // no-`formula` case, where the base text falls back to the entry
-        // REF (`<code className="data">`) instead -- never the literal
-        // words "Species entry" (the enclosing <dt> already says that).
-        // Queried by href and asserted on textContent, not accessible
-        // name: `getByRole(..., { name })` collapses the whitespace
-        // between the SMILES `code` and the bracketed-formula `span`
-        // differently from raw `textContent` (see
-        // `RecordIdentityHeader.test.tsx`'s identical comment).
-        const identityHeader = document.querySelector(".record-identity-header") as HTMLElement
-        const speciesEntryLink = identityHeader.querySelector('a[href="/species-entries/spe_demo"]')!
-        expect(speciesEntryLink.textContent).toBe("[CH3] (CH3)")
-
-        // The conformer-basin link text is always the stable ref now, never
-        // the depositor's own `conformer_group.label` (e.g. "conformer_1"
-        // -- house rule widened 2026-09: no depositor-typed labels on
-        // public pages at all). `mockRecord()` still deposits
-        // `label: "conformer_1"` on the wire; it must never surface.
-        expect(screen.getByRole("link", { name: "cg_demo" }))
-            .toHaveAttribute("href", "/conformer-groups/cg_demo")
-        expect(screen.queryByText("conformer_1")).not.toBeInTheDocument()
-
-        // Stable public refs stay visible and copyable even when a label exists.
-        expect(screen.getByText("co_one", { selector: "code" })).toBeVisible()
-        expect(screen.getByText("cg_demo", { selector: "code" })).toBeVisible()
-        expect(screen.getByText("spc_demo", { selector: "code" })).toBeVisible()
-
-        // Sibling list excludes this observation itself and links onward.
-        expect(screen.getByRole("link", { name: "co_two" })).toHaveAttribute(
-            "href", "/conformer-observations/co_two",
-        )
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        expect(screen.getByRole("link", { name: "co_two" })).toHaveAttribute("href", "/conformer-observations/co_two")
         expect(screen.queryByRole("link", { name: "co_one" })).not.toBeInTheDocument()
-
-        // Review-trust layer is separate from the summary metrics.
         expect(screen.getByRole("heading", { name: "Review history" })).toBeVisible()
         expect(screen.getByText("Looks consistent")).toBeVisible()
-
-        // Geometry links point at the geometry detail route.
-        expect(screen.getByRole("link", { name: "geo_one" })).toHaveAttribute("href", "/geometries/geo_one")
+        expect(screen.getAllByRole("link", { name: "geo_one" })[0]).toHaveAttribute("href", "/geometries/geo_one")
     })
 
-    // Owner decision: "yes show each record's own ref inline" -- this
-    // page already showed "Observation ref" first, but with no copy
-    // button; every other record page's own-ref fact gets one via
-    // `RecordIdentityHeader`'s `ownRef` prop, so this hand-rolled page
-    // now matches that affordance.
     it("shows the observation's own ref first in the identity block, with the data face and a copy button", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({ record: mockRecord() })
-        )))
-
+        serve()
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
-
-        const identityFacts = document.querySelector(".record-identity-header dl.kv-list") as HTMLElement
-        expect(identityFacts).not.toBeNull()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        const identityFacts = screen.getByText("Observation ref").closest(".record-identity-facts") as HTMLElement
+        const ownRef = within(identityFacts).getByText("co_one")
+        expect(ownRef.tagName).toBe("CODE")
+        expect(ownRef).toHaveClass("data")
         expect(Array.from(identityFacts.children)[0]).toHaveTextContent("Observation ref")
-        const ownRefValue = within(identityFacts).getByText("co_one", { selector: "code" })
-        expect(ownRefValue).toBeVisible()
-        expect(ownRefValue).toHaveClass("data")
-        expect(screen.getByRole("button", { name: /copy observation ref/i })).toBeVisible()
+        expect(within(identityFacts).getByRole("button", { name: /copy observation ref/i })).toBeVisible()
     })
 
-    // Unified fallback rule (per `SpeciesEntryLink`'s own reviewer-flagged
-    // duplication fix, shared with `ConformerGroupPage.tsx` and
-    // `RecordIdentityHeader.tsx`): when the species SMILES did not parse
-    // and the backend serves neither a `canonical_smiles` nor a
-    // `formula`, the base link text is the entry REF as `<code
-    // className="data">`, never the literal words "Species entry" -- the
-    // enclosing <dt> already says that.
     it("falls back to the entry ref, as a data code run, when the species context carries no SMILES and no formula", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({
-                record: mockRecord({
-                    species: {
-                        species_ref: "spc_demo",
-                        species_entry_ref: "spe_demo",
-                        species_entry_label: "ground state",
-                        formula: null,
-                        canonical_smiles: null,
-                    },
-                }),
-            })
-        )))
-
+        serve(mockRecord({
+            species: { species_ref: "spc_demo", species_entry_ref: "spe_demo", species_entry_label: "ground state", formula: null, canonical_smiles: null },
+        }))
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
-
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1/ })
         const identityHeader = document.querySelector(".record-identity-header") as HTMLElement
-        const speciesEntryLink = within(identityHeader).getByRole("link", { name: "spe_demo" })
-        expect(speciesEntryLink).toHaveAttribute("href", "/species-entries/spe_demo")
-        expect(within(speciesEntryLink).getByText("spe_demo")).toHaveClass("data")
-        expect(speciesEntryLink.textContent).not.toContain("Species entry")
-    })
-
-    // Same shape as the fix on `CalculationDetailPage.tsx`'s `OwnerCard`:
-    // a separate "Group ref" row is only needed when the "Conformer basin"
-    // link above shows a LABEL, not the ref itself. Without a label, the
-    // link already shows the ref, and a second row would repeat it.
-    it("omits the duplicate 'Group ref' row when the basin has no label (the link already shows the ref)", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({
-                record: mockRecord({
-                    conformer_group: { conformer_group_ref: "cg_demo", label: null, note: null, review: { status: "not_reviewed" } },
-                }),
-            })
-        )))
-        page()
-        await screen.findByRole("heading", { name: "Computed observation" })
-        expect(screen.getByRole("link", { name: "cg_demo" })).toHaveAttribute("href", "/conformer-groups/cg_demo")
-        expect(screen.getAllByText("cg_demo")).toHaveLength(1)
-        expect(screen.queryByText("Group ref")).not.toBeInTheDocument()
+        const link = within(identityHeader).getByRole("link", { name: "spe_demo" })
+        expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
+        expect(within(link).getByText("spe_demo")).toHaveClass("data")
     })
 
     it("collapses review history to one line when its only entry carries no real event", async () => {
-        // A `review_history` row whose `reviewed_at` and `note` are both
-        // null mirrors the observation's current status without recording
-        // an actual status-change event -- the owner's report: a one-row
-        // table reading "not reviewed / not recorded / not recorded" that
-        // said nothing the hero badge hadn't already said.
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({
-                record: mockRecord({
-                    conformer_observation: {
-                        conformer_observation_ref: "co_one",
-                        scientific_origin: "computed",
-                        note: "Coarse pre-optimisation basin",
-                        created_at: "2026-07-21T12:06:50.748258",
-                        review: { status: "not_reviewed" },
-                    },
-                    review_history: [{ status: "not_reviewed", reviewed_at: null, note: null }],
-                }),
-            })
-        )))
+        serve(mockRecord({
+            conformer_observation: {
+                conformer_observation_ref: "co_one", scientific_origin: "computed", note: null,
+                created_at: "2026-07-21T12:06:50.748258", review: { status: "not_reviewed" },
+            },
+            review_history: [{ status: "not_reviewed", reviewed_at: null, note: null }],
+        }))
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
-
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         expect(screen.getByRole("heading", { name: "Review history" })).toBeVisible()
         expect(screen.queryByRole("table", { name: /Review history for/ })).not.toBeInTheDocument()
         expect(screen.getByText("No review events are recorded for this observation.")).toBeVisible()
-        // The intro sentence no longer restates the raw status value --
-        // that already lives once, in the hero badge.
         expect(screen.queryByText(/The current status is/)).not.toBeInTheDocument()
     })
 
-    it("still renders the review-history table when a real event is recorded", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({ record: mockRecord() })
-        )))
+    it("still renders the review-history table, inside a labelled scroll box, when a real event is recorded", async () => {
+        serve()
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         expect(screen.getByRole("table", { name: "Review history for co_one" })).toBeVisible()
+        expect(screen.getByRole("region", { name: "Table of review history" })).toBeVisible()
         expect(screen.getByText("Looks consistent")).toBeVisible()
     })
 
     it("reports a check as 'recorded', never as a pass/fail verdict", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({ record: mockRecord() })
-        )))
+        serve()
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
-        // record-summary-row PR: the inline run-on sentence ("opt yes ·
-        // freq yes · ...") is gone -- each check is now its own labelled
-        // row in the evidence checklist (`.coverage-checklist`, the SAME
-        // shape `CalculationDetailPage`'s own checklist uses).
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         const checklist = document.querySelector(".coverage-checklist") as HTMLElement
-        expect(checklist).not.toBeNull()
         expect(ddFor(checklist, "Geometry validation")).toBe("recorded")
         expect(ddFor(checklist, "SCF stability")).toBe("not recorded")
     })
 
-    // Independent review: `ddFor` above reads `textContent`, which is true
-    // whether or not the card is open -- `EvidenceChecklist` collapses this
-    // card by default (item 2), so confirm with a real visibility check
-    // that opening it (the only way a reader reaches these rows) surfaces
-    // the same content.
-    it("the checklist card is collapsed by default, and opening it makes the rows actually visible to a reader", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({ record: mockRecord() })
-        )))
-        page()
-        await screen.findByRole("heading", { name: "Computed observation" })
-
-        const card = document.querySelector(".card.card--derived.coverage-card") as HTMLElement
-        const details = card.querySelector("details") as HTMLDetailsElement
-        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
-        expect(details.open).toBe(false)
-        expect(checklist).not.toBeVisible()
-
-        fireEvent.click(details.querySelector("summary")!)
-        expect(details.open).toBe(true)
-        expect(checklist).toBeVisible()
-        const gvDt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Geometry validation")
-        const gvDd = gvDt?.nextElementSibling as HTMLElement
-        expect(gvDd).toBeVisible()
-        expect(gvDd.textContent).toBe("recorded")
-    })
-
-    // record-summary-row PR, item 1: the evidence box sits BELOW the tile
-    // row now, as its own full-width `.ledger-summary--single` section --
-    // never a 4th item sharing the tiles' own grid row (the owner report
-    // this fixes). And item 3: every check is present/absent (or
-    // recorded/not recorded) as its own pilled row, using the SAME
-    // `value-pill`/`value-pill--muted` pair every other bounded-status-word
-    // checklist on this app uses.
-    it("renders the tile row and the evidence checklist as two separate sections, tiles with no evidence card among them", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({ record: mockRecord() })
-        )))
-        page()
-        await screen.findByRole("heading", { name: "Computed observation" })
-
-        const tileRow = screen.getByLabelText("Observation evidence summary")
-        expect(tileRow).not.toHaveClass("ledger-summary--single")
-        expect(tileRow.querySelector(".coverage-card")).toBeNull()
-        expect(within(tileRow).getAllByText(/Calculation rows|Distinct stored geometries|Other observations in this basin/)).toHaveLength(3)
-
-        const checklistSection = screen.getByLabelText("Observation evidence checklist")
-        expect(checklistSection).toHaveClass("ledger-summary", "ledger-summary--single")
-        const card = checklistSection.querySelector(".card.card--derived.coverage-card") as HTMLElement
-        expect(card).not.toBeNull()
-        expect(within(card).getByText("Evidence on this observation")).toHaveClass("t-label")
-
-        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
-        // Default mockRecord: has_opt/has_freq true (present), has_sp false
-        // (absent), has_geometry_validation true (recorded),
-        // has_scf_stability false (not recorded) -- see the mockRecord
-        // definition above.
-        for (const [label, value] of [
-            ["Optimisation", "present"], ["Frequency", "present"], ["Geometry validation", "recorded"],
-        ] as const) {
-            const pill = ddPillFor(checklist, label)
-            expect(pill).toHaveClass("value-pill")
-            expect(pill).not.toHaveClass("value-pill--muted")
-            expect(pill).toHaveTextContent(value)
-        }
-        for (const [label, value] of [["Single point", "absent"], ["SCF stability", "not recorded"]] as const) {
-            const pill = ddPillFor(checklist, label)
-            expect(pill).toHaveClass("value-pill", "value-pill--muted")
-            expect(pill).toHaveTextContent(value)
-        }
-    })
-
-    // Post-review (review of 2bd17511): the tile-alignment fix moved from a
-    // reserved label height to number-first markup -- the number (`<strong>`)
-    // must be each tile's FIRST child, with the label (`<span>`) after it,
-    // so the number always sits at the tile's own top edge regardless of
-    // whether the label wraps.
-    it("renders each metric tile number-first: <strong> before <span>", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({ record: mockRecord() })
-        )))
-        page()
-        await screen.findByRole("heading", { name: "Computed observation" })
-        const tiles = screen.getByLabelText("Observation evidence summary").querySelectorAll(".metric")
-        expect(tiles).toHaveLength(3)
-        for (const tile of tiles) {
-            expect(tile.children[0].tagName).toBe("STRONG")
-            expect(tile.children[1].tagName).toBe("SPAN")
-        }
-    })
-
     it("gives the disclosure a real heading so heading-navigation does not skip it", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({ record: mockRecord({ selections: [{ selection_kind: "lowest_energy" }] }) })
-        )))
+        serve(mockRecord({ selections: [{ selection_kind: "lowest_energy" }] }))
         page()
         const heading = await screen.findByRole("heading", { name: "Curation selections (1)" })
-        expect(heading).toBeVisible()
-        // BLOCKING-3 fix (PR B review): the heading sits OUTSIDE the
-        // `Disclosure` that collapses the selections list -- never nested
-        // inside its `<summary>` (a 28px serif h2 never belonged inside a
-        // 13px summary row).
         expect(heading.closest("summary")).toBeNull()
     })
 
-    // BLOCKING-3 mutation check: no heading element sits inside any
-    // `<summary>` on this page. Put an h2 back inside a `Disclosure`'s
-    // `summary` prop and this test fails.
     it("never puts a heading (h1-h4) inside a <summary> on this page", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({ record: mockRecord({ selections: [{ selection_kind: "lowest_energy" }] }) })
-        )))
+        serve(mockRecord({ selections: [{ selection_kind: "lowest_energy" }] }))
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         const summaries = document.querySelectorAll("summary")
         expect(summaries.length).toBeGreaterThan(0)
-        for (const summary of summaries) {
-            expect(summary.querySelector("h1, h2, h3, h4")).toBeNull()
-        }
+        for (const summary of summaries) expect(summary.querySelector("h1, h2, h3, h4")).toBeNull()
+    })
+
+    it("registers each section in the table of contents", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        const toc = await screen.findByRole("navigation", { name: "Sections on this page" })
+        await waitFor(() => expect(within(toc).getAllByRole("link").map((link) => link.textContent)).toEqual([
+            "Calculations and energies", "Geometries", "Other observations of this conformer", "Review history",
+        ]))
+    })
+
+    it("uses the one word conformer, and says basin nowhere", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        await screen.findByText("−40.123457")
+        const copy = document.body.cloneNode(true) as HTMLElement
+        copy.querySelectorAll(".depositor-note").forEach((note) => note.remove())
+        expect(copy.textContent).not.toMatch(/basin/i)
+    })
+
+    it("ranks nothing: no best, lowest or recommended wording", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        await screen.findByText("−40.123457")
+        expect(rankingWords(textOf(document.body))).toEqual([])
+    })
+
+    it("prints a depositor's note only inside a note from the depositor", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        const note = document.querySelector(".depositor-note blockquote") as HTMLElement
+        expect(note).toHaveTextContent("Coarse pre-optimisation basin")
+        expect(document.querySelectorAll(".depositor-note")).toHaveLength(1)
     })
 
     it("shows a specific not-found state for a 404", async () => {
@@ -600,7 +409,7 @@ describe("ConformerObservationPage", () => {
             HttpResponse.json({ record: withoutKey })
         )))
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         expect(screen.getByText("This section was not requested for this view.")).toBeVisible()
         expect(screen.queryByText("No calculation rows were returned for this observation.")).not.toBeInTheDocument()
     })
@@ -618,7 +427,7 @@ describe("ConformerObservationPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         expect(screen.getByText("No calculation rows were returned for this observation.")).toBeVisible()
     })
 
@@ -635,29 +444,26 @@ describe("ConformerObservationPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         expect(screen.getByText(/The archive marks this observation as having recorded evidence here/)).toBeVisible()
     })
 
-    it("renders a single-observation basin with no sibling list, not an error", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
-            HttpResponse.json({
-                record: mockRecord({
-                    observations: [{
-                        conformer_observation: {
-                            conformer_observation_ref: "co_one",
-                            review: { status: "reviewed" },
-                        },
-                    }],
-                }),
-            })
-        )))
+    it("renders a single-observation conformer with no sibling list, not an error", async () => {
+        serve(mockRecord({
+            observations: [{ conformer_observation: { conformer_observation_ref: "co_one", review: { status: "reviewed" } } }],
+        }))
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
-        const siblingMetric = screen.getByText("Other observations in this basin").closest(".metric")
-        expect(within(siblingMetric as HTMLElement).getByText("0")).toBeVisible()
-        expect(screen.getByText("No other deposited observations were returned for this basin.")).toBeVisible()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        expect(screen.getByText("No other deposited observations were returned for this conformer.")).toBeVisible()
         expect(screen.queryByRole("link", { name: "co_two" })).not.toBeInTheDocument()
+    })
+
+    it("states the order of the sibling list", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
+        const section = screen.getByRole("heading", { name: "Other observations of this conformer" }).closest("section") as HTMLElement
+        expect(within(section).getByText("Listed in deposit order.", { exact: false })).toBeVisible()
     })
 
     // Reproduces the owner's exact report: the same "not reviewed" status
@@ -703,14 +509,11 @@ describe("ConformerObservationPage", () => {
         )))
 
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
 
-        // Positive assertion: the calculation table still renders all four
-        // rows (this is not an absence check -- the rows are there, just
-        // without their own Review column).
-        const calcTable = screen.getByRole("table", { name: "Calculations for co_one" })
-        expect(within(calcTable).getAllByRole("row")).toHaveLength(5) // header + 4 calculation rows
-        expect(within(calcTable).queryByRole("columnheader", { name: "Review" })).not.toBeInTheDocument()
+        // All four calculations are still listed; none carries its own review beside the hero's.
+        expect(screen.getAllByRole("link", { name: "calc_opt2" })[0]).toBeVisible()
+        expect(screen.getAllByRole("link", { name: "calc_freq" })[0]).toBeVisible()
 
         // Exactly one "not reviewed" on the whole page -- the hero pill.
         // The three siblings all share this observation's own status, so
@@ -751,7 +554,7 @@ describe("ConformerObservationPage", () => {
         )))
 
         page()
-        await screen.findByRole("heading", { name: "Computed observation" })
+        await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
 
         const siblingRow = screen.getByRole("link", { name: "co_two" }).closest("li")
         expect(siblingRow).not.toBeNull()
@@ -759,12 +562,11 @@ describe("ConformerObservationPage", () => {
     })
 })
 
-describe("ConformerObservationPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
-    it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
+describe("ConformerObservationPage -- depositor text", () => {
+    it("prints a depositor's typed fields only inside a note from the depositor", async () => {
         const planted = plantSentinels(mockRecord({
             species: {
                 species_ref: "spc_demo", species_entry_ref: "spe_demo", formula: "CH3", canonical_smiles: "[CH3]",
-                // The server joins computed and typed parts into one label; the typed ones carry the sentinel.
                 species_entry_label: `${ADVERSARIAL.joinedLabel} ${ADVERSARIAL.smilesWord}`,
             },
         }), ["label", "note"])
@@ -773,12 +575,10 @@ describe("ConformerObservationPage -- no depositor-typed text (owner decision 20
         server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => HttpResponse.json({ record: value })))
 
         page()
-        // The fixture reached the page: its ref and its computed species facts are on screen.
-        expect(await screen.findByRole("heading", { name: "Computed observation" })).toBeVisible()
+        expect(await screen.findByRole("heading", { level: 1, name: /^Conformer observation of CH3/ })).toBeVisible()
         expect(screen.getAllByText("co_one").length).toBeGreaterThan(0)
-        expect(screen.getAllByText("cg_demo").length).toBeGreaterThan(0)
 
-        expectNoDepositorText()
+        expectDepositorTextOnlyInNotes()
         expectNoAdversarialText()
     })
 })

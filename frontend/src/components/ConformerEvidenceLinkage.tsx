@@ -109,7 +109,7 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
                         kind="observations"
                         count={total}
                         unit={total === 1 ? "deposited observation" : "deposited observations"}
-                        detail="each a separate sighting of this basin"
+                        detail="each a separate sighting of this shape"
                     />
                     <LinkageConnector />
                     <LinkageStep

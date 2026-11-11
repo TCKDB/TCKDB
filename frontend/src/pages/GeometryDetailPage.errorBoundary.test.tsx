@@ -69,9 +69,9 @@ describe("GeometryDetailPage — a broken structure view", () => {
         const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
 
         page()
-        await screen.findByRole("heading", { name: "CH geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH/ })
 
-        const viewerSection = screen.getByRole("heading", { name: "Structure view" }).closest("section") as HTMLElement
+        const viewerSection = screen.getByRole("figure", { name: "Picture of this geometry" })
         fireEvent.click(within(viewerSection).getByRole("button", { name: "Show in 3D" }))
         expect(within(viewerSection).getByRole("alert")).toHaveTextContent(/could not be drawn/)
         expect(viewerSection.querySelector("svg")).toBeNull()

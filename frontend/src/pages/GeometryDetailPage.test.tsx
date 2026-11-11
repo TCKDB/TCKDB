@@ -2,6 +2,8 @@ import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
+import { rankingWords, textOf } from "../test/rankingWords"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import GeometryDetailPage from "./GeometryDetailPage"
 import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
@@ -105,15 +107,15 @@ describe("GeometryDetailPage identity (#321)", () => {
     it("renders the SERVED formula, not the client-derived Hill formula, when identity is present", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ identity: speciesIdentity }))))
         page()
-        expect(await screen.findByRole("heading", { name: "XeF6 geometry" })).toBeVisible()
-        expect(screen.queryByRole("heading", { name: "CH4 geometry" })).not.toBeInTheDocument()
+        expect(await screen.findByRole("heading", { name: /^Geometry of XeF6/ })).toBeVisible()
+        expect(screen.queryByRole("heading", { name: /^Geometry of CH4/ })).not.toBeInTheDocument()
         expect(screen.queryByText(/computed on this page from atom symbols/)).not.toBeInTheDocument()
     })
 
     it("falls back to the client-derived Hill formula, labelled as such, when identity is absent", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ identity: null }))))
         page()
-        expect(await screen.findByRole("heading", { name: "CH4 geometry" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: /^Geometry of CH4/ })).toBeVisible()
         expect(screen.getByText(/computed on this page from atom symbols/)).toBeVisible()
     })
 
@@ -125,7 +127,7 @@ describe("GeometryDetailPage identity (#321)", () => {
             },
         }))))
         page()
-        expect(await screen.findByRole("heading", { name: "CH4 geometry" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: /^Geometry of CH4/ })).toBeVisible()
         expect(screen.getByTestId("record-identity-ambiguous")).toHaveTextContent(/more than one distinct owner/)
         expect(screen.getByText("spe_a")).toBeVisible()
         expect(screen.getByText("spe_b")).toBeVisible()
@@ -143,7 +145,7 @@ describe("GeometryDetailPage identity (#321)", () => {
             },
         }))))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         expect(screen.queryByText("SMILES")).not.toBeInTheDocument()
         expect(screen.queryByText("InChIKey")).not.toBeInTheDocument()
         expect(screen.queryByText("Reaction SMILES (unmapped)")).not.toBeInTheDocument()
@@ -158,14 +160,14 @@ describe("GeometryDetailPage identity (#321)", () => {
     it("renders no submission row when the key is absent (anonymous caller)", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         expect(screen.queryByText("Submission")).not.toBeInTheDocument()
     })
 
     it("renders the submission ref when the key is present (authenticated caller)", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ submission_ref: "sub_demo" }))))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         expect(screen.getByText("Submission")).toBeVisible()
         expect(screen.getByText("sub_demo")).toBeVisible()
     })
@@ -178,23 +180,68 @@ describe("GeometryDetailPage", () => {
             return HttpResponse.json(mockRecord())
         }))
         page()
-        expect(await screen.findByRole("heading", { name: "CH4 geometry" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: /^Geometry of CH4/ })).toBeVisible()
     })
 
-    it("renders a single-level breadcrumb, since this endpoint carries no owner/species-entry link", async () => {
+    it("renders the geometry as the only crumb when no owner is served, never a TCKDB or species link", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" })
-        expect(within(breadcrumb).getByRole("link", { name: "TCKDB" })).toHaveAttribute("href", "/")
-        expect(within(breadcrumb).getByText("Geometry")).toBeVisible()
-        expect(within(breadcrumb).queryByRole("link", { name: /species/i })).not.toBeInTheDocument()
+        expect(within(breadcrumb).getByText("Geometry")).toHaveAttribute("aria-current", "page")
+        expect(within(breadcrumb).queryAllByRole("link")).toHaveLength(0)
+    })
+
+    it("builds the breadcrumb from the owning molecule, its version and this geometry", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ identity: {
+            kind: "species_entry",
+            species_entry: {
+                species_ref: "spc_demo", species_entry_ref: "spe_demo", formula: "CH4", canonical_smiles: "C",
+                inchi_key: "VNWKTOKETHGBQD-UHFFFAOYSA-N", charge: 0, multiplicity: 1,
+                species_entry_kind: "minimum", electronic_state_kind: "ground",
+            },
+            transition_state_entry: null,
+            ambiguous_owners: [],
+        } }))))
+        page()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" })
+        const links = within(breadcrumb).getAllByRole("link")
+        expect(links.map((link) => link.getAttribute("href"))).toEqual(["/species", "/species/spc_demo", "/species-entries/spe_demo"])
+        expect(links[0]).toHaveTextContent("Molecules")
+        expect(within(breadcrumb).getByText("Geometry")).toHaveAttribute("aria-current", "page")
+    })
+
+    it("titles the page by what it is and never by a ref", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ provenance: { produced_by: [{ calculation_ref: "calc_opt_two", calculation_type: "opt", role: "final" }] } }))))
+        page()
+        const h1 = await screen.findByRole("heading", { level: 1, name: /^Geometry of CH4/ })
+        expect(h1).toHaveTextContent("Geometry of CH4 (final, from an optimisation)")
+        expect(h1.textContent).not.toMatch(/geom_|calc_/)
+    })
+
+    it("states the shape from the coordinates, in one sentence, under the picture", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const figure = screen.getByRole("figure", { name: "Picture of this geometry" })
+        expect(within(figure).getByText("5 atoms: 1 C and 4 H, with 4 bonds drawn.")).toBeVisible()
+    })
+
+    it("states two atoms and their distance", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({
+            natoms: 2,
+            atoms: [{ atom_index: 1, element: "O", x: 0, y: 0, z: 0 }, { atom_index: 2, element: "H", x: 0, y: 0, z: 0.98 }],
+        }))))
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Geometry of/ })
+        expect(screen.getByText("2 atoms, O and H, 0.98 Å apart.")).toBeVisible()
     })
 
     it("shows the geometry ref first in the identity block, and the hash, format and units in the context list", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         // Own ref: first fact in the identity block (`RecordIdentityHeader`'s
         // `ownRef` prop), never inside `.basin-context` any more — see
         // `RefsDisclosure.tsx`'s own-ref-inline rule.
@@ -225,7 +272,7 @@ describe("GeometryDetailPage", () => {
     it("renders the kicker row before the h1, and every table as .data-table, never .stage-table", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         const { container } = page()
-        const h1 = await screen.findByRole("heading", { name: "CH4 geometry" })
+        const h1 = await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         const header = h1.closest(".basin-header") as HTMLElement
         expect(header).not.toBeNull()
         const kickerRow = header.querySelector(".record-identity-kicker-row") as HTMLElement
@@ -241,87 +288,22 @@ describe("GeometryDetailPage", () => {
     })
 
     it("says validation is not recorded for this geometry, rather than fabricating a verdict", async () => {
-        // record-summary-row PR: the evidence box moved OUT of "Geometry
-        // provenance summary" (now tiles only) into its own full-width
-        // section below, "Geometry validation checklist" -- see that
-        // section's own aria-label in `GeometryDetailPage.tsx`.
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
-        const checklist = screen.getByLabelText("Geometry validation checklist")
-        // `EvidenceChecklist` is collapsed by default (owner: "Evidence
-        // blocks should be expandable rather") -- open it via its own
-        // `<summary>` toggle, same as a reader clicking it, before
-        // asserting the row content is actually visible once expanded.
-        fireEvent.click(checklist.querySelector("summary")!)
-        expect(within(checklist).getByText("not recorded for this geometry")).toBeVisible()
-        expect(within(checklist).queryByText(/passed/i)).not.toBeInTheDocument()
-        expect(within(checklist).queryByText(/failed/i)).not.toBeInTheDocument()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const details = screen.getByRole("heading", { name: "Record details" }).closest("section") as HTMLElement
+        expect(within(details).getByText("Validation", { selector: "dt" }).nextElementSibling).toHaveTextContent("not recorded for this geometry")
+        expect(within(details).queryByText(/passed/i)).not.toBeInTheDocument()
+        expect(within(details).queryByText(/failed/i)).not.toBeInTheDocument()
     })
 
-    // record-summary-row PR, item 1: the tile row and the evidence card are
-    // two separate sections now, the card renders through the SAME
-    // `.card.card--derived.coverage-card` > `.kv-list.coverage-checklist`
-    // structure every other record page uses (no more page-local
-    // `.validation-card`), and its one row is pilled -- the absent case of
-    // a bounded status word, same as the other pages' checklists.
-    it("renders the tile row and the evidence checklist as two separate sections, sharing the calculation page's card structure", async () => {
+    it("points to the Produced by / Used as input by tables, rather than repeating every ref inline", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
-
-        const tileRow = screen.getByLabelText("Geometry provenance summary")
-        expect(tileRow).not.toHaveClass("ledger-summary--single")
-        expect(tileRow.querySelector(".coverage-card")).toBeNull()
-        expect(tileRow.querySelector(".validation-card")).toBeNull()
-
-        const checklistSection = screen.getByLabelText("Geometry validation checklist")
-        expect(checklistSection).toHaveClass("ledger-summary", "ledger-summary--single")
-        const card = checklistSection.querySelector(".card.card--derived.coverage-card") as HTMLElement
-        expect(card).not.toBeNull()
-        expect(card).not.toHaveClass("validation-card")
-
-        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
-        const dt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Validation")
-        const dd = dt?.nextElementSibling as HTMLElement
-        const pill = dd.querySelector("span") as HTMLElement
-        expect(pill).toHaveClass("value-pill", "value-pill--muted")
-        expect(pill).toHaveTextContent("not recorded for this geometry")
-    })
-
-    // Post-review (review of 2bd17511): number-first tile markup.
-    it("renders each metric tile number-first: <strong> before <span>", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
-        page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
-        const tiles = screen.getByLabelText("Geometry provenance summary").querySelectorAll(".metric")
-        expect(tiles).toHaveLength(2)
-        for (const tile of tiles) {
-            expect(tile.children[0].tagName).toBe("STRONG")
-            expect(tile.children[1].tagName).toBe("SPAN")
-        }
-    })
-
-    it("points to the Produced by / Used as input by tables below, rather than repeating every ref inline", async () => {
-        // Finding #13: this card used to repeat every producing/consuming
-        // calculation ref inline as its own `<dl>` of links -- up to twelve
-        // on the live CH3 record, reported rendering all-caps with no link
-        // affordance. Those SAME refs are already real, correctly-cased
-        // links in the "Produced by" / "Used as input by" tables further
-        // down this page (see the tests around those headings below) -- this
-        // card now just points there instead of duplicating the list, so
-        // there is only ONE place on the page that can get a ref's case or
-        // link styling wrong.
-        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
-        page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
-        const checklist = screen.getByLabelText("Geometry validation checklist")
-        fireEvent.click(checklist.querySelector("summary")!)
-
-        expect(within(checklist).getByText(/Produced by.*Used as input by/s)).toBeVisible()
-        // No calculation refs repeated inline in this card -- confirmed by
-        // there being no links inside it at all (the pointer is plain text).
-        expect(within(checklist).queryAllByRole("link")).toHaveLength(0)
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const details = screen.getByRole("heading", { name: "Record details" }).closest("section") as HTMLElement
+        expect(within(details).getByText(/Produced by.*Used as input by/s)).toBeVisible()
+        expect(within(details).queryAllByRole("link")).toHaveLength(0)
     })
 
     it("says nothing about a validation pointer when a geometry has no producers or consumers at all", async () => {
@@ -329,15 +311,15 @@ describe("GeometryDetailPage", () => {
             provenance: { produced_by: [], used_as_input_by: [] },
         }))))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
-        const checklist = screen.getByLabelText("Geometry validation checklist")
-        expect(within(checklist).queryByText(/Produced by/)).not.toBeInTheDocument()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const details = screen.getByRole("heading", { name: "Record details" }).closest("section") as HTMLElement
+        expect(within(details).queryByText(/Produced by/)).not.toBeInTheDocument()
     })
 
     it("renders every atom row in the coordinate table, in payload order", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
         const rows = within(table).getAllByRole("row").slice(1)
         expect(rows).toHaveLength(5)
@@ -364,16 +346,16 @@ describe("GeometryDetailPage", () => {
         // (or read one atom's coordinate for another's row) is observable
         // here, unlike a fixture whose x/y/z happened to share one value.
         const secondDataRow = rows[1]
-        expect(within(secondDataRow).getByText("0.11", { selector: "[data-column='x']" })).toBeVisible()
-        expect(within(secondDataRow).getByText("0.22", { selector: "[data-column='y']" })).toBeVisible()
-        expect(within(secondDataRow).getByText("0.33", { selector: "[data-column='z']" })).toBeVisible()
+        expect(within(secondDataRow).getByText("0.110000", { selector: "[data-column='x'], [data-column='x'] data" })).toBeVisible()
+        expect(within(secondDataRow).getByText("0.220000", { selector: "[data-column='y'], [data-column='y'] data" })).toBeVisible()
+        expect(within(secondDataRow).getByText("0.330000", { selector: "[data-column='z'], [data-column='z'] data" })).toBeVisible()
     })
 
     it("flags a mismatch between the declared atom count and the returned coordinate rows", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ natoms: 99 }))))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
-        const section = screen.getByRole("heading", { name: "Coordinate table" }).closest("section") as HTMLElement
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const section = screen.getByRole("heading", { name: "Atoms and coordinates" }).closest("section") as HTMLElement
         expect(within(section).getByRole("alert")).toHaveTextContent(
             /declared atom count \(99\).*does not match.*coordinate rows returned\s*\(5\)/,
         )
@@ -384,15 +366,15 @@ describe("GeometryDetailPage", () => {
     it("says nothing about a count mismatch when natoms and the returned rows agree", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
-        const section = screen.getByRole("heading", { name: "Coordinate table" }).closest("section") as HTMLElement
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const section = screen.getByRole("heading", { name: "Atoms and coordinates" }).closest("section") as HTMLElement
         expect(within(section).queryByRole("alert")).not.toBeInTheDocument()
     })
 
     it("renders the raw XYZ text verbatim in a selectable block", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         const xyzSection = screen.getByRole("heading", { name: "Raw XYZ" }).closest("section") as HTMLElement
         expect(within(xyzSection).getByText(/H 0\.110000 0\.220000 0\.330000/)).toBeVisible()
     })
@@ -400,8 +382,8 @@ describe("GeometryDetailPage", () => {
     it("shows a picture and a Show in 3D button first, with the bond-inference disclosure beside the picture", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
-        const viewerSection = screen.getByRole("heading", { name: "Structure view" }).closest("section") as HTMLElement
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const viewerSection = screen.getByRole("figure", { name: "Picture of this geometry" })
         expect(within(viewerSection).getByRole("img", { name: "Ball-and-stick picture of CH4" })).toBeVisible()
         expect(within(viewerSection).getByRole("button", { name: "Show in 3D" })).toBeVisible()
         expect(viewerSection.querySelector(".viewer-canvas")).toBeNull()
@@ -414,8 +396,8 @@ describe("GeometryDetailPage", () => {
         // jsdom has no WebGL or layout, so the viewer settles into its unavailable status, as in a browser without WebGL.
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
-        const viewerSection = screen.getByRole("heading", { name: "Structure view" }).closest("section") as HTMLElement
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const viewerSection = screen.getByRole("figure", { name: "Picture of this geometry" })
         fireEvent.click(within(viewerSection).getByRole("button", { name: "Show in 3D" }))
         expect(await within(viewerSection).findByText(/The interactive 3D view could not start in this browser/)).toBeVisible()
         expect(within(viewerSection).getByRole("img", { name: "Ball-and-stick picture of CH4" })).toBeVisible()
@@ -435,7 +417,7 @@ describe("GeometryDetailPage", () => {
         const record = mockRecord()
         server.use(http.get(ENDPOINT, () => HttpResponse.json(record)))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         const xyzSection = screen.getByRole("heading", { name: "Raw XYZ" }).closest("section") as HTMLElement
         expect(within(xyzSection).getByText(/H 0\.630000 -0\.630000 -0\.630000/)).toBeVisible()
         expect(record.xyz_text).toContain("H 0.630000 -0.630000 -0.630000")
@@ -444,7 +426,7 @@ describe("GeometryDetailPage", () => {
     it("binds each produced-by row's own type and role — not the first row's", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         const section = screen.getByRole("heading", { name: "Produced by" }).closest("section") as HTMLElement
 
         const rowOne = within(section).getByRole("link", { name: "calc_opt_two" }).closest("tr") as HTMLElement
@@ -464,7 +446,7 @@ describe("GeometryDetailPage", () => {
     it("never merges producer and consumer rows, even for a calculation that appears in both lists", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
 
         const producedSection = screen.getByRole("heading", { name: "Produced by" }).closest("section") as HTMLElement
         const consumedSection = screen.getByRole("heading", { name: "Used as input by" }).closest("section") as HTMLElement
@@ -506,15 +488,6 @@ describe("GeometryDetailPage", () => {
         // borrowing a role from the producer side or printing a fake value.
         expect(within(consumedSection).queryByRole("columnheader", { name: "Role" })).not.toBeInTheDocument()
         expect(within(producedSection).getByRole("columnheader", { name: "Role" })).toBeVisible()
-
-        // The metric counts are independent, not a combined tally: two
-        // producer edges and three consumer edges, never summed (5) and
-        // never deduplicated by unique ref (4, since calc_opt_two repeats).
-        const summary = screen.getByLabelText("Geometry provenance summary")
-        const producingMetric = within(summary).getByText("Producing calculations").closest(".metric") as HTMLElement
-        const consumingMetric = within(summary).getByText("Consuming calculations").closest(".metric") as HTMLElement
-        expect(within(producingMetric).getByText("2")).toBeVisible()
-        expect(within(consumingMetric).getByText("3")).toBeVisible()
     })
 
     it("distinguishes an archive-dropped field from a genuinely empty list", async () => {
@@ -527,7 +500,7 @@ describe("GeometryDetailPage", () => {
         delete (withoutKey.provenance as Record<string, unknown>).used_as_input_by
         server.use(http.get(ENDPOINT, () => HttpResponse.json(withoutKey)))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         const section = screen.getByRole("heading", { name: "Used as input by" }).closest("section") as HTMLElement
         expect(within(section).getByText("The archive did not return this field for this geometry.")).toBeVisible()
         expect(within(section).queryByText(/not requested/i)).not.toBeInTheDocument()
@@ -540,7 +513,7 @@ describe("GeometryDetailPage", () => {
             provenance: { produced_by: [], used_as_input_by: mockRecord().provenance.used_as_input_by },
         }))))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         const section = screen.getByRole("heading", { name: "Produced by" }).closest("section") as HTMLElement
         expect(within(section).getByText("No calculation is recorded as having produced this geometry.")).toBeVisible()
         expect(within(section).queryByRole("link")).not.toBeInTheDocument()
@@ -549,16 +522,16 @@ describe("GeometryDetailPage", () => {
     it("shows a static message and no viewer when the geometry has no atom rows", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ natoms: 0, symbols: [], coords: [], atoms: [] }))))
         page()
-        await screen.findByRole("heading", { name: "Geometry" })
-        const viewerSection = screen.getByRole("heading", { name: "Structure view" }).closest("section") as HTMLElement
-        expect(within(viewerSection).getByText(/No atom rows are recorded/)).toBeVisible()
-        expect(viewerSection.querySelector("svg")).toBeNull()
+        await screen.findByRole("heading", { level: 1, name: /^Geometry/ })
+        expect(screen.getAllByText(/No atom rows are recorded/)[0]).toBeVisible()
+        expect(screen.queryByRole("figure", { name: "Picture of this geometry" })).toBeNull()
+        expect(document.querySelector("svg.mol-poster")).toBeNull()
     })
 
     it("shows a message when no raw XYZ text is recorded", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ xyz_text: null }))))
         page()
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         const xyzSection = screen.getByRole("heading", { name: "Raw XYZ" }).closest("section") as HTMLElement
         expect(within(xyzSection).getByText("No raw XYZ text is recorded for this geometry.")).toBeVisible()
     })
@@ -649,7 +622,7 @@ describe("GeometryDetailPage", () => {
         it("defaults to ångström — the owner's own instruction was 'starts with angstrom cause that's how it's stored'", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of CH4/ })
             const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
             const section = table.closest("section") as HTMLElement
             expect(within(section).getByRole("button", { name: "Å" })).toHaveAttribute("aria-pressed", "true")
@@ -658,13 +631,13 @@ describe("GeometryDetailPage", () => {
             // default unit to "bohr" would fail this (it would show the
             // converted 0.2079... value instead of 0.11).
             const secondRow = within(table).getAllByRole("row")[2]
-            expect(within(secondRow).getByText("0.11", { selector: "[data-column='x']" })).toBeVisible()
+            expect(within(secondRow).getByText("0.110000", { selector: "[data-column='x'], [data-column='x'] data" })).toBeVisible()
         })
 
         it("converts every coordinate with the exact CODATA Å→bohr factor when toggled, and back when toggled again", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of CH4/ })
             const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
             const section = table.closest("section") as HTMLElement
 
@@ -676,20 +649,20 @@ describe("GeometryDetailPage", () => {
             // 0.11 Å and -0.63 Å converted by the exact factor, not a
             // rounded approximation, not the untouched angstrom value,
             // and not an inverted (divided) factor.
-            expect(within(secondRow).getByText((0.11 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-column='x']" })).toBeVisible()
-            expect(within(secondRow).getByText((0.22 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-column='y']" })).toBeVisible()
-            expect(within(secondRow).getByText((0.33 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-column='z']" })).toBeVisible()
+            expect(within(secondRow).getByText((0.11 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-column='x'], [data-column='x'] data" })).toBeVisible()
+            expect(within(secondRow).getByText((0.22 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-column='y'], [data-column='y'] data" })).toBeVisible()
+            expect(within(secondRow).getByText((0.33 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-column='z'], [data-column='z'] data" })).toBeVisible()
             const thirdRow = within(table).getAllByRole("row")[3]
-            expect(within(thirdRow).getByText((-0.63 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-column='x']" })).toBeVisible()
+            expect(within(thirdRow).getByText((-0.63 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-column='x'], [data-column='x'] data" })).toBeVisible()
 
             fireEvent.click(within(section).getByRole("button", { name: "Å" }))
-            expect(within(secondRow).getByText("0.11", { selector: "[data-column='x']" })).toBeVisible()
+            expect(within(secondRow).getByText("0.110000", { selector: "[data-column='x'], [data-column='x'] data" })).toBeVisible()
         })
 
         it("names the exact conversion factor and states the wire truth (stored in ångström), never implying the archive holds a bohr-valued record", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of CH4/ })
             const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
             const section = table.closest("section") as HTMLElement
             // Finding #9: plain wording, no `coordinate_units`-on-the-wire jargon --
@@ -708,7 +681,7 @@ describe("GeometryDetailPage", () => {
             // <th>'s own text.
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of CH4/ })
             const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
             const section = table.closest("section") as HTMLElement
             expect(within(table).getByRole("columnheader", { name: "x (Å)" })).toBeVisible()
@@ -736,7 +709,7 @@ describe("GeometryDetailPage", () => {
         it("computed text-transform is none on the x/y/z coordinate headers in both ångström and bohr", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of CH4/ })
             const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
             const section = table.closest("section") as HTMLElement
             for (const name of ["x (Å)", "y (Å)", "z (Å)"]) {
@@ -773,10 +746,10 @@ describe("GeometryDetailPage", () => {
             })
             server.use(http.get(ENDPOINT, () => HttpResponse.json(record)))
             page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of CH4/ })
             const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
             const firstDataRow = within(table).getAllByRole("row")[1]
-            expect(within(firstDataRow).getByText("1.078957", { selector: "[data-column='x']" })).toBeVisible()
+            expect(within(firstDataRow).getByText("1.078957", { selector: "[data-column='x'], [data-column='x'] data" })).toBeVisible()
             // Would read "1.08" under a `.toFixed(2)` mutation of the
             // ångström branch — asserted absent so this test actually
             // fails under that mutation rather than merely not checking.
@@ -793,7 +766,7 @@ describe("GeometryDetailPage", () => {
             // what that CSS renders, unconditionally of viewport width.
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of CH4/ })
             const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
             const section = table.closest("section") as HTMLElement
             const firstDataRow = within(table).getAllByRole("row")[1]
@@ -809,7 +782,7 @@ describe("GeometryDetailPage", () => {
         it("defaults to element symbols, and switching to Number shows each row's own atomic number", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of CH4/ })
             const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
             const section = table.closest("section") as HTMLElement
             expect(within(section).getByRole("button", { name: "Symbol" })).toHaveAttribute("aria-pressed", "true")
@@ -832,7 +805,7 @@ describe("GeometryDetailPage", () => {
             })
             server.use(http.get(ENDPOINT, () => HttpResponse.json(record)))
             page()
-            await screen.findByRole("heading", { name: "Xx geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of Xx/ })
             const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
             const section = table.closest("section") as HTMLElement
 
@@ -849,7 +822,7 @@ describe("GeometryDetailPage", () => {
         it("reuses the shared CopyButton next to the raw XYZ block", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of CH4/ })
             const xyzSection = screen.getByRole("heading", { name: "Raw XYZ" }).closest("section") as HTMLElement
             expect(within(xyzSection).getByRole("button", { name: "Copy raw XYZ text" })).toBeVisible()
         })
@@ -857,7 +830,7 @@ describe("GeometryDetailPage", () => {
         it("renders no copy button when there is no raw XYZ text to copy", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ xyz_text: null }))))
             page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of CH4/ })
             const xyzSection = screen.getByRole("heading", { name: "Raw XYZ" }).closest("section") as HTMLElement
             expect(within(xyzSection).queryByRole("button", { name: /Copy/ })).not.toBeInTheDocument()
         })
@@ -876,7 +849,7 @@ describe("GeometryDetailPage", () => {
             const record = mockRecord()
             server.use(http.get(ENDPOINT, () => HttpResponse.json(record)))
             page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of CH4/ })
 
             const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
             const coordSection = table.closest("section") as HTMLElement
@@ -893,32 +866,6 @@ describe("GeometryDetailPage", () => {
         })
     })
 
-    describe("validation card shape", () => {
-        // Finding #13: this card no longer repeats every producing/consuming
-        // calculation ref inline as its own SET OF LINKS -- it points at the
-        // "Produced by" / "Used as input by" tables further down the page
-        // instead (plain prose, in the `.note`), where those SAME refs
-        // already render as real, correctly-cased links. See the
-        // "points to the Produced by / Used as input by tables below" and
-        // "says nothing about a validation pointer..." tests above, which
-        // now cover this card's shape.
-        //
-        // record-summary-row PR: `.validation-card` is retired -- this box
-        // now renders through the shared `.coverage-card` structure (a
-        // `.kv-list.coverage-checklist` `<dl>` DOES appear now, by design;
-        // that is the "going down list" fix -- what stays asserted here is
-        // that it holds no LINKS, since the pointer sentence is plain prose).
-        it("renders the pointer sentence as plain prose inside the evidence card, not a link list", async () => {
-            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
-            page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
-            const checklist = screen.getByLabelText("Geometry validation checklist")
-            const card = within(checklist).getByText("Evidence on this geometry", { selector: ".t-label" }).closest(".coverage-card") as HTMLElement
-            expect(card).not.toBeNull()
-            expect(card.querySelector("a")).toBeNull()
-        })
-    })
-
     describe("page shell: table of contents and width caps", () => {
         // This page's real, unmodified fixture (`mockRecord()`) renders 5
         // `<h2>` sections at runtime -- Structure view, Coordinate table,
@@ -929,7 +876,7 @@ describe("GeometryDetailPage", () => {
         it("shows a table of contents with one entry per section that actually rendered", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of CH4/ })
 
             const toc = await screen.findByRole("navigation", { name: "Sections on this page" })
             // The nav appears once TWO sections have registered, but this page
@@ -938,15 +885,15 @@ describe("GeometryDetailPage", () => {
             await waitFor(() => expect(
                 within(toc).getAllByRole("link").map((link) => link.textContent),
             ).toEqual([
-                "Structure view", "Coordinate table", "Raw XYZ", "Produced by", "Used as input by",
+                "Atoms and coordinates", "Raw XYZ", "Produced by", "Used as input by", "Record details",
             ]))
-            expect(within(toc).getAllByRole("link")[0]).toHaveAttribute("href", "#viewer-heading")
+            expect(within(toc).getAllByRole("link")[0]).toHaveAttribute("href", "#coordinates-heading")
         })
 
         it("caps running prose at its own width while the 3D viewer and coordinate table use the page's full width", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             const { container } = page()
-            await screen.findByRole("heading", { name: "CH4 geometry" })
+            await screen.findByRole("heading", { name: /^Geometry of CH4/ })
 
             // `.basin-intro` retired (design/foundations PR B) -- this
             // header's intro paragraph now goes through `RecordIdentityHeader`'s
@@ -996,6 +943,58 @@ describe("GeometryDetailPage", () => {
     })
 })
 
+describe("GeometryDetailPage -- wording and keyboard", () => {
+    it("uses the one word conformer where it names a shape, and says basin nowhere", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        expect(document.body.textContent).not.toMatch(/basin/i)
+    })
+
+    it("ranks nothing: no best, lowest or recommended wording", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        expect(rankingWords(textOf(document.body))).toEqual([])
+    })
+
+    it("puts the picture first, directly under the header and before any table", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const figure = screen.getByRole("figure", { name: "Picture of this geometry" })
+        const firstTable = document.querySelector("table") as HTMLElement
+        expect(figure.compareDocumentPosition(firstTable) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        const firstSection = document.querySelector("section[aria-labelledby]") as HTMLElement
+        expect(figure.compareDocumentPosition(firstSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it("opens the 3D view from the keyboard and moves focus to the result", async () => {
+        const user = userEvent.setup()
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const open = screen.getByRole("button", { name: "Show in 3D" })
+        for (let presses = 0; presses < 40 && document.activeElement !== open; presses += 1) await user.tab()
+        expect(open).toHaveFocus()
+        await user.keyboard("{Enter}")
+        // jsdom has no WebGL, so the live view settles into its failure sentence, which takes focus.
+        const note = await screen.findByText(/The interactive 3D view could not start in this browser/)
+        await waitFor(() => expect(note).toHaveFocus())
+    })
+
+    it("scrolls a table inside its own labelled, focusable box", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        for (const name of ["Table of coordinates", "Table of produced by", "Table of used as input by"]) {
+            const box = screen.getByRole("region", { name })
+            expect(box).toHaveAttribute("tabindex", "0")
+            expect(box).toHaveClass("table-scroll")
+        }
+    })
+})
+
 describe("GeometryDetailPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
     it("prints none of the typed identity fields, in text or in any attribute", async () => {
         const planted = plantSentinels(mockRecord({
@@ -1014,7 +1013,7 @@ describe("GeometryDetailPage -- no depositor-typed text (owner decision 2026-11-
         server.use(http.get(ENDPOINT, () => HttpResponse.json(value)))
         page()
         // The fixture reached the page: the geometry's ref and its transition-state entry ref rendered.
-        await screen.findByRole("heading", { name: "CH4 geometry" })
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         expect(screen.getAllByText("tse_demo").length).toBeGreaterThan(0)
 
         expectNoDepositorText()

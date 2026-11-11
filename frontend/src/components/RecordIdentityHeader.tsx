@@ -89,7 +89,7 @@ import type { RecordIdentity } from "../domain/recordIdentity"
  */
 export function RecordIdentityHeader({
     kicker, pill, glyph, review, lede, title, titleVariant = "display-1", intro,
-    identity, facets, submissionRef, explainTransitionStateIdentity = true, ownRef,
+    identity, facets, submissionRef, explainTransitionStateIdentity = true, ownRef, ownFacts,
 }: {
     kicker: ReactNode
     pill?: ReactNode
@@ -111,7 +111,10 @@ export function RecordIdentityHeader({
      *  in three different positions relative to identity. Rendered as
      *  `--type-body` capped to `--measure-prose`, same as `SectionHeading`'s. */
     intro?: ReactNode
-    identity: RecordIdentity
+    /** Omitted by a page whose owner context does not fit `RecordIdentity`; it passes `ownFacts` instead. */
+    identity?: RecordIdentity
+    /** Extra rows after the record's own ref, for a page with no `identity`. */
+    ownFacts?: ReactNode
     facets?: EntryFacetAxes
     submissionRef?: string | null
     explainTransitionStateIdentity?: boolean
@@ -139,7 +142,18 @@ export function RecordIdentityHeader({
                 {title}
             </h1>
             {lede ? <Lede>{lede}</Lede> : intro && <p className="t-body section-intro">{intro}</p>}
-            <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} ownRef={ownRef} />
+            {identity ? (
+                <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} ownRef={ownRef} />
+            ) : (
+                <dl className="kv-list record-identity-facts">
+                    {ownRef && (
+                        <IdentityFact label={ownRef.label} copy={ownRef.value}>
+                            <code className="data">{ownRef.value}</code>
+                        </IdentityFact>
+                    )}
+                    {ownFacts}
+                </dl>
+            )}
             {/* No pill boxes: a plain, readable phrase built from the same
                 raw axes a pill row used to read one-per-pill -- see
                 `SpeciesEntrySummary.tsx`'s `EntryIdentity` for the report

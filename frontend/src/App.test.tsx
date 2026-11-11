@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import App from "./App"
 import { bySummaryText } from "./test/disclosureQueries"
+import { conformerReadHandlers } from "./test/conformerReads"
 import { titleHasKind, type RouteTitleKindKey } from "./test/routeTitleKinds"
 
 const speciesRef = "spc_abcde234567abcde234567abcd"
@@ -321,13 +322,10 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     // reactions with the species/transition/vanderwaals browsing page?").
     ["/species", "Browse molecules", undefined],
     ["/species/spc_abcde234567abcde234567abcd", "H2O", speciesRef],
-    // The h1 states what the record IS ("Conformer basin"), not the
-    // producer's own deposited label -- see `ConformerGroupPage.tsx`'s own
-    // header comment. The fixture below still sets `label: "Conformer
-    // group"` deliberately, so this heading value only changes because the
-    // page itself no longer titles by that label at all.
-    ["/conformer-groups/cfg_abc", "Conformer basin", "cfg_abc"],
-    ["/conformer-observations/cfo_abc", "Computed observation", "cfo_abc"],
+    // The h1 states what the record IS, not the producer's own deposited label. The fixture below sets
+    // `label: "Conformer group"`, which is not the archive's own numbering, so the page does not print it.
+    ["/conformer-groups/cfg_abc", "Conformer", "cfg_abc"],
+    ["/conformer-observations/cfo_abc", "Conformer observation", "cfo_abc"],
     ["/calculations/calc_abc", "Single-point of H2O", "calc_abc"],
     ["/geometries/geom_abc", "Geometry", "geom_abc"],
     // `/reactions` is no longer `RecordPlaceholderPage` -- it is `BrowsePage`
@@ -358,7 +356,7 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
 const EXPECTED_TITLES: Record<string, string> = {
     "/species": "Molecules · TCKDB",
     "/species/spc_abcde234567abcde234567abcd": "H2O · Molecule · TCKDB",
-    "/conformer-groups/cfg_abc": "Conformer basin · TCKDB",
+    "/conformer-groups/cfg_abc": "Conformer · TCKDB",
     "/conformer-observations/cfo_abc": "Conformer observation · TCKDB",
     "/calculations/calc_abc": "Single-point · Calculation · TCKDB",
     "/geometries/geom_abc": "Geometry · TCKDB",
@@ -376,6 +374,7 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
                 HttpResponse.json({ records: [overviewSpecies()] })
             )), ...emptyValueSearches)
         }
+        if (path.startsWith("/conformer-groups/") || path.startsWith("/conformer-observations/")) server.use(...conformerReadHandlers({ entryRef }))
         if (path.startsWith("/conformer-groups/")) {
             server.use(http.get("/api/v1/scientific/conformer-groups/:ref", () => HttpResponse.json({
                 record: {

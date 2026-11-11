@@ -8,7 +8,19 @@ import { KJ_MOL_PER_HARTREE } from "./energyUnits"
 import { softwareLabel } from "./provenanceFormat"
 import { calculationTypeCounts, conformerDisplayNumber } from "./conformerEvidence"
 
-type ObservationCalculation = NonNullable<NonNullable<NonNullable<ConformerProjection["observations"]>[number]["calculations"]>[number]>
+type ObservationCalculation = {
+    calculation_ref: string
+    type: string
+    level_of_theory?: LevelOfTheory | null
+    software_release?: { software?: string | null; version?: string | null } | null
+}
+/** The observations of a conformer group, from the conformer search or from the group's own read. */
+export type ObservationSource = {
+    observations?: readonly {
+        conformer_observation: { conformer_observation_ref: string }
+        calculations?: readonly ObservationCalculation[] | null
+    }[] | null
+}
 
 const COUNT_WORDS: Record<string, [string, string]> = {
     opt: ["geometry optimisation", "geometry optimisations"],
@@ -40,7 +52,11 @@ export function depositorWrittenLabel(conformer: ConformerProjection): string | 
 
 /** The geometry the picture is drawn from: the first final geometry in the group's own order, else the first listed. */
 export function pictureGeometryRef(conformer: ConformerProjection): string | null {
-    const links = conformer.geometries ?? []
+    return pictureGeometryFromLinks(conformer.geometries ?? [])
+}
+
+/** The same choice over any list of geometry links: the first final geometry, else the first listed. */
+export function pictureGeometryFromLinks(links: readonly { geometry: { geometry_ref: string; role?: unknown } }[]): string | null {
     const final = links.find((link) => link.geometry.role === "final")
     return (final ?? links[0])?.geometry.geometry_ref ?? null
 }
@@ -272,7 +288,7 @@ const reviewOf = (record: SpeciesCalculationEnergyRecord | undefined): string | 
  * record that names this observation but is missing from the group's own list is added. Nothing is picked or merged.
  */
 export function shapeRows(
-    conformer: ConformerProjection,
+    conformer: ObservationSource,
     spRecords: readonly SpeciesCalculationEnergyRecord[],
     optRecords: readonly SpeciesCalculationEnergyRecord[],
 ): ShapeRow[] {

@@ -1,14 +1,17 @@
 import { StrictMode } from "react"
-import { http, HttpResponse } from "msw"
+import { http, HttpResponse, type JsonBodyType } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ConformerGroupPage from "./ConformerGroupPage"
-import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { conformerReadHandlers } from "../test/conformerReads"
+import { ADVERSARIAL, expectDepositorTextOnlyInNotes, expectNoAdversarialText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { rankingWords, textOf } from "../test/rankingWords"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
+beforeEach(() => server.use(...conformerReadHandlers({ entryRef: "spe_demo" })))
 afterEach(() => {
     server.resetHandlers()
     cleanup()
@@ -87,7 +90,7 @@ const payload = {
             calculations: [
                 {
                     calculation_ref: "calc_opt",
-                    type: "optimization",
+                    type: "opt",
                     quality: "ok",
                     review: { status: "reviewed" },
                     level_of_theory: { method: "b3lyp", basis: "def2tzvp" },
@@ -95,8 +98,15 @@ const payload = {
                     workflow_tool_release: { workflow_tool: "ARC" },
                 },
                 {
+                    calculation_ref: "calc_sp",
+                    type: "sp",
+                    review: { status: "approved" },
+                    level_of_theory: { method: "ccsd(t)", basis: "cc-pvtz" },
+                    software_release: { software: "Molpro", version: "2024" },
+                },
+                {
                     calculation_ref: "calc_freq",
-                    type: "frequency",
+                    type: "freq",
                     quality: "ok",
                     review: { status: "not_reviewed" },
                     level_of_theory: { method: "wb97xd", basis: "def2tzvp" },
@@ -118,417 +128,246 @@ const payload = {
 }
 
 describe("ConformerGroupPage", () => {
-    it("keeps observations, calculation stages, methods, and geometry inventory distinct", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", ({ request }) => {
-            // `observation_details` is required alongside `observations` to
-            // get each embedded observation's own calculations/geometries
-            // expanded inline (issue #537) -- without it the response would
-            // carry only a lean per-observation summary and this page's
-            // observation cards would render empty. Mutation check: drop
-            // the token from `loadConformerGroup` and this assertion fails.
-            expect(new URL(request.url).searchParams.getAll("include"))
-                .toEqual(["observations", "observation_details", "calculations", "geometries"])
-            return HttpResponse.json(payload)
-        }))
+    const SP_RECORD = {
+    calculation: { calculation_ref: "calc_sp", calculation_type: "sp", review: { status: "approved" } },
+    energy: { energy_hartree: -40.123456789, energy_kind: "electronic" },
+    conformer: { conformer_observation_ref: "co_one", conformer_group_ref: "cg_demo" },
+    level_of_theory: { method: "ccsd(t)", basis: "cc-pvtz" },
+    software_release: { software: "Molpro", version: "2024" },
+}
 
-        page()
-        expect(await screen.findByRole("heading", { name: "Conformer basin" })).toBeVisible()
-        expect(screen.getByText(/One torsional basin, shown through its deposited observations/))
-            .toBeVisible()
-        // selector: "strong" -- the metric tile's own element (`Metric`
-        // renders its number in a `<strong>`) -- disambiguates from the
-        // "3" subscript inside this fixture's own "CH3" formula rendering
-        // (`Formula` renders the digit as a `<sub>`), now that the
-        // species-entry link shows the served formula.
-        expect(screen.getByText("3", { selector: "strong" })).toBeVisible()
-        expect(screen.getByText("1 optimisation chains")).toBeVisible()
-
-        // The observation-scoped evidence ledger is open by default on this
-        // page -- its content is asserted directly, no click needed.
-        expect(screen.getByText("b3lyp/def2tzvp")).toBeVisible()
-        expect(screen.getByText("wb97xd/def2tzvp")).toBeVisible()
-        expect(screen.getByText("reviewed", { selector: "td" })).toBeVisible()
-        expect(screen.getByText(/produced by calc_opt, calc_sp/)).toBeVisible()
-        expect(screen.getByText((_, element) => (
-            element?.textContent === "geo_one from calc_opt"
-        ))).toBeVisible()
-        expect(screen.getAllByRole("link", { name: "geo_one" })[0]).toHaveAttribute(
-            "href",
-            "/geometries/geo_one",
+    function serve(record: JsonBodyType = payload, energies: { sp?: unknown[]; opt?: unknown[] } = { sp: [SP_RECORD] }) {
+        server.use(
+            ...conformerReadHandlers({ entryRef: "spe_demo", energies }),
+            http.get("/api/v1/scientific/conformer-groups/cg_demo", ({ request }) => {
+                // `observation_details` expands each observation's calculations and geometries inline.
+                expect(new URL(request.url).searchParams.getAll("include"))
+                    .toEqual(["observations", "observation_details", "calculations", "geometries"])
+                return HttpResponse.json(record)
+            }),
         )
-        expect(screen.getByText(/Their count is not a conformer count/)).toBeVisible()
+    }
+
+    it("titles the record by what it is, never by a ref or the producer's label", async () => {
+        serve()
+        page()
+        const h1 = await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1 of CH3/ })
+        expect(h1.textContent).toBe("Conformer Group 1 of CH3")
+        expect(h1.textContent).not.toMatch(/cg_|conformer_1/)
     })
 
-    // record-summary-row PR, item 1: the coverage card sits BELOW the tile
-    // row now, as its own full-width `.ledger-summary--single` section --
-    // never a 4th item sharing the tiles' own grid row. Item 3: each stage's
-    // coverage is its own row ("N of M observations"), a count, so no
-    // `.value-pill` -- unlike the observation page's present/absent checks,
-    // this is not a bounded-vocabulary status word (see `EvidenceChecklist`'s
-    // own docstring for that distinction).
-    it("renders the tile row and the coverage checklist as two separate sections, one row per stage with plain-text counts", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+    it("titles an un-numbered group by its kind and formula, and prints the depositor's label only as theirs", async () => {
+        const record = structuredClone(payload)
+        record.record.conformer_group.label = "my anti conformer"
+        ;(record.record.conformer_group as { note: string | null }).note = "Found by a manual scan."
+        serve(record)
         page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-
-        const tileRow = screen.getByLabelText("Basin evidence summary")
-        expect(tileRow).not.toHaveClass("ledger-summary--single")
-        expect(tileRow.querySelector(".coverage-card")).toBeNull()
-
-        const checklistSection = screen.getByLabelText("Basin evidence checklist")
-        expect(checklistSection).toHaveClass("ledger-summary", "ledger-summary--single")
-        const card = checklistSection.querySelector(".card.card--derived.coverage-card") as HTMLElement
-        expect(card).not.toBeNull()
-        expect(within(card).getByText("Evidence on this conformer group")).toHaveClass("t-label")
-
-        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
-        for (const [label, value] of [
-            ["Optimisation", "2 of 2 observations"],
-            ["Frequency", "1 of 2 observations"],
-            ["Single point", "1 of 2 observations"],
-        ] as const) {
-            const dt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === label)
-            const dd = dt?.nextElementSibling as HTMLElement
-            expect(dd).toHaveTextContent(value)
-            // A count, not a status word -- plain text, no pill wrapper.
-            expect(dd.querySelector(".value-pill")).toBeNull()
-        }
+        const h1 = await screen.findByRole("heading", { level: 1, name: /^Conformer of CH3/ })
+        expect(h1.textContent).not.toContain("my anti")
+        const notes = document.querySelectorAll(".depositor-note blockquote")
+        expect(Array.from(notes).map((note) => note.textContent)).toEqual(["my anti conformer", "Found by a manual scan."])
+        expectDepositorTextOnlyInNotes()
     })
 
-    // Independent review: `toHaveTextContent` above is true whether or not
-    // the card is open -- `EvidenceChecklist` collapses this card by
-    // default (item 2), so confirm with a real visibility check that
-    // opening it (the only way a reader reaches these rows) surfaces the
-    // same content. Also pins the TRUE roll-up (`stageCoverageSummary`,
-    // `ConformerGroupPage.tsx`) this fixture computes: opt=2/2 (covered),
-    // freq=1/2, sp=1/2 (both NOT covered) -> "1 of 3 stages covered", not
-    // a bare row count ("3 rows" reads identically for 1-of-3 and 3-of-3).
-    it("the checklist card is collapsed behind a TRUE stage-coverage roll-up, and opening it makes the rows actually visible", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+    it("says what the page is in one sentence under the title, from the counts", async () => {
+        serve()
         page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-
-        const card = screen.getByLabelText("Basin evidence checklist").querySelector(".card.card--derived.coverage-card") as HTMLElement
-        const rollup = card.querySelector(".coverage-checklist-summary") as HTMLElement
-        expect(rollup).toHaveTextContent("1 of 3 stages covered")
-
-        const details = card.querySelector("details") as HTMLDetailsElement
-        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
-        expect(details.open).toBe(false)
-        expect(checklist).not.toBeVisible()
-
-        fireEvent.click(details.querySelector("summary")!)
-        expect(details.open).toBe(true)
-        expect(checklist).toBeVisible()
-        const optDt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Optimisation")
-        const optDd = optDt?.nextElementSibling as HTMLElement
-        expect(optDd).toBeVisible()
-        expect(optDd.textContent).toBe("2 of 2 observations")
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        expect(screen.getByText(/One 3D shape this molecule can take, deposited as 2 observations and 3 calculations/)).toBeVisible()
     })
 
-    // Post-review (review of 2bd17511): number-first tile markup -- and
-    // specifically, THIS page's "Calculation rows" tile is the one caller
-    // with a `<small>` detail line ("N optimisation chains"). The detail
-    // must sit AFTER the label, never between the number and its own
-    // label, so it cannot displace the number the way a wrapping LABEL
-    // used to.
-    it("renders each metric tile number-first, with the detail line (where present) last, never before the label", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+    it("shows the review status as a word beside the glyph", async () => {
+        serve()
         page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-        const tiles = screen.getByLabelText("Basin evidence summary").querySelectorAll(".metric")
-        expect(tiles).toHaveLength(3)
-        for (const tile of tiles) {
-            expect(tile.children[0].tagName).toBe("STRONG")
-            expect(tile.children[1].tagName).toBe("SPAN")
-        }
-        const calcRowsTile = within(screen.getByLabelText("Basin evidence summary")).getByText("Calculation rows").closest(".metric") as HTMLElement
-        expect(calcRowsTile.children).toHaveLength(3)
-        expect(calcRowsTile.children[0]).toHaveTextContent("3")
-        expect(calcRowsTile.children[0].tagName).toBe("STRONG")
-        expect(calcRowsTile.children[1].tagName).toBe("SPAN")
-        expect(calcRowsTile.children[2].tagName).toBe("SMALL")
-        expect(calcRowsTile.children[2]).toHaveTextContent("1 optimisation chains")
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        const header = document.querySelector(".record-identity-kicker-row") as HTMLElement
+        expect(within(header).getByText("not reviewed")).toBeVisible()
     })
 
-    // Design/foundations PR B (item 5, BLOCKING-3 fix per review): this
-    // disclosure now composes the shared `Disclosure` primitive
-    // (`.disclosure`, `design-system.css`) instead of a page-local
-    // `<details className="ledger-section">` recipe -- and the section
-    // heading is a plain, always-visible `SectionHeading` OUTSIDE the
-    // disclosure, never an h2 nested inside its `<summary>` (a 28px serif
-    // heading never belonged inside a 13px summary row). `Disclosure` is
-    // deliberately UNCONTROLLED -- it does not set `aria-expanded` itself
-    // (native `<details>`/`<summary>` already conveys expanded state to
-    // real assistive tech on its own) -- so this test asserts the native
-    // `open` attribute and content visibility directly, the same
-    // mechanism `CalculationDetailPage`'s `LazySection` tests already
-    // rely on for the identical primitive.
-    it("opens the observation-scoped evidence ledger by default, naming its count in the disclosure summary, and keeps its heading outside the disclosure", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+    it("carries Molecules, the molecule, its version and the conformer as breadcrumbs", async () => {
+        serve()
         page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-
-        const heading = screen.getByRole("heading", { name: "Observation-scoped evidence" })
-        // BLOCKING-3: the heading itself is never inside a details/summary.
-        expect(heading.closest("details")).toBeNull()
-        expect(heading.closest("summary")).toBeNull()
-
-        const summary = screen.getByText("1 deposited observation").closest("summary") as HTMLElement
-        const details = summary?.closest("details") as HTMLElement
-        expect(details).not.toBeNull()
-        // Mutation check: rename the class away and this fails.
-        expect(details).toHaveClass("disclosure")
-
-        // Open by default: this is the only deposited-evidence section this
-        // record page has, so a reader lands with it already expanded.
-        expect(heading).toBeVisible()
-        expect(details).toHaveAttribute("open")
-        expect(screen.getByText("b3lyp/def2tzvp")).toBeVisible()
-
-        // <summary> is still a real, native, keyboard-operable disclosure
-        // control -- a reader who wants it collapsed can still close it.
-        // The native `open` DOM attribute flips synchronously on click, and
-        // jsdom implements native `<details>` toggle behaviour (the same
-        // mechanism `LazySection`'s own tests rely on), so no `waitFor` is
-        // needed for either assertion below.
-        fireEvent.click(summary)
-
-        expect(details).not.toHaveAttribute("open")
-        expect(screen.getByText("b3lyp/def2tzvp")).not.toBeVisible()
-        // The heading itself is unaffected by the toggle -- it was never
-        // inside the collapsing element to begin with.
-        expect(heading).toBeVisible()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" })
+        const links = within(breadcrumb).getAllByRole("link")
+        expect(links.map((link) => link.getAttribute("href"))).toEqual(["/species", "/species/spc_demo", "/species-entries/spe_demo"])
+        expect(links[0]).toHaveTextContent("Molecules")
+        expect(within(breadcrumb).getByText("Conformer Group 1")).toHaveAttribute("aria-current", "page")
     })
 
-    // BLOCKING-3 mutation check: no heading element sits inside any
-    // `<summary>` on this page. Put an h2 back inside a `Disclosure`'s
-    // `summary` prop and this test fails.
-    it("never puts a heading (h1-h4) inside a <summary> on this page", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+    it("draws the group's first final geometry with a Show in 3D button and a sentence about its shape", async () => {
+        serve()
         page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-        const summaries = document.querySelectorAll("summary")
-        expect(summaries.length).toBeGreaterThan(0)
-        for (const summary of summaries) {
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        const figure = await screen.findByRole("figure", { name: "Picture of this conformer" })
+        expect(await within(figure).findByRole("img", { name: /Ball-and-stick picture of CH3/ })).toBeVisible()
+        expect(within(figure).getByRole("button", { name: "Show in 3D" })).toBeVisible()
+        expect(within(figure).getByText(/2 atoms, O and H, 0\.98 Å apart\./)).toBeVisible()
+        expect(within(figure).getByRole("link", { name: "Open the geometry" })).toHaveAttribute("href", "/geometries/geo_one")
+    })
+
+    it("lists each observation in deposit order with its energy, level, program and review beneath it", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        const section = screen.getByRole("heading", { name: "Observations" }).closest("section") as HTMLElement
+        expect(within(section).getByText("Listed in deposit order.", { exact: false })).toBeVisible()
+        expect(within(section).getByText("This order is not a recommendation.", { exact: false })).toBeVisible()
+        expect(within(section).getByRole("link", { name: "Observation 1" })).toHaveAttribute("href", "/conformer-observations/co_one")
+        // The energy is a link to its calculation, shown to six places with the stored value on hover.
+        const energy = await within(section).findByText("−40.123457")
+        expect(energy.closest("a")).toHaveAttribute("href", "/calculations/calc_sp")
+        expect(energy).toHaveAttribute("title", "-40.123456789")
+        const source = energy.closest("li") as HTMLElement
+        expect(source).toHaveTextContent(/Source calc_sp · single-point · at ccsd\(t\)\/cc-pvtz · Molpro 2024 · Review of this record: approved/)
+        // The calculations that found the geometry keep their own levels.
+        expect(within(section).getAllByText("b3lyp/def2tzvp").length).toBeGreaterThan(0)
+        expect(within(section).getAllByText("wb97xd/def2tzvp").length).toBeGreaterThan(0)
+    })
+
+    it("says an energy is not recorded, rather than leaving it blank, when no energy came back for a single-point calculation", async () => {
+        serve(payload, { sp: [] })
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        expect((await screen.findAllByText("Energy not recorded")).length).toBeGreaterThan(0)
+    })
+
+    it("says the energies could not be read when that read fails, never that they are absent", async () => {
+        server.use(
+            http.get("/api/v1/scientific/species-calculations/search", () => HttpResponse.json({}, { status: 500 })),
+            ...conformerReadHandlers({ entryRef: "spe_demo" }),
+            http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)),
+        )
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        expect(await screen.findByText("The single-point energies could not be read.")).toBeVisible()
+        expect(screen.getAllByText("Could not be read").length).toBeGreaterThan(0)
+    })
+
+    it("never states a spread across different levels or programs", async () => {
+        const second = { ...SP_RECORD, calculation: { ...SP_RECORD.calculation, calculation_ref: "calc_sp_two" }, energy: { energy_hartree: -40.1, energy_kind: "electronic" }, software_release: { software: "Psi4", version: "1.9" } }
+        const record = structuredClone(payload)
+        record.record.observations[0].calculations.push({ calculation_ref: "calc_sp_two", type: "sp", review: { status: "approved" }, level_of_theory: { method: "ccsd(t)", basis: "cc-pvtz" }, software_release: { software: "Psi4", version: "1.9" } } as never)
+        serve(record, { sp: [SP_RECORD, second] })
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        await screen.findByText("−40.100000")
+        expect(screen.queryByText(/differ by up to/)).not.toBeInTheDocument()
+    })
+
+    it("names the thermochemistry and rate coefficients that name this conformer, and where it was merged", async () => {
+        server.use(
+            ...conformerReadHandlers({
+                entryRef: "spe_demo",
+                usage: {
+                    species_entry_ref: "spe_demo",
+                    groups: [{
+                        conformer_group_ref: "cg_demo",
+                        merged_into_conformer_group_ref: "cg_other",
+                        thermo: [{ thermo_ref: "thm_one", declared_by: "depositor" }],
+                        kinetics: [{ kinetics_ref: "kin_one", reaction_entry_ref: "rxe_one", role: "reactant" }],
+                    }],
+                    ensemble_thermo_refs: [],
+                },
+            }),
+            http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)),
+        )
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        const section = screen.getByRole("heading", { name: "Used by" }).closest("section") as HTMLElement
+        expect(await within(section).findByRole("link", { name: "thm_one" })).toHaveAttribute("href", "/species-entries/spe_demo/thermo?conformer=cg_demo#thermo-heading-thm_one")
+        expect(within(section).getByRole("link", { name: "kin_one" })).toHaveAttribute("href", "/reaction-entries/rxe_one#kinetics-heading")
+        expect(within(section).getByText(/was merged into/)).toBeVisible()
+        expect(within(section).getByRole("link", { name: "another conformer" })).toHaveAttribute("href", "/conformer-groups/cg_other")
+    })
+
+    it("says no thermochemistry or rate coefficient names it when none does, never inferring one", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        expect(await screen.findByText("No thermochemistry or rate coefficient names this shape.")).toBeVisible()
+    })
+
+    it("says so when which records use it cannot be read", async () => {
+        server.use(
+            http.get("/api/v1/scientific/species-entries/spe_demo/conformer-usage", () => HttpResponse.json({}, { status: 500 })),
+            ...conformerReadHandlers({ entryRef: "spe_demo" }),
+            http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)),
+        )
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        expect(await screen.findByText("Which records name this conformer could not be read.")).toBeVisible()
+    })
+
+    it("counts coverage per stage in plain text, collapsed behind a true roll-up", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        const checklist = screen.getByLabelText("Conformer evidence checklist")
+        expect(within(checklist).getByText("1 of 3 stages covered")).toBeInTheDocument()
+        fireEvent.click(checklist.querySelector("summary")!)
+        expect(within(checklist).getByText("2 of 2 observations")).toBeVisible()
+        expect(within(checklist).getAllByText("1 of 2 observations")).toHaveLength(2)
+    })
+
+    it("lists the stored geometries with the calculations that produced them", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        expect(screen.getByText(/produced by calc_opt, calc_sp/)).toBeVisible()
+        expect(screen.getAllByRole("link", { name: "geo_one" })[0]).toHaveAttribute("href", "/geometries/geo_one")
+        expect(screen.getByText(/This is not a count of conformers/)).toBeVisible()
+    })
+
+    it("shows a plain empty state when the group has no deposited observations", async () => {
+        const record = structuredClone(payload)
+        record.record.observations = []
+        record.record.observations_summary.total = 0
+        serve(record)
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        expect(screen.getByText("No deposited observations were returned for this conformer.")).toBeVisible()
+        expect(screen.queryByText("Listed in deposit order.", { exact: false })).not.toBeInTheDocument()
+    })
+
+    it("registers each section in the table of contents", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        const toc = await screen.findByRole("navigation", { name: "Sections on this page" })
+        await waitFor(() => expect(within(toc).getAllByRole("link").map((link) => link.textContent)).toEqual(["Observations", "Used by", "Geometries"]))
+    })
+
+    it("never puts a heading inside a summary", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        for (const summary of document.querySelectorAll("summary")) {
             expect(summary.querySelector("h1, h2, h3, h4")).toBeNull()
         }
     })
 
-    it("keeps the evidence-ledger heading registered in the table of contents", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+    it("uses the one word conformer, and says basin nowhere", async () => {
+        serve()
         page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-        const toc = await screen.findByRole("navigation", { name: "Sections on this page" })
-        expect(within(toc).getByRole("link", { name: "Observation-scoped evidence (1 deposited observation)" }))
-            .toBeVisible()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        expect(document.body.textContent).not.toMatch(/basin/i)
+        expect(document.title).not.toMatch(/basin/i)
     })
 
-    // The header used to be TITLED by the producer's own label (e.g.
-    // "conformer_1", an ARC-assigned string, not TCKDB semantics) at a
-    // 120px h1, then demoted to a secondary "Producer label" identity fact.
-    // That fact is now REMOVED entirely (house rule widened 2026-09: no
-    // depositor-typed labels on public pages at all) -- the h1 always
-    // states what the record is, and the ref is the one identity fact this
-    // page still shows. `payload.record.conformer_group.label` is still
-    // deposited ("conformer_1", see the fixture above); it must never
-    // surface.
-    it("titles the record by what it is, lists the stable ref, and never shows the producer's own label", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+    it("ranks nothing: no best, lowest or recommended wording", async () => {
+        serve()
         page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-        expect(screen.getByText("Group ref")).toBeVisible()
-        expect(screen.getByText("cg_demo", { selector: "code" })).toBeVisible()
-        expect(screen.queryByText("Producer label")).not.toBeInTheDocument()
-        expect(screen.queryByText("conformer_1")).not.toBeInTheDocument()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        await screen.findByText("−40.123457")
+        expect(rankingWords(textOf(document.body))).toEqual([])
     })
 
-    // Owner decision: "yes show each record's own ref inline" -- this
-    // page already showed "Group ref" first, but with no copy button;
-    // every other record page's own-ref fact gets one via
-    // `RecordIdentityHeader`'s `ownRef` prop, so this hand-rolled page
-    // now matches that affordance.
-    it("gives the group's own ref, first in the identity block, the same copy affordance as every other record page", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+    it("titles the tab with the kind Conformer", async () => {
+        serve()
         page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-        const identityFacts = document.querySelector(".record-identity-header dl.kv-list") as HTMLElement
-        expect(identityFacts).not.toBeNull()
-        expect(Array.from(identityFacts.children)[0]).toHaveTextContent("Group ref")
-        expect(screen.getByRole("button", { name: /copy group ref/i })).toBeVisible()
-    })
-
-    // Item 1/6/7, design/foundations PR B: the kicker-row/h1 order, the
-    // review-status pill's `.value-pill` primitive (muted for
-    // "not reviewed"), and the calculation table's `.data-table` primitive
-    // are all mutation-checked here -- rename any of these classes and this
-    // test fails.
-    it("renders the kicker row before the h1, the review pill as .value-pill--muted, and the calculation table as .data-table", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
-        page()
-        const h1 = await screen.findByRole("heading", { name: "Conformer basin" })
-        // SHOULD-FIX-7 (PR B review): the kicker row, h1, intro and identity
-        // `.kv-list` all sit inside the SAME `.record-identity-header`
-        // wrapper `RecordIdentityHeader` itself renders -- not bare
-        // siblings of `.basin-header` -- so this hand-matched header gets
-        // the same `gap` between them. Mutation check: h1 must be a
-        // descendant of `.record-identity-header`, and that wrapper's own
-        // direct children must carry the kicker row before the h1.
-        const wrapper = h1.closest(".record-identity-header") as HTMLElement
-        expect(wrapper).not.toBeNull()
-        const kickerRow = wrapper.querySelector(".record-identity-kicker-row") as HTMLElement
-        expect(kickerRow).not.toBeNull()
-        const order = Array.from(wrapper.children)
-        expect(order.indexOf(kickerRow)).toBeLessThan(order.indexOf(h1))
-
-        const pill = within(kickerRow).getByText("not reviewed")
-        expect(pill).toHaveClass("value-pill")
-        expect(pill).toHaveClass("value-pill--muted")
-        expect(document.querySelector(".review-badge")).toBeNull()
-
-        expect(document.querySelector(".stage-table")).toBeNull()
-        const table = document.querySelector("table") as HTMLElement
-        expect(table).toHaveClass("data-table")
-        expect(table.closest(".table-scroll")).not.toBeNull()
-    })
-
-    it("omits the 'Producer label' row when the group has no deposited label either, but still shows the ref", async () => {
-        const noLabelPayload = {
-            record: {
-                ...payload.record,
-                conformer_group: { ...payload.record.conformer_group, label: null },
-            },
-        }
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(noLabelPayload)))
-        page()
-        // The h1 states what the record is either way -- it never falls
-        // back to the ref or the (now absent) label.
-        await screen.findByRole("heading", { name: "Conformer basin" })
-        expect(screen.getByText("Group ref")).toBeVisible()
-        expect(screen.getByText("cg_demo", { selector: "code" })).toBeVisible()
-        expect(screen.queryByText("Producer label")).not.toBeInTheDocument()
-    })
-
-    // SF-1 (post-review): this page hand-rolls its own identity markup
-    // (it does not compose `RecordIdentityHeader`, see this file's own
-    // comment above `.basin-header`), so it grew its OWN copy of the
-    // `species_entry_label` bug independently of that component --
-    // `species.species_entry_label` rendered directly as the "Species
-    // entry" fact's link text, a bare "R" on a real record. Now
-    // delegates to `SpeciesEntryLink`, the same shared component
-    // `RecordIdentityHeader.tsx` and `ConformerObservationPage.tsx` use,
-    // which pairs the entry's served `formula` (RDKit-derived, backend
-    // fix) with the discriminator expanded via `stereoChip` ("R" -> "R
-    // enantiomer") rather than showing it raw.
-    // `getByRole(..., { name })` uses accessible-name computation, which
-    // collapses whitespace between the SMILES `code` and the bracketed-
-    // formula `span` differently from raw `textContent` -- queried by
-    // `href` and asserted on `textContent` here instead (see
-    // `RecordIdentityHeader.test.tsx`'s identical comment).
-    it("shows SMILES-leads-formula-in-brackets and never the served species_entry_label", async () => {
-        const labelledPayload = {
-            record: {
-                ...payload.record,
-                species: { ...payload.record.species, species_entry_label: "R" },
-            },
-        }
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(labelledPayload)))
-        page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-        const identityDl = document.querySelector(".basin-header dl.kv-list") as HTMLElement
-        const link = identityDl.querySelector('a[href="/species-entries/spe_demo"]')!
-        expect(link.textContent).toBe("[CH3] (CH3)")
-    })
-
-    it("shows SMILES-leads-formula-in-brackets alone with no label suffix when the entry has no deposited label", async () => {
-        const noLabelPayload = {
-            record: {
-                ...payload.record,
-                species: { ...payload.record.species, species_entry_label: null },
-            },
-        }
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(noLabelPayload)))
-        page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-        const identityDl = document.querySelector(".basin-header dl.kv-list") as HTMLElement
-        const link = identityDl.querySelector('a[href="/species-entries/spe_demo"]')!
-        expect(link.textContent).toBe("[CH3] (CH3)")
-    })
-
-    // Unified fallback rule (per this component's own reviewer-flagged
-    // duplication fix): when the species SMILES did not parse and the
-    // backend serves neither a `formula` nor a `canonical_smiles`, the
-    // base link text is the entry REF as `<code className="data">`,
-    // never the literal words "Species entry" -- the `<dt>` beside this
-    // `<dd>` already says that.
-    it("falls back to the entry ref, as a data code run, when the species context carries no SMILES and no formula", async () => {
-        const noFormulaPayload = {
-            record: {
-                ...payload.record,
-                species: { ...payload.record.species, canonical_smiles: null, formula: null, species_entry_label: null },
-            },
-        }
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(noFormulaPayload)))
-        page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-        const identityDl = document.querySelector(".basin-header dl.kv-list") as HTMLElement
-        const link = within(identityDl).getByRole("link", { name: "spe_demo" })
-        expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
-        const code = link.querySelector("code")
-        expect(code).not.toBeNull()
-        expect(code).toHaveClass("data")
-        expect(link.textContent).not.toContain("Species entry")
-    })
-
-    it("carries the TCKDB / Species / Species entry / Conformer basin breadcrumb -- the record page this was reported missing it on", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
-        page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-        const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" })
-        expect(within(breadcrumb).getByRole("link", { name: "TCKDB" })).toHaveAttribute("href", "/")
-        expect(within(breadcrumb).getByRole("link", { name: "Species" }))
-            .toHaveAttribute("href", "/species/spc_demo")
-        expect(within(breadcrumb).getByRole("link", { name: "Species entry" }))
-            .toHaveAttribute("href", "/species-entries/spe_demo")
-        expect(within(breadcrumb).getByText("Conformer basin")).toHaveAttribute("aria-current", "page")
-    })
-
-    it("shows a plain, always-open empty state when the group has no deposited observations (nothing to disclose)", async () => {
-        const emptyPayload = {
-            record: {
-                ...payload.record,
-                observations_summary: { total: 0, by_scientific_origin: {} },
-                observations: [],
-            },
-        }
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(emptyPayload)))
-        page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-        expect(screen.getByRole("heading", { name: "Observation-scoped evidence" })).toBeVisible()
-        expect(screen.getByText("No deposited observations were returned for this conformer basin."))
-            .toBeVisible()
-        // No disclosure control offered over an EMPTY observation-scoped
-        // evidence section specifically -- scoped to that section, not the
-        // whole document: the page's own `EvidenceChecklist` coverage card
-        // (a DIFFERENT, always-present disclosure, per item 2) still
-        // renders its own `details.disclosure` regardless of whether this
-        // basin has any observations at all.
-        const observationSection = document.querySelector('section[aria-labelledby="observation-ledger"]') as HTMLElement
-        expect(observationSection.querySelector("details.disclosure")).toBeNull()
-    })
-
-    // This page renders exactly 2 sections at runtime (observation-scoped
-    // evidence, geometry records) -- at the shared shell's list threshold
-    // (`MIN_SECTIONS_FOR_LIST`, `components/TableOfContents.tsx`), so the
-    // table of contents DOES show here: a list is worth showing once there
-    // is more than one place to jump to. Real fixture, real page -- not a
-    // count hand-picked to land at the threshold.
-    it("renders a table of contents with both of this page's sections -- 2 sections is at the list threshold", async () => {
-        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
-        page()
-        await screen.findByRole("heading", { name: "Conformer basin" })
-        const toc = await screen.findByRole("navigation", { name: "Sections on this page" })
-        await waitFor(() => expect(within(toc).getAllByRole("link")).toHaveLength(2))
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        expect(document.title).toBe("CH3 · Conformer · TCKDB")
     })
 
     it("shows a specific not-found state", async () => {
@@ -536,7 +375,7 @@ describe("ConformerGroupPage", () => {
             return HttpResponse.json({}, { status: 404 })
         }))
         page()
-        expect(await screen.findByRole("heading", { name: "Conformer basin not found" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Conformer not found" })).toBeVisible()
     })
 
     // Regression test for the requestCache StrictMode bug (see the module
@@ -551,8 +390,8 @@ describe("ConformerGroupPage", () => {
             return HttpResponse.json({}, { status: 404 })
         }))
         strictPage()
-        expect(await screen.findByRole("heading", { name: "Conformer basin not found" })).toBeVisible()
-        expect(screen.queryByRole("heading", { name: "Conformer basin unavailable" })).not.toBeInTheDocument()
+        expect(await screen.findByRole("heading", { name: "Conformer not found" })).toBeVisible()
+        expect(screen.queryByRole("heading", { name: "Conformer unavailable" })).not.toBeInTheDocument()
     })
 
     // Same bug, the OTHER failure mode: a page that renders successfully
@@ -563,8 +402,8 @@ describe("ConformerGroupPage", () => {
     it("renders real data under React.StrictMode's double-invoked effects, never stuck loading", async () => {
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
         strictPage()
-        expect(await screen.findByRole("heading", { name: "Conformer basin" })).toBeVisible()
-        expect(screen.queryByText("Loading conformer basin…")).not.toBeInTheDocument()
+        expect(await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1 of CH3/ })).toBeVisible()
+        expect(screen.queryByText("Loading conformer…")).not.toBeInTheDocument()
     })
 
     it("gives a malformed-ref 422 (code invalid_handle) its own non-retryable state", async () => {
@@ -580,7 +419,7 @@ describe("ConformerGroupPage", () => {
             context: {},
         }, { status: 422 })))
         page()
-        expect(await screen.findByRole("heading", { name: "Not a conformer basin reference" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Not a conformer reference" })).toBeVisible()
         expect(screen.getByText(/not a recognised conformer_group handle/)).toBeVisible()
         expect(screen.getByRole("alert")).toBeVisible()
     })
@@ -606,12 +445,12 @@ describe("ConformerGroupPage", () => {
         // Let the first (429) response and its synchronous onRateLimited
         // notification land, without yet advancing past the retry delay.
         await act(async () => { await vi.advanceTimersByTimeAsync(0) })
-        expect(screen.getByRole("heading", { name: "Loading conformer basin…" })).toBeVisible()
+        expect(screen.getByRole("heading", { name: "Loading conformer…" })).toBeVisible()
         const waitingMessage = () => screen.getByText(/receiving too many requests right now/)
         expect(waitingMessage()).toBeVisible()
         expect(waitingMessage().textContent).toMatch(/retrying automatically in about 8 seconds…/i)
         // Never the terminal states while still waiting on the automatic retry.
-        expect(screen.queryByRole("heading", { name: "Conformer basin unavailable" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("heading", { name: "Conformer unavailable" })).not.toBeInTheDocument()
         expect(screen.queryByRole("heading", { name: "Archive is busy" })).not.toBeInTheDocument()
 
         // The countdown ticks down locally (RetryCountdown), independent
@@ -621,7 +460,7 @@ describe("ConformerGroupPage", () => {
 
         // The retry itself fires at the full Retry-After delay and succeeds.
         await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
-        expect(screen.getByRole("heading", { name: "Conformer basin" })).toBeVisible()
+        expect(screen.getByRole("heading", { level: 1, name: /^Conformer Group 1 of CH3/ })).toBeVisible()
         expect(attempt).toBe(2)
     })
 
@@ -647,8 +486,8 @@ describe("ConformerGroupPage", () => {
     })
 })
 
-describe("ConformerGroupPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
-    it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
+describe("ConformerGroupPage -- depositor text", () => {
+    it("prints a depositor's typed fields only inside a note from the depositor", async () => {
         const planted = plantSentinels(payload, ["label", "note"])
         expectPlanted(planted)
         const { value } = planted
@@ -656,10 +495,10 @@ describe("ConformerGroupPage -- no depositor-typed text (owner decision 2026-11-
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(value)))
 
         page()
-        expect(await screen.findByRole("heading", { name: "Conformer basin" })).toBeVisible()
+        expect(await screen.findByRole("heading", { level: 1, name: /^Conformer of CH3/ })).toBeVisible()
         expect(screen.getAllByText("cg_demo").length).toBeGreaterThan(0)
 
-        expectNoDepositorText()
+        expectDepositorTextOnlyInNotes()
         expectNoAdversarialText()
     })
 })

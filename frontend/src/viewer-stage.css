@@ -47,3 +47,24 @@
     outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
 }
+
+/* A stage with the sentence that describes its shape, across the content column. */
+.viewer-figure {
+    display: grid;
+    gap: .75rem;
+    margin: 0 0 var(--s-6);
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.viewer-figure figcaption {
+    max-width: var(--measure-prose);
+    margin: 0;
+    font: var(--type-body-font);
+}
+
+.viewer-figure .viewer-poster-note {
+    margin: 0;
+}

@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Conformer and geometry pages (Unreleased)
+
+- **Behaviour:** the conformer group, conformer observation and geometry pages lead with the picture (a ball-and-stick drawing with "Show in 3D") and one sentence about the shape worked out from the stored coordinates (two atoms and their distance, or atoms per element and the bonds drawn). Titles are human labels ("Conformer Group 1 of C2H6O", "Geometry of CH3 (final, from an optimisation)"), breadcrumbs run Molecules, the molecule, its version, the conformer. The word "basin" is gone from page text. The group page lists each observation in deposit order with every energy computed on its geometry, each giving its calculation, level of theory, program and review status; a spread is stated only between energies of one kind at one level and one program. A "Used by" section lists the thermochemistry and rate coefficients that name the conformer, and where it was merged. A depositor's label and note appear only in a labelled note from the depositor. Coordinates show 6 decimal places in ångström and bohr, with the stored ångström number as the hover value. Tables scroll inside their own labelled box.
+- **Schema and migration:** none. No new environment variable.
+
 ## Deposited numbers to 6 significant figures (Unreleased)
 
 - **Behaviour:** quantities deposited as stored numbers print at most 6 significant figures, trailing zeros trimmed and no padding (38.92638673392166 shows as 38.9264). A whole number that JavaScript holds safely is never rounded; a non-integer from a million up to 2^53 shows as a whole number; beyond 2^53 it shows 6 figures and an exponent.

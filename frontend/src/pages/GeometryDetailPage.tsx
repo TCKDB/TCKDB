@@ -2,17 +2,24 @@ import { useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../geometry-detail.css"
-import { EvidenceChecklist } from "../components/EvidenceChecklist"
-import { ViewerStage } from "../components/ViewerStage"
+import { Breadcrumbs, type Crumb } from "../components/Breadcrumbs"
+import { entryCrumbs } from "../components/entryCrumbs"
+import { Formula } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
+import { Stored } from "../components/QuantityValue"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { SectionErrorBoundary } from "../components/SectionErrorBoundary"
 import { CopyButton } from "../components/RefsDisclosure"
+import { ViewerStage } from "../components/ViewerStage"
+import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import type { GeometryProvenanceCalcLink, GeometryRecord } from "../api/geometryApi"
+import { typeLabel } from "../domain/calculationTypeFormat"
+import { geometryLede } from "../domain/conformerLede"
+import { producedByPhrase, shapeSummary } from "../domain/geometryShape"
 import { hasIsotopeLabel, isotopeHillFormula, isotopeLabel } from "../domain/isotopeLabel"
-import { identityFormula, identityFromGeometry } from "../domain/recordIdentity"
+import { identityFormula, identityFromGeometry, type RecordIdentity } from "../domain/recordIdentity"
 import { useGeometry } from "../hooks/useGeometry"
 import {
     ANGSTROM_TO_BOHR,
@@ -24,26 +31,13 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 type ElementDisplayMode = "symbol" | "number"
 
-function formatCoordinate(valueAngstrom: number, unit: CoordinateUnitMode): string {
-    // Angstrom keeps this page's own pre-existing numeric rendering
-    // (`String(valueAngstrom)`, unchanged from before this toggle
-    // existed) of the parsed `atoms[].x/y/z` JSON numbers — bohr is the
-    // one display-only conversion, rounded to 6dp for a stable column
-    // width rather than trailing whatever float noise
-    // `* ANGSTROM_TO_BOHR` happens to produce (the coordinate-toggle-note
-    // below the table says so).
-    //
-    // NOT claimed as fidelity to the archive's raw text: `String(-0)` is
-    // `"0"` in JS, but the Raw XYZ block renders the archive's own
-    // `xyz_text` string verbatim, which for the same atom can read
-    // `-0.000000000000` (however the server formatted it). So this
-    // ångström column and the Raw XYZ block below can print the same
-    // atom's coordinate two different ways on the same page. That is
-    // pre-existing (this toggle did not introduce it, and did not fix
-    // it) — noted here so this comment does not overclaim a round-trip
-    // guarantee the code does not have.
-    if (unit === "angstrom") return String(valueAngstrom)
-    return angstromToBohr(valueAngstrom).toFixed(6)
+/** Six decimal places in either unit, so the columns line up; the stored ångström number is the hover value. */
+function CoordinateValue({ valueAngstrom, unit }: { valueAngstrom: number; unit: CoordinateUnitMode }) {
+    const shown = (unit === "angstrom" ? valueAngstrom : angstromToBohr(valueAngstrom)).toFixed(6)
+    const text = Number(shown) === 0 ? shown.replace("-", "") : shown
+    return unit === "angstrom" && String(valueAngstrom) !== text
+        ? <Stored full={String(valueAngstrom)}>{text}</Stored>
+        : <>{text}</>
 }
 
 function elementDisplayValue(
@@ -56,23 +50,8 @@ function elementDisplayValue(
     return atom.isotope_mass_number == null ? String(atomicNumber) : `${atomicNumber} (mass ${atom.isotope_mass_number})`
 }
 
-// ---------------------------------------------------------------------------
-// This page has no on-demand ("behind a disclosure") sections — see the
-// shape notes atop `api/geometryApi.ts`. Every field on this endpoint is
-// returned unconditionally in one request, so the internal three-state
-// shape below is the same eager-section triple `CalculationDetailPage` /
-// `ConformerObservationPage` use, but its *wording* cannot be borrowed
-// from them: on those surfaces a token really does gate the field, so an
-// absent key can honestly be read as "not requested". Here every field is
-// always requested (this page sends `include=provenance` unconditionally,
-// see `api/geometryApi.ts`) and no token gates anything at all — an
-// absent key can *only* mean the archive dropped the field from its own
-// response, never that this client failed to ask for it. Saying "not
-// requested" here would blame the request for something the request
-// provably did not cause, so the copy below says the archive-side thing
-// instead. There is no fourth "idle, not yet requested by the reader"
-// state here either, because nothing on this page is reader-gated.
-// ---------------------------------------------------------------------------
+// Every field on this endpoint is returned in one request and no token gates any of them, so an absent key can only
+// mean the archive dropped it, never that this client failed to ask.
 type SectionAvailability = "absent" | "empty" | "populated"
 
 function sectionAvailability<T>(value: T[] | null | undefined): SectionAvailability {
@@ -84,27 +63,9 @@ function sectionAvailability<T>(value: T[] | null | undefined): SectionAvailabil
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
-const CALC_TYPE_LABELS: Record<string, string> = {
-    opt: "Optimisation",
-    freq: "Frequency",
-    sp: "Single-point",
-    irc: "IRC",
-    scan: "Scan",
-    path_search: "Path search",
-    conf: "Conformer",
-}
-const typeLabel = (type: string) => CALC_TYPE_LABELS[type] ?? type.replaceAll("_", " ")
-
 /**
- * A simple Hill-order formula string derived only from the atom elements
- * already shown on this page (carbon first, hydrogen second, everything
- * else alphabetical) — a display convenience computed from data the reader
- * can already see in the coordinate table, not an inferred relationship.
- *
- * This is now a FALLBACK only, used when the archive's own `identity`
- * block (#321) is absent or ambiguous — never the primary source when a
- * served formula exists. See `GeometryDetail`'s `displayFormula` /
- * `formulaIsFallback`.
+ * A Hill-order formula from the atoms shown on this page, used only when the archive's own identity block is absent or
+ * ambiguous.
  */
 function hillFormula(elements: string[]): string {
     if (elements.length === 0) return ""
@@ -116,6 +77,27 @@ function hillFormula(elements: string[]): string {
         return a.localeCompare(b)
     })
     return order.map((el) => `${el}${(counts.get(el) ?? 0) > 1 ? counts.get(el) : ""}`).join("")
+}
+
+/** The owner's own parents, outermost first, ending at this page. */
+function geometryCrumbs(identity: RecordIdentity): Crumb[] {
+    if (identity.kind === "species_entry" && identity.speciesRef && identity.speciesEntryRef) {
+        return [
+            ...entryCrumbs({
+                speciesRef: identity.speciesRef, speciesEntryRef: identity.speciesEntryRef, formula: identity.formula,
+                smiles: identity.canonicalSmiles, facets: identity.facets,
+            }),
+            { label: "Geometry" },
+        ]
+    }
+    if (identity.kind === "transition_state_entry" && identity.transitionStateEntryRef) {
+        return [
+            { label: "Transition states", to: BROWSE_KIND_PATHS.transition_state },
+            { label: "This transition state", to: `/transition-state-entries/${identity.transitionStateEntryRef}` },
+            { label: "Geometry" },
+        ]
+    }
+    return [{ label: "Geometry" }]
 }
 
 export default function GeometryDetailPage() {
@@ -138,84 +120,39 @@ export default function GeometryDetailPage() {
 function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
     const atomsAvailability = sectionAvailability(geometry.atoms)
     const atoms = geometry.atoms ?? []
-    // `symbols`/`coords` are a parallel-array view of the same rows as
-    // `atoms` (see the shape notes in api/geometryApi.ts) — this page reads
-    // the richer `atoms` shape throughout rather than duplicating both.
     const clientFormula = hillFormula(atoms.map((atom) => atom.element))
 
-    // The archive's own served identity (#321) wins whenever it has a
-    // formula to offer. Only when identity is absent/ambiguous (or the
-    // owning entry's formula itself failed to parse server-side) does
-    // this page fall back to the client-derived Hill formula above — and
-    // when it does, it says so, rather than presenting a computed value
-    // as if the archive had served it.
+    // The archive's own identity wins whenever it has a formula; the formula computed from the atoms is a labelled fallback.
     const identity = identityFromGeometry(geometry.identity)
     const servedFormula = identityFormula(identity)
-    // An isotope-labelled geometry shows the formula of its own atoms: the
-    // entry's served formula is element-only and would read H2O for D2O.
+    // An isotope-labelled geometry shows the formula of its own atoms: the entry's served formula is element-only.
     const isotopeLabelled = hasIsotopeLabel(atoms)
     const displayFormula = isotopeLabelled ? isotopeHillFormula(atoms) : (servedFormula ?? clientFormula)
     const formulaIsFallback = !isotopeLabelled && servedFormula === null && clientFormula !== ""
     useDocumentTitle("Geometry", displayFormula)
 
-    // Lifted out of `CoordinateTableSection` (where it lived alone until
-    // now) so `GeometryViewer`'s atom-picking measurements can follow the
-    // same Å/bohr toggle as the coordinate table beside it — see
-    // `GeometryViewer.tsx`'s module docstring for the units decision this
-    // serves. One piece of state, two controlled consumers below, rather
-    // than two independent toggles that could disagree about which unit
-    // is "current" for the same page.
+    // One unit for the coordinate table and the viewer's measurements.
     const [coordinateUnit, setCoordinateUnit] = useState<CoordinateUnitMode>("angstrom")
 
     const producedByAvailability = sectionAvailability(geometry.provenance?.produced_by)
     const usedAsInputByAvailability = sectionAvailability(geometry.provenance?.used_as_input_by)
     const producedBy = geometry.provenance?.produced_by ?? []
     const usedAsInputBy = geometry.provenance?.used_as_input_by ?? []
+    const producedPhrase = producedByPhrase(producedBy)
 
     return (
         <section className="conformer-page geometry-page">
-            <nav className="record-breadcrumbs" aria-label="Breadcrumb">
-                <Link to="/">TCKDB</Link>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">Geometry</span>
-            </nav>
-
             <PageShell
                 identity={(
                     <header className="basin-header">
-                        {/* SHOULD-FIX-7 (PR B review): the intro sentence
-                            now goes through `RecordIdentityHeader`'s own
-                            `intro` prop -- kicker -> h1 -> intro -> identity
-                            is the one order every record page's header
-                            follows now, rather than each page picking its
-                            own position for this sentence relative to
-                            identity (this page used to put it AFTER the
-                            whole header/identity block; `ConformerGroupPage`/
-                            `ConformerObservationPage`'s hand-matched headers
-                            put it BEFORE identity -- three different
-                            orders for the same fact). */}
-                        {/* `title` is a plain string, not run through
-                            `Formula` -- `displayFormula` is either the
-                            archive's own served formula or (see
-                            `formulaIsFallback` below) a client-computed
-                            Hill formula, neither of which is chemistry-
-                            typeset text here the way the identity block's
-                            own facts are. Deliberately NOT SMILES-leads-
-                            formula-in-brackets (owner ruling, applied
-                            everywhere else a species is shown): this h1
-                            names ONE geometry record, not two participants
-                            a reader could confuse, and (when `identity` is
-                            a known species/TS owner) the owning species'
-                            own SMILES already renders a few lines below in
-                            this same header's identity block -- a SMILES-
-                            led title here ("[CH2]SO (CH3OS) geometry")
-                            would only make the heading harder to read for
-                            no disambiguation this page did not already
-                            have. */}
+                        <Breadcrumbs crumbs={geometryCrumbs(identity)} />
                         <RecordIdentityHeader
-                            kicker="Geometry · deposited evidence"
-                            title={displayFormula ? `${displayFormula} geometry` : "Geometry"}
-                            intro="One stored set of atomic coordinates: the exact positions a calculation consumed or produced. This is not a species or a calculation — the same coordinates can be reused across more than one calculation, in either direction."
+                            kicker="Geometry"
+                            lede={geometryLede()}
+                            title={<>
+                                Geometry{displayFormula ? <> of <Formula value={displayFormula} /></> : null}
+                                {producedPhrase ? ` (${producedPhrase})` : ""}
+                            </>}
                             identity={identity}
                             submissionRef={geometry.submission_ref}
                             ownRef={{ label: "Geometry ref", value: geometry.geometry_ref }}
@@ -228,151 +165,77 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                             </p>
                         )}
                         {formulaIsFallback && (
-                            // Only reachable when the archive's own identity is absent
-                            // or ambiguous — the honest label the brief asks for,
-                            // rather than presenting a client-computed value as if it
-                            // came from the archive.
                             <p className="note">
                                 Formula computed on this page from atom symbols — the archive did not serve a formula
                                 for this geometry's owning entry.
                             </p>
                         )}
-                        <dl className="kv-list basin-context">
-                            {/* Geometry ref itself is no longer here -- it
-                                renders first, in the identity block above,
-                                via `RecordIdentityHeader`'s `ownRef` prop
-                                (owner decision: "yes show each record's own
-                                ref inline"). Repeating it in this second
-                                kv-list would show the same ref twice on one
-                                page. */}
-                            <div><dt>Atom count</dt><dd>{geometry.natoms}</dd></div>
-                            <div><dt>Geometry hash</dt><dd><code>{geometry.geom_hash}</code></dd></div>
-                            <div><dt>Format</dt><dd>{geometry.format}</dd></div>
-                            <div><dt>Coordinate units</dt><dd>{geometry.coordinate_units}</dd></div>
-                            <div><dt>Deposited</dt><dd>{isoDate(geometry.created_at)}</dd></div>
-                        </dl>
                     </header>
                 )}
             >
-            <section className="ledger-summary geometry-summary" aria-label="Geometry provenance summary">
-                <Metric label="Producing calculations" value={producedBy.length} />
-                <Metric label="Consuming calculations" value={usedAsInputBy.length} />
-            </section>
-            {/* Sits BELOW the tile row above, full row width -- see
-                `ConformerObservationPage.tsx`'s identical comment on its own
-                evidence checklist for the owner report this fixes. Now
-                `.card--derived.coverage-card` (the SAME class every other
-                record page's evidence box carries), not the page-local
-                `.validation-card` this used to be -- item 8's `--derived`
-                rule ("a COMPUTED verdict about the record") applies here
-                exactly as it does on the calculation page: "this geometry
-                has no validation of its own" is a computed absence, not a
-                single deposited field, so it gets the same left-border
-                treatment as the other three pages' evidence cards
-                (CONSISTENCY -- record-summary-row PR). `tone="pill-muted"`:
-                this row's value is the absent case of a bounded status
-                word, the same axis `EvidenceChecklist`'s other callers
-                already pill (see that component's own docstring). Heading
-                names the CARD ("Evidence on this geometry", matching the
-                calculation page's "Evidence on this calculation"); the row
-                below names the specific CHECK ("Validation") -- restating
-                "Validation" as both would be the exact near-restatement
-                this app's own section-heading rule already avoids
-                elsewhere (see `SectionHeading`'s kicker-suppression
-                comment in `PageSections.tsx`). */}
-            <section className="ledger-summary ledger-summary--single" aria-label="Geometry validation checklist">
-                {/* Finding #9: "on this endpoint" was API jargon leaking into a
-                    chemist-facing page — "for this geometry" says the same thing
-                    (this record has no validation field of its own) without it.
-                    Finding #13: the note used to also repeat every producing/
-                    consuming calculation ref inline (twelve on the live CH3
-                    record, comma-joined, no visual link affordance) -- the same
-                    refs already render as real, correctly-cased links in the
-                    "Produced by" / "Used as input by" tables further down this
-                    page, so this note points there instead of duplicating them.
-                    The single note prop below joins what used to be two
-                    separate `<p className="note">` paragraphs -- see
-                    `EvidenceChecklist`'s one-`note`-slot contract; the second
-                    sentence still only renders when there is somewhere for it
-                    to point (`producedBy`/`usedAsInputBy` non-empty). */}
-                <EvidenceChecklist
-                    heading="Evidence on this geometry"
-                    rows={[{ label: "Validation", value: "not recorded for this geometry", tone: "pill-muted" }]}
-                    note={(
-                        <>
-                            This geometry record carries no validation field of its own. A geometry-vs-formula check,
-                            where one was recorded, lives on the calculation that produced or consumed it, not here.
-                            {(producedBy.length > 0 || usedAsInputBy.length > 0) && (
-                                <> See "Geometry validation" on the producing or consuming calculations, listed with links in the "Produced by" and "Used as input by" tables below.</>
-                            )}
-                        </>
-                    )}
+                <StageSection atoms={atoms} atomsAvailability={atomsAvailability} formula={displayFormula} xyzText={geometry.xyz_text ?? null} coordinateUnit={coordinateUnit} />
+
+                <CoordinateTableSection
+                    atoms={atoms}
+                    atomsAvailability={atomsAvailability}
+                    geometryRef={geometry.geometry_ref}
+                    natoms={geometry.natoms}
+                    unit={coordinateUnit}
+                    onUnitChange={setCoordinateUnit}
                 />
-            </section>
 
-            <ViewerSection
-                atoms={atoms}
-                atomsAvailability={atomsAvailability}
-                formula={displayFormula}
-                xyzText={geometry.xyz_text ?? null}
-                coordinateUnit={coordinateUnit}
-            />
+                <RawXyzSection xyzText={geometry.xyz_text ?? null} />
 
-            <CoordinateTableSection
-                atoms={atoms}
-                atomsAvailability={atomsAvailability}
-                geometryRef={geometry.geometry_ref}
-                natoms={geometry.natoms}
-                unit={coordinateUnit}
-                onUnitChange={setCoordinateUnit}
-            />
+                <ProvenanceSection
+                    title="Produced by"
+                    description="Calculations that emitted this geometry as an output. A role, where recorded, says which output this geometry was for that calculation."
+                    links={producedBy}
+                    availability={producedByAvailability}
+                    showRole
+                    emptyText="No calculation is recorded as having produced this geometry."
+                />
 
-            <RawXyzSection xyzText={geometry.xyz_text ?? null} />
+                <ProvenanceSection
+                    title="Used as input by"
+                    description="Calculations that consumed this geometry as an input. This list is never merged with or inferred from the producer list above: the same geometry can appear in both, and a calculation can appear in both lists at once."
+                    links={usedAsInputBy}
+                    availability={usedAsInputByAvailability}
+                    showRole={false}
+                    emptyText="No calculation is recorded as having consumed this geometry as input."
+                />
 
-            <ProvenanceSection
-                title="Produced by"
-                description="Calculations that emitted this geometry as an output. A role, where recorded, describes which output slot on that calculation this geometry filled."
-                links={producedBy}
-                availability={producedByAvailability}
-                showRole
-                emptyText="No calculation is recorded as having produced this geometry."
-            />
-
-            <ProvenanceSection
-                title="Used as input by"
-                description="Calculations that consumed this geometry as an input. This list is never merged with, summed with, or inferred from the producer list above — the same geometry can appear in both, and a calculation can appear in both lists at once."
-                links={usedAsInputBy}
-                availability={usedAsInputByAvailability}
-                showRole={false}
-                emptyText="No calculation is recorded as having consumed this geometry as input."
-            />
+                <section className="ledger-section" aria-labelledby="details-heading">
+                    <SectionHeading id="details-heading">Record details</SectionHeading>
+                    <dl className="kv-list basin-context">
+                        <div><dt>Atom count</dt><dd>{geometry.natoms}</dd></div>
+                        <div><dt>Geometry hash</dt><dd><code>{geometry.geom_hash}</code></dd></div>
+                        <div><dt>Format</dt><dd>{geometry.format}</dd></div>
+                        <div><dt>Coordinate units</dt><dd>{geometry.coordinate_units}</dd></div>
+                        <div><dt>Deposited</dt><dd>{isoDate(geometry.created_at)}</dd></div>
+                        <div><dt>Validation</dt><dd>not recorded for this geometry</dd></div>
+                    </dl>
+                    <p className="note">
+                        This geometry record carries no validation field of its own. A geometry-vs-formula check,
+                        where one was recorded, lives on the calculation that produced or consumed it, not here.
+                        {(producedBy.length > 0 || usedAsInputBy.length > 0) && (
+                            <> See "Geometry validation" on the producing or consuming calculations, listed with links in the "Produced by" and "Used as input by" tables above.</>
+                        )}
+                    </p>
+                </section>
             </PageShell>
         </section>
     )
 }
 
-// Post-review (2bd17511): number FIRST, label after -- see the tile-
-// alignment comment on `.ledger-summary` (`conformer-group.css`) for why.
-function Metric({ label, value }: { label: string; value: number }) {
-    return (
-        <div className="card metric">
-            <strong>{value}</strong>
-            <span>{label}</span>
-        </div>
-    )
-}
-
 function SectionEmptyMessage({ availability, emptyText }: { availability: SectionAvailability; emptyText: string }) {
     if (availability === "absent") {
-        // Not "not requested" — see the module docstring above. This page
-        // always requests every field, so an absent key can only mean the
-        // archive did not return it, never that this client failed to ask.
         return <p className="empty-projection">The archive did not return this field for this geometry.</p>
     }
     return <p className="empty-projection">{emptyText}</p>
 }
 
-function ViewerSection({ atoms, atomsAvailability, formula, xyzText, coordinateUnit }: {
+/** The picture first, across the content column, with one sentence about its shape worked out from the coordinates. */
+function StageSection({ atoms, atomsAvailability, formula, xyzText, coordinateUnit }: {
     atoms: GeometryRecord["atoms"]
     atomsAvailability: SectionAvailability
     formula: string
@@ -380,38 +243,28 @@ function ViewerSection({ atoms, atomsAvailability, formula, xyzText, coordinateU
     coordinateUnit: CoordinateUnitMode
 }) {
     const rows = atoms ?? []
+    if (atomsAvailability !== "populated") {
+        return (
+            <SectionEmptyMessage
+                availability={atomsAvailability}
+                emptyText="No atom rows are recorded for this geometry, so no view can be drawn."
+            />
+        )
+    }
     return (
-        <section className="ledger-section" aria-labelledby="viewer-heading">
-            {/* Post-review pass (item 4): "Structure" was correctly dropped
-                as a kicker (SHOULD-FIX-6) for restating "Structure view",
-                but that left this page 3-of-5 kickered -- MEASURED and
-                flagged as inconsistent ("either every section on a page
-                has a category kicker or none does"). "Deposited evidence"
-                fits for real (not a restatement of "Structure view", and
-                accurate: this section, the coordinate table below, and
-                the raw XYZ block further down all render the SAME
-                deposited atom coordinates in three different forms) --
-                matching `.coordinates-heading`'s own kicker below rather
-                than inventing a fourth wording for the same category. */}
-            <SectionHeading id="viewer-heading" kicker="Deposited evidence">Structure view</SectionHeading>
-            {atomsAvailability === "populated" ? (
-                <SectionErrorBoundary
-                    fallback={(
-                        <p className="empty-projection" role="alert">
-                            This structure view could not be drawn. The coordinate table and raw XYZ
-                            block below are unaffected.
-                        </p>
-                    )}
-                >
-                    <ViewerStage atoms={rows} formula={formula} xyzText={xyzText} coordinateUnitMode={coordinateUnit} />
-                </SectionErrorBoundary>
-            ) : (
-                <SectionEmptyMessage
-                    availability={atomsAvailability}
-                    emptyText="No atom rows are recorded for this geometry, so no view can be drawn."
-                />
-            )}
-        </section>
+        <figure className="viewer-figure" aria-label="Picture of this geometry">
+            <SectionErrorBoundary
+                fallback={(
+                    <p className="empty-projection" role="alert">
+                        This structure view could not be drawn. The coordinate table and raw XYZ
+                        block below are unaffected.
+                    </p>
+                )}
+            >
+                <ViewerStage atoms={rows} formula={formula} xyzText={xyzText} coordinateUnitMode={coordinateUnit} />
+            </SectionErrorBoundary>
+            <figcaption>{shapeSummary(rows)}</figcaption>
+        </figure>
     )
 }
 
@@ -423,25 +276,18 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
     unit: CoordinateUnitMode
     onUnitChange: (unit: CoordinateUnitMode) => void
 }) {
-    // `natoms` and `atoms.length` are two separately-sourced numbers on the
-    // wire (see `app/services/scientific_read/geometry.py` — one is a
-    // stored column, the other is `len(atoms)` freshly queried) and are
-    // never reconciled by this page's rendering. A mismatch is a real
-    // archive-side inconsistency worth surfacing, not a client bug to hide.
+    // `natoms` (a stored column) and `atoms.length` (the rows returned) are separate numbers; a mismatch is a real
+    // archive-side inconsistency, shown rather than hidden.
     const countMismatch = atomsAvailability === "populated" && natoms !== atoms.length
-    // `unit` is now controlled by `GeometryDetail` (see its own comment) so
-    // `GeometryViewer`'s measurements can share it — this section no longer
-    // owns the state, only the two buttons that change it.
     const [elementDisplay, setElementDisplay] = useState<ElementDisplayMode>("symbol")
     const unitLabel = unit === "angstrom" ? "Å" : "bohr"
     return (
         <section className="ledger-section" aria-labelledby="coordinates-heading">
             <SectionHeading
                 id="coordinates-heading"
-                kicker="Deposited evidence"
-                intro="Every atom in this geometry, in the order the archive returned them. This table is the accessible, selectable fallback for the view above — it renders whether or not that view does."
+                intro="Every atom in this geometry, in the order the archive returned them. This table is the text version of the picture above, and it shows whether or not the picture does."
             >
-                Coordinate table
+                Atoms and coordinates
             </SectionHeading>
             {countMismatch && (
                 <p className="empty-projection" role="alert">
@@ -461,53 +307,21 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
                         <button type="button" aria-pressed={elementDisplay === "symbol"} onClick={() => setElementDisplay("symbol")}>Symbol</button>
                         <button type="button" aria-pressed={elementDisplay === "number"} onClick={() => setElementDisplay("number")}>Number</button>
                     </fieldset>
-                    {/* Owner's own words: "plain toggle but starts with angstrom
-                        cause that's how it's stored" — no "converted" badge next
-                        to a value, and this note names the wire truth (angstrom
-                        is what `coordinate_units` says and what the archive
-                        holds) rather than let the bohr column imply otherwise.
-                        Also names the rounding: bohr values are computed then
-                        `.toFixed(6)`'d for a stable column width (see
-                        `formatCoordinate`), so a reader comparing this column
-                        against their own conversion is not surprised by a
-                        7th-digit difference this note never mentioned.
-
-                        Finding #9: plain wording, no `coordinate_units`-on-the-wire
-                        jargon — the guarantee (stored in ångström; bohr is a display
-                        conversion) and the rounding/conversion-factor detail both stay,
-                        just said in words a chemist reads without needing to know this
-                        app's field names. */}
                     <p className="note coordinate-toggle-note">
-                        Stored in ångström; bohr here is a display conversion only, rounded to 6 decimal
-                        places, at 1 Å = {ANGSTROM_TO_BOHR.toFixed(10)} bohr (CODATA 2018 Bohr radius).
+                        Stored in ångström; bohr here is a display conversion only, at 1 Å = {ANGSTROM_TO_BOHR.toFixed(10)} bohr
+                        (CODATA 2018 Bohr radius). Both units are shown to 6 decimal places; hover an ångström number for the stored value.
                     </p>
                 </div>
             )}
             {atomsAvailability === "populated" ? (
-                <div className="table-scroll">
+                <div className="table-scroll" tabIndex={0} role="region" aria-label="Table of coordinates">
                     <table className="data-table coordinate-table" aria-label={`Coordinates for ${geometryRef}`}>
                         <thead>
                             <tr>
                                 <th scope="col">Atom</th>
                                 <th scope="col">Element</th>
-                                {/* `data-column` is the CSS/test hook for "this is
-                                    the x/y/z column" — stable across unit toggles,
-                                    unlike the visible header text below it (which
-                                    intentionally changes to name the active unit;
-                                    see geometry-detail.css's numeric-alignment rule
-                                    for why the two must not be the same attribute).
-
-                                    SCIENTIFIC ERROR fixed here (sweep finding,
-                                    same class `arrhenius-chart.css`/`thermo-cp-
-                                    chart.css` already fix): `.data-table th`
-                                    (design-system.css) uppercases every header via
-                                    `--type-label-strong-transform`, correct for
-                                    "Atom"/"Element" above but not for `unitLabel`
-                                    -- "bohr" read "BOHR" (not the unit's own
-                                    written form; the toggle button and the caption
-                                    above this table both spell it lower-case).
-                                    `.t-preserve-case` (design-system.css) is the
-                                    shared fix. */}
+                                {/* `data-column` is the hook for the numeric alignment rule and never changes with the unit;
+                                    the visible header does. `.t-preserve-case` keeps "bohr" from being uppercased. */}
                                 <th className="t-preserve-case" scope="col" data-column="x">{`x (${unitLabel})`}</th>
                                 <th className="t-preserve-case" scope="col" data-column="y">{`y (${unitLabel})`}</th>
                                 <th className="t-preserve-case" scope="col" data-column="z">{`z (${unitLabel})`}</th>
@@ -518,24 +332,10 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
                                 <tr key={atom.atom_index}>
                                     <td data-label="Atom">{atom.atom_index}</td>
                                     <td data-label="Element">{elementDisplayValue(atom, elementDisplay)}</td>
-                                    {/* `data-label` here carries the ACTIVE UNIT
-                                        (`x (Å)` / `x (bohr)`), not a bare axis
-                                        letter — this is what the mobile stacked
-                                        view's `td::before { content:
-                                        attr(data-label) }` (conformer-group.css)
-                                        actually shows a reader below the 680px
-                                        breakpoint. Without the unit in this
-                                        string, a phone reader in bohr mode saw
-                                        "X / 2.038933" with no unit anywhere on
-                                        the value — a wrong-unit-reading hazard.
-                                        `data-column` (unit-independent) is the
-                                        separate hook the desktop alignment CSS
-                                        keys on instead, so that rule does not
-                                        silently stop matching the moment this
-                                        label's text changes. */}
-                                    <td data-column="x" data-label={`x (${unitLabel})`}>{formatCoordinate(atom.x, unit)}</td>
-                                    <td data-column="y" data-label={`y (${unitLabel})`}>{formatCoordinate(atom.y, unit)}</td>
-                                    <td data-column="z" data-label={`z (${unitLabel})`}>{formatCoordinate(atom.z, unit)}</td>
+                                    {/* The stacked phone layout shows `data-label`, so it carries the active unit. */}
+                                    <td data-column="x" data-label={`x (${unitLabel})`}><CoordinateValue valueAngstrom={atom.x} unit={unit} /></td>
+                                    <td data-column="y" data-label={`y (${unitLabel})`}><CoordinateValue valueAngstrom={atom.y} unit={unit} /></td>
+                                    <td data-column="z" data-label={`z (${unitLabel})`}><CoordinateValue valueAngstrom={atom.z} unit={unit} /></td>
                                 </tr>
                             ))}
                         </tbody>
@@ -554,16 +354,7 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
 function RawXyzSection({ xyzText }: { xyzText: string | null }) {
     return (
         <section className="ledger-section" aria-labelledby="xyz-heading">
-            {/* Post-review pass (item 4): "Raw" was correctly dropped as a
-                kicker (SHOULD-FIX-6) for restating "Raw XYZ" -- see the
-                matching comment on `viewer-heading` above for why
-                "Deposited evidence" (not a restatement of "Raw XYZ", and
-                the same category the Structure-view/Coordinate-table
-                sections above share -- all three render the same
-                deposited coordinates) is what makes this page's kickers
-                consistent again rather than removing the two that were
-                never redundant in the first place. */}
-            <SectionHeading id="xyz-heading" kicker="Deposited evidence" intro="The archive's own XYZ-format text block for this geometry, selectable as deposited.">
+            <SectionHeading id="xyz-heading" intro="The archive's own XYZ-format text for this geometry, selectable as deposited.">
                 Raw XYZ
             </SectionHeading>
             {xyzText ? (
@@ -571,7 +362,7 @@ function RawXyzSection({ xyzText }: { xyzText: string | null }) {
                     <div className="xyz-actions">
                         <CopyButton value={xyzText} label="raw XYZ" srLabel="text" />
                     </div>
-                    <pre className="xyz-block"><code>{xyzText}</code></pre>
+                    <pre className="xyz-block" tabIndex={0}><code>{xyzText}</code></pre>
                 </>
             ) : (
                 <p className="empty-projection">No raw XYZ text is recorded for this geometry.</p>
@@ -591,9 +382,9 @@ function ProvenanceSection({ title, description, links, availability, showRole, 
     const headingId = `provenance-${title.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`
     return (
         <section className="ledger-section" aria-labelledby={headingId}>
-            <SectionHeading id={headingId} kicker="Deposited provenance" intro={description}>{title}</SectionHeading>
+            <SectionHeading id={headingId} intro={description}>{title}</SectionHeading>
             {availability === "populated" ? (
-                <div className="table-scroll">
+                <div className="table-scroll" tabIndex={0} role="region" aria-label={`Table of ${title.toLowerCase()}`}>
                     <table className="data-table" aria-label={`${title} for this geometry`}>
                         <thead>
                             <tr>

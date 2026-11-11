@@ -55,15 +55,15 @@ describe("GeometryDetailPage isotope labels (#685)", () => {
     it("shows a D2O geometry as 2H atoms and a 2H2O formula, not H / H2O", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(record([O, hAt(2, 0.76), hAt(2, -0.76)]))))
         page()
-        expect(await screen.findByRole("heading", { name: "²H2O geometry" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: /^Geometry of ²H2O/ })).toBeVisible()
         expect(screen.getAllByRole("cell", { name: "²H" })).toHaveLength(2)
-        expect(screen.queryByRole("heading", { name: "H2O geometry" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("heading", { name: /^Geometry of H2O/ })).not.toBeInTheDocument()
     })
 
     it("renders a mixed HDO geometry with one labelled and one plain H", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(record([O, hAt(null, 0.76), hAt(2, -0.76)]))))
         page()
-        expect(await screen.findByRole("heading", { name: "H²HO geometry" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: /^Geometry of H²HO/ })).toBeVisible()
         expect(screen.getAllByRole("cell", { name: "²H" })).toHaveLength(1)
         expect(screen.getAllByRole("cell", { name: "H" })).toHaveLength(1)
     })
@@ -72,7 +72,7 @@ describe("GeometryDetailPage isotope labels (#685)", () => {
         const c13: Atom = { element: "C", mass: 13, xyz: [0, 0, 0] }
         server.use(http.get(ENDPOINT, () => HttpResponse.json(record([c13, hAt(null, 1), hAt(null, -1)]))))
         page()
-        expect(await screen.findByRole("heading", { name: "¹³CH2 geometry" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: /^Geometry of ¹³CH2/ })).toBeVisible()
         expect(screen.getByRole("cell", { name: "¹³C" })).toBeVisible()
     })
 
@@ -92,14 +92,14 @@ describe("GeometryDetailPage isotope labels (#685)", () => {
         }
         server.use(http.get(ENDPOINT, () => HttpResponse.json(rec)))
         page()
-        expect(await screen.findByRole("heading", { name: "²H2O geometry" })).toBeVisible()
-        expect(screen.queryByRole("heading", { name: "H2O geometry" })).not.toBeInTheDocument()
+        expect(await screen.findByRole("heading", { name: /^Geometry of ²H2O/ })).toBeVisible()
+        expect(screen.queryByRole("heading", { name: /^Geometry of H2O/ })).not.toBeInTheDocument()
     })
 
     it("does not invent an isotope for an unlabelled geometry", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(record([O, hAt(null, 0.76), hAt(null, -0.76)]))))
         page()
-        expect(await screen.findByRole("heading", { name: "H2O geometry" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: /^Geometry of H2O/ })).toBeVisible()
         expect(screen.queryByRole("cell", { name: "²H" })).not.toBeInTheDocument()
     })
 })
