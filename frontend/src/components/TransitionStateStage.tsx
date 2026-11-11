@@ -18,11 +18,12 @@ export function TransitionStateStage({ transitionStateEntryRef }: { transitionSt
     const geometryRef = entry.status === "ready" ? stageGeometryRef(entry.data) : null
     const geometry = useLoaded(loadGeometryAtoms, geometryRef)
     const atoms = geometry.status === "ready" ? geometry.data.atoms ?? [] : []
-    const waiting = !near || entry.status === "loading" || entry.status === "idle" || (geometryRef !== null && (geometry.status === "loading" || geometry.status === "idle"))
+    const loading = near && (entry.status === "loading" || entry.status === "idle" || (geometryRef !== null && (geometry.status === "loading" || geometry.status === "idle")))
     return (
         <div className="ts-stage" ref={ref}>
-            {waiting && <p className="note" role="status" aria-busy="true">Loading the geometry of this transition state.</p>}
-            {!waiting && atoms.length > 0 && geometryRef && (
+            {!near && <p className="note">The picture of this transition state loads when you scroll to it.</p>}
+            {loading && <p className="note" role="status" aria-busy="true">Loading the geometry of this transition state.</p>}
+            {near && !loading && atoms.length > 0 && geometryRef && (
                 <>
                     <ViewerStage key={geometryRef} atoms={atoms} formula="transition state" xyzText={geometry.status === "ready" ? geometry.data.xyz_text ?? null : null} />
                     <p className="note">
@@ -30,7 +31,7 @@ export function TransitionStateStage({ transitionStateEntryRef }: { transitionSt
                     </p>
                 </>
             )}
-            {!waiting && atoms.length === 0 && <p className="empty-projection">No picture: no final geometry could be read for this transition state.</p>}
+            {near && !loading && atoms.length === 0 && <p className="empty-projection">No picture: no final geometry could be read for this transition state.</p>}
         </div>
     )
 }
