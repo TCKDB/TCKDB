@@ -6,6 +6,8 @@ import { Breadcrumbs, type Crumb } from "../components/Breadcrumbs"
 import { entryCrumbs } from "../components/entryCrumbs"
 import { Formula } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
+import { RecordMap } from "../components/RelationshipMap"
+import { geometryNodes } from "../domain/recordMapNodes"
 import { SectionHeading } from "../components/PageSections"
 import { Stored } from "../components/QuantityValue"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
@@ -146,9 +148,21 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
     const usedAsInputBy = geometry.provenance?.used_as_input_by ?? []
     const producedPhrase = producedByPhrase(producedBy)
 
+    const mapNodes = geometryNodes({
+        owner: identity.kind === "species_entry" && identity.speciesEntryRef
+            ? { kind: "species_entry", entryRef: identity.speciesEntryRef, formula: identity.formula }
+            : identity.kind === "transition_state_entry" && identity.transitionStateEntryRef
+                ? { kind: "transition_state_entry", entryRef: identity.transitionStateEntryRef }
+                : null,
+        producedBy: geometry.provenance?.produced_by ? producedBy : null,
+        usedAsInputBy: geometry.provenance?.used_as_input_by ? usedAsInputBy : null,
+        typeLabel,
+    })
+
     return (
         <section className="conformer-page geometry-page">
             <PageShell
+                side={<RecordMap selfKind="geometry" selfLabel="This geometry" nodes={mapNodes} />}
                 identity={(
                     <header className="basin-header">
                         <Breadcrumbs crumbs={geometryCrumbs(identity)} />

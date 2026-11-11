@@ -14,6 +14,8 @@ import { Formula } from "../components/Formula"
 import { EnergyNotices, ObservationEvidence } from "../components/ObservationEvidence"
 import { OrderNote } from "../components/OrderNote"
 import { PageShell } from "../components/PageShell"
+import { RecordMap } from "../components/RelationshipMap"
+import { conformerObservationNodes } from "../domain/recordMapNodes"
 import { SectionHeading } from "../components/PageSections"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
@@ -95,9 +97,17 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
         [core, calculations, singlePoints, optimisations],
     )
 
+    const mapNodes = conformerObservationNodes({
+        group: group ? { ref: group.conformer_group_ref, name: groupName } : null,
+        entry: { ref: entryRef, formula: species.formula ?? null },
+        calculationCount: evidence.calculation_count,
+        geometryCount: evidence.geometry_count,
+    })
+
     return (
         <section className="conformer-page">
             <PageShell
+                side={<RecordMap selfKind="conformer-observation" selfLabel="This observation" nodes={mapNodes} />}
                 identity={(
                     <header className="basin-header">
                         <Breadcrumbs crumbs={[

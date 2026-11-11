@@ -14,6 +14,8 @@ import { EnergyProfile } from "../components/EnergyProfile"
 import { ListPager } from "../components/ListPager"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
+import { RecordMap } from "../components/RelationshipMap"
+import { transitionStateEntryNodes } from "../domain/recordMapNodes"
 import { SectionHeading } from "../components/PageSections"
 import { ReactionEquation } from "../components/ReactionEquation"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
@@ -248,10 +250,19 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         { label: "This transition state" },
     ]
 
+    const mapParticipant = (p: (typeof reactants)[number]) => ({ entryRef: p.species_entry_ref, formula: p.formula, smiles: p.smiles })
+    const mapNodes = transitionStateEntryNodes({
+        reactionEntryRef: reaction.reaction_entry_ref ?? null,
+        reactants: reactants.map(mapParticipant),
+        products: products.map(mapParticipant),
+        calculationCount: evidence.calculation_count,
+    })
+
     return (
         <section className="conformer-page tse-page">
             <PageShell
                 contents="list"
+                side={<RecordMap selfKind="transition-state" selfLabel="This transition state" nodes={mapNodes} />}
                 identity={(
                     <>
                         <Breadcrumbs crumbs={crumbs} />
