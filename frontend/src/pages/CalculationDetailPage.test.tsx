@@ -253,6 +253,41 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
 }
 
 describe("CalculationDetailPage", () => {
+    it("shows where this record sits in the side column, with the drawing hidden and a list twin", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ conformer: { conformer_observation_ref: "co_one", conformer_group_ref: "cg_one", conformer_group_label: "conformer_3" } }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        const side = document.querySelector(".page-shell-side") as HTMLElement
+        const map = within(side).getByRole("region", { name: "Where this record sits" })
+        expect(map.querySelector("svg.rel-map-figure")).toHaveAttribute("aria-hidden", "true")
+        const list = within(map).getByRole("list", { name: "Connected records" })
+        const items = within(list).getAllByRole("listitem").map((item) => item.textContent)
+        expect(items).toEqual([
+            expect.stringContaining("Molecule version"),
+            expect.stringContaining("Conformer group"),
+            expect.stringContaining("Conformer observation"),
+            expect.stringContaining("Geometries"),
+            expect.stringContaining("Related calculations"),
+            expect.stringContaining("Level of theory"),
+        ])
+        expect(items[1]).toContain("Conformer Group 3")
+        expect(items[3]).toContain("1 input, 2 output")
+        expect(within(list).getByRole("link", { name: "Level of theory" })).toHaveAttribute("href", "/methods/lot_1")
+        expect(within(list).getByRole("link", { name: "Related calculations" })).toHaveAttribute("href", "/calculations/calc_freq_one#dependencies-heading")
+    })
+
+    it("leaves a node out when the page does not hold its data", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ level_of_theory: null, dependencies: [], input_geometries: [], output_geometries: [] }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        const list = within(document.querySelector(".page-shell-side") as HTMLElement).getByRole("list", { name: "Connected records" })
+        expect(within(list).getAllByRole("listitem")).toHaveLength(1)
+    })
+
     // The freq Result block used to print the raw field name
     // "n_imag at or above tau" and, for a null value, "not determinable" --
     // a claim about the data where the archive simply holds no projection.

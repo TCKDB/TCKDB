@@ -38,6 +38,10 @@ import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { Formula } from "../components/Formula"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
+import { RecordMap } from "../components/RelationshipMap"
+import { calculationNodes } from "../domain/recordMapNodes"
+import { conformerGroupName } from "../domain/conformerEvidence"
+import { lotLabel } from "../api/scientificSchemas"
 import { SectionHeading } from "../components/PageSections"
 import { QuantityValue } from "../components/QuantityValue"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
@@ -432,9 +436,30 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 : "this record")
             : "this record"
 
+    const mapNodes = calculationNodes({
+        owner: ownerSpecies
+            ? { kind: "species_entry", entryRef: ownerSpecies.species_entry_ref, formula: ownerSpecies.formula ?? null }
+            : ownerTS
+                ? { kind: "transition_state_entry", entryRef: ownerTS.transition_state_entry_ref, reactionEntryRef: ownerTS.reaction_entry_ref ?? null }
+                : null,
+        conformer: conformer
+            ? {
+                groupRef: conformer.conformer_group_ref,
+                groupName: conformerGroupName(conformer.conformer_group_label),
+                observationRef: conformer.conformer_observation_ref,
+            }
+            : null,
+        inputGeometryRefs: calculation.input_geometries ? inputGeometries.map((link) => link.geometry_ref) : null,
+        outputGeometryRefs: calculation.output_geometries ? outputGeometries.map((link) => link.geometry_ref) : null,
+        dependencies: calculation.dependencies ? dependencies : null,
+        levelOfTheory: lot ? { ref: lot.level_of_theory_ref ?? null, label: lotLabel(lot) } : null,
+        inputExtractedFromArtifact: inputGeometries[0]?.source === "extracted_from_artifact",
+    })
+
     return (
         <section className="calc-page">
             <PageShell
+                side={<RecordMap selfKind="calculation" selfLabel="This calculation" nodes={mapNodes} />}
                 crumbs={[
                     ...(ownerSpecies ? [
                         { label: "Species", to: `/species/${ownerSpecies.species_ref}` },

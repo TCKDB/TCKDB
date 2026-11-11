@@ -18,6 +18,8 @@ import { reactionOverviewLede } from "../domain/reactionLede"
 import { ListPager } from "../components/ListPager"
 import { SpeciesFace } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
+import { RecordMap } from "../components/RelationshipMap"
+import { reactionOverviewNodes } from "../domain/recordMapNodes"
 import { SectionHeading } from "../components/PageSections"
 import { ReactionEquation } from "../components/ReactionEquation"
 import { RecordStatus } from "../components/RecordStatus"
@@ -87,6 +89,7 @@ function ReactionChooser({ reactionRef }: { reactionRef: string }) {
         <ChooserDocument
             reactionRef={reactionRef}
             headerRecord={firstPage.record.records[0]}
+            firstPageEntryRefs={firstPage.record.records.map((record) => record.reaction_entry_ref)}
             total={firstPage.record.pagination.total}
             kineticsTotal={firstPage.record.records.reduce((sum, record) => sum + record.availability.kinetics_count, 0)}
             records={shown?.records ?? []}
@@ -98,10 +101,12 @@ function ReactionChooser({ reactionRef }: { reactionRef: string }) {
     )
 }
 
-function ChooserDocument({ reactionRef, headerRecord, total, kineticsTotal, records, pageStatus, reviewSummary, meta, onPage }: {
+function ChooserDocument({ reactionRef, headerRecord, firstPageEntryRefs, total, kineticsTotal, records, pageStatus, reviewSummary, meta, onPage }: {
     reactionRef: string
     /** The first entry of the first page: the source of the title and equation, whatever page the table is on. */
     headerRecord: ReactionOverviewRecord
+    /** The refs of the first page of entries, the same page the header comes from. */
+    firstPageEntryRefs: readonly string[]
     total: number
     /** Kinetics records across the first page of entries; the compare link is offered from two. */
     kineticsTotal: number
@@ -115,9 +120,17 @@ function ChooserDocument({ reactionRef, headerRecord, total, kineticsTotal, reco
     const headerSourceNote = chooserHeaderSourceNote(first.reaction_entry_ref, total)
     const formulaOnly = !equationNeedsStructure(first.reactants, first.products)
     useDocumentTitle("Reaction", equationText(first.reactants, first.products, first.reversible))
+    const mapParticipant = (p: (typeof first.reactants)[number]) => ({ entryRef: p.species_entry_ref, formula: p.formula, smiles: p.smiles })
+    const mapNodes = reactionOverviewNodes({
+        entryRefs: firstPageEntryRefs,
+        total,
+        reactants: first.reactants.map(mapParticipant),
+        products: first.products.map(mapParticipant),
+    })
     return (
         <section className="conformer-page">
             <PageShell
+                side={<RecordMap selfKind="reaction" selfLabel="This reaction" nodes={mapNodes} />}
                 identity={(
                     <>
                         <Breadcrumbs crumbs={[

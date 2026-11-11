@@ -1,4 +1,4 @@
-import { useId, useRef, type Ref } from "react"
+import { useId, useMemo, useRef, type Ref } from "react"
 import { Link, useLocation } from "react-router-dom"
 import "../relationship-map.css"
 import { RecordGlyph, type RecordKind } from "./RecordGlyph"
@@ -18,7 +18,7 @@ const NODE_W = WIDTH - NODE_X - 4
 const TEXT_X = NODE_X + 34
 
 const nodeAria = (node: NeighbourNode) =>
-    [node.label, node.relation, node.ref, node.found].filter((part): part is string => !!part).join(", ")
+    [node.label, node.relation, node.ref, node.sub, node.found].filter((part): part is string => !!part).join(", ")
 
 /**
  * Shows where the record sits, sized for the 14rem side column: this entry on top, what it connects to stacked below.
@@ -38,7 +38,7 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
     const shorts = shortRefs(nodes.map((node) => node.ref ?? ""))
     const rows = nodes.map((node, index) => {
         const lines = wrapLabel(node.label)
-        const noteLines = node.ref ? wrapLabel(shorts[index]) : wrapLabel(node.found ?? node.relation)
+        const noteLines = node.ref ? wrapLabel(shorts[index]) : wrapLabel(node.drawnNote ?? node.sub ?? node.found ?? node.relation)
         return { lines, noteLines, height: 22 + 16 * (lines.length + noteLines.length) }
     })
     const tops: number[] = []
@@ -100,7 +100,7 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
                         <RecordGlyph kind={node.kind} />
                         {" "}
                         {node.to === null ? <span>{node.label}</span> : <Link to={node.to} aria-describedby={`${headingId}-${node.id}-note`}>{node.label}</Link>}
-                        <span className="rel-map-item-note" id={`${headingId}-${node.id}-note`}>{[node.relation, node.ref, node.found].filter(Boolean).join(", ")}</span>
+                        <span className="rel-map-item-note" id={`${headingId}-${node.id}-note`}>{[node.relation, node.ref, node.sub, node.found].filter(Boolean).join(", ")}</span>
                     </li>
                 ))}
             </ul>
@@ -142,4 +142,10 @@ export function SpeciesRelationshipMap({ species }: { species: SpeciesOverview }
         })
     }
     return <RelationshipMap selfKind="species" selfLabel="This molecule" state={{ status: "ready", nodes }} />
+}
+
+/** The map for any record page whose neighbours are all known from the data the page already holds. */
+export function RecordMap({ selfKind, selfLabel, nodes }: { selfKind: RecordKind; selfLabel: string; nodes: NeighbourNode[] }) {
+    const state = useMemo<NeighboursState>(() => ({ status: "ready", nodes }), [nodes])
+    return <RelationshipMap selfKind={selfKind} selfLabel={selfLabel} state={state} />
 }

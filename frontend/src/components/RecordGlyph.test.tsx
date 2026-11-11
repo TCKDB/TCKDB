@@ -4,7 +4,7 @@ import { RecordGlyph, type RecordKind } from "./RecordGlyph"
 
 afterEach(cleanup)
 
-const KINDS: RecordKind[] = ["species", "species-entry", "conformer-group", "calculation", "reaction", "transition-state", "network"]
+const KINDS: RecordKind[] = ["species", "species-entry", "conformer-group", "calculation", "reaction", "transition-state", "network", "conformer-observation", "geometry", "level-of-theory", "thermo", "kinetics"]
 
 describe("RecordGlyph", () => {
     it("is hidden from assistive technology by default", () => {
@@ -22,7 +22,7 @@ describe("RecordGlyph", () => {
         expect(image).not.toHaveAttribute("aria-hidden")
     })
 
-    it("draws a distinct shape for each of the seven kinds", () => {
+    it("draws a distinct shape for each kind", () => {
         const shapes = KINDS.map((kind) => {
             const { container, unmount } = render(<RecordGlyph kind={kind} />)
             const markup = container.querySelector("svg")!.innerHTML

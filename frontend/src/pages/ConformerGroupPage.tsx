@@ -15,6 +15,8 @@ import { Formula } from "../components/Formula"
 import { EnergyNotices, ObservationEvidence } from "../components/ObservationEvidence"
 import { OrderNote } from "../components/OrderNote"
 import { PageShell } from "../components/PageShell"
+import { RecordMap } from "../components/RelationshipMap"
+import { conformerGroupNodes } from "../domain/recordMapNodes"
 import { SectionHeading } from "../components/PageSections"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
@@ -76,9 +78,22 @@ function Ledger({ group }: { group: ConformerGroup }) {
     const hidden = usageData ? hiddenByDefaultNote(usageData.hidden, "records") : null
     const depositorLabel = core.label && name === null && core.label.trim() !== "" ? core.label : null
 
+    const usageGroup = usageData?.groups.get(core.conformer_group_ref)
+    const mapNodes = conformerGroupNodes({
+        entry: { ref: entryRef, formula: species.formula ?? null },
+        observationCount: summary.total,
+        onlyObservationRef: observations.length === 1 ? observations[0].conformer_observation.conformer_observation_ref : null,
+        calculationCount: evidence.calculation_count,
+        geometryCount: evidence.geometry_count,
+        thermoCount: usageData ? new Set(usageGroup?.thermo.map((t) => t.thermo_ref)).size : null,
+        // The read lists one row per interpretation assignment, so a record naming the group twice is counted once.
+        kineticsCount: usageData ? new Set(usageGroup?.kinetics.map((k) => k.kinetics_ref)).size : null,
+    })
+
     return (
         <section className="conformer-page">
             <PageShell
+                side={<RecordMap selfKind="conformer-group" selfLabel="This conformer group" nodes={mapNodes} />}
                 identity={(
                     <header className="basin-header">
                         <Breadcrumbs crumbs={[
