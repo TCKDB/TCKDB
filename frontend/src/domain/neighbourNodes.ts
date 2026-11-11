@@ -15,6 +15,8 @@ export type NeighbourNode = {
     to: string | null
     /** A short second line in plain words ("optimisation, b3lyp/def2tzvp"); shown when the node has no ref of its own. */
     sub?: string
+    /** The second line of the drawing only, when it must say more than the list does ("Reactant · [CH2]C=C"). */
+    drawnNote?: string
     /** What the read returned, in words ("2 found"); never a guess. */
     found: string | null
 }

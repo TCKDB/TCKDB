@@ -172,6 +172,7 @@ describe("transitionStateEntryNodes", () => {
             calculationCount: 0,
         })
         expect(byId(nodes, "reactant-0")?.sub).toBe("[CH2]C=C")
+        expect(byId(nodes, "reactant-0")?.drawnNote).toBe("Reactant · [CH2]C=C")
         expect(byId(nodes, "product-0")?.sub).toBe("[CH]1CC1")
     })
 })

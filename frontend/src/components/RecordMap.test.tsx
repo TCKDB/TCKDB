@@ -30,5 +30,7 @@ describe("RecordMap list text", () => {
         const { container } = render(<MemoryRouter><RecordMap selfKind="transition-state" selfLabel="This transition state" nodes={nodes} /></MemoryRouter>)
         const items = within(container.querySelector(".rel-map-list") as HTMLElement).getAllByRole("listitem").map((item) => item.textContent?.trim())
         expect(items).toEqual(["C3H5Reactant, [CH2]C=C", "C3H5Product, [CH]1CC1"])
+        const drawn = [...container.querySelectorAll("svg .rel-map-note")].map((note) => note.textContent)
+        expect(drawn).toEqual(["Reactant · [CH2]C=C", "Product · [CH]1CC1"])
     })
 })

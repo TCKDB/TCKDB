@@ -38,7 +38,7 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
     const shorts = shortRefs(nodes.map((node) => node.ref ?? ""))
     const rows = nodes.map((node, index) => {
         const lines = wrapLabel(node.label)
-        const noteLines = node.ref ? wrapLabel(shorts[index]) : wrapLabel(node.sub ?? node.found ?? node.relation)
+        const noteLines = node.ref ? wrapLabel(shorts[index]) : wrapLabel(node.drawnNote ?? node.sub ?? node.found ?? node.relation)
         return { lines, noteLines, height: 22 + 16 * (lines.length + noteLines.length) }
     })
     const tops: number[] = []
