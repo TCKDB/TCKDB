@@ -157,6 +157,12 @@ from app.schemas.reads.scientific_provenance import (
     TransitionStateCalculationSlot,
     TransitionStateDependency,
 )
+from app.schemas.reads.scientific_reaction_energy_profile import (
+    CitedCalculation,
+    EnergyProfileUnavailable,
+    KineticsCitedEnergies,
+    ReactionEnergyProfile,
+)
 from app.schemas.reads.scientific_species_calculations import (
     CalculationProvenanceBlock,
     ConformerContextBlock,
@@ -363,6 +369,11 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         ConformerUsageGroup,
         ConformerUsageKinetics,
         ConformerUsageThermo,
+        # Energy profile: a profile, an unavailable entry and a kinetics citation each go whole.
+        ReactionEnergyProfile,
+        EnergyProfileUnavailable,
+        KineticsCitedEnergies,
+        CitedCalculation,
     }
 )
 

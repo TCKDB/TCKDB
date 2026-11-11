@@ -56,7 +56,6 @@ import logging
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -99,14 +98,12 @@ from app.db.models.species import (
     SpeciesEntry,
 )
 from app.db.models.thermo import Thermo
-from app.db.models.transition_state import TransitionState, TransitionStateEntry
-from app.schemas.reads.scientific_common import REVIEW_RANK
+from app.db.models.transition_state import TransitionState
 from app.services.document_formats import ML_EXPORT, current_header
 from app.services.scientific_read import export as export_core
 from app.services.scientific_read.common import (
     fetch_review_badges,
     linked_evidence_predicate,
-    review_floor_predicate,
     visible_statuses,
     where_visible,
 )
@@ -115,6 +112,12 @@ from app.services.scientific_read.handles import canonical_level_of_theory_id
 from app.services.scientific_read.profile import (
     ResolvedReadProfile,
     current_read_profile,
+)
+from app.services.scientific_read.reaction_energy_profile import (
+    ml_energy_row_floor,
+    species_entry_energy_at_lot,
+    ts_calculation_energies,
+    ts_entries,
 )
 
 logger = logging.getLogger(__name__)
@@ -642,19 +645,6 @@ def _species_thermo_blocks(
     return blocks
 
 
-def ml_energy_row_floor(profile: ResolvedReadProfile) -> Any:
-    """The review floor on the ML export's ENERGY ROWS: a named exception to the evidence rule (owner decision Q7, ADR 0023).
-
-    The ML export's rows are calculations (a geometry with the energies, frequencies and Hessian computed at it), so a
-    calculation is a RECORD of the dataset, not linked evidence of another record, and it keeps the ``approved`` floor under
-    ``curated``: a row is left out whatever its review state below it, and the barrier and reactant sums read only those rows.
-    Everything else nested in an ML record follows the evidence rule (conformer observations and groups:
-    :func:`_conformer_refs`; the listed thermo, kinetics and transition-state records keep the record floor as in every list).
-    Dataset releases are unchanged. ``None`` without a review floor (exploratory), so nothing is added to the statement.
-    """
-    return review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=profile)
-
-
 def _conformer_refs(
     session: Session, observation_ids: list[int], profile: ResolvedReadProfile
 ) -> tuple[list[str], list[str]]:
@@ -1036,120 +1026,6 @@ def _species_entry_smiles(session: Session, species_entry_id: int) -> str | None
     )
 
 
-def _species_entry_energy_at_lot(
-    session: Session, species_entry_id: int, lot_id: int, profile: ResolvedReadProfile
-) -> tuple[float, str, str] | None:
-    """Lowest electronic energy for a species entry at ONE level of theory, with where it came from.
-
-    Returns ``(energy_hartree, energy_type, calculation_ref)`` or ``None``. Single-point energies are used before
-    optimisation final energies, and the lowest value wins (the lowest-conformer convention, inside one level). Used to
-    assemble a same-level reactant energy sum for the electronic barrier; the barrier record carries the calculation
-    each reactant energy came from.
-    """
-    shown = ml_energy_row_floor(profile)
-    sp_rows = session.execute(
-        where_visible(
-            select(CalculationSPResult.electronic_energy_hartree, Calculation.public_ref)
-            .join(Calculation, Calculation.id == CalculationSPResult.calculation_id)
-            .where(
-                Calculation.species_entry_id == species_entry_id,
-                Calculation.lot_id == lot_id,
-                CalculationSPResult.electronic_energy_hartree.is_not(None),
-            ),
-            shown,
-        )
-    ).all()
-    if sp_rows:
-        energy, ref = min(sp_rows, key=lambda r: (r[0], r[1]))
-        return energy, "single_point", ref
-    opt_rows = session.execute(
-        where_visible(
-            select(CalculationOptResult.final_energy_hartree, Calculation.public_ref)
-            .join(Calculation, Calculation.id == CalculationOptResult.calculation_id)
-            .where(
-                Calculation.species_entry_id == species_entry_id,
-                Calculation.lot_id == lot_id,
-                CalculationOptResult.final_energy_hartree.is_not(None),
-            ),
-            shown,
-        )
-    ).all()
-    if opt_rows:
-        energy, ref = min(opt_rows, key=lambda r: (r[0], r[1]))
-        return energy, "optimization", ref
-    return None
-
-
-def _ts_calculation_energies(
-    session: Session, ts_entry_id: int, profile: ResolvedReadProfile
-) -> list[tuple[float, str, Calculation]]:
-    """EVERY electronic energy of EVERY shown calculation of one TS entry: ``(energy_hartree, energy_type, calculation)``.
-
-    Nothing is dropped and nothing is chosen: two single points at one level are two entries, and an optimisation final
-    energy is an entry beside them (as the species-side ``energies`` list is). Callers group by level of theory; the
-    lowest-within-a-level convention is applied only to compute a barrier, and each barrier names the calculation it
-    used.
-    """
-    # Hidden calculations are not candidates: their energies would otherwise set the barrier.
-    shown = ml_energy_row_floor(profile)
-    sp_rows = session.execute(
-        where_visible(
-            select(CalculationSPResult.electronic_energy_hartree, Calculation)
-            .join(Calculation, Calculation.id == CalculationSPResult.calculation_id)
-            .where(
-                Calculation.transition_state_entry_id == ts_entry_id,
-                CalculationSPResult.electronic_energy_hartree.is_not(None),
-            ),
-            shown,
-        )
-    ).all()
-    opt_rows = session.execute(
-        where_visible(
-            select(CalculationOptResult.final_energy_hartree, Calculation)
-            .join(Calculation, Calculation.id == CalculationOptResult.calculation_id)
-            .where(
-                Calculation.transition_state_entry_id == ts_entry_id,
-                CalculationOptResult.final_energy_hartree.is_not(None),
-            ),
-            shown,
-        )
-    ).all()
-    return [(e, "single_point", c) for e, c in sp_rows] + [(e, "optimization", c) for e, c in opt_rows]
-
-
-def _ts_entries(
-    session: Session, reaction_entry_id: int, profile: ResolvedReadProfile
-) -> list[TransitionStateEntry]:
-    """EVERY transition-state entry of a reaction entry that the profile shows, in DISPLAY order.
-
-    Review rank, then deposition time newest first, then id descending (``docs/specs/browse_order.md``): a listing
-    order, never a pick; all entries are returned. A hidden entry is not in the population, so it is neither listed nor
-    named.
-    """
-    entries = list(
-        session.scalars(
-            where_visible(
-                select(TransitionStateEntry)
-                .join(
-                    TransitionState,
-                    TransitionState.id == TransitionStateEntry.transition_state_id,
-                )
-                .where(TransitionState.reaction_entry_id == reaction_entry_id),
-                review_floor_predicate(
-                    TransitionStateEntry.id, SubmissionRecordType.transition_state_entry, profile=profile
-                ),
-            )
-        ).all()
-    )
-    badges = fetch_review_badges(
-        session,
-        record_type=SubmissionRecordType.transition_state_entry,
-        record_ids=[e.id for e in entries],
-    )
-    entries.sort(key=lambda e: (REVIEW_RANK[badges[e.id].status], -e.created_at.timestamp(), -e.id))
-    return entries
-
-
 def _kinetics_blocks(
     session: Session,
     reaction_entry_id: int,
@@ -1236,11 +1112,11 @@ def _ts_blocks_and_barriers(
     def reactant_energy(se_id: int, lot_id: int) -> tuple[float, str, str] | None:
         key = (se_id, lot_id)
         if key not in reactant_energy_cache:
-            reactant_energy_cache[key] = _species_entry_energy_at_lot(session, se_id, lot_id, profile)
+            reactant_energy_cache[key] = species_entry_energy_at_lot(session, se_id, lot_id, profile)
         return reactant_energy_cache[key]
 
-    for ts_entry in _ts_entries(session, reaction_entry_id, profile):
-        every_energy = _ts_calculation_energies(session, ts_entry.id, profile)
+    for ts_entry in ts_entries(session, reaction_entry_id, profile):
+        every_energy = ts_calculation_energies(session, ts_entry.id, profile)
         energy_blocks: list[dict] = []
         by_level: dict[int | None, list[tuple[float, str, Calculation]]] = {}
         for energy, energy_type, calc in every_energy:

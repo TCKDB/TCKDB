@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.201.0 - 2026-11-11
+
+No client code changed. The parity ledger lists `GET /api/v1/scientific/reaction-entries/{reaction_entry_ref}/energy-profile` as raw-only (reachable with `get_json()`).
+
 ## 0.200.0 - 2026-11-10
 
 No client code changed. The parity ledger lists `GET /api/v1/scientific/species-entries/{species_entry_ref}/conformer-usage` as raw-only (reachable with `get_json()`).

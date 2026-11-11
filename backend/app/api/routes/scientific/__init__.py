@@ -31,6 +31,8 @@ Sub-routers:
                             → /scientific/species-entries/{id}/statmech
                               /scientific/species-entries/{id}/transport
                               /scientific/species-entries/{id}/observations
+    reaction_energy_profile.router
+                            → /scientific/reaction-entries/{ref}/energy-profile
     provenance.router       → /scientific/reaction-entries/{id}/full
     thermo_search.router    → /scientific/thermo/search (GET, POST)
     kinetics_search.router  → /scientific/kinetics/search (GET, POST)
@@ -84,6 +86,7 @@ from app.api.routes.scientific import (
     networks,
     networks_browse,
     provenance,
+    reaction_energy_profile,
     reactions,
     reactions_browse,
     relative_conformer_energy,
@@ -155,6 +158,8 @@ scientific_router.include_router(statmech_selection.router)
 # Sibling per-entry subresource reads (statmech / transport) sharing the
 # ``/species-entries`` prefix with the thermo per-entry endpoint.
 scientific_router.include_router(species_subresources.router)
+# Energy profile of a reaction entry (a fixed sub-path, so it cannot be read as the /full handle).
+scientific_router.include_router(reaction_energy_profile.router)
 scientific_router.include_router(provenance.router)
 scientific_router.include_router(thermo_search.router)
 scientific_router.include_router(kinetics_search.router)

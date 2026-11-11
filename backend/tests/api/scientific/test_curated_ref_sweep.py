@@ -262,6 +262,10 @@ ML_ENERGY_ROWS = (
     "the dataset's other nested evidence (conformer observations, linearity witnesses) follows the evidence rule. The "
     "records it lists are under EXPORTED_RECORDS"
 )
+PROFILE_ENTRIES = (
+    "an energy profile is listed per transition-state ENTRY, a record of the read, so the record floor decides which entries "
+    "it lists; the calculations behind a point keep the approved floor as the ML export's energy rows do"
+)
 COMPARED_RECORDS = (
     "a relative-energy request compares conformer GROUPS, which are records, so the record floor decides the compared set; "
     "the observations and calculations inside a group are evidence and follow the evidence rule (step 5)"
@@ -278,6 +282,7 @@ KEEPS_THE_RECORD_FLOOR: dict[tuple[str, str], tuple[set[str], str]] = {
     ("GET", "/api/v1/scientific/export/ml/species.ndjson"): ({'calc', 'thm'}, ML_ENERGY_ROWS),
     ("GET", "/api/v1/scientific/export/ndjson"): ({'kin', 'thm', 'trn'}, EXPORTED_RECORDS),
     ("GET", "/api/v1/scientific/frequency-scale-factors/search"): ({'sm', 'tse'}, DERIVED),
+    ("GET", "/api/v1/scientific/reaction-entries/{reaction_entry_ref}/energy-profile"): ({'tse'}, PROFILE_ENTRIES),
     ("GET", "/api/v1/scientific/level-of-theories/browse"): ({'calc'}, DERIVED),
     ("GET", "/api/v1/scientific/level-of-theories/search"): ({'calc'}, DERIVED),
     ("GET", "/api/v1/scientific/networks/browse"): ({'nsolve'}, SERVICE_FLOOR),
