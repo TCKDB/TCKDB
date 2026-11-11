@@ -188,6 +188,38 @@ Out of scope here; tracked separately:
 
 ---
 
+## Loading species names from PubChem
+
+Name search has no names until some are loaded. The fetch runs on an operator's machine and never at request time; the load runs
+inside the API container with the API's own `DB_*` settings, so it needs no API credential. Run both from `backend/` with
+`PYTHONPATH=.`.
+
+1. **Fetch.** Builds the species list from the public species browse (GET only), asks PubChem for each InChIKey (nothing else is
+   sent; at most 4 requests a second, 10 s timeout, up to 2 retries on 503) and writes a review file:
+
+   ```bash
+   python scripts/names/fetch_pubchem_names.py --from-api https://<host> --save-species species.json --out names_review.json
+   # or, from a species list you already have (species_ref, inchi_key per item):
+   python scripts/names/fetch_pubchem_names.py --species species.json --out names_review.json
+   ```
+
+   Each row of `rows` is one name: species ref, InChIKey, name, kind (`common` from PubChem's Title, `systematic` from its
+   IUPACName), CID and PubChem URL. `skipped` lists what was left out and why: `no_pubchem_match`, `several_cids`,
+   `inchikey_shared_by_species` (PubChem does not know spin state), `lookup_failed`, `name_missing`, `name_length`,
+   `name_characters`, `name_no_letter_or_digit`, `bad_input_row`.
+2. **Review.** Read `names_review.json`; delete rows you do not want. Only the `rows` section is loaded.
+3. **Dry run.** Reports every row as `would_insert` or `skipped` with a reason, and writes nothing:
+
+   ```bash
+   python scripts/names/import_species_names.py names_review.json
+   ```
+
+4. **Import.** The same command with `--commit`. A name is written only when the species ref exists, is not merged, and still has
+   the row's InChIKey. Names are stored with source kind `offline_import` and an `external_source` row `PubChem` / `CID <n>`.
+   A name the species already has (live, or retired; curated or imported) is skipped, so a re-run writes nothing new and a
+   retired name is never restored. Skip reasons: `bad_row`, `species_not_found`, `inchikey_mismatch`, `species_merged`,
+   `already_present`, `retired_name_not_restored`, plus the name reasons above.
+
 ## See also
 
 - [`.env.selfhosted.example`](../../.env.selfhosted.example) — template that encodes every safe value above.
