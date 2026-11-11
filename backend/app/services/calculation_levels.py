@@ -1254,17 +1254,19 @@ def _method_key(level: LevelOfTheory) -> str:
 
 
 def is_one_electron_hf_substitute(declared: LevelOfTheory, linked: LevelOfTheory) -> bool:
-    """Whether ``linked`` is Hartree-Fock where ``declared`` is a correlated level and nothing else differs.
+    """Whether ``linked`` is Hartree-Fock where ``declared`` is a wavefunction correlated method, all else equal.
 
-    The method of ``linked`` is Hartree-Fock (identity key ``hf``), the method of ``declared`` is not, and every other
-    identity field but spin treatment agrees. The caller adds the one-electron condition: for one electron every
-    correlation term (CCSD, (T), MP2, the PNO truncation and the F12 pair correction) is zero, so a Hartree-Fock
-    energy in the same orbital basis is the correlated energy. ORCA refuses every correlated method for one electron
-    ("no electrons to correlate" for MP2-F12, "Number of processes (1) exceeds number of pairs (0)" for CCSD(T)-F12/RI).
+    ``linked`` has method key ``hf``; ``declared`` is classified ``wavefunction`` or ``multireference`` and is not
+    ``hf`` (a density functional, a composite recipe or an unclassified method gets no exemption); every other
+    identity field but spin treatment agrees. The caller adds the one-electron condition: with one electron every
+    correlation term is zero, and ORCA refuses correlated methods there (ORCA 6 "no electrons to correlate").
     """
+    from app.chemistry.method_families import MethodFamily, classify_method
     from app.services.calculation_resolution import spin_agnostic_level_key
 
     if _method_key(linked) not in HARTREE_FOCK_METHOD_KEYS or _method_key(declared) in HARTREE_FOCK_METHOD_KEYS:
+        return False
+    if classify_method(declared.method).family not in (MethodFamily.wavefunction, MethodFamily.multireference):
         return False
     declared_key = spin_agnostic_level_key(declared)
     linked_key = spin_agnostic_level_key(linked)

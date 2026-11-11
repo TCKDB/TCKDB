@@ -264,21 +264,25 @@ def test_a_declared_hartree_fock_level_is_not_widened_to_other_hf_spellings(clie
 # ---------------------------------------------------------------------------
 
 
-def _deposit(client, smiles: str, multiplicity: int, level: dict) -> None:
+def _sp(level: dict, multiplicity: int) -> dict:
     spin = "restricted" if multiplicity == 1 else "unrestricted"
-    resp = client.post(
-        "/api/v1/uploads/conformers",
-        json={
-            "species_entry": {"smiles": smiles, "charge": 0, "multiplicity": multiplicity},
-            "geometry": {"xyz_text": _XYZ[smiles]},
-            "calculation": {
-                "type": "sp",
-                "software_release": _SOFTWARE,
-                "level_of_theory": {**level, "spin_treatment": spin},
-                "sp_result": {"electronic_energy_hartree": -0.5},
-            },
-        },
-    )
+    return {
+        "type": "sp",
+        "software_release": _SOFTWARE,
+        "level_of_theory": {**level, "spin_treatment": spin},
+        "sp_result": {"electronic_energy_hartree": -0.5},
+    }
+
+
+def _deposit(client, smiles: str, multiplicity: int, level: dict, *, also: dict | None = None) -> None:
+    payload = {
+        "species_entry": {"smiles": smiles, "charge": 0, "multiplicity": multiplicity},
+        "geometry": {"xyz_text": _XYZ[smiles]},
+        "calculation": _sp(level, multiplicity),
+    }
+    if also is not None:
+        payload["additional_calculations"] = [_sp(also, multiplicity)]
+    resp = client.post("/api/v1/uploads/conformers", json=payload)
     assert resp.status_code == 201, resp.text[:500]
 
 
@@ -450,8 +454,7 @@ def test_a_declared_composite_scheme_is_never_exempted(db_session):
         definition_hash="e" * 64,
     )
     hf = _level(db_session, "8", method="hf")
-    other = _level(db_session, "9", method="dlpno-ccsd(t)-f12")
-    energies = [_energy(db_session, "[H]", 2, hf), _energy(db_session, "[H][H]", 1, other)]
+    energies = [_energy(db_session, "[H]", 2, hf), _energy(db_session, "[H][H]", 1, declared)]
     violation = kinetics_energy_level_violation(energies, declared)
     assert violation is not None and violation.code == "kinetics_energy_level_contradiction"
 
@@ -468,3 +471,71 @@ def test_a_restricted_open_atom_beside_unrestricted_radicals_is_still_mixed(db_s
     violation = kinetics_energy_level_violation(energies, declared)
     assert violation is not None
     assert violation.context["reason"] == "open_shell_reference_mixed"
+
+
+# ---------------------------------------------------------------------------
+# The declared method must be a wavefunction or multireference method
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("method", ["DLPNO-CCSD(T)-F12", "CCSD(T)-F12a", "MP2-F12", "CASPT2", "MRCI+Q"])
+def test_a_correlated_wavefunction_or_multireference_declared_method_is_accepted(client, method):
+    level = {"method": method, "basis": "cc-pVTZ-F12"}
+    resp = client.post(
+        _REACTION, json=_bundle(level, left_level={**level, "method": "hf"}, product_level=level)
+    )
+    assert resp.status_code == 201, resp.text[:800]
+    assert len(_hf_codes(resp)) == 1
+
+
+@pytest.mark.parametrize("method", ["B3LYP", "B2PLYP", "G4"])
+def test_a_density_functional_or_composite_declared_method_is_not_exempted(client, method):
+    """Kills: any non-HF declared method counting as correlated. The atom's B3LYP energy is not its HF energy."""
+    level = {"method": method, "basis": "cc-pVTZ"}
+    resp = client.post(
+        _REACTION, json=_bundle(level, left_level={**level, "method": "hf"}, product_level=level)
+    )
+    _assert_refused(resp)
+
+
+# ---------------------------------------------------------------------------
+# /uploads/kinetics: the HF calculation stands in only when nothing matches exactly
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("spin", [None, "unrestricted"])
+def test_standalone_an_atom_with_a_correlated_and_an_hf_single_point_resolves_to_the_correlated_one(
+    client, db_session, spin
+):
+    """Kills: an HF stand-in competing with an exact match (it made the lookup ambiguous)."""
+    from sqlalchemy import select
+
+    from app.db.models.calculation import Calculation
+    from app.db.models.kinetics import KineticsSourceCalculation
+
+    _deposit(client, "[H]", 2, _F12, also=_HF)
+    _deposit(client, "[H][H]", 1, _F12)
+    declared = {**_F12, **({"spin_treatment": spin} if spin else {})}
+    resp = client.post(_STANDALONE, json=_standalone(declared))
+    assert resp.status_code == 201, resp.text[:800]
+    assert _hf_codes(resp) == []
+    methods = db_session.scalars(
+        select(Calculation.lot_id).join(
+            KineticsSourceCalculation, KineticsSourceCalculation.calculation_id == Calculation.id
+        ).where(KineticsSourceCalculation.kinetics_id == resp.json()["id"])
+    ).all()
+    from app.db.models.level_of_theory import LevelOfTheory
+
+    levels = {db_session.get(LevelOfTheory, lot_id).method.lower() for lot_id in methods}
+    assert levels == {"dlpno-ccsd(t)-f12"}
+
+
+def test_a_declared_hartree_fock_level_is_not_a_correlated_level(db_session):
+    """Kills: the declared-not-HF guard. Declaring HF (spin unknown) with H at hf+unrestricted is no substitution."""
+    from app.db.models.common import SpinTreatment
+    from app.services.calculation_levels import kinetics_one_electron_hf_substitutions
+
+    declared = _level(db_session, "1", method="hf", basis="cc-pvtz-f12")
+    atom = _level(db_session, "2", method="hf", basis="cc-pvtz-f12", spin_treatment=SpinTreatment.unrestricted)
+    energies = [_energy(db_session, "[H]", 2, atom), _energy(db_session, "[H][H]", 1, declared)]
+    assert kinetics_one_electron_hf_substitutions(energies, declared) == []

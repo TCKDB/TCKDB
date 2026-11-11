@@ -1261,13 +1261,14 @@ CHECK_A_ONE_ELECTRON_HARTREE_FOCK_ENERGY_STANDS_FOR_THE_CORRELATED_LEVEL = Scien
         "is narrow (one electron by the stored species, Hartree-Fock, every other identity field equal); a "
         "two-electron participant or a different basis stays a kinetics_energy_level_contradiction."
     ),
-    adr="0008",
+    adr="0008, 0021",
     enforced_by=(
         PythonCheck(
             calculation_levels.kinetics_one_electron_hf_substitutions,
             note=(
-                "Run on the linked reactant, product and transition-state energies of a kinetics record whose "
-                "declared level is not a composite scheme or a Hartree-Fock method. The electron count is the "
+                "Run on the linked reactant and product energies of a kinetics record whose declared level is a "
+                "wavefunction or multireference method (not a composite scheme, a density functional or an "
+                "unclassified method). The electron count is the "
                 "sum of the atomic numbers of the stored SMILES minus the stored charge."
             ),
         ),

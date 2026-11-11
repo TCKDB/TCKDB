@@ -1889,14 +1889,14 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | **Tier** | `warn` |
 | **Code** | `one_electron_hf_substitution` |
 | **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
-| **Governing ADR** | 0008 |
+| **Governing ADR** | 0008, 0021 |
 
 **Why this tier.** Not a contradiction: ORCA refuses every correlated method for one electron, so a correct producer has no correlated energy to link, and the Hartree-Fock one is exact apart from the CABS singles term that an F12 method adds to its reference. That term is about 0.05 to 0.1 mEh for a hydrogen atom, below the noise of a PNO truncation but not zero, so the acceptance is stated rather than silent. The condition is narrow (one electron by the stored species, Hartree-Fock, every other identity field equal); a two-electron participant or a different basis stays a kinetics_energy_level_contradiction.
 
 **Enforced at.**
 
 - `kinetics_one_electron_hf_substitutions` — `backend/app/services/calculation_levels.py::kinetics_one_electron_hf_substitutions`
-  *Run on the linked reactant, product and transition-state energies of a kinetics record whose declared level is not a composite scheme or a Hartree-Fock method. The electron count is the sum of the atomic numbers of the stored SMILES minus the stored charge.*
+  *Run on the linked reactant and product energies of a kinetics record whose declared level is a wavefunction or multireference method (not a composite scheme, a density functional or an unclassified method). The electron count is the sum of the atomic numbers of the stored SMILES minus the stored charge.*
 - `is_one_electron_hf_substitute` — `backend/app/services/calculation_levels.py::is_one_electron_hf_substitute`
 
 **Escape hatch.** None needed: the deposit is accepted. Link a correlated energy to state a level without the substitution.

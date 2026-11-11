@@ -149,12 +149,16 @@ def _calculations_at_declared_level(
         .order_by(Calculation.id)
     ).all()
     scheme_ids = declared_scheme_level_ids(session, [lot_id, *{c.lot_id for c in candidates}])
-    one_electron = one_electron_calculation_ids(session, [c.id for c in candidates])
-    matching = [
-        c
-        for c in candidates
-        if kinetics_level_fields_match(declared, c.lot, scheme_ids=scheme_ids, one_electron=c.id in one_electron)
-    ]
+    matching = [c for c in candidates if kinetics_level_fields_match(declared, c.lot, scheme_ids=scheme_ids)]
+    if not matching:
+        # A one-electron species' Hartree-Fock calculation stands in only when nothing matches exactly.
+        one_electron = one_electron_calculation_ids(session, [c.id for c in candidates])
+        matching = [
+            c
+            for c in candidates
+            if c.id in one_electron
+            and kinetics_level_fields_match(declared, c.lot, scheme_ids=scheme_ids, one_electron=True)
+        ]
     spin = level_spin_value(declared)
     if spin is None:
         return [c for c in matching if c.lot_id == lot_id] or matching
