@@ -15,7 +15,7 @@ expose opt-in compact ``include=assessments`` summaries; their existing
 ``include=trust`` policy remains unchanged (trust is opt-in only and
 ``include=all`` does not surface either token).
 
-``observations`` (Phase C-E5) is the first public read of
+``observations`` is the first public read of
 ``molecular_property_observation`` — until this route, no read route named
 that table at all (grep-verified: no ``molecular_property`` hit anywhere
 under ``app/api``). Unlike its two siblings above, it is not a candidate

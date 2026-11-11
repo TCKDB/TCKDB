@@ -270,7 +270,7 @@ def persist_conformer_upload(
         # alone, so any string at all resolved to the primary
         # observation/calculation and a typo attached the correction to
         # something the depositor never named. The calc-key namespace is
-        # the one the statmech block already points at (DR-0029 Req 1).
+        # the one the statmech block already points at.
         source_conf_id = resolve_applied_correction_source_key(
             correction_payload.source_conformer_key,
             conformers_by_key,
@@ -337,7 +337,7 @@ def persist_conformer_upload(
         )
 
     # An assembled composite's inputs are written, and its total checked, now that
-    # every calculation it may name exists (ADR 0021, P5). Before the review
+    # every calculation it may name exists. Before the review
     # policy: a policy that accepts the composite freezes its inputs.
     composite_input_warnings = finalize_composite_inputs(
         session,

@@ -1,4 +1,4 @@
-"""Entry-level stereo descriptors (DR-0038).
+"""Entry-level stereo descriptors.
 
 A *species* is a constitution: the stereo-blind canonical SMILES plus charge and
 multiplicity. Stereochemistry is resolved only on the *species entry*, as a
@@ -97,7 +97,7 @@ allene in a ring of five or fewer atoms, and a centre or double bond whose stere
 sense and is not the plain case below (:data:`_ALLENE_DEPENDENT`). The plain case is a centre with two
 constitutionally equal arms that each hold one allene axis (``CC=C=CC(C)C=C=CC``): ``-`` when the two senses are
 equal, ``r`` or ``s`` when they differ, because an ``Ra`` arm outranks an ``Sa`` arm (IUPAC 2013 P-92.5, Rule 5); see
-:func:`pseudo_geometry_token`. See DR-0038.
+:func:`pseudo_geometry_token`.
 """
 
 from __future__ import annotations

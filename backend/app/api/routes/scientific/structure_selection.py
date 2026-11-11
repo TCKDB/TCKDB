@@ -141,7 +141,7 @@ def select_species_conformers(
     """The lowest validated basin of one cohort, the basins that support a claim, or the protocols that cover a request, in display order.
 
     A basin needs supported curvature evidence on its own geometry: imaginary modes are judged by magnitude against
-    the stored tau (ADR 0012), never counted. Repeated determinations of one basin are alternates, not independent
+    the stored tau, never counted. Repeated determinations of one basin are alternates, not independent
     confirmation, and a basin with a passing and a refuted determination is contested. A complete profile claim
     (``all_requested_members``) needs every requested basin eligible and in one cohort; no mixed-method profile is
     ever built from each basin's available method.

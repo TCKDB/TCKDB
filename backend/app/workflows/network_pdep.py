@@ -289,7 +289,7 @@ def _barrier_owner_check(
     return check
 
 
-#: Two states of one network resolve to the same participants (DR-0038).
+#: Two states of one network resolve to the same participants.
 W_NETWORK_STATE_DUPLICATE_COMPOSITION = "network_state_duplicate_composition"
 
 
@@ -796,7 +796,7 @@ def persist_network_pdep_upload(
         geometry_key_to_id[ts_in.geometry.key] = ts_geometry.id
 
         # The saddle point must be made of its micro reaction's atoms, at that
-        # reaction's charge (ADR 0008: definitional, therefore blocking).
+        # reaction's charge (definitional, therefore blocking).
         validate_transition_state_composition(
             session,
             reaction_entry_id=reaction_entry.id,
@@ -885,7 +885,7 @@ def persist_network_pdep_upload(
             warnings=warning_sink,
         )
 
-        # Atom map (ADR 0011). A pressure-dependent network is a set of micro
+        # Atom map. A pressure-dependent network is a set of micro
         # reactions, and each saddle point here is one of them: the absence of
         # a map is exactly as invisible on this path as on any other, and the
         # ADR requires it be loud enough that a depositor who *has* the
@@ -911,7 +911,7 @@ def persist_network_pdep_upload(
         )
 
     # An assembled composite's inputs are written, and its total checked, now that
-    # every calculation exists (ADR 0021, P5).
+    # every calculation exists.
     warning_sink.extend(
         finalize_composite_inputs(
             session,
@@ -1213,7 +1213,7 @@ def persist_network_pdep_upload(
 
         # Energy transfer. A network-wide declaration carries no state and no
         # collider by declaration; ``scope`` is what tells a later reader that
-        # the NULLs are the record, not a dropped field (ADR 0009).
+        # the NULLs are the record, not a dropped field.
         for et_index, et in enumerate(solve_in.energy_transfer):
             session.add(
                 NetworkSolveEnergyTransfer(
@@ -1259,7 +1259,7 @@ def persist_network_pdep_upload(
         # ``validate_mechanistic_channel_evidence``: the coverage rules there
         # compare the supplied state/path keys against the topology, which
         # catches an undefined key as a side effect. A ``reported`` solve
-        # (ADR 0010) is exempt from those rules and so was exempt from the
+        # Is exempt from those rules and so was exempt from the
         # side effect, and reached these subscripts with whatever it wrote.
         species_key_by_entry_id = {
             entry.id: key for key, entry in species_key_to_entry.items()  # type: ignore[attr-defined]

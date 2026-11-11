@@ -104,7 +104,7 @@ class AdminUserResponse(BaseModel):
     alone frequently cannot tell two people apart.
 
     ``id`` is a raw row id, which the read layer otherwise sweeps out of
-    responses (DR-0028). It is correct here and not an exception being
+    responses. It is correct here and not an exception being
     smuggled in: this is an explicitly admin-only schema, and the route
     that acts on the result -- ``PATCH /admin/users/{user_id}/role`` --
     is keyed on exactly this id. Withholding it would leave that route
@@ -525,7 +525,7 @@ class AdminCuratorTaskResponse(BaseModel):
     from "task #12 concerns calculation 431" to the record itself, and 431 is
     not something any read route answers to -- ``calc_...`` is. Without it the
     only way across is an internal id a curator cannot use and a UI must not
-    show (DR-0028 Req 2).
+    show.
 
     It is ``null`` when the record cannot be named: ``applied_energy_correction``
     has no ``public_ref`` column, and a record may have been deleted since the
@@ -1327,7 +1327,7 @@ def attach_energy_correction_scheme_provenance(
 
 
 # ---------------------------------------------------------------------------
-# Molecular-property observation identity attach (Phase C-E5)
+# Molecular-property observation identity attach
 # ---------------------------------------------------------------------------
 
 

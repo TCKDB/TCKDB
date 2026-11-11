@@ -35,7 +35,7 @@ class CreatedByMixin:
 
 
 class PublicRefMixin:
-    """Phase A public-ref column for ref-bearing tables.
+    """Public-ref column for ref-bearing tables.
 
     Auto-populated at INSERT time by a global SQLAlchemy ``before_insert``
     listener installed by

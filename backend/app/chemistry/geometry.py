@@ -76,7 +76,7 @@ def resolve_element_symbol(symbol: str) -> str:
     hydrogen. They are also nuclides -- ``D`` is deuterium (mass number 2) and
     ``T`` is tritium (mass number 3), the only meaning either symbol has in
     chemistry (IUPAC Red Book IR-3.3.2) -- and that half of the meaning is
-    carried elsewhere (decided 2026-10-03, ``docs/adr/0022``): a ``D``/``T``
+    carried elsewhere (decided, ``docs/adr/0022``): a ``D``/``T``
     element token is read as hydrogen **plus** an implied mass number by
     :func:`parse_xyz`, so every *new* ``geometry_atom`` row holds ``H`` and an
     ``isotope_mass_number``.

@@ -9,10 +9,10 @@ the scientific reads obey. This module gives them the same three:
   (:func:`~app.services.scientific_read.common.visible_statuses`).
 * **The read profile.** ``?profile=curated`` raises the floor to ``approved`` through that same function, and is
   resolved by the same dependency as on the scientific surface. The record floor decides which rows a list returns
-  and counts. A record's own detail route serves it unless it is rejected or deprecated (ADR 0023 step 7), and a
+  and counts. A record's own detail route serves it unless it is rejected or deprecated, and a
   withheld one
   answers exactly as an id that names nothing.
-* **Linked evidence (ADR 0023).** The floor decides which rows a list returns; a detail route answers 404 for a withheld record only (step 7). What a returned
+* **Linked evidence.** The floor decides which rows a list returns; a detail route answers 404 for a withheld record only (step 7). What a returned
   row NAMES (a pointer column, an embedded record such as a conformer group's observations) is linked evidence: under
   ``curated`` only a rejected or deprecated record is blanked or dropped, and one that is merely below the floor is named as
   it is under the default profile. These payloads carry raw ids and no badge field, so the response says the badge in the
@@ -179,7 +179,7 @@ class LegacyVisibility:
 HIDDEN_HEADER = "X-TCKDB-Hidden-By-Default"
 
 #: The review status of the record a legacy DETAIL read served under a profile with a review floor (``curated``). The
-#: legacy payloads are raw entity rows with no badge field, and since step 7 of ADR 0023 a detail serves a record that is
+#: legacy payloads are raw entity rows with no badge field, and a detail serves a record that is
 #: merely ``not_reviewed`` or ``under_review``, so the status travels here. Absent under the default profile, on a list, and
 #: on a detail whose path names no gated record.
 REVIEW_STATUS_HEADER = "X-TCKDB-Review-Status"
@@ -254,7 +254,7 @@ NETWORK_KINETICS = "network_kinetics"
 
 
 def _evidence_statuses() -> set[RecordReviewStatus]:
-    """The statuses linked evidence may have and still be shown under the profile (ADR 0023): all but ``rejected`` and
+    """The statuses linked evidence may have and still be shown under the profile: all but ``rejected`` and
     ``deprecated`` under a floor, every status without one."""
     return set(evidence_visible_statuses())
 
@@ -472,7 +472,7 @@ def withhold_hidden_records(session: Session, payload: Any, *, request_statuses:
     """Strip a legacy response of every mention of a record the request does not show.
 
     * Pointer columns and id-typed links (:data:`POINTER_KINDS`) are linked evidence: under a floor only ``rejected`` and
-      ``deprecated`` records are withheld (ADR 0023).
+      ``deprecated`` records are withheld.
     * Records embedded in the response (:data:`RECORD_MODELS`) are judged by the request's visibility (the default
       exclusions) without a floor, and by the same evidence rule under one.
 
@@ -485,7 +485,7 @@ def withhold_hidden_records(session: Session, payload: Any, *, request_statuses:
     records: dict = {}
     _collect(body, pointers, records)
     floor = current_read_profile().review_floor is not None
-    # ADR 0023: under a floor a nested pointer, and a record embedded in another (a group's observation), is linked
+    # Under a floor a nested pointer, and a record embedded in another (a group's observation), is linked
     # evidence. Only rejected and deprecated evidence is withheld; a not-reviewed one is named as it always was (these
     # payloads carry raw ids and no badge field). The floor still decides which TOP-LEVEL rows a list returns, in SQL.
     evidence_statuses = _evidence_statuses()
@@ -539,12 +539,12 @@ def _wrap(endpoint: Any, gates: dict[str, Gate], path_params: set[str], served_p
                     kwargs[param] = ABSENT_ID
                     continue
                 if isinstance(value, int) and param == served_param:
-                    # The record this route serves states its own review status (ADR 0023 step 7).
+                    # The record this route serves states its own review status.
                     badge = fetch_review_badges(session, record_type=gate.record_type, record_ids=[value]).get(value)
                     if badge is not None:
                         context.served_review_status = badge.status.value
             # An id-typed filter naming a WITHHELD record (rejected or deprecated) is the filter for an id that names
-            # nothing. A filter naming a not-reviewed one is kept: a filter is not a subject (ADR 0023).
+            # nothing. A filter naming a not-reviewed one is kept: a filter is not a subject.
             for name, value in list(kwargs.items()):
                 kind = POINTER_KINDS.get(name)
                 if kind is not None and name not in path_params and isinstance(value, int) and name not in gates:

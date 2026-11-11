@@ -385,7 +385,7 @@ class Shape(str, Enum):
     lived was the prose a client was told not to parse.
 
     The obvious repair — populate ``context`` everywhere — is wrong. Most
-    refusals have nothing to put there. Calvin's rule (2026-08-17) says
+    refusals have nothing to put there. Calvin's rule says
     which do:
 
         A code naming a **relationship** — conflict, mismatch, ambiguity —
@@ -501,7 +501,7 @@ class Shape(str, Enum):
     #: is the only place the *which* can live. What goes in it is the
     #: things themselves — a field path, a public ref, a declared local
     #: key, a count — and never an internal identifier: not a database
-    #: primary key (DR-0028 Requirement 2), and since 2026-08-18 not a
+    #: primary key, and since 2026-08-18 not a
     #: raw database constraint name either. Both are logged instead, for
     #: the same reason: they are ours, not the depositor's, they do not
     #: survive a restore or a rename, and no public surface is keyed on

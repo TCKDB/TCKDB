@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     # tooling.
     auth_allow_open_registration: bool = True
 
-    # Phase D internal-ID visibility policy. When ``False`` (the
+    # Internal-ID visibility policy. When ``False`` (the
     # default, intended for hosted production), the scientific read
     # API hides internal integer primary keys (``*_id`` fields,
     # ``*_ids`` bare arrays, and a small allow-list of non-suffix PK

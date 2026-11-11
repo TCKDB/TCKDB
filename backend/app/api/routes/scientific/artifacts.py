@@ -237,7 +237,7 @@ def artifact_integrity_search(
     Curator or admin only. The rows carry verifier prose and the object
     store's own ``ETag`` and paths, which is operational detail about a
     deployment rather than science about a record -- the same reasoning
-    that gates raw artifact bytes (ADR 0004).
+    that gates raw artifact bytes.
     """
     # No ``except ValueError -> HTTPException(422)`` here, deliberately.
     # The service raises the same coded refusals every other scientific read
@@ -423,7 +423,7 @@ def download_approved_artifact(
         # row is what makes the break visible to the *next* reader, and
         # to the trust evaluator, without anyone having to grep. Written
         # in its own transaction and best-effort, so it cannot turn a
-        # 502 into a 500. See ADR 0014. Recorded *before* the re-raise:
+        # 502 into a 500. Recorded *before* the re-raise:
         # nothing after this line can skip it.
         record_from_error(
             exc,
@@ -466,7 +466,7 @@ def download_approved_artifact(
             # Authenticated, potentially PII-bearing bytes: forbid shared
             # caches from retaining them. ``public`` would let a CDN serve
             # one user's raw log to a later anonymous request for the same
-            # URL, defeating the auth gate (ADR 0004).
+            # URL, defeating the auth gate.
             "Cache-Control": "private, no-store",
             # BOTH forms, per RFC 6266. `filename*` alone was a real
             # defect: curl's -J reads only the plain `filename=` parameter

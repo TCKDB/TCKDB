@@ -126,7 +126,7 @@ def assert_thermo_role_matches_calculation_type(
     source_calculations``, at which point three copies of one rule could
     disagree about the same deposit.
 
-    DR-0028 Requirement 1: a single typo in ``existing_calculation_id`` (or
+    A single typo in ``existing_calculation_id`` (or
     a mis-keyed inline calc) would otherwise silently link thermo to the
     wrong supporting calc within the same species. ``opt``/``freq``
     require exact ``CalculationType`` match. ``composite`` and ``imported``
@@ -192,7 +192,7 @@ def _resolve_source_calculation(
     ``existing_calculation_id`` is set. Inline keys are looked up in the
     map of just-persisted calculations. Existing ids are loaded from the
     database; missing rows produce 404, cross-species or role/type
-    mismatches produce 422 (DR-0028 Requirement 2).
+    mismatches produce 422.
 
     Since #230 the 404 carries ``unknown_calculation_ref`` and a
     ``context`` naming this field, rather than the generic
@@ -251,7 +251,7 @@ def _resolve_statmech_id(
     """Resolve an optional ``existing_statmech_id`` to a statmech row id.
 
     Mirrors the ``existing_calculation_id`` handling for source
-    calculations (DR-0028): a missing row produces 404, a row owned by a
+    calculations: a missing row produces 404, a row owned by a
     different species entry produces 422. The error detail names the field
     but does not leak internal identifiers.
 
@@ -387,7 +387,7 @@ def persist_thermo_upload(
 
     # An assembled composite's inputs are written, and its total checked, now
     # that every inline calculation exists and the key namespace is complete
-    # (ADR 0021, P5). Always run: the write is not optional when the caller
+    # Always run: the write is not optional when the caller
     # collects no warnings.
     composite_input_warnings = finalize_composite_inputs(
         session,
@@ -571,7 +571,7 @@ def persist_thermo_upload(
 
     # Group-additivity estimation provenance (estimated thermo only; the
     # upload schema enforces the origin match). Reifies which GA scheme +
-    # per-group contributions produced the estimated H298/S298 (DR-0035).
+    # per-group contributions produced the estimated H298/S298.
     if request.group_additivity is not None:
         create_applied_group_additivity(
             session,

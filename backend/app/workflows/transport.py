@@ -95,7 +95,7 @@ def persist_transport_upload(
 
     # An assembled composite's inputs are written, and its total checked, now
     # that every inline calculation exists and the key namespace is complete
-    # (ADR 0021, P5). Always run: the write is not optional when the caller
+    # Always run: the write is not optional when the caller
     # collects no warnings.
     composite_input_warnings = finalize_composite_inputs(
         session,

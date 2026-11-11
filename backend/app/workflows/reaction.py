@@ -122,7 +122,7 @@ def persist_reaction_upload(
 
     # Equal species on both sides is a legal graph reaction (a stereo isomerisation); equal
     # *entries* on both sides is a null reaction unless the deposit carries a transition state or
-    # kinetics (DR-0038).
+    # kinetics.
     refuse_null_reaction_entry(
         reactant_entries,
         product_entries,

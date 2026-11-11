@@ -741,7 +741,7 @@ def upload_computed_species(
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
     """Bundle upload: identity + conformers + per-conformer calcs +
-    artifacts + optional thermo, atomic in one transaction (DR-0029)."""
+    artifacts + optional thermo, atomic in one transaction."""
     if (replay := idem.maybe_replay()) is not None:
         return replay
     warnings = reconcile_species_entry(
@@ -872,7 +872,7 @@ def upload_computed_reaction(
 
 
 # ---------------------------------------------------------------------------
-# ThermoML file upload (Phase C-E6)
+# ThermoML file upload
 # ---------------------------------------------------------------------------
 
 #: Reuses the artifact-upload cap (``app.services.artifact_storage``)

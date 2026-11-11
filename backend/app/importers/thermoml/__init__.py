@@ -1,4 +1,4 @@
-"""ThermoML Cp importer (Phase C-E2).
+"""ThermoML Cp importer.
 
 Turns a NIST TRC ThermoML Archive article (XML + JSON twin) into
 :class:`~app.schemas.entities.molecular_property_observation.MolecularPropertyObservationCreate`
@@ -71,7 +71,7 @@ ARCHIVE_SIZE = 189433115
 #: Canonical XSD download location NIST/TRC documents alongside the
 #: archive (the schema is also mirrored at the PDR download endpoint
 #: used above for ``ARCHIVE_URL``; both serve byte-identical content --
-#: verified 2026-09-20, both hash to ``XSD_SHA256`` below). The
+#: verified, both hash to ``XSD_SHA256`` below). The
 #: committed copy at ``schema/ThermoML.xsd`` is what every validation
 #: actually runs against; this URL is provenance metadata only, never
 #: fetched at runtime.

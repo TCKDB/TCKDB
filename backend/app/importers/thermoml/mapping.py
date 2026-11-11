@@ -132,7 +132,7 @@ class ThermoMLLiteratureFragment(BaseModel):
     """DOI/title/year/journal/authors, for C-E3's literature resolver.
 
     Never resolved to a ``literature_id`` here --
-    ``resolve_or_create_literature`` (Phase C-E3) is the only thing
+    ``resolve_or_create_literature`` is the only thing
     allowed to do that.
     """
 

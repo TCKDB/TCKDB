@@ -59,7 +59,7 @@ from app.workflows.reaction import persist_reaction_upload
 
 #: Closing sentence of the atom-map absence warning on this path.
 #:
-#: A map indexes into a geometry per participant (ADR 0011: geometry-relative,
+#: A map indexes into a geometry per participant (geometry-relative,
 #: with the geometries named explicitly), and this payload describes its
 #: reactants and products by *identity*, so a participant's geometry is
 #: optional and a map can only be written against the ones a depositor chose to
@@ -146,7 +146,7 @@ def persist_transition_state_upload(
     geometry = resolve_geometry_payload(session, request.geometry)
 
     # The saddle point must be made of this reaction's atoms, at this
-    # reaction's charge (ADR 0008: definitional, therefore blocking).
+    # reaction's charge (definitional, therefore blocking).
     validate_transition_state_composition(
         session,
         reaction_entry_id=reaction_entry.id,
@@ -238,7 +238,7 @@ def persist_transition_state_upload(
         )
         applied_correction_ids.append(applied.id)
 
-    # 7. Atom map (ADR 0011). Participant geometries are stored as plain
+    # 7. Atom map. Participant geometries are stored as plain
     #    geometries and checked against the species they claim to be: a map is
     #    counted into them, so coordinates that are not the participant's own
     #    would make every index in it point at the wrong atom.
@@ -293,7 +293,7 @@ def persist_transition_state_upload(
     session.flush()
 
     # An assembled composite's inputs are written, and its total checked, now that
-    # every calculation it may name exists (ADR 0021, P5). Before the review
+    # every calculation it may name exists. Before the review
     # policy, which can freeze them; and always run, whether or not the caller
     # collects warnings.
     composite_input_warnings = finalize_composite_inputs(

@@ -104,7 +104,6 @@ class NotFoundError(Exception):
     payload cited four refs, and the alternative is a client string-matching
     prose. It is deep-sanitised by :func:`app.api.error_contract.error_envelope`
     like any other context, and must never carry a database primary key
-    (DR-0028 Requirement 2).
     """
 
     def __init__(
@@ -690,7 +689,7 @@ def _artifact_storage_unavailable_handler(
 
     "This has been recorded" is not a courtesy on the missing branch, and
     it is not asserted from here. The route that reads stored bytes writes
-    the ``object_missing`` custody row *before* re-raising (ADR 0014), so
+    the ``object_missing`` custody row *before* re-raising, so
     the sentence is true of every path that can reach this branch with a
     request attached; a caller that reaches it opportunistically never
     sees a response at all.

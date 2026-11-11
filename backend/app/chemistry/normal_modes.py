@@ -214,7 +214,7 @@ DEGENERACY_WINDOW_CM1 = 1.0
 #: corpus sits near the line from either side.
 FRAME_CONSISTENCY_TOLERANCE_CM1 = 100.0
 
-#: ADR 0012: "more than about 90% overlap means the mode is projection
+#: "more than about 90% overlap means the mode is projection
 #: residue and nothing else".
 #:
 #: Kept at ADR 0012's figure because the measurement says it is not a
@@ -226,7 +226,7 @@ FRAME_CONSISTENCY_TOLERANCE_CM1 = 100.0
 #: between 0.01 and 0.99 would change no answer.
 RIGID_BODY_OVERLAP_THRESHOLD = 0.90
 
-#: ADR 0012: "more than about 70% identifies a torsion".
+#: "more than about 70% identifies a torsion".
 #:
 #: Kept, and -- unlike when this constant was first written -- on evidence
 #: from both sides of the line.
@@ -237,7 +237,7 @@ RIGID_BODY_OVERLAP_THRESHOLD = 0.90
 #: spectrum reaches 0.472, and everything above 675 cm-1 is below 0.10.
 #:
 #: The negative case is now the live corpus. All 18 imaginary-mode records
-#: (2026-08-11) carry a genuine reaction coordinate, between them spanning
+#: carry a genuine reaction coordinate, between them spanning
 #: 6 to 27 atoms and 0 to 7 rotatable bonds -- exactly the population most
 #: able to produce a false torsion, since a reaction coordinate in a floppy
 #: molecule has every chance to look like one. The highest torsional

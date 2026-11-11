@@ -1,4 +1,4 @@
-"""Bundle workflow for ``POST /api/v1/uploads/computed-species`` (DR-0029).
+"""Bundle workflow for ``POST /api/v1/uploads/computed-species``.
 
 Self-contained: identity + conformers + per-conformer calcs + artifacts +
 optional thermo, persisted in one SQL transaction with bundle-level
@@ -455,7 +455,7 @@ def persist_computed_species_upload(
             ),
         )
 
-        # FOLLOW-UP (DR-0029): the additional-calc anchor logic below
+        # FOLLOW-UP: the additional-calc anchor logic below
         # (output-geometry link + auto-edge to primary opt) duplicates
         # ``app.services.calculation_resolution.persist_additional_calculations``.
         # Inline here because the bundle needs to thread observation_id
@@ -839,7 +839,7 @@ def persist_computed_species_upload(
         # An assembled composite's inputs are written, and its total checked,
         # now that every calculation exists, every ``depends_on`` edge is wired
         # and every artifact has had the chance to fill a single-point energy
-        # the payload left out (ADR 0021, P5). Before the review policy, which
+        # the payload left out. Before the review policy, which
         # can freeze them.
         upload_warnings.extend(
             finalize_composite_inputs(
