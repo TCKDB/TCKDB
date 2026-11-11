@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.174.2 - 2026-11-11
+
+Docstrings, comments and field descriptions in the package are reworded to state behaviour only. No refusal, warning, field or behaviour changes.
+
 ## 0.174.1 - 2026-11-11
 
 The check descriptions the generated producer contract quotes (`contract/`) are shortened to one sentence per check and per escape hatch. No refusal, warning, field or behaviour changes.

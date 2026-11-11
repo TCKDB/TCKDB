@@ -46,7 +46,7 @@ class NetworkSelectedKineticsExportRequest(BaseModel):
     include_reported: bool = Field(
         default=False,
         description="CHEMKIN only: a solve of kind 'reported' (rates transcribed from a publication) is written into a "
-        "mechanism only when this is true, and then annotated with its literature (ADR 0010).",
+        "mechanism only when this is true, and then annotated with its literature.",
     )
     naming_policy: Literal["formula", "public_ref"] = "formula"
 

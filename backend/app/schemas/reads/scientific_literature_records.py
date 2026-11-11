@@ -129,7 +129,7 @@ class LiteratureLinkedRecordSummary(BaseModel):
     network_ref: str | None = None
     network_solve_ref: str | None = None
     # Whether a linked ``network_solve`` solved the master equation here or
-    # transcribed the rates out of a publication (ADR 0010). ``reported`` is
+    # transcribed the rates out of a publication. ``reported`` is
     # the *only* kind required to carry a literature link, so every reported
     # solve is listed on this surface and its ``me_method`` — the sole
     # free-text ``label`` for the type — is in practice NULL, though nothing

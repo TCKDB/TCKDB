@@ -1,4 +1,4 @@
-"""Recomputing an assembled composite's total, and the correlation convention (ADR 0021, P5).
+"""Recomputing an assembled composite's total, and the correlation convention.
 
 Pure arithmetic over plain numbers: the backend and a producer's own pre-flight
 check run the same functions. What is pinned:

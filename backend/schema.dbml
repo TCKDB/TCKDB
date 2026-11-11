@@ -1243,7 +1243,7 @@ Table calc_composite_input {
     `term_position >= 0` [name: 'ck_calc_composite_input_term_position_non_negative']
   }
 
-  Note: 'One input of an assembled composite: the calculation that fills a scheme slot (ADR 0021, P5).'
+  Note: 'One input of an assembled composite: the calculation that fills a scheme slot.'
 }
 
 Table calc_composite_log_check {
@@ -1262,7 +1262,7 @@ Table calc_composite_log_check {
     `parser_version >= 1` [name: 'ck_calc_composite_log_check_parser_version_positive']
   }
 
-  Note: 'What comparing a composite calculation with one attached output log concluded (ADR 0021, P7a).'
+  Note: 'What comparing a composite calculation with one attached output log concluded.'
 }
 
 Table calc_composite_result {
@@ -1278,7 +1278,7 @@ Table calc_composite_result {
     `recipe_zpe_hartree IS NULL OR (recipe_zpe_hartree >= 0 AND recipe_zpe_hartree < 'Infinity'::float8)` [name: 'ck_calc_composite_result_recipe_zpe_non_negative_finite']
   }
 
-  Note: 'The energy of a ``composite`` calculation (ADR 0021), 1:1 with ``calculation``.'
+  Note: 'The energy of a ``composite`` calculation, 1:1 with ``calculation``.'
 }
 
 Table calc_composite_term {
@@ -1608,7 +1608,7 @@ Table calc_sp_energy_component {
     `value_hartree > '-Infinity'::float8 AND value_hartree < 'Infinity'::float8` [name: 'ck_calc_sp_energy_component_value_hartree_finite']
   }
 
-  Note: 'One deposited part of a single point\'s electronic energy (ADR 0021).'
+  Note: 'One deposited part of a single point\'s electronic energy.'
 }
 
 Table calc_sp_result {
@@ -2519,7 +2519,7 @@ Table kinetics_arrhenius_entry {
     `entry_index >= 1` [name: 'ck_kinetics_arrhenius_entry_arrhenius_entry_index_ge_1']
   }
 
-  Note: 'One modified-Arrhenius term of a sum-of-Arrhenius rate (DR-0036).'
+  Note: 'One modified-Arrhenius term of a sum-of-Arrhenius rate.'
 }
 
 Table kinetics_bath_gas {
@@ -2604,7 +2604,7 @@ Table kinetics_falloff {
   sri_e double
   note text
 
-  Note: 'Pressure-dependent falloff parameters for a kinetics record (DR-0032).'
+  Note: 'Pressure-dependent falloff parameters for a kinetics record.'
 }
 
 Table kinetics_interpretation_assignment {

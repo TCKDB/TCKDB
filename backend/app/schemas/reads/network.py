@@ -123,7 +123,7 @@ class NetworkSolveEnergyTransferRead(ORMBaseSchema):
     ``scope`` says what the declaration was specified over, so a consumer can
     tell a well-resolved ⟨ΔE⟩down from one model declared for the whole
     network. On a ``network_wide`` row ``state_id`` and
-    ``collider_species_entry_id`` are null by declaration (ADR 0009).
+    ``collider_species_entry_id`` are null by declaration.
     """
 
     id: int
@@ -231,7 +231,7 @@ class _NetworkSolveBase(ORMBaseSchema):
     created_at: datetime
     created_by: int | None = None
 
-    # Solved here, or transcribed from a publication (ADR 0010). Required,
+    # Solved here, or transcribed from a publication. Required,
     # no default: the column is NOT NULL, so a read schema that had to
     # supply one would be inventing provenance rather than reporting it.
     kind: NetworkSolveKind

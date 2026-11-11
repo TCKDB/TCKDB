@@ -18,10 +18,9 @@ There is no ``is_full`` column. "Is the store currently full?" is
 computed as head-of-log by
 :func:`app.services.artifact_storage_capacity.current_full_state`. A
 stored flag would be a second source of truth able to disagree with the
-log it summarises, which is the ``is_current`` shape ADR 0007 rejected
-for curated selections and ADR 0003 for accepted science. The same
-reasoning applies here for the same reason: a claim about a subject is
-stored beside it, never inside it, and a summary that can drift from its
+log it summarises, which is the stored ``is_current`` shape that curated
+selections and accepted science avoid for the same reason: a claim about a
+subject is stored beside it, never inside it, and a summary that can drift from its
 evidence is worse than no summary.
 
 Nothing here is ever updated or deleted. Recovery is a **new**

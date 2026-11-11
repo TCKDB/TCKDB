@@ -128,7 +128,7 @@ class SpeciesCalculationsSearchRequest(BaseModel):
     # Explicit handles (optional)
     species_id: int | None = None
     species_entry_id: int | None = None
-    # Phase C: ref siblings for species / species_entry identity handles.
+    # ref siblings for species / species_entry identity handles.
     species_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
     species_entry_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
 
@@ -151,7 +151,7 @@ class SpeciesCalculationsSearchRequest(BaseModel):
     scientific_origin: ScientificOriginKind | None = None
     calculation_quality: CalculationQuality | None = None
 
-    # Trust filters (shallow per D7)
+    # Trust filters (shallow)
     min_review_status: RecordReviewStatus | None = None
     include_rejected: bool = False
     include_deprecated: bool = False
@@ -176,7 +176,7 @@ class SpeciesCalculationsSearchRequest(BaseModel):
 class SpeciesCalculationsSpeciesContext(BaseModel):
     """Resolved species/species-entry identity context for a calculation.
 
-    Phase B: ``species_ref`` and ``species_entry_ref`` are the public stable
+    ``species_ref`` and ``species_entry_ref`` are the public stable
     handles alongside the integer IDs.
 
     ``species_entry_label`` is the short discriminator that says *which*
@@ -209,7 +209,7 @@ class SpeciesCalculationsSpeciesContext(BaseModel):
 class CalculationCoreBlock(BaseModel):
     """Direct calculation-row metadata.
 
-    Phase B: ``calculation_ref`` is the public stable handle alongside
+    ``calculation_ref`` is the public stable handle alongside
     ``calculation_id``.
     """
 
@@ -226,8 +226,7 @@ class DerivedSinglePointEnergy(BaseModel):
 
     A geometry optimisation computes the electronic energy at its final
     geometry; running a separate ``sp`` calculation at the *same* level of
-    theory would reproduce that number, not a different one (the house
-    rule behind ``docs/decisions`` on SP-vs-opt energy). When the opt's
+    theory would reproduce that number, not a different one. When the opt's
     owner — a conformer observation for a species-owned calculation, a
     transition-state entry for a TS-owned one, whichever owner the
     calculation actually has — has no independent ``sp`` calculation at
@@ -285,7 +284,7 @@ class ConformerContextBlock(BaseModel):
     The service must never fabricate conformer associations; this block is
     populated only when ``Calculation.conformer_observation_id`` is set.
 
-    Phase B: ``*_ref`` siblings carry the public stable handles for the
+    ``*_ref`` siblings carry the public stable handles for the
     observation, group, and assignment scheme.
     """
 
@@ -312,7 +311,7 @@ class GeometryRef(BaseModel):
 class GeometryBlock(BaseModel):
     """Geometry IDs and metadata. Full XYZ deferred per spec.
 
-    Phase B: ``primary_output_geometry_ref`` and the ``input_geometries`` /
+    ``primary_output_geometry_ref`` and the ``input_geometries`` /
     ``output_geometries`` object arrays carry the public stable handles. The
     bare ``*_id`` / ``*_ids`` fields are preserved for the compatibility
     window.
@@ -344,7 +343,7 @@ class SupportingCalculationRef(BaseModel):
 class CalculationProvenanceBlock(BaseModel):
     """Calculation-level provenance summary.
 
-    Phase B: ``supporting_calculations`` object array and ``submission_ref``
+    ``supporting_calculations`` object array and ``submission_ref``
     carry the public stable handles alongside the legacy
     ``supporting_calculation_ids`` and ``submission_id`` fields.
 
@@ -386,30 +385,29 @@ class SpeciesCalculationsSearchRecord(BaseModel):
     energy: CalculationEnergyBlock | None = None
 
     #: Summary projection of this calculation's ``calc_freq_result`` row:
-    #: ``n_imag``, the imaginary wavenumber, the ZPE, and ADR 0012's
-    #: stored judgement. The **same fragment** the
+    #: ``n_imag``, the imaginary wavenumber, the ZPE, and the
+    #: stored imaginary-mode judgement. The **same fragment** the
     #: ``/scientific/calculations/*`` surface serves as ``results.freq``,
     #: imported rather than re-declared, so one table has one public
     #: shape and a consumer moving between the two surfaces parses one
     #: thing.
     #:
-    #: Two of ADR 0012's four persisted fields are transition-state
+    #: Two of the four persisted judgement fields are transition-state
     #: business. ``reaction_coordinate_mode_index`` reads ``null`` on
     #: every record this surface returns, because ``StationaryPointKind``
     #: has no saddle-point member (a species entry is a ``minimum`` or a
     #: ``vdw_complex``, never a TS) and a minimum that designates one is
     #: refused. ``imaginary_mode_structural_flag`` reads ``null`` unless
-    #: the frequency result was judged under the minimum rule (ADR 0012's
-    #: 2026-10-29 note): then it is ``false`` -- every imaginary mode below
+    #: the frequency result was judged under the minimum rule:
+    #: then it is ``false`` -- every imaginary mode below
     #: tau, accepted with a warning, judged and not flagged -- and never
     #: ``true`` here. They are kept rather than trimmed into a
     #: species-only variant, because ``null`` is the honest answer ("never
     #: judged"), and because the other two are *not* TS-specific at all.
     #: ``imaginary_mode_tau_cm1`` / ``imaginary_mode_tau_basis`` are
-    #: recorded for every frequency upload taken since ADR 0012 shipped,
-    #: minima included; nothing was backfilled, so a record older than
-    #: that carries all four as ``null`` — "never judged", not "judged
-    #: and clean". And where a tau *is* stored,
+    #: recorded for every judged frequency upload, minima included; a record
+    #: that was never judged carries all four as ``null`` — "never judged",
+    #: not "judged and clean". And where a tau *is* stored,
     #: ``n_imag_at_or_above_tau`` is what tells a reader that a structure
     #: filed here as a minimum has an imaginary mode above the noise
     #: floor and is not one.

@@ -180,7 +180,7 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         default=KineticsModelKind.modified_arrhenius,
         server_default=KineticsModelKind.modified_arrhenius.value,
     )
-    # Which direction of the reaction this fit describes (DR-0036). NULL =
+    # Which direction of the reaction this fit describes. NULL =
     # unspecified (historical default), so existing rows are unaffected. Lets
     # a forward and a reverse Arrhenius fit for one ``reaction_entry`` coexist
     # distinctly (Chemkin/Cantera round-trip).
@@ -262,7 +262,7 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         ForeignKey("software_release.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
     )
-    # Bridge to the pressure-dependent network counterpart (DR-0036). When set,
+    # Bridge to the pressure-dependent network counterpart. When set,
     # this reaction-level HPL/apparent fit corresponds to the k(T,P) of a
     # specific ``network_kinetics`` channel-under-solve, so "give me k(T,P) for
     # reaction R" resolves in one join instead of a two-query split. Nullable /
@@ -586,7 +586,7 @@ class KineticsTunnelingApplication(Base):
 
 
 class KineticsFalloff(Base):
-    """Pressure-dependent falloff parameters for a kinetics record (DR-0032).
+    """Pressure-dependent falloff parameters for a kinetics record.
 
     Falloff reactions transition between a low-pressure limit (k0,
     effectively third-order) and a high-pressure limit (k∞, second-order).
@@ -712,7 +712,7 @@ class KineticsPlog(Base):
 
     A PLOG rate coefficient is given as modified-Arrhenius parameters at a
     set of pressures; k(T,P) is interpolated in log P between the bracketing
-    entries. Stored reaction-level (DR-0032 Part C) so a literature PLOG fit
+    entries. Stored reaction-level so a literature PLOG fit
     can be deposited without a master-equation network/solve. The parent
     ``kinetics.model_kind`` must be ``plog``.
     """
@@ -747,7 +747,7 @@ class KineticsPlog(Base):
 
 
 class KineticsArrheniusEntry(Base):
-    """One modified-Arrhenius term of a sum-of-Arrhenius rate (DR-0036).
+    """One modified-Arrhenius term of a sum-of-Arrhenius rate.
 
     Represents a single term of a Chemkin ``DUPLICATE`` channel: the rate
     coefficient is the *sum* over these entries,
@@ -789,7 +789,7 @@ class KineticsChebyshev(Base):
     """Chebyshev-polynomial k(T,P) surface for a kinetics record.
 
     Stores the n_T × n_P coefficient matrix and the T/P domain over which
-    it is valid. Reaction-level (DR-0032 Part C) so a literature Chebyshev
+    it is valid. Reaction-level so a literature Chebyshev
     fit can be deposited without a master-equation solve. The parent
     ``kinetics.model_kind`` must be ``chebyshev``.
     """

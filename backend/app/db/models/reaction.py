@@ -44,7 +44,7 @@ class ChemReaction(Base, TimestampMixin, PublicRefMixin):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     stoichiometry_hash: Mapped[Optional[str]] = mapped_column(CHAR(64), nullable=True)
-    #: The reaction this row was merged into, or ``NULL`` for a live row (DR-0038).
+    #: The reaction this row was merged into, or ``NULL`` for a live row.
     #: Two reactions whose participants became one species are one reaction. The
     #: row that loses is kept, with its public ref and curation history, and
     #: forwards one hop to the survivor, whose entries it handed over.
@@ -155,7 +155,7 @@ class ReactionEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         foreign_keys="Kinetics.reaction_entry_id",
     )
     #: Atom correspondences across this micro reaction, one per
-    #: transition-state candidate (ADR 0011). Empty is the ordinary state for
+    #: transition-state candidate. Empty is the ordinary state for
     #: everything deposited before atom mapping existed, and for every
     #: barrierless channel.
     atom_maps: Mapped[list["ReactionAtomMap"]] = relationship(
@@ -216,7 +216,7 @@ class ReactionEntryStructureParticipant(Base, TimestampMixin, CreatedByMixin):
         # exists to be the target of ``reaction_atom_map_pair``'s
         # ``(structure_participant_id, side)`` foreign key, which keeps a
         # mapped atom's declared leg in step with the role of the participant
-        # it belongs to. See ADR 0011.
+        # it belongs to.
         UniqueConstraint(
             "id",
             "role",

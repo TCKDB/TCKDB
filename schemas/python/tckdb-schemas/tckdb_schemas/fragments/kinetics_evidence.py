@@ -9,8 +9,8 @@ cross-field checks below, are the single definition of that evidence. Both
 (``POST /uploads/computed-reaction``) use them, so the two routes cannot
 disagree about what a valid interpretation or tunneling block is.
 
-Every reference here is a *public ref* of a record deposited earlier; no
-database id is accepted (the "no FK ids in upload schemas" rule). The
+Every reference here is a *public ref* of a record already deposited; no
+database id is accepted. The
 ``transition_state_entry_ref``/``statmech_ref`` of a record created by the
 same request cannot be known to the depositor in advance, so a request can
 only cite records that already exist.

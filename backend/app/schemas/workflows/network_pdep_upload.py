@@ -18,7 +18,7 @@ Key uniqueness rules:
 This schema expects one connected network component — disconnected subnetworks
 are rejected when channels are explicitly provided.
 
-See DR-0001 for design rationale.
+
 """
 
 import math
@@ -229,11 +229,7 @@ class NetworkSpeciesIn(SchemaBase):
         species's conformer geometries -- it names the geometry the
         calculation ran on.
 
-        Anchoring is ``conformer_key``'s job. This docstring used to
-        attribute it to ``geometry_key``, matching a helper in
-        ``app.workflows.network_pdep`` that dropped the anchor without a word
-        whenever ``geometry_key`` was absent. Both said the same wrong thing,
-        so neither contradicted the other. See
+        Anchoring is ``conformer_key``'s job. See
         ``app.services.conformer_anchoring``.
 
         When a calculation states both keys they must name the same conformer:
@@ -321,7 +317,7 @@ class NetworkSpeciesIn(SchemaBase):
         Runs after the two undeclared-key validators above, so by here each key
         that is set names one of this species's own conformers. The mapping is
         known from the payload alone, so the request schema is the only layer
-        that checks it; the workflow can no longer be handed the contradiction.
+        that checks it; the workflow is never handed the contradiction.
         """
         assert_conformer_primaries_agree(self.conformers)
         assert_calculation_geometry_matches_conformer(
@@ -379,7 +375,7 @@ class NetworkSpeciesIn(SchemaBase):
     def validate_n_imag_matches_species_entry_kind(self) -> Self:
         """Refuse frequency evidence that contradicts the declared kind.
 
-        Definitional, therefore blocking (ADR 0008).
+        Definitional, therefore blocking.
         """
         raise_for_blocking_findings(self.stationary_point_findings())
         return self
@@ -468,8 +464,7 @@ class TransitionStateIn(SchemaBase):
     def validate_reaction_coordinate_contract(self) -> Self:
         """Refuse frequency evidence with no usable reaction coordinate.
 
-        Definitional, therefore blocking (ADR 0008, narrowed by ADR
-        0012: at least one imaginary mode, exactly one designated the
+        Definitional, therefore blocking (at least one imaginary mode, exactly one designated the
         reaction coordinate, and no undeclared mode stiff enough to make
         that designation meaningless).
         """
@@ -708,7 +703,7 @@ class EnergyTransferIn(SchemaBase):
     single-exponential-down for the entire network, and demanding a per-pair
     entry for such a run would force the depositor to paste one number N
     times, fabricating specificity the calculation never had. ``network_wide``
-    lets that be said honestly. See ADR 0009.
+    lets that be said honestly.
 
     :param scope: ``per_well`` (names a state and a collider) or
         ``network_wide`` (names neither, by declaration).
@@ -748,7 +743,7 @@ class EnergyTransferIn(SchemaBase):
     def validate_scope(self) -> Self:
         """The declared scope and the supplied keys must agree.
 
-        This is a definitional check, not an expectation (ADR 0008): a
+        This is a definitional check, not an expectation: a
         ``network_wide`` entry that also names a well contradicts itself, and a
         ``per_well`` entry with no well names nothing. Neither can be produced
         by a correct calculation, so both block.
@@ -1264,7 +1259,7 @@ class NetworkSolveIn(SchemaBase):
         publication (``reported``). A ``reported`` solve is not held to the
         state-energy, channel-barrier or energy-transfer coverage rules — it
         holds none of those inputs — and must supply ``literature`` instead.
-        See ADR 0010.
+
     :param literature: Optional literature submission payload. Required when
         ``kind='reported'``.
     :param software_release: Optional software provenance reference.
@@ -1346,18 +1341,17 @@ class NetworkSolveIn(SchemaBase):
     def validate_kind_requirements(self) -> Self:
         """Hold a computed solve to the master-equation inputs it must have.
 
-        These are the requirements ``min_length`` used to carry. They move
-        here because they apply to one member of ``kind`` and not the other: a
+        These requirements apply to one member of ``kind`` and not the
+        other: a
         computed solve is a claim that the master equation was solved in this
         database, and a solve with no state energies and no source
         calculations does not support it. A reported solve makes no such
-        claim, so the same absence is the expected shape rather than a defect
-        (ADR 0010).
+        claim, so the same absence is the expected shape rather than a defect.
 
         What a reported solve *must* have is the mirror image: the publication
         it was transcribed from, and at least one k(T,P) — a record that
         reports nothing contradicts its own kind. Both are definitional, so
-        both block under ADR 0008. The completeness limitation that *is* an
+        both block. The completeness limitation that *is* an
         expectation rather than a definition — that nobody can re-derive these
         rates — warns instead, in
         ``collect_network_solve_kind_warnings``.
@@ -1887,7 +1881,7 @@ class NetworkPDepUploadRequest(SchemaBase):
             # Solve source calculations must reference defined calculation keys.
             # Named `solve_sc`, not `sc`: the statmech loop earlier in this
             # same function binds `sc` to a `StatmechSourceCalcIn`, so reusing
-            # the name gave the solve entry the statmech entry's static type.
+            # the name would give the solve entry the statmech entry's static type.
             for sc_index, solve_sc in enumerate(self.solve.source_calculations):
                 if solve_sc.calculation_key not in calculation_keys:
                     raise undeclared_key_error(
@@ -2270,7 +2264,7 @@ class NetworkPDepUploadRequest(SchemaBase):
         # not applicable to one whose k(T,P) were transcribed from a
         # publication: the depositor holds none of those inputs and the paper
         # usually never published them, so demanding them refused the deposit
-        # outright instead of recording a weaker but honest record (ADR 0010).
+        # outright instead of recording a weaker but honest record.
         #
         # These rules are the *full* contract and this is the only place that
         # holds it. Migration ``f9b2e6c4a1d7`` adds a deferred constraint
@@ -2294,7 +2288,7 @@ class NetworkPDepUploadRequest(SchemaBase):
             # is what an Arkane or MESS input usually contains. Demanding the
             # cross product there would only get one number pasted N times.
             # The completeness limitation is reported as an UploadWarning
-            # instead (ADR 0008, ADR 0009), never refused.
+            # instead, never refused.
             network_wide = any(
                 item.scope == NetworkEnergyTransferScope.network_wide
                 for item in self.solve.energy_transfer

@@ -106,7 +106,7 @@ class ReactionSearchRequest(BaseModel):
     match: ReactionMatchMode = ReactionMatchMode.contains
     family: str | None = Field(default=None, max_length=_MAX_FAMILY_LENGTH)
 
-    # Phase C: explicit handles (refs) — useful when a caller already has
+    # explicit handles (refs) — useful when a caller already has
     # a reaction/reaction_entry ref from a previous response.
     reaction_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
     reaction_entry_ref: str | None = Field(
@@ -129,7 +129,7 @@ class ReactionSearchRequest(BaseModel):
     def _bound_participant_lengths(cls, value: list[str]) -> list[str]:
         """Reject participant SMILES that exceed the public free-text cap.
 
-        ``smiles_too_long`` is a relationship code as of 2026-08-18: a
+        ``smiles_too_long`` is a relationship code: a
         supplied length against a configured maximum, neither named by
         the code. ``context`` carries both, and both are safe under the
         disclosure line in ``app.api.code_catalogue.Shape`` — the
@@ -195,33 +195,21 @@ class ReactionsBrowseRequest(BaseModel):
     Every SMILES within one field is matched **together, as one group,
     against a single stored side in a single orientation** -- not each
     SMILES independently against whichever side it happens to appear
-    on. Which orientation(s) are tried is now the caller's explicit
-    choice via ``direction`` (below), not a hardcoded setting.
+    on. Which orientation(s) are tried is the caller's explicit
+    choice via ``direction`` (below).
 
-    **Behaviour change (2026-09):** ``direction`` defaults to
-    :attr:`ReactionDirectionQuery.forward`, not ``either``. Before this
-    field existed, the service called the matcher with ``direction=either``
-    unconditionally, so a ``reactant_smiles`` group matched an entry
-    whenever it appeared on **either** stored side -- including entries
-    where it is only a stored *product*, reached through the reverse
-    orientation of a reversible reaction (``matched_direction:
-    "reverse"``). That answers "is this species involved, in either
-    role" rather than the question the field name asks ("is this species
-    a reactant"), and it is why a plain ``reactant_smiles=[H]`` query
-    used to come back with results where ``[H]`` is never a stored
-    reactant at all. ``forward`` is the only default under which
+    ``direction`` defaults to :attr:`ReactionDirectionQuery.forward`, not
+    ``either``. ``forward`` is the only default under which
     ``reactant_smiles`` means "on the stored reactant side" and
-    ``product_smiles`` means "on the stored product side", so it is the
-    default now: a ``reactant_smiles`` group is tried only against the
-    stored reactants, and a ``product_smiles`` group only against the
-    stored products. A caller who wants the old either-direction
-    behaviour -- deliberately, e.g. to also catch reverse-oriented
-    matches on a reversible reaction -- must request
-    ``direction=either`` explicitly; every returned record still carries
-    ``matched_direction`` saying which orientation actually matched.
-    **Existing callers who relied on the old default for
-    ``reactant_smiles`` or ``product_smiles`` will see a different
-    (narrower, and correctly named) result set after this change.**
+    ``product_smiles`` means "on the stored product side": a
+    ``reactant_smiles`` group is tried only against the stored reactants, and
+    a ``product_smiles`` group only against the stored products. ``either``
+    answers "is this species involved, in either role": it also matches
+    entries where the group is only a stored *product*, reached through the
+    reverse orientation of a reversible reaction (``matched_direction:
+    "reverse"``). A caller who wants that must request ``direction=either``
+    explicitly; every returned record still carries ``matched_direction``
+    saying which orientation actually matched.
 
     ``direction=reverse`` is also legal here: it tries a
     ``reactant_smiles`` group against the stored *products* and a
@@ -290,13 +278,13 @@ class ReactionsBrowseRequest(BaseModel):
 class ReactionParticipantSummary(EntryFacetFields):
     """Reactant or product participant within a reaction-entry record.
 
-    Phase B: ``species_entry_ref`` is the public stable handle for the
+    ``species_entry_ref`` is the public stable handle for the
     participant species entry.
 
     ``smiles`` is the *species'* graph identity, shared by every entry
     under it, so two participants that are different stereoisomers of
-    one species render identically from it alone -- the hydrazine
-    network's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an
+    one species render identically from it alone -- for example ``N=N``
+    carries a ``Z`` entry and an ``E`` entry, and an
     isomerisation between them reads as running from a species to
     itself. ``species_entry_label`` is what tells them apart: ``"E"``,
     ``"Z"``, ``"excited T1"``, or ``None`` for the plain ground-state,
@@ -327,7 +315,7 @@ class ReactionAvailability(BaseModel):
     """Boolean availability flags + counts per L1.
 
     ``has_atom_map`` says whether the record states which atom of the
-    reactants and products is which atom of the transition state (ADR 0011).
+    reactants and products is which atom of the transition state.
     ``false`` is the ordinary state for everything deposited before atom
     mapping existed and for every barrierless channel; it means the record is
     incomplete, not wrong. It is here rather than only on the deep read so a
@@ -345,7 +333,7 @@ class ReactionAvailability(BaseModel):
 class ReactionScientificRecord(BaseModel):
     """One reaction-entry row from /scientific/reactions/search.
 
-    Phase B: ``reaction_ref`` and ``reaction_entry_ref`` are the public
+    ``reaction_ref`` and ``reaction_entry_ref`` are the public
     stable handles for the chem-reaction-level identity and the
     reaction-entry event, respectively.
     """

@@ -1,8 +1,7 @@
 """Shared statmech upload fragments.
 
 Every reference out of these fragments is a **local string key**, never a
-database row id (DR-0029 Requirement 1, and the "no FK IDs in upload
-schemas" rule). A depositor can name a calculation they declared in the
+database row id. A depositor can name a calculation they declared in the
 same request; they cannot know its primary key, and a contract that asks
 for one is only usable by something that has already queried the
 database.
@@ -73,7 +72,7 @@ class StatmechTorsionCoordinateIn(SchemaBase):
 class StatmechSourceCalcIn(SchemaBase):
     """Statmech → calculation link, by local calculation key.
 
-    Only a key is accepted (DR-0029 Requirement 1). The key resolves
+    Only a key is accepted. The key resolves
     against whichever calc-key namespace the enclosing request defines —
     the bundle's global namespace, the standalone statmech upload's
     inline ``calculations`` list, or the keys a conformer upload put on

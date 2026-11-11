@@ -1,4 +1,4 @@
-"""Signed linear coefficients of the extrapolation formulas (ADR 0021, P7a).
+"""Signed linear coefficients of the extrapolation formulas.
 
 For the three formulas that are linear in the input energies,
 ``E_CBS = sum_i c_i * E_i``, and a read of a scheme reports the ``c_i`` per input. The

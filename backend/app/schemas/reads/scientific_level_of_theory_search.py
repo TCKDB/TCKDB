@@ -81,7 +81,7 @@ class LevelOfTheorySearchRequest(BaseModel):
     dft_rung_min: DftRungBound = None
     dft_rung_max: DftRungBound = None
     spin_treatment: SpinTreatment | None = None
-    #: Frozen-core or all-electron (ADR 0021). Matches only levels that *state* it; a level whose
+    #: Frozen-core or all-electron. Matches only levels that *state* it; a level whose
     #: producer did not say is never "frozen core by default", so it matches neither value.
     core_treatment: CoreTreatment | None = None
     relativistic_hamiltonian: RelativisticHamiltonian | None = None
@@ -147,7 +147,7 @@ class LevelOfTheoryBrowseRequest(BaseModel):
     dft_rung_min: DftRungBound = None
     dft_rung_max: DftRungBound = None
     spin_treatment: SpinTreatment | None = None
-    #: Frozen-core or all-electron (ADR 0021). Matches only levels that *state* it; a level whose
+    #: Frozen-core or all-electron. Matches only levels that *state* it; a level whose
     #: producer did not say is never "frozen core by default", so it matches neither value.
     core_treatment: CoreTreatment | None = None
     relativistic_hamiltonian: RelativisticHamiltonian | None = None

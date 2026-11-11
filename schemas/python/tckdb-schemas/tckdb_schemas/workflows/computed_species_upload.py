@@ -4,7 +4,7 @@ The bundle is a single self-contained payload that carries identity +
 conformers + per-conformer calculations + artifacts + optional thermo,
 statmech and transport.
 All cross-references inside the bundle are local string keys; **no
-database FK ids are accepted anywhere** (DR-0029 Requirement 1).
+database FK ids are accepted anywhere**.
 """
 
 from __future__ import annotations
@@ -102,7 +102,7 @@ from tckdb_schemas.workflows.transport_upload import TransportUploadPayload
 
 
 # Field names that are forbidden anywhere in the bundle payload tree.
-# DR-0029 Requirement 1: the bundle is self-contained — every cross-
+# The bundle is self-contained — every cross-
 # reference is a local string key. A producer accidentally serializing a
 # DB FK id (e.g. ``existing_calculation_id`` or ``source_calculation_id``)
 # inside ``parameters_json`` would otherwise leak past Pydantic's
@@ -180,8 +180,8 @@ class CalculationInBundle(SchemaBase):
 
     Carries everything the primitive ``CalculationWithResultsPayload``
     carries plus a local ``key``, plus optional ``depends_on`` and
-    ``artifacts``. Crucially does NOT carry ``existing_calculation_id``
-    (DR-0029 Requirement 1) — the bundle is self-contained.
+    ``artifacts``. Crucially does NOT carry ``existing_calculation_id``;
+    the bundle is self-contained.
     """
 
     key: str = Field(min_length=1)
@@ -303,7 +303,7 @@ class CalculationInBundle(SchemaBase):
 
     @model_validator(mode="after")
     def validate_sp_energy_components(self) -> Self:
-        """Components sit on a single point and agree with its energy (ADR 0021)."""
+        """Components sit on a single point and agree with its energy."""
         check_sp_energy_components(
             [(c.component, c.value_hartree) for c in self.sp_energy_components],
             calculation_type=self.type,
@@ -398,7 +398,7 @@ class CalculationInBundle(SchemaBase):
 
     @model_validator(mode="after")
     def reject_database_id_fields(self) -> Self:
-        """DR-0029 Requirement 1: bundle must not carry DB FK ids.
+        """The bundle must not carry DB FK ids.
 
         Walks ``parameters_json`` recursively to catch FK ids that would
         bypass the model's ``extra="forbid"`` (which only enforces
@@ -426,14 +426,11 @@ def require_opt_primary_unless_monatomic(
     """Refuse a conformer primary that is not an ``opt``, unless the geometry is one atom.
 
     An atom has no geometry to optimise: its geometry is a point, and a
-    program run on it is a single point. Producers used to relabel that
-    single point as an ``opt`` to get past this check, which stored a
-    calculation that was not what ran (same log and energy as the ``sp``,
-    ``converged=false``, and a level of theory and program that were not the
-    ones used). An ``sp`` primary is the honest shape, so it is accepted for
-    a geometry of exactly one atom and for nothing else.
+    program run on it is a single point. An ``sp`` primary is the honest
+    shape, so it is accepted for a geometry of exactly one atom and for
+    nothing else.
 
-    The other exception is a ``composite`` primary (ADR 0021). A named
+    The other exception is a ``composite`` primary. A named
     composite method (CBS-QB3, G4, ...) runs its own optimisation as the first
     step of the recipe, so the one program run that produced the conformer's
     geometry is the composite calculation, and calling it an ``opt`` would
@@ -448,7 +445,7 @@ def require_opt_primary_unless_monatomic(
 
     Only ``sp`` (on one atom) and ``composite`` are exempt. A ``freq``,
     ``scan`` or any other type is not a conformer's defining calculation, and
-    accepting it would widen the rule past what was decided.
+    accepting it would widen the rule.
 
     :param primary_type: The declared type of the conformer's primary calculation.
     :param xyz_text: The conformer's own geometry.
@@ -457,7 +454,7 @@ def require_opt_primary_unless_monatomic(
         (or a ``composite``).
     """
     if primary_type is CalculationType.composite:
-        # Only a program-run composite produced the geometry (ADR 0021, P5).
+        # Only a program-run composite produced the geometry.
         assert_assembled_not_primary(primary_composite_result, subject=subject)  # type: ignore[arg-type]
         return
     if primary_type is CalculationType.opt:
@@ -465,7 +462,7 @@ def require_opt_primary_unless_monatomic(
     # The counter reaches no coded refusal (it counts through
     # ``xyz_block_shape`` and returns None for a block it cannot count), so a
     # direct call does not make the producer-contract tracer list
-    # ``atom_map_geometry_unparseable`` against this rule (#623).
+    # ``atom_map_geometry_unparseable`` against this rule.
     n_atoms = atom_count_of_xyz(xyz_text)
     if primary_type is CalculationType.sp and n_atoms == 1:
         return
@@ -489,7 +486,7 @@ class ConformerInBundle(SchemaBase):
     """One conformer with its primary calculation + additional calcs.
 
     The primary is an ``opt``, with one exception: a conformer whose geometry
-    is a single atom may carry an ``sp`` primary instead (#610). See
+    is a single atom may carry an ``sp`` primary instead. See
     :func:`require_opt_primary_unless_monatomic`.
     """
 
@@ -546,8 +543,8 @@ class ThermoSourceCalcInBundle(SchemaBase):
     """Thermo → calc link by local key.
 
     Only ``calculation_key`` is allowed inside a bundle.
-    ``existing_calculation_id`` (DR-0028) is the primitive-endpoint
-    mechanism and is intentionally not present here (DR-0029 Requirement 1).
+    ``existing_calculation_id`` is the primitive-endpoint
+    mechanism and is intentionally not present here.
     """
 
     calculation_key: str = Field(min_length=1)
@@ -650,7 +647,7 @@ class TransportSourceCalcInBundle(SchemaBase):
 
     Same shape and rule as :class:`ThermoSourceCalcInBundle`: only
     ``calculation_key`` is accepted inside a bundle, resolving against the
-    bundle's global calculation-key namespace (DR-0029 Requirement 1).
+    bundle's global calculation-key namespace.
     """
 
     calculation_key: str = Field(min_length=1)
@@ -702,12 +699,11 @@ class TransportInBundle(TransportUploadPayload):
 
 
 #: Statmech → calc link by local key. Mirrors ``ThermoSourceCalcInBundle``:
-#: only ``calculation_key`` is accepted inside the bundle (DR-0029
-#: Requirement 1), resolving against the bundle's global calc-key
-#: namespace. This used to be a bundle-only class; it is now an alias for
-#: the shared :class:`~tckdb_schemas.statmech_bits.StatmechSourceCalcIn`,
+#: only ``calculation_key`` is accepted inside the bundle,
+#: resolving against the bundle's global calc-key namespace. It is an alias
+#: for the shared :class:`~tckdb_schemas.statmech_bits.StatmechSourceCalcIn`,
 #: because the conformer and standalone-statmech paths express the same
-#: link the same way and one concept should be one wire component. A bare
+#: link the same way. A bare
 #: ``X = SomeClass`` assignment is a variable, not a type, to a type
 #: checker -- hence the explicit ``TypeAlias``.
 StatmechSourceCalcInBundle: TypeAlias = StatmechSourceCalcIn
@@ -939,8 +935,7 @@ class ComputedSpeciesUploadRequest(SchemaBase):
 
     ``note`` is **not** persisted by this route. It is recorded here so
     the omission is stated rather than discovered: the bundle has no row
-    of its own to carry a bundle-level note, and choosing one is a
-    separate decision from wiring a field that already has a home.
+    of its own to carry a bundle-level note.
     """
 
     # A minimal valid payload. Published as the JSON Schema's ``examples``, in
@@ -1057,8 +1052,7 @@ class ComputedSpeciesUploadRequest(SchemaBase):
 
         Answers with the same code and the same ``context`` keys as
         ``app.workflows.computed_species``'s seam does for the identical
-        mistake, so a depositor cannot tell which layer caught them
-        (ADR 0017). The prose is unchanged from before it had a code.
+        mistake, so a depositor cannot tell which layer caught them.
         """
         defined = self._all_calc_keys()
         for conf in self.conformers:
@@ -1120,7 +1114,7 @@ class ComputedSpeciesUploadRequest(SchemaBase):
     def validate_n_imag_matches_species_entry_kind(self) -> Self:
         """Refuse frequency evidence that contradicts the declared kind.
 
-        Definitional, therefore blocking (ADR 0008).
+        Definitional, therefore blocking.
         """
         raise_for_blocking_findings(self.stationary_point_findings())
         return self

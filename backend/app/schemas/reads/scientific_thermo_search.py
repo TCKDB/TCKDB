@@ -96,7 +96,7 @@ class ThermoSearchRequest(BaseModel):
     electronic_state_kind: SpeciesEntryStateKind | None = None
     species_entry_kind: StationaryPointKind | None = None
 
-    # Phase C: optional explicit handles for follow-up lookups.
+    # optional explicit handles for follow-up lookups.
     species_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
     species_entry_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
 
@@ -148,7 +148,7 @@ class ThermoSearchRequest(BaseModel):
 class ThermoSearchSpeciesContext(BaseModel):
     """Resolved species/species-entry identity context for a thermo record.
 
-    Phase B: ``species_ref`` and ``species_entry_ref`` are the public
+    ``species_ref`` and ``species_entry_ref`` are the public
     stable handles alongside the integer IDs.
 
     ``species_entry_label`` is the short discriminator that says *which*

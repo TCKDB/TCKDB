@@ -48,8 +48,8 @@ from tckdb_schemas.workflows.transport_upload import TransportUploadPayload
 class ElectronicLevelIn(SchemaBase):
     """One electronic energy level for the electronic partition function.
 
-    Ordered (energy, degeneracy) pairs relative to the ground state
-    (DR-0033). E.g. OH X²Π: level 1 (0 cm⁻¹, g=2), level 2 (~139 cm⁻¹,
+    Ordered (energy, degeneracy) pairs relative to the ground state.
+    E.g. OH X²Π: level 1 (0 cm⁻¹, g=2), level 2 (~139 cm⁻¹,
     g=2). ``level_index`` is 1-based and unique within a statmech record.
     """
 
@@ -221,7 +221,7 @@ class ConformerCalculationIn(CalculationWithResultsPayload):
     The key is what the nested statmech block points at. It exists so a
     depositor can say "the statmech's vibrational basis is *that* freq
     job" using a name they chose, rather than a calculation row id they
-    would have to query for (DR-0029 Requirement 1).
+    would have to query for.
 
     Optional by design: a payload with no statmech cross-references never
     needs one, and every payload written before keys existed stays valid.
@@ -307,7 +307,7 @@ class ConformerUploadRequest(SchemaBase):
 
     @model_validator(mode="after")
     def validate_primary_is_not_an_assembled_composite(self) -> Self:
-        """The primary produced the geometry; an assembled composite produced nothing (ADR 0021)."""
+        """The primary produced the geometry; an assembled composite produced nothing."""
         assert_assembled_not_primary(self.calculation.composite_result, subject="calculation")
         return self
 
@@ -372,8 +372,7 @@ class ConformerUploadRequest(SchemaBase):
         The code is ``statmech_calculation_key_undeclared`` because that is
         what ``app.services.statmech_resolution`` answers when the same
         typo survives to the write path — this route reaches that seam, and
-        ADR 0017 says the depositor must not be able to tell which of the
-        two caught them.
+        the depositor cannot tell which of the two caught them.
         """
         if self.statmech is None:
             return self
@@ -479,7 +478,7 @@ class ConformerUploadRequest(SchemaBase):
     def validate_n_imag_matches_species_entry_kind(self) -> Self:
         """Refuse frequency evidence that contradicts the declared kind.
 
-        Definitional, therefore blocking (ADR 0008).
+        Definitional, therefore blocking.
         """
         raise_for_blocking_findings(self.stationary_point_findings())
         return self

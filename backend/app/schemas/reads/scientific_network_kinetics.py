@@ -116,8 +116,7 @@ class NetworkKineticsSolveContext(BaseModel):
     because it qualifies *these rates*: it says whether the k(T,P) in this
     record were produced by a master equation this database holds, or
     transcribed from a publication whose inputs it does not. A consumer
-    pulling rates should not have to make a second request to find that out
-    (ADR 0010).
+    pulling rates should not have to make a second request to find that out.
     """
 
     network_solve_id: int | None = None
@@ -125,7 +124,7 @@ class NetworkKineticsSolveContext(BaseModel):
     # Required, no default. ``network_kinetics.solve_id`` is NOT NULL and
     # ``network_solve.kind`` is NOT NULL, so this is always knowable; a
     # default could only mask a builder that forgot to project it, and the
-    # value it would mask with is the stronger claim (ADR 0010).
+    # value it would mask with is the stronger claim.
     kind: NetworkSolveKind
     me_method: str | None = None
 

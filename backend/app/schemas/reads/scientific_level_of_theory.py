@@ -5,8 +5,8 @@ Covers:
 - ``GET /api/v1/scientific/level-of-theories/{level_of_theory_ref_or_id}``
 - ``GET/POST /api/v1/scientific/level-of-theories/search``
 
-``level_of_theory`` is a first-class, deduplicated provenance identity
-(DR-0034), keyed by ``lot_hash`` over ``method, basis, aux_basis,
+``level_of_theory`` is a first-class, deduplicated provenance identity,
+keyed by ``lot_hash`` over ``method, basis, aux_basis,
 cabs_basis, dispersion, solvent, solvent_model, spin_treatment``, plus ``core_treatment``,
 ``relativistic_hamiltonian``, ``pno_truncation`` and ``ri_approximation`` when stated.
 It is not in ``SubmissionRecordType``, so it has no per-row review
@@ -83,7 +83,7 @@ class LevelOfTheoryCoreBlock(BaseModel):
     the enumeration risk internal ids exist to withhold.
 
     ``aux_basis``/``cabs_basis`` are part of ``lot_hash``'s
-    identity inputs (DR-0034) alongside the fields already served
+    identity inputs alongside the fields already served
     elsewhere; a page whose whole point is showing what distinguishes one
     level of theory from another should not silently drop two of them. There is no ``label`` field: the ORM row carries no such column
     (unlike ``LevelOfTheorySummary.label``, which is a cross-record
@@ -102,14 +102,14 @@ class LevelOfTheoryCoreBlock(BaseModel):
     solvent: str | None = None
     solvent_model: str | None = None
     spin_treatment: SpinTreatment | None = None
-    #: Frozen-core or all-electron; ``None`` = not stated (ADR 0021).
+    #: Frozen-core or all-electron; ``None`` = not stated.
     core_treatment: CoreTreatment | None = None
     #: Method qualifiers; ``None`` = not stated. Each is part of ``lot_hash`` only when set.
     relativistic_hamiltonian: RelativisticHamiltonian | None = None
     pno_truncation: PnoTruncation | None = None
     ri_approximation: RiApproximation | None = None
     lot_hash: str
-    #: The composite recipe this level names (ADR 0021), or ``None`` for an
+    #: The composite recipe this level names, or ``None`` for an
     #: ordinary level. Not part of ``lot_hash``.
     composite_scheme: CompositeSchemeSummary | None = None
     created_at: datetime
@@ -117,7 +117,7 @@ class LevelOfTheoryCoreBlock(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def label(self) -> str:
-        """The level written in full, for display (ADR 0021, P7b).
+        """The level written in full, for display.
 
         The same text as ``LevelOfTheorySummary.label``: ``method/basis`` then each stated part of
         the level's identity, from :func:`app.chemistry.level_label.render_level_label`. Derived, never
@@ -173,11 +173,10 @@ class LevelOfTheoryFrequencyScaleFactorProvenance(BaseModel):
     """One underlying ``frequency_scale_factor`` row inside a dedup group.
 
     A level of theory can carry several FSF rows that all evaluate to the
-    same ``(scale_kind, value)`` pair -- ten of them for b3lyp/def2tzvp on
-    the live archive today, one per distinct producing workflow-tool
-    release. Each one is still a separate depositor action and keeps its
+    same ``(scale_kind, value)`` pair -- for example one per distinct
+    producing workflow-tool release. Each one is still a separate depositor action and keeps its
     own ref and provenance here; only the *grouping* collapses, never the
-    rows themselves (methods-surface plan §4.2 item 4).
+    rows themselves.
     """
 
     frequency_scale_factor_ref: str
@@ -233,8 +232,7 @@ class LevelOfTheorySoftwareUsage(BaseModel):
 
     ``version`` is ``None`` -- never ``""`` -- when the ``software_release``
     row(s) behind this pair carry no recorded version. Absence is stated,
-    not implied: on the live archive, 2 of 3 software packages have no
-    version recorded at all, and rendering that as a blank string would
+    not implied: rendering a missing version as a blank string would
     read as "we asked and it was blank" rather than "no one recorded it".
     """
 
@@ -246,8 +244,7 @@ class LevelOfTheorySoftwareUsage(BaseModel):
 class LevelOfTheoryWorkflowToolUsage(BaseModel):
     """One ``(workflow_tool, version)`` pair observed running >=1
     calculation at this level of theory. Same absent-version rule as
-    :class:`LevelOfTheorySoftwareUsage` -- on the live archive only 10 of
-    ARC's 416 calculations carry a recorded workflow-tool-release version.
+    :class:`LevelOfTheorySoftwareUsage`.
     """
 
     workflow_tool: str
@@ -260,13 +257,10 @@ class LevelOfTheorySoftwareBreakdown(BaseModel):
     ran calculations at this level of theory, and how many.
 
     Usage-derived, same ``INNER JOIN`` discipline as ``list_software`` /
-    ``list_workflow_tools`` in ``app/services/scientific_read/meta.py``
-    (2026-08): a software package or workflow tool with zero calculations
+    ``list_workflow_tools`` in ``app/services/scientific_read/meta.py``:
+    a software package or workflow tool with zero calculations
     at *this* level of theory is absent from the corresponding list, never
-    present with a zero count. This is the closed gap named in the
-    methods-surface plan §5.3 -- establishing this mapping by hand cost 12
-    ``calculations/search?lot_ref=&software=`` calls before this endpoint
-    existed.
+    present with a zero count.
     """
 
     software: list[LevelOfTheorySoftwareUsage]
@@ -283,7 +277,7 @@ class LevelOfTheoryEvidenceSummary(BaseModel):
 
     ``calculation_usage_count`` is usage-derived: an ``INNER JOIN`` from
     ``calculation.lot_id``, the same discipline ``list_software`` /
-    ``list_workflow_tools`` already apply (2026-08). A level of theory
+    ``list_workflow_tools`` already apply. A level of theory
     with zero attributing calculations does not appear in
     ``/level-of-theories/search`` at all -- see that endpoint's own
     docstring.
@@ -298,12 +292,9 @@ class LevelOfTheoryEvidenceSummary(BaseModel):
     #: ``_software_usage_rows`` in
     #: ``app/services/scientific_read/level_of_theory.py``) -- counting
     #: the distinct package names in those rows, not a separate
-    #: ``COUNT(DISTINCT ...)`` query. This is a deliberate choice: PR 1
-    #: computed this scalar with its own query, and a second, independent
-    #: query computing the ``include=software`` breakdown could in
-    #: principle disagree with it (e.g. after an unrelated edit changes
-    #: one join but not the other). Sharing one query makes that
-    #: disagreement structurally impossible instead of merely unlikely.
+    #: ``COUNT(DISTINCT ...)`` query. Sharing one query with the
+    #: ``include=software`` breakdown makes any disagreement between the two
+    #: structurally impossible.
     distinct_software_count: int
 
 
@@ -317,10 +308,8 @@ class AvailableLevelOfTheorySections(BaseModel):
     #: calculation at this level of theory -- i.e. ``distinct_software_count
     #: > 0``. Deliberately silent on workflow-tool-only usage (a
     #: calculation citing a ``workflow_tool_release`` but no
-    #: ``software_release``): that is a real but rare shape on today's
-    #: archive (1 workflow tool, ARC, always alongside a software release
-    #: in the measured data) and is not worth a second always-on query
-    #: per record to detect. ``include=software``'s own
+    #: ``software_release``): that shape is not worth a second
+    #: always-on query per record to detect. ``include=software``'s own
     #: ``workflow_tools`` list is unaffected by this simplification --
     #: it is still correct when requested, this flag just does not
     #: promise to predict it.

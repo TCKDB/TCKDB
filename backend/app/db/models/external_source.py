@@ -4,7 +4,7 @@ Implements CCCBDB importer spec Gap 4 (``backend/docs/specs/cccbdb_importer.md``
 §7) for **new rows only** -- existing CCCBDB observations keep their
 flattened ``external_source_*`` columns on ``molecular_property_observation``
 untouched (see that model's module docstring). These two tables are the
-custody chain a new importer (ThermoML, Phase C-E2/E3) attaches to instead:
+custody chain a new importer (ThermoML) attaches to instead:
 
 * ``external_source`` identifies the source *database/collection* (e.g. "NIST
   ThermoML Archive", release "2024-06") a document was fetched from.

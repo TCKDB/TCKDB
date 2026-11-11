@@ -29,7 +29,7 @@ def normalize_tunneling_model(value):
     """Coerce a producer-supplied tunneling model to a canonical token.
 
     Case-insensitive; folds any unrecognized non-empty value to ``other``,
-    mirroring the DB migration (DR-0032). ``None``/blank → ``None``. Real
+    mirroring the DB migration. ``None``/blank → ``None``. Real
     producers (e.g. ARC) emit ``"Eckart"``, which normalizes to ``eckart``.
     Returns a string the enum field then coerces (or ``None``).
     """

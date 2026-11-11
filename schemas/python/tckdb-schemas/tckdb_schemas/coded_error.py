@@ -56,7 +56,7 @@ class CodedValidationError(ValueError):
     :param detail: Human-readable explanation, already formatted.
     :param context: Optional structured facts about the refusal.
     :param message_prefix: Whether ``str(exc)`` repeats the code ahead of
-        the detail. ``True`` keeps the legacy ``"code: detail"`` shape that
+        the detail. ``True`` keeps the ``"code: detail"`` shape that
         the read API's published details already carry. ``False`` makes
         ``str(exc)`` exactly *detail*, which is what an existing refusal
         gaining a code for the first time wants: the ``code`` field appears,

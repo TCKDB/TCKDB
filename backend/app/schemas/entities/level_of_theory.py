@@ -47,7 +47,7 @@ class LevelOfTheoryRead(LevelOfTheoryBase, TimestampedReadSchema):
     #: Restricted / unrestricted / restricted-open. ``None`` means the producer did not state it,
     #: which is not the same as the enum's own ``unknown`` member. Part of the level's identity.
     spin_treatment: SpinTreatment | None = None
-    #: Frozen-core or all-electron (ADR 0021). ``None`` means the producer did not state it, never
+    #: Frozen-core or all-electron. ``None`` means the producer did not state it, never
     #: "frozen core by default". Part of the level's identity only when set.
     core_treatment: CoreTreatment | None = None
     #: Method qualifiers; ``None`` means not stated, and a stated value is part of the level's identity.

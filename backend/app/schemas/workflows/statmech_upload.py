@@ -332,7 +332,7 @@ class StatmechUploadRequest(SchemaBase):
     def validate_n_imag_matches_species_entry_kind(self) -> Self:
         """Refuse inline frequency evidence that contradicts the declared kind.
 
-        Definitional, therefore blocking (ADR 0008). The inline
+        Definitional, therefore blocking. The inline
         calculations are scoped to this upload's species entry, so the
         declared kind and the parsed ``n_imag`` are both present here.
         """

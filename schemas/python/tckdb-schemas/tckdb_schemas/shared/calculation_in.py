@@ -105,17 +105,15 @@ class CalculationIn(SchemaBase):
     :param level_of_theory: Required level-of-theory reference.
     :param workflow_tool_release: Optional workflow-tool provenance reference.
     :param literature: Optional inline literature provenance, resolved (or
-        created) by the workflow. Replaces the former ``literature_id``,
-        which was a database primary key on an upload surface — usable only
-        by a client that had already queried this database, which a
-        depositor has not. Matches ``CalculationInBundle.literature`` on the
-        species bundle, which took the inline fragment from the start.
+        created) by the workflow. A database primary key is never
+        accepted here. Matches ``CalculationInBundle.literature`` on the
+        species bundle.
     :param sp_electronic_energy_hartree: SP result (if type=sp).
     :param composite_result: Composite energy (type must be ``composite``, and a
         ``composite`` calculation must carry it). See
         :class:`~tckdb_schemas.fragments.calculation.CompositeResultPayload`.
     :param sp_energy_components: The parts of the single point's electronic
-        energy (reference, correlation, ...), single points only (ADR 0021).
+        energy (reference, correlation, ...), single points only.
     :param opt_converged: Opt result (if type=opt).
     :param opt_n_steps: Opt result (if type=opt).
     :param opt_final_energy_hartree: Opt result (if type=opt).
@@ -159,7 +157,7 @@ class CalculationIn(SchemaBase):
         default_factory=list, description=SP_ENERGY_COMPONENTS_DESCRIPTION
     )
 
-    #: The composite energy block (ADR 0021): the one result that is a block
+    #: The composite energy block: the one result that is a block
     #: rather than flat fields, because it carries a list of terms.
     composite_result: CompositeResultPayload | None = None
 
@@ -173,7 +171,7 @@ class CalculationIn(SchemaBase):
     freq_frequencies_cm1: list[float] | None = None
 
     #: 1-based index into ``freq_frequencies_cm1`` naming the reaction
-    #: coordinate. Required by ADR 0012 for a transition state with more
+    #: coordinate. Required for a transition state with more
     #: than one imaginary mode; meaningless anywhere else.
     freq_reaction_coordinate_mode_index: int | None = Field(default=None, ge=1)
 
@@ -225,7 +223,7 @@ class CalculationIn(SchemaBase):
 
     @model_validator(mode="after")
     def validate_sp_energy_components(self) -> Self:
-        """Components sit on a single point and agree with its energy (ADR 0021)."""
+        """Components sit on a single point and agree with its energy."""
         check_sp_energy_components(
             [(c.component, c.value_hartree) for c in self.sp_energy_components],
             calculation_type=self.type,
@@ -254,7 +252,7 @@ def freq_result_of(calc_in: "CalculationIn") -> FreqResultPayload | None:
 
     The single place the flat ``freq_*`` fields become the canonical
     result block, so a consistency check and the persistence seam can
-    never disagree about what was deposited. ADR 0012's judgement needs
+    never disagree about what was deposited. The imaginary-mode judgement needs
     the whole block — the frequency list, the designated reaction
     coordinate and each other imaginary mode's disposition — not just
     the ``(n_imag, imag_freq_cm1)`` pair :func:`freq_evidence` returns.
@@ -299,7 +297,7 @@ def freq_result_of(calc_in: "CalculationIn") -> FreqResultPayload | None:
 
 
 def tau_resolution_of(calc_in: "CalculationIn") -> TauResolution:
-    """ADR 0012's tau for a bundle-local calculation.
+    """The tau for a bundle-local calculation.
 
     The bundle twin of :meth:`CalculationWithResultsPayload.tau_resolution`:
     method its inline output log reports, then the recorded
@@ -407,14 +405,9 @@ def calculation_in_to_with_results_payload(
     are not part of the shared payload.
 
     The citation is forwarded as the inline ``literature`` fragment, not as
-    a resolved id. This function used to take a ``literature_id`` keyword
-    and refuse the pair "fragment present, id absent", because the shared
-    payload carried a raw ``literature_id`` and only the caller had a
-    database session to produce one. The shared payload now carries the
-    fragment too (#194), so there is no id to lose here and no seam at
-    which to lose it: resolution happens once, in
+    a resolved id: resolution happens once, in
     ``resolve_and_persist_calculation_with_results``, which has the
-    session. The guard is gone because the failure mode it guarded is.
+    session.
     """
 
     opt_result: OptResultPayload | None = None

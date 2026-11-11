@@ -28,7 +28,7 @@ What is stored and what is not
 ------------------------------
 A producer's *conclusion* about a mode or an ordering is stored here, with the
 numbers it rests on, so a reader can see what was claimed. The arithmetic
-anyone can redo from a stored Hessian is not: the ADR 0012 eigenvector
+anyone can redo from a stored Hessian is not: the eigenvector
 projections run at read time and write nothing. The displacement-agreement
 flag is the producer's verdict, recorded as a verdict.
 
@@ -196,7 +196,7 @@ class TransitionStateValidationEvidenceIn(SchemaBase):
             # A mapping with no participants at all is still refused above: it
             # partitions nothing and names nobody. An individual participant's
             # list may be empty -- see the class docstring -- but only a
-            # participant with no atoms may use it, which is decided against
+            # participant with no atoms may use it, which is checked against
             # the reaction in ``validate_ts_evidence_set``.
             if not participant_key.strip() or any(index < 1 for index in atom_indices):
                 raise ValueError("participant mappings use 1-based atom indices and require non-empty keys.")

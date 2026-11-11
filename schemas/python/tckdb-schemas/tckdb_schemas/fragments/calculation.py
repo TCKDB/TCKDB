@@ -131,14 +131,8 @@ class CalculationPayload(SchemaBase):
     workflow_tool_release: WorkflowToolReleaseRef | None = None
     level_of_theory: LevelOfTheoryRef
 
-    #: Replaces the former ``literature_id``, a raw database primary key on
-    #: a depositor-facing surface. Only a client that had already queried
-    #: this database could supply one, which is the client we do not design
-    #: for (``.claude/rules/schema-rules.md``, DR-0029 Req 1). The species
-    #: bundle took the inline fragment from the start and ``CalculationIn``
-    #: was converted in #172; this is the same conversion for the five
-    #: routes that reach the shared payload directly — conformers,
-    #: transition-states, statmech, thermo and transport.
+    #: The literature source of this calculation, given inline. A raw
+    #: database primary key is never accepted here.
     literature: LiteratureUploadRequest | None = None
 
     #: The recipe this calculation actually ran, where the level-of-theory label
@@ -152,7 +146,7 @@ class CalculationPayload(SchemaBase):
 
     @model_validator(mode="after")
     def validate_software_and_composite_shape(self) -> Self:
-        """Software is required unless an assembled composite; composite rules (ADR 0021)."""
+        """Software is required unless an assembled composite; composite rules."""
         assert_composite_calculation_shape(
             self.type,
             getattr(self, "composite_result", None),
@@ -186,12 +180,12 @@ class OptResultPayload(SchemaBase):
 #: neither reader that the other exists — the cheap summary says three, the
 #: frequency list shows one, and the two consumers walk away with different
 #: science from the same row. That is a contract between two fields of one
-#: record rather than an expectation about a result, so ADR 0008 puts it at
-#: the blocking tier.
+#: record rather than an expectation about a result, so it is
+#: at the blocking tier.
 #:
 #: **Absence is not disagreement.** ``modes = null`` is a deposit that carries
 #: no frequency list, which is incomplete rather than contradictory and is
-#: accepted with ``n_imag`` at any value; ADR 0012's read surface already
+#: accepted with ``n_imag`` at any value; the read surface already
 #: reports ``n_imag_at_or_above_tau = null`` rather than ``0`` for exactly that
 #: state. An *empty* list is a different claim — "here is the frequency list,
 #: and nothing in it is imaginary" — and is judged like any other list.
@@ -212,7 +206,7 @@ W_FREQ_N_IMAG_DISAGREES_WITH_MODES = "freq_n_imag_disagrees_with_modes"
 #:
 #: It still needs a name. "Your frequency list is malformed, renumber the
 #: modes" is a different repair from every other 422 the same request can
-#: produce, and a client could previously tell it apart only by matching
+#: produce, and without a name a client could tell it apart only by matching
 #: English inside a ``request_validation_error``.
 W_FREQ_MODE_INDEX_NOT_UNIQUE = "freq_mode_index_not_unique"
 
@@ -242,7 +236,7 @@ class FrequencyModePayload(BaseModel):
         is not the reaction coordinate. Declared by the depositor, never
         inferred — TCKDB stores no normal-mode displacement vectors to
         infer it from. Only meaningful on an imaginary mode; setting it
-        on a real one is refused rather than ignored. See ADR 0012.
+        on a real one is refused rather than ignored.
     :param note: Optional free-text annotation.
     """
 
@@ -291,8 +285,7 @@ class FreqResultPayload(SchemaBase):
         the count of imaginary modes must agree with ``n_imag`` if both
         are present.
     :param reaction_coordinate_mode_index: ``mode_index`` of the mode the
-        depositor designates the reaction coordinate. ADR 0012 makes this
-        the contract that replaces the old ``n_imag == 1`` gate: a
+        depositor designates the reaction coordinate. A
         transition state with more than one imaginary mode is accepted
         only if it says which one is the barrier and is removed from the
         partition function. Meaningless on a minimum, and refused there.
@@ -433,7 +426,7 @@ class SPResultPayload(SchemaBase):
 
 #: A ``composite_result`` was sent on a calculation whose ``type`` is not
 #: ``composite``. A composite energy is the result of a composite calculation
-#: and of nothing else (ADR 0021); it is not an ``sp`` or ``opt`` result.
+#: and of nothing else; it is not an ``sp`` or ``opt`` result.
 COMPOSITE_RESULT_REQUIRES_COMPOSITE_TYPE = "composite_result_requires_composite_type"
 
 #: A calculation with ``type: "composite"`` carried no ``composite_result``.
@@ -442,7 +435,7 @@ COMPOSITE_RESULT_REQUIRES_COMPOSITE_TYPE = "composite_result_requires_composite_
 COMPOSITE_TYPE_REQUIRES_COMPOSITE_RESULT = "composite_type_requires_composite_result"
 
 #: The stated 0 K energy is not the stated ZPE-free energy plus the stated
-#: recipe ZPE. Applied only when all three are present (ADR 0021, block tier:
+#: recipe ZPE. Applied only when all three are present (block tier:
 #: it asserts a definition, e0 = electronic + recipe ZPE).
 COMPOSITE_E0_INCONSISTENT = "composite_e0_inconsistent"
 
@@ -450,8 +443,8 @@ COMPOSITE_E0_INCONSISTENT = "composite_e0_inconsistent"
 #: terms are given and the total is present.
 COMPOSITE_TERMS_DO_NOT_SUM = "composite_terms_do_not_sum"
 
-#: Floor, in hartree, of the tolerance of the two arithmetic checks above
-#: (ADR 0021: 1e-6 Eh). A deposit that differs by more than the tolerance is
+#: Floor, in hartree, of the tolerance of the two arithmetic checks above.
+#: A deposit that differs by more than the tolerance is
 #: blocked; TCKDB never replaces a stated number with one it computed.
 COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE = 1e-6
 
@@ -502,8 +495,8 @@ class CompositeTermPayload(SchemaBase):
 #: ref, or by neither.
 COMPOSITE_INPUT_REFERENCE_INVALID = "composite_input_reference_invalid"
 
-#: An ``assembled`` composite deposited no ``electronic_energy_hartree`` (owner
-#: decision 5: the total is deposited and only checked by recomputation).
+#: An ``assembled`` composite deposited no ``electronic_energy_hartree``
+#: (the total is deposited and only checked by recomputation).
 COMPOSITE_TOTAL_REQUIRED = "composite_total_required"
 
 #: An ``assembled`` composite is a conformer's (or transition state's) primary
@@ -515,9 +508,7 @@ COMPOSITE_ASSEMBLED_CANNOT_BE_PRIMARY = "composite_assembled_cannot_be_primary"
 COMPOSITE_INPUTS_REQUIRE_ASSEMBLED = "composite_inputs_require_assembled"
 
 #: An ``assembled`` composite's ``level_of_theory`` is not a user-built scheme
-#: carried inline: the definition is what its inputs are matched to. (Published
-#: with P3a, when no assembled composite was accepted at all; since P5 it names
-#: the one way an assembled composite is still not accepted.)
+#: carried inline: the definition is what its inputs are matched to.
 COMPOSITE_ASSEMBLED_NOT_ACCEPTED = "composite_assembled_not_accepted"
 
 #: A calculation names no software release and is not an assembled composite.
@@ -566,7 +557,7 @@ class CompositeInputPayload(SchemaBase):
 
 
 class CompositeResultPayload(SchemaBase):
-    """The energy of a ``composite`` calculation (ADR 0021).
+    """The energy of a ``composite`` calculation.
 
     Every energy is optional and ``null`` means *not stated*, never zero.
     TCKDB never stores a total it computed itself: these are the producer's
@@ -841,7 +832,7 @@ def assert_composite_calculation_shape(
 
 
 class SPEnergyComponentPayload(SchemaBase):
-    """One deposited part of a single point's electronic energy (ADR 0021).
+    """One deposited part of a single point's electronic energy.
 
     :param component: Which part: ``reference`` (the SCF / HF energy),
         ``correlation``, ``triples``, ``dboc``, ``scalar_relativistic``, or
@@ -1000,7 +991,7 @@ class HessianPayload(SchemaBase):
     ``N`` atoms that is exactly ``3N(3N+1)/2`` values.
 
     Attaches to ``freq`` calculations and to ``opt`` calculations run with
-    an analytic Hessian (``opt=calcall``-style). See DR-0030.
+    an analytic Hessian (``opt=calcall``-style).
 
     :param geometry: The geometry the Hessian was computed at.
     :param lower_triangle_hartree_bohr2: Packed lower triangle (with
@@ -1584,13 +1575,12 @@ class CalculationWithResultsPayload(CalculationPayload):
     _numfreq_energy_implied: bool = PrivateAttr(default=False)
 
     def tau_resolution(self) -> TauResolution:
-        """ADR 0012's τ for this calculation: recorded, else assumed, else conservative.
+        """The τ for this calculation: recorded, else assumed, else conservative.
 
         A recorded ``freq.hessian_method`` (from the ``canonical_key`` /
         ``canonical_value`` pairs the producer deposited) always wins. Failing
         that, the payload's own software and level-of-theory method select the
-        producing program's assumed default (ADR 0012, 2026-09-04 amendment,
-        applied at validation since 2026-10-31), stored with an ``assumed_*``
+        producing program's assumed default, stored with an ``assumed_*``
         basis. A program or method family the table does not know — or no
         software at all — resolves to ``protocol_not_recorded``, and says so
         rather than picking a number.
@@ -1653,7 +1643,7 @@ class CalculationWithResultsPayload(CalculationPayload):
 
     @model_validator(mode="after")
     def validate_sp_energy_components(self) -> Self:
-        """Components sit on a single point and agree with its energy (ADR 0021)."""
+        """Components sit on a single point and agree with its energy."""
         check_sp_energy_components(
             [(c.component, c.value_hartree) for c in self.sp_energy_components],
             calculation_type=self.type,
@@ -1667,8 +1657,7 @@ class CalculationWithResultsPayload(CalculationPayload):
     def validate_tckdb_origin_metadata(self) -> Self:
         """If ``parameters_json["tckdb_origin"]`` is present, validate
         its shape against :class:`CalculationOriginMetadata`. Absence is
-        allowed and means "executed" by default. See DR-0026 for the
-        full convention.
+        allowed and means "executed" by default.
         """
         if not self.parameters_json or not isinstance(self.parameters_json, dict):
             return self

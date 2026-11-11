@@ -1,6 +1,6 @@
 r"""The codes a refusal carries when an upload names a local key nothing declared.
 
-An upload payload never carries a database id (DR-0029 Requirement 1).
+An upload payload never carries a database id.
 When a thermo record has to say which calculations produced its number,
 or a channel has to name the states it joins, the payload writes a
 *local key* — a string the same request declared elsewhere in itself.
@@ -15,49 +15,28 @@ Two layers can catch a key that names nothing:
 
 Why the codes live here and not next to the seam
 ------------------------------------------------
-ADR 0017: *a refusal's code and context belong to the check, not to the
-layer that happens to run it.* Wherever both a validator and a seam can
-refuse the same mistake, both raise the same
-:class:`~tckdb_schemas.coded_error.CodedValidationError` — same ``code``,
-same ``context`` keys — so which layer fired is invisible to a client.
+A refusal's code and context belong to the check, not to the layer that runs
+it. Where both a validator and a seam can refuse the same mistake, both raise
+the same :class:`~tckdb_schemas.coded_error.CodedValidationError` -- same
+``code``, same ``context`` keys -- so which layer fired is invisible to a client.
 
-That rule cannot be kept if the codes live under ``app``.
 ``schemas/python/tckdb-schemas/tests/test_import_boundaries.py`` forbids
-``tckdb_schemas`` from importing anything under ``app``, statically and
-at runtime, so a wire-schema validator could not name the seam's code
-even if it wanted to. Before #219 it did not: the validator raised a bare
-``ValueError`` and a client received the generic
-``request_validation_error`` with an empty ``context``, while the very
-same mistake caught one layer later received a specific code and the list
-of names that *would* have worked. Which layer fired therefore decided
-what the client was told — a published contract by accident, and one a
-refactor could change silently. It had, twice in one month.
+``tckdb_schemas`` from importing anything under ``app``, so the codes are
+defined here, where both layers can import them. The catalogue in
+``app.api.code_catalogue`` names *this* module as their origin.
 
-So the constants moved here, where both layers can import them, and the
-backend re-exports them from their old homes
-(:mod:`app.services.local_key_resolution`,
-:mod:`app.services.statmech_resolution`,
-:mod:`app.services.energy_correction_resolution`) so no backend import
-had to move. The catalogue in ``app.api.code_catalogue`` names *this*
-module as their origin.
-
-Neither layer may be deleted because the other exists
------------------------------------------------------
-The validator is not redundant: it refuses earlier, and it refuses in a
-client with no server in reach. The seam is not redundant either, and
-that is the harder half to believe — #218 and #198 are both cases where a
-validator's coverage was *narrower than the workflow's reach* (one member
-of a union guarded, its sibling not) and the penalty was an unhandled
-500. Guard coverage is the thing that drifts; the seam is the backstop
-precisely because of it.
+Neither layer is redundant
+--------------------------
+The validator refuses earlier, and it refuses in a client with no server in
+reach. The seam covers a key the validator's guard does not reach, such as one
+member of a union guarded and its sibling not.
 
 What a refusal in this family carries
 -------------------------------------
 ``context`` is always exactly ``{"field", "key", "declared_keys"}``, built
 by :func:`undeclared_key_context` so the two layers cannot spell it
 differently. Never a row id: the ids are the *values* of these maps and
-they stay there, out of anything a depositor reads (DR-0028
-Requirement 2).
+they stay there, out of anything a depositor reads.
 
 What is *not* in this family
 ----------------------------
@@ -106,12 +85,12 @@ __all__ = [
 #: right answer and it is spelled the same way whichever field asked.
 #:
 #: Deliberately *not* used for an applied energy correction's source key.
-#: That field already had a code before this one existed
+#: That field has its own code
 #: (:data:`W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED`), it is pinned by
 #: ``tests/api/test_api_upload_key_and_role_contracts.py`` on
 #: ``/uploads/conformers``, and it spans a conformer key as well as a
 #: calculation key — so a correction's source is one repair on that
-#: route and would become two if the bundle routes answered differently.
+#: route.
 W_CALCULATION_KEY_UNDECLARED = "calculation_key_undeclared"
 
 # ---------------------------------------------------------------------------
@@ -197,8 +176,7 @@ def undeclared_key_context(
     """The three facts every refusal in this family reports, and only those.
 
     One function so that a validator and the seam it shadows cannot spell
-    the same context differently — which is the half of ADR 0017 that a
-    reviewer cannot see by reading either layer alone.
+    the same context differently.
 
     :param field: Field path naming the offending key, as the depositor's
         own payload spells it.
@@ -224,11 +202,9 @@ def undeclared_key_error(
     undeclared_key_error(...)`` and the traceback starts where the mistake
     was found.
 
-    ``message_prefix=False`` is not optional here: these validators all
-    had published prose before they had a code, and the whole point of
-    ADR 0017 is that the ``code`` and ``context`` fields appear while
-    ``detail`` does not move a byte. A consumer matching English keeps
-    working; a consumer matching ``code`` starts working.
+    ``message_prefix=False`` is not optional here: it keeps ``detail`` exactly
+    the sentence given, so a consumer matching English and a consumer matching
+    ``code`` both work.
 
     :param code: One of this module's constants.
     :param detail: The refusal's existing sentence, unchanged.

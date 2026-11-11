@@ -1,4 +1,4 @@
-"""The user-built composite scheme on the wire (ADR 0021, P5).
+"""The user-built composite scheme on the wire.
 
 Covers ``LevelOfTheoryRef.composite_scheme``, the shape rules behind it, the
 assembled ``composite_result.inputs`` and the software rule, on every payload

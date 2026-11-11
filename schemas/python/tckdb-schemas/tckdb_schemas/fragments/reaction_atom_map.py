@@ -1,4 +1,4 @@
-"""Depositor-supplied atom correspondence across one reaction (ADR 0011).
+"""Depositor-supplied atom correspondence across one reaction.
 
 A reaction payload says which species react, which saddle point sits between
 them, and what rate results. It does not say *which atom is which*. This
@@ -44,7 +44,7 @@ completeness rule for the whole map: rule 7 below only engages once every
 declared participant is mapped, and a reaction with an electron in it could
 never reach that state.
 
-Tiering (ADR 0008)
+Tiering
 ------------------
 Absence warns; contradiction blocks. An unmapped reaction is an *incomplete*
 record, not a false one — the rate constant is still the rate constant — so a
@@ -168,7 +168,7 @@ def parse_xyz_elements(xyz_text: str) -> list[str]:
     number (``geometry_atom.element`` is compared across a map, and an element
     does not change across a reaction). Returning the nuclide symbol here would
     refuse a map from a ``D``-spelled reactant onto a saddle point spelled
-    ``H`` with ``isotopes``, which is correct chemistry (#672).
+    ``H`` with ``isotopes``, which is correct chemistry.
     """
 
     declared, body = xyz_block_shape(xyz_text)
@@ -233,8 +233,8 @@ class ReactionAtomMapParticipantIn(SchemaBase):
 
         Both directions are refused because both are unreadable. An index with
         no geometry beside it identifies a position in an ordering the reader
-        has to guess at, which is the whole reason ADR 0011 chose
-        geometry-relative indexing over canonical ordering. A geometry beside
+        has to guess at, which is why indices are relative to a
+        named geometry rather than to a canonical ordering. A geometry beside
         no indices is the reverse claim, from a participant that by its own
         account has no atoms in that geometry to point at -- a free electron
         has no geometry anywhere in the deposit.
@@ -322,7 +322,7 @@ class ReactionAtomMapIn(SchemaBase):
         Declared before the ``inferred`` rule below so that rule sees the
         normalised value: ``note='   '`` is not the name of an algorithm, and
         without this it would satisfy "an inferred map says what inferred it"
-        while carrying nothing at all — the anonymous inferred map ADR 0011
+        while carrying nothing at all — the anonymous inferred map this rule
         exists to prevent, admitted through whitespace.
         """
         self.note = normalize_optional_text(self.note)
@@ -332,7 +332,7 @@ class ReactionAtomMapIn(SchemaBase):
     def validate_inferred_names_its_algorithm(self) -> Self:
         """An inferred map must say what inferred it.
 
-        Definitional, therefore blocking. ADR 0011 permits inference only as a
+        Definitional, therefore blocking. Inference is permitted only as a
         *labelled and separable* thing; an inferred map whose origin is
         anonymous is one careless consumer away from being read as a human
         assertion.
@@ -416,7 +416,7 @@ def validate_reaction_atom_map(
 ) -> None:
     """Refuse an atom map that contradicts itself. Accept an incomplete one.
 
-    Blocking rules, each definitional under ADR 0008 — none of them could fire
+    Blocking rules, each definitional — none of them could fire
     on a correct novel result, because each names a record that cannot be what
     it says it is:
 
@@ -711,8 +711,8 @@ def _reaction_is_balanced(
 ) -> bool:
     """Say whether the mapped participants conserve every element.
 
-    This is how ADR 0011's hedge "where no species is missing" is decided,
-    rather than left to judgement: if the reactant and product element
+    This decides "where no species is missing" by arithmetic
+    rather than by judgement: if the reactant and product element
     multisets agree, nothing is missing and an unaccounted atom is a
     contradiction. If they disagree, a species genuinely is absent from the
     deposit and the same discrepancy is incompleteness, which warns.

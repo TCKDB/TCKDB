@@ -1,4 +1,4 @@
-"""Basis-set extrapolation arithmetic for user-built composite schemes (ADR 0021, P5).
+"""Basis-set extrapolation arithmetic for user-built composite schemes.
 
 A user-built composite scheme (``extrapolation`` or ``additive``) names the
 formula that turns energies at several cardinal numbers into a basis-set limit.

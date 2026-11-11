@@ -223,7 +223,7 @@ class StatmechElectronicLevelBase(BaseModel):
     """Shared fields for one electronic energy level.
 
     Low-lying electronic states drive the electronic partition function
-    ``q_elec = Σ gᵢ·exp(−εᵢ/kT)`` (DR-0033). Each row is an ordered
+    ``q_elec = Σ gᵢ·exp(−εᵢ/kT)``. Each row is an ordered
     ``(energy, degeneracy)`` pair.
 
     :param level_index: One-based ordinal (ground state is ``1`` at

@@ -85,10 +85,9 @@ class GeometryAtom(Base):
     #: ``session_replication_role = replica`` -- so readers may now compare the
     #: stored value directly.
     #:
-    #: Case is canonicalised, and so is the hydrogen-isotope spelling, since
-    #: ``docs/adr/0022`` (2026-10-03): a deposited ``D``/``T`` is stored as
+    #: Case is canonicalised, and so is the hydrogen-isotope spelling, : a deposited ``D``/``T`` is stored as
     #: ``H`` with ``isotope_mass_number`` 2/3, while ``geometry.xyz_text`` keeps
-    #: the ``D``. Rows written before that decision hold ``D``/``T`` here with
+    #: the ``D``. A row written earlier may hold ``D``/``T`` here with
     #: a NULL mass number and cannot be rewritten
     #: (``trg_as_geometry_atom``); code that counts elements resolves them with
     #: :func:`app.chemistry.geometry.resolve_element_symbol`, and code that needs
@@ -138,7 +137,7 @@ class GeometryAtom(Base):
         # restriction. It exists to be the target of
         # ``reaction_atom_map_pair``'s two foreign keys, which carry
         # ``element`` on both ends so that a mapped pair whose atoms are
-        # different elements cannot be written. See ADR 0011 and
+        # different elements cannot be written. See
         # :mod:`app.db.models.reaction_atom_map`.
         UniqueConstraint(
             "geometry_id",

@@ -1,4 +1,4 @@
-"""The identity key of a level-of-theory method name (issue #585).
+"""The identity key of a level-of-theory method name.
 
 A method name is written in whatever case a producer prefers. ARC lower-cases
 every method it emits (``arc/level.py``, ``Level.lower``); Gaussian, ORCA and
@@ -71,8 +71,7 @@ The table is deliberately small and stays out of anything it cannot cite:
 member are separate keys. A split is recoverable, because the merge script
 joins it later; a false merge is not.
 
-The canonical key of each alias is the spelling ARC and Gaussian write, so
-rows already stored that way keep their hash.
+The canonical key of each alias is the spelling ARC and Gaussian write.
 
 Named composite methods
 ----------------------------------

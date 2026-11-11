@@ -166,7 +166,7 @@ class KineticsReactionUpload(SchemaBase):
 
 
 class FalloffUpload(SchemaBase):
-    """Pressure-dependent falloff parameters (DR-0032 Part B).
+    """Pressure-dependent falloff parameters.
 
     The high-pressure-limit (k∞) Arrhenius parameters are the top-level
     ``a``/``n``/``reported_ea`` on the kinetics request; this block carries
@@ -207,7 +207,7 @@ class ThirdBodyEfficiencyUpload(SchemaBase):
 
 
 class PlogEntryUpload(SchemaBase):
-    """One pressure entry of a standalone PLOG rate (DR-0032 Part C)."""
+    """One pressure entry of a standalone PLOG rate."""
 
     entry_index: int = Field(ge=1)
     pressure_bar: float = Field(gt=0)
@@ -218,7 +218,7 @@ class PlogEntryUpload(SchemaBase):
 
 
 class MultiArrheniusEntryUpload(SchemaBase):
-    """One modified-Arrhenius term of a sum-of-Arrhenius rate (DR-0036).
+    """One modified-Arrhenius term of a sum-of-Arrhenius rate.
 
     A Chemkin ``DUPLICATE`` channel's rate coefficient is the sum of these
     terms. Unlike a PLOG entry there is no pressure — the terms are summed,
@@ -246,7 +246,7 @@ class MultiArrheniusEntryUpload(SchemaBase):
 
 
 class ChebyshevUpload(SchemaBase):
-    """A standalone Chebyshev k(T,P) surface (DR-0032 Part C).
+    """A standalone Chebyshev k(T,P) surface.
 
     ``coefficients`` is the n_temperature × n_pressure coefficient matrix
     (list of rows).
@@ -386,8 +386,8 @@ class KineticsUploadRequest(SchemaBase):
     # so existing clients keep working -- absence bites at release time.
     rights: DepositRights | None = None
 
-    # Public, opaque handle for a pressure-dependent network counterpart
-    # (DR-0036). Upload payloads must never accept database primary keys;
+    # Public, opaque handle for a pressure-dependent network counterpart.
+    # Upload payloads must never accept database primary keys;
     # the workflow resolves this handle to its internal FK.
     network_kinetics_ref: str | None = Field(default=None, min_length=1)
 
@@ -494,7 +494,7 @@ class KineticsUploadRequest(SchemaBase):
 
     @model_validator(mode="after")
     def validate_multi_arrhenius(self) -> Self:
-        """Bind ``multi_arrhenius`` to its sum-of-terms child rows (DR-0036).
+        """Bind ``multi_arrhenius`` to its sum-of-terms child rows.
 
         A DUPLICATE channel is a sum of at least two modified-Arrhenius
         terms; the scalar ``a`` must stay unset because the coefficient lives
@@ -619,7 +619,7 @@ class KineticsUploadRequest(SchemaBase):
     @model_validator(mode="after")
     def validate_arrhenius_entries_a_units(self) -> Self:
         """Every summed ``multi_arrhenius`` term is the SAME reaction rate, so
-        each term's ``a_units`` must match the main-line molecularity (DR-0036).
+        each term's ``a_units`` must match the main-line molecularity.
         """
         orders = self._main_line_molecularities()
         if orders is None:
@@ -637,7 +637,7 @@ class KineticsUploadRequest(SchemaBase):
     @model_validator(mode="after")
     def validate_plog_entries_a_units(self) -> Self:
         """Each PLOG pressure entry's A is the reaction's rate at that pressure,
-        so its ``a_units`` shares the main-line molecularity (DR-0032 Part C).
+        so its ``a_units`` shares the main-line molecularity.
         """
         orders = self._main_line_molecularities()
         if orders is None:
@@ -657,7 +657,7 @@ class KineticsUploadRequest(SchemaBase):
         """The low-pressure-limit k0 Arrhenius is by definition one order higher
         than k∞, so ``falloff.low_a_units`` validates one order above the
         coefficient's side (reactants forward, products reverse, either when
-        no direction is stated) regardless of ``is_third_body`` (DR-0032 Part B).
+        no direction is stated) regardless of ``is_third_body``.
         """
         if self.falloff is None or self.falloff.low_a_units is None:
             return self

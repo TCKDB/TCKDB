@@ -77,10 +77,9 @@ class ThermoSourceCalculationIn(SchemaBase):
     Exactly one of ``calculation_key`` (inline reference into the same
     upload's ``calculations`` list) or ``existing_calculation_id`` (FK
     reference to a row already persisted in the ``calculation`` table)
-    must be provided. See DR-0028 for the rationale: ARC's typical
-    pipeline uploads opt/freq/sp during conformer upload, so the thermo
-    upload should reference those existing rows rather than re-declare
-    duplicate calculations.
+    must be provided. ARC's typical pipeline uploads opt/freq/sp during
+    conformer upload, so the thermo upload references those existing rows
+    rather than re-declaring duplicate calculations.
 
     Audience guidance:
 
@@ -167,7 +166,7 @@ class ThermoUploadRequest(SchemaBase):
 
     # Statmech linkage for computed thermo. This is an *advanced /
     # programmatic* mechanism (mirroring ``existing_calculation_id`` on
-    # source-calculation entries, DR-0028): a client that has just
+    # source-calculation entries): a client that has just
     # uploaded a statmech record threads its returned id through here so
     # the derived thermo cites its statmech basis. Contributor-facing
     # bundle uploads that resolve statmech server-side by local key are a
@@ -248,37 +247,27 @@ class ThermoUploadRequest(SchemaBase):
     # Standard-state reference pressure (bar) and physical phase.
     #
     # ``reference_pressure_bar`` is left unset (``None``) at the field level
-    # and is NEVER defaulted, for any origin (decided 2026-09-24, issue
-    # #529). It used to be stamped ``1.0`` for computed uploads on the
-    # reasoning that a QC record is "reasonably gas-phase @ 1 bar (IUPAC)
-    # unless stated otherwise" -- a read-only survey of ARC/RMG on
-    # 2026-09-24 established that reasoning is false for the dominant
-    # producer: ARC's entropy is computed with a translational partition
-    # function that hardcodes 1 atm (101325 Pa), and ARC records no
-    # pressure anywhere in its output. The default was therefore stamping
-    # every ARC-derived computed thermo record with a standard state
-    # (1 bar) its own numbers were never computed at -- an offset of
-    # R*ln(1.01325) on every gas-phase entropy, invisible and systematic.
-    # This mirrors the ``enthalpy_reference_kind`` decision on this same
-    # model (see ``Thermo``'s docstring): a wrong default is a
-    # plausible-looking error nothing detects, so omission stays omission.
-    # An explicit value (including an explicit ``None``) is always honored
-    # regardless of origin, via ``model_fields_set``; for legacy 1 atm data
-    # set ``reference_pressure_bar=1.01325`` explicitly.
+    # and is NEVER defaulted, for any origin. The dominant computed producer
+    # (ARC) computes entropy with a translational partition function that
+    # hardcodes 1 atm (101325 Pa) and records no pressure anywhere in its
+    # output, so a default would stamp every ARC-derived computed thermo
+    # record with a standard state its own numbers were not computed at -- an
+    # offset of R*ln(1.01325) on every gas-phase entropy, invisible and
+    # systematic. A wrong default is a plausible-looking error nothing
+    # detects, so omission stays omission. An explicit value (including an
+    # explicit ``None``) is always honored regardless of origin, via
+    # ``model_fields_set``; for 1 atm data set
+    # ``reference_pressure_bar=1.01325`` explicitly.
     #
     # ``phase`` keeps its computed-origin default of ``gas`` (see
-    # ``apply_computed_origin_defaults`` below). Judgement call, not
-    # symmetry-by-default: unlike the pressure convention, gas is not an
-    # arbitrary unit choice a producer could plausibly have gotten wrong --
-    # it is a direct consequence of the ideal-gas rigid-rotor/harmonic-
-    # oscillator statistical mechanics every current computed-origin
-    # producer in this system uses (RMG's translational partition function,
-    # which ARC calls, has no non-gas mode). No computed thermo record has
-    # ever been deposited with a non-gas phase, and nothing in the current
-    # pipeline (including ``level_of_theory.solvent``/``solvent_model``,
-    # which characterize the electronic-energy calculation, not the
-    # thermo standard state) produces one. Revisit if/when a
-    # condensed-phase computed producer exists.
+    # ``apply_computed_origin_defaults`` below). Gas is not an arbitrary unit
+    # choice a producer could plausibly have gotten wrong -- it is a direct
+    # consequence of the ideal-gas rigid-rotor/harmonic-oscillator
+    # statistical mechanics every computed-origin producer in this system
+    # uses (RMG's translational partition function, which ARC calls, has no
+    # non-gas mode). ``level_of_theory.solvent``/``solvent_model``
+    # characterize the electronic-energy calculation, not the thermo
+    # standard state.
     enthalpy_reference_kind: EnthalpyReferenceKind | str | None = Field(
         default=None,
         description=(
@@ -337,8 +326,8 @@ class ThermoUploadRequest(SchemaBase):
 
     # Group-additivity (Benson) estimation provenance. Only meaningful for
     # ``scientific_origin=estimated`` thermo — it reifies which GA scheme and
-    # which per-group contributions produced the estimated H298/S298. See
-    # DR-0035. Validated below to reject attaching a GA breakdown to a
+    # which per-group contributions produced the estimated H298/S298. Validated
+    # below to reject attaching a GA breakdown to a
     # non-estimated record.
     group_additivity: AppliedGroupAdditivityUploadPayload | None = None
 
@@ -358,9 +347,8 @@ class ThermoUploadRequest(SchemaBase):
         provided — defaulting it would silently stamp e.g. a
         condensed-phase literature value as ``gas``.
 
-        ``reference_pressure_bar`` is NEVER defaulted, for any origin
-        (decided 2026-09-24, issue #529): an omitted pressure is stored as not
-        stated, never assumed to be 1 bar or 1 atm.
+        ``reference_pressure_bar`` is NEVER defaulted, for any origin:
+        an omitted pressure is stored as not stated, never assumed to be 1 bar or 1 atm.
 
         Explicit values (including an explicit ``None``) are honored:
         ``model_fields_set`` distinguishes "omitted" from "provided".
@@ -404,7 +392,7 @@ class ThermoUploadRequest(SchemaBase):
     def validate_n_imag_matches_species_entry_kind(self) -> Self:
         """Refuse inline frequency evidence that contradicts the declared kind.
 
-        Definitional, therefore blocking (ADR 0008). The inline
+        Definitional, therefore blocking. The inline
         calculations are scoped to this upload's species entry, so the
         declared kind and the parsed ``n_imag`` are both present here.
         """

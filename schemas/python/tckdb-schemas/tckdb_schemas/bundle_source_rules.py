@@ -16,7 +16,7 @@ conformer whose geometry it says it ran on (``geometry_key``) must be the same
 one. The citation rules above read the calculation's conformer, so they can
 only be sound if the calculation never states two.
 
-ADR 0017: a refusal's code and context belong to the check, not to the layer
+A refusal's code and context belong to the check, not to the layer
 that runs it. The request schema refuses these mistakes the moment the body is
 parsed and the workflow refuses them again where it knows which entry each key
 resolved to, so both raise the same error built by the functions below. The

@@ -1,4 +1,4 @@
-"""Wire-level rules for transition-state validation evidence (#621).
+"""Wire-level rules for transition-state validation evidence.
 
 These run against the wire package alone, without the backend, because the
 rules they pin are the ones a producer can be held to before it sends
@@ -331,7 +331,7 @@ class TestFiniteAndPlausibleValues:
 
 
 class TestZpeScaleFactor:
-    """``zpe_scale_factor`` states how an E0's zero-point energy was scaled (#638)."""
+    """``zpe_scale_factor`` states how an E0's zero-point energy was scaled."""
 
     def _record(self, kind: str, **extra):
         return TransitionStateValidationEvidenceIn(

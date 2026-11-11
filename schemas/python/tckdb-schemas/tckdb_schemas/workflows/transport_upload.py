@@ -71,8 +71,7 @@ class TransportUploadPayload(SchemaBase):
 
         A transport row carrying none of these is definitionally empty — it
         claims to be transport data while carrying no transport property — so
-        this is a contract violation and blocks at upload, per ADR 0008
-        (``docs/adr/0008-validation-tiers-definitions-block-expectations-warn.md``).
+        this is a contract violation and blocks at upload.
         The read-time counterpart is the backend's
         ``HardFailReason.no_transport_property_present``, which this check owns
         as the blocking tier; the trust label remains as a backstop for rows

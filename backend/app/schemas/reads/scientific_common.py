@@ -43,7 +43,7 @@ class HiddenByDefault(BaseModel):
     Reported only under the ``exploratory`` profile, and only for an exclusion the request left at its default
     (``include_rejected`` / ``include_deprecated`` not set). ``counts`` has one key per such exclusion, counted over the
     records that matched the request's other filters. Under ``curated`` the block is never present: records below the
-    review floor are left out of a list and are not counted (the record floor, ADR 0023).
+    review floor are left out of a list and are not counted (the record floor).
     """
 
     counts: dict[str, int]
@@ -56,8 +56,7 @@ class HiddenByDefault(BaseModel):
 class ScientificResponse(BaseModel):
     """Base class for every ``/scientific/*`` response envelope (a block with a ``request`` echo).
 
-    ``review_status_by_ref`` is the review badge of every gated record the response names (ADR 0023: linked evidence is shown
-    WITH its badge). It exists because most nested pointers are bare refs with no badge field of their own. Under the
+    ``review_status_by_ref`` is the review badge of every gated record the response names. It exists because most nested pointers are bare refs with no badge field of their own. Under the
     ``curated`` profile it maps each such ref still present in the finished response to its review status (a record with no
     review row reads as ``not_reviewed``); a ref the evidence rule withheld is not in the response and so not in the map.
     It is ``null`` under the exploratory profile, where no review lookup is made. The record floor, not the badge, decides
@@ -103,8 +102,8 @@ class ProfiledRequestEcho(BaseModel):
     #: What the default visibility hid (exploratory only; see :class:`HiddenByDefault`). ``None`` when nothing was
     #: excluded by default, on every read that applies no default visibility, and always under ``curated``.
     hidden_by_default: HiddenByDefault | None = None
-    #: Public refs this request named that belong to a species, species entry or reaction that was merged into another
-    #: (DR-0038), each mapped to the ref of the row it stands for and whose results the response shows. Empty when
+    #: Public refs this request named that belong to a species, species entry or reaction that was merged into another,
+    #: each mapped to the ref of the row it stands for and whose results the response shows. Empty when
     #: no named ref was merged. A merged row keeps its ref, so a citation of it still resolves; this says that it did so
     #: by forwarding.
     merged_refs: dict[str, str] = Field(default_factory=dict)
@@ -248,7 +247,7 @@ class ReviewStatusSummary(BaseModel):
 
 
 class RecordReviewBadge(BaseModel):
-    """Single record's direct review state — no chain traversal (D7).
+    """Single record's direct review state — no chain traversal.
 
     ``note`` is the curator's stated reason, and it is **public**. A status
     on its own tells a reader that somebody formed a view without saying
@@ -289,8 +288,7 @@ class SupersessionNotice(BaseModel):
     so nobody investigates. Findable-and-unmarked is precisely the failure
     the append-only design was meant to prevent, so every read of a
     superseded record carries this block — unconditionally, not behind an
-    ``include=`` token. See ADR 0003 (frozen rows) and ADR 0007 (no stored
-    ``is_current``).
+    ``include=`` token.
 
     Two pointers, deliberately
     --------------------------
@@ -306,7 +304,7 @@ class SupersessionNotice(BaseModel):
     the head is computed per read. Storing the head would mean ``UPDATE``-ing
     every earlier record whenever a new correction lands — forbidden by the
     accepted-science immutability triggers, and the same second-source-of-
-    truth defect ADR 0007 rejected as ``is_current``. Appending a correction
+    truth defect that a stored ``is_current`` would be. Appending a correction
     is one ``INSERT``, and every read of every earlier record reports the new
     head immediately because it was never written down.
 
@@ -315,8 +313,7 @@ class SupersessionNotice(BaseModel):
     here: the read API does not attribute curation actions to a person.
 
     Both pointers are public refs of the *records* (``thm_…``, ``kin_…``),
-    never of the supersession edge, and never a database row id
-    (DR-0028 Req 2).
+    never of the supersession edge, and never a database row id.
     """
 
     superseded_by: str
@@ -337,7 +334,7 @@ class SupersessionNotice(BaseModel):
 
 
 class CompositeSchemeSummary(BaseModel):
-    """The composite recipe a level of theory is bound to (ADR 0021).
+    """The composite recipe a level of theory is bound to.
 
     ``composite_scheme_ref`` is the handle for
     ``GET /scientific/composite-schemes/{ref}``, which returns the recipe's
@@ -355,7 +352,7 @@ class CompositeSchemeSummary(BaseModel):
 
 
 class CompositeEnergyVerification(BaseModel):
-    """How far a composite energy has been checked (ADR 0021, P7a). Derived at read time, never stored.
+    """How far a composite energy has been checked. Derived at read time, never stored.
 
     ``state``
         * ``recomputed`` -- an ``assembled`` composite whose stored inputs, run
@@ -391,7 +388,7 @@ class CompositeEnergyVerification(BaseModel):
 class LevelOfTheorySummary(BaseModel):
     """Lightweight LoT shape used in scientific provenance summaries.
 
-    Phase B: ``level_of_theory_ref`` is the public stable handle; the
+    ``level_of_theory_ref`` is the public stable handle; the
     existing ``level_of_theory_id`` integer stays for the compatibility
     window. See ``docs/specs/public_identifier_policy.md``.
     """
@@ -402,12 +399,12 @@ class LevelOfTheorySummary(BaseModel):
     basis: str | None = None
     dispersion: str | None = None
     solvent: str | None = None
-    #: Restricted / unrestricted / restricted-open (DR-0034). ``None`` means
+    #: Restricted / unrestricted / restricted-open. ``None`` means
     #: unspecified by the producer, distinct from the enum's own explicit
     #: ``unknown`` member -- see ``LevelOfTheory.spin_treatment``. Part of
     #: LOT identity and folded into ``lot_hash``; not builders' to omit.
     spin_treatment: SpinTreatment | None = None
-    #: Frozen-core or all-electron (ADR 0021). ``None`` means the producer did
+    #: Frozen-core or all-electron. ``None`` means the producer did
     #: not state it, never "frozen core by default". Part of LOT identity only
     #: when set. Every builder passes it explicitly
     #: (``tests/invariants/test_level_summary_carries_composite_scheme.py``).
@@ -464,8 +461,6 @@ class LevelOfTheorySummary(BaseModel):
         all-electron and frozen-core ``CCSD(T)/cc-pCVTZ`` read ``... (core=all_electron)`` and
         ``... (core=frozen_core)`` rather than identically. ``display`` is the short form (method and
         basis only). Like ``display``, it is for reading: ``level_of_theory_ref`` is the handle to compare on.
-        This replaces the earlier stored ``label``, which every builder left ``null`` or filled with a
-        slash-joined method and basis.
         """
         return level_label(self)
 
@@ -596,7 +591,7 @@ def level_label(level: LevelOfTheorySummary) -> str:
 def levels_notation(*, energy: LevelOfTheorySummary | None, geometry: LevelOfTheorySummary | None) -> str | None:
     """The notation of a record's energy and geometry levels, e.g. ``CCSD(T)-F12/cc-pVTZ-F12//wB97X-D/def2-TZVP``.
 
-    The rules, exactly (ADR 0021, plan section 2.6), applied in this order:
+    The rules, exactly, applied in this order:
 
     * **Either level absent: no notation** (``None``). Never a partial one: ``x``
       alone would claim the geometry is at ``x`` too, which is a fact nobody
@@ -663,7 +658,7 @@ class LiteratureSummary(BaseModel):
     deliberately smaller shape sufficient for scientific-read provenance,
     avoiding a heavier include for what is usually a sidebar fact.
 
-    Phase B: ``literature_ref`` is the public stable handle; ``id`` stays
+    ``literature_ref`` is the public stable handle; ``id`` stays
     for the compatibility window.
     """
 
@@ -693,7 +688,7 @@ SCFStabilityStatusValue = Literal[
 class ValidationSummary(BaseModel):
     """Geometry validation outcome for a single calculation.
 
-    Phase B: ``calculation_ref`` is the public stable handle for the
+    ``calculation_ref`` is the public stable handle for the
     associated calculation; ``calculation_id`` stays for compatibility.
     """
 
@@ -738,9 +733,9 @@ class PathSearchSummary(BaseModel):
 
 
 class TemperatureCoverage(BaseModel):
-    """D8 verbatim — full-range coverage gate plus extrapolation distance.
+    """Full-range coverage gate plus extrapolation distance.
 
-    ``overlap_fraction`` is diagnostic only; per D8 it is never the primary
+    ``overlap_fraction`` is diagnostic only; it is never the primary
     sort score.
     """
 
@@ -776,7 +771,7 @@ class EvidenceCompletenessBreakdown(BaseModel):
 def default_visible_statuses(
     *, include_rejected: bool = False, include_deprecated: bool = False
 ) -> set[RecordReviewStatus]:
-    """Set of statuses that should be visible by default per D5.
+    """Set of statuses that should be visible by default.
 
     Approved / under_review / not_reviewed are always visible. Rejected and
     deprecated are excluded unless explicitly opted in.

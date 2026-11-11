@@ -33,11 +33,11 @@ class MadeUnder(BaseModel):
     this record, so there is no rubric to name). ``stale`` is not ``unassessed``: a stale assessment exists and says what it was made under.
 
     ``stale_reason`` says why a stale assessment is stale: ``rubric_version`` (the rubric has moved on, or the
-    assessment was stamped before the 2026-10 versioning reset, as version 0, which is never current) or
+    assessment carries version 0, which is never current) or
     ``inputs_changed`` (same rubric version, but the inputs it was computed from differ now: new evidence, or a changed
     rule under the same version).
 
-    ``assessed_version`` 0 is "stamped before the 2026-10 versioning reset". It is never a current version.
+    ``assessed_version`` 0 is never a current version.
     Nothing here ranks a record: it names the rule that judged it, not how good the record is.
     """
 

@@ -102,7 +102,7 @@ class KineticsReadRequest(BaseModel):
     )
     model_kind: KineticsModelKind | None = None
     level_of_theory_id: int | None = None
-    # Phase C: LoT may be supplied by ref instead of (or alongside) id.
+    # LoT may be supplied by ref instead of (or alongside) id.
     level_of_theory_ref: str | None = None
     software: str | None = None
 
@@ -172,7 +172,7 @@ class ArrheniusParameters(BaseModel):
 class MultiArrheniusTerm(BaseModel):
     """One modified-Arrhenius term of a sum-of-Arrhenius (DUPLICATE) rate.
 
-    DR-0036: for ``model_kind == 'multi_arrhenius'`` records, the rate
+    For ``model_kind == 'multi_arrhenius'`` records, the rate
     coefficient is the sum over these terms; the top-level ``parameters``
     block is empty (scalar A/n/Ea are null on the parent).
     """
@@ -194,7 +194,7 @@ class KineticsUncertainty(BaseModel):
 
 
 class PlogEntryBlock(BaseModel):
-    """One pressure entry of a standalone PLOG rate (DR-0032 Part C).
+    """One pressure entry of a standalone PLOG rate.
 
     k(T,P) is interpolated in log P between bracketing entries; each entry is
     a modified-Arrhenius set at a fixed pressure. Mirrors the ``kinetics_plog``
@@ -210,7 +210,7 @@ class PlogEntryBlock(BaseModel):
 
 
 class ChebyshevBlock(BaseModel):
-    """Chebyshev-polynomial k(T,P) surface (DR-0032 Part C).
+    """Chebyshev-polynomial k(T,P) surface.
 
     Mirrors the ``kinetics_chebyshev`` ORM child: the T/P validity domain and
     the ``n_temperature`` x ``n_pressure`` coefficient matrix (list of rows).
@@ -232,7 +232,7 @@ class ChebyshevBlock(BaseModel):
 
 
 class FalloffBlock(BaseModel):
-    """Pressure-dependent falloff parameters (DR-0032 Part B).
+    """Pressure-dependent falloff parameters.
 
     The high-pressure-limit (k∞) Arrhenius lives in the parent record's
     ``parameters`` block; this block carries the low-pressure-limit (k0)
@@ -381,7 +381,7 @@ class KineticsProvenance(BaseModel):
     :func:`app.services.scientific_read.kinetics._build_kinetics_levels`
     for the mechanism.
 
-    Phase B: ``*_ref`` siblings carry the public stable handles for each
+    ``*_ref`` siblings carry the public stable handles for each
     integer ``*_id`` field. The nested summary objects (path_search,
     primary_level_of_theory, primary_software, etc.) carry their own
     ``*_ref`` fields per their schemas.
@@ -408,7 +408,7 @@ class KineticsProvenance(BaseModel):
     literature: LiteratureSummary | None = None
     software_release: SoftwareReleaseSummary | None = None
     workflow_tool_release: WorkflowToolReleaseSummary | None = None
-    # DR-0036 bridge: the pressure-dependent network counterpart of this
+    # Bridge to the pressure-dependent network counterpart of this
     # reaction-level fit, if one has been linked. ``null`` otherwise.
     network_kinetics_id: int | None = None
     network_kinetics_ref: str | None = None
@@ -453,7 +453,7 @@ class KineticsDeterminationBlock(BaseModel):
 class KineticsRecord(BaseModel):
     """One kinetics record returned by the kinetics endpoint.
 
-    Phase B: ``kinetics_ref`` is the public stable handle alongside
+    ``kinetics_ref`` is the public stable handle alongside
     ``kinetics_id``.
     """
 
@@ -490,11 +490,11 @@ class KineticsRecord(BaseModel):
     #: ``include=`` token. See :class:`SupersessionNotice`.
     supersession: SupersessionNotice | None = None
     parameters: ArrheniusParameters
-    # DR-0036: populated only for ``multi_arrhenius`` records — the summed
+    # Populated only for ``multi_arrhenius`` records — the summed
     # modified-Arrhenius terms. ``null`` for every other model kind.
     multi_arrhenius: list[MultiArrheniusTerm] | None = None
     tunneling_model: str | None = None
-    # Pressure-dependent / third-body forms (DR-0032). All ``None`` for a
+    # Pressure-dependent / third-body forms. All ``None`` for a
     # plain Arrhenius record; each block is populated only when its data is
     # present on the underlying ``kinetics`` row.
     is_third_body: bool = False
@@ -572,7 +572,7 @@ class RequestEcho(ProfiledRequestEcho):
 class ScientificReactionKineticsResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/reaction-entries/{id}/kinetics.
 
-    Phase B: ``reaction_entry_ref`` mirrors ``reaction_entry_id`` as the
+    ``reaction_entry_ref`` mirrors ``reaction_entry_id`` as the
     public stable handle for the response's path-parameter resource.
     """
 

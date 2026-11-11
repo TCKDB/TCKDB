@@ -34,13 +34,13 @@ class LevelOfTheory(Base, TimestampMixin, PublicRefMixin):
     solvent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     solvent_model: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Restricted / unrestricted / restricted-open — part of LOT identity
-    # (DR-0034). NULL = unspecified (distinct from an explicit 'unknown').
+    # NULL = unspecified (distinct from an explicit 'unknown').
     spin_treatment: Mapped[Optional[SpinTreatment]] = mapped_column(
         SAEnum(SpinTreatment, name="spin_treatment"),
         nullable=True,
     )
 
-    # Frozen-core vs all-electron (ADR 0021). NULL = not stated, and a NULL
+    # Frozen-core vs all-electron. NULL = not stated, and a NULL
     # row hashes exactly as it did before the column existed: the key joins the
     # hash only when set, so no existing row is re-keyed.
     core_treatment: Mapped[Optional[CoreTreatment]] = mapped_column(
@@ -48,7 +48,7 @@ class LevelOfTheory(Base, TimestampMixin, PublicRefMixin):
         nullable=True,
     )
 
-    # Method qualifiers (Stage 2 of the keywords decision). Each joins the hash
+    # Method qualifiers. Each joins the hash
     # only when set, exactly like ``core_treatment``: NULL = not stated and adds
     # no key. There is deliberately no free-text keywords column; the settings a
     # deck or log states are stored as calculation parameters.

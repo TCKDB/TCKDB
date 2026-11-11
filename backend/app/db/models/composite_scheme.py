@@ -1,4 +1,4 @@
-"""Composite levels of theory: recipe identity bound to a level (ADR 0021).
+"""Composite levels of theory: recipe identity bound to a level.
 
 A composite energy (CBS-QB3, a CCSD(T)/CBS extrapolation, a focal-point sum)
 is a *recipe*, and a recipe is what these tables hold. The level of theory

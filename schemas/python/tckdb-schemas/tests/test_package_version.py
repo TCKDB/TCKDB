@@ -1,10 +1,9 @@
 """Guard against the ``__version__`` / ``pyproject.toml`` drift.
 
-``tckdb_schemas.__init__`` used to hard-code ``__version__ = "0.10.0"`` while
-``pyproject.toml`` shipped 0.14.0. Anything negotiating the wire-contract
-version on ``__version__`` was told the wrong answer. The fix is to keep
-exactly one version literal in the repo — the one in ``pyproject.toml`` — and
-resolve ``__version__`` from installed distribution metadata.
+``tckdb_schemas.__init__`` must not hard-code a version: anything negotiating
+the wire-contract version on ``__version__`` would be told the wrong answer.
+Exactly one version literal exists in the repo -- the one in ``pyproject.toml``
+-- and ``__version__`` is resolved from installed distribution metadata.
 """
 
 from __future__ import annotations

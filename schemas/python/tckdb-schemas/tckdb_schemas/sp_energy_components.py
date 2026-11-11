@@ -1,4 +1,4 @@
-"""Block-tier checks for a single point's deposited energy components (ADR 0021).
+"""Block-tier checks for a single point's deposited energy components.
 
 A single point may carry the parts of its electronic energy: the reference
 (SCF / HF) energy, the correlation energy, a triples part, corrections. A

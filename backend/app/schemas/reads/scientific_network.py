@@ -127,8 +127,8 @@ class NetworkSpeciesSummary(EntryFacetFields):
     species_entry_ref: str
     #: The short discriminator that says which entry of the species this
     #: participant is. ``canonical_smiles`` is the *species'* and is shared
-    #: by every entry under it -- the hydrazine network carries two diazene
-    #: entries under one ``N=N``, and without this they read as the same
+    #: by every entry under it -- for example two diazene
+    #: entries sit under one ``N=N``, and without this they read as the same
     #: participant listed twice. ``None`` for the plain ground-state,
     #: stereo-unlabelled entry.
     species_entry_label: str | None = None
@@ -231,17 +231,16 @@ class NetworkSolveSummary(BaseModel):
     network_solve_ref: str
     # Whether the master equation was solved here or the rates were read out
     # of a paper. A consumer comparing two solves of the same network needs
-    # this to tell "we computed it" from "a paper says so" (ADR 0010).
+    # this to tell "we computed it" from "a paper says so".
     #
     # Deliberately **required, with no default**. ``network_solve.kind`` is
     # NOT NULL, so every row this schema can ever project provably has one;
     # a default would only ever fire when a *builder forgot to project it*,
     # and defaulting to ``computed`` would then read the stronger scientific
-    # claim out of an absence — the read-side twin of the write-side bug
-    # ADR 0010 fixed. Required means that mistake raises a ValidationError at
-    # construction instead of silently shipping a false provenance claim.
-    # Nothing changes on the wire: the field is already present in every
-    # response, so this only moves it into the OpenAPI ``required`` array.
+    # claim out of an absence. Required means that mistake raises a
+    # ValidationError at construction instead of silently shipping a false
+    # provenance claim. The field is present in every response and is in the
+    # OpenAPI ``required`` array.
     kind: NetworkSolveKind
     me_method: str | None = None
     interpolation_model: str | None = None
@@ -519,7 +518,7 @@ class NetworkSolveEnergyTransferSummary(BaseModel):
     ``network_wide`` row ``state_composition_hash`` and
     ``collider_species_entry_ref`` are null *by declaration* — the producer
     determined one ⟨ΔE⟩down for the entire network — not because the fields
-    were dropped. See ADR 0009.
+    were dropped.
     """
 
     energy_transfer_id: int | None = None

@@ -145,7 +145,7 @@ class SpeciesSearchRequest(SpeciesFilterRequest):
     inchi: str | None = Field(default=None, max_length=_MAX_INCHI_LENGTH)
     inchi_key: str | None = Field(default=None, max_length=_MAX_INCHI_KEY_LENGTH)
 
-    # Phase C: explicit handles (refs); ID siblings keep the existing
+    # explicit handles (refs); ID siblings keep the existing
     # behavior. If both are supplied they must resolve to the same row.
     species_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
     species_entry_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
@@ -309,7 +309,7 @@ class SpeciesEntrySectionIds(BaseModel):
 class SpeciesEntryScientificRecord(BaseModel):
     """Per-entry block embedded in a SpeciesScientificRecord.
 
-    Phase B: ``species_entry_ref`` is the public stable handle alongside
+    ``species_entry_ref`` is the public stable handle alongside
     the integer ``species_entry_id``.
 
     Identity fields
@@ -325,7 +325,7 @@ class SpeciesEntryScientificRecord(BaseModel):
     wrong answer. Two entries of one species that agree on every served
     field are indistinguishable on the wire, and a reader picking a ref
     from a list of two identical records has a 50% chance of citing the
-    other molecule. The live database has exactly that shape: ``N=N``
+    other molecule. For example, ``N=N``
     carries a ``Z`` entry (cis-diazene) and an ``E`` entry
     (trans-diazene), with different thermochemistry. A reader who does
     not know to ask for an include token is precisely the reader who gets
@@ -339,12 +339,11 @@ class SpeciesEntryScientificRecord(BaseModel):
     a structure search, and a network state label.
 
     Every one of these is ``None`` when the column is ``NULL``, never
-    ``""``. 51 of the 60 entries on the deployed database have no stereo
-    label at all, and "no label" must render as no label rather than as a
-    label that happens to be blank.
+    ``""``: "no label" must render as no label rather than as a label that
+    happens to be blank.
 
     ``isotopologue_label`` is deliberately **not** served. It is a
-    deprecated free-text column, is no longer part of the entry's unique
+    deprecated free-text column, is not part of the entry's unique
     identity, is never written by the application, and therefore cannot
     discriminate between two entries; serving it would advertise an
     identity component that is not one.
@@ -355,7 +354,7 @@ class SpeciesEntryScientificRecord(BaseModel):
     species_entry_kind: StationaryPointKind
     electronic_state_kind: SpeciesEntryStateKind
     stereo_label: str | None = None
-    #: The entry's stereo key (DR-0038): ``R``/``S``/``E``/``Z``/``Ra``/``Sa``/``?`` per potential
+    #: The entry's stereo key: ``R``/``S``/``E``/``Z``/``Ra``/``Sa``/``?`` per potential
     #: stereo element (``Ra``/``Sa``: an allene axis), ``null`` only when the species is achiral. ``stereo_label`` is
     #: its display text (``null`` while nothing is resolved); this is the key.
     stereo_descriptor: str | None = None
@@ -387,7 +386,7 @@ class SpeciesEntryScientificRecord(BaseModel):
 class SpeciesScientificRecord(BaseModel):
     """One species row returned from /scientific/species/search.
 
-    Phase B: ``species_ref`` is the public stable handle alongside
+    ``species_ref`` is the public stable handle alongside
     the integer ``species_id``.
 
     ``stereo_kind`` is a property of the *species* graph, not of any one

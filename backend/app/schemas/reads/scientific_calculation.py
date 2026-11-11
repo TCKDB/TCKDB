@@ -63,7 +63,7 @@ from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 from app.services.trust.models import TrustFragment
 
 # ---------------------------------------------------------------------------
-# Imaginary-mode projection vocabulary (ADR 0012 / ADR 0013)
+# Imaginary-mode projection vocabulary
 # ---------------------------------------------------------------------------
 
 # Spelled as literals rather than reused from
@@ -134,7 +134,7 @@ class SpeciesEntryOwnerSummary(EntryFacetFields):
     Mirrors ``SpeciesCalculationsSpeciesContext`` but only carries the
     fields the calculation-detail endpoint reliably has on hand without
     additional heavy joins. ``species_id`` / ``species_entry_id`` are
-    stripped by the Phase D internal-ids policy when not allowed.
+    stripped by the internal-ids policy when not allowed.
 
     ``species_entry_label`` says *which* entry of that species owns
     the calculation. ``canonical_smiles`` is the species' and is
@@ -226,7 +226,7 @@ class CalculationConformerSummary(BaseModel):
 class CalculationCoreBlock(BaseModel):
     """Direct calculation-row metadata.
 
-    Phase B/D: ``calculation_ref`` is the public stable handle alongside
+    ``calculation_ref`` is the public stable handle alongside
     ``calculation_id`` (the integer id is stripped when the deployment
     forbids exposing internal ids).
     """
@@ -261,7 +261,7 @@ class CalculationEvidenceProvenanceSummary(BaseModel):
     - ``submission_ref``/``submission_id`` for traceability back to the
       submission that created the calculation.
 
-    ``submission_id`` follows the ordinary Phase D internal-id policy
+    ``submission_id`` follows the ordinary internal-id policy
     (hidden unless ``include=internal_ids`` *and* the deployment
     permits it). ``submission_ref`` is gated differently: it is present
     (possibly ``null``, so an authenticated caller can detect "no
@@ -320,7 +320,7 @@ class CalculationEvidenceProvenanceSummary(BaseModel):
 
 
 class CalculationSPEnergyComponentSummary(BaseModel):
-    """One deposited part of a single point's electronic energy (ADR 0021).
+    """One deposited part of a single point's electronic energy.
 
     The value is what the depositor sent; TCKDB checked it against the
     single point's energy at deposit and never derived it.
@@ -368,7 +368,7 @@ class CalculationCompositeInputSummary(BaseModel):
 
 
 class CalculationCompositeResultSummary(BaseModel):
-    """Summary projection of a ``calc_composite_result`` row and its terms (ADR 0021).
+    """Summary projection of a ``calc_composite_result`` row and its terms.
 
     Every energy is ``null`` when the depositor did not state it, never zero.
     The numbers are the producer's: TCKDB never stores a total it computed.
@@ -406,32 +406,28 @@ class CalculationFreqResultSummary(BaseModel):
     array is served under the dedicated ``include=freq_modes`` heavy
     include (see :class:`CalculationFreqModeSummary`).
 
-    **``n_imag`` does not travel alone.** ADR 0012 retired counting
-    imaginary modes in favour of judging them by magnitude against the
-    protocol that produced them, and requires that wherever ``n_imag``
-    is reported it is accompanied by the tolerance applied, how that
-    tolerance was chosen, and the count above it. It is reported here
+    **``n_imag`` does not travel alone.** Imaginary modes are judged by
+    magnitude against the protocol that produced them rather than counted, so
+    wherever ``n_imag`` is reported it is accompanied by the tolerance applied,
+    how that tolerance was chosen, and the count above it. It is reported here
     anyway — it is what the ESS printed — but a consumer that filters on
-    ``n_imag == 1`` and stops is selecting on a quantity ADR 0012 shows
-    is a property of the method, grid and Hessian algorithm as much as of
-    the structure: two correct calculations of the same saddle point can
-    return 1 and 3.
+    ``n_imag == 1`` and stops is selecting on a quantity that is a property of
+    the method, grid and Hessian algorithm as much as of the structure: two
+    correct calculations of the same saddle point can return 1 and 3.
 
     ``imaginary_mode_structural_flag`` is the field that makes that
-    filter safe, and it is the reason these fields are on the *cheap*
-    projection rather than behind an opt-in include. It is ADR 0012's
-    structural exclusion signal: true means the record carries an
-    imaginary mode at or above tau beyond its designated reaction
-    coordinate, so it is a genuine higher-order saddle — accepted,
+    filter safe, and it is on the *cheap* projection rather than behind an
+    opt-in include. It is the structural exclusion signal: true means the
+    record carries an imaginary mode at or above tau beyond its designated
+    reaction coordinate, so it is a genuine higher-order saddle — accepted,
     because that can be correct chemistry, but excluded from default
     transition-state consumption. A flag a consumer has to know to ask
     for does not protect the consumer who did not know.
 
     Every field here is read straight off the stored row. Nothing is
-    re-resolved: ADR 0012 requires tau to be *stored* precisely so that a
-    later parser improvement cannot silently re-decide a historical
-    judgement, and recomputing it to fill this block would be that
-    defect. The one derived field is
+    re-resolved: tau is *stored* so that a later parser improvement cannot
+    silently re-decide a historical judgement, and recomputing it to fill
+    this block would be that defect. The one derived field is
     :attr:`n_imag_at_or_above_tau`, which compares stored magnitudes
     against the stored tau and resolves nothing.
 
@@ -443,11 +439,9 @@ class CalculationFreqResultSummary(BaseModel):
     (``ck_calc_freq_result_imaginary_mode_tau_basis_known``), so an
     unrecognised value means a newer writer, never a typo.
 
-    All four ADR 0012 fields are ``None`` together on a record deposited
-    before that decision shipped. That is "never judged under ADR 0012",
-    which is a different fact from "judged and not flagged" and is not
-    collapsed into ``false``/``0`` here any more than it was backfilled
-    in the migration that added the columns.
+    All four tau-judgement fields are ``None`` together on a record that was
+    never judged. That is a different fact from "judged and not flagged" and
+    is not collapsed into ``false``/``0`` here.
     """
 
     n_imag: int | None = None
@@ -456,12 +450,12 @@ class CalculationFreqResultSummary(BaseModel):
     zpe_uncertainty_hartree: float | None = None
 
     #: ``mode_index`` of the mode the depositor designated the reaction
-    #: coordinate. ADR 0012 makes designating exactly one mode the
-    #: contract that replaced the ``n_imag == 1`` gate, so its absence on
-    #: a multi-imaginary-mode transition state is a finding.
+    #: coordinate. Designating exactly one mode is the contract for a
+    #: transition state with several imaginary modes, so its absence on
+    #: one is a finding.
     reaction_coordinate_mode_index: int | None = None
 
-    #: The ADR 0012 tolerance actually applied to this record (cm-1) and
+    #: The tolerance actually applied to this record (cm-1) and
     #: which row of the protocol table chose it. Two records with the
     #: same frequency list and different tau were judged differently, and
     #: neither is wrong: tau is a statement about the noise floor of the
@@ -469,7 +463,7 @@ class CalculationFreqResultSummary(BaseModel):
     imaginary_mode_tau_cm1: float | None = None
     imaginary_mode_tau_basis: str | None = None
 
-    #: ADR 0012's structural flag. See the class docstring: this is the
+    #: The structural flag. See the class docstring: this is the
     #: exclusion signal, and null means "never judged", not "clean".
     imaginary_mode_structural_flag: bool | None = None
 
@@ -507,17 +501,14 @@ class CalculationFreqModeSummary(BaseModel):
 
     **The evidence and the verdict on it travel together.** This include
     is where a reader meets the individual negative frequencies, and it
-    is therefore where the question ADR 0012 exists to answer gets asked:
-    a record with several of them is accepted only because the depositor
+    is therefore where the question of which mode is the reaction coordinate gets
+    asked: a record with several of them is accepted only because the depositor
     said which one is the reaction coordinate and what each of the others
     *is*. The designation lives on the freq-result projection
     (``reaction_coordinate_mode_index``); the dispositions live per mode
-    and were, until this field existed, stored and unreadable here — so a
-    consumer looking at three negative frequencies could see that one of
-    them was designated and could not see that the other two had been
-    declared a torsion and projection residue. It was the ambiguity ADR
-    0012 was written to remove, reintroduced by a projection that carried
-    the evidence and dropped the judgement.
+    and are reported here, so a consumer looking at three negative
+    frequencies sees which one was designated and what the other two were
+    declared (for example a torsion and projection residue).
 
     The same declaration is also reported under
     ``include=imaginary_mode_projections``, where it sits beside a
@@ -555,7 +546,7 @@ class CalculationFreqModeSummary(BaseModel):
 
 
 class ImaginaryModeProjectionEntry(BaseModel):
-    """One imaginary mode's ADR 0012 projections, next to its declaration.
+    """One imaginary mode's projections, next to its declaration.
 
     ``declared_disposition`` is what the **depositor** said the mode is.
     ``determination`` is what projecting the eigenvector recovered from
@@ -570,7 +561,7 @@ class ImaginaryModeProjectionEntry(BaseModel):
     looks like but is not a claim about which internal coordinate it is.
 
     The raw overlaps and the thresholds applied to them are both on the
-    payload, so a reader who disagrees with ADR 0012's 90% and 70% can
+    payload, so a reader who disagrees with the 90% and 70% thresholds can
     reach their own verdict without re-running anything.
     """
 
@@ -588,7 +579,7 @@ class ImaginaryModeProjectionEntry(BaseModel):
 
 
 class TauProtocolParameterEntry(BaseModel):
-    """One recorded parameter ADR 0012's tau is resolved from.
+    """One recorded parameter tau is resolved from.
 
     All three canonical keys are always listed, in a fixed order, with
     ``canonical_value = null`` for the ones this record does not carry.
@@ -624,19 +615,19 @@ class TauRankedModeEntry(BaseModel):
 
 
 class ImaginaryModeTauContext(BaseModel):
-    """ADR 0012's stored magnitude judgement, returned beside a
+    """The stored magnitude judgement, returned beside a
     projection that could not be taken.
 
     Present only when ``ImaginaryModeProjectionSummary.status`` is one of
     the not-determinable values and the record has imaginary modes.
-    Absent on a ``determined`` block, because ADR 0012's own rule is
-    that a determination beats a threshold and reporting both would
+    Absent on a ``determined`` block, because a determination beats
+    a threshold and reporting both would
     invite a reader to split the difference between a measurement and a
     tolerance.
 
     Everything here is read back from ``calc_freq_result`` and
     ``calculation_parameter`` as the upload wrote them. Nothing is
-    re-resolved: ADR 0012 requires tau to be stored precisely so a later
+    re-resolved: tau is stored so a later
     parser improvement cannot silently re-label a historical record, and
     recomputing it to fill this block would be that defect.
 
@@ -668,7 +659,7 @@ class ImaginaryModeProjectionSummary(BaseModel):
 
     Nor is it a shrug. A record with no matrix was still judged by
     magnitude at upload, and ``tau_context`` carries that judgement --
-    the tau applied, the row of ADR 0012's protocol table it came from,
+    the tau applied, the row of the protocol table it came from,
     the recorded provenance that chose that row, the persisted
     structural flag, and every imaginary mode ranked by magnitude
     against the tau. A reader gets "this could not be determined from
@@ -751,7 +742,7 @@ class CalculationArtifactSummary(BaseModel):
     added by the public-ref backfill described in
     ``backend/docs/deployment/migrations.md``.
 
-    ``artifact_id`` is subject to the Phase D internal-ID visibility
+    ``artifact_id`` is subject to the internal-ID visibility
     policy and is stripped by the strip helper when the deployment
     forbids exposing internal ids.
     """
@@ -797,7 +788,7 @@ class CalculationGeometryLinkSummary(BaseModel):
     output as a stand-in for it). See
     ``app.db.models.common.CalculationInputGeometrySource``.
 
-    ``geometry_id`` is subject to the Phase D internal-ID visibility
+    ``geometry_id`` is subject to the internal-ID visibility
     policy and is stripped by the strip helper when the deployment
     forbids exposing internal ids; ``geometry_ref`` is always present.
     """
@@ -973,8 +964,7 @@ class CalculationReviewEntry(BaseModel):
 
     ``reviewer_ref`` is not surfaced because ``app_user`` carries no
     public ref. ``submission_ref`` is loaded when the review row links
-    a submission. All ``*_id`` fields are subject to the Phase D
-    internal-ID visibility policy.
+    a submission. All ``*_id`` fields are subject to the internal-ID visibility policy.
     """
 
     status: RecordReviewStatus
@@ -997,7 +987,7 @@ class CalculationConstraintSummary(BaseModel):
     list is the non-null indices in arity order so flattened consumers
     can iterate without re-checking the kind.
 
-    ``calculation_id`` is subject to the Phase D internal-ID visibility
+    ``calculation_id`` is subject to the internal-ID visibility
     policy and is stripped when the deployment forbids exposing
     internal ids. ``constraint_index`` is scientific/order metadata
     (not a DB-internal surrogate) and stays visible.
@@ -1098,7 +1088,7 @@ class CalculationParameterSummary(BaseModel):
     vocab row (descriptions, classification flags) is intentionally not
     inlined; callers that need it can fetch the vocab via a separate read.
 
-    ``parameter_id`` is subject to the Phase D internal-ID visibility
+    ``parameter_id`` is subject to the internal-ID visibility
     policy and is stripped by the strip helper when the deployment
     forbids exposing internal ids.
     """
@@ -1137,7 +1127,7 @@ class CalculationGeometryValidationSummary(BaseModel):
     with other heavy includes — it will contain zero or one entry.
 
     ``input_geometry_id`` / ``output_geometry_id`` are subject to the
-    Phase D internal-ID visibility policy. Refs are always present
+    internal-ID visibility policy. Refs are always present
     when the underlying geometry exists.
 
     What the verdict actually means
@@ -1203,7 +1193,7 @@ class CalculationSCFStabilitySummary(BaseModel):
     ``source_calculation_id`` via the calculation's own ``public_ref``.
     Both stay ``None`` when the corresponding FK is unset — that is a
     property of the (nullable) link, not of the ref column. Internal
-    IDs follow the Phase D visibility policy.
+    IDs follow the visibility policy.
     """
 
     status: SCFStabilityStatus
@@ -1415,7 +1405,7 @@ class CalculationDependencySummary(BaseModel):
       ``parent_calculation_*`` fields point at the calculation it
       depends on.
 
-    Integer ids are subject to the Phase D internal-ID visibility
+    Integer ids are subject to the internal-ID visibility
     policy and are stripped by the strip helper when the deployment
     forbids exposing them. Refs are always present.
     """
@@ -1576,7 +1566,7 @@ class ScientificCalculationRecord(BaseModel):
     provenance: CalculationEvidenceProvenanceSummary
     available_sections: AvailableCalculationSections
     results: CalculationResultSummary | None = None
-    #: How far a ``composite`` calculation's energy has been checked (ADR 0021, P7a),
+    #: How far a ``composite`` calculation's energy has been checked,
     #: derived on every read: an assembled composite is recomputed from its stored
     #: inputs, a program run is read from the log check recorded at upload. ``null``
     #: for every other calculation type. Never behind an ``include=`` token, and never

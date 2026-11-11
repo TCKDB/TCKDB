@@ -53,8 +53,8 @@ Classification choices (every entry is in the table below)
 * A leading ``u``, ``r`` or ``ro`` (unrestricted, restricted, restricted-open-shell) is read through only when the rest is
   a classified method and the prefixed name is not a table entry of its own (``uccsd``, ``um062x``, ``ub2plyp``).
 * r2SCAN-3c is rung 3 (meta-GGA, no exact exchange); PBEh-3c is rung 4 (hybrid).
-* XYG3 and the other XYG double hybrids are left out on purpose: they are evaluated on B3LYP orbitals, so their
-  provenance needs a decision first. They stay ``unclassified``.
+* XYG3 and the other XYG double hybrids are left out: they are evaluated on B3LYP orbitals. They stay
+  ``unclassified``.
 * HF-3c and machine-learned potentials are left out, so they are ``unclassified``.
 * ``casscf(n,m)`` with the active space written in the method name is not recognised; the bare name is.
 """

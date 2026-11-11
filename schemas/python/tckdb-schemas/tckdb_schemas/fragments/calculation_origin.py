@@ -5,7 +5,7 @@ from another calculation, imported from external source, or derived by
 post-processing.
 
 This is producer-side metadata; TCKDB stores it but does not enforce a
-schema column for ``origin_kind`` today (see DR-0026). When the column
+schema column for ``origin_kind`` today. When the column
 is later promoted, ``CalculationOriginKind`` should move alongside the
 backend DB enums and this fragment should be re-shaped to read from /
 write to that column.
@@ -58,7 +58,6 @@ class ReusedFromCalculationRef(BaseModel):
     id. The relational link from this row to its source is provided by
     ``calculation_dependency`` (which IS FK-enforced); duplicating the
     id here would create a soft pointer the database cannot validate.
-    See DR-0026 for the rationale.
     """
 
     calculation_type: CalculationType

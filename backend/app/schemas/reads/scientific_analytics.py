@@ -6,7 +6,7 @@ documented, indexed place to happen, instead of dozens of optional numeric
 filters accreting onto every transactional search. See
 ``backend/docs/specs/scientific_analytics_surface.md``.
 
-Three shape decisions, and why:
+Three shape rules:
 
 * **Flat records, not detail records.** The transactional searches return the
   same nested record the detail endpoint returns, which is right when a human

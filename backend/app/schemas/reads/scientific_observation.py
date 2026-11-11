@@ -19,7 +19,7 @@ What ``identity_basis`` answers is a different question -- not *whether* the
 row has an identity, but *how* it got one: an importer's automatic
 single-InChIKey match (``external_identifier_match``) or a curator's later
 judgement call through the identity-attach service
-(``curator_attached``, review round 2 / F8). See
+(``curator_attached``). See
 ``app.db.models.common.ObservationIdentityBasis``.
 """
 
@@ -50,7 +50,7 @@ from app.schemas.reads.scientific_common import (
 
 
 class ObservationUncertainty(BaseModel):
-    """Typed uncertainty on ``scalar_value`` (Phase C-E1 contract).
+    """Typed uncertainty on ``scalar_value``.
 
     ``kind`` may be ``None`` even when ``value`` is present: legacy
     CCCBDB-imported rows carry a bare ``scalar_uncertainty`` with no stated
@@ -73,7 +73,7 @@ class ObservationExternalSource(BaseModel):
     ``app/db/models/molecular_property_observation.py`` and
     ``app/db/models/external_source.py``): legacy CCCBDB rows carry
     flattened ``external_source_*`` columns with no schema identifier /
-    ``mapping_version``; new rows (Phase C-E1 onward) cite an
+    ``mapping_version``; newer rows cite an
     ``external_source_record`` custody row that carries those two plus a
     content digest. This fragment is the union of both — whichever fields
     the row's provenance shape actually has are populated, the rest are
@@ -83,7 +83,7 @@ class ObservationExternalSource(BaseModel):
     schema_id`` under a different wire name on purpose: the column holds a
     free-text schema identifier (e.g. ``"thermoml.v1"``), not a database
     primary key, but any field ending in ``_id``/``_ids`` is stripped from
-    every public response by the Phase D internal-ID policy
+    every public response by the internal-ID policy
     (``app/services/scientific_read/internal_ids.py::is_internal_id_key``).
     Naming it ``schema_id`` on the wire would silently vanish it from every
     unauthenticated response.

@@ -1,4 +1,4 @@
-"""``LevelOfTheoryRef.method`` guards at the wire (ADR 0021)."""
+"""``LevelOfTheoryRef.method`` guards at the wire."""
 
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ def test_a_method_without_a_double_slash_is_accepted(method):
         # Arkane strips hyphens: the RMG-database key is "cbsqb3paraskevas".
         ("cbsqb3paraskevas", "cbsqb3"),
         ("CBSQB3Paraskevas", "cbsqb3"),
-        # Year suffixes on ordinary methods (ADR decision 12).
+        # Year suffixes on ordinary methods.
         ("b3lyp2023", "b3lyp"),
         ("b2plypd32023", "b2plypd3"),
         ("dlpnoccsd(t)f122023", "dlpnoccsd(t)f12"),

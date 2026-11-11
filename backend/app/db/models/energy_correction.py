@@ -96,11 +96,9 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     # output of a program's own build-level numerics (integration grid,
     # SCF thresholds, basis-set definition) -- these change between
     # releases of the same program, so the correction is release-specific,
-    # not merely program-specific (correction-scheme-provenance plan v2
-    # §3.1). Keyed on ``software_release`` like every other
-    # provenance-bearing table in this schema (plan §2.2), including
-    # ``FrequencyScaleFactor.software_release_id`` below since its own
-    # sibling revision (plan §6).
+    # not merely program-specific. Keyed on ``software_release`` like every
+    # other provenance-bearing table in this schema, including
+    # ``FrequencyScaleFactor.software_release_id`` below.
     software_release_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(

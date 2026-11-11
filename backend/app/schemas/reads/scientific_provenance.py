@@ -98,8 +98,8 @@ class ReactionAtomMapBadge(BaseModel):
     genuinely carries no map — it does not mean the section was not requested.
 
     ``source`` is the load-bearing field. A map produced by an algorithm reads
-    back as ``inferred`` and is never presented as though a human asserted it
-    (ADR 0011); a consumer that treats the two alike is reading a claim the
+    back as ``inferred`` and is never presented as though a human asserted it;
+    a consumer that treats the two alike is reading a claim the
     record does not make.
 
     ``equivalent_map_count`` is ``null`` when the depositor made no claim. It
@@ -156,13 +156,13 @@ class ReactionAtomMapDetail(ReactionAtomMapBadge):
 class ReactionEntrySummary(BaseModel):
     """Top-level reaction-entry header for the /full response.
 
-    Phase B: ``reaction_ref`` and ``reaction_entry_ref`` are the public
+    ``reaction_ref`` and ``reaction_entry_ref`` are the public
     stable handles alongside the integer IDs.
 
     ``atom_maps`` is always present and never gated behind an ``include``
     token: an unmapped reaction that is indistinguishable from a mapped one is
-    the failure ADR 0011 exists to remove, and it would be reintroduced by
-    making the distinction cost a second request.
+    a failure, and it would be reintroduced by making the distinction cost a
+    second request.
     """
 
     id: int
@@ -179,13 +179,13 @@ class ReactionEntrySummary(BaseModel):
 class ReactionFullSpeciesParticipant(EntryFacetFields):
     """Reactant or product side participant in /full.
 
-    Phase B: ``species_entry_ref`` is the public stable handle for the
+    ``species_entry_ref`` is the public stable handle for the
     participant species entry.
 
     ``smiles`` is the *species'* graph identity, shared by every entry
     under it, so two participants that are different stereoisomers of
-    one species render identically from it alone -- the hydrazine
-    network's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an
+    one species render identically from it alone -- for example ``N=N``
+    carries a ``Z`` entry and an ``E`` entry, and an
     isomerisation between them reads as running from a species to
     itself. ``species_entry_label`` is what tells them apart: ``"E"``,
     ``"Z"``, ``"excited T1"``, or ``None`` for the plain ground-state,
@@ -228,7 +228,7 @@ class ReactionFullSpecies(BaseModel):
 class TransitionStateCalculationSlot(BaseModel):
     """One calculation slot within the TS sub-record (ts_opt, ts_freq, etc.).
 
-    Phase B: ``calculation_ref`` is the public stable handle alongside
+    ``calculation_ref`` is the public stable handle alongside
     ``calculation_id``.
 
     ``energy_hartree`` is the one energy quantity this calculation's own
@@ -274,7 +274,7 @@ class TransitionStateCalculationSlot(BaseModel):
 class TransitionStateDependency(BaseModel):
     """Edge in the TS calculation dependency graph.
 
-    Phase B: ``parent_calculation_ref`` and ``child_calculation_ref`` are
+    ``parent_calculation_ref`` and ``child_calculation_ref`` are
     the public stable handles alongside the integer IDs.
     """
 
@@ -298,9 +298,9 @@ class TransitionStateInFull(BaseModel):
       ``GET /scientific/calculations/{ref}``
 
     ``transition_state_ref`` is ``null`` under ``?profile=curated`` when the owning transition state is below the review
-    floor: the entry stays in the response and only its owner ref (and id) is withheld (owner decision D1).
+    floor: the entry stays in the response and only its owner ref (and id) is withheld.
 
-    Integer ``*_id`` siblings are Phase D policy-gated. ``status``
+    Integer ``*_id`` siblings are policy-gated. ``status``
     and ``evidence_summary`` mirror the corresponding fields on
     :class:`ScientificTransitionStateEntryRecord` so the
     full-response block lines up byte-for-byte with the per-entry
@@ -319,7 +319,7 @@ class TransitionStateInFull(BaseModel):
 
     transition_state_id: int | None = None
     #: The owning transition state. ``null`` under ``?profile=curated`` when that transition state is below
-    #: the review floor: the entry stays in the response, only its owner ref is withheld (owner decision D1).
+    #: the review floor: the entry stays in the response, only its owner ref is withheld.
     transition_state_ref: str | None
     transition_state_entry_id: int
     transition_state_entry_ref: str
@@ -405,7 +405,7 @@ class ReactionFullCalculationArtifacts(BaseModel):
     ``GET /scientific/calculations/{ref}?include=artifacts`` — same
     ``CalculationArtifactSummary`` shape, same ordering.
 
-    Phase D internal-id policy gates both ``calculation_id`` and the
+    internal-id policy gates both ``calculation_id`` and the
     per-row ``artifact_id`` (stripped recursively by
     :func:`apply_internal_ids_visibility`). Public refs and storage
     URIs are always present; **never** does this surface inline body
@@ -434,7 +434,7 @@ class ReactionFullConformerGroupItem(BaseModel):
 
     ``GET /scientific/conformer-groups/{conformer_group_ref}?include=all``
 
-    Phase D internal-id policy gates ``conformer_group_id`` (and every
+    internal-id policy gates ``conformer_group_id`` (and every
     nested ``*_id`` inside the summary blocks).
     """
 
@@ -565,7 +565,7 @@ class ScientificReactionFullResponse(ScientificResponse):
     # map exists and how it was obtained; this section is the map itself, which
     # is per-atom and therefore opt-in.
     atom_map: list[ReactionAtomMapDetail] | None = None
-    # Pressure-dependent network admission (DR-0001/DR-0036 territory). See
+    # Pressure-dependent network admission. See
     # ReactionFullNetworkMembership for the three-state contract.
     networks: list[ReactionFullNetworkMembership] | None = None
 

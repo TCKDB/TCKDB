@@ -1,4 +1,4 @@
-"""Read schemas for the artifact custody record (ADR 0014).
+"""Read schemas for the artifact custody record.
 
 ``artifact_integrity_event`` answers "has TCKDB ever failed to produce
 the bytes behind this digest, and what did it see when it looked?". Until
@@ -7,7 +7,7 @@ deployment, while the *consequence* -- ``hard_fail_reason`` --  reached
 clients. A curator could be told a record was untrustworthy and had no
 way to find out what happened to it.
 
-Two shapes, and the split is the substantive decision.
+Two shapes.
 
 **The list aggregates; it does not paginate raw observations.** Every
 read of a corrupt object appends another row, deliberately: persistence

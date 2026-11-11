@@ -72,7 +72,7 @@ class NetworkSolveSearchRequest(BaseModel):
     # solved here, with its inputs) or ``reported`` (k(T,P) transcribed from a
     # publication). A consumer that will only accept re-derivable rates filters
     # on ``computed``; an operator looking for what blocks a downgrade filters
-    # on ``reported``. See ADR 0010.
+    # on ``reported``.
     kind: NetworkSolveKind | None = None
     # ``solve_method`` matches NetworkSolve.me_method (free-text ME algorithm).
     solve_method: str | None = Field(default=None, max_length=128)

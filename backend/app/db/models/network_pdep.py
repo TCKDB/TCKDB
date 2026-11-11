@@ -328,8 +328,7 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     the derivation.
 
     The distinction is stored rather than inferred because every ME-specific
-    column here is nullable — before ADR 0010 ``network_id`` was the only NOT
-    NULL column, so a row could assert "master-equation solution" by table
+    column here is nullable, so a row could assert "master-equation solution" by table
     membership alone while carrying no evidence of one. ``kind`` is what
     turns that into a checkable claim.
 
@@ -348,8 +347,7 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
       state, one ⟨ΔE⟩down per (well, collider) pair, one barrier per
       saddle-point path — those remain properties of the wired upload path,
       enforced by ``validate_mechanistic_channel_evidence`` in
-      ``app/schemas/workflows/network_pdep_upload.py``. See ADR 0010's
-      amendment.
+      ``app/schemas/workflows/network_pdep_upload.py``.
     """
 
     __tablename__ = "network_solve"
@@ -364,7 +362,7 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     # Whether the master equation was solved here or the rates were read out
     # of a publication. A ``reported`` solve is not required to carry state
     # energies, channel barriers or an energy-transfer model, and must name
-    # the literature it was transcribed from (ADR 0010).
+    # the literature it was transcribed from.
     kind: Mapped[NetworkSolveKind] = mapped_column(
         SAEnum(NetworkSolveKind, name="network_solve_kind"),
         nullable=False,
@@ -533,7 +531,7 @@ class NetworkSolveEnergyTransfer(Base):
     because the producer declared one model for the whole network and the
     well-resolved values simply do not exist. The check constraint keeps the
     two shapes from blurring into each other, so a NULL ``state_id`` is always
-    an explained absence rather than a dropped field. See ADR 0009.
+    an explained absence rather than a dropped field.
     """
 
     __tablename__ = "network_solve_energy_transfer"

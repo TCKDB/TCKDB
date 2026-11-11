@@ -1,4 +1,4 @@
-"""The five extrapolation formulas against published numbers and against their own models (ADR 0021, P5).
+"""The five extrapolation formulas against published numbers and against their own models.
 
 Two kinds of evidence, and the module says which each test is:
 
@@ -150,7 +150,7 @@ def test_points_that_do_not_fit_the_formula_are_refused_not_guessed(formula, poi
 
 
 # ---------------------------------------------------------------------------
-# exponential_sqrt: ORCA's SCF form, E_SCF(X) = E_CBS + A * exp(-alpha * sqrt(X))  (#659)
+# exponential_sqrt: ORCA's SCF form, E_SCF(X) = E_CBS + A * exp(-alpha * sqrt(X))
 # ---------------------------------------------------------------------------
 
 #: (X, E_X, Y, E_Y, alpha, printed extrapolated SCF energy, where it is printed). Water, cc-pVnZ SCF energies.
