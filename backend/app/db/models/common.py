@@ -2255,3 +2255,18 @@ class ReleaseArtifactKind(str, Enum):
     candidate_records = "candidate_records"
     review_history = "review_history"
     selection_ledger = "selection_ledger"
+
+
+class SpeciesNameKind(str, Enum):
+    """What sort of name a ``species_name`` row holds."""
+
+    common = "common"
+    systematic = "systematic"
+    abbreviation = "abbreviation"
+
+
+class SpeciesNameSourceKind(str, Enum):
+    """How a ``species_name`` row came to exist: entered by a curator or loaded from a reviewed offline file."""
+
+    curated = "curated"
+    offline_import = "offline_import"

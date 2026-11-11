@@ -336,6 +336,7 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
         )
         for m in ("GET", "POST")
     },
+    ("GET", f"{BASE}/species/name-search"): _variants({"q": "water", "limit": 20}, {"q": "wat", "match": "prefix", "limit": 20}),
     # PR-2b: the family's detail reads with every include token, the opt-in ones (``trust``, ``assessments``) included.
     ("GET", f"{BASE}/reaction-entries/{{reaction_entry_id}}/full"): _variants(
         {},

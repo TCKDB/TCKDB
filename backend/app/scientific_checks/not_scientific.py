@@ -288,6 +288,7 @@ NOT_SCIENTIFIC: dict[str, str] = {
     'software_release_version_filled_from_artifact': _R16,
     'software_release_version_is_composite': _R16,
     'source_pin_missing': _R05,
+    'species_name_query_invalid': _R06,
     'sp_energy_component_derived': 'Payload shape of the single-point components (a derived component is not stored); the arithmetic is registered.',
     'sp_energy_component_not_on_sp': 'Payload shape of the single-point components (components belong to a single point); the arithmetic is registered.',
     'sp_energy_components_require_energy': 'Payload shape of the single-point components (the energy must be stated so the parts can be checked); the arithmetic is registered.',

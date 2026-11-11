@@ -94,6 +94,14 @@ class Settings(BaseSettings):
     # import's worth of work 30 times a minute (#586).
     rate_limit_bundle_dry_run_per_minute: int = 10
     rate_limit_anon_other_per_minute: int = 20
+    # ``name_search`` -- ``GET /scientific/species/name-search``. Its own bucket (anonymous per IP, credentialed per
+    # credential) so typing in a search box neither spends nor is limited by the general read allowance.
+    rate_limit_name_search_anon_per_minute: int = 30
+    rate_limit_name_search_auth_per_minute: int = 120
+    # Every name search is also charged to the caller's IP, whatever credential it carries.
+    rate_limit_name_search_ip_per_minute: int = 120
+    # ``SET LOCAL statement_timeout`` (milliseconds) applied to the name-search read.
+    name_search_statement_timeout_ms: int = 2000
 
     # Auth-surface throttles. These are deliberately tight: login is
     # the credential-stuffing target, and register is the account-spam

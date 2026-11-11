@@ -2942,6 +2942,31 @@ the gap.
 
 - `ck_software_version_attestation_calculation_release_changed`: `before_software_release_id <> after_software_release_id`
 
+### `species_name`
+
+**Role:** role not stated on the model
+
+**Purpose:** One name of one species. The same name may belong to several species.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `species_id` | BIGINT | no | — | species.id | — | not documented |
+| `name` | TEXT | no | — | — | — | not documented |
+| `name_key` | TEXT COLLATE "C" | no | — | — | — | not documented |
+| `kind` | SpeciesNameKind (enum) | no | — | — | `common`, `systematic`, `abbreviation` | not documented |
+| `source_kind` | SpeciesNameSourceKind (enum) | no | — | — | `curated`, `offline_import` | not documented |
+| `external_source_id` | BIGINT | yes | — | external_source.id | — | not documented |
+| `created_by_user_id` | BIGINT | yes | — | app_user.id | — | not documented |
+| `retired_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_species_name_name_key_length`: `char_length(name_key) BETWEEN 1 AND 128`
+- `ck_species_name_name_length`: `char_length(name) BETWEEN 1 AND 128`
+
 ### `statmech`
 
 **Role:** role not stated on the model

@@ -888,6 +888,8 @@ ORDER_KEY_CATALOG: dict[str, tuple[OrderDirection, str]] = {
     "last_observed_at": ("desc", "time the integrity condition was last observed, newest first"),
     "sha256": ("asc", "artifact content digest, alphabetical"),
     "record_type": ("asc", "kind of record, alphabetical"),
+    "name_key": ("asc", "normalised name (lower case, code-point order), alphabetical"),
+    "species_ref": ("asc", "species public reference, alphabetical"),
 }
 
 

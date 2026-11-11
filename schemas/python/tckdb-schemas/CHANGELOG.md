@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.171.0 - 2026-11-11
+
+One refusal code is added: `species_name_query_invalid` (422), returned by `GET /api/v1/scientific/species/name-search` for a query that is not 2 to 64 characters of letters, digits, space and `- , ' ( ) [ ] + . :`. No model or payload shape changed.
+
 ## 0.170.0 - 2026-11-09
 
 One refusal code is added: `request_body_too_large` (413). The frontend proxy answers a body over its size cap (100 MiB on the upload, job and calculation-artifact routes, 10 MiB on other `/api/` routes) with this code and `context.max_bytes`, where it sent a bare HTML page. A request-validation 422 no longer echoes the request body under each error's `input`. No model or payload shape changed.

@@ -113,6 +113,8 @@ _FILTER_LADDER = (
     # so any non-empty value satisfies the ladder.
     "software=gaussian",
     "workflow_tool=arc",
+    # /species/name-search requires a query.
+    "q=water",
 )
 
 

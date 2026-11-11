@@ -125,6 +125,7 @@ Not strictly required, but strongly recommended for any internet-exposed deploym
 | `BUNDLE_MAX_RECORDS` | 500 (default) | Thermo plus kinetics records per bundle, refused `422 bundle_too_many_records`. Measured bundles carry one to a handful. |
 | `RATE_LIMIT_ANON_OTHER_PER_MINUTE` | 20 (default) | Smaller than `ANON_READ` so anonymous writes do not inherit the read budget. |
 | `RATE_LIMIT_AUTH_LOGIN_PER_MINUTE` | 10 (default) | Credential-stuffing cap; IP-keyed. |
+| `RATE_LIMIT_NAME_SEARCH_ANON_PER_MINUTE` / `_AUTH_PER_MINUTE` / `_IP_PER_MINUTE` | 30 / 120 / 120 (defaults) | `GET /scientific/species/name-search` has its own bucket. Every request is also charged to the IP ceiling, so rotating credentials cannot exceed it; keep it at or above the credentialed limit. |
 | `RATE_LIMIT_REGISTER_PER_HOUR` | 10 (default) | Account-spam cap; IP-keyed. Mitigation against botnet registration is upstream (Cloudflare / WAF). |
 | `LOG_FORMAT` | `json` for hosted | Structured one-JSON-per-line output with `request_id`, `level`, `logger`, `message`, `timestamp`. Recommended when logs are shipped to journald/ELK/Datadog/etc. Default `text` is fine for ad-hoc inspection only. |
 | `PUBLIC_MAX_LIMIT` | `200` (default) | Hard cap on page size. Lower it on memory-constrained hosts. |

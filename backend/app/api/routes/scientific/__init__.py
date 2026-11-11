@@ -7,6 +7,7 @@ provenance) lives in ``app/services/scientific_read``.
 Sub-routers:
     species.router          → /scientific/species/search
     species_browse.router   → /scientific/species/browse
+    species_name_search.router → /scientific/species/name-search
     reactions.router        → /scientific/reactions/search (GET, POST)
     reactions_browse.router → /scientific/reactions/browse
     kinetics.router         → /scientific/reaction-entries/{id}/kinetics
@@ -94,6 +95,7 @@ from app.api.routes.scientific import (
     species,
     species_browse,
     species_calculations_search,
+    species_name_search,
     species_subresources,
     statmech,
     statmech_selection,
@@ -129,6 +131,8 @@ scientific_router.include_router(species.router)
 # (``/species/browse`` vs ``/species/search``); no route-ordering
 # constraint between the two.
 scientific_router.include_router(species_browse.router)
+# Species by name: a fixed sub-path of /species, beside the identifier and catalogue reads.
+scientific_router.include_router(species_name_search.router)
 # Identifier-free catalogue read, registered right before the search
 # router it deliberately does not modify. Distinct static path
 # (``/reactions/browse`` vs ``/reactions/search``); ``reactions.router``

@@ -689,6 +689,17 @@ enum SpeciesEntryStateKind {
   excited
 }
 
+enum SpeciesNameKind {
+  common
+  systematic
+  abbreviation
+}
+
+enum SpeciesNameSourceKind {
+  curated
+  offline_import
+}
+
 enum SpinTreatment {
   restricted
   unrestricted
@@ -3817,6 +3828,34 @@ Table species_entry_review {
   }
 
   Note: 'Store explicit human review or curation events for species entries.'
+}
+
+Table species_name {
+  id bigint [pk, not null]
+  species_id bigint [not null, ref: > species.id]
+  name text [not null]
+  name_key text [not null]
+  kind SpeciesNameKind [not null]
+  source_kind SpeciesNameSourceKind [not null]
+  external_source_id bigint [ref: > external_source.id]
+  created_by_user_id bigint [ref: > app_user.id]
+  retired_at timestamp
+  created_at timestamp [not null, default: 'now']
+  public_ref string [not null]
+
+  indexes {
+    name_key [name: 'ix_species_name_name_key']
+    public_ref [unique, name: 'ix_species_name_public_ref']
+    species_id [name: 'ix_species_name_species_id']
+    (species_id, name_key) [unique, name: 'uq_species_name_species_id_name_key_live']
+  }
+
+  checks {
+    `char_length(name_key) BETWEEN 1 AND 128` [name: 'ck_species_name_name_key_length']
+    `char_length(name) BETWEEN 1 AND 128` [name: 'ck_species_name_name_length']
+  }
+
+  Note: 'One name of one species. The same name may belong to several species.'
 }
 
 Table statmech {

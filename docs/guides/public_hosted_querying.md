@@ -31,6 +31,7 @@ Companion documents:
 | Surface | Endpoint |
 |---|---|
 | species search | `GET /scientific/species/search` |
+| species by name | `GET /scientific/species/name-search` |
 | reaction search | `GET\|POST /scientific/reactions/search` |
 | thermo search | `GET\|POST /scientific/thermo/search` |
 | kinetics search | `GET\|POST /scientific/kinetics/search` |
