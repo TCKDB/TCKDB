@@ -10,7 +10,7 @@ from tckdb_schemas.fragments.kinetics_bath_gas import (
 from tckdb_schemas.fragments.kinetics_evidence import (
     T0_K_DESCRIPTION,
     T0_K_MAX,
-    # Re-exported: the class moved to the wire package in #620, and importers
+    # Re-exported: the class lives in the wire package, and importers
     # (``tests/services/test_conformer_selection_locator.py``) name it here.
     ConformerSelectionContentRef,  # noqa: F401
     KineticsInterpretationAssignmentUpload,
@@ -88,7 +88,7 @@ def _validate_a_units_named(field: str, a_units: ArrheniusAUnits, orders: tuple[
     move a published message.
 
     Note what the prefix does *not* become. The message now starts with
-    ``"plog_entries[1].a_units: "``, and #159 promotes a leading token only
+    ``"plog_entries[1].a_units: "``, and a leading token is promoted to a code only
     where :mod:`app.api.code_catalogue` calls it a code. A field path is not
     catalogued, so it cannot be mistaken for one; the code arrives because
     the exception declares it, never because of where it sits in a sentence.
@@ -545,7 +545,7 @@ class KineticsUploadRequest(SchemaBase):
     def _rate_side_counts(self) -> tuple[int, ...] | None:
         """Species on the side the coefficient is a rate *of*; ``None`` when no order exists.
 
-        A forward coefficient is a rate of the reactants, a reverse one of the products (#695), so
+        A forward coefficient is a rate of the reactants, a reverse one of the products, so
         one count. A ``net`` rate folds both directions and has no single order: ``None``, not
         checked. A record that states no direction could be either, and none is assumed: it returns
         ``(reactants, products)`` (one count when they are equal) and the check accepts units of

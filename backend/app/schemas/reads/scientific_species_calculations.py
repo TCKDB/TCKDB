@@ -76,7 +76,7 @@ from app.schemas.reads.scientific_common import (
 )
 
 # ---------------------------------------------------------------------------
-# Ranking enum (Phase 7 spec — measurable values only)
+# Ranking enum (measurable values only)
 # ---------------------------------------------------------------------------
 
 
@@ -128,7 +128,7 @@ class SpeciesCalculationsSearchRequest(BaseModel):
     # Explicit handles (optional)
     species_id: int | None = None
     species_entry_id: int | None = None
-    # ref siblings for species / species_entry identity handles.
+    # Ref siblings for species / species_entry identity handles.
     species_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
     species_entry_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
 
@@ -327,7 +327,7 @@ class GeometryBlock(BaseModel):
 
 
 class ValidationBlock(BaseModel):
-    """Geometry validation + SCF stability summaries (Phase 2.3 vocabularies)."""
+    """Geometry validation + SCF stability summaries."""
 
     geometry_validation: ValidationSummary | None = None
     scf_stability: SCFStabilitySummary | None = None

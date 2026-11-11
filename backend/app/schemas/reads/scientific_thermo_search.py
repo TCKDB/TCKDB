@@ -96,7 +96,7 @@ class ThermoSearchRequest(BaseModel):
     electronic_state_kind: SpeciesEntryStateKind | None = None
     species_entry_kind: StationaryPointKind | None = None
 
-    # optional explicit handles for follow-up lookups.
+    # Optional explicit handles for follow-up lookups.
     species_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
     species_entry_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
 

@@ -243,15 +243,11 @@ class ConformerObservationSiblingSummary(BaseModel):
     slightly richer, projection the **conformer-group** surface embeds
     under its own ``observations`` include by default.
 
-    Before this type existed, a sibling was built as a full
-    :class:`ScientificConformerObservationRecord` with every include
-    token minus ``observations`` — its own calculations, geometries,
-    selections, review history and evidence summary, and a *duplicate*
-    copy of the parent group's core block and species context. For a
-    basin the UI renders as three ``<li>`` elements (ref + review pill),
-    that scaled the response linearly with basin size: one measured
-    request came back at 22.8 KB, 90%+ of it the sibling block (issue
-    #269). A sibling in a list carries what the list needs; the full
+    A full :class:`ScientificConformerObservationRecord` per sibling would
+    carry its own calculations, geometries, selections, review history and
+    evidence summary, and a *duplicate* copy of the parent group's core
+    block and species context, scaling the response linearly with basin
+    size. A sibling in a list carries what the list needs; the full
     record for any one sibling is one hop away, at that sibling's own
     ``GET /scientific/conformer-observations/{ref}``.
     """
@@ -278,15 +274,10 @@ class ConformerObservationGroupSummary(BaseModel):
     different need, not the same one duplicated.
 
     What it does **not** carry is calculations, geometries, selections,
-    review history or its own evidence summary — before ``observation_
-    details`` existed as an explicit opt-in, every embedded observation
-    was a full :class:`ScientificConformerObservationRecord` (every
-    include token minus ``observations``), so a caller requesting
-    ``include=observations,selections,review`` on the group surface got
-    every one of those sections duplicated onto every observation, never
-    requested them there, and paid a cost that multiplied with basin
-    size without ever asking for it (issue #537, following the same
-    shape #269/PR #535 fixed on the observation-sibling case above). A
+    review history or its own evidence summary: a full
+    :class:`ScientificConformerObservationRecord` per observation would
+    duplicate every include token onto every observation, at a cost that
+    multiplies with basin size. A
     caller that genuinely needs an observation's own calculations and
     geometries inline — the group page's own use — asks for both
     explicitly: ``include=observations,observation_details,calculations,
@@ -641,7 +632,7 @@ class ScientificConformerObservationRecord(BaseModel):
     #: Every observation in this record's conformer group, this one
     #: included, projected as a lean ref+review summary rather than a
     #: full nested record — see :class:`ConformerObservationSiblingSummary`
-    #: for why (issue #269). Populated under ``include=observations``,
+    #: for why. Populated under ``include=observations``,
     #: which on an observation-grained record is the one question the
     #: record cannot answer from itself: *what else is in this basin*.
     #: This field only exists on the top-level record returned by the

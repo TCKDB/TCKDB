@@ -58,8 +58,8 @@ class UploadJob(Base):
     result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     # The warnings the request earned when it was enqueued (``{field, code,
     # message}`` list), derived from the request as sent: re-parsing ``payload``
-    # cannot reproduce a warning whose field the first parse rewrote (#670).
-    # NULL = not recorded (a job enqueued before the column existed).
+    # cannot reproduce a warning whose field the first parse rewrote.
+    # NULL = not recorded.
     request_warnings: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, server_default="0", nullable=False)

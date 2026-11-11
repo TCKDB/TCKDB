@@ -21,7 +21,9 @@ The longest list is ``3N``, the total number of eigenvalues of the
 mass-weighted Hessian of an ``N``-atom geometry, the six translation/rotation
 eigenvalues included. The ceiling is inclusive: a list of exactly ``3N`` is
 accepted. A longer list is **blocking**: no harmonic analysis of that geometry
-produces it, so the list and the geometry do not describe the same molecule.
+produces it, so the list and the geometry do not describe the same molecule. The ceiling is
+declared as ``CHECK_FREQ_LIST_WITHIN_GEOMETRY_DEGREES_OF_FREEDOM`` in the
+scientific check register.
 
 Pure functions only — no Pydantic, no backend imports. Callers extract
 the two integers from whatever shape they hold and pass them in.

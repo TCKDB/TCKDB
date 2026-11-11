@@ -444,8 +444,7 @@ def require_opt_primary_unless_monatomic(
     that owns that contract, and an unproven atom must not get the exemption.
 
     Only ``sp`` (on one atom) and ``composite`` are exempt. A ``freq``,
-    ``scan`` or any other type is not a conformer's defining calculation, and
-    accepting it would widen the rule.
+    ``scan`` or any other type is not a conformer's defining calculation, so it is refused.
 
     :param primary_type: The declared type of the conformer's primary calculation.
     :param xyz_text: The conformer's own geometry.

@@ -62,8 +62,7 @@ class GeometryAtomPayload(BaseModel):
     symbol already implies a non-standard nuclide; an ordinary symbol with a
     non-null value here does too). A geometry deposited with a ``D``/``T``
     element token is stored as ``H`` with ``isotope_mass_number`` 2 or 3;
-    a row stored earlier may still hold the ``D``/``T`` symbol with a null
-    value here.
+    a row may still hold the ``D``/``T`` symbol with a null value here.
     """
 
     atom_index: int

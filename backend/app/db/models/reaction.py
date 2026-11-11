@@ -156,8 +156,8 @@ class ReactionEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     )
     #: Atom correspondences across this micro reaction, one per
     #: transition-state candidate. Empty is the ordinary state for
-    #: everything deposited before atom mapping existed, and for every
-    #: barrierless channel.
+    #: a reaction deposited without an atom map, and for every barrierless
+    #: channel.
     atom_maps: Mapped[list["ReactionAtomMap"]] = relationship(
         back_populates="reaction_entry",
         cascade="all, delete-orphan",

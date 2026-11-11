@@ -8,13 +8,12 @@ The per-record surface (``GET /scientific/network-kinetics/{ref}/evaluate``,
 see ``scientific_network_kinetics_evaluate.py``) evaluates one stored fit.
 This surface evaluates *every* stored ``network_kinetics`` fit belonging to
 one network at a shared ``(temperature_k, pressure_bar)`` grid, in one call
-— so a k(T,P) chart covering a whole
-network needs one request instead of one per fit.
+— so a k(T,P) chart covering a whole network needs one request instead of one
+per fit.
 
 **Keyed by ``network_kinetics_ref``, not by channel.** A channel can carry
 more than one fit (both a Chebyshev and a PLOG parameterization on the same
-channel), and the
-two are never picked, preferred, averaged, or otherwise collapsed — they can
+channel), and the two are never picked, preferred, averaged, or otherwise collapsed — they can
 disagree materially, and
 presenting one as *the* rate for that channel would be a false scientific
 claim. Every stored fit is served; the client decides how to group and

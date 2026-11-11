@@ -156,7 +156,7 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         DateTime(timezone=False), nullable=True, doc="When parameters were extracted"
     )
 
-    # --- Software provenance reconciliation -----------------------
+    # --- Software provenance reconciliation -----------------------------------
     # Records how the user-declared software_release related to the version
     # banner observed by the ESS output parser. Provenance, not a trust gate:
     # a mismatch is recorded here (declared value still wins on
@@ -873,8 +873,8 @@ class CalculationFreqResult(Base):
     #: imaginary modes (cm⁻¹), and which row of the protocol table chose
     #: it. Stored rather than recomputed because τ is read from execution
     #: provenance: a later parser improvement would silently re-decide
-    #: every historical record, so a reader can see what was decided and on
-    #: what basis.
+    #: every historical record; storing it lets a reader see what was decided
+    #: and on what basis.
     imaginary_mode_tau_cm1: Mapped[Optional[float]] = mapped_column(nullable=True)
     #: Typed ``str`` rather than the ``TauBasis`` enum **on purpose**, and
     #: only on the wire: a reader must be shown a basis this build does
@@ -2240,8 +2240,7 @@ class CalculationSpinDiagnostic(Base, TimestampMixin, CreatedByMixin):
     fires when ``s_squared_expected`` differs from the entry's ``S(S+1)`` by
     more than 0.001.
 
-    The ``<S^2>`` signals of a wavefunction diagnostic (T1/D1) are held here, not in
-    ``calc_wavefunction_diagnostic``.
+    ``<S^2>`` values are held here; T1/D1 are in ``calc_wavefunction_diagnostic``.
 
     Producer contract (not enforced by DB):
 

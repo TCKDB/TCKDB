@@ -792,8 +792,7 @@ class FreqScaleFactorRef(SchemaBase):
         (e.g. Gaussian 16, Revision C.02). A harmonic frequency scale
         factor is fit against a program's own build-level vibrational
         frequencies, which change between releases of the same program
-        (correction-scheme-provenance plan v2 §6, mirroring
-        ``EnergyCorrectionSchemeRef.software``'s reasoning) -- so the
+        (the same reason as ``EnergyCorrectionSchemeRef.software``) -- so the
         factor is release-specific, not merely program-specific. Only
         ``name`` is required; a depositor who knows only the program
         resolves to the version-less release row for it. Null means

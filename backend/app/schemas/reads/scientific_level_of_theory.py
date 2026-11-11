@@ -85,11 +85,8 @@ class LevelOfTheoryCoreBlock(BaseModel):
     ``aux_basis``/``cabs_basis`` are part of ``lot_hash``'s
     identity inputs alongside the fields already served
     elsewhere; a page whose whole point is showing what distinguishes one
-    level of theory from another should not silently drop two of them. There is no ``label`` field: the ORM row carries no such column
-    (unlike ``LevelOfTheorySummary.label``, which is a cross-record
-    presentation field every existing builder sets to ``None`` for lack of
-    a stored value) -- inventing one here would fabricate a field the API
-    cannot back.
+    level of theory from another should not silently drop two of them. ``label`` is computed from the identity fields; there is no
+    stored label column.
     """
 
     level_of_theory_id: int | None = None

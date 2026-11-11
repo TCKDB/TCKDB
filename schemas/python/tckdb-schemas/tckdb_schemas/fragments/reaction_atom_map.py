@@ -38,11 +38,9 @@ A participant with no atoms
 ``OH- + H -> H2O + e-`` releases a free electron, and an electron is a
 participant with no atoms and no geometry. It is mapped by naming it with an
 empty ``atom_to_ts`` and no ``geometry_key`` — a claim, not an omission, and
-accepted only for a participant the reaction declares atomless. Until that was
-expressible the participant had to be skipped, which silently switched off the
-completeness rule for the whole map: rule 7 below only engages once every
-declared participant is mapped, and a reaction with an electron in it could
-never reach that state.
+accepted only for a participant the reaction declares atomless. Skipping the
+participant would switch off the completeness rule for the whole map: rule 7
+below only engages once every declared participant is mapped.
 
 Tiering
 ------------------

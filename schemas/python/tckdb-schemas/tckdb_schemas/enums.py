@@ -55,10 +55,8 @@ class ImaginaryModeDisposition(str, Enum):
     # What an imaginary vibrational mode *is*, other than the reaction
     # coordinate. Declared by the depositor, never inferred: a transition state
     # carrying extra imaginary modes is accepted only because the record says
-    # what they are, and
-    # ``transition_state.py`` records that TCKDB deliberately does not
-    # store normal-mode displacement vectors, so there is nothing here
-    # to infer an assignment from.
+    # what they are. Read-time projections from ``calc_hessian`` are
+    # reported beside it, never in place of it.
     #
     # ``unassigned`` is a real answer and not a placeholder: it says the
     # depositor looked and could not classify the mode. It is treated as

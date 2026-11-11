@@ -2762,7 +2762,7 @@ Table level_of_theory_merge {
     `merged_lot_id <> into_lot_id` [name: 'ck_level_of_theory_merge_not_merged_into_itself']
   }
 
-  Note: 'A level-of-theory row merged into another spelling of the same level (#574).'
+  Note: 'A level-of-theory row merged into another spelling of the same level.'
 }
 
 Table literature {
@@ -3256,7 +3256,7 @@ Table network_solve_state_energy_source {
     (solve_id, species_entry_id, state_id) [pk]
   }
 
-  Note: 'The calculation one participant of a state contributes to its energy (#678).'
+  Note: 'The calculation one participant of a state contributes to its energy.'
 }
 
 Table network_species {

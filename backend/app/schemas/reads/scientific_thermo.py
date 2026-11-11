@@ -192,7 +192,7 @@ class ThermoProvenance(BaseModel):
     carry the public stable handles.
 
     Two distinct kinds of "software" can appear on a thermo record, and
-    issue #284 was exactly the two getting collapsed into one field:
+    they are kept in separate fields:
 
     - ``software_release`` / ``workflow_tool_release`` — what computed
       *this thermochemistry* (e.g. Arkane, run by ARC). Sourced strictly
@@ -344,7 +344,7 @@ class ThermoRecord(BaseModel):
     #: record does not cover (R6: a thermo derived from a statmech record
     #: inherits its levels). Never borrowed from an unlinked statmech on the
     #: same entry: an unlinked thermo with no source calculations has none
-    #: (#636). See :class:`ScientificLevelsSummary`.
+    #: See :class:`ScientificLevelsSummary`.
     levels: ScientificLevelsSummary = Field(default_factory=ScientificLevelsSummary)
     # Group-additivity estimation breakdown; null unless the record is an
     # estimated thermo with an attached GA breakdown.

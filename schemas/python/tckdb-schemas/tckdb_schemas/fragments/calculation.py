@@ -234,8 +234,7 @@ class FrequencyModePayload(BaseModel):
         (e.g. ``"A1"``, ``"E"``), when reported.
     :param imaginary_disposition: What this imaginary mode *is*, when it
         is not the reaction coordinate. Declared by the depositor, never
-        inferred — TCKDB stores no normal-mode displacement vectors to
-        infer it from. Only meaningful on an imaginary mode; setting it
+        inferred; read-time projections are reported beside it. Only meaningful on an imaginary mode; setting it
         on a real one is refused rather than ignored.
     :param note: Optional free-text annotation.
     """

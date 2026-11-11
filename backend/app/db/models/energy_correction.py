@@ -337,11 +337,9 @@ class FrequencyScaleFactor(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
     # against a program's own build-level vibrational frequencies (same
     # LOT in Gaussian 16 vs Gaussian 09 vs QChem can legitimately need a
     # different factor), so the factor is release-specific, not merely
-    # program-specific (correction-scheme-provenance plan v2 §6, mirroring
-    # §3.1's argument for EnergyCorrectionScheme.software_release_id
-    # above). Keyed on ``software_release`` like every other
+    # program-specific. Keyed on ``software_release`` like every other
     # provenance-bearing table in this schema, including
-    # ``EnergyCorrectionScheme`` as of plan v2.
+    # ``EnergyCorrectionScheme``.
     software_release_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(

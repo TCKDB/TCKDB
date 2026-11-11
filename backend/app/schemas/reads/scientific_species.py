@@ -135,7 +135,7 @@ class SpeciesSearchRequest(SpeciesFilterRequest):
 
     At least one of ``smiles``, ``inchi``, ``inchi_key``, ``formula`` must be
     supplied; multiple identifiers AND-combine. Inconsistent identifiers
-    return an empty result set, not a validation error (per Phase 2.1 patch).
+    return an empty result set, not a validation error.
     """
 
     smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
@@ -145,7 +145,7 @@ class SpeciesSearchRequest(SpeciesFilterRequest):
     inchi: str | None = Field(default=None, max_length=_MAX_INCHI_LENGTH)
     inchi_key: str | None = Field(default=None, max_length=_MAX_INCHI_KEY_LENGTH)
 
-    # explicit handles (refs); ID siblings keep the existing
+    # Explicit handles (refs); ID siblings keep the existing
     # behavior. If both are supplied they must resolve to the same row.
     species_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
     species_entry_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
@@ -206,7 +206,7 @@ class SpeciesBrowseRequest(SpeciesFilterRequest):
     ``software_version`` requires ``software`` (and ``workflow_tool_version``
     requires ``workflow_tool``) — refused with 422 ``missing_version_parent``
     otherwise, matching ``/meta/software-versions`` and
-    ``/meta/workflow-tool-versions`` (#304). A version string alone is
+    ``/meta/workflow-tool-versions``. A version string alone is
     ambiguous across packages (two software packages can each have a
     release called "16"), and this endpoint already has a coded refusal
     for exactly that shape of ambiguity elsewhere in the read API, so

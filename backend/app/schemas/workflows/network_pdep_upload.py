@@ -17,8 +17,6 @@ Key uniqueness rules:
 
 This schema expects one connected network component — disconnected subnetworks
 are rejected when channels are explicitly provided.
-
-
 """
 
 import math
@@ -161,7 +159,7 @@ class ConformerIn(SchemaBase):
     :param geometry: Geometry payload with a reusable key.
     :param calculation: The optimization calculation that produced this conformer.
         Must have ``type == "opt"``, except for a one-atom geometry, whose
-        primary may be its ``sp`` (#615).
+        primary may be its ``sp``.
     :param scientific_origin: Scientific origin for the conformer observation.
     :param label: Optional user hint carried with the upload; basin dedupe still
         happens at the conformer-group layer.
@@ -201,8 +199,8 @@ class ConformerIn(SchemaBase):
     def validate_primary_calc_is_opt(self) -> Self:
         """Send an ``opt`` as a conformer's ``calculation``; a single atom sends its ``sp``.
 
-        The same rule as the computed-species and computed-reaction bundles
-        (#610, #615), taken from the one helper they share: an atom has no
+        The same rule as the computed-species and computed-reaction bundles,
+        taken from the one helper they share: an atom has no
         geometry to optimise, so its honest primary is the single point that
         ran, once, with the atom's one-atom XYZ as the conformer geometry. An
         ``sp`` on two or more atoms, an uncountable geometry, or any type other
@@ -1259,7 +1257,6 @@ class NetworkSolveIn(SchemaBase):
         publication (``reported``). A ``reported`` solve is not held to the
         state-energy, channel-barrier or energy-transfer coverage rules — it
         holds none of those inputs — and must supply ``literature`` instead.
-
     :param literature: Optional literature submission payload. Required when
         ``kind='reported'``.
     :param software_release: Optional software provenance reference.
@@ -1342,8 +1339,7 @@ class NetworkSolveIn(SchemaBase):
         """Hold a computed solve to the master-equation inputs it must have.
 
         These requirements apply to one member of ``kind`` and not the
-        other: a
-        computed solve is a claim that the master equation was solved in this
+        other: a computed solve is a claim that the master equation was solved in this
         database, and a solve with no state energies and no source
         calculations does not support it. A reported solve makes no such
         claim, so the same absence is the expected shape rather than a defect.

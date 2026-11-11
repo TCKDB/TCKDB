@@ -56,7 +56,8 @@ class HiddenByDefault(BaseModel):
 class ScientificResponse(BaseModel):
     """Base class for every ``/scientific/*`` response envelope (a block with a ``request`` echo).
 
-    ``review_status_by_ref`` is the review badge of every gated record the response names. It exists because most nested pointers are bare refs with no badge field of their own. Under the
+    ``review_status_by_ref`` is the review badge of every gated record the response names. It exists because
+    most nested pointers are bare refs with no badge field of their own. Under the
     ``curated`` profile it maps each such ref still present in the finished response to its review status (a record with no
     review row reads as ``not_reviewed``); a ref the evidence rule withheld is not in the response and so not in the map.
     It is ``null`` under the exploratory profile, where no review lookup is made. The record floor, not the badge, decides
@@ -676,10 +677,10 @@ class LiteratureSummary(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-# Geometry validation values per Phase 2.3 spec patch.
+# Geometry validation values.
 GeometryValidationStatus = Literal["passed", "warning", "fail", "not_present"]
 
-# SCF stability values per Phase 2.3 spec patch.
+# SCF stability values.
 SCFStabilityStatusValue = Literal[
     "stable", "unstable", "stabilized", "inconclusive", "not_present"
 ]
@@ -806,7 +807,7 @@ def simple_selection_sort_key(
     Used by the per-species thermo, statmech and transport reads and by the
     export, so the read and the export list records in the same order.
     Temperature coverage and evidence scores are displayed fields, not part of
-    the key (#648). ``latest`` orders purely by deposition time;
+    the key. ``latest`` orders purely by deposition time;
     ``default`` and ``most_reviewed`` order by review rank first. All policies
     break ties by ``created_at`` DESC then id DESC so the order is total and
     deterministic. The first record is display order, never a scientific

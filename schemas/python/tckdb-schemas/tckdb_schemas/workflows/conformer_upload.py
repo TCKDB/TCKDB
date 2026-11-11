@@ -224,7 +224,7 @@ class ConformerCalculationIn(CalculationWithResultsPayload):
     would have to query for.
 
     Optional by design: a payload with no statmech cross-references never
-    needs one, and every payload written before keys existed stays valid.
+    needs one.
 
     :param key: Optional local name for this calculation, unique within
         the request. Referenced from

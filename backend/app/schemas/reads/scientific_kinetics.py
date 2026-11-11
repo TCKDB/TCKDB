@@ -2,7 +2,7 @@
 
 See docs/specs/browse_order.md.
 
-Provenance keys are always present (Phase 2.2). TS-chain fields are populated
+Provenance keys are always present. TS-chain fields are populated
 for TS-backed computational kinetics and ``null`` for non-TS-backed records
 (experimental, estimated, imported, fitted, network-derived, literature-derived).
 """
@@ -361,7 +361,7 @@ class KineticsTunnelingApplicationBlock(BaseModel):
 
 
 class KineticsProvenance(BaseModel):
-    """Provenance block per Phase 2.2 — every key always present, ``null`` if absent.
+    """Provenance block — every key always present, ``null`` if absent.
 
     TS-chain fields populated only for TS-backed computational kinetics. The
     service must never fabricate TS links for non-TS-backed records.

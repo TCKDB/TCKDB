@@ -97,7 +97,7 @@ class KineticsSearchRequest(BaseModel):
     match: ReactionMatchMode = ReactionMatchMode.contains
     family: str | None = Field(default=None, max_length=_MAX_FAMILY_LENGTH)
 
-    # optional explicit reaction/reaction-entry handles.
+    # Optional explicit reaction/reaction-entry handles.
     reaction_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
     reaction_entry_ref: str | None = Field(
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH

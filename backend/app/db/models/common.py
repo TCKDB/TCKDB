@@ -46,10 +46,8 @@ class ImaginaryModeDisposition(str, Enum):
     # What an imaginary vibrational mode *is*, other than the reaction
     # coordinate. Declared by the depositor, never inferred: a transition state
     # carrying extra imaginary modes is accepted only because the record says
-    # what they are, and
-    # ``transition_state.py`` records that TCKDB deliberately does not
-    # store normal-mode displacement vectors, so there is nothing here
-    # to infer an assignment from.
+    # what they are. Read-time projections from ``calc_hessian`` are
+    # reported beside it, never in place of it.
     #
     # ``unassigned`` is a real answer and not a placeholder: it says the
     # depositor looked and could not classify the mode. It is treated as
@@ -236,7 +234,7 @@ class MolecularPropertyKind(str, Enum):
     homo_lumo_gap = "homo_lumo_gap"
     rotational_constant = "rotational_constant"
     spectroscopic_constant = "spectroscopic_constant"
-    # fixed-unit (J/mol/K) ideal-gas heat capacity observation.
+    # Fixed-unit (J/mol/K) ideal-gas heat capacity observation.
     # See ``ck_mpo_heat_capacity_cp_unit_j_mol_k`` on
     # ``molecular_property_observation`` -- the unit is enforced by CHECK,
     # not left to ``scalar_unit`` free text, per the unit policy.
@@ -793,8 +791,8 @@ class SoftwareReconciliationStatus(str, Enum):
       value that rode along from an unrelated job. The declared string is never discarded even when
       outranked: it survives on ``calculation.declared_software_banner``.
     * ``declared_only`` — user declared, no parseable banner was observed.
-      No artifact was uploaded for such a row, so there is nothing to reconcile against and the
-      declared value is simply what the calculation records.
+      No parseable banner was observed (usually because no output log was uploaded), so there is
+      nothing to reconcile against and the declared value is what the calculation records.
     * ``parsed_only`` — no user declaration, only a parsed banner.
 
     A NULL value means reconciliation was never run for the calculation
@@ -891,8 +889,7 @@ class KineticsDirection(str, Enum):
     ``forward`` / ``reverse`` are relative to the reaction_entry's stored
     reactant→product orientation. ``net`` marks a rate that already folds
     both directions (e.g. an apparent/observed net rate). A ``NULL`` column
-    means the producer did not specify — the historical default, so existing
-    rows are unaffected.
+    means the producer did not specify.
     """
 
     forward = "forward"
@@ -1594,7 +1591,7 @@ class EnergyZeroConvention(str, Enum):
     # Deliberately a comment rather than a docstring: this enum is mirrored
     # between ``app.db.models.common`` and ``tckdb_schemas.enums``, and the
     # two JSON schemas merge into one published component only while they are
-    # byte-identical (see ``MoleculeKind``). Since #620 the typed tunneling
+    # byte-identical (see ``MoleculeKind``). The typed tunneling
     # evidence lives in the wire package, so this enum is reachable from both
     # sides of the OpenAPI document. Kept in lockstep by
     # ``tests/schemas/test_tckdb_schemas_enum_drift.py``.
@@ -1622,7 +1619,7 @@ class EnergyCorrectionConvention(str, Enum):
     # Deliberately a comment rather than a docstring: this enum is mirrored
     # between ``app.db.models.common`` and ``tckdb_schemas.enums``, and the
     # two JSON schemas merge into one published component only while they are
-    # byte-identical (see ``MoleculeKind``). Since #620 the typed tunneling
+    # byte-identical (see ``MoleculeKind``). The typed tunneling
     # evidence lives in the wire package, so this enum is reachable from both
     # sides of the OpenAPI document. Kept in lockstep by
     # ``tests/schemas/test_tckdb_schemas_enum_drift.py``.
@@ -1983,7 +1980,7 @@ class SubmissionRecordType(str, Enum):
     # for traceability (role="artifact") but never carries a record_review row:
     # artifacts are contribution evidence, not reviewable scientific results.
     artifact = "artifact"
-    # an experimental molecular-property observation (e.g. an
+    # An experimental molecular-property observation (e.g. an
     # imported ThermoML/CCCBDB Cp(T) point). Reviewable like other results
     # (may carry a ``record_review`` / ``record_machine_review`` row) but
     # deliberately NOT in ``SELECTABLE_RECORD_TYPES`` -- observations are

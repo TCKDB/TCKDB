@@ -42,9 +42,9 @@ of a geometry, not of a species.
 
 What the database refuses on its own
 ------------------------------------
-Three of the blocking rules are structural here rather than only
-validated at the API boundary: a second write path must not be able to assert what the
-first one refuses.
+Three blocking rules are structural here rather than only validated at the
+API boundary: a second write path must not be able to assert what the first one
+refuses.
 
 * **An index that is not a real atom of the named geometry** —
   ``fk_reaction_atom_map_pair_geometry_id_geometry_atom`` and its TS-side twin

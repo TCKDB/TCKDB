@@ -420,7 +420,7 @@ class CalculationScanResultRead(CalculationScanResultPayload, ORMBaseSchema):
 
 
 # ---------------------------------------------------------------------------
-# IRC result and points (Phase 2)
+# IRC result and points
 # ---------------------------------------------------------------------------
 
 
@@ -453,7 +453,7 @@ class CalculationIRCResultRead(ORMBaseSchema):
 
 
 # ---------------------------------------------------------------------------
-# Path-search results (Phase 2 — generalizes NEB / GSM / string methods)
+# Path-search results (generalizes NEB / GSM / string methods)
 # ---------------------------------------------------------------------------
 
 
@@ -490,7 +490,7 @@ class CalculationPathSearchResultRead(ORMBaseSchema):
 
 
 # ---------------------------------------------------------------------------
-# Calculation parameters (Phase 2)
+# Calculation parameters
 # ---------------------------------------------------------------------------
 
 
@@ -508,7 +508,7 @@ class CalculationParameterRead(TimestampedReadSchema):
 
 
 # ---------------------------------------------------------------------------
-# Geometry validation (Phase 2)
+# Geometry validation
 # ---------------------------------------------------------------------------
 
 

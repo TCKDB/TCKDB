@@ -109,9 +109,7 @@ class ThermoSourceCalculationIn(SchemaBase):
     are append-only and never deduplicated, so a deposit forced to re-send
     them mints duplicate rows for the same job and destroys the meaning of
     counting distinct calculations). The two are intended to stay
-    symmetric: an asymmetry between them is a bug, not a signal. Statmech
-    reached this contract later only because PR #148 moved it to local keys
-    without a chaining mechanism.
+    symmetric: an asymmetry between them is a bug, not a signal.
 
     Neither field is offered by the contribution-bundle routes, and that
     omission is deliberate on both: a bundle carries one global calc-key

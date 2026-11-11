@@ -137,9 +137,7 @@ class StatmechSourceCalculationIn(StatmechSourceCalcIn):
     :class:`app.schemas.workflows.thermo_upload.ThermoSourceCalculationIn`
     ``.existing_calculation_id``, which does the same job for thermo. The
     two are intended to stay symmetric; an asymmetry between them is a
-    bug, not a signal. (Statmech reached this contract later only because
-    PR #148 moved it to local keys without a chaining mechanism, and the
-    gap read as deliberate because nothing recorded that it was not.)
+    bug, not a signal.
 
     :param calculation_key: Local key of a calculation declared in this
         request's ``calculations`` list.

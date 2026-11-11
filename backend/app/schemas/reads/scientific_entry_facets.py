@@ -16,7 +16,7 @@ renders species pages renders these blocks with the same code. Every one is
 ``electronic_state_label`` and ``term_symbol`` are typed text. They are served
 here only when they satisfy the write-time grammar
 (``tckdb_schemas.electronic_state``), in their canonical NFC spelling (``T1``,
-``X ²Π``); a value that fails it (a row stored before the grammar was enforced)
+``X ²Π``); a value that fails it (a stored value outside the grammar)
 reads ``None``. They are for the display of excited and spin states and are
 never to be parsed as stereo descriptors.
 """

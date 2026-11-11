@@ -6295,7 +6295,7 @@ Unknown keys are refused.
 |---|---|---|---|---|---
 | `key` | string | yes |  | length >= 1 | Local key for this conformer.
 | `geometry` | [`GeometryIn`](#m-geometryin) | yes |  |  | Geometry payload with a reusable key.
-| `calculation` | [`NetworkCalculationIn`](#m-networkcalculationin) | yes |  |  | The optimization calculation that produced this conformer. Must have ``type == "opt"``, except for a one-atom geometry, whose primary may be its ``sp`` (#615).
+| `calculation` | [`NetworkCalculationIn`](#m-networkcalculationin) | yes |  |  | The optimization calculation that produced this conformer. Must have ``type == "opt"``, except for a one-atom geometry, whose primary may be its ``sp``.
 | `scientific_origin` | `ScientificOriginKind` | no | `"computed"` | `computed`, `experimental`, `estimated` | Scientific origin for the conformer observation.
 | `label` | string \| null | no |  |  | Optional user hint carried with the upload; basin dedupe still happens at the conformer-group layer.
 | `note` | string \| null | no |  |  | Optional note on the conformer observation.
@@ -6305,8 +6305,8 @@ Unknown keys are refused.
 
   Send an ``opt`` as a conformer's ``calculation``; a single atom sends its ``sp``.
 
-  The same rule as the computed-species and computed-reaction bundles
-  (#610, #615), taken from the one helper they share: an atom has no
+  The same rule as the computed-species and computed-reaction bundles,
+  taken from the one helper they share: an atom has no
   geometry to optimise, so its honest primary is the single point that
   ran, once, with the atom's one-atom XYZ as the conformer geometry. An
   ``sp`` on two or more atoms, an uncountable geometry, or any type other
@@ -6893,7 +6893,7 @@ Unknown keys are refused.
 | `level_of_theory` | [`LevelOfTheoryRef`](#m-leveloftheoryref) | yes |  |  | Level of theory this factor applies to.
 | `scale_kind` | `FrequencyScaleKind` | no | `"fundamental"` | `fundamental`, `zpe`, `enthalpy`, `entropy`, `heat_capacity` | Type of scaling (fundamental, ZPE, enthalpy, etc.).
 | `value` | number | yes |  | > 0 | The scale factor value.
-| `software` | [`SoftwareReleaseRef`](#m-softwarereleaseref) \| null | no |  |  | The ESS program *release* the factor was fit against (e.g. Gaussian 16, Revision C.02). A harmonic frequency scale factor is fit against a program's own build-level vibrational frequencies, which change between releases of the same program (correction-scheme-provenance plan v2 §6, mirroring ``EnergyCorrectionSchemeRef.software``'s reasoning) -- so the factor is release-specific, not merely program-specific. Only ``name`` is required; a depositor who knows only the program resolves to the version-less release row for it. Null means software-agnostic or unknown.
+| `software` | [`SoftwareReleaseRef`](#m-softwarereleaseref) \| null | no |  |  | The ESS program *release* the factor was fit against (e.g. Gaussian 16, Revision C.02). A harmonic frequency scale factor is fit against a program's own build-level vibrational frequencies, which change between releases of the same program (the same reason as ``EnergyCorrectionSchemeRef.software``) -- so the factor is release-specific, not merely program-specific. Only ``name`` is required; a depositor who knows only the program resolves to the version-less release row for it. Null means software-agnostic or unknown.
 | `source_literature` | [`LiteratureUploadRequest`](#m-literatureuploadrequest) \| null | no |  |  | Structured literature provenance, when available. Mutually informative with ``workflow_tool_release``; either, both, or neither may be supplied.
 | `workflow_tool_release` | [`WorkflowToolReleaseRef`](#m-workflowtoolreleaseref) \| null | no |  |  | Workflow tool (e.g. ARC) whose data file was the proximate source, when the factor was looked up from a tool table rather than directly from a paper.
 | `note` | string \| null | no |  |  | Optional descriptive note. Never used for dedupe.
@@ -6920,7 +6920,7 @@ Unknown keys are silently ignored.
 | `ir_intensity_km_mol` | number \| null | no |  | km/mol | >= 0 | IR intensity in km/mol, when reported.
 | `raman_activity` | number \| null | no |  |  |  | Raman activity (Å⁴/amu), when reported.
 | `symmetry_label` | string \| null | no |  |  |  | Irreducible representation label (e.g. ``"A1"``, ``"E"``), when reported.
-| `imaginary_disposition` | `ImaginaryModeDisposition` \| null | no |  |  | `rigid_body_residue`, `torsion`, `ring_pucker`, `intermolecular`, `symmetry_breaking`, `unassigned` | What this imaginary mode *is*, when it is not the reaction coordinate. Declared by the depositor, never inferred — TCKDB stores no normal-mode displacement vectors to infer it from. Only meaningful on an imaginary mode; setting it on a real one is refused rather than ignored.
+| `imaginary_disposition` | `ImaginaryModeDisposition` \| null | no |  |  | `rigid_body_residue`, `torsion`, `ring_pucker`, `intermolecular`, `symmetry_breaking`, `unassigned` | What this imaginary mode *is*, when it is not the reaction coordinate. Declared by the depositor, never inferred; read-time projections are reported beside it. Only meaningful on an imaginary mode; setting it on a real one is refused rather than ignored.
 | `note` | string \| null | no |  |  |  | Optional free-text annotation.
 
 - **FrequencyModePayload.validate_sign_matches_is_imaginary** (model, after; can refuse):
@@ -8025,8 +8025,7 @@ Unknown keys are refused.
   Hold a computed solve to the master-equation inputs it must have.
 
   These requirements apply to one member of ``kind`` and not the
-  other: a
-  computed solve is a claim that the master equation was solved in this
+  other: a computed solve is a claim that the master equation was solved in this
   database, and a solve with no state energies and no source
   calculations does not support it. A reported solve makes no such
   claim, so the same absence is the expected shape rather than a defect.

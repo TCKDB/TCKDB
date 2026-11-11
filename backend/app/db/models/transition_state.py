@@ -375,9 +375,9 @@ class TransitionStateValidationEnergy(Base):
     )
     #: What holding ``energy_hartree`` against the energy TCKDB stores for
     #: ``source_calculation_id`` concluded when the row was written
-    #: (issue #638): ``agrees`` (within the printed-precision tolerance) or
+    #: ``agrees`` (within the printed-precision tolerance) or
     #: ``not_compared``, in which case ``not_compared_reason`` says why. NULL
-    #: means the row was deposited before the comparison existed, and is not a
+    #: means no comparison was recorded, and is not a
     #: pass. A *disagreement* is never stored: it refuses the deposit.
     stored_energy_comparison: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     not_compared_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

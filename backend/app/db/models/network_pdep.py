@@ -622,8 +622,8 @@ class NetworkSolveStateEnergy(Base):
     )
 
     #: What comparing the stated energy with the sum of its per-participant
-    #: sources concluded at upload (#678): ``agrees`` or ``not_compared``. NULL
-    #: means the row was deposited before the comparison existed, and is not a
+    #: sources concluded at upload: ``agrees`` or ``not_compared``. NULL
+    #: means no comparison was recorded, and is not a
     #: pass. A *disagreement* is never stored: it refuses the deposit. No computed
     #: total is stored either; the sum is recomputed, never kept.
     source_sum_comparison: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -634,14 +634,14 @@ class NetworkSolveStateEnergy(Base):
     #: "not stated" (never inferred from the digits of the number).
     energy_precision_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
     #: The factor ``s`` the producer scaled the zero-point energies of an ``electronic_plus_zpe``
-    #: state with (#693): the sum compared is ``sum(nu * (E + s * ZPE))``. NULL is "not stated",
+    #: state with: the sum compared is ``sum(nu * (E + s * ZPE))``. NULL is "not stated",
     #: never one; the stored ZPE is the producer's unscaled one.
     zpe_scale_factor: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
 
     solve: Mapped["NetworkSolve"] = relationship(back_populates="state_energies")
     state: Mapped["NetworkState"] = relationship()
     source_calculation: Mapped[Optional["Calculation"]] = relationship()
-    #: One calculation per participant (#678); empty on a row that used the
+    #: One calculation per participant; empty on a row that used the
     #: single ``source_calculation_id`` slot.
     participant_sources: Mapped[list["NetworkSolveStateEnergySource"]] = relationship(
         back_populates="state_energy",
@@ -684,7 +684,7 @@ class NetworkSolveStateEnergy(Base):
 
 
 class NetworkSolveStateEnergySource(Base):
-    """The calculation one participant of a state contributes to its energy (#678).
+    """The calculation one participant of a state contributes to its energy.
 
     A bimolecular state's energy is a sum over its species, so one source slot
     cannot name where it came from. One row per participant: ``stoichiometry``
@@ -733,7 +733,7 @@ class NetworkSolveStateEnergySource(Base):
         nullable=False,
     )
     #: The ``freq`` calculation whose zero-point energy this participant adds to the energy of
-    #: ``calculation_id`` (#693); NULL when none was cited (an atom, a composite's E0, an
+    #: ``calculation_id``; NULL when none was cited (an atom, a composite's E0, an
     #: ``electronic_only`` state). It is the participant's own, checked at upload.
     zpe_calculation_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,

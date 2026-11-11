@@ -68,7 +68,7 @@ class MolecularPropertyObservationBase(BaseModel):
     vector_json: dict[str, Any] | list[Any] | None = None
     tensor_json: dict[str, Any] | list[Any] | None = None
 
-    # typed uncertainty meaning. See ObservedUncertaintyKind's
+    # Typed uncertainty meaning. See ObservedUncertaintyKind's
     # docstring -- no "unspecified" member; absent is None.
     uncertainty_kind: ObservedUncertaintyKind | None = None
     uncertainty_coverage_factor: float | None = Field(default=None, ge=1.0)

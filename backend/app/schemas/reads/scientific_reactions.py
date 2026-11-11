@@ -45,7 +45,7 @@ class ReactionDirectionQuery(str, Enum):
     ``either``   — match in either orientation.
 
     ``exact`` is **not** in v0; the service rejects it with a deterministic
-    422 error (per Phase 2.1 patch).
+    422 error.
     """
 
     forward = "forward"
@@ -106,7 +106,7 @@ class ReactionSearchRequest(BaseModel):
     match: ReactionMatchMode = ReactionMatchMode.contains
     family: str | None = Field(default=None, max_length=_MAX_FAMILY_LENGTH)
 
-    # explicit handles (refs) — useful when a caller already has
+    # Explicit handles (refs) — useful when a caller already has
     # a reaction/reaction_entry ref from a previous response.
     reaction_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
     reaction_entry_ref: str | None = Field(
@@ -316,8 +316,8 @@ class ReactionAvailability(BaseModel):
 
     ``has_atom_map`` says whether the record states which atom of the
     reactants and products is which atom of the transition state.
-    ``false`` is the ordinary state for everything deposited before atom
-    mapping existed and for every barrierless channel; it means the record is
+    ``false`` is the ordinary state for a record deposited without an atom
+    map and for every barrierless channel; it means the record is
     incomplete, not wrong. It is here rather than only on the deep read so a
     consumer never has to fetch a reaction to find out that it cannot answer
     the question they came with.

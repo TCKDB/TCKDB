@@ -177,8 +177,11 @@ def raise_for_atomless_structure(
     calculation — definitional, therefore blocking, rather
     than a warning.
 
-    The check names the offending field path and answers on the wire, before any
-    species is resolved.
+    The check covers conformer geometries and calculation geometries
+    (``geometry_key``, ``input_geometries``, ``output_geometries``), names the
+    offending field path and answers on the wire, before any species is
+    resolved. ``app.services.calculation_geometry_composition`` is the
+    database-side counterpart for geometries linked to a calculation.
 
     ``pseudo`` is out of scope here for the same reason it is absent from
     :data:`ATOMLESS_MOLECULE_KINDS`: a lumped construct's composition is

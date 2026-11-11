@@ -181,7 +181,7 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         server_default=KineticsModelKind.modified_arrhenius.value,
     )
     # Which direction of the reaction this fit describes. NULL =
-    # unspecified (historical default), so existing rows are unaffected. Lets
+    # unspecified. Lets
     # a forward and a reverse Arrhenius fit for one ``reaction_entry`` coexist
     # distinctly (Chemkin/Cantera round-trip).
     direction: Mapped[Optional[KineticsDirection]] = mapped_column(

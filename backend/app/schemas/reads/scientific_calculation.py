@@ -408,7 +408,7 @@ class CalculationFreqResultSummary(BaseModel):
 
     **``n_imag`` does not travel alone.** Imaginary modes are judged by
     magnitude against the protocol that produced them rather than counted, so
-    wherever ``n_imag`` is reported it is accompanied by the tolerance applied,
+    on this projection ``n_imag`` is accompanied by the tolerance applied,
     how that tolerance was chosen, and the count above it. It is reported here
     anyway — it is what the ESS printed — but a consumer that filters on
     ``n_imag == 1`` and stops is selecting on a quantity that is a property of
@@ -1369,12 +1369,10 @@ class AppliedEnergyCorrectionSummary(BaseModel):
     #: ``True`` when :attr:`components` carries fewer rows than
     #: :attr:`component_count`.
     #:
-    #: **This flag decides whether the components may be summed.** Measured
-    #: on every one of the hosted instance's 164 applied corrections, the
-    #: served ``contribution_value`` rows sum exactly to the served
-    #: ``applied_value`` — both are read off the same stored rows, neither
-    #: is recomputed, so a reader who adds the components reaches the
-    #: total. That identity holds **only over a complete set**. When this
+    #: **This flag decides whether the components may be summed.** The
+    #: served ``contribution_value`` rows and the served ``applied_value``
+    #: are read off the same stored rows and neither is recomputed, so a
+    #: reader who adds the components reaches the total. That identity holds **only over a complete set**. When this
     #: flag is ``True`` the served rows are a prefix and their sum is
     #: meaningless: :attr:`applied_value` remains the whole, authoritative
     #: correction and the partial rows are for inspection only. Do not

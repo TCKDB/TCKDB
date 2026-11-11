@@ -2,8 +2,7 @@
 
 ``tckdb_schemas.__init__`` must not hard-code a version: anything negotiating
 the wire-contract version on ``__version__`` would be told the wrong answer.
-Exactly one version literal exists in the repo -- the one in ``pyproject.toml``
--- and ``__version__`` is resolved from installed distribution metadata.
+The version is written by hand only in ``pyproject.toml``, and ``__version__`` is resolved from installed distribution metadata.
 """
 
 from __future__ import annotations

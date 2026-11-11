@@ -89,8 +89,8 @@ __all__ = [
 #: (:data:`W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED`), it is pinned by
 #: ``tests/api/test_api_upload_key_and_role_contracts.py`` on
 #: ``/uploads/conformers``, and it spans a conformer key as well as a
-#: calculation key — so a correction's source is one repair on that
-#: route.
+#: calculation key — so reusing this code on the bundle routes would give one repair
+#: two codes.
 W_CALCULATION_KEY_UNDECLARED = "calculation_key_undeclared"
 
 # ---------------------------------------------------------------------------

@@ -25,7 +25,8 @@ not here has no assumed default, and the read says "not stated" rather than gues
     SCF=Tight for all calculations, including single points").
   * ORCA 5 and 6, ``opt`` only: ``tight``. Source: ORCA 5.0.4 manual 8.3.3 ("TightSCF in the SCF part is set as default
     to avoid the buildup of too much numerical noise in the gradients") and ORCA 6.1 manual 4.1.12
-    (same sentence). The same manuals only say the plain default is "between medium and strong", which is not a named level, so an ORCA single point, frequency or any other job type has no entry.
+    (same sentence). The same manuals only say the plain default is "between medium and strong", which is
+    not a named level, so an ORCA single point, frequency or any other job type has no entry.
   * Gaussian 16, any calculation type: ``tight``. No G16 manual line is cited; the basis is the G09
     sentence above (the keyword is unchanged) plus an observed Gaussian 16 Rev C.01 default run
     (``# sp b3lyp/def2svp``, no grid or SCF keyword) printing "Requested convergence on RMS density matrix=1.00D-08",

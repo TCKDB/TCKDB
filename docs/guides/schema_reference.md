@@ -537,7 +537,7 @@ the gap.
 
 **Role:** provenance
 
-**Purpose:** A level-of-theory row merged into another spelling of the same level (#574).
+**Purpose:** A level-of-theory row merged into another spelling of the same level.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
@@ -2545,7 +2545,7 @@ the gap.
 
 **Role:** role not stated on the model
 
-**Purpose:** The calculation one participant of a state contributes to its energy (#678).
+**Purpose:** The calculation one participant of a state contributes to its energy.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
