@@ -329,6 +329,7 @@ class RejectionCode(str, Enum):
     SPECIES_HANDLE_CONFLICT = "species_handle_conflict"
     SPECIES_KEY_UNDECLARED = "species_key_undeclared"
     SPECIES_KIND_CONFLICT = "species_kind_conflict"
+    SPECIES_NAME_QUERY_INVALID = "species_name_query_invalid"
     SPECIES_SMILES_CHARGE_MISMATCH = "species_smiles_charge_mismatch"
     SPECIES_STEREO_CONTRADICTION = "species_stereo_contradiction"
     SPECIES_STEREO_LABEL_INVALID = "species_stereo_label_invalid"
@@ -667,6 +668,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.SPECIES_HANDLE_CONFLICT,
         RejectionCode.SPECIES_KEY_UNDECLARED,
         RejectionCode.SPECIES_KIND_CONFLICT,
+        RejectionCode.SPECIES_NAME_QUERY_INVALID,
         RejectionCode.SPECIES_SMILES_CHARGE_MISMATCH,
         RejectionCode.SPECIES_STEREO_CONTRADICTION,
         RejectionCode.SPECIES_STEREO_LABEL_INVALID,
@@ -1058,6 +1060,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.SPECIES_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.SPECIES_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.SPECIES_KIND_CONFLICT: frozenset({422}),
+    RejectionCode.SPECIES_NAME_QUERY_INVALID: frozenset({422}),
     RejectionCode.SPECIES_SMILES_CHARGE_MISMATCH: frozenset({422}),
     RejectionCode.SPECIES_STEREO_CONTRADICTION: frozenset({422}),
     RejectionCode.SPECIES_STEREO_LABEL_INVALID: frozenset({422}),

@@ -2626,6 +2626,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("species_kind_conflict", 422, Surface.coded_exception,
             "backend/app/services/species_resolution.py",
             shape=Shape.relationship),
+    ApiCode("species_name_query_invalid", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/species_name_search.py"),
     ApiCode("species_smiles_charge_mismatch", 422, Surface.coded_exception,
             "backend/app/chemistry/species.py",
             shape=Shape.relationship),

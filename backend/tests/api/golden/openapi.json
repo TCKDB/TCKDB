@@ -32586,6 +32586,14 @@
         "title": "MultiArrheniusTerm",
         "type": "object"
       },
+      "NameMatchMode": {
+        "enum": [
+          "exact",
+          "prefix"
+        ],
+        "title": "NameMatchMode",
+        "type": "string"
+      },
       "NetworkBarrierBasis": {
         "description": "Whether the stated energies are electronic only or include zero-point energy.",
         "enum": [
@@ -57007,6 +57015,170 @@
         ],
         "title": "SpeciesEntryTarget",
         "type": "object"
+      },
+      "SpeciesNameKind": {
+        "description": "What sort of name a ``species_name`` row holds.",
+        "enum": [
+          "common",
+          "systematic",
+          "abbreviation"
+        ],
+        "title": "SpeciesNameKind",
+        "type": "string"
+      },
+      "SpeciesNameMatch": {
+        "description": "One species found by one of its names.",
+        "properties": {
+          "formula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SpeciesNameKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "smiles": {
+            "title": "Smiles",
+            "type": "string"
+          },
+          "source_kind": {
+            "$ref": "#/components/schemas/SpeciesNameSourceKind"
+          },
+          "species_ref": {
+            "title": "Species Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species_ref",
+          "formula",
+          "smiles",
+          "name",
+          "kind",
+          "source_kind"
+        ],
+        "title": "SpeciesNameMatch",
+        "type": "object"
+      },
+      "SpeciesNameSearchRequestEcho": {
+        "properties": {
+          "hidden_by_default": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HiddenByDefault"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "match": {
+            "$ref": "#/components/schemas/NameMatchMode"
+          },
+          "merged_refs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Merged Refs",
+            "type": "object"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "query_key": {
+            "title": "Query Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query_key",
+          "match",
+          "limit"
+        ],
+        "title": "SpeciesNameSearchRequestEcho",
+        "type": "object"
+      },
+      "SpeciesNameSearchResponse": {
+        "properties": {
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/SpeciesNameMatch"
+            },
+            "title": "Matches",
+            "type": "array"
+          },
+          "order": {
+            "$ref": "#/components/schemas/OrderEcho"
+          },
+          "request": {
+            "$ref": "#/components/schemas/SpeciesNameSearchRequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "request",
+          "matches",
+          "truncated",
+          "order"
+        ],
+        "title": "SpeciesNameSearchResponse",
+        "type": "object"
+      },
+      "SpeciesNameSourceKind": {
+        "description": "How a ``species_name`` row came to exist: entered by a curator or loaded from a reviewed offline file.",
+        "enum": [
+          "curated",
+          "offline_import"
+        ],
+        "title": "SpeciesNameSourceKind",
+        "type": "string"
       },
       "SpeciesRead": {
         "properties": {
@@ -109856,6 +110028,101 @@
           }
         },
         "summary": "Species Browse",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/species/name-search": {
+      "get": {
+        "description": "Species whose name matches ``q`` exactly or begins with it, after normalisation.\n\nNames are curated by TCKDB, so a molecule with no curated name is not found here. Matches are alphabetical by\nnormalised name, then by species reference; that order is not a ranking. ``truncated`` is true when more species\nmatch than ``limit``: refine the query. A species merged into another is listed once, as the survivor. A malformed\nquery is a 422 ``species_name_query_invalid``.",
+        "operationId": "species_name_search_api_v1_scientific_species_name_search_get",
+        "parameters": [
+          {
+            "description": "2 to 64 characters after normalisation: letters, digits, space and - , ' ( ) [ ] + . :",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "2 to 64 characters after normalisation: letters, digits, space and - , ' ( ) [ ] + . :",
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "match",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NameMatchMode",
+              "default": "exact"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a legacy single-record read carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a legacy single-record read carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpeciesNameSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Find species by name (exact or prefix), alphabetical and not ranked",
         "tags": [
           "scientific"
         ]

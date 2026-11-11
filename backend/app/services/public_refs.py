@@ -123,6 +123,8 @@ PREFIXES: dict[str, str] = {
     # identical scalar bytes from two distinct import/attach events must
     # stay separately citable -- same reasoning as CalculationArtifact.
     "MolecularPropertyObservation": "mpo",
+    # A name of a species. Opaque: a name is an event by a curator or an import, and a retired name keeps its ref.
+    "SpeciesName": "snm",
 }
 
 # Classes whose ref is content-derived from existing identity columns.

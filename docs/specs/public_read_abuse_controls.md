@@ -32,12 +32,15 @@ generous read budget for writes:
 | `auth_read`   | hash of `X-API-Key` or session  | 60 s   | `RATE_LIMIT_AUTH_READ_PER_MINUTE` = 300 |
 | `auth_write`  | hash of `X-API-Key` or session  | 60 s   | `RATE_LIMIT_AUTH_WRITE_PER_MINUTE` = 30 |
 | `bundle_dry_run` | hash of `X-API-Key` or session | 60 s   | `RATE_LIMIT_BUNDLE_DRY_RUN_PER_MINUTE` = 10 |
+| `name_search` | client IP, or hash of `X-API-Key` or session | 60 s | `RATE_LIMIT_NAME_SEARCH_ANON_PER_MINUTE` = 30, `RATE_LIMIT_NAME_SEARCH_AUTH_PER_MINUTE` = 120 |
 | `anon_other`  | client IP                       | 60 s   | `RATE_LIMIT_ANON_OTHER_PER_MINUTE` = 20 |
 | `login`       | client IP                       | 60 s   | `RATE_LIMIT_AUTH_LOGIN_PER_MINUTE` = 10 |
 | `register`    | client IP                       | 3600 s | `RATE_LIMIT_REGISTER_PER_HOUR` = 10 |
 
 Classification rules:
 
+- **`name_search`** — `GET /api/v1/scientific/species/name-search`, matched on the exact path before the public-read
+  rule; keyed by credential when one is present, else by client IP.
 - **`anon_read` / `auth_read`** — public scientific reads (GET
   `/api/v1/scientific/...`, POST `/api/v1/scientific/.../search`, POST the relative-energy and
   relative-energy compare routes, GET

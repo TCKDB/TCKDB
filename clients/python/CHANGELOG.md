@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.202.0 - 2026-11-11
+
+`RejectionCode` gains `SPECIES_NAME_QUERY_INVALID`. The parity ledger lists `GET /api/v1/scientific/species/name-search` as raw-only (reachable with `get_json()`).
+
 ## 0.201.0 - 2026-11-11
 
 No client code changed. The parity ledger lists `GET /api/v1/scientific/reaction-entries/{reaction_entry_ref}/energy-profile` as raw-only (reachable with `get_json()`).

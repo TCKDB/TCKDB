@@ -12,6 +12,9 @@ bucket and chooses an identity:
   bucket (per-minute, IP-keyed). Tight: credential-stuffing target.
 - ``/api/v1/auth/register`` → ``register`` bucket (per-hour, IP-keyed).
   Tight: account-spam target.
+- ``GET /api/v1/scientific/species/name-search`` → ``name_search``
+  (per-minute; IP-keyed without a credential, credential-keyed with one).
+  Matched on the exact path before the generic public-read branch.
 - Public scientific reads (GET ``/api/v1/scientific/...``, POST
   ``/api/v1/scientific/.../search``, POST the relative-energy and
   relative-energy compare routes, GET ``/api/v1/workflow-tools``,
@@ -238,6 +241,8 @@ _READ_ONLY_POST_RE = re.compile(
     r"/conformers/relative-energies(?:/compare)?"
 )
 
+_NAME_SEARCH_PATH = "/api/v1/scientific/species/name-search"
+
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
@@ -319,6 +324,11 @@ def _classify(request: Request) -> tuple[str, int, int, str]:
         return ("register", settings.rate_limit_register_per_hour, 3600, ip)
 
     credential = _credential_fingerprint(request)
+
+    if method == "GET" and path == _NAME_SEARCH_PATH:
+        if credential is not None:
+            return ("name_search", settings.rate_limit_name_search_auth_per_minute, 60, credential)
+        return ("name_search", settings.rate_limit_name_search_anon_per_minute, 60, ip)
 
     if _is_public_read_path(method, path):
         if credential is not None:
