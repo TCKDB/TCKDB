@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Transition state page with its energy hill (Unreleased)
+
+- **Behaviour:** the transition state entry page is titled "Transition state of <equation>" with breadcrumbs, a review word and a lede, and shows the energy hill narrowed to this entry with its peak marked (or why there is none), the 3D picture, the imaginary frequency with a glossary term and a link to its calculation, a checks table (one imaginary frequency, IRC, energy ordering, each recorded or not recorded with its outcome), and trust and IRC side by side with what each asks. The depositor's note appears only as a depositor note. The tab title is "<equation> · Transition state · TCKDB".
+- **Schema and migration:** none. No new environment variable.
+
 ## Reaction pages with the energy profile (Unreleased)
 
 - **Behaviour:** the reaction entry page has breadcrumbs, a review word, a lede, a scheme row and an "Energy profile" section: reactants, transition state and products as bars in kJ/mol relative to the reactants, a profile picker when there are several (the first in response order is shown), a table of the same points linked to their calculations, unavailable reasons in words, and the energies rate records cite in a separate table. "Numbers for this entry" states its order and gives each record a source line. Each transition state has a picture with an on-request 3D view. The reaction page says "Reaction · all deposited versions".

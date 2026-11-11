@@ -76,7 +76,11 @@ const evidenceSummarySchema = z.object({
 // "present" | "absent" | "failed" -- kept as a bare string rather than a
 // zod enum so an archive-side vocabulary addition degrades to an unstyled
 // label instead of a validation failure across this whole record.
-const validationSchema = z.object({ irc: z.string() }).passthrough()
+const validationSchema = z.object({
+    irc: z.string(),
+    imaginary_mode: z.string().optional(),
+    energy_ordering: z.string().optional(),
+}).passthrough()
 
 const availableSectionsSchema = z.object({
     has_entries: z.boolean(),

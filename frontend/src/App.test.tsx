@@ -766,7 +766,7 @@ it("routes a transition-state-entry ref to its detail page (finding #1)", async 
     })))
     window.history.replaceState({}, "", "/transition-state-entries/tse_abc")
     render(<App />)
-    expect(await screen.findByRole("heading", { name: "A <=> B" })).toBeVisible()
+    expect(await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })).toBeVisible()
     expect(window.location.pathname).toBe("/transition-state-entries/tse_abc")
 })
 
@@ -926,7 +926,7 @@ describe("the home-page identifier search recognizes and routes public reference
         const user = userEvent.setup(); render(<App />)
         await user.type(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), `tse_${REF_BODY}`)
         await user.click(screen.getByRole("button", { name: "Search" }))
-        expect(await screen.findByRole("heading", { name: "A <=> B" })).toBeVisible()
+        expect(await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })).toBeVisible()
         expect(window.location.pathname).toBe(`/transition-state-entries/tse_${REF_BODY}`)
     })
 })

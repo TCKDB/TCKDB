@@ -193,7 +193,62 @@
    measured and risks a different, unverified regression on those two
    pages. This fix stays scoped to the one page and the one column width
    it was actually measured on. */
-.tse-page .data-table th:first-child,
-.tse-page .data-table td:first-child {
+.tse-page .tse-calc-scroll .data-table th:first-child,
+.tse-page .tse-calc-scroll .data-table td:first-child {
     white-space: nowrap;
+}
+
+/* Tables that scroll sideways inside their own labelled box, never the page. */
+.tse-scroll {
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+}
+
+.tse-scroll:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.tse-checks-table {
+    width: 100%;
+    min-width: 40rem;
+}
+
+.tse-check-note {
+    display: block;
+    margin-top: var(--s-2);
+    color: var(--ink-2);
+}
+
+.tse-absent {
+    color: var(--muted);
+}
+
+/* Trust and IRC side by side; one column on narrow screens. */
+.tse-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-4);
+    margin-top: var(--s-4);
+}
+
+.tse-pair-card {
+    min-width: 0;
+    padding: var(--s-3) var(--s-4);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.tse-pair-card h3 { margin: 0 0 var(--s-2); }
+
+.tse-pair-card p { margin: var(--s-2) 0 0; }
+
+.tse-pair-label {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+@media (max-width: 48rem) {
+    .tse-pair { grid-template-columns: 1fr; }
 }

@@ -369,6 +369,12 @@ export async function loadReactionEntry(
     return parseScientificResponse(reactionFullResponseSchema, payload, "reaction entry")
 }
 
+/** The entry and its participating species only (`include=species`), for naming a reaction from a page that is not its own. */
+export async function loadReactionEntryParticipants(ref: string, signal?: AbortSignal): Promise<Pick<ReactionFullRecord, "reaction_entry" | "species">> {
+    const payload = await fetchFull(ref, ["species"], signal)
+    return parseScientificResponse(reactionFullResponseSchema.pick({ reaction_entry: true, species: true }), payload, "reaction entry")
+}
+
 // ---------------------------------------------------------------------------
 // §3C fallback -- `networks/search?reaction_entry_ref=...&include=reactions`
 // against an API that does not yet serve `include=networks` on `/full`.

@@ -6,7 +6,8 @@ import userEvent from "@testing-library/user-event"
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
 import TransitionStateEntryPage from "./TransitionStateEntryPage"
 import { bySummaryText } from "../test/disclosureQueries"
-import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { ADVERSARIAL, expectDepositorTextOnlyInNotes, expectNoAdversarialText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { rankingWords, textOf } from "../test/rankingWords"
 import { titleHasKind } from "../test/routeTitleKinds"
 
 const ENTRY_REF = "tse_aq5ktxlu27nvul3hmdwpuyuz4e"
@@ -21,7 +22,80 @@ const defaultSiblingsHandler = http.get(
     () => HttpResponse.json({ records: [] }),
 )
 
-const server = setupServer(defaultSiblingsHandler)
+const REACTION_ENTRY_REF = "rxe_snamm2m4daoyiw6ljc3cvmfabm"
+
+function participant(ref: string, smiles: string, formula: string, index: number) {
+    return { species_entry_ref: ref, smiles, formula, stoichiometry: 1, participant_index: index, review: { status: "not_reviewed" } }
+}
+
+// The parent reaction entry's participants: what names the reaction on this page.
+function participantsRead() {
+    return {
+        reaction_entry: {
+            reaction_entry_ref: REACTION_ENTRY_REF,
+            reaction_ref: "rxn_nu4c52up4c4hqtbtxufwbscq3a",
+            equation: "as deposited",
+            reversible: false,
+            family: null,
+            review: { status: "not_reviewed" },
+            atom_maps: [],
+        },
+        review_summary: { total: 1, not_reviewed: 1, approved: 0, under_review: 0, deprecated: 0, rejected: 0 },
+        species: {
+            reactants: [participant("spe_ch4", "C", "CH4", 0), participant("spe_oh", "[OH]", "OH", 1)],
+            products: [participant("spe_ch3", "[CH3]", "CH3", 0), participant("spe_h2o", "O", "H2O", 1)],
+        },
+    }
+}
+
+const LEVEL = { level_of_theory_ref: "lot_a", method: "wb97xd", basis: "def2tzvp", display: "wb97xd/def2tzvp" }
+
+function point(calc: string, hartree: number) {
+    return { calculation_ref: calc, energy_type: "single_point", electronic_energy_hartree: hartree, software: { program: "Gaussian", version: "16" }, review_status: "not_reviewed", convergence_unrecorded: false }
+}
+
+function profileFor(tse: string, kj: number) {
+    return {
+        transition_state_entry_ref: tse,
+        transition_state_entry_review_status: "not_reviewed",
+        level_of_theory: LEVEL,
+        program: "Gaussian",
+        energy_types: ["single_point"],
+        versions: ["16"],
+        energy_kind: "electronic",
+        definition: "each molecule's lowest computed energy at this level, from this program",
+        reactants: [{ species_entry_ref: "spe_ch4", count: 1, ...point("calc_ra", -40.1) }, { species_entry_ref: "spe_oh", count: 1, ...point("calc_rb", -75.2) }],
+        transition_state: { transition_state_entry_ref: tse, ...point(`calc_ts_${tse}`, -115.2) },
+        products: [{ species_entry_ref: "spe_ch3", count: 1, ...point("calc_pa", -39.5) }, { species_entry_ref: "spe_h2o", count: 1, ...point("calc_pb", -76.3) }],
+        energy_hartree: { reactants: -115.3, transition_state: -115.2, products: -115.8 },
+        relative_kj_mol: { reactants: 0, transition_state: kj, products: -80 },
+    }
+}
+
+function energyRead(overrides: Record<string, unknown> = {}) {
+    return {
+        request: { hidden_by_default: null, hidden_by_default_by_scope: {} },
+        reaction_entry_ref: REACTION_ENTRY_REF,
+        profiles: [profileFor(ENTRY_REF, 84.3), profileFor("tse_sibling", 12.5)],
+        unavailable: [],
+        cited_by_kinetics: [],
+        ...overrides,
+    }
+}
+
+const PICTURE = {
+    geometry_ref: "geom_mtihqs7ac7btur4efqushl7aoy", natoms: 2, geom_hash: "h", format: "cartesian", coordinate_units: "angstrom", created_at: "2026-01-01T00:00:00Z",
+    atoms: [{ atom_index: 1, element: "C", x: 0, y: 0, z: 0 }, { atom_index: 2, element: "O", x: 1.4, y: 0, z: 0 }], xyz_text: null,
+}
+
+// Default reads for the parent reaction entry and the picture, so a test overrides only what it is about.
+const defaultParentHandlers = [
+    http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/full`, () => HttpResponse.json(participantsRead())),
+    http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/energy-profile`, () => HttpResponse.json(energyRead())),
+    http.get("/api/v1/scientific/geometries/:ref", () => HttpResponse.json(PICTURE)),
+]
+
+const server = setupServer(defaultSiblingsHandler, ...defaultParentHandlers)
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => {
     server.resetHandlers()
@@ -133,14 +207,14 @@ describe("TransitionStateEntryPage", () => {
     // The breadcrumb's "Browse" crumb points at the transition-state
     // browse kind's own canonical path now (per-kind browse paths change),
     // not the legacy `/species?kind=transition_state` it used to.
-    it("the breadcrumb's Browse crumb links to /transition-states", async () => {
+    it("the breadcrumb starts at the Reactions list", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: mockRecord() })))
         page()
-        await screen.findByRole("heading", { name: "C1=C[C]2C=CCC2C=C1 <=> C1=Cc2ccccc2C1 + [H]" })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         await waitFor(() => expect(titleHasKind(document.title, "/transition-state-entries/:ref")).toBe(true))
 
         const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" })
-        expect(within(breadcrumb).getByRole("link", { name: "Browse" })).toHaveAttribute("href", "/transition-states")
+        expect(within(breadcrumb).getByRole("link", { name: "Reactions" })).toHaveAttribute("href", "/reactions")
     })
 
     it("leads with the reaction equation as the h1, and never shows a SMILES row", async () => {
@@ -150,7 +224,7 @@ describe("TransitionStateEntryPage", () => {
         }))
 
         page()
-        expect(await screen.findByRole("heading", { name: "C1=C[C]2C=CCC2C=C1 <=> C1=Cc2ccccc2C1 + [H]" })).toBeVisible()
+        expect(await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })).toBeVisible()
 
         // The depositor's own label is not rendered anywhere on the page,
         // not as a pill and not as an identity fact -- house rule widened
@@ -203,7 +277,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord() })
         )))
         const { container } = page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
 
         expect(container.querySelector(".geometry-role-disclosure")).toBeNull()
         const roleDisclosure = screen.getByText(/IRC reverse/).closest("details") as HTMLElement
@@ -235,20 +309,15 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
 
         const statement = document.querySelector(".tse-saddle-point") as HTMLElement
         expect(statement).not.toBeNull()
         expect(statement).toHaveTextContent("1 imaginary mode")
-        expect(statement).toHaveTextContent("-768.7")
+        expect(statement).toHaveTextContent("-768.67")
         expect(statement).toHaveTextContent("b3lyp/def2tzvp")
         expect(within(statement).getByRole("link", { name: "calc_k4snenouw4m6zbmbzyvqrmn2om" }))
             .toHaveAttribute("href", "/calculations/calc_k4snenouw4m6zbmbzyvqrmn2om")
-
-        // It is the first thing under the identity header -- immediately
-        // adjacent in the DOM, not buried further down the page.
-        const identityHeader = document.querySelector(".record-identity-header") as HTMLElement
-        expect(identityHeader.nextElementSibling).toBe(statement)
     })
 
     function saddleWith(basis: string | undefined) {
@@ -272,7 +341,7 @@ describe("TransitionStateEntryPage", () => {
     it("saddle-point: says the result is the declared one when the server reports the declared witness", async () => {
         saddleWith("declared_curvature_witness")
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText(/the frequency result the declared saddle target pins/)).toBeVisible()
     })
 
@@ -281,7 +350,7 @@ describe("TransitionStateEntryPage", () => {
         async (basis) => {
             saddleWith(basis)
             page()
-            await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+            await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
             expect(screen.getByText(/1 imaginary mode/)).toBeVisible()
             expect(screen.queryByText(/declared saddle target pins/)).not.toBeInTheDocument()
         },
@@ -303,8 +372,8 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
-        expect(screen.getByText(/flagged as a higher-order saddle point/)).toBeVisible()
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
+        expect(screen.getByText(/Flagged as a higher-order saddle point/)).toBeVisible()
         expect(screen.queryByText(/ADR/)).not.toBeInTheDocument()
     })
 
@@ -324,7 +393,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText(/3 imaginary modes; reaction-coordinate mode not designated/)).toBeVisible()
     })
 
@@ -348,7 +417,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText("No frequency calculation deposited for this entry.")).toBeVisible()
     })
 
@@ -366,7 +435,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord({ saddle_point: null }) })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText("Frequency calculation deposited; no imaginary-mode result recorded.")).toBeVisible()
         expect(screen.queryByText("No frequency calculation deposited for this entry.")).not.toBeInTheDocument()
     })
@@ -383,7 +452,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord() }) // no `saddle_point` key at all
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText("Saddle-point verdict not served by this deployment.")).toBeVisible()
         expect(screen.queryByText("No frequency calculation deposited for this entry.")).not.toBeInTheDocument()
         expect(screen.queryByText("Frequency calculation deposited; no imaginary-mode result recorded.")).not.toBeInTheDocument()
@@ -401,9 +470,9 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText(/well supported/)).toBeVisible()
-        expect(screen.getByText(/24\/26/)).toBeVisible()
+        expect(screen.getByText(/24 of 26 checks passed/)).toBeVisible()
     })
 
     it("made under: the trust badge names its rubric and version, as current", async () => {
@@ -418,7 +487,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         const line = document.querySelector('[data-component="made-under"]')
         expect(line).toHaveAttribute("data-state", "current")
         expect(line).toHaveTextContent("Assessed under rubric computed transition state, version 2, the current version.")
@@ -436,7 +505,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(document.querySelector('[data-component="made-under"]')).toBeNull()
     })
 
@@ -472,7 +541,7 @@ describe("TransitionStateEntryPage", () => {
     ])("structure assessment: %j renders its sentence", async (block, sentence) => {
         assessmentWith(block)
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText("Structure assessment")).toBeVisible()
         expect(screen.getByText(sentence)).toBeVisible()
     })
@@ -480,7 +549,7 @@ describe("TransitionStateEntryPage", () => {
     it("structure assessment: a status token this page was not taught renders as itself and the page still loads", async () => {
         assessmentWith({ status: "some_future_status" })
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText("some_future_status")).toBeVisible()
         expect(screen.queryByText(/malformed/i)).not.toBeInTheDocument()
     })
@@ -488,7 +557,7 @@ describe("TransitionStateEntryPage", () => {
     it("structure assessment: an outcome token this page was not taught renders as itself and the page still loads", async () => {
         assessmentWith({ status: "assessed", outcome: "some_future_outcome" })
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText(/some_future_outcome/)).toBeVisible()
         expect(screen.queryByText(/malformed/i)).not.toBeInTheDocument()
     })
@@ -496,7 +565,7 @@ describe("TransitionStateEntryPage", () => {
     it("structure assessment: an older deployment that does not serve the block renders no row", async () => {
         assessmentWith(undefined)
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.queryByText("Structure assessment")).not.toBeInTheDocument()
     })
 
@@ -510,7 +579,7 @@ describe("TransitionStateEntryPage", () => {
     ])("structure assessment: %j beside the declared-target warning claims no disproof and no certificate", async (block) => {
         assessmentWith(block, { declared_saddle_target_qualifies: "warning" })
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText("Structure assessment")).toBeVisible() // this block rendered, not a cached one
         expect(screen.getByText(
             "The structure assessment finds no declared saddle target that qualifies, or a declared target is contested — needs investigation",
@@ -541,7 +610,7 @@ describe("TransitionStateEntryPage", () => {
             reaction_coordinate_designated_for_ts: "missing",
         })
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         const list = screen.getByRole("list", { name: "Trust warnings" })
         const items = within(list).getAllByRole("listitem").map((li) => li.textContent)
         expect(items).toEqual([
@@ -555,14 +624,14 @@ describe("TransitionStateEntryPage", () => {
     it("trust warnings: an unknown warning key renders as its raw token rather than being dropped", async () => {
         trustWith({ some_future_server_warning: "warning" })
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText("some_future_server_warning — needs investigation")).toBeVisible()
     })
 
     it("trust warnings: an unknown outcome value still renders the page and the known warnings", async () => {
         trustWith({ some_future_check: "needs_review", no_frequency_result_has_undesignated_imaginary_modes: "warning" })
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.queryByText(/malformed/i)).not.toBeInTheDocument()
         expect(within(screen.getByRole("list", { name: "Trust warnings" })).getAllByRole("listitem")).toHaveLength(1)
     })
@@ -570,12 +639,12 @@ describe("TransitionStateEntryPage", () => {
     it("trust warnings: renders no list when nothing is a warning, or when the check map is not served", async () => {
         trustWith({ transition_state_entry_present: "passed", imaginary_frequency_value_present: "not_applicable" })
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.queryByRole("list", { name: "Trust warnings" })).not.toBeInTheDocument()
         cleanup()
         trustWith(undefined)
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.queryByRole("list", { name: "Trust warnings" })).not.toBeInTheDocument()
     })
 
@@ -606,7 +675,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText(/0 imaginary modes recorded at this level — needs investigation/)).toBeVisible()
         const text = document.body.textContent ?? ""
         for (const banned of ["not a saddle point", "validated", "certified", "disproved"]) {
@@ -619,7 +688,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord() })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
 
         const pills = document.querySelector(".tse-evidence-pills") as HTMLElement
         const opt = within(pills).getByText("opt")
@@ -642,7 +711,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord() })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
 
         expect(screen.queryByRole("heading", { name: "Levels of theory by stage" })).not.toBeInTheDocument()
 
@@ -669,7 +738,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         const calcTable = screen.getByRole("table", { name: `Calculations for ${ENTRY_REF}` })
         const refCells = within(calcTable).getAllByRole("link").map((link) => link.textContent)
         expect(refCells).toEqual(["calc_opt", "calc_freq", "calc_sp", "calc_irc"])
@@ -693,7 +762,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText(/SP electronic energy/)).toBeVisible()
         expect(screen.getByText(/-348.435000 hartree/)).toBeVisible()
     })
@@ -715,7 +784,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText(/Molpro \(version not recorded\)/)).toBeVisible()
     })
 
@@ -736,7 +805,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
 
         expect(screen.getByText(/Gaussian 16/)).toBeVisible()
         expect(screen.getByText(/ARC 1\.1\.0/)).toBeVisible()
@@ -755,7 +824,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
 
         const ircSummary = document.querySelector(".tse-irc-summary") as HTMLElement
         expect(within(ircSummary).getByText(/IRC ran/)).toBeVisible()
@@ -789,7 +858,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         const ircSummary = document.querySelector(".tse-irc-summary") as HTMLElement
         expect(within(ircSummary).getByText("No IRC calculation was deposited for this entry.")).toBeVisible()
     })
@@ -799,7 +868,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord({ validation: { irc: "present" } }) })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText(/IRC validation passed/)).toBeVisible()
     })
 
@@ -808,7 +877,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord({ validation: { irc: "failed" } }) })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText(/IRC validation failed/)).toBeVisible()
     })
 
@@ -817,7 +886,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord() })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
 
         expect(screen.getByRole("link", { name: "calc_yu6nspewwco74qzh6lwgh6ewxy" }))
             .toHaveAttribute("href", "/calculations/calc_yu6nspewwco74qzh6lwgh6ewxy")
@@ -839,7 +908,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord() })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         // The reaction-record link now lives ONCE (the Reaction section);
         // the entry's OWN ref is no longer in this disclosure at all (it
         // renders first, inline, in the identity header instead -- see the
@@ -858,7 +927,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord({ transition_state: null }) })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.queryByText("ts_uql5lf3xeqnehtostrilmns5yi")).not.toBeInTheDocument()
         expect(screen.getByText(bySummaryText(/References \(1\)/))).toBeVisible()
     })
@@ -868,7 +937,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord() })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
 
         // Visible without opening the (collapsed) References disclosure.
         const facts = screen.getByText("Transition state entry ref").closest(".record-identity-facts") as HTMLElement
@@ -892,7 +961,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ detail: "not found" }, { status: 404 })
         )))
         page("tse_missing")
-        expect(await screen.findByText("Transition state entry not found")).toBeVisible()
+        expect(await screen.findByText("Transition state not found")).toBeVisible()
     })
 
     it("never states the depositor label anywhere, and states the charge/multiplicity fact exactly once", async () => {
@@ -900,7 +969,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord() })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
 
         // "TS0" appears zero times on the page -- house rule widened
         // 2026-09: no depositor-typed labels on public pages at all.
@@ -928,7 +997,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
 
         expect(screen.getByText("Saddle-point geometry")).toBeVisible()
         expect(screen.getByRole("link", { name: "geom_final" })).toHaveAttribute("href", "/geometries/geom_final")
@@ -958,7 +1027,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText(/Path search.*1 point/)).toBeVisible()
     })
 
@@ -975,7 +1044,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getAllByRole("link", { name: "geom_shared" })).toHaveLength(1)
     })
 
@@ -991,7 +1060,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
 
         expect(screen.getByText("No saddle-point (final) geometry was deposited for this entry.")).toBeVisible()
         expect(screen.queryByText("Saddle-point geometry")).not.toBeInTheDocument()
@@ -1051,7 +1120,7 @@ describe("TransitionStateEntryPage", () => {
             }),
         )
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
 
         // Excludes itself -- only the other two entries show. Neither
         // depositor label ("TS0"/"TS1") renders anywhere in the section --
@@ -1087,7 +1156,7 @@ describe("TransitionStateEntryPage", () => {
             )),
         )
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(await screen.findByText("Could not load sibling saddle points for this reaction.")).toBeVisible()
     })
 
@@ -1097,7 +1166,7 @@ describe("TransitionStateEntryPage", () => {
         )))
         // defaultSiblingsHandler already serves `{ records: [] }`.
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.queryByText("Other saddle points deposited for this reaction")).not.toBeInTheDocument()
     })
 
@@ -1106,7 +1175,7 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord() })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText("Not yet reviewed — no review events recorded.")).toBeVisible()
         expect(screen.queryByRole("table", { name: `Review history for ${ENTRY_REF}` })).not.toBeInTheDocument()
     })
@@ -1122,7 +1191,7 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         const table = screen.getByRole("table", { name: `Review history for ${ENTRY_REF}` })
         expect(within(table).getByText("Looks correct.")).toBeVisible()
         expect(screen.queryByText("Not yet reviewed — no review events recorded.")).not.toBeInTheDocument()
@@ -1170,7 +1239,7 @@ describe("transition-state entry page: orders and picks that are now stated", ()
     it("says the calculation table is in stage order, as a display order and not a ranking", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: mockRecord() })))
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText(/Rows are grouped by stage \(opt, freq, sp, irc, path search\)/)).toBeVisible()
         expect(screen.getByText(/not a ranking: no row is preferred over another/)).toBeVisible()
     })
@@ -1290,7 +1359,7 @@ describe("transition-state entry page: siblings when this entry is the only reco
             })),
         )
         page()
-        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.queryByText("Other saddle points deposited for this reaction")).not.toBeInTheDocument()
     })
 
@@ -1334,10 +1403,220 @@ describe("TransitionStateEntryPage -- no depositor-typed text (owner decision 20
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: value })))
         page()
         // The fixture reached the page: the reaction equation heading and the entry ref rendered.
-        await screen.findByRole("heading", { name: "C1=C[C]2C=CCC2C=C1 <=> C1=Cc2ccccc2C1 + [H]" })
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getAllByText(ENTRY_REF).length).toBeGreaterThan(0)
 
-        expectNoDepositorText()
+        expectDepositorTextOnlyInNotes()
+        expectNoAdversarialText()
+    })
+})
+
+describe("TransitionStateEntryPage -- the redesigned page", () => {
+    function withRecord(overrides: Record<string, unknown> = {}) {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: mockRecord(overrides) })))
+    }
+    const SADDLE = {
+        n_imag: 1,
+        imag_freq_cm1: -768.67,
+        reaction_coordinate_mode_index: 1,
+        imaginary_mode_structural_flag: false,
+        calculation_ref: "calc_freq1",
+        level_of_theory: { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp" },
+    }
+
+    it("names the page from the reaction's codes: the h1 is a sentence, never a ref, and the tab title follows", async () => {
+        withRecord()
+        page()
+        const heading = await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
+        await waitFor(() => expect(heading).toHaveTextContent(/^Transition state of CH4/))
+        expect(heading.textContent).not.toMatch(/\b(tse|rxe|rxn|ts)_[a-z0-9]+/)
+        expect(heading.textContent).not.toContain("TS0")
+        await waitFor(() => expect(document.title).toBe("CH4 + OH → CH3 + H2O · Transition state · TCKDB"))
+        expect(titleHasKind(document.title, "/transition-state-entries/:ref")).toBe(true)
+    })
+
+    it("falls back to a plain h1 when the reaction entry cannot be read", async () => {
+        withRecord()
+        server.use(http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/full`, () => HttpResponse.json({ detail: "x" }, { status: 500 })))
+        page()
+        expect(await screen.findByRole("heading", { level: 1, name: "Transition state of this reaction" })).toBeVisible()
+        expect(document.title).toBe("Transition state · TCKDB")
+    })
+
+    it("breadcrumbs run Reactions, the reaction, this deposited version, this transition state", async () => {
+        withRecord()
+        page()
+        const nav = await screen.findByRole("navigation", { name: "Breadcrumb" })
+        expect(within(nav).getByRole("link", { name: "Reactions" })).toHaveAttribute("href", "/reactions")
+        expect(within(nav).getByRole("link", { name: "This deposited version" })).toHaveAttribute("href", `/reaction-entries/${REACTION_ENTRY_REF}`)
+        expect(within(nav).getByText("This transition state")).toHaveAttribute("aria-current", "page")
+        await waitFor(() => expect(within(nav).getAllByRole("link")[1]).toHaveAttribute("href", "/reactions/rxn_nu4c52up4c4hqtbtxufwbscq3a"))
+    })
+
+    it("draws the energy hill from this entry's own profile only, with its peak marked", async () => {
+        withRecord()
+        page()
+        const figure = await screen.findByRole("group", { name: /Energy relative to the reactants/ })
+        expect(figure).toHaveTextContent("+84.3 kJ/mol")
+        expect(figure).not.toHaveTextContent("12.5")
+        expect(figure).toHaveTextContent("This transition state")
+        expect(document.querySelector(".energy-profile-peak")).not.toBeNull()
+        const table = screen.getByRole("table", { name: /Every point of the selected profile/ })
+        expect(table).not.toHaveTextContent("tse_sibling")
+        expect(screen.queryByLabelText("Profile")).toBeNull()
+    })
+
+    it("says why there is no hill when this entry has no complete profile, from the read's own reason", async () => {
+        withRecord()
+        server.use(http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/energy-profile`, () => HttpResponse.json(energyRead({
+            profiles: [profileFor("tse_sibling", 12.5)],
+            unavailable: [
+                { transition_state_entry_ref: ENTRY_REF, transition_state_entry_review_status: "not_reviewed", code: "no_product_energy_at_level", level_of_theory: LEVEL, program: "Gaussian" },
+                { transition_state_entry_ref: "tse_sibling", transition_state_entry_review_status: "not_reviewed", code: "no_ts_energy" },
+            ],
+        }))))
+        page()
+        expect(await screen.findByText("No complete energy profile is available for this transition state.")).toBeVisible()
+        expect(screen.getByText(/Why there is no profile at some levels/)).toBeVisible()
+        const list = screen.getByText(/Why there is no profile at some levels/).parentElement!
+        expect(list).toHaveTextContent(ENTRY_REF)
+        expect(list).not.toHaveTextContent("tse_sibling")
+        expect(screen.queryByRole("group", { name: /Energy relative to the reactants/ })).toBeNull()
+    })
+
+    it("says so when the read lists nothing about this entry", async () => {
+        withRecord()
+        server.use(http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/energy-profile`, () => HttpResponse.json(energyRead({ profiles: [], unavailable: [] }))))
+        page()
+        expect(await screen.findByText("No complete energy profile is available for this transition state.")).toBeVisible()
+        expect(screen.getByText(/gives no reason for this transition state/)).toBeVisible()
+    })
+
+    it("glosses the imaginary frequency with the term, and links its value to the frequency calculation", async () => {
+        withRecord({ saddle_point: SADDLE })
+        page()
+        const term = await screen.findByRole("button", { name: "imaginary frequency" })
+        expect(term).toHaveAttribute("aria-describedby")
+        expect(document.getElementById(term.getAttribute("aria-describedby")!)).toHaveTextContent("The one motion that carries a transition state downhill")
+        const value = screen.getByRole("link", { name: /768\.67/ })
+        expect(value).toHaveAttribute("href", "/calculations/calc_freq1")
+        expect(value).toHaveTextContent("cm⁻¹")
+    })
+
+    it("checks table: each row says Recorded or Not recorded, with the outcome in words and an evidence link where one exists", async () => {
+        withRecord({
+            saddle_point: SADDLE,
+            validation: { irc: "present", imaginary_mode: "present", energy_ordering: "failed" },
+        })
+        page()
+        const region = await screen.findByRole("region", { name: "Checks on this transition state" })
+        const rows = within(region).getAllByRole("row").slice(1)
+        expect(rows).toHaveLength(3)
+        expect(rows[0]).toHaveTextContent("One imaginary frequency")
+        expect(rows[0]).toHaveTextContent("Recorded")
+        expect(rows[0]).toHaveTextContent("Passed")
+        expect(within(rows[0]).getByRole("link", { name: "Frequency calculation" })).toHaveAttribute("href", "/calculations/calc_freq1")
+        expect(rows[1]).toHaveTextContent("IRC connects reactants and products")
+        expect(rows[1]).toHaveTextContent("Passed")
+        expect(within(rows[1]).getByRole("link", { name: "IRC calculation" })).toHaveAttribute("href", "/calculations/calc_heds3dt3dsqxmqkcchibvbtwi4")
+        expect(rows[2]).toHaveTextContent("Energy ordering (transition state above both sides)")
+        expect(rows[2]).toHaveTextContent("Did not pass")
+        expect(within(rows[2]).getByRole("link", { name: "Energy hill on this page" })).toHaveAttribute("href", "#energy-heading")
+    })
+
+    it("checks table: a check with no deposited record is Not recorded, and a reported frequency count is not turned into a result", async () => {
+        withRecord({ saddle_point: SADDLE, validation: { irc: "absent" } })
+        page()
+        const region = await screen.findByRole("region", { name: "Checks on this transition state" })
+        const rows = within(region).getAllByRole("row").slice(1)
+        for (const row of rows) {
+            expect(row).toHaveTextContent("Not recorded")
+            expect(row).not.toHaveTextContent("Passed")
+        }
+        expect(rows[0]).toHaveTextContent("reports 1 imaginary frequency. That is a result, not a recorded check.")
+        expect(rows[2]).toHaveTextContent("none to link")
+        expect(screen.getByText(/Not recorded means nobody deposited it/)).toBeVisible()
+    })
+
+    it("shows trust and IRC side by side, each with what it asks", async () => {
+        withRecord({
+            trust: { trust_status: "well_supported", evidence: { passed_count: 5, possible_count: 6, checks: {} } },
+        })
+        page()
+        const trust = await screen.findByRole("region", { name: "Trust" })
+        const irc = screen.getByRole("region", { name: "IRC" })
+        expect(trust.parentElement).toBe(irc.parentElement)
+        expect(trust).toHaveTextContent("Asks whether the deposited results pass")
+        expect(trust).toHaveTextContent("well supported")
+        expect(trust).toHaveTextContent("5 of 6 checks passed")
+        expect(irc).toHaveTextContent("Asks whether a reaction-path calculation connects")
+        expect(irc).toHaveTextContent("IRC ran")
+    })
+
+    it("draws the picture of the saddle point from its final geometry", async () => {
+        withRecord()
+        page()
+        expect(await screen.findByRole("img", { name: /Ball-and-stick picture of transition state/ })).toBeInTheDocument()
+        expect(screen.getByRole("button", { name: "Show in 3D" })).toBeInTheDocument()
+    })
+
+    it("keyboard: Tab reaches the imaginary-frequency term, Esc closes it, then each check's evidence link", async () => {
+        const user = userEvent.setup()
+        withRecord({ saddle_point: SADDLE, validation: { irc: "present", imaginary_mode: "present", energy_ordering: "present" } })
+        page()
+        const term = await screen.findByRole("button", { name: "imaginary frequency" })
+        const popover = document.getElementById(term.getAttribute("aria-describedby")!)!
+        for (let step = 0; step < 80 && document.activeElement !== term; step++) await user.tab()
+        expect(document.activeElement).toBe(term)
+        expect(popover).toHaveAttribute("data-open", "true")
+        await user.keyboard("{Escape}")
+        expect(popover).toHaveAttribute("data-open", "false")
+        expect(document.activeElement).toBe(term)
+        const region = screen.getByRole("region", { name: "Checks on this transition state" })
+        for (const name of ["Frequency calculation", "IRC calculation", "Energy hill on this page"]) {
+            const link = within(region).getByRole("link", { name })
+            for (let step = 0; step < 80 && document.activeElement !== link; step++) await user.tab()
+            expect(document.activeElement).toBe(link)
+        }
+    })
+
+    it("uses no ranking word and no literal double hyphen anywhere on the page", async () => {
+        withRecord({ saddle_point: SADDLE, validation: { irc: "present", imaginary_mode: "present", energy_ordering: "present" } })
+        page()
+        await screen.findByRole("group", { name: /Energy relative to the reactants/ })
+        await screen.findByRole("region", { name: "Checks on this transition state" })
+        // The profile's own definition and the order note say what is not done ("lowest computed energy", "no row is preferred"); they are the served wording.
+        const clone = document.body.cloneNode(true) as HTMLElement
+        clone.querySelectorAll(".energy-profile-definition, .calculation-order-note").forEach((node) => node.remove())
+        expect(rankingWords(textOf(clone))).toEqual([])
+        expect(textOf(document.body)).not.toContain("--")
+    })
+
+    it("never reads values from a sibling entry: siblings are links, and a sibling's saddle point is not shown as this one's", async () => {
+        withRecord()
+        server.use(http.get("/api/v1/scientific/transition-states/search", () => HttpResponse.json({
+            records: [{
+                transition_state_entry: { transition_state_entry_ref: "tse_sibling", created_at: "2026-08-06T00:00:00Z", review: { status: "approved" } },
+                transition_state: { label: "TS9" },
+                calculations: [],
+            }],
+        })))
+        page()
+        const sibling = await screen.findByRole("link", { name: "tse_sibling" })
+        expect(sibling).toHaveAttribute("href", "/transition-state-entries/tse_sibling")
+        expect(screen.queryByText("TS9")).toBeNull()
+    })
+})
+
+describe("TransitionStateEntryPage -- depositor text only in a note", () => {
+    it("shows the transition state's note inside a depositor note and its label nowhere", async () => {
+        const planted = plantSentinels(mockRecord(), ["label", "note", "unmapped_smiles"])
+        expectPlanted(planted)
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: planted.value })))
+        page()
+        const note = await screen.findByLabelText("Note from the depositor")
+        expect(note).toHaveTextContent(planted.byKey.note[0])
+        expectDepositorTextOnlyInNotes()
         expectNoAdversarialText()
     })
 })

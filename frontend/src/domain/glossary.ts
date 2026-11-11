@@ -73,7 +73,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     },
     "imaginary-frequency": {
         term: "Imaginary frequency",
-        definition: "The one vibration of a transition state that carries it downhill toward reactants or products. It is reported as a negative number.",
+        definition: "The one motion that carries a transition state downhill, toward the reactants one way and the products the other. It is reported as a negative number.",
     },
     "energy-units": {
         term: "Energy units",
