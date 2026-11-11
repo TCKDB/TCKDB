@@ -58,7 +58,7 @@ function participantNodes(
                 kind: "species-entry",
                 label: labelOf(p),
                 relation: `${role}${relationSuffix}`,
-                ...(shared ? { sub: `${role}, ${p.smiles}` } : {}),
+                ...(shared ? { sub: p.smiles ?? undefined } : {}),
                 to: speciesEntryPath(p.entryRef),
                 found: null,
             })
