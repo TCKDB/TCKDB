@@ -8,18 +8,16 @@ interesting way?", and membership *is* the claim that a check encodes a
 scientific decision — so an entry that fails the test dilutes every other
 entry. That register is also the manuscript's validation claim.
 
-The client's ``RejectionCode`` enum used to be generated from that
-register alone, which quietly made it serve a second, different purpose:
-enumerating what the API can return. Those are different sets. A
+The register and the set of codes the API can return are different sets. A
 role/type mismatch, an ownership refusal and ``missing_filter`` are real
 codes a client must be able to branch on, and none of them can be wrong
-in an interesting way — so the register was correctly refusing them, and
-the consequence was that a client could not import them. The register was
-being asked to choose between diluting a scientific claim and leaving
-real codes unbranchable.
+in an interesting way — so the register correctly refuses them. A client's
+``RejectionCode`` enum generated from the register alone could not import
+them, and the register cannot be asked to choose between diluting a
+scientific claim and leaving real codes unbranchable.
 
 This module is the second set. It enumerates codes; it says nothing about
-chemistry. The register is now an *annotated subset* of it, and
+chemistry. The register is an *annotated subset* of it, and
 ``backend/tests/api/test_api_code_catalogue.py`` checks the containment:
 every code the register declares must exist here, and this list must stay
 several times the size of that one, so "the catalogue" and "the register"
@@ -66,9 +64,8 @@ live on that class. What belongs here is the part a reader of *this list*
 needs -- the borderline calls -- because a classification whose hard cases
 are undocumented is one the next person re-litigates from scratch.
 
-Measured on this file: 83 entries (81 distinct codes) are relationships,
-98 are things. The cap family moved eight of them across on 2026-08-18 --
-see the first borderline group below. (The ten statmech_*/thermo_*
+The cap family is among the relationships -- see the first borderline group
+below. (The ten statmech_*/thermo_*
 levels-of-theory codes added for the R1-R6 rule set in
 ``app/services/calculation_levels.py`` are all relationships too --
 each names two calculations, two levels of theory, or a role and a
@@ -76,16 +73,15 @@ count that its own code does not already state.)
 
 The groups where the call was genuinely arguable, and the argument:
 
-* **Caps are relationships. Overruled 2026-08-18.** ``limit_too_large``,
+* **Caps are relationships.** ``limit_too_large``,
   ``offset_too_large``, ``geometry_too_large``, ``smiles_too_long``,
   ``export_all_cap_exceeded``, ``ml_export_all_cap_exceeded``,
   ``query_too_expensive`` and
-  ``composed_search_candidate_limit_exceeded`` were classified as things
-  when :class:`Shape` was introduced, on the ground that the rule's
-  discriminator is *conflict, mismatch, ambiguity* and a cap breach is
-  none of those. That reading was invited to be overruled and was.
+  ``composed_search_candidate_limit_exceeded`` are relationships even
+  though the rule's discriminator is *conflict, mismatch, ambiguity* and a
+  cap breach is none of those.
 
-  The argument that won: **a limit refusal that does not state the limit
+  The argument: **a limit refusal that does not state the limit
   is un-actionable.** A client that wants to retry must guess, or a human
   must go and read documentation -- and every one of these caps is a
   *setting* or a module constant, so on a deployment that lowers
@@ -152,11 +148,10 @@ this file by four different routes, and no one of them is enough:
   a *parameter*, ``tckdb_schemas.stationary_point`` raises with whichever
   code its blocking finding carries, and the integrity handler looks its
   code up by PostgreSQL constraint name. That is twenty-two codes the scan
-  is blind to — nineteen until #195 gave the ownership family its three
-  statmech-and-selection codes — and the ``*_handle_conflict`` family was
+  is blind to, and the ``*_handle_conflict`` family was
   found only by the
-  observer below. Six of them have since been brought back into
-  static view: #177 widened the scan to read a ``*_code=`` argument at
+  observer below. Six of them have been brought back into
+  static view: the scan reads a ``*_code=`` argument at
   any call, not only at a ``raise``, so the codes handed to
   ``reconcile_id_ref`` are seen where they are written. That matters
   because five of those six are emitted by no test — the observer's
@@ -385,7 +380,7 @@ class Shape(str, Enum):
     lived was the prose a client was told not to parse.
 
     The obvious repair — populate ``context`` everywhere — is wrong. Most
-    refusals have nothing to put there. Calvin's rule (2026-08-17) says
+    refusals have nothing to put there. The rule says
     which do:
 
         A code naming a **relationship** — conflict, mismatch, ambiguity —
@@ -442,7 +437,7 @@ class Shape(str, Enum):
     Deciding a code is a relationship settles that it owes ``context``.
     It does not settle *what goes in it*, and for the cap family the two
     questions come apart, because a cap refusal compares two numbers of
-    different kinds. Calvin's rule of 2026-08-18:
+    different kinds. The rule:
 
         **Publish the THRESHOLD. Never publish the MEASURED VALUE that
         crossed it, where that value describes the corpus rather than the
@@ -501,7 +496,7 @@ class Shape(str, Enum):
     #: is the only place the *which* can live. What goes in it is the
     #: things themselves — a field path, a public ref, a declared local
     #: key, a count — and never an internal identifier: not a database
-    #: primary key (DR-0028 Requirement 2), and since 2026-08-18 not a
+    #: primary key, and not a
     #: raw database constraint name either. Both are logged instead, for
     #: the same reason: they are ours, not the depositor's, they do not
     #: survive a restore or a rename, and no public surface is keyed on
@@ -610,10 +605,9 @@ class ApiCode:
     def is_client_facing(self) -> bool:
         """Whether a client should be able to import and branch on this.
 
-        This answers *can a caller branch on it*, and since #234 it no
-        longer doubles as *should a caller retry it*. Those are different
-        questions, and answering both with one rule is why a 5xx a client
-        genuinely needs had nowhere to go: ``artifact_object_missing`` is
+        This answers *can a caller branch on it*, not *should a caller retry
+        it*. Those are different questions, and answering both with one rule
+        would leave a 5xx a client genuinely needs with nowhere to go: ``artifact_object_missing`` is
         correctly refused here — the caller did nothing wrong, so there is
         no branch for them to write — while being precisely the code a
         retry layer must recognise. The second question is answered by

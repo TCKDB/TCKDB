@@ -1,8 +1,12 @@
 # Changelog
 
-## 0.173.1 - 2026-11-11
+## 0.173.2 - 2026-11-11
 
 The check descriptions the generated producer contract quotes (`contract/`) are shortened to one sentence per check and per escape hatch. No refusal, warning, field or behaviour changes.
+
+## 0.173.1 - 2026-11-11
+
+The producer contract text is reworded to state behaviour only: route descriptions in `PRODUCER_CONTRACT.md` no longer cite decision records or design plans. No refusal, warning, field or behaviour changes.
 
 ## 0.173.0 - 2026-11-11
 

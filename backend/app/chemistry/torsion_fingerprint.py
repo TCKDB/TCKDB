@@ -1,6 +1,6 @@
 """Canonical torsion fingerprint for conformer basin matching.
 
-Implements DR-0005: builds a species-specific, symmetry-aware torsion
+Builds a species-specific, symmetry-aware torsion
 fingerprint from an RDKit mol + 3D conformer geometry.
 
 Key concepts:
@@ -579,8 +579,7 @@ def _find_matches_using_smiles_graph(
 
     # First, find the best distance-based assignment for each element group
     # Assign XYZ atoms to reference atoms by element order. (A
-    # proximity-based refinement was intended here but is not implemented;
-    # see plan.md discovered-issues 2026-07-02.)
+    # proximity-based refinement is not implemented.)
     base_mapping: dict[int, int] = {}  # xyz_idx → ref_idx
     for elem in xyz_by_elem:
         xyz_indices = xyz_by_elem[elem]

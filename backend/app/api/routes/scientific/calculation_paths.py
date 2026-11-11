@@ -77,7 +77,7 @@ def scientific_calculation_scan(
     Full coordinate payloads remain accessible only via
     ``GET /scientific/geometries/{geometry_ref}``.
 
-    Internal-ID visibility follows the existing Phase D policy.
+    Internal-ID visibility follows the existing policy.
     Client-supplied ``sort=`` is rejected with 422
     ``client_sort_not_supported``.
     """
@@ -123,7 +123,7 @@ def scientific_calculation_irc(
     coordinate payloads remain accessible only via
     ``GET /scientific/geometries/{geometry_ref}``.
 
-    Internal-ID visibility follows the existing Phase D policy via
+    Internal-ID visibility follows the existing policy via
     ``include=internal_ids``.
     """
     payload = get_calculation_irc(
@@ -168,7 +168,7 @@ def scientific_calculation_path_search(
     block (ref + natoms + geom_hash). Full coordinate payloads remain
     accessible only via ``GET /scientific/geometries/{geometry_ref}``.
 
-    Internal-ID visibility follows the existing Phase D policy via
+    Internal-ID visibility follows the existing policy via
     ``include=internal_ids``.
     """
     payload = get_calculation_path_search(

@@ -1,10 +1,8 @@
 """Scientific artifact metadata search and gated byte download.
 
-Search remains metadata-only. A separate content-addressed download route
-serves bytes to authenticated callers when the owning calculation is
-explicitly approved, or when the caller is the depositor of that
-calculation, and re-verifies the persisted digest and size before
-returning content on either path.
+Search is metadata-only. A separate content-addressed download route
+serves stored bytes to any authenticated caller and re-verifies the
+persisted digest and size before returning content.
 """
 
 from __future__ import annotations
@@ -67,11 +65,9 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.profile import current_read_profile
 
 router = APIRouter(route_class=ServerFaultRoute, prefix="/artifacts")
-#: No call sites at present. The two lines this module used to log became
-#: duplicates of what the handlers in ``app.api.errors`` log for the same
-#: exceptions, once the download route stopped swallowing them (#212) --
-#: one event, one journal entry. The logger stays because the next thing
-#: this module needs to say will not be an exception the handlers see.
+#: No call sites at present. Exceptions raised by the download route are
+#: logged by the handlers in ``app.api.errors``, so one event has one
+#: journal entry; this logger is for anything that is not such an exception.
 logger = logging.getLogger(__name__)
 
 # Query-string keys allowed alongside POST. None in v0 — POST search
@@ -237,7 +233,7 @@ def artifact_integrity_search(
     Curator or admin only. The rows carry verifier prose and the object
     store's own ``ETag`` and paths, which is operational detail about a
     deployment rather than science about a record -- the same reasoning
-    that gates raw artifact bytes (ADR 0004).
+    that gates raw artifact bytes.
     """
     # No ``except ValueError -> HTTPException(422)`` here, deliberately.
     # The service raises the same coded refusals every other scientific read
@@ -357,52 +353,34 @@ def download_approved_artifact(
     user: AppUser = Depends(get_current_user),
     session: Session = Depends(get_db),
 ) -> Response:
-    """Download approved bytes, or the caller's own, by content digest.
+    """Download stored artifact bytes by content digest.
 
     Unlike the metadata search endpoints, which are part of the public
     read surface, raw-artifact bytes are served only to authenticated
     callers (any valid API key or session): unredacted logs may embed
     producer-side scratch paths, usernames, and cluster hostnames that
     must never reach anonymous clients. This gate is unconditional (no
-    opt-out flag) so no deployment can accidentally re-expose the bytes;
-    see ``docs/adr/0004-store-artifacts-verbatim-gate-raw-log-access.md``.
-    The digest is still re-verified against the stored bytes below, on
-    every path — an owner's download is verified exactly like anyone
-    else's, because integrity is a claim about the store, not about who
+    opt-out flag) so no deployment can accidentally re-expose the bytes.
+    Any authenticated caller may fetch any stored artifact; review status
+    and ownership do not narrow the result. Anonymous callers get 401.
+
+    The digest is re-verified against the stored bytes below, on every
+    request, because integrity is a claim about the store, not about who
     is asking.
 
     When that verification fails, this route does more than answer: it
     writes an ``artifact_integrity_event``, which hard-fails the owning
     calculation at read time for every subsequent reader. A 502 here is
     therefore not a private incident between one caller and the store —
-    it is a recorded break in TCKDB's custody of the evidence
-    (``docs/adr/0014-custody-of-stored-evidence-is-recorded-not-logged.md``).
+    it is a recorded break in TCKDB's custody of the evidence.
 
-    *Which* authenticated callers get the bytes has two answers, and
-    until 2026-08-24 it had only one. Curator approval publishes evidence
-    to every authenticated caller, and that is unchanged. But approval is
-    a curator action on a store where curation has barely begun — 563 of
-    563 artifacts on the hosted instance belonged to ``not_reviewed``
-    calculations — so an approval-only gate had never opened for anyone,
-    the depositor of the file included. A depositor may therefore always
-    fetch back what they deposited, judged by the same ownership rule the
-    upload route authorizes attaching with
-    (``app.services.deposit_ownership``). ADR 0004's argument for gating
-    raw logs is not overturned by this; only its unargued choice of
-    *review status* as the gate is.
-
-    A caller who owns nothing here still cannot tell an unapproved digest
-    from an unknown one: both are 404.
+    An unknown digest is 404.
     """
 
     artifact = resolve_downloadable_artifact_by_sha256(session, sha256, user)
     if artifact is None:
-        # Now says only what it means. While review status gated access this
-        # sentence had to stay vague -- "approved artifact not found" covered
-        # both "no such digest" and "exists but not for you", deliberately,
-        # so the response was not an existence oracle. With authentication as
-        # the whole gate there is no second case left to hide, and a signed-in
-        # caller reading "not found" can take it literally.
+        # Authentication is the whole gate, so "not found" means there is no
+        # such digest and a signed-in caller can take it literally.
         raise HTTPException(status_code=404, detail="No artifact with this digest is in the archive.")
 
     try:
@@ -412,9 +390,8 @@ def download_approved_artifact(
         )
     # Both are caught for their side effect and then **re-raised typed**, so
     # the handlers in app.api.errors still mint the code and still log with
-    # the request's method and path. The earlier version of these blocks did
-    # the side effect and then raised a bare ``HTTPException``, which is what
-    # made this route answer ``code="http_502"`` where the upload path answers
+    # the request's method and path. Raising a bare ``HTTPException`` would
+    # make this route answer ``code="http_502"`` where the upload path answers
     # ``artifact_integrity_failed`` for the identical condition — one break,
     # two contracts, decided by which route noticed it. A caught exception
     # that must keep its meaning has to leave the handler as itself.
@@ -423,7 +400,7 @@ def download_approved_artifact(
         # row is what makes the break visible to the *next* reader, and
         # to the trust evaluator, without anyone having to grep. Written
         # in its own transaction and best-effort, so it cannot turn a
-        # 502 into a 500. See ADR 0014. Recorded *before* the re-raise:
+        # 502 into a 500. Recorded *before* the re-raise:
         # nothing after this line can skip it.
         record_from_error(
             exc,
@@ -466,7 +443,7 @@ def download_approved_artifact(
             # Authenticated, potentially PII-bearing bytes: forbid shared
             # caches from retaining them. ``public`` would let a CDN serve
             # one user's raw log to a later anonymous request for the same
-            # URL, defeating the auth gate (ADR 0004).
+            # URL, defeating the auth gate.
             "Cache-Control": "private, no-store",
             # BOTH forms, per RFC 6266. `filename*` alone was a real
             # defect: curl's -J reads only the plain `filename=` parameter

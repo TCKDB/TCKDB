@@ -104,7 +104,6 @@ class NotFoundError(Exception):
     payload cited four refs, and the alternative is a client string-matching
     prose. It is deep-sanitised by :func:`app.api.error_contract.error_envelope`
     like any other context, and must never carry a database primary key
-    (DR-0028 Requirement 2).
     """
 
     def __init__(
@@ -370,12 +369,12 @@ def _no_result_found_handler(
 # code and sentence, looked up by name in ``_constraint_rejections``
 # below; everything else still falls back to the SQLSTATE bucket.
 #
-# What a bucket may say, settled 2026-08-18
-# -----------------------------------------
+# What a bucket may say
+# ---------------------
 # **A raw database constraint name never appears in a user-facing body.**
 # It is an internal identifier: meaningless to a depositor, unstable
 # across a rename, and a disclosure of schema layout — the same reasoning
-# that keeps row ids out of bodies under DR-0028 Requirement 2. The name
+# that keeps row ids out of bodies. The name
 # goes to the log below, where the operator is.
 #
 # So the sentence is what the bucket owes, and it is written to be acted
@@ -495,17 +494,11 @@ def public_integrity_error(exc: IntegrityError) -> tuple[str, str, dict[str, Any
     # Keyed on the constraint name rather than on the driver's message
     # text: parsing prose is what the typed envelope exists to replace.
     #
-    # The name is the *key*, and it stays on this side of the wire. Until
-    # 2026-08-18 this branch also published it as
-    # ``context["constraint"]``, and the repository held three positions
-    # about whether that was allowed: this one said yes, the unregistered
-    # buckets said no in as many words ("Internal constraint name must not
-    # leak through the public body"), and the foreign-key bucket said
-    # nothing at all. Calvin settled it in the direction the majority
-    # already pointed -- a raw constraint name is an internal identifier
-    # and never appears in a user-facing body -- so what a registered
-    # constraint earns is a *code and a sentence of its own*, which is a
-    # public contract, rather than a schema object name, which is not.
+    # The name is the *key*, and it stays on this side of the wire: a raw
+    # constraint name is an internal identifier and never appears in a
+    # user-facing body, so what a registered constraint earns is a *code and
+    # a sentence of its own*, which is a public contract, rather than a
+    # schema object name, which is not.
     # Looking the rule up in ``docs/guides/scientific_check_register.md``
     # is done by that code; the name reaches the operator through the log
     # line below.
@@ -635,13 +628,12 @@ def _artifact_storage_unavailable_handler(
     """One exception type, three facts, three statuses, three answers.
 
     503 for a store that did not answer; 502 for one that answered "not
-    there"; 507 for one that answered "no room". The 507 branch is the
-    newest and its reasoning sits with it below, including why it is a
+    there"; 507 for one that answered "no room". The 507 branch's
+    reasoning sits with it below, including why it is a
     status change rather than a third ``Replay`` member.
 
-    The two older facts, and how they came to be told apart. Until #226
-    both left here as ``503 artifact_storage_unavailable`` with "Retry
-    later." — true of an outage, and a false instruction for the other
+    The two older facts, told apart by ``exc.missing``. "Retry later." is
+    true of an outage, and a false instruction for the other
     case: a store that answered ``NoSuchKey`` for a digest a committed
     row still points at will keep saying so no matter how long the client
     waits. ``exc.missing`` is the discriminator, set at the one place that
@@ -654,9 +646,9 @@ def _artifact_storage_unavailable_handler(
     did nothing wrong. The artifact record exists, is findable, and is
     still published; what is gone are bytes TCKDB undertook to keep. A
     404 would additionally be indistinguishable from this route's
-    deliberate "unknown or unapproved digest" answer, which would recreate
-    the very ambiguity this split removes — one pair meaning both "you may
-    not see this" and "we lost it". A 410 carries the right retry advice
+    "unknown digest" answer, which would recreate
+    the very ambiguity this split removes — one pair meaning both "there is
+    no such artifact" and "we lost it". A 410 carries the right retry advice
     but the wrong instruction: it tells a client the resource was
     withdrawn and its references may be dropped, and that reference is
     what lets an operator put the object back (see ``restore_held_object``
@@ -665,18 +657,17 @@ def _artifact_storage_unavailable_handler(
     caller did — which is why neither code is in the client's
     ``RejectionCode`` enum.
 
-    That was necessary and, until #234, not sufficient. The sentence below
-    says "retrying will not clear it" and no client could act on it: 502
-    sits in ``tckdb_client``'s default retry set, and the one field that
+    That is necessary but not sufficient. The sentence below says
+    "retrying will not clear it" and no client could act on it: 502 sits in
+    ``tckdb_client``'s default retry set, and the one field that
     contradicts the status is the ``code``, which the enum excludes by
-    construction. So a well-behaved client replayed a custody break on a
-    backoff schedule forever. The catalogue now carries a second,
+    construction. The catalogue therefore carries a second,
     *declared* classification -- ``ApiCode.replay`` -- exported beside the
     enum as ``NON_RETRYABLE_CODES``, and the client reads the body's code
     at the point it decides whether to retry. The sentence in this branch
-    is therefore load-bearing twice over: a human reads it, and a machine
-    acts on the code beside it. Changing one without the other is the
-    disagreement #234 removed.
+    is load-bearing twice over: a human reads it, and a machine
+    acts on the code beside it. Changing one without the other makes them
+    disagree.
 
     The public body stays deliberately vague -- it names a subsystem and
     says what to do. That is right for a caller and useless for whoever
@@ -690,7 +681,7 @@ def _artifact_storage_unavailable_handler(
 
     "This has been recorded" is not a courtesy on the missing branch, and
     it is not asserted from here. The route that reads stored bytes writes
-    the ``object_missing`` custody row *before* re-raising (ADR 0014), so
+    the ``object_missing`` custody row *before* re-raising, so
     the sentence is true of every path that can reach this branch with a
     request attached; a caller that reaches it opportunistically never
     sees a response at all.

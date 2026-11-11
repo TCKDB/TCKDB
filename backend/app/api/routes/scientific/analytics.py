@@ -64,7 +64,7 @@ def kinetics_analytics(
     session: Session = Depends(get_db),
     scientific_origin: ScientificOriginKind | None = Query(None),
     direction: KineticsDirection | None = Query(
-        None, description="Stored direction of the fit (DR-0036)."
+        None, description="Stored direction of the fit."
     ),
     model_kind: KineticsModelKind | None = Query(None),
     tunneling_model: TunnelingModel | None = Query(None),

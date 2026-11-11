@@ -25,7 +25,12 @@ dataset must never require a code release.
 ## The scientific check register is slimmed (Unreleased)
 
 - **Behaviour:** the scientific check register lists each check's code, rule, tier, enforcement and repair; justification text was removed. The `adr` and `tier_rationale` fields and the enforcement `note` text are gone from the register and its generated document, and the producer contract quotes the shorter text. Checks and entry numbers are unchanged.
-- **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-schemas` 0.173.1.
+- **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-schemas` 0.173.2.
+
+## Decision narrative removed from the API, workflows and chemistry modules (Unreleased)
+
+- **Behaviour:** none. Comments and docstrings in `backend/app/api`, `workflows`, `chemistry`, `importers` and related modules now state behaviour only. Route descriptions in the OpenAPI document and `PRODUCER_CONTRACT.md` are reworded accordingly.
+- **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-schemas` 0.173.1 (no client change).
 
 ## A one-electron participant's Hartree-Fock energy under a correlated kinetics level (Unreleased)
 

@@ -74,7 +74,7 @@ joins it later; a false merge is not.
 The canonical key of each alias is the spelling ARC and Gaussian write, so
 rows already stored that way keep their hash.
 
-Named composite methods (ADR 0021)
+Named composite methods
 ----------------------------------
 ``cbsqb3``, ``rocbsqb3``, ``cbs4m`` and ``cbsapno`` (Arkane's hyphen-free
 spelling) key to the hyphenated forms, and ``g4(mp2)``, ``g3(mp2)`` and
@@ -160,7 +160,7 @@ NAME_ALIASES: tuple[MethodAlias, ...] = (
             "(hyb_mgga_x_m06_2x + mgga_c_m06_2x); Q-Chem and Psi4 write M06-2X.",
         ),
     ),
-    # Named composite methods (ADR 0021). The canonical key is the Gaussian /
+    # Named composite methods. The canonical key is the Gaussian /
     # ARC spelling, so rows stored that way keep their hash. Every spelling
     # below names the same recipe in every program that accepts it; only
     # Gaussian documents these as keywords (app/chemistry/composite_methods.py).

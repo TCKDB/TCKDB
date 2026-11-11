@@ -155,8 +155,8 @@ from app.workflows.reaction import persist_reaction_upload
 #: The generic remedy tells a depositor to supply ``atom_map``. The
 #: pressure-dependent network bundle has no such field, so saying that here
 #: would send them looking for something that does not exist — a warning that
-#: cannot be acted on is the kind nobody reads, and ADR 0011 is explicit that a
-#: warning nobody reads leaves the corpus splitting between mapped and unmapped
+#: cannot be acted on is the kind nobody reads, and a warning nobody reads
+#: leaves the corpus splitting between mapped and unmapped
 #: records for no reason. The honest statement is that this path cannot record
 #: a map yet and which path can.
 #:
@@ -289,7 +289,7 @@ def _barrier_owner_check(
     return check
 
 
-#: Two states of one network resolve to the same participants (DR-0038).
+#: Two states of one network resolve to the same participants.
 W_NETWORK_STATE_DUPLICATE_COMPOSITION = "network_state_duplicate_composition"
 
 
@@ -312,7 +312,7 @@ def refuse_duplicate_state_compositions(
     A state is the multiset of its participants' species *entries*, and
     ``uq_network_state_network_id`` keeps one state per (network, composition). Two states that
     resolve to the same entries (two species keys that name one entry, or one state declared
-    twice) used to reach the database and surface as a raw ``IntegrityError`` (HTTP 500). They
+    twice) would reach the database and surface as a raw ``IntegrityError`` (HTTP 500). They
     are refused here, before any state row is written, naming the local state keys.
 
     :raises CodedValueError: ``network_state_duplicate_composition`` (422).
@@ -398,9 +398,8 @@ def _persist_calculation(
         )
 
     # The inline literature fragment is forwarded unresolved; the shared
-    # persistence seam resolves it (#194). This route reaches the same
-    # shared model as every other upload root, so the FK leak the
-    # network-PDep no-FK gate used to exempt is gone with it.
+    # persistence seam resolves it. This route reaches the same
+    # shared model as every other upload root.
     shared_payload = calculation_in_to_with_results_payload(calc_in)
     calculation = resolve_and_persist_calculation_with_results(
         session,
@@ -796,7 +795,7 @@ def persist_network_pdep_upload(
         geometry_key_to_id[ts_in.geometry.key] = ts_geometry.id
 
         # The saddle point must be made of its micro reaction's atoms, at that
-        # reaction's charge (ADR 0008: definitional, therefore blocking).
+        # reaction's charge (definitional, therefore blocking).
         validate_transition_state_composition(
             session,
             reaction_entry_id=reaction_entry.id,
@@ -885,10 +884,10 @@ def persist_network_pdep_upload(
             warnings=warning_sink,
         )
 
-        # Atom map (ADR 0011). A pressure-dependent network is a set of micro
+        # Atom map. A pressure-dependent network is a set of micro
         # reactions, and each saddle point here is one of them: the absence of
         # a map is exactly as invisible on this path as on any other, and the
-        # ADR requires it be loud enough that a depositor who *has* the
+        # absence must be loud enough that a depositor who *has* the
         # mapping notices they are being asked for it. The map itself cannot
         # be deposited here yet — see ``_PDEP_ABSENCE_DEPOSIT_PATH`` — so the call
         # passes ``None`` unconditionally and exists to report the gap.
@@ -911,7 +910,7 @@ def persist_network_pdep_upload(
         )
 
     # An assembled composite's inputs are written, and its total checked, now that
-    # every calculation exists (ADR 0021, P5).
+    # every calculation exists.
     warning_sink.extend(
         finalize_composite_inputs(
             session,
@@ -1213,7 +1212,7 @@ def persist_network_pdep_upload(
 
         # Energy transfer. A network-wide declaration carries no state and no
         # collider by declaration; ``scope`` is what tells a later reader that
-        # the NULLs are the record, not a dropped field (ADR 0009).
+        # the NULLs are the record, not a dropped field.
         for et_index, et in enumerate(solve_in.energy_transfer):
             session.add(
                 NetworkSolveEnergyTransfer(
@@ -1259,8 +1258,8 @@ def persist_network_pdep_upload(
         # ``validate_mechanistic_channel_evidence``: the coverage rules there
         # compare the supplied state/path keys against the topology, which
         # catches an undefined key as a side effect. A ``reported`` solve
-        # (ADR 0010) is exempt from those rules and so was exempt from the
-        # side effect, and reached these subscripts with whatever it wrote.
+        # is exempt from those rules and so from the
+        # side effect, and reaches these subscripts with whatever it writes.
         species_key_by_entry_id = {
             entry.id: key for key, entry in species_key_to_entry.items()  # type: ignore[attr-defined]
         }

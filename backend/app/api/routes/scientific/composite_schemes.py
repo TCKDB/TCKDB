@@ -1,4 +1,4 @@
-"""Scientific composite-scheme endpoint -- the recipe behind a composite level (ADR 0021).
+"""Scientific composite-scheme endpoint -- the recipe behind a composite level.
 
 - ``GET /scientific/composite-schemes/{composite_scheme_ref}``
 

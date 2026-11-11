@@ -77,7 +77,7 @@ def persist_statmech_upload(
         belong to the statmech target's species entry.
     :raises NotFoundError: If an ``existing_calculation_id`` names a
         calculation row that does not exist. 404 carrying
-        ``unknown_calculation_ref`` since #230 — the same code the
+        ``unknown_calculation_ref`` — the same code the
         public-ref spelling on ``/uploads/kinetics`` uses, since the
         missing row and its repair are the same.
     """
@@ -132,8 +132,8 @@ def persist_statmech_upload(
         calculations_by_key[calc_in.key] = calc_row
 
     # An assembled composite's inputs are written, and its total checked, now
-    # that every inline calculation exists and the key namespace is complete
-    # (ADR 0021, P5). Always run: the write is not optional when the caller
+    # that every inline calculation exists and the key namespace is complete.
+    # Always run: the write is not optional when the caller
     # collects no warnings.
     composite_input_warnings = finalize_composite_inputs(
         session,
@@ -144,7 +144,7 @@ def persist_statmech_upload(
         warnings_out.extend(composite_input_warnings)
 
     # An inline opt or sp at a named composite method's level is the same
-    # misshapen deposit the bundle routes warn about (ADR 0021, decision 7).
+    # misshapen deposit the bundle routes warn about.
     if warnings_out is not None:
         warnings_out.extend(
             collect_named_composite_deposit_warnings(

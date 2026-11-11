@@ -126,12 +126,9 @@ class RehearsalContended(RuntimeError):
 def discard_unflushed_writes(session: Session) -> None:
     """Drop changes the session holds but has not yet sent.
 
-    A leftover safeguard. Until #587 ``authenticate_api_key`` set
-    ``api_key.last_used_at`` on the session a dry run reads with; the first
-    query flushed it, and the row lock that UPDATE took was held for the whole
-    rehearsal, so a second dry run on the same key queued behind the first
-    (#577 review, F2). The stamp is now written on its own connection, so
-    nothing of the kind is pending any more, but a dry-run session never
+    A leftover safeguard. ``authenticate_api_key`` writes the
+    ``api_key.last_used_at`` stamp on its own connection, so
+    nothing of the kind is pending, but a dry-run session never
     commits, so discarding whatever a future dependency leaves unflushed
     costs nothing and keeps that failure from returning.
     """

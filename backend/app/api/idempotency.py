@@ -16,17 +16,12 @@ plus the integrity error handler in :mod:`app.api.errors` is what
 catches a race: the losing committer surfaces ``409
 idempotency_conflict`` via constraint-name mapping.
 
-Whether that is a gap or a decision
------------------------------------
-This paragraph used to end "for v0", and "deliberate for v0" and
-"planned for v1" are not the same claim — a reader looking for which
-one this was could not tell, which is the only reason the distinction
-is spelled out here at all.
-
-It is a decision. ``docs/specs/upload-idempotency-key-spec.md`` lists
+Why ``idempotency_in_progress`` is not reachable
+------------------------------------------------
+It is deliberate. ``docs/specs/upload-idempotency-key-spec.md`` lists
 ``idempotency_in_progress`` under *Optional* and says "Only implement
-``idempotency_in_progress`` if needed by the chosen approach". It was
-never a milestone to reach; it was a code that some approaches need and
+``idempotency_in_progress`` if needed by the chosen approach". It is
+not a milestone to reach; it is a code that some approaches need and
 others do not, and the approach chosen here — one unique constraint,
 one integrity handler — does not. Nothing scheduled sets the flag.
 
@@ -147,8 +142,8 @@ class IdempotencyContext:
         in the request's own transaction"; the key may well replay. That is
         the safe side: the worst a client does is repeat a write it did not
         need to.
-        Returning a bare success with no signal is the pre-fix behaviour and
-        is exactly what kept the 2026-08-05 incident invisible.
+        Returning a bare success with no signal would keep such a failure
+        invisible.
 
         A concurrent-duplicate ``IntegrityError`` still propagates, so a key
         raced by two in-flight requests still yields ``409``.

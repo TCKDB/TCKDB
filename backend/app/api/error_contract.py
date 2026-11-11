@@ -24,17 +24,16 @@ Three ways a ``code`` can be found, in descending order of trust
 is necessary but not sufficient" below.
 
 (2) and (3) read English, and reading English is how a code silently stops
-being reported when somebody rewords a sentence — which is exactly what had
-happened to the parenthesised convention the scientific checks used to use
-(``"... (reaction_mass_balance_failed)."``): the pattern below requires a
-colon, so those codes matched nothing and every chemistry refusal reached
-its client as the generic ``validation_error``. They are kept because
+being reported when somebody rewords a sentence — a parenthesised convention
+(``"... (reaction_mass_balance_failed)."``) is not matched by the pattern
+below, which requires a colon, so such a code would match nothing and the
+refusal would reach its client as the generic ``validation_error``. They are kept because
 existing details are a published surface, not because they are a good idea.
 
-What "declared" means for (3), and why it had to be narrowed
-------------------------------------------------------------
-(3) used to promote *any* ``snake_case_token: `` appearing anywhere in a
-message. The house style for a workflow refusal is
+What "declared" means for (3)
+-----------------------------
+(3) promotes only a ``snake_case_token: `` in the code position, not one
+appearing anywhere in a message. The house style for a workflow refusal is
 ``raise ValueError(f"{context}: <prose>")`` where ``context`` is a **field
 path**, so a path ending in a field name — ``source_calculations[0].
 existing_calculation_id`` — put that field name in front of a colon and
@@ -128,22 +127,19 @@ the replacement.
 The residual exposure is therefore the one shape neither scan reads: a
 message bound to a local before being raised (``message = "code: …"; raise
 ValueError(message)``). No such site exists — a census of every string
-literal in both trees beginning with a ``token: `` prefix found 71 tokens
-(re-measured after #178), of which 66 are catalogued as ``message_prefix``
+literal in both trees beginning with a ``token: `` prefix found 71 tokens,
+of which 66 are catalogued as ``message_prefix``
 and 5 are logger format strings that reach no response body
-(``manifest``, ``readyz``, ``startup``, ``status``, and — until it was
-reworded — ``geometry_validation``). The two accidental prefixes that made
-the count 73 are gone: they were reworded, not reclassified. So the set of
-error-reachable prefixes the catalogue does not cover is presently empty —
-measured, and re-measurable, rather than asserted.
+(``manifest``, ``readyz``, ``startup``, ``status`` and ``geometry validation``).
+So the set of error-reachable prefixes the catalogue does not cover is
+presently empty — measured, and re-measurable, rather than asserted.
 
 What ``context`` promises, and what it does not
 ----------------------------------------------
 "Branch on ``code``, read ``context``, never parse ``detail``" is the
-published advice and it is right. It was also, until #210, an
-over-promise: ``context`` is populated by the raiser, and a large part of
-the catalogue has no raiser that can populate it. Measured on the entry
-count as this was written, 65 of 170 entries arrive by
+published advice and it is right, with one limit: ``context`` is populated
+by the raiser, and a large part of the catalogue has no raiser that can
+populate it. A large share of entries arrive by
 :data:`~app.api.code_catalogue.Surface.message_prefix` — that is,
 ``raise ValueError(f"code: prose")`` — and a plain ``ValueError`` has
 nowhere to put structured facts, so :func:`error_envelope` renders
@@ -167,11 +163,9 @@ names, which is what
   and an empty one leaves the reason reachable only through the prose a
   client was told not to read.
 
-``limit_too_large`` was the example in the first bullet until 2026-08-18
-and is now in the second, which is worth saying out loud rather than
-quietly editing: a cap refusal that does not state the cap is
-un-actionable, so the whole cap family became relationships and now
-carries the limit. What such a code may put in ``context`` is bounded by
+``limit_too_large`` is an example of the second bullet: a cap refusal that
+does not state the cap is un-actionable, so the whole cap family are
+relationships and carry the limit. What such a code may put in ``context`` is bounded by
 the disclosure line on :class:`~app.api.code_catalogue.Shape` — the
 threshold and the caller's own value, never a server-side measurement of
 how much data exists.
@@ -192,15 +186,13 @@ minimum supported — are already machine-readable; they are simply in
 ``detail``. "Never parse ``detail``" still holds, because parsing is what
 a sentence needs and a dict does not.
 
-One of those five was itself repaired rather than merely recorded. Only
-``geometry_validation`` contained an underscore, so it was the only logger
-prefix ``_CODE_POSITION_PATTERN`` could match — a string carrying the
-shape of a declaration while declaring nothing. It now reads ``"geometry
-validation: …"``, and
+One of those five is worded to stay out of the pattern: its prefix is
+``"geometry validation: …"``, with a space, because ``geometry_validation``
+would be the only logger prefix ``_CODE_POSITION_PATTERN`` could match — a
+string carrying the shape of a declaration while declaring nothing.
 ``backend/tests/api/test_error_contract_catalogue_gate.py::
-TestNoLoggerFormatStringSitsInTheCodePosition`` fails on the next one
-written the old way. The remaining four cannot match that pattern and were
-left as they are.
+TestNoLoggerFormatStringSitsInTheCodePosition`` fails on any logger prefix
+written that way. The remaining four cannot match that pattern.
 """
 
 from __future__ import annotations
@@ -394,14 +386,12 @@ def validation_detail_context(detail: object) -> dict[str, Any]:
 
     That rule is not restated here, it is *asked* -- this function calls
     :func:`validation_detail_code` rather than reimplementing its test.
-    The two used to spell the question differently: the code fell back on
+    If the two spelled the question differently (the code falling back on
     more than one *failure*, the context only on more than one distinct
-    *code*. Two failures carrying the same code therefore produced the
+    *code*), two failures carrying the same code would produce the
     generic ``request_validation_error`` beside a populated ``context``,
     describing one of the failures the envelope had just declined to
-    name. #219 moves ~24 refusals into ``model_validator(mode="after")``,
-    which accumulates failures instead of stopping at the first, so that
-    combination stops being rare. One expression, one caller, no drift.
+    name. One expression, one caller, no drift.
 
     There is deliberately no merge. Two contexts for one promoted code
     would have to be combined, and the loop that did it was

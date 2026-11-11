@@ -230,8 +230,7 @@ def _run_computed_reaction(session: Session, job: UploadJob, review_policy: Revi
     return {
         **result,
         # ``warnings`` arrives as ``UploadWarning`` objects, which the JSONB
-        # result column cannot store: a computed-reaction job that raised any
-        # warning used to finish with a "result_unavailable" placeholder.
+        # result column cannot store, so they are serialised here.
         "warnings": [
             w.model_dump(mode="json") if hasattr(w, "model_dump") else w
             for w in warnings

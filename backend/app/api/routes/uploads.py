@@ -242,9 +242,7 @@ class ComputedReactionUploadResult(BaseModel):
     kinetics_ids: list[int]
     thermo_ids: list[int]
     #: One id per ``statmech`` row written for a species in this bundle.
-    #: A bundle depositing all three product types now gets all three
-    #: named; before, statmech had to be found by querying back through
-    #: ``species_entry_ids``.
+    #: A bundle depositing all three product types gets all three named.
     statmech_ids: list[int] = Field(default_factory=list)
     #: One id per ``transport`` row written for a species in this bundle.
     transport_ids: list[int] = Field(default_factory=list)
@@ -741,7 +739,7 @@ def upload_computed_species(
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
     """Bundle upload: identity + conformers + per-conformer calcs +
-    artifacts + optional thermo, atomic in one transaction (DR-0029)."""
+    artifacts + optional thermo, atomic in one transaction."""
     if (replay := idem.maybe_replay()) is not None:
         return replay
     warnings = reconcile_species_entry(
@@ -872,7 +870,7 @@ def upload_computed_reaction(
 
 
 # ---------------------------------------------------------------------------
-# ThermoML file upload (Phase C-E6)
+# ThermoML file upload
 # ---------------------------------------------------------------------------
 
 #: Reuses the artifact-upload cap (``app.services.artifact_storage``)
@@ -897,11 +895,9 @@ class ThermoMLUploadResult(BaseModel):
     entirely in public refs.
 
     Deliberately carries no database id anywhere, unlike the ``id``/
-    ``submission_id`` fields on every sibling result above: this route
-    was written after ``docs/specs/public_identifier_policy.md`` landed
-    and after the C-E5 read route set the ``public_ref`` precedent for
-    this exact table, so it follows that precedent rather than repeating
-    the older routes' leak.
+    ``submission_id`` fields on every sibling result above: it follows
+    ``docs/specs/public_identifier_policy.md`` and the ``public_ref``
+    precedent of the read route for this exact table.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -955,10 +951,8 @@ def upload_thermoml(
     # Required, unlike every sibling route's optional Idempotency-Key
     # (``idempotency_dependency`` itself treats a missing header as "not
     # idempotent, proceed anyway" -- see that dependency's own
-    # docstring, and DR-0024 itself: the header is optional in general).
-    # The C-E6 decision (2026-09-20; see "C-E6 -- ThermoML file input and
-    # upload route" in docs/research/tckdb-phase-c-implementation-plan.md)
-    # requires a key on every upload through *this* route specifically;
+    # docstring; the header is optional in general).
+    # This route requires a key on every upload through it specifically;
     # declaring the SAME header a second time, this time required, makes
     # FastAPI's ordinary missing-required-field 422 fire before the route
     # body runs -- the
@@ -969,8 +963,7 @@ def upload_thermoml(
 ):
     """Accept one ThermoML XML document directly -- not from the NIST bulk
     archive that ``backend/scripts/thermoml_cp_import.py --archive``
-    reads. Anyone authenticated may deposit one (Phase C-E6, "let anyone
-    ingest a ThermoML file, not only the NIST archive").
+    reads. Anyone authenticated may deposit one.
 
     Transport mirrors ``ArtifactIn.content_base64`` (the only other
     inline-file-bytes schema in this codebase): JSON body,
@@ -981,10 +974,8 @@ def upload_thermoml(
     padding slack.
 
     Idempotency: unlike every sibling ``/uploads/*`` route (where the
-    ``Idempotency-Key`` header is optional -- DR-0024 does not make it
-    mandatory in general), this specific route requires it, by the C-E6
-    decision (2026-09-20; "C-E6 -- ThermoML file input and upload route",
-    ``docs/research/tckdb-phase-c-implementation-plan.md``). A request
+    ``Idempotency-Key`` header is optional), this specific route requires
+    it. A request
     without the header never reaches this function's body at all:
     FastAPI's own required-header validation (see the
     ``_idempotency_key_required`` parameter above) answers with its
@@ -1018,9 +1009,9 @@ def upload_thermoml(
     if not request.content_base64.isascii():
         # ``base64.b64decode`` encodes its input to ASCII internally
         # before decoding, and for non-ASCII input that raises a plain
-        # ``ValueError`` -- NOT ``binascii.Error`` (Phase C-E6 review
-        # round 2, F2: measured, e.g. "YWJjé" -> ValueError('string
-        # argument should contain only ASCII characters')). Pre-checking
+        # ``ValueError`` -- NOT ``binascii.Error`` (e.g. "YWJjé" ->
+        # ValueError('string argument should contain only ASCII
+        # characters')). Pre-checking
         # here, rather than adding ``ValueError`` to the ``except``
         # clause below, keeps that clause narrow to ``binascii.Error``
         # only -- ``ValueError`` is one of the types the API layer's
@@ -1064,8 +1055,7 @@ def upload_thermoml(
     # here -- it has its own registered FastAPI handler
     # (``app.api.errors._artifact_storage_unavailable_handler``, 503
     # ``artifact_storage_unavailable``), so letting it propagate reuses
-    # the existing refusal instead of inventing a second one (Phase C-E6
-    # review round 2, F5).
+    # the existing refusal instead of inventing a second one.
     try:
         result = import_thermoml_cp_upload(
             session,
