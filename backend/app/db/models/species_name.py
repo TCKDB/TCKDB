@@ -40,6 +40,10 @@ class SpeciesName(Base, TimestampMixin, PublicRefMixin):
     external_source_id: Mapped[Optional[int]] = mapped_column(
         BigInteger, ForeignKey("external_source.id", deferrable=True, initially="IMMEDIATE"), nullable=True
     )
+    #: The record's id at the external source (a PubChem CID, as text).
+    external_record_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    #: When the external record was fetched.
+    retrieved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False), nullable=True)
     created_by_user_id: Mapped[Optional[int]] = mapped_column(
         BigInteger, ForeignKey("app_user.id", deferrable=True, initially="IMMEDIATE"), nullable=True
     )
@@ -49,6 +53,15 @@ class SpeciesName(Base, TimestampMixin, PublicRefMixin):
     __table_args__ = (
         CheckConstraint("char_length(name) BETWEEN 1 AND 128", name="name_length"),
         CheckConstraint("char_length(name_key) BETWEEN 1 AND 128", name="name_key_length"),
+        CheckConstraint(
+            "source_kind <> 'offline_import' OR (external_source_id IS NOT NULL AND external_record_key IS NOT NULL "
+            "AND retrieved_at IS NOT NULL)",
+            name="offline_import_has_source",
+        ),
+        CheckConstraint(
+            "source_kind <> 'curated' OR (external_record_key IS NULL AND retrieved_at IS NULL)",
+            name="curated_has_no_record",
+        ),
         Index(
             "uq_species_name_species_id_name_key_live",
             "species_id",

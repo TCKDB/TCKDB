@@ -302,6 +302,8 @@ _TS_TOKEN = re.compile(
     r"//[^\n]*|/\*.*?\*/|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`|[A-Za-z_$][\w$]*",
     re.DOTALL,
 )
+#: SVG path data (``M2 11.5V8.5h2.6v3Z``): drawing commands and numbers, never a name.
+_SVG_PATH = re.compile(r"^[Mm][MmZzLlHhVvCcSsQqTtAa0-9.,\s-]*$")
 _TS_TEST = re.compile(r"(?:\.test\.|\.spec\.)|(?:^|/)(?:__tests__|__mocks__|test|tests)/")
 
 
@@ -317,6 +319,8 @@ def scan_frontend(root: Path = FRONTEND_ROOT, repo_root: Path = REPO_ROOT) -> li
             if text.startswith(("//", "/*")):
                 continue
             if text[0] in "\"'`":
+                if _SVG_PATH.match(text[1:-1]):
+                    continue
                 if is_versioned_string(text[1:-1]) or _FORMAT_TEMPLATE.search(text[1:-1]):
                     findings.append(Finding(rel, "frontend", _clip(text[1:-1])))
             elif is_versioned_identifier(text):

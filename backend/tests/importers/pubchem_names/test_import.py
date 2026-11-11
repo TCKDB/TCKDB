@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import itertools
 import string
+from datetime import datetime
 
 import pytest
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 
 from app.db.models.common import SpeciesNameKind, SpeciesNameSourceKind
 from app.db.models.external_source import ExternalSource
@@ -34,7 +36,7 @@ def _species(db_session, *, entry=True):
 
 def _row(sp, name="Ammonia", kind="common", cid=222, **over):
     row = {"species_ref": sp.public_ref, "inchi_key": sp.inchi_key, "name": name, "kind": kind, "cid": cid,
-           "url": f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"}
+           "url": f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}", "retrieved_at": "2026-11-11T10:30:00Z"}
     row.update(over)
     return row
 
@@ -51,7 +53,7 @@ def _reasons(report):
     return [r.reason for r in report.rows]
 
 
-def test_an_import_writes_offline_import_names_tied_to_a_pubchem_source_per_cid(db_session):
+def test_an_import_writes_offline_import_names_with_the_pubchem_source_cid_and_retrieval_time(db_session):
     sp = _species(db_session)
     report = import_species_names(db_session, _doc(_row(sp), _row(sp, "azane", "systematic")), dry_run=False)
     assert [r.outcome for r in report.rows] == ["inserted", "inserted"]
@@ -63,18 +65,51 @@ def test_an_import_writes_offline_import_names_tied_to_a_pubchem_source_per_cid(
     sources = {db_session.get(ExternalSource, r.external_source_id) for r in rows}
     assert len(sources) == 1
     (source,) = sources
-    assert (source.source_name, source.source_release) == ("PubChem", "CID 222")
+    assert (source.source_name, source.source_release) == ("PubChem Compound", "rolling")
+    assert all(r.external_record_key == "222" and r.retrieved_at == datetime(2026, 11, 11, 10, 30) for r in rows)
     assert all(r.created_by_user_id is None and r.retired_at is None for r in rows)
 
 
-def test_a_cid_shared_by_two_species_reuses_one_source(db_session):
+def test_species_with_different_cids_share_one_source_and_each_name_keeps_its_own_cid_and_time(db_session):
     a, b = _species(db_session), _species(db_session)
-    import_species_names(db_session, _doc(_row(a, cid=9001), _row(b, cid=9001)), dry_run=False)
-    ids = {r.external_source_id for sp in (a, b) for r in _names(db_session, sp)}
-    assert len(ids) == 1
+    import_species_names(
+        db_session,
+        _doc(_row(a, cid=9001, retrieved_at="2026-11-11T01:00:00Z"), _row(b, cid=9002, retrieved_at="2026-11-12T02:00:00+00:00")),
+        dry_run=False,
+    )
+    (na,), (nb,) = _names(db_session, a), _names(db_session, b)
+    assert na.external_source_id == nb.external_source_id
+    assert (na.external_record_key, na.retrieved_at) == ("9001", datetime(2026, 11, 11, 1, 0))
+    assert (nb.external_record_key, nb.retrieved_at) == ("9002", datetime(2026, 11, 12, 2, 0))
     assert db_session.scalar(
-        select(func.count()).select_from(ExternalSource).where(ExternalSource.source_release == "CID 9001")
+        select(func.count()).select_from(ExternalSource).where(ExternalSource.source_name == "PubChem Compound")
     ) == 1
+
+
+@pytest.mark.parametrize("value", [None, "", "yesterday", 5])
+def test_a_row_without_a_usable_retrieval_time_is_skipped(db_session, value):
+    sp = _species(db_session)
+    report = import_species_names(db_session, _doc(_row(sp, retrieved_at=value)), dry_run=False)
+    assert _reasons(report) == ["bad_row"] and _names(db_session, sp) == []
+
+
+def test_the_database_refuses_an_offline_import_without_a_record_key_and_a_curated_name_with_one(db_session):
+    sp = _species(db_session)
+    source = ExternalSource(source_name="PubChem Compound", source_release="rolling-check")
+    db_session.add(source)
+    db_session.flush()
+
+    def attempt(**fields):
+        base = {"species_id": sp.id, "name": "x one", "name_key": "x one", "kind": SpeciesNameKind.common}
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.add(SpeciesName(**{**base, **fields}))
+            db_session.flush()
+
+    attempt(source_kind=SpeciesNameSourceKind.offline_import)
+    attempt(source_kind=SpeciesNameSourceKind.offline_import, external_source_id=source.id, retrieved_at=datetime(2026, 1, 1))
+    attempt(source_kind=SpeciesNameSourceKind.offline_import, external_source_id=source.id, external_record_key="1")
+    attempt(source_kind=SpeciesNameSourceKind.curated, external_record_key="1")
+    attempt(source_kind=SpeciesNameSourceKind.curated, retrieved_at=datetime(2026, 1, 1))
 
 
 def test_a_rerun_inserts_nothing_new(db_session):

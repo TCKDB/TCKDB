@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import func, select
@@ -23,7 +24,8 @@ from app.db.models.species_name import SpeciesName
 from app.services.species_name_normalisation import name_problem, normalise_name
 from app.services.species_name_review import REVIEW_FORMAT, is_inchikey
 
-SOURCE_NAME = "PubChem"
+SOURCE_NAME = "PubChem Compound"
+SOURCE_RELEASE = "rolling"
 SOURCE_TERMS_URL = "https://www.ncbi.nlm.nih.gov/home/about/policies/"
 IMPORTABLE_KINDS = {SpeciesNameKind.common.value, SpeciesNameKind.systematic.value}
 
@@ -59,19 +61,29 @@ class ImportReport:
         return {"dry_run": self.dry_run, "counts": self.counts, "rows": [r.to_json() for r in self.rows]}
 
 
-def _get_or_create_source(session: Session, cid: int) -> ExternalSource:
-    release = f"CID {cid}"
+def _get_or_create_source(session: Session) -> ExternalSource:
     existing = session.scalar(
         select(ExternalSource).where(
-            ExternalSource.source_name == SOURCE_NAME, ExternalSource.source_release == release
+            ExternalSource.source_name == SOURCE_NAME, ExternalSource.source_release == SOURCE_RELEASE
         )
     )
     if existing is not None:
         return existing
-    row = ExternalSource(source_name=SOURCE_NAME, source_release=release, terms_url=SOURCE_TERMS_URL)
+    row = ExternalSource(source_name=SOURCE_NAME, source_release=SOURCE_RELEASE, terms_url=SOURCE_TERMS_URL)
     session.add(row)
     session.flush()
     return row
+
+
+def _parse_retrieved_at(value: Any) -> datetime | None:
+    """The review row's retrieval time as a naive UTC datetime, or ``None`` when absent or not an ISO timestamp."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed.astimezone(timezone.utc).replace(tzinfo=None) if parsed.tzinfo else parsed
 
 
 def _is_merged(species: Species) -> bool:
@@ -98,6 +110,10 @@ def _import_row(session: Session, raw: Any, *, dry_run: bool) -> RowOutcome:
         or cid <= 0
         or not is_inchikey(key)
     ):
+        out.reason = "bad_row"
+        return out
+    retrieved_at = _parse_retrieved_at(raw.get("retrieved_at"))
+    if retrieved_at is None:
         out.reason = "bad_row"
         return out
     problem = name_problem(name)
@@ -136,7 +152,7 @@ def _import_row(session: Session, raw: Any, *, dry_run: bool) -> RowOutcome:
         return out
     try:
         with session.begin_nested():
-            source = _get_or_create_source(session, cid)
+            source = _get_or_create_source(session)
             session.add(
                 SpeciesName(
                     species_id=species.id,
@@ -145,6 +161,8 @@ def _import_row(session: Session, raw: Any, *, dry_run: bool) -> RowOutcome:
                     kind=SpeciesNameKind(kind),
                     source_kind=SpeciesNameSourceKind.offline_import,
                     external_source_id=source.id,
+                    external_record_key=str(cid),
+                    retrieved_at=retrieved_at,
                 )
             )
             session.flush()
