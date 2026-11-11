@@ -234,7 +234,7 @@ def persist_transition_state_upload(
             created_by=created_by,
             field=f"applied_energy_corrections[{index}]",
             warnings_out=warnings,
-            can_name_source=False,
+            standalone_transition_state=True,
         )
         applied_correction_ids.append(applied.id)
 
