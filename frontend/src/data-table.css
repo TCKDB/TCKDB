@@ -127,7 +127,7 @@
     border-left: 3px solid var(--control-border);
 }
 
-.compare-table th.compare-corner {
+.compare-table td.compare-corner {
     color: var(--ink-2);
 }
 
@@ -200,7 +200,8 @@
 
 @media (max-width: 40rem) {
     .data-table-grid a,
-    .data-table-order a {
+    .data-table-order a,
+    .species-overview .order-note a {
         display: inline-flex;
         align-items: center;
         min-height: 44px;
@@ -217,7 +218,7 @@
         max-width: 8rem;
     }
 
-    .compare-table thead th:first-child {
+    .compare-table thead tr > :first-child {
         position: sticky;
         left: 0;
         z-index: 1;

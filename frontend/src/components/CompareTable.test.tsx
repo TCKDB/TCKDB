@@ -24,19 +24,27 @@ afterEach(cleanup)
 describe("CompareTable", () => {
     it("has one column per record under a version header, a unit column, and row headers for the quantities", () => {
         setup([measured("Enthalpy", [number("1.00"), number("1.00"), number("2.00"), number("2.00")])])
-        expect(screen.getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(["Version", "version one", "Quantity", "Unit", "record a", "record b", "record c", "record d"])
+        expect(screen.getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(["version one", "Quantity", "Unit", "record a", "record b", "record c", "record d"])
         expect(screen.getByRole("columnheader", { name: "version one" })).toHaveAttribute("colspan", "4")
         const row = screen.getByRole("row", { name: /Enthalpy/ })
         expect(within(row).getByRole("rowheader")).toHaveTextContent("Enthalpy")
         expect(within(row).getAllByRole("cell")[0]).toHaveTextContent("kJ/mol")
     })
 
+    it("gives every header and body row exactly one unit cell, so the unit column hides cleanly on phones", () => {
+        setup([measured("Enthalpy", [number("1.00"), number("1.00"), number("2.00"), number("2.00")]), setting("Treatment", [word("A"), word("A"), word("A"), word("A")])], TWO)
+        const rows = Array.from(document.querySelectorAll("thead tr, tbody tr"))
+        expect(rows).toHaveLength(4)
+        for (const row of rows) expect(row.querySelectorAll(".compare-unit-col")).toHaveLength(1)
+        expect(screen.queryByRole("columnheader", { name: "Version" })).not.toBeInTheDocument()
+    })
+
     it("marks a setting at row level, in words, when the recorded values are not all equal, and shows the legend", () => {
         setup([setting("Treatment", [word("A"), word("A"), word("B"), absent("Not recorded")])])
         const header = within(screen.getByRole("row", { name: /Treatment/ })).getByRole("rowheader")
-        expect(header).toHaveTextContent("≠ Not the same in every record")
+        expect(header).toHaveTextContent("≠ Not the same within a version")
         expect(document.querySelectorAll(".compare-cell--differs")).toHaveLength(0)
-        expect(screen.getByText(/a setting that is not the same in every record of a version; not a verdict\./, { selector: ".compare-legend" })).toBeVisible()
+        expect(screen.getByText(/a setting that is not the same within one version; not a verdict\./, { selector: ".compare-legend" })).toBeVisible()
     })
 
     it("does not mark a setting that agrees, nor a split between versions, and gives a 2-vs-2 split one row mark", () => {
@@ -47,7 +55,7 @@ describe("CompareTable", () => {
         ], TWO)
         expect(within(screen.getByRole("row", { name: /Agrees/ })).getByRole("rowheader")).not.toHaveTextContent("Not the same")
         expect(within(screen.getByRole("row", { name: /Per version/ })).getByRole("rowheader")).not.toHaveTextContent("Not the same")
-        expect(within(screen.getByRole("row", { name: /Split/ })).getByRole("rowheader")).toHaveTextContent("Not the same in every record")
+        expect(within(screen.getByRole("row", { name: /Split/ })).getByRole("rowheader")).toHaveTextContent("Not the same within a version")
     })
 
     it("never marks a measured number, however much the values differ, and shows no legend without a setting row", () => {

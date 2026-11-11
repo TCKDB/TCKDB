@@ -163,10 +163,10 @@ describe("molecule compare page", () => {
         await open({ statmech: [statmech("stm_one", entryA, 6), statmech("stm_two", entryA, 12), statmech("stm_three", entryB, 6, { rotational_constant_a_cm1: 0.00123 })] })
         const table = await statmechTable()
         const symmetry = within(within(table).getByRole("row", { name: /External symmetry number/ })).getByRole("rowheader")
-        expect(symmetry).toHaveTextContent("≠ Not the same in every record")
+        expect(symmetry).toHaveTextContent("≠ Not the same within a version")
         expect(within(within(table).getByRole("row", { name: /Treatment/ })).getByRole("rowheader")).not.toHaveTextContent("Not the same")
         expect(within(within(table).getByRole("row", { name: /Rotational constant A/ })).getByRole("rowheader")).not.toHaveTextContent("Not the same")
-        expect(within(table.parentElement as HTMLElement).getByText(/a setting that is not the same in every record of a version; not a verdict\./)).toBeVisible()
+        expect(within(table.parentElement as HTMLElement).getByText(/a setting that is not the same within one version; not a verdict\./)).toBeVisible()
     })
 
     it("subscripts the point group and keeps exponents in both the comparison and the list, and sorts the list by the true value", async () => {

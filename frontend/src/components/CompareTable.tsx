@@ -31,7 +31,7 @@ export function CompareCellView({ cell, to }: { cell: CompareCell; to: string | 
 
 /**
  * One column per record, grouped by version, one row per quantity, with the unit in its own column. A row for a setting
- * (treatment, point group and the like) is marked when the setting is not the same in every record of a version; the
+ * (treatment, point group and the like) is marked when the setting is not the same within a version; the
  * legend says that is not a verdict. A measured number is never marked, ordered or called best.
  */
 export function CompareTable({ caption, label, groups, rows }: {
@@ -53,7 +53,8 @@ export function CompareTable({ caption, label, groups, rows }: {
                     {groups.map((group) => <colgroup key={group.key} className="compare-colgroup">{group.columns.map((column) => <col key={column.key} />)}</colgroup>)}
                     <thead>
                         <tr>
-                            <th scope="col" colSpan={2} className="compare-corner">Version</th>
+                            <td className="compare-corner">Version</td>
+                            <td className="compare-unit-col" aria-hidden="true" />
                             {groups.map((group) => <th key={group.key} scope="colgroup" colSpan={group.columns.length} className="compare-group">{group.header}</th>)}
                         </tr>
                         <tr>
@@ -72,7 +73,7 @@ export function CompareTable({ caption, label, groups, rows }: {
                                     <th scope="row">
                                         {displayLabel(row.label)}
                                         {row.unit && <span className="compare-row-unit t-preserve-case">{row.unit}</span>}
-                                        {differs && <span className="compare-differs"><span aria-hidden="true">≠</span> Not the same in every record</span>}
+                                        {differs && <span className="compare-differs"><span aria-hidden="true">≠</span> Not the same within a version</span>}
                                     </th>
                                     <td className="compare-unit-col t-preserve-case">{row.unit}</td>
                                     {row.cells.map((cell, index) => (
@@ -86,7 +87,7 @@ export function CompareTable({ caption, label, groups, rows }: {
                     </tbody>
                 </table>
             </div>
-            {hasSettings && <p className="compare-legend"><span aria-hidden="true">≠</span> a setting that is not the same in every record of a version; not a verdict.</p>}
+            {hasSettings && <p className="compare-legend"><span aria-hidden="true">≠</span> a setting that is not the same within one version; not a verdict.</p>}
         </>
     )
 }
