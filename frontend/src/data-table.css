@@ -1,0 +1,234 @@
+/* Sortable record tables and the side-by-side comparison of a molecule's records. */
+
+.data-table-scroll {
+    max-width: 100%;
+    margin: var(--s-3) 0;
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+}
+
+.data-table-scroll:focus-visible,
+.data-table-sort:focus-visible,
+.data-table-reset:focus-visible,
+.compare-record a:focus-visible,
+.compare-group a:focus-visible,
+.compare-link:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.data-table-grid {
+    position: relative;
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table-grid th,
+.data-table-grid td {
+    padding: var(--s-2) var(--s-3);
+    border-bottom: 1px solid var(--line-2);
+    text-align: left;
+    vertical-align: top;
+}
+
+.data-table-grid thead th {
+    background: var(--surface-sunken);
+    color: var(--ink);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.data-table-grid tbody th[scope="row"] {
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--ink);
+}
+
+/* In the accessibility tree, off the screen. */
+.data-table-caption,
+.data-table-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+.data-table-sort,
+.data-table-reset {
+    min-height: 44px;
+    padding: 0 var(--s-2);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.data-table-sort {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: var(--s-2);
+    margin-left: calc(var(--s-2) * -1);
+    padding-top: var(--s-2);
+    color: var(--ink);
+    text-align: left;
+}
+
+.data-table-sort:hover,
+.data-table-reset:hover {
+    border-color: var(--accent);
+    background: var(--accent-50);
+}
+
+.data-table-reset {
+    font-weight: 400;
+    text-decoration: underline;
+}
+
+.data-table-arrow {
+    flex: none;
+    color: var(--ink-2);
+}
+
+.data-table-head {
+    display: grid;
+    min-width: 8rem;
+    gap: var(--s-1);
+}
+
+.data-table-unit {
+    color: var(--ink-2);
+    font-weight: 400;
+    white-space: nowrap;
+}
+
+.compare-table {
+    min-width: 36rem;
+}
+
+.compare-table th.compare-record {
+    min-width: 12rem;
+    max-width: 18rem;
+    font-weight: 400;
+    overflow-wrap: anywhere;
+}
+
+.compare-table th.compare-group {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    border-left: 3px solid var(--control-border);
+}
+
+.compare-table td.compare-corner {
+    color: var(--ink-2);
+}
+
+.compare-table .compare-group-start {
+    border-left: 3px solid var(--control-border);
+}
+
+.compare-table tbody th[scope="row"] {
+    min-width: 11rem;
+    background: var(--surface);
+}
+
+.compare-row-unit {
+    display: none;
+    font-weight: 400;
+    color: var(--ink-2);
+}
+
+.compare-head {
+    display: grid;
+    gap: var(--s-1);
+}
+
+.compare-head-key {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.compare-level {
+    display: block;
+}
+
+.compare-head a,
+.compare-link {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .15em;
+}
+
+/* Positioned so the off-screen text stays inside the scroll box instead of widening the page. */
+.compare-cell {
+    position: relative;
+    white-space: nowrap;
+}
+
+.compare-differs {
+    display: block;
+    margin-top: var(--s-1);
+    color: var(--ink-2);
+    font-weight: 400;
+}
+
+.compare-absent {
+    color: var(--muted);
+    white-space: normal;
+}
+
+.compare-legend {
+    margin: 0 0 var(--s-3);
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.compare-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+}
+
+@media (max-width: 40rem) {
+    .data-table-grid a,
+    .data-table-order a,
+    .species-overview .order-note a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* The first column stays in view while the records scroll past it; its unit sits under the label. */
+    .compare-table tbody th[scope="row"] {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        min-width: 0;
+        width: 8rem;
+        max-width: 8rem;
+    }
+
+    .compare-table thead tr > :first-child {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+    }
+
+    .compare-row-unit {
+        display: block;
+    }
+
+    .compare-unit-col {
+        display: none;
+    }
+}

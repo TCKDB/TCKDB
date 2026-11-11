@@ -20,6 +20,7 @@ const DECLARED: Record<string, "list" | "none"> = {
     "./pages/NetworkEntryPage.tsx": "list",
     "./pages/ReactionEntryPage.tsx": "list",
     "./pages/ReactionOverviewPage.tsx": "list",
+    "./pages/SpeciesComparePage.tsx": "list",
     "./pages/SpeciesEntryPage.tsx": "list",
     "./pages/SpeciesOverviewPage.tsx": "list",
     "./pages/TransitionStateEntryPage.tsx": "list",

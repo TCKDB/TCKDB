@@ -1,10 +1,11 @@
 import { useMemo } from "react"
 import { Link } from "react-router-dom"
+import "../data-table.css"
 import "../entry-numbers.css"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
 import { numbersOrderSentence } from "../domain/entryNumbers"
 import { versionFacts } from "../domain/entryVersions"
-import { speciesValueRows, type SpeciesValueRow } from "../domain/speciesValues"
+import { speciesValueRows, valueRecordLinks, type SpeciesValueRow } from "../domain/speciesValues"
 import { useSpeciesValues } from "../hooks/useSpeciesValues"
 import { ListNotes, NumbersTable, WalkStatus } from "./NumbersTable"
 import { OrderNote } from "./OrderNote"
@@ -47,17 +48,15 @@ export function SpeciesValues({ species }: { species: SpeciesOverview }) {
                         lists={[["thermochemistry", data.thermo], ["statistical mechanics", data.statmech]]}
                         rest={() => "Each version's page lists its own records."}
                     />
+                    {(data.thermo.records.length >= 2 || data.statmech.records.length >= 2) && (
+                        <p><Link className="compare-link" to={`/species/${species.species_ref}/compare`}>Compare these values</Link></p>
+                    )}
                     <NumbersTable<SpeciesValueRow>
                         rows={rows}
                         caption="Values for this molecule, one row per record"
                         label="Table of values for this molecule"
                         groupLabels={NO_LABELS}
-                        hrefs={(row) => {
-                            if (!row.entryRef) return { to: null, entryPath: null }
-                            const entryPath = `/species-entries/${row.entryRef}`
-                            const query = row.conformerGroupRef ? `?conformer=${encodeURIComponent(row.conformerGroupRef)}` : ""
-                            return { to: `${entryPath}/${row.kind}${query}#${row.kind}-heading-${row.ref}`, entryPath }
-                        }}
+                        hrefs={valueRecordLinks}
                         version={(row) => (row.entryRef
                             ? <>
                                 <span className="entry-numbers-key">Version:</span>{" "}

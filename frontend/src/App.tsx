@@ -30,6 +30,7 @@ const ReactionOverviewPage = lazy(() => import("./pages/ReactionOverviewPage"))
 const ReviewQueuePage = lazy(() => import("./pages/ReviewQueuePage"))
 const SpeciesEntryPage = lazy(() => import("./pages/SpeciesEntryPage"))
 const SpeciesOverviewPage = lazy(() => import("./pages/SpeciesOverviewPage"))
+const SpeciesComparePage = lazy(() => import("./pages/SpeciesComparePage"))
 const TransitionStateEntryPage = lazy(() => import("./pages/TransitionStateEntryPage"))
 
 function App() {
@@ -59,6 +60,7 @@ function App() {
                 it is the one path every pre-existing browse link used. */}
             <Route path={BROWSE_KIND_PATHS.species} element={<BrowsePage />} />
             <Route path="/species/:speciesRef" element={<SpeciesOverviewPage />} />
+            <Route path="/species/:speciesRef/compare" element={<SpeciesComparePage />} />
             {/* Both the sectionless and `:section` routes render the SAME
                 element type, `SpeciesEntrySectionRoute` -- this is not
                 cosmetic. React Router matches a Route by *config entry*,
