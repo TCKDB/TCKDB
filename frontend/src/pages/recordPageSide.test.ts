@@ -14,7 +14,11 @@ const RECORD_PAGES = [
     "SpeciesEntryPage.tsx",
     "SpeciesOverviewPage.tsx",
     "LevelOfTheoryPage.tsx",
+    "NetworkEntryPage.tsx",
 ]
+
+/** `side=` must hold a relationship map; `side={null}` or `side={undefined}` does not count. */
+const MAP_SIDE = /\bside=\{\s*<(RecordMap|RelationshipMap|SpeciesEntryRelationshipMap|SpeciesRelationshipMap)\b/
 
 /** The props text of each `<PageShell ...>` opening tag, found by walking to the first `>` outside braces. */
 function pageShellTags(source: string): string[] {
@@ -40,10 +44,13 @@ describe("record pages", () => {
         expect(SOURCES[`./${file}`], `${file} is read`).toBeTypeOf("string")
         const tags = pageShellTags(SOURCES[`./${file}`])
         expect(tags.length).toBeGreaterThan(0)
-        for (const tag of tags) expect(tag).toMatch(/\bside=\{/)
+        for (const tag of tags) expect(tag).toMatch(MAP_SIDE)
     })
 
     it("finds a PageShell that forgets side=", () => {
-        expect(pageShellTags("<PageShell identity={<a />}>x</PageShell>")[0]).not.toMatch(/\bside=\{/)
+        expect(pageShellTags("<PageShell identity={<a />}>x</PageShell>")[0]).not.toMatch(MAP_SIDE)
+        expect(pageShellTags("<PageShell side={null}>x</PageShell>")[0]).not.toMatch(MAP_SIDE)
+        expect(pageShellTags("<PageShell side={undefined}>x</PageShell>")[0]).not.toMatch(MAP_SIDE)
+        expect(pageShellTags("<PageShell side={<RecordMap nodes={[]} />}>x</PageShell>")[0]).toMatch(MAP_SIDE)
     })
 })

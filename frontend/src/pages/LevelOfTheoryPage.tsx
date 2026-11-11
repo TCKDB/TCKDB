@@ -75,8 +75,8 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
         compositeScheme: lot.composite_scheme
             ? { ref: lot.composite_scheme.composite_scheme_ref, label: words(lot.composite_scheme.kind) ?? "recipe" }
             : null,
-        schemeCount: record.correction_schemes ? record.correction_schemes.length : null,
-        scaleFactorCount: record.frequency_scale_factors
+        schemeCount: record.available_sections.has_correction_schemes && record.correction_schemes ? record.correction_schemes.length : null,
+        scaleFactorCount: record.available_sections.has_frequency_scale_factors && record.frequency_scale_factors
             ? record.frequency_scale_factors.reduce((sum, group) => sum + group.frequency_scale_factor_count, 0)
             : null,
     })

@@ -16,6 +16,8 @@ import { QuantityValue } from "../components/QuantityValue"
 import { NetworkDiagram } from "../components/NetworkDiagram"
 import { NetworkKtpChart } from "../components/NetworkKtpChart"
 import { PageShell } from "../components/PageShell"
+import { RecordMap } from "../components/RelationshipMap"
+import { networkNodes } from "../domain/recordMapNodes"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
@@ -90,9 +92,16 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
             : []),
     ]
 
+    const mapNodes = networkNodes({
+        speciesEntryRefs: record.speciesEntryRefs,
+        reactionEntryRefs: Object.keys(record.reactionEntries),
+        solveCount: solves.length,
+    })
+
     return (
         <section className="conformer-page tse-page">
             <PageShell
+                side={<RecordMap selfKind="network" selfLabel="This network" nodes={mapNodes} />}
                 identity={(
                     <header className="basin-header">
                         <div className="record-identity-header">

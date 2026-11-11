@@ -164,6 +164,26 @@ describe("ConformerGroupPage", () => {
         expect(items.find((item) => item.includes("Geometries"))).toContain("2 found")
     })
 
+    it("counts a rate record once when the usage read lists it for several assignments", async () => {
+        serve()
+        server.use(http.get("/api/v1/scientific/species-entries/spe_demo/conformer-usage", () => HttpResponse.json({
+            groups: [{
+                conformer_group_ref: "cg_demo",
+                thermo: [],
+                kinetics: [
+                    { kinetics_ref: "kin_1", reaction_entry_ref: "rxe_1", role: "reactant" },
+                    { kinetics_ref: "kin_1", reaction_entry_ref: "rxe_1", role: "reactant" },
+                ],
+            }],
+            ensemble_thermo_refs: [],
+        })))
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        const list = within(document.querySelector(".page-shell-side") as HTMLElement).getByRole("list", { name: "Connected records" })
+        await waitFor(() => expect(within(list).getByText(/Rate record/)).toBeInTheDocument())
+        expect(within(list).getByText(/Rate record/).closest("li")).toHaveTextContent("1 found")
+    })
+
     it("titles the record by what it is, never by a ref or the producer's label", async () => {
         serve()
         page()

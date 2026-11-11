@@ -85,8 +85,9 @@ function Ledger({ group }: { group: ConformerGroup }) {
         onlyObservationRef: observations.length === 1 ? observations[0].conformer_observation.conformer_observation_ref : null,
         calculationCount: evidence.calculation_count,
         geometryCount: evidence.geometry_count,
-        thermoCount: usageData ? (usageGroup?.thermo.length ?? 0) : null,
-        kineticsCount: usageData ? (usageGroup?.kinetics.length ?? 0) : null,
+        thermoCount: usageData ? new Set(usageGroup?.thermo.map((t) => t.thermo_ref)).size : null,
+        // The read lists one row per interpretation assignment, so a record naming the group twice is counted once.
+        kineticsCount: usageData ? new Set(usageGroup?.kinetics.map((k) => k.kinetics_ref)).size : null,
     })
 
     return (

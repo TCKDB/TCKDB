@@ -453,6 +453,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
         outputGeometryRefs: calculation.output_geometries ? outputGeometries.map((link) => link.geometry_ref) : null,
         dependencies: calculation.dependencies ? dependencies : null,
         levelOfTheory: lot ? { ref: lot.level_of_theory_ref ?? null, label: lotLabel(lot) } : null,
+        inputExtractedFromArtifact: inputGeometries[0]?.source === "extracted_from_artifact",
     })
 
     return (

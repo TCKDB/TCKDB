@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
     calculationNodes,
+    networkNodes,
     conformerGroupNodes,
     conformerObservationNodes,
     geometryNodes,
@@ -41,13 +42,16 @@ describe("calculationNodes", () => {
 
     it("counts distinct related calculations and links to the page's own sections", () => {
         const nodes = calculationNodes(base)
-        expect(byId(nodes, "related")).toMatchObject({ sub: "depends on 1, used by 2", to: "#dependencies-heading" })
+        expect(byId(nodes, "related")).toMatchObject({ sub: "depends\u00a0on\u00a01, used\u00a0by\u00a02", to: "#dependencies-heading" })
         expect(byId(nodes, "geometry")).toMatchObject({ sub: "1 input, 2 output", to: "#geometries-heading" })
     })
 
     it("links a single geometry directly and says which role it has", () => {
-        const nodes = calculationNodes({ ...base, inputGeometryRefs: ["geom_x"], outputGeometryRefs: ["geom_x"] })
-        expect(byId(nodes, "geometry")).toMatchObject({ label: "Geometry", sub: "input and output", to: "/geometries/geom_x" })
+        const input = { ...base, inputGeometryRefs: ["geom_x"], outputGeometryRefs: ["geom_x"] }
+        // The same row in both lists is the output, as the Geometries section says, unless the start was extracted from the input file.
+        expect(byId(calculationNodes(input), "geometry")).toMatchObject({ label: "Geometry", sub: "output", to: "/geometries/geom_x" })
+        expect(byId(calculationNodes({ ...input, inputExtractedFromArtifact: true }), "geometry")?.sub).toBe("input and output")
+        expect(byId(calculationNodes({ ...input, outputGeometryRefs: [] }), "geometry")?.sub).toBe("input")
     })
 
     it("leaves out what the page does not hold", () => {
@@ -120,7 +124,7 @@ describe("conformerObservationNodes", () => {
 describe("geometryNodes", () => {
     const typeLabel = (type: string) => (type === "opt" ? "Optimisation" : type)
 
-    it("links a single producing calculation and counts several consumers", () => {
+    it("links a single producing calculation and counts several consumers, each named apart", () => {
         const nodes = geometryNodes({
             owner: { kind: "species_entry", entryRef: "spe_1", formula: "CH3" },
             producedBy: [{ calculation_ref: "calc_1", calculation_type: "opt" }],
@@ -128,8 +132,9 @@ describe("geometryNodes", () => {
             typeLabel,
         })
         expect(ids(nodes)).toEqual(["owner", "produced-by", "used-by"])
-        expect(byId(nodes, "produced-by")).toMatchObject({ to: "/calculations/calc_1", sub: "Optimisation, produced it" })
-        expect(byId(nodes, "used-by")).toMatchObject({ sub: "2 found, takes it as input", to: "#provenance-used-as-input-by" })
+        expect(byId(nodes, "produced-by")).toMatchObject({ label: "Producing calculation", to: "/calculations/calc_1", sub: "Optimisation" })
+        expect(byId(nodes, "used-by")).toMatchObject({ label: "Calculations using it", found: "2 found", to: "#provenance-used-as-input-by" })
+        expect(byId(nodes, "used-by")?.sub).toBeUndefined()
     })
 
     it("knows no owner when the geometry is shared, and nothing when the lists were not served", () => {
@@ -144,27 +149,30 @@ describe("geometryNodes", () => {
 })
 
 describe("transitionStateEntryNodes", () => {
-    it("lists the reaction version, both sides and the calculation count", () => {
+    it("lists the reaction version, one molecule version per side, how many more, and the calculation count", () => {
         const nodes = transitionStateEntryNodes({
             reactionEntryRef: "rxe_1", reactants: [participant("spe_a", "CH4"), participant("spe_b", "OH")], products: [participant("spe_c", "CH3")],
             calculationCount: 5,
         })
-        expect(ids(nodes)).toEqual(["reaction-entry", "reactant-0", "reactant-1", "product-0", "calculations"])
-        expect(byId(nodes, "calculations")).toMatchObject({ found: "5 found", to: "#calc-ledger" })
-    })
-
-    it("says how many more sit on the reaction version when a side is long", () => {
-        const nodes = transitionStateEntryNodes({
-            reactionEntryRef: "rxe_1", reactants: [participant("a"), participant("b"), participant("c"), participant("d")], products: [],
-            calculationCount: 0,
-        })
-        expect(byId(nodes, "reactant-more")).toMatchObject({ label: "2 more reactants", to: "/reaction-entries/rxe_1" })
-        expect(ids(nodes)).not.toContain("calculations")
+        expect(ids(nodes)).toEqual(["reaction-entry", "reactant-0", "product-0", "participants-more", "calculations"])
+        expect(byId(nodes, "participants-more")).toMatchObject({ label: "1 more molecule version", to: "/reaction-entries/rxe_1" })
+        expect(byId(nodes, "calculations")).toMatchObject({ label: "Calculations", found: "5 found", to: "#calc-ledger" })
+        expect(byId(transitionStateEntryNodes({ reactionEntryRef: null, reactants: [], products: [], calculationCount: 1 }), "calculations")?.label).toBe("Calculation")
     })
 
     it("leaves out the reaction version and its links when the entry names none", () => {
         const nodes = transitionStateEntryNodes({ reactionEntryRef: null, reactants: [], products: [], calculationCount: 0 })
         expect(nodes).toEqual([])
+    })
+
+    it("gives a shared formula its SMILES as the second line", () => {
+        const nodes = transitionStateEntryNodes({
+            reactionEntryRef: "rxe_1",
+            reactants: [{ entryRef: "a", formula: "C3H5", smiles: "[CH2]C=C" }], products: [{ entryRef: "b", formula: "C3H5", smiles: "[CH]1CC1" }],
+            calculationCount: 0,
+        })
+        expect(byId(nodes, "reactant-0")?.sub).toBe("Reactant, [CH2]C=C")
+        expect(byId(nodes, "product-0")?.sub).toBe("Product, [CH]1CC1")
     })
 })
 
@@ -174,6 +182,8 @@ describe("reactionOverviewNodes", () => {
             entryRefs: ["rxe_1", "rxe_2", "rxe_3"], total: 5, reactants: [participant("spe_a", "CH4")], products: [participant("spe_b", "CH3")],
         })
         expect(ids(nodes)).toEqual(["rxe_1", "rxe_2", "more-entries", "reactant-0", "product-0"])
+        expect(nodes.slice(0, 2).map((n) => n.label)).toEqual(["Reaction version 1", "Reaction version 2"])
+        expect(byId(nodes, "reactant-0")?.relation).toBe("Reactant, first reaction version")
         expect(byId(nodes, "more-entries")).toMatchObject({ label: "3 more under Reaction entries", to: "#entries-heading" })
     })
 
@@ -182,11 +192,12 @@ describe("reactionOverviewNodes", () => {
         expect(ids(nodes)).toEqual(["rxe_1"])
     })
 
-    it("caps each side and points the rest at the first reaction version", () => {
+    it("keeps one molecule version per side and one row for the rest, at most six nodes", () => {
         const nodes = reactionOverviewNodes({
-            entryRefs: ["rxe_1"], total: 1, reactants: [participant("a"), participant("b"), participant("c")], products: [],
+            entryRefs: ["rxe_1", "rxe_2"], total: 9, reactants: [participant("a"), participant("b"), participant("c")], products: [participant("d"), participant("e")],
         })
-        expect(byId(nodes, "reactant-more")).toMatchObject({ label: "1 more reactant", to: "/reaction-entries/rxe_1" })
+        expect(byId(nodes, "participants-more")).toMatchObject({ label: "3 more molecule versions", to: "/reaction-entries/rxe_1" })
+        expect(nodes.length).toBeLessThanOrEqual(6)
     })
 })
 
@@ -200,5 +211,31 @@ describe("levelOfTheoryNodes", () => {
 
     it("leaves out what is absent or zero", () => {
         expect(levelOfTheoryNodes({ calculationCount: 0, compositeScheme: null, schemeCount: null, scaleFactorCount: 0 })).toEqual([])
+    })
+})
+
+describe("labels", () => {
+    it("are singular for one record", () => {
+        const nodes = conformerGroupNodes({
+            entry: { ref: "spe_1", formula: null }, observationCount: 1, onlyObservationRef: null, calculationCount: 1, geometryCount: 1, thermoCount: 1, kineticsCount: 1,
+        })
+        expect(nodes.map((n) => n.label)).toEqual(["Molecule version", "Conformer observation", "Calculation", "Geometry", "Thermochemistry", "Rate record"])
+    })
+})
+
+describe("networkNodes", () => {
+    it("counts the molecule versions, reaction versions and solves the page loaded, linking its own sections", () => {
+        const nodes = networkNodes({ speciesEntryRefs: ["a", "b", "c"], reactionEntryRefs: ["r1", "r2"], solveCount: 1 })
+        expect(nodes.map((n) => [n.label, n.found, n.to])).toEqual([
+            ["Molecule versions", "3 found", "#evidence-heading"],
+            ["Reaction versions", "2 found", "#reactions-heading"],
+            ["Network solve", "1 found", "#evidence-heading"],
+        ])
+    })
+
+    it("links a lone molecule or reaction version and leaves out what is absent", () => {
+        const nodes = networkNodes({ speciesEntryRefs: ["a"], reactionEntryRefs: ["r1"], solveCount: 0 })
+        expect(nodes.map((n) => n.to)).toEqual(["/species-entries/a", "/reaction-entries/r1"])
+        expect(networkNodes({ speciesEntryRefs: [], reactionEntryRefs: [], solveCount: 0 })).toEqual([])
     })
 })
