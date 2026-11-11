@@ -329,7 +329,7 @@
     }
 
     .home-counts > div {
-        padding: var(--s-4);
+        padding: var(--s-4) 0;
     }
 }
 

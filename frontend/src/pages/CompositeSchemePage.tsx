@@ -73,8 +73,7 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                             <h1 className="t-display-2 record-identity-title">{title}</h1>
                             <p className="composite-label"><code className="data">{scheme.name}</code></p>
                             <p className="t-body section-intro">
-                                How one composite energy is put together from the energies of other calculations,
-                                and which levels of theory name it.
+                                How a composite energy is defined, and which levels of theory name it.
                                 <GuideLink to="composite-recipe" />
                             </p>
                             <div className="record-identity-known">

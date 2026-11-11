@@ -299,7 +299,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 </section>
 
                 <section className="ledger-section" aria-labelledby="checks-heading">
-                    <SectionHeading id="checks-heading" intro={<>Not recorded means not deposited, not failed.<GuideLink to="ts-checks" /></>}>
+                    <SectionHeading id="checks-heading" intro={<>Not recorded means not deposited, not failed.<GuideLink to="not-recorded" /></>}>
                         Checks
                     </SectionHeading>
                     <div className="table-scroll tse-scroll" tabIndex={0} role="region" aria-label="Checks on this transition state">
@@ -335,7 +335,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 </section>
 
                 <section className="ledger-section" aria-labelledby="trust-irc-heading">
-                    <SectionHeading id="trust-irc-heading">Trust and IRC</SectionHeading>
+                    <SectionHeading id="trust-irc-heading" intro={<GuideLink to="ts-checks" />}>Trust and IRC</SectionHeading>
                     <div className="tse-pair">
                         <section className="tse-pair-card" aria-labelledby="trust-card-heading">
                             <h3 className="t-heading-2" id="trust-card-heading">Trust</h3>

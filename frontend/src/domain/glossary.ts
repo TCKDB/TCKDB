@@ -94,7 +94,7 @@ export const GUIDE_TOPICS: GuideTopic[] = [
     { id: "correction-scheme", term: "Correction scheme", text: "Energy corrections deposited against a level of theory, such as per-element or per-bond parameters." },
     { id: "composite-recipe", term: "Composite recipe", text: "The recipe behind a composite energy: a named method such as CBS-QB3, or an extrapolation or sum of single-point energies." },
     { id: "staged-optimisation", term: "Staged optimisation", text: "A coarse optimisation runs first and a finer one refines it from there." },
-    { id: "picture", term: "How a molecule is drawn", text: "On a conformer's page, bonds are inferred from atom distances; the record stores only atoms and positions. The picture shows the first final geometry deposited, and other observations may differ slightly." },
+    { id: "picture", term: "How a molecule is drawn", text: "Bonds are inferred from atom distances; the record stores only atoms and positions. On a conformer's page the picture shows the first final geometry deposited, and other observations may differ slightly." },
     { id: "relative-energy", term: "Relative energies", text: "Shapes are compared in kJ/mol at one level and program, and only if a stored frequency calculation shows each is a minimum. Energies from different programs are not combined." },
     { id: "not-recorded", term: "Not recorded", text: "It means nobody deposited that item. It does not mean a check failed." },
 ]

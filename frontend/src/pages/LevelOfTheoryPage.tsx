@@ -79,7 +79,7 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                                 <span className="t-kicker record-identity-kicker">Level of theory · provenance vocabulary</span>
                             </div>
                             <h1 className="t-display-2 record-identity-title">{title}</h1>
-                            <p><GuideLink to="lot-identity" /></p>
+                            <p><GuideLink to="level-of-theory" /></p>
                             <div className="record-identity-known">
                                 <dl className="kv-list record-identity-facts">
                                     <div>
