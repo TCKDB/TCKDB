@@ -76,6 +76,11 @@
     stroke-width: 5;
 }
 
+.energy-profile-bar.energy-profile-peak {
+    stroke: var(--accent);
+    stroke-width: 8;
+}
+
 .energy-profile-connector {
     stroke: var(--divider-strong);
     stroke-width: 1.5;

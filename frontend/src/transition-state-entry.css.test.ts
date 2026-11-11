@@ -134,3 +134,40 @@ describe("IRC summary paragraph is capped to --measure-note", () => {
         expect(rule![1]).toMatch(/max-width:\s*var\(--measure-note\)/)
     })
 })
+
+/** Trust and IRC sit side by side and stack on narrow screens; tables scroll inside their own box. */
+describe("trust and IRC pair, and the scrolling boxes", () => {
+    const stripped = stripComments(css)
+
+    it("lays the pair out in two columns", () => {
+        expect(stripped).toMatch(/\.tse-pair\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/)
+    })
+
+    it("stacks the pair in one column on narrow screens", () => {
+        expect(stripped).toMatch(/@media \(max-width: 48rem\) \{\s*\.tse-pair\s*\{\s*grid-template-columns:\s*1fr;/)
+    })
+
+    it("lets the pair's cards shrink below their content", () => {
+        expect(stripped).toMatch(/\.tse-pair-card\s*\{[^}]*min-width:\s*0/)
+    })
+
+    it("gives a scrolling box a focus outline", () => {
+        expect(stripped).toMatch(/\.tse-scroll:focus-visible\s*\{[^}]*outline:/)
+    })
+
+    it("keeps the first-column nowrap off the checks table, whose first column is a sentence", () => {
+        expect(stripped).not.toMatch(/\.tse-checks-table[^{]*:first-child/)
+    })
+
+    it("every selector of the nowrap rule sits under .tse-calc-scroll", () => {
+        const rules = [...stripped.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(([, , body]) => /white-space:\s*nowrap/.test(body))
+        expect(rules.length, "no nowrap rule found").toBeGreaterThan(0)
+        for (const [, selectors] of rules) {
+            for (const selector of selectors.split(",")) expect(selector.trim(), selector).toMatch(/\.tse-calc-scroll/)
+        }
+    })
+
+    it("stacks the checks table below 40rem with the labels shown from data-label", () => {
+        expect(stripped).toMatch(/@media \(max-width: 40rem\)[\s\S]*\.tse-checks-table td\[data-label\]::before\s*\{[^}]*content:\s*attr\(data-label\)/)
+    })
+})

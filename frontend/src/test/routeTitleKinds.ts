@@ -8,7 +8,7 @@ export const ROUTE_TITLE_KINDS = {
     "/conformer-observations/:ref": "Conformer observation",
     "/calculations/:ref": "Calculation",
     "/geometries/:ref": "Geometry",
-    "/transition-state-entries/:ref": "Transition state entry",
+    "/transition-state-entries/:ref": "Transition state",
     "/reaction-entries/:ref": "Reaction entry",
     "/reactions/:ref": "Reaction",
     "/networks/:ref": "Pressure-dependent network",

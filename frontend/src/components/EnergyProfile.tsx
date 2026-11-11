@@ -34,6 +34,8 @@ import { ValueLink } from "./ValueLink"
 const INTRO = "Reactants are the zero. The transition state sits above them by the energy needed to pass over the barrier, "
     + "and the products sit where the reaction ends. Each profile uses one level of theory and one program, and no profile is chosen for you."
 
+const HILL_NOTE = "The hill is TCKDB's own comparison at one level and one program; the depositor's ordering check may use other energies."
+
 const W = 500
 const H = 240
 const TOP = 30
@@ -42,7 +44,7 @@ const AXIS_X = 52
 const BAR_W = 100
 const CENTRES = [122, 272, 422]
 
-function ProfileFigure({ profile, captionId }: { profile: EnergyProfileRecord; captionId: string }) {
+function ProfileFigure({ profile, captionId, markPeak }: { profile: EnergyProfileRecord; captionId: string; markPeak: boolean }) {
     const levels = levelsOf(profile)
     const scale = profileScale(levels.map((level) => level.kj))
     const plot = H - TOP - BOTTOM
@@ -68,11 +70,13 @@ function ProfileFigure({ profile, captionId }: { profile: EnergyProfileRecord; c
             ))}
             {levels.map((level, index) => (
                 <g key={level.key}>
-                    <line className="energy-profile-bar" x1={CENTRES[index] - BAR_W / 2} x2={CENTRES[index] + BAR_W / 2} y1={y(level.kj)} y2={y(level.kj)} />
+                    <line className={markPeak && level.key === "transition_state" ? "energy-profile-bar energy-profile-peak" : "energy-profile-bar"} x1={CENTRES[index] - BAR_W / 2} x2={CENTRES[index] + BAR_W / 2} y1={y(level.kj)} y2={y(level.kj)} />
                     <text className="energy-profile-value t-preserve-case" x={CENTRES[index]} y={y(level.kj) - 8} textAnchor="middle">
                         {relativeKjText(level.kj)} kJ/mol
                     </text>
-                    <text className="energy-profile-name" x={CENTRES[index]} y={H - 14} textAnchor="middle">{level.label}</text>
+                    <text className="energy-profile-name" x={CENTRES[index]} y={H - 14} textAnchor="middle">
+                        {markPeak && level.key === "transition_state" ? "This transition state" : level.label}
+                    </text>
                 </g>
             ))}
         </svg>
@@ -162,7 +166,7 @@ function GroupRows({ title, points, sum, kj, labels }: {
     )
 }
 
-function ProfileTable({ profile, labels }: { profile: EnergyProfileRecord; labels: ReadonlyMap<string, string> }) {
+function ProfileTable({ profile, labels, single }: { profile: EnergyProfileRecord; labels: ReadonlyMap<string, string>; single: boolean }) {
     const ts = profile.transition_state
     return (
         <div className="table-scroll energy-profile-scroll" tabIndex={0} role="region" aria-label="Points of the selected energy profile">
@@ -181,7 +185,11 @@ function ProfileTable({ profile, labels }: { profile: EnergyProfileRecord; label
                 <tbody>
                     <GroupRows title="Reactants" points={profile.reactants} sum={profile.energy_hartree.reactants} kj={profile.relative_kj_mol.reactants} labels={labels} />
                     <tr>
-                        <th scope="row">Transition state: <Link to={`/transition-state-entries/${ts.transition_state_entry_ref}`}><code className="t-preserve-case">{ts.transition_state_entry_ref}</code></Link></th>
+                        <th scope="row">
+                            {single
+                                ? "This transition state"
+                                : <>Transition state: <Link to={`/transition-state-entries/${ts.transition_state_entry_ref}`}><code className="t-preserve-case">{ts.transition_state_entry_ref}</code></Link></>}
+                        </th>
                         <PointCells point={ts} />
                         <RelativeCell kj={profile.relative_kj_mol.transition_state} />
                     </tr>
@@ -192,7 +200,7 @@ function ProfileTable({ profile, labels }: { profile: EnergyProfileRecord; label
     )
 }
 
-function ProfileView({ profile, labels, several }: { profile: EnergyProfileRecord; labels: ReadonlyMap<string, string>; several: boolean }) {
+function ProfileView({ profile, labels, several, markPeak }: { profile: EnergyProfileRecord; labels: ReadonlyMap<string, string>; several: boolean; markPeak: boolean }) {
     const captionId = useId()
     const boxRef = useRef<HTMLDivElement | null>(null)
     const overflows = useOverflows(boxRef)
@@ -202,7 +210,7 @@ function ProfileView({ profile, labels, several }: { profile: EnergyProfileRecor
     return (
         <div className="energy-profile-view">
             <dl className="kv-list energy-profile-facts">
-                <div><dt>Transition-state entry</dt><dd><Link to={`/transition-state-entries/${profile.transition_state_entry_ref}`}><code className="t-preserve-case">{profile.transition_state_entry_ref}</code></Link> <ReviewChip status={profile.transition_state_entry_review_status} explain={false} /></dd></div>
+                {!markPeak && <div><dt>Transition-state entry</dt><dd><Link to={`/transition-state-entries/${profile.transition_state_entry_ref}`}><code className="t-preserve-case">{profile.transition_state_entry_ref}</code></Link> <ReviewChip status={profile.transition_state_entry_review_status} explain={false} /></dd></div>}
                 <div><dt>Level of theory</dt><dd><LevelOfTheoryLink levelOfTheory={profile.level_of_theory} /></dd></div>
                 <div><dt>Program</dt><dd className="t-preserve-case">{profile.program}</dd></div>
             </dl>
@@ -213,7 +221,7 @@ function ProfileView({ profile, labels, several }: { profile: EnergyProfileRecor
                     ref={boxRef}
                     {...(overflows ? { tabIndex: 0, role: "region", "aria-label": "Energy profile picture, scrolls sideways" } : {})}
                 >
-                    <ProfileFigure profile={profile} captionId={captionId} />
+                    <ProfileFigure profile={profile} captionId={captionId} markPeak={markPeak} />
                 </div>
                 <figcaption id={captionId} className="energy-profile-caption">
                     Energy relative to the reactants, in kJ/mol
@@ -225,29 +233,37 @@ function ProfileView({ profile, labels, several }: { profile: EnergyProfileRecor
                 </figcaption>
             </figure>
             <p className="note energy-profile-definition">{profile.definition}</p>
+            {markPeak && <p className="note">{HILL_NOTE}</p>}
             {isMixed(profile) && (
                 <p className="note energy-profile-mixed">
                     This profile mixes kinds of energy or program versions. Kinds of energy: {kinds}. Program versions: {versions}.
                 </p>
             )}
-            <ProfileTable profile={profile} labels={labels} />
+            <ProfileTable profile={profile} labels={labels} single={markPeak} />
         </div>
     )
 }
 
-function Unavailable({ read }: { read: EnergyProfileRead }) {
+function Unavailable({ read, single }: { read: EnergyProfileRead; single: boolean }) {
     if (read.unavailable.length === 0) return null
+    const none = read.profiles.length === 0
     return (
         <div className="energy-profile-unavailable">
-            <h3 className="t-heading-2">No profile for these transition states</h3>
+            {single
+                ? <h3 className="t-heading-2">{none ? "Why there is no profile" : "Levels and programs with no profile"}</h3>
+                : <h3 className="t-heading-2">No profile for these transition states</h3>}
             <ul>
                 {read.unavailable.map((item, index) => (
                     <li key={`${item.transition_state_entry_ref}-${item.code}-${index}`}>
-                        <Link to={`/transition-state-entries/${item.transition_state_entry_ref}`}><code className="t-preserve-case">{item.transition_state_entry_ref}</code></Link>
-                        {" "}<ReviewChip status={item.transition_state_entry_review_status} explain={false} />
-                        {item.level_of_theory && <>{" · "}<LevelOfTheoryLink levelOfTheory={item.level_of_theory} /></>}
-                        {item.program && <>{" · "}<span className="t-preserve-case">{item.program}</span></>}
-                        {": "}
+                        {!single && (
+                            <>
+                                <Link to={`/transition-state-entries/${item.transition_state_entry_ref}`}><code className="t-preserve-case">{item.transition_state_entry_ref}</code></Link>
+                                {" "}<ReviewChip status={item.transition_state_entry_review_status} explain={false} />
+                            </>
+                        )}
+                        {item.level_of_theory && <>{!single && " · "}<LevelOfTheoryLink levelOfTheory={item.level_of_theory} /></>}
+                        {item.program && <>{(!single || item.level_of_theory) && " · "}<span className="t-preserve-case">{item.program}</span></>}
+                        {(!single || item.level_of_theory || item.program) && ": "}
                         {Object.hasOwn(UNAVAILABLE_WORDS, item.code) ? UNAVAILABLE_WORDS[item.code] : <code>{item.code}</code>}
                     </li>
                 ))}
@@ -311,7 +327,7 @@ function CitedEnergies({ read, labels }: { read: EnergyProfileRead; labels: Read
 }
 
 /** The picker and the chosen profile; `read` needs only its profiles. */
-export function Profiles({ read, labels }: { read: Pick<EnergyProfileRead, "profiles">; labels: ReadonlyMap<string, string> }) {
+export function Profiles({ read, labels, markPeak = false }: { read: Pick<EnergyProfileRead, "profiles">; labels: ReadonlyMap<string, string>; markPeak?: boolean }) {
     const pickerId = useId()
     const [index, setIndex] = useState(0)
     const optionLabels = profileLabels(read.profiles)
@@ -329,10 +345,12 @@ export function Profiles({ read, labels }: { read: Pick<EnergyProfileRead, "prof
                     <p className="note">
                         {read.profiles.length} profiles. The first is shown until you pick another.
                     </p>
-                    <OrderNote order="Listed by transition-state entry (approved first, then newest deposited first), then level of theory and program in alphabetical order." />
+                    <OrderNote order={markPeak
+                        ? "Listed by level of theory, then program, in alphabetical order."
+                        : "Listed by transition-state entry (approved first, then newest deposited first), then level of theory and program in alphabetical order."} />
                 </div>
             )}
-            {chosen && <ProfileView profile={chosen} labels={labels} several={read.profiles.length > 1} />}
+            {chosen && <ProfileView profile={chosen} labels={labels} several={read.profiles.length > 1} markPeak={markPeak} />}
         </>
     )
 }
@@ -340,25 +358,44 @@ export function Profiles({ read, labels }: { read: Pick<EnergyProfileRead, "prof
 /**
  * The energy profile of one reaction entry: reactants, transition state and products at one level of theory and one
  * program, as a picture and a table of the same points. Reads its own data; the cited energies of the rate records
- * stay a separate table.
+ * stay a separate table. With `onlyTransitionState` the read is narrowed to that transition-state entry's own profiles
+ * and reasons, its peak is marked, and the rate records' cited energies are kept only where they cite this transition state.
  */
-export function EnergyProfile({ entryRef, speciesLabels }: { entryRef: string; speciesLabels: ReadonlyMap<string, string> }) {
+export function EnergyProfile({ entryRef, speciesLabels, onlyTransitionState }: {
+    entryRef: string
+    speciesLabels: ReadonlyMap<string, string>
+    onlyTransitionState?: string
+}) {
     const state = useScientificRecord(entryRef, loadReactionEnergyProfile)
-    const read = state.status === "ready" ? state.record : null
+    const served = state.status === "ready" ? state.record : null
+    const read = served && onlyTransitionState
+        ? {
+            ...served,
+            profiles: served.profiles.filter((profile) => profile.transition_state_entry_ref === onlyTransitionState),
+            unavailable: served.unavailable.filter((item) => item.transition_state_entry_ref === onlyTransitionState),
+            cited_by_kinetics: served.cited_by_kinetics
+                .map((record) => ({ ...record, calculations: record.calculations.filter((calculation) => calculation.transition_state_entry_ref === onlyTransitionState) }))
+                .filter((record) => record.calculations.length > 0),
+        }
+        : served
+    const noun = onlyTransitionState ? "transition state" : "reaction entry"
     return (
         <section className="energy-profile" aria-labelledby="energy-heading">
-            <SectionHeading id="energy-heading" kicker="How the energy changes" intro={INTRO}>Energy profile</SectionHeading>
+            <SectionHeading id="energy-heading" kicker="How the energy changes" intro={INTRO}>{onlyTransitionState ? "Energy hill" : "Energy profile"}</SectionHeading>
             {(state.status === "loading" || state.status === "retrying") && <p className="note" role="status" aria-busy="true">Loading the energy profile.</p>}
             {state.status !== "ready" && state.status !== "loading" && state.status !== "retrying" && (
                 <p className="note" role="alert">The energy profile could not be loaded.</p>
             )}
             {read && (
                 <>
-                    {read.profiles.length === 0 && <p className="empty-projection">No complete energy profile is available for this reaction entry.</p>}
-                    <Profiles key={entryRef} read={read} labels={speciesLabels} />
-                    <Unavailable read={read} />
+                    {read.profiles.length === 0 && <p className="empty-projection">No complete energy profile is available for this {noun}.</p>}
+                    <Profiles key={`${entryRef}-${onlyTransitionState ?? ""}`} read={read} labels={speciesLabels} markPeak={Boolean(onlyTransitionState)} />
+                    <Unavailable read={read} single={Boolean(onlyTransitionState)} />
+                    {onlyTransitionState && read.profiles.length === 0 && read.unavailable.length === 0 && (
+                        <p className="note">The energy profile read gives no reason for this transition state: it was not among the entries it listed.</p>
+                    )}
                     <CitedEnergies read={read} labels={speciesLabels} />
-                    {hiddenNotes(read).map((note) => <p className="note" role="note" key={note}>{note}</p>)}
+                    {hiddenNotes(read).map((note) => <p className="note" role="note" key={note}>{onlyTransitionState ? `For this reaction entry: ${note}` : note}</p>)}
                 </>
             )}
         </section>
