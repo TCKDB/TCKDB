@@ -27,6 +27,11 @@ dataset must never require a code release.
 - **Behaviour:** a kinetics record's declared energy level is now accepted when a linked reactant, product or transition-state energy has the method `hf` (any case; `uhf`, `rhf`, `rohf` and `hartree-fock` are other methods and are not exempt) for a participant with exactly one electron (atomic numbers of the stored SMILES minus the stored charge; H, D, T and He+ count, H- does not) and every other identity field but spin equals the declared level's, where it was refused as `kinetics_energy_level_contradiction`. The accepted record carries the warning `one_electron_hf_substitution`, naming the calculations and, for an F12 declared level, that the CABS singles correction is absent from them. `/uploads/kinetics` and bundle import find such a calculation as the participant's energy at the declared level. The exemption needs at least one link at the declared method: when every link is such a Hartree-Fock energy the ordinary rule applies. A declared composite scheme is never exempted. A two-electron participant, another basis, auxiliary basis or CABS basis, or another method at one electron is still a contradiction.
 - **Schema and migration:** none. No new environment variable.
 
+## Decision narrative removed from the tau modules (Unreleased)
+
+- **Behaviour:** none. Comments and docstrings in the Hessian-method and stationary-point modules of `tckdb-schemas` now state behaviour only.
+- **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-schemas` 0.172.1 (within the client's existing `<0.173` window; no client change).
+
 ## Every box in "Where this record sits" opens something (Unreleased)
 
 - **Behaviour:** on a molecule version page, "Calculations" opens the "Calculations of this shape" section (it says "N found, listed by shape"), and "Reactions with this molecule" opens the reactions list filtered to the molecule when there are several. Several networks have no list yet, so that box stays text and says "not listed yet". On the other record pages, a level of theory without a page and a "more molecule versions" box the entry cannot list say "no page yet" or "not listed yet" instead of looking clickable.

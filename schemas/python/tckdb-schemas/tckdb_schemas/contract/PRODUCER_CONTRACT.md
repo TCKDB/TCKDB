@@ -238,6 +238,10 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 One warning code is added: `one_electron_hf_substitution`, returned when a kinetics record's declared correlated energy level is accepted for a one-electron participant whose linked energy was computed at Hartree-Fock. Context: `declared_level_of_theory_ref`, `energy_calculation_refs` and `cabs_singles_absent` (true when the declared method is an F12 method). It is scientific check register entry 83. No model or payload shape changed.
 
+### 0.172.1 - 2026-11-11
+
+Comments and docstrings in the Hessian-method and stationary-point modules are reworded to state behaviour only. No refusal, warning, field or behaviour changes.
+
 ### 0.172.0 - 2026-11-11
 
 Three codes are added: the refusal `applied_energy_correction_value_conflict` (422) and the warnings `applied_energy_correction_note_not_stored` and `applied_energy_correction_reused_hidden` (context `review_status`: `rejected` or `deprecated`). The refusal is returned by every upload route that carries applied energy corrections when a correction with the same target, sources, scheme or scale factor, role and temperature is already stored with a different total or component breakdown. `context` carries `record_kind`, `application_role`, the target and scheme public refs, `field`, the stored and supplied totals with units, and `differs`. A matching correction is now reused rather than refused. No model or payload shape changed.
@@ -249,10 +253,6 @@ One refusal code is added: `species_name_query_invalid` (422), returned by `GET 
 ### 0.170.0 - 2026-11-09
 
 One refusal code is added: `request_body_too_large` (413). The frontend proxy answers a body over its size cap (100 MiB on the upload, job and calculation-artifact routes, 10 MiB on other `/api/` routes) with this code and `context.max_bytes`, where it sent a bare HTML page. A request-validation 422 no longer echoes the request body under each error's `input`. No model or payload shape changed.
-
-### 0.169.0 - 2026-11-09
-
-The deposit-warning item on scientific reads gains optional `retired_at` and `retired_reason`, set only for curators and admins reading a retired warning (`artifact_attached`, `single_point_deposited`, `hessian_stored`, `superseded_by_recheck`). Other readers get current warnings only and never receive the keys. No field is removed.
 
 ## Every producer route
 
