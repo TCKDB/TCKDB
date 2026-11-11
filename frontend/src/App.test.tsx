@@ -1020,6 +1020,7 @@ describe("every route sets a title and renders exactly one h1", () => {
     const RECORD_ROUTES: Array<[path: string, key: RouteTitleKindKey]> = [
         ["/species/spc_missing", "/species/:ref"],
         ["/species/spc_missing/compare", "/species/:ref/compare"],
+        ["/reactions/rxn_missing/compare", "/reactions/:ref/compare"],
         ["/species-entries/spe_missing", "/species-entries/:ref"],
         ["/species-entries/spe_missing/thermo", "/species-entries/:ref"],
         ["/conformer-groups/cfg_missing", "/conformer-groups/:ref"],

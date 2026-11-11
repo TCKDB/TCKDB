@@ -29,3 +29,19 @@ const lookup = (table: Readonly<Record<string, string>>, code: string): string |
 export const modelKindWord = (code: string) => lookup(MODEL_KIND_WORDS, code)
 export const originWord = (code: string) => lookup(ORIGIN_WORDS, code)
 export const tunnellingWord = (code: string) => lookup(TUNNELLING_WORDS, code)
+
+const A_UNIT_WORDS: Readonly<Record<string, string>> = {
+    per_s: "s⁻¹",
+    cm3_mol_s: "cm³ mol⁻¹ s⁻¹",
+    cm3_molecule_s: "cm³ molecule⁻¹ s⁻¹",
+    m3_mol_s: "m³ mol⁻¹ s⁻¹",
+    cm6_mol2_s: "cm⁶ mol⁻² s⁻¹",
+    cm6_molecule2_s: "cm⁶ molecule⁻² s⁻¹",
+    m6_mol2_s: "m⁶ mol⁻² s⁻¹",
+}
+
+/** The typeset unit of a record's A (and of its k); a code with no wording is spelled out with spaces. */
+export function aUnitsWord(code: string | null | undefined): string {
+    if (!code) return ""
+    return lookup(A_UNIT_WORDS, code) ?? code.replaceAll("_", " ")
+}

@@ -7,7 +7,15 @@ import { formatQuantity } from "./quantityFormat"
 export type CompareCell = { kind: "value"; value: NumberValue } | { kind: "absent"; words: string }
 
 /** An `exact` row is a setting that is either the same or not; a `continuous` row is a measured or computed number, never marked. */
-export type CompareRow = { key: string; label: string; unit: string | null; compare: "exact" | "continuous"; cells: CompareCell[] }
+export type CompareRow = {
+    key: string
+    label: string
+    unit: string | null
+    compare: "exact" | "continuous"
+    cells: CompareCell[]
+    /** Per group, the difference its own two records give for this row; used only where a group closes with a difference column. */
+    deltas?: (CompareCell | null)[]
+}
 
 /** One record of the molecule as a column: its own row of values, and the record behind it for heat capacity. */
 export type CompareColumn = {

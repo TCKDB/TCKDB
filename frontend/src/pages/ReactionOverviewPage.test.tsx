@@ -99,7 +99,7 @@ describe("ReactionOverviewPage -- formulas, with structure only where formulas a
 })
 
 describe("ReactionOverviewPage -- the header of the page that lists every version", () => {
-    it("says it lists all deposited versions, shows breadcrumbs and a lede, and has no compare link", async () => {
+    it("says it lists all deposited versions, shows breadcrumbs and a lede, and offers the compare link", async () => {
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
         page(REACTION_REF)
         await screen.findByRole("heading", { level: 1, name: /H4N2/ })
@@ -107,7 +107,7 @@ describe("ReactionOverviewPage -- the header of the page that lists every versio
         const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" })
         expect(crumbs.querySelector('a[href="/reactions"]')).toHaveTextContent("Reactions")
         expect(document.querySelector(".record-lede")).toHaveTextContent("This reaction has 2 deposited versions. Each is a separate record with its own numbers, and none is chosen for you.")
-        expect(screen.queryByRole("link", { name: /compare/i })).not.toBeInTheDocument()
+        expect(screen.getByRole("link", { name: "Compare these values" })).toHaveAttribute("href", `/reactions/${REACTION_REF}/compare`)
         expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
     })
 })

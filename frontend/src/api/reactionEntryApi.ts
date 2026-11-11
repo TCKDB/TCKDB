@@ -158,7 +158,7 @@ const kineticsProvenanceSchema = z.object({
     network_kinetics_ref: z.string().nullable().optional(),
 }).passthrough()
 
-const kineticsRecordSchema = z.object({
+export const kineticsRecordSchema = z.object({
     kinetics_ref: z.string(),
     scientific_origin: z.string(),
     model_kind: z.string(),

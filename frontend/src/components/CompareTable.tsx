@@ -17,17 +17,18 @@ export type CompareTableGroup = {
     /** The version the records below it belong to. */
     header: ReactNode
     columns: CompareTableColumn[]
+    /** A difference column closing the group, for the rows that carry a difference for it. Never spans two groups. */
+    delta?: { header: ReactNode }
 }
 
-
 /** One cell as every table of values shows it: the same numbers, exponents and point-group subscripts. */
-export function CompareCellView({ cell, to }: { cell: CompareCell; to: string | null }) {
+export function CompareCellView({ cell, to, showUnit = false }: { cell: CompareCell; to: string | null; showUnit?: boolean }) {
     if (cell.kind === "absent") return <span className="compare-absent">{cell.words}</span>
     const { value } = cell
     if (value.kind === "pointGroup") return <PointGroup value={value.value as string} />
     if (value.kind === "code") return <code className="t-preserve-case">{value.value}</code>
     if (value.kind === "text") return <>{value.value}</>
-    return <ValueLink value={value.exponent ? <>{value.value} × 10<sup>{value.exponent}</sup></> : value.value} to={to} full={value.full} />
+    return <ValueLink value={value.exponent ? <>{value.value} × 10<sup>{value.exponent}</sup></> : value.value} unit={showUnit ? (value.unit ?? undefined) : undefined} to={to} full={value.full} />
 }
 
 /**
@@ -35,35 +36,45 @@ export function CompareCellView({ cell, to }: { cell: CompareCell; to: string | 
  * (treatment, point group and the like) is marked when the setting is not the same within a version; the
  * legend says that is not a verdict. A measured number is never marked, ordered or called best.
  */
-export function CompareTable({ caption, label, groups, rows }: {
+export function CompareTable({ caption, label, groups, rows, groupNoun = "version" }: {
     caption: string
+    /** What a group is, for the corner cell and the marks: "version" (the default) or "group". */
+    groupNoun?: string
     label: string
     groups: readonly CompareTableGroup[]
     rows: readonly CompareRow[]
 }) {
-    const columns = groups.flatMap((group) => group.columns)
     const spans = groups.map((group) => group.columns.length)
     const hasSettings = rows.some((row) => row.compare === "exact")
-    const groupStarts = new Set(groups.slice(1).map((_group, index) => groups.slice(0, index + 1).reduce((sum, group) => sum + group.columns.length, 0)))
+    const starts = groups.map((_group, index) => spans.slice(0, index).reduce((sum, span) => sum + span, 0))
+    const edge = (index: number) => (index > 0 ? " compare-group-start" : "")
     return (
         <>
             <div className="table-scroll data-table-scroll" tabIndex={0} role="region" aria-label={label}>
                 <table className="data-table data-table-grid compare-table">
                     <caption className="data-table-caption">{caption}</caption>
                     <colgroup><col className="compare-col-quantity" /><col className="compare-col-unit" /></colgroup>
-                    {groups.map((group) => <colgroup key={group.key} className="compare-colgroup">{group.columns.map((column) => <col key={column.key} />)}</colgroup>)}
+                    {groups.map((group) => (
+                        <colgroup key={group.key} className="compare-colgroup">
+                            {group.columns.map((column) => <col key={column.key} />)}
+                            {group.delta && <col />}
+                        </colgroup>
+                    ))}
                     <thead>
                         <tr>
-                            <td className="compare-corner">Version</td>
+                            <td className="compare-corner">{groupNoun === "version" ? "Version" : "Group"}</td>
                             <td className="compare-unit-col" aria-hidden="true" />
-                            {groups.map((group) => <th key={group.key} scope="colgroup" colSpan={group.columns.length} className="compare-group">{group.header}</th>)}
+                            {groups.map((group) => <th key={group.key} scope="colgroup" colSpan={group.columns.length + (group.delta ? 1 : 0)} className="compare-group">{group.header}</th>)}
                         </tr>
                         <tr>
                             <th scope="col">Quantity</th>
                             <th scope="col" className="compare-unit-col">Unit</th>
-                            {columns.map((column, index) => (
-                                <th key={column.key} scope="col" className={groupStarts.has(index) ? "compare-record compare-group-start" : "compare-record"}>{column.header}</th>
-                            ))}
+                            {groups.flatMap((group, groupIndex) => [
+                                ...group.columns.map((column, index) => (
+                                    <th key={column.key} scope="col" className={index === 0 && groupIndex > 0 ? "compare-record compare-group-start" : "compare-record"}>{column.header}</th>
+                                )),
+                                ...(group.delta ? [<th key={`${group.key}-delta`} scope="col" className="compare-record compare-delta">{group.delta.header}</th>] : []),
+                            ])}
                         </tr>
                     </thead>
                     <tbody>
@@ -74,14 +85,20 @@ export function CompareTable({ caption, label, groups, rows }: {
                                     <th scope="row">
                                         {displayLabel(row.label)}
                                         {row.unit && <span className="compare-row-unit t-preserve-case">{row.unit}</span>}
-                                        {differs && <span className="compare-differs"><span aria-hidden="true">≠</span> Not the same within a version</span>}
+                                        {differs && <span className="compare-differs"><span aria-hidden="true">≠</span> Not the same within a {groupNoun}</span>}
                                     </th>
                                     <td className="compare-unit-col t-preserve-case">{row.unit}</td>
-                                    {row.cells.map((cell, index) => (
-                                        <td key={columns[index].key} className={groupStarts.has(index) ? "compare-cell compare-group-start" : "compare-cell"}>
-                                            <CompareCellView cell={cell} to={columns[index].to} />
-                                        </td>
-                                    ))}
+                                    {groups.flatMap((group, groupIndex) => {
+                                        const cells = group.columns.map((column, index) => (
+                                            <td key={column.key} className={index === 0 ? `compare-cell${edge(groupIndex)}` : "compare-cell"}>
+                                                <CompareCellView cell={row.cells[starts[groupIndex] + index]} to={column.to} showUnit={row.unit === null} />
+                                            </td>
+                                        ))
+                                        const delta = row.deltas?.[groupIndex]
+                                        return group.delta
+                                            ? [...cells, <td key={`${group.key}-delta`} className="compare-cell compare-delta">{delta && <CompareCellView cell={delta} to={null} showUnit={row.unit === null} />}</td>]
+                                            : cells
+                                    })}
                                 </tr>
                             )
                         })}
@@ -89,7 +106,7 @@ export function CompareTable({ caption, label, groups, rows }: {
                 </table>
             </div>
             {rows.some((row) => row.cells.some((cell) => cell.kind === "value" && cell.value.full !== undefined)) && <p className="note">{ROUNDED_NOTE}</p>}
-            {hasSettings && <p className="compare-legend"><span aria-hidden="true">≠</span> a setting that is not the same within one version; not a verdict.</p>}
+            {hasSettings && <p className="compare-legend"><span aria-hidden="true">≠</span> a setting that is not the same within one {groupNoun}; not a verdict.</p>}
         </>
     )
 }

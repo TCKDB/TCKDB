@@ -3,6 +3,7 @@ import { ParticipantChips } from "../components/ParticipantChips"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../record-identity-header.css"
+import "../data-table.css"
 import "../reaction-entry.css"
 import type { NetworkMembership, ReactionEntrySpeciesParticipant, ReactionFullRecord } from "../api/reactionEntryApi"
 import { loadReactionEntry, loadReactionEntryNetworksFallback } from "../api/reactionEntryApi"
@@ -262,6 +263,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                 <section className="ledger-section" aria-labelledby="kinetics-heading">
                     <p className="t-kicker section-kicker">Deposited rate expressions</p>
                     <SectionHeading id="kinetics-heading">Numbers for this entry</SectionHeading>
+                    {kinetics.length >= 2 && <p><Link className="compare-link" to={`/reactions/${entry.reaction_ref}/compare`}>Compare these values</Link></p>}
                     <ReactionKineticsSection
                         kinetics={kinetics}
                         calculations={record.calculations}

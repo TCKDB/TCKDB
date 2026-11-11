@@ -9,7 +9,7 @@ import { resolveProductLevels } from "../domain/productLevels"
 import { buildCalculationsByRef, buildDependencyEdgesByChildRef, deriveKineticsLevelsFallback } from "../domain/reactionKineticsLevels"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { lotLabel } from "../api/scientificSchemas"
-import { modelKindWord, originWord, tunnellingWord } from "../domain/kineticsWords"
+import { aUnitsWord, modelKindWord, originWord, tunnellingWord } from "../domain/kineticsWords"
 import { OrderNote } from "./OrderNote"
 import { ReviewChip } from "./ReviewChip"
 import { ValueSource } from "./ValueSource"
@@ -19,30 +19,11 @@ function token(value: string): string {
     return value.replaceAll("_", " ")
 }
 
-// `ArrheniusAUnits` (`backend/app/db/models/common.py`) -> the typeset unit
-// string this record's own `A` is reported in. A token this table has not
-// been taught yet falls back to the raw token, spaces for underscores —
-// never blocks the page on an unrecognised enum value.
-const A_UNIT_LABELS: Record<string, string> = {
-    per_s: "s⁻¹",
-    cm3_mol_s: "cm³ mol⁻¹ s⁻¹",
-    cm3_molecule_s: "cm³ molecule⁻¹ s⁻¹",
-    m3_mol_s: "m³ mol⁻¹ s⁻¹",
-    cm6_mol2_s: "cm⁶ mol⁻² s⁻¹",
-    cm6_molecule2_s: "cm⁶ molecule⁻² s⁻¹",
-    m6_mol2_s: "m⁶ mol⁻² s⁻¹",
-}
-
-function aUnitLabel(units: string | null | undefined): string {
-    if (!units) return ""
-    return A_UNIT_LABELS[units] ?? token(units)
-}
-
 // `evidence_completeness.checklist`'s nine keys (`backend/app/services/scientific_read/kinetics.py`'s
 // own `checklist = {...}` literal) -> the mock's prose labels. A key this
 // table has not been taught yet (a future ninth-plus addition) falls back
 // to `token(key)`, the same "never block on an unrecognised value" rule
-// `aUnitLabel` follows above.
+// `aUnitsWord` follows.
 const EVIDENCE_LABELS: Record<string, string> = {
     has_source_calculations: "Source calculations",
     has_transition_state_entry: "Transition-state entry",
@@ -182,7 +163,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
         ? `${formatQuantity("thermo_temperature_k", record.temperature_coverage.record_min_k)?.value}–${formatQuantity("thermo_temperature_k", record.temperature_coverage.record_max_k)?.value} K`
         : null
 
-    const unitLabel = aUnitLabel(record.parameters.A_units)
+    const unitLabel = aUnitsWord(record.parameters.A_units)
     const recordAnchor = `#kinetics-${record.kinetics_ref}`
     const sourceLevels = [
         { role: "geometry", label: resolvedLevels.geometry ? lotLabel(resolvedLevels.geometry) : "" },

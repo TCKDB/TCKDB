@@ -240,6 +240,7 @@ export const QUANTITY_SPECS = {
     kinetics_ea_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
     kinetics_a: { kind: "scientific", digits: 3, unit: null },
     kinetics_n: { kind: "scientific", digits: 4, unit: null },
+    kinetics_k: { kind: "scientific", digits: 3, unit: null },
 } as const satisfies Record<string, QuantitySpec>
 
 /** How a quantity is printed: to a digit count ("fixed", "scientific", "significant"), or to 6 significant figures ("deposited"). */
