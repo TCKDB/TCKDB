@@ -191,7 +191,7 @@ def _load_record_counts(
     table's ``literature_id`` column. Under the default profile no filtering by
     review status is applied — the counts represent the total inverse fan-out.
     Under ``profile=curated`` each count is of the records the profile shows, the
-    same population ``/records`` lists (owner decision D5): a count that included
+    same population ``/records`` lists: a count that included
     a hidden record would say it exists.
     """
     def _count(model_cls, record_type: SubmissionRecordType) -> int:

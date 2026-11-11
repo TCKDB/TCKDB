@@ -132,19 +132,9 @@ from app.services.trust import (
 # Public include tokens shared by every scientific statmech surface —
 # detail, species-entry subresource and search alike.
 #
-# ``trust`` used to be missing here, and the search surface was the reason:
-# only the detail paths eager-loaded the graph the evaluator walks, so the
-# narrower search vocabulary kept trust out of list responses entirely.
-# That left ``/scientific/statmech/search`` declaring a ``trust`` field
-# that no request could fill — the route strips it unconditionally, so the
-# key was permanently absent and nothing in the response hinted that a
-# verdict had been computed for the record. It had: the same verdict is
-# one token away under ``include=assessments``.
-#
-# The token is now legal on search too, and the eager-load argument is
-# answered rather than dodged: the search materializer applies
-# ``_TRUST_EAGER_LOADS`` to the page query, so the 19-entry chain is paid
-# once per page and never once per record.
+# ``trust`` is legal on the search surface too: the search materializer
+# applies ``_TRUST_EAGER_LOADS`` to the page query, so the 19-entry chain the
+# evaluator walks is paid once per page and never once per record.
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "source_calculations",
     "torsions",
@@ -358,7 +348,7 @@ def build_statmech_record(
 
     source_rows, withheld_source_calc_ids = _load_source_rows(session, sm.id)
     torsion_rows, withheld_scan_calc_ids = _load_torsion_rows(session, sm.id)
-    # Evidence rule (ADR 0023): the counts, flags and levels below describe the source calculations the profile SHOWS. An
+    # Evidence rule: the counts, flags and levels below describe the source calculations the profile SHOWS. An
     # unreviewed one is shown, with its badge; a rejected or deprecated one (under ``curated``) is withheld, so it is not
     # counted and supplies no level. The blocks that name calculations keep every row: the ref guard removes the withheld.
     shown_source_rows = [r for r in source_rows if r.calculation_id not in withheld_source_calc_ids]
@@ -563,7 +553,7 @@ def _build_levels(
     """R1: derive geometry/frequency/energy levels from this record's links.
 
     The derivation reads every link. A level whose supplying calculations are all in ``withheld_calculation_ids`` (the
-    evidence rule, ADR 0023) is then nulled together with its source, never re-derived from what is left.
+    evidence rule) is then nulled together with its source, never re-derived from what is left.
 
     ``source_rows`` is already ordered ``role.asc(), calculation_id.asc()``
     by :func:`_load_source_rows`, so appending in order already gives
@@ -602,7 +592,7 @@ def _build_levels(
     }
 
     # Composite-role calculations also say where the geometry and frequency
-    # levels come from when no opt / freq is linked (ADR 0021, R1).
+    # levels come from when no opt / freq is linked.
     typed_composite_ids = [
         cid
         for cid in role_calc_ids.get("composite", [])

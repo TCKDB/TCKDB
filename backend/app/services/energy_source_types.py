@@ -8,9 +8,8 @@ energy it is cited for:
 * the pressure-dependent network rule
   (:mod:`app.services.network_energy_sources`, #642).
 
-They used to keep a table each, and the two disagreed: #637's predated the
-``composite`` calculation type (ADR 0021, #654) and accepted it for neither
-kind, while #642 had to extend its own floor to take it.
+Both rules read this one table, so they cannot disagree about which
+calculation types carry an energy kind.
 
 What each kind is
 -----------------

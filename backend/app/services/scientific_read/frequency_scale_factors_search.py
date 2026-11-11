@@ -68,11 +68,9 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
 
 # Legacy grouping name for declared filters without a backing column.
 # The service rejects these before querying; none is treated as a no-op.
-# ``software_version`` moved out of this group once
-# ``frequency_scale_factor`` gained a release-grain column
-# (``software_release_id``, correction-scheme-provenance plan v2 §6) and
-# this module joined through it, mirroring
-# ``energy_correction_schemes_search.py``'s identical move for ECS.
+# ``software_version`` is not in this group: ``frequency_scale_factor`` has a
+# release-grain column (``software_release_id``) and this module joins
+# through it, as ``energy_correction_schemes_search.py`` does for ECS.
 _DEFERRED_FILTER_FIELDS: tuple[str, ...] = ("model_kind",)
 
 
@@ -143,8 +141,7 @@ def search_frequency_scale_factors(
         if request.basis is not None:
             stmt = stmt.where(basis_matches(request.basis))
     if request.software is not None or request.software_version is not None:
-        # FSF stores software_release_id (correction-scheme-provenance
-        # plan v2 §6), so both the program-name filter and the
+        # FSF stores software_release_id, so both the program-name filter and the
         # release-grain version filter join through software_release/
         # software -- mirroring energy_correction_schemes_search.py.
         stmt = stmt.join(

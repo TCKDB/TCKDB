@@ -518,7 +518,7 @@ def _chemkin_files(
     ]
     reported = origin["solve_kind"] == "reported"
     if reported and not choice.include_reported:
-        # ADR 0010 (mechanism export): a transcribed rate must not enter a mechanism file undisclosed, and comments are
+        # Mechanism export: a transcribed rate must not enter a mechanism file undisclosed, and comments are
         # routinely stripped by the simulators that read it. Emitting one is therefore a named, deliberate act.
         forms.append(
             {"reason": "reported_solve_requires_include_reported", "solve_kind": "reported",

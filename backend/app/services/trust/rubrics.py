@@ -184,7 +184,7 @@ def _check_quality_recorded(calc: Calculation) -> EvidenceOutcome:
     contributor from setting it to ``curated`` on their own submission, and
     before this fix that self-declaration alone was accepted as passed
     evidence. A trust signal earned by the party being judged is not a
-    trust signal, so this check now reads
+    trust signal, so this check reads
     :attr:`~app.db.models.calculation.Calculation.record_review` — the
     curator-authored row written by :func:`app.services.record_review.set_record_review_status`
     — instead of the depositor's own claim. ``calculation.quality`` keeps
@@ -273,7 +273,7 @@ def _check_artifacts_present(calc: Calculation) -> EvidenceOutcome:
     claim about the *depositor* — this calculation retained its evidence
     — and that claim is satisfied by the row. Whether the stored object
     still hashes to its digest is a claim about *TCKDB*, and the two are
-    deliberately kept apart (ADR 0002, ADR 0014):
+    deliberately kept apart:
 
     * A rubric runner is contractually pure and free of I/O; the
       evaluator's determinism depends on it. Fetching from the object
@@ -460,7 +460,7 @@ def _check_temperature_range_valid(kinetics: Kinetics) -> EvidenceOutcome:
     """Return passed when the populated temperature range is physically plausible.
 
     This graded (``optional``) check is the *only* owner of the upper
-    temperature bound. Per ADR 0008 the cap is an expectation, not a
+    temperature bound. The cap is an expectation, not a
     definition: shock-tube, detonation, plasma, and re-entry chemistry
     legitimately exceed it, so exceeding it lowers evidence completeness and is
     reported as a ``missing`` outcome in ``checks`` — it never hard-fails the
@@ -757,7 +757,7 @@ def _thermo_range_is_present(thermo: Thermo) -> bool:
 # Glenn (Gordon & McBride) maximum of 20,000 K: canonical NASA-9 fits use a
 # 6,000-20,000 K high-temperature interval.
 #
-# This bound is an *expectation*, not a definition (ADR 0008), so it lives only
+# This bound is an *expectation*, not a definition, so it lives only
 # in this graded rubric. Exceeding it lowers evidence completeness; it never
 # hard-fails. The evaluator asserts only the definitional 0 < low < high.
 _MAX_THERMO_TEMPERATURE_K = 20_000
@@ -1048,9 +1048,8 @@ def _check_thermo_uncertainty_present(thermo: Thermo) -> EvidenceOutcome:
 
 # Kinds whose parameters are the output of a program's own build-level
 # numerics (integration grid, SCF thresholds, basis-set definition) and are
-# therefore release-specific (correction-scheme-provenance plan v2 §3.1,
-# §7). ``atom_hf`` / ``atom_thermal`` / ``soc`` are physical or reference
-# constants -- not a program's output -- so the software axis does not
+# therefore release-specific. ``atom_hf`` / ``atom_thermal`` / ``soc`` are
+# physical or reference constants -- not a program's output -- so the software axis does not
 # apply to them, and neither does ``isodesmic`` / ``other``, which this
 # rubric does not attempt to classify.
 _SOFTWARE_SCOPED_CORRECTION_SCHEME_KINDS: frozenset[EnergyCorrectionSchemeKind] = (
@@ -1070,8 +1069,7 @@ def _thermo_cited_correction_schemes(thermo: Thermo) -> list[EnergyCorrectionSch
     ``applied_energy_correction`` targets a species entry
     (``target_species_entry_id``), not a specific thermo row -- a
     correction is applied at the species level and every thermo record for
-    that species entry shares it (correction-scheme-provenance plan v2
-    §7). Rows sourced from a frequency scale factor rather than a
+    that species entry shares it. Rows sourced from a frequency scale factor rather than a
     correction scheme (``scheme_id IS NULL``) are excluded: this rubric
     axis is about scheme self-documentation, not frequency scaling.
     """
@@ -1102,8 +1100,7 @@ def _check_correction_scheme_software_release_present(
     A different axis from the existing source-calculation checks above:
     those ask whether a correction was *applied* to the record at all;
     this asks whether the *cited scheme itself* documents which program
-    release computed its parameters (correction-scheme-provenance plan v2
-    §7). ``not_applicable`` -- never a vacuous pass -- when the record
+    release computed its parameters. ``not_applicable`` -- never a vacuous pass -- when the record
     cites no scheme, or cites only constant-kind schemes for which the
     software axis does not apply.
     """
@@ -2570,7 +2567,7 @@ the PARENT (reached via ``calc.child_dependencies[*].parent_calculation``)
 should be pulled into the source set: ``optimized_from`` (a ``path_search``
 (NEB/GSM/...) that produced the TS guess which the TS opt was then optimized
 from) and ``composite_input`` (the single points an assembled composite at the
-TS was built from, ADR 0021: they are the evidence for its energy)."""
+TS was built from: they are the evidence for its energy)."""
 
 _TS_CALC_IS_PARENT_ROLES: frozenset[CalculationDependencyRole] = frozenset(
     {
@@ -2664,7 +2661,7 @@ def _ts_representative_freq_result(ts_entry: TransitionStateEntry, context: Tran
     ``calculation.id DESC`` tie-break. Returns ``None`` when no freq calc
     in the source set carries a ``calc_freq_result`` row.
 
-    Owner decision O2 (#723): when the entry declares a saddle target, the pool is first narrowed to the
+    When the entry declares a saddle target, the pool is first narrowed to the
     frequency calculations a declared target pins in role ``curvature`` (``context.declared_curvature_refs``), so the
     frequency-presence checks read the result the declaration points at and an unrelated newer rerun cannot fail a
     required check of a qualifying declared saddle. This stays a presence read: it chooses which result to look at, and
@@ -3030,12 +3027,9 @@ def _check_ts_reaction_coordinate_designated(
 ) -> EvidenceOutcome:
     """Return passed when the record identifies its reaction coordinate.
 
-    This runner replaced ``_check_ts_single_imaginary_frequency_for_ts``,
-    which re-derived ``n_imag == 1`` at read time. Under ADR 0008 §9 that
-    was an untidy duplicate of the upload-time rule; under ADR 0012 it
-    was a live contradiction, because a record with three imaginary
-    modes and a designated reaction coordinate is now accepted at upload
-    and would still have been hard-failed here.
+    This does not re-derive ``n_imag == 1`` at read time: a record with
+    three imaginary modes and a designated reaction coordinate is accepted
+    at upload and must not be hard-failed here.
 
     The physics has exactly one owner —
     :mod:`tckdb_schemas.stationary_point`, which judged this record when
@@ -3131,7 +3125,7 @@ def _check_ts_declared_saddle_target_qualifies(
 def _check_ts_extra_imaginary_modes_not_flagged(
     ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
-    """Return warning when ADR 0012's structural flag was recorded.
+    """Return warning when the structural flag was recorded.
 
     The flag is read, never recomputed. It was written at deposit time
     by the same function that judged the payload, against the τ that the
@@ -3170,14 +3164,15 @@ def _check_ts_review_not_rejected_or_deprecated_if_applicable(
     return EvidenceOutcome.not_applicable
 
 
-# Contract of the baseline version (ADR 0012, #722, #723, #729). A transition state's representative frequency result is
-# not asked to have exactly one imaginary mode (that duplicated the upload-time rule and, once ADR 0012 replaced it,
-# contradicted it): the required check is ``reaction_coordinate_designated_for_ts``, which cites the persisted
+# Contract of the baseline version. A transition state's representative frequency result is
+# not asked to have exactly one imaginary mode, and that count is not
+# re-derived here: the required check is
+# ``reaction_coordinate_designated_for_ts``, which cites the persisted
 # designation instead of recounting, beside the advisory check that surfaces the recorded structural flag. Two zero-weight
 # warnings report on the frequency result, ``no_frequency_result_lacks_an_imaginary_mode`` and
 # ``no_frequency_result_has_undesignated_imaginary_modes``. The scoped structure assessment is brought into the
 # projection, and the zero-weight ``declared_saddle_target_qualifies`` warning is reported. The representative frequency
-# result, for an entry that declares a saddle target, is the one the declaration pins (owner decision O2). Label,
+# result, for an entry that declares a saddle target, is the one the declaration pins. Label,
 # completeness, score and ``is_certified`` never read the assessment: the assessment itself is the
 # ``trust.structure_assessment`` block, and only the pinned-result rule can move a completeness number, and only for an
 # entry that declares a target.
@@ -3507,11 +3502,11 @@ def statmech_rubric_for(statmech: Statmech) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Review-tier rubrics (Phase C-E4)
+# Review-tier rubrics
 # ---------------------------------------------------------------------------
 #
 # Everything above this point evaluates the deterministic *computed-trust*
-# evidence completeness for a record (ADR 0008's structural tier) and is
+# evidence completeness for a record (the structural tier) and is
 # reachable through RUBRIC_NAME_FOR_RECORD_TYPE / get_rubric_for_record_type. The rubrics
 # below are a different thing: they exist only to give the review-tier checks
 # (``app.scientific_checks.external_comparison``,

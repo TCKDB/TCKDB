@@ -354,8 +354,7 @@ def get_release_selection(
     """One selection row of a release, by public ref.
 
     A direct lookup, deliberately: reading a single row back by paging the
-    ledger and scanning caps a release at the page size, which is how the
-    write path used to fail on the 201st selection.
+    ledger and scanning caps a release at the page size.
     """
     release = resolve_release(session, handle)
     row = session.scalars(

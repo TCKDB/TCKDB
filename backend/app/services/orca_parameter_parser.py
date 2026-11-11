@@ -57,7 +57,7 @@ _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
     ("pno", "loosepno"): ("pno.truncation", "loose"),
     # Frequency-job Hessian method (from ! line, section="freq").
     #
-    # ADR 0012's tau keys on how the *frequency job* built its second
+    # The imaginary-mode tau keys on how the *frequency job* built its second
     # derivatives, which is not the same thing as opt.initial_hessian.
     # ORCA says so explicitly in the keyword line, so it is recorded
     # rather than guessed; a run that says neither leaves the key absent
@@ -129,7 +129,7 @@ def _lookup_canonical(
 #:
 #: ``numfreq`` and ``anfreq`` are deliberately absent. They *are* job
 #: types, but they also state how the frequency job built its Hessian,
-#: which ADR 0012's tau keys on and which nothing else in the record
+#: which the imaginary-mode tau keys on and which nothing else in the record
 #: says. They are classified into the ``freq`` section by
 #: :func:`_classify_keyword` so they emit a ``freq.hessian_method`` row;
 #: the calculation's type is decided elsewhere and is unaffected.

@@ -389,7 +389,7 @@ def _withhold_hidden_references(session: Session, validation: dict | None) -> di
     entries = []
     for entry in validation["entries"]:
         ref = entry.get("reference_solve_ref")
-        # The reference solve is evidence the entry rests on (ADR 0023): known unless rejected or deprecated.
+        # The reference solve is evidence the entry rests on: known unless rejected or deprecated.
         if ref is not None and not solve_ref_is_visible(session, ref, as_evidence=True):
             entry = {**entry, "reference_solve_ref": None, "reference_withheld": True}
         entries.append(entry)

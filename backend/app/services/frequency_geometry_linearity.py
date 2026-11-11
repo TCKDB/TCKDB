@@ -46,8 +46,7 @@ whole contract is that it carries neither.
 
 Tier: advisory, never blocking
 ------------------------------
-`ADR 0008 <../../../docs/adr/0008-validation-tiers-definitions-block-expectations-warn.md>`_
-lets a check block only when it asserts a definition or a contract, never
+A check may block only when it asserts a definition or a contract, never
 an expectation. "This molecule looks bent, so it should have ``3N - 6``
 modes" rests on a *tolerance* — on where the line between bent and
 straight is drawn — and a rule whose answer moves when a constant moves
@@ -116,7 +115,7 @@ frozen-atom regions and lumped participants and would send a depositor
 looking in the wrong place.
 
 The tier is the same as its mirror, and for the same reason: the
-verdict rests on a tolerance, so ADR 0008 makes it an expectation. It
+verdict rests on a tolerance, so it is an expectation. It
 is also a shape a correct deposit really can take — a genuine partial
 or frozen-atom Hessian on a linear molecule produces a short list
 honestly — which is the second, independent argument for warning rather

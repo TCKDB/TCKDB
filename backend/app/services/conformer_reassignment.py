@@ -27,7 +27,7 @@ Under the entry's per-entry advisory lock (the one live uploads take, so the two
    split leaves the original row with the part that holds the original representative); a basin with no claimant
    gets a new row.
 4. Move the observations (their basin link, scheme, stored fingerprint and mapped coordinates; nothing else).
-5. Move what pointed at a basin that changed, by D5: each thermo target goes to the basin holding the
+5. Move what pointed at a basin that changed: each thermo target goes to the basin holding the
    observation its own calculations came from; where that cannot be determined (no calculations, none
    anchored to a basin of this entry, or they span several new basins) it goes with the basin that holds
    the old group's representative. Conformer selections carry no calculations and follow the representative,

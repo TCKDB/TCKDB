@@ -1,12 +1,11 @@
 """D8: a conformer group whose optimised structures are not all within tolerance of each other (a wide basin).
 
-A conformer basin is the set of converged optimised structures connected by "same basin" matches
-(``docs``/ADR 0005). A chain of such structures can be linked end to end while its two ends are further apart than
+A conformer basin is the set of converged optimised structures connected by "same basin" matches. A chain of such structures can be linked end to end while its two ends are further apart than
 the matching tolerance: each pair of neighbours is the same minimum, the ends may not be. TCKDB reports that and never
 splits it, because any automatic cut would put back either an arbitrary threshold or a dependence on the order of
 deposition.
 
-This check is how the report reaches a curator. It is advisory in ADR 0008's sense -- one append-only
+This check is how the report reaches a curator. It is advisory -- one append-only
 ``record_machine_review`` row a curator may read, no status, selection, trust or approval effect, nothing rewritten.
 It reads only what the group stores about itself (``basin_is_clique``, ``basin_span_deg``), which the upload path and
 the recompute derive from the group's defining members; it does not compare structures again.

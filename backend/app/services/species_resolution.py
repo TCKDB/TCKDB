@@ -64,7 +64,7 @@ def null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement[
 def find_species(session: Session, payload: SpeciesEntryIdentityPayload) -> Species | None:
     """The live species row ``payload`` resolves to, or ``None``. Read-only; the lookup submit performs.
 
-    A species merged into another keeps its row and forwards (DR-0038); it is never what an upload resolves to.
+    A species merged into another keeps its row and forwards; it is never what an upload resolves to.
     """
 
     canonical_smiles, _inchi_key = canonical_species_identity(payload)
@@ -117,15 +117,15 @@ def resolve_species(
     ----------------------------------
     ``molecule_kind`` is written when the row is created and is **not** part of
     the identity, so a later deposit of the same
-    ``(smiles, charge, multiplicity)`` used to receive the stored row whatever
-    kind it declared, and its own claim was dropped without a word. That is not
+    ``(smiles, charge, multiplicity)`` would receive the stored row whatever
+    kind it declared, and its own claim would be dropped without a word. That is not
     a cosmetic loss: :func:`app.services.reaction_resolution.validate_reaction_elemental_balance`
     and its charge-conservation twin decline to judge any reaction containing a
     ``pseudo`` participant, and they read ``species.kind`` — the stored row —
     not the payload. So a ``pseudo`` row whose free-text ``smiles`` happens to
-    collide with a real canonical SMILES silently switched mass balance and
+    collide with a real canonical SMILES would silently switch mass balance and
     charge conservation off for every subsequent deposit of that molecule, and
-    nothing on any surface said so. The reverse direction loses the exemption a
+    nothing on any surface would say so. The reverse direction loses the exemption a
     lumped construct was declared to need.
 
     Both are contradictions rather than incompleteness — one identity cannot be
@@ -155,8 +155,8 @@ def resolve_species(
             )
             stereo_kind, _auto_label = classify_stereo_kind(ident_mol)
 
-    # Identity is (constitution smiles, charge, multiplicity) — DR-0031, with the
-    # key stereo-blind per DR-0038.
+    # Identity is (constitution smiles, charge, multiplicity), with the
+    # key stereo-blind.
     # inchi_key is stored for cross-notation search but is NOT the dedup
     # key: it cannot distinguish spin states (singlet vs triplet CH2) and
     # wrongly merges some tautomers (2-pyridone vs 2-hydroxypyridine).
@@ -412,7 +412,7 @@ def assert_geometry_composition_matches_identity(
     numbers for a molecule nobody deposited.
 
     Formula agreement between a structure and its own identifier is
-    **definitional** under ADR 0008 — no correct calculation can produce a
+    **definitional** — no correct calculation can produce a
     geometry that is not made of its own molecule's atoms — so it blocks,
     exactly as :func:`app.services.reaction_resolution.validate_reaction_elemental_balance`
     blocks the same class of contradiction one layer up and
@@ -466,7 +466,7 @@ def assert_geometry_composition_matches_identity(
     is a nuclide, and that is not ignored: :func:`parse_xyz` reads the spelling
     as a 2H/3H declaration, so isotope agreement -- checked separately and
     exactly by :func:`assert_geometry_isotopes_match_identity` -- refuses a
-    ``D`` geometry under a protium identity (``docs/adr/0022``).
+    ``D`` geometry under a protium identity.
 
     **Counts, not positions.** Two structures with the same formula pass, even
     if the connectivity differs — an isomer deposited under the wrong
@@ -478,8 +478,8 @@ def assert_geometry_composition_matches_identity(
 
     **Charge is already owned elsewhere.** The SMILES formal charge is
     compared against the declared ``charge`` by
-    :func:`app.chemistry.species.canonical_species_identity`, which blocks. Per
-    ADR 0008 the blocking tier owns a rule and the others cite it rather than
+    :func:`app.chemistry.species.canonical_species_identity`, which blocks. The
+    blocking tier owns a rule and the others cite it rather than
     re-deriving it, so this function does not re-check charge — a second copy
     could only disagree with the first.
 
@@ -675,7 +675,7 @@ def resolve_species_entry(
         assert_geometry_isotopes_match_identity(payload, candidate_geometry)
 
     # Stereo is resolved before the species row is touched: a contradiction is a
-    # refusal, and a refused deposit should leave nothing behind (DR-0038).
+    # refusal, and a refused deposit should leave nothing behind.
     resolved_stereo = resolve_entry_stereo(
         payload, [*(() if geometry is None else (geometry,)), *additional_geometries]
     )
@@ -788,8 +788,8 @@ def stereo_unresolved_warning(
 ) -> UploadWarning | None:
     """Warn when a stereo-capable entry ends with a stereo element still unknown.
 
-    The entry is accepted: ``E,?`` and ``?`` are honest entries of their own
-    (DR-0038), and a later, fully specified deposit does not merge into it.
+    The entry is accepted: ``E,?`` and ``?`` are honest entries of their own,
+    and a later, fully specified deposit does not merge into it.
     The warning tells the depositor the configuration was not pinned down by
     geometry, marks or label, so they can supply it.
 

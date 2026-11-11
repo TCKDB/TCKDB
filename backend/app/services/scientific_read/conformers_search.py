@@ -344,7 +344,7 @@ def _apply_identity_filters(
         ).where(SpeciesEntry.species_id == species_id)
     if conformer_observation_id is not None:
         # Match the group that owns this observation.
-        # The observation is linked evidence (ADR 0023): a rejected / deprecated one named by ref matches nothing.
+        # The observation is linked evidence: a rejected / deprecated one named by ref matches nothing.
         stmt = stmt.where(
             exists().where(
                 and_(
@@ -431,7 +431,7 @@ def _shown_observations_of_group():
     """``select(ConformerObservation.id)`` over this group's observations the active profile shows.
 
     A rejected or deprecated observation, and every calculation reached through one, contributes nothing to a
-    filter match under curated (the evidence rule, ADR 0023); a not-reviewed one does. Without a review floor the
+    filter match under curated (the evidence rule); a not-reviewed one does. Without a review floor the
     statement is unchanged.
     """
     sub = select(ConformerObservation.id).where(ConformerObservation.conformer_group_id == ConformerGroup.id)

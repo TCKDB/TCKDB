@@ -5,9 +5,6 @@ This package qualifies *supplied* interpretations for a stated claim and lists t
 display order; it ranks none above another. It never assembles a favourable mixture of records and never computes a
 partition function, a thermochemical value, a population or a rate.
 
-Stage 1 holds the contract: the vocabulary, the normalised request and its cross-field rules, the bounds, the
-facts-level reading of a legacy record and the read-only coverage inventory. Nothing here is wired to a route and
-nothing persists.
 """
 
 from app.services.statmech_selection.models import (

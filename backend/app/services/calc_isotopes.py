@@ -55,7 +55,7 @@ def entry_isotope_counts(entry: SpeciesEntry, species: Species) -> IsotopeCounts
     by every isotopologue). ``NULL`` is the all-standard entry, i.e. an empty
     mapping.
 
-    **Legacy fallback (#680).** A species stored before #66 (2026-07-31) kept
+    **Legacy fallback.** A legacy species kept
     its isotope labels in ``species.smiles`` and has no ``isotope_key``; the
     migration that added the column deliberately did not backfill it (the
     label was free text, deriving a key would be a guess). So when

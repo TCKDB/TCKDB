@@ -21,11 +21,10 @@ Currency vs. provenance (policy §3.5). A latest review is *current* only when
 * ``prompt`` — the active machine-review prompt, a name and a version;
 * ``rubric`` — the active rubric for this record, a name and a version.
 
-Every review stored before the 2026-10 versioning reset is stale, and it says so by name. The reset restarted every
-rubric and the prompt at version 1, and the migration (``c7d4a9e2b6f1``) stored each pre-reset stamp so that it cannot
-equal an active one: a rubric's latest old version became 1, every older version became **0**, and every old prompt
-became version **0** (the prompt's wording changed in the same release, and a deterministic runner's old stamp carried
-no version at all). Version 0 is never current -- no registry holds it -- so every pre-reset review reports
+A review stamped under an earlier numbering is stale, and it says so by name. Such stamps are stored so that they
+cannot equal an active one: a rubric's latest old version is 1, every older version is **0**, and every old prompt is
+version **0** (a deterministic runner's old stamp carried no version at all). Version 0 is never current -- no
+registry holds it -- so every such review reports
 ``prompt_version_mismatch`` and/or ``rubric_versions_mismatch``, for a true reason (it was made under a prompt or rubric
 that is not the active one), not because a hash happened to differ. Stored refs are read back as
 :class:`~app.versioning.StoredVersionRef`, the one type that may hold a 0.
@@ -81,9 +80,9 @@ class MachineReviewStaleReason(str, Enum):
     (e.g. both the evidence and the prompt changed); they are reported in a
     fixed order (schema version, hash, prompt, rubric versions).
 
-    A stored prompt (or rubric) version of **0** means "stamped before the 2026-10 version reset": the stamp was
-    renumbered by that reset and is never current, so ``prompt_version_mismatch`` on a version-0 review (a
-    deterministic runner's included) says the review predates the reset, not that the runner's check changed.
+    A stored prompt (or rubric) version of **0** means "stamped under an earlier numbering": the stamp was
+    renumbered and is never current, so ``prompt_version_mismatch`` on a version-0 review (a
+    deterministic runner's included) says the review predates the current numbering, not that the runner's check changed.
     """
 
     context_schema_version_mismatch = "context_schema_version_mismatch"
@@ -233,7 +232,7 @@ def stamp_mismatches(
 ) -> tuple[MachineReviewStaleReason, ...]:
     """The prompt and rubric dimensions of currency: the one rule, used by the classifier and by a read that does not
     have the evidence digest (the curator queue's "made under" line). A different name or a different version of either
-    is a mismatch; a stored version 0 (stamped before the 2026-10 reset) never matches."""
+    is a mismatch; a stored version 0 (stamped under an earlier numbering) never matches."""
     reasons: list[MachineReviewStaleReason] = []
     if stored_prompt != active_prompt:
         reasons.append(MachineReviewStaleReason.prompt_version_mismatch)

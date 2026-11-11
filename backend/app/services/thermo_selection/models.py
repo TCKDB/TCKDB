@@ -51,7 +51,7 @@ ASSESSMENT_SEMANTICS = new_current_only_registry(
 #: rule matches, edges, overridden edges, opposing pairs or cycles. Version 3: the request records its filters and its
 #: eligibility settings, each candidate records which defaults it failed or passed only by override, and the population
 #: records the funnel. Version 4: the manifest records its ``read_profile`` and, in it, the review statuses whose
-#: linked evidence that profile withheld (ADR 0023); under ``curated`` a not-reviewed or under-review record is shown
+#: linked evidence that profile withheld; under ``curated`` a not-reviewed or under-review record is shown
 #: as evidence and only a rejected or deprecated one is a token.
 #: Version 5: the filters are the browse's full provenance set (method, basis, software version,
 #: workflow tool, method family, DFT rung, scientific origin), and the provenance fields are matched through ONE source

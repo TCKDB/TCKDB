@@ -101,10 +101,7 @@ def _resolve_software(
 
     Text-sniffed evidence wins when the banner unambiguously names a
     program; the declared ``software_release`` name is the fallback for
-    artifacts that carry no recognisable banner. Inverted 2026-09 (issue
-    #305's ARC follow-up): the declared name used to win outright
-    whenever it was one of the three parsed programs, even when the
-    artifact's own banner named a different one. ARC's own per-job-type
+    artifacts that carry no recognisable banner. ARC's own per-job-type
     version map can carry a stale/inherited software name into a
     ``software_release`` that never ran the job in question — a real
     banner is evidence; a declared label is not, when the two disagree.
@@ -344,7 +341,7 @@ def extract_and_store_calculation_parameters(
         each row and on ``calculation.parameters_parser_name`` / ``parameters_parser_version``.
         Defaults to whatever the parser self-reports.
     :param warnings: Optional list to append a depositor-facing warning to
-        when DR-0008 reconciliation corrects the calculation's software
+        when software reconciliation corrects the calculation's software
         identity from this artifact (see
         :func:`app.services.calculation_resolution.software_reconciliation_warning`).
         Callers that do not track warnings (the backfill script) simply
@@ -362,7 +359,7 @@ def extract_and_store_calculation_parameters(
     if unbound_log:
         parsed = {**parsed, "parameters": []}
 
-    # DR-0008: reconcile the declared software_release against the version
+    # Reconcile the declared software_release against the version
     # banner the parser just observed, and persist the outcome on the
     # calculation. Non-blocking: a mismatch is recorded, never raised, and
     # any failure here must not abort parameter extraction / the upload.
@@ -662,7 +659,7 @@ def try_extract_parameters_from_artifact_upload(
 
     :param warnings: Optional list to append a depositor-facing warning to
         when this artifact corrects the calculation's software identity
-        (DR-0008) — see :func:`extract_and_store_calculation_parameters`.
+        (see :func:`extract_and_store_calculation_parameters`).
     """
 
     # ``artifact_in`` is a Pydantic model whose ``kind`` field is typed
@@ -730,7 +727,7 @@ def try_extract_parameters_from_input_artifact_row(
         # The docstring promises this returns None on *any* failure so the
         # backfill can continue across the corpus, and it did not: an
         # integrity failure escaped and stopped the loop at the first
-        # corrupt object. Record the break (ADR 0014) and keep going —
+        # corrupt object. Record the break and keep going —
         # aborting the backfill is the one response that guarantees the
         # rest of the corpus stays unexamined.
         record_from_error(
@@ -769,17 +766,15 @@ def _extract_safe(
 
     ``extract_and_store_calculation_parameters`` is parse-first /
     write-second, and ``ParameterExtractionError`` is raised only by the parse
-    half, where no ``calculation_parameter`` rows have been written yet. That
-    is why catching it alone used to look sufficient.
-
-    It was not. The write half does real work — ``persist_calculation_parameters``
-    issues a ``DELETE`` of the previous parser rows and then ``INSERT``s the new
+    half, where no ``calculation_parameter`` rows have been written yet.
+    Catching it alone therefore does not make the step best-effort: the write
+    half does real work — ``persist_calculation_parameters`` issues a
+    ``DELETE`` of the previous parser rows and then ``INSERT``s the new
     batch — and a database error there is not a ``ParameterExtractionError``.
-    It escaped this guard entirely and aborted the artifact upload, despite the
-    calling route declaring the whole step "best-effort (never abort the
-    upload)". The guard existed; it just did not cover the writes.
+    It would abort the artifact upload, although the calling route declares
+    the whole step "best-effort (never abort the upload)".
 
-    :func:`isolated_best_effort` now covers both halves: the artifact rows the
+    :func:`isolated_best_effort` covers both halves: the artifact rows the
     route already persisted are flushed outside the savepoint, the extraction
     runs and flushes inside it, and any failure rolls back to the savepoint
     with the upload intact and the session still usable for the artifacts that

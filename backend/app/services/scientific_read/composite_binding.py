@@ -1,4 +1,4 @@
-"""Which composite scheme, if any, a level of theory is bound to (ADR 0021).
+"""Which composite scheme, if any, a level of theory is bound to.
 
 Every ``LevelOfTheorySummary`` the read layer builds carries
 ``composite_scheme``. The summaries are built in many places, from a row, a

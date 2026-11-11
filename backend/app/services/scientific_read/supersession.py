@@ -25,8 +25,8 @@ A read of a superseded record needs two different answers:
 
 The head is deliberately *not* stored. Storing it would mean ``UPDATE``-ing
 every earlier record in the chain whenever a new correction lands, which the
-accepted-science immutability triggers refuse (ADR 0003) and which is the
-same second-source-of-truth defect ADR 0007 rejected as a stored
+accepted-science immutability triggers refuse and which is the
+same second-source-of-truth defect as a stored
 ``is_current`` flag. Appending a correction stays one ``INSERT``; every read
 of every earlier record reports the new head immediately, because the head
 was never written down.
@@ -79,7 +79,7 @@ from app.schemas.reads.scientific_common import SupersessionNotice
 
 #: Root models whose rows can be *named* in a notice. Every entry carries
 #: ``PublicRefMixin``, so a notice can cite ``public_ref`` and never a
-#: database row id (DR-0028 Req 2).
+#: database row id.
 #:
 #: ``applied_energy_correction`` is a supported supersession *type* but is
 #: absent here on purpose: ``AppliedEnergyCorrection`` has no ``public_ref``

@@ -4,12 +4,12 @@ The trust rubric is a presence checklist and its runners are pure. The structure
 judgement of the saddle a depositor *declared* (a stored ``structure_determination``), and it needs queries. This
 module runs it once, for one entry, and hands the rubric a :class:`TransitionStateTrustContext`.
 
-Where it runs (owner decision O3). On a **single transition-state-entry detail read** and on the machine-review
+Where it runs. On a **single transition-state-entry detail read** and on the machine-review
 evaluation of one entry. Never on a list: browse, search, the sibling entries of a detail read and the reaction
 document carry :func:`not_assessed_on_lists_context`, which issues no statement. The same entry therefore renders the
 same on every list page, and lists never slow down or fail on account of an assessment.
 
-The question (owner decision O1). Fixed, evidence-only and echoed in the response (:data:`BADGE_TASK`), so anyone can
+The question. Fixed, evidence-only and echoed in the response (:data:`BADGE_TASK`), so anyone can
 send it to ``POST /scientific/transition-state-entries/{ref}/evidence/select`` and get the same answer. The answer here
 is **that endpoint's own answer**, taken from the same service and the same response builder; this module adds no
 judgement.

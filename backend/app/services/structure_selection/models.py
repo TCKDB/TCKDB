@@ -424,7 +424,7 @@ class EnergyFacts:
 class CurvatureFacts:
     """What a calculation's own frequency or Hessian result states about curvature at a geometry.
 
-    ``structural_flag`` is the owner's persisted judgement (ADR 0012): ``True`` an imaginary mode at or above tau
+    ``structural_flag`` is the owner's persisted judgement: ``True`` an imaginary mode at or above tau
     beyond the reaction coordinate, ``False`` judged and clear, ``None`` not judged. ``imaginary_modes`` are the
     stored imaginary modes as ``(mode_index, frequency_cm1, disposition)`` (disposition ``None`` when undeclared);
     together with ``imag_freq_cm1``, the reaction coordinate designation and the stored ``tau_cm1``/``tau_basis`` they
@@ -617,7 +617,7 @@ class NormalizedDetermination:
     #: of its transition-state entry's. ``None`` for a determination with none of those: it has no review of its own, and
     #: its species entry is a scoping parent whose status is never copied onto it.
     review_status: RecordReviewStatus | None
-    #: The two statuses ``review_status`` combines for a conformer basin, recorded apart (manifest format 5, ADR 0023): the
+    #: The two statuses ``review_status`` combines for a conformer basin, recorded apart (manifest format 5): the
     #: conformer GROUP is the record that gates the basin and keeps the record floor; the conformer OBSERVATION inside it is
     #: linked evidence and follows the evidence rule. ``None`` when the determination has no observation (and so no group).
     observation_review_status: RecordReviewStatus | None

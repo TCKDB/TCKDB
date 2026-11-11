@@ -15,7 +15,7 @@ The order, which is the specification's:
 4. the actual recipe, normalised: equal unknown settings are not equivalence;
 5. coherent role use: the pinned geometry, the curvature witness on it, no latest/lowest-id witness and no Cartesian assembly
    of favourable pieces;
-6. the stationary-point owner (ADR 0012: magnitude against the stored tau, never counts) and scoped findings, each at its
+6. the stationary-point owner (magnitude against the stored tau, never counts) and scoped findings, each at its
    own subject and role: a failed unrelated rerun does not erase a coherent model, a same-target disproof cannot be evaded,
    and a curvature invalidation does not invalidate a separately valid recorded energy;
 7. the task's own accounting: scale purpose and application, rotor replacement, member and region counting, energy
@@ -912,7 +912,7 @@ def assess_candidate(
         profile's, with the terminal statuses out. A request never lifts this; a parent's approval never approves a source.
     :param candidate_statuses: What the candidate's own review status may be: ``effective_statuses`` plus the terminal
         statuses the request lifted (``eligibility``). ``None``: the same as ``effective_statuses``.
-    :param evidence_statuses: What a source calculation or a declared member must have to be used (ADR 0023): the evidence
+    :param evidence_statuses: What a source calculation or a declared member must have to be used: the evidence
         rule, which has no record floor. ``None``: the same as ``effective_statuses``. The determination's owner, a
         transition-state entry, is a record and keeps ``effective_statuses``.
     """

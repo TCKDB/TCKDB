@@ -60,11 +60,9 @@ from app.services.scientific_read.public_assessments import (
 )
 from app.services.scientific_read.reactions import search_reactions
 
-# ``trust`` is legal here, and it was not always. This surface used to
-# declare ``records[*].kinetics.trust`` — one level down, inside the
-# ``kinetics`` wrapper — while rejecting ``include=trust`` with
-# ``422 unknown_include_token``, so the field could never carry a value and
-# shipped as a permanent ``null``. The token is legal now, the value is
+# ``trust`` is legal here: ``records[*].kinetics.trust`` is declared one
+# level down, inside the ``kinetics`` wrapper, so the token must be accepted
+# for the field to carry a value. The value is
 # built for the returned page (see :func:`attach_kinetics_trust` below), and
 # the route drops the key when the caller did not ask for it.
 #
@@ -110,7 +108,7 @@ def search_kinetics(
     Returns kinetics records along with the resolved reaction/reaction_entry
     identity context. Composes :func:`search_reactions` and
     :func:`get_reaction_kinetics` — non-TS-backed kinetics surface with null
-    TS-chain provenance per Phase 2.2; nothing is fabricated.
+    TS-chain provenance; nothing is fabricated.
 
     :param session: SQLAlchemy session.
     :param request: Parsed request model.

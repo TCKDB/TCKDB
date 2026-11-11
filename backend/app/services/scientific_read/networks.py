@@ -195,7 +195,7 @@ def build_network_record(
 
     ``detail`` is True for the network's own detail read. Its solves (and the counts, envelope and kinetics flags that rest
     on them) are then embedded records of a served page: under ``curated`` they are shown badged unless rejected or
-    deprecated, and the counts agree with the list the page returns (ADR 0023 step 7). A search row keeps the record floor.
+    deprecated, and the counts agree with the list the page returns. A search row keeps the record floor.
     """
     # --- bulk-load counts + envelope -------------------------------------
     species_count = _count(
@@ -210,7 +210,7 @@ def build_network_record(
     channel_count = _count(
         session, NetworkChannel, NetworkChannel.network_id == n.id
     )
-    # Counts, the envelope and the kinetics flags rest on the solves the page shows (owner decision D5; the evidence rule
+    # Counts, the envelope and the kinetics flags rest on the solves the page shows (the evidence rule
     # on a served detail, the record floor on a search row).
     solve_rows = session.scalars(
         where_visible(
@@ -799,7 +799,7 @@ def _build_kinetics(
     # Solve ref + origin lookup. ``kind`` rides along on the query that was
     # already fetching the ref, so a consumer reading rates off the network
     # surface can tell a derived one from a transcribed one without also
-    # requesting ``include=solves`` (ADR 0010).
+    # requesting ``include=solves``.
     solve_rows = session.execute(
         select(NetworkSolve.id, NetworkSolve.public_ref, NetworkSolve.kind).where(
             NetworkSolve.id.in_(solve_ids)
@@ -864,7 +864,6 @@ def _build_kinetics(
                 # were selected *by* ``solve_id.in_(solve_ids)``, so the key is
                 # always present. A default here could only ever fabricate a
                 # provenance claim out of a lookup miss that cannot happen
-                # (ADR 0010).
                 network_solve_kind=solve_kind_by_id[r.solve_id],
                 channel_source_composition_hash=src,
                 channel_sink_composition_hash=sink,
@@ -1192,12 +1191,12 @@ def build_network_solve_record(
 
     ``detail`` is True for the solve's own detail read. Under ``curated`` the transition-state entries it names (its channel
     barriers) are then embedded records of a served detail and follow the evidence rule: shown with their badge unless
-    rejected or deprecated (ADR 0023 step 7, owner decision Q9). A search row (``detail=False``) counts the barriers of
+    rejected or deprecated. A search row (``detail=False``) counts the barriers of
     the entries the record floor lists, as a list does.
     """
     barrier_entries_shown = _barrier_entry_visible(detail=detail)
     parent = session.get(Network, s.network_id)
-    # Owner decision D1: the owner block is always built here; under ``profile=curated`` the ref guard blanks it when the
+    # The owner block is always built here; under ``profile=curated`` the ref guard blanks it when the
     # network is hidden (``NetworkContextSummary`` is a registered pointer and the field is nullable).
     network_ctx = NetworkContextSummary(
         network_id=parent.id if parent is not None else None,
@@ -1531,7 +1530,7 @@ def _visible_join(calculation, id_column):
     """``calculation.id = id_column`` that holds only for a calculation the evidence rule shows.
 
     Used for the per-participant sources of a state energy, where the service (not only the guard) must drop a source
-    whose calculation is withheld (rejected or deprecated under ``curated``; an unreviewed one is shown, ADR 0023):
+    whose calculation is withheld (rejected or deprecated under ``curated``; an unreviewed one is shown):
     ``partial_sources`` is computed here from the sources that remain, and a guard that deleted the element afterwards
     would leave it saying the sources are complete.
     """
@@ -1541,7 +1540,7 @@ def _visible_join(calculation, id_column):
 
 def _barrier_entry_visible(*, detail: bool):
     """The channel-barrier rows whose transition-state entry is shown: the record floor for a list row, the evidence rule
-    for the barriers embedded in a served solve detail (ADR 0023 step 7)."""
+    for the barriers embedded in a served solve detail."""
     visible = shown_predicate(
         NetworkSolveChannelBarrier.transition_state_entry_id, SubmissionRecordType.transition_state_entry, detail=detail
     )

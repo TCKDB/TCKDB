@@ -110,11 +110,10 @@ class HardFailReason(str, Enum):
     =============================================  ==========================================================
 
     That looks like pointless duplication, and reading it that way invites
-    someone to delete the read-time half. It is not duplication. Under ADR 0008
-    the upload tier *owns* each of these rules; these reasons exist to catch
+    someone to delete the read-time half. It is not duplication. The
+    upload tier *owns* each of these rules; these reasons exist to catch
     records that never went through the upload tier at all — archive restore,
-    data migrations, bulk importers, and direct SQL. That path is real: an
-    archive-restore defect was found in this repository recently, and a record
+    data migrations, bulk importers, and direct SQL. That path is real, and a record
     that entered that way has been validated by nothing.
 
     The practical consequence for whoever reads a report: when one of these six
@@ -159,7 +158,7 @@ class HardFailReason(str, Enum):
     #: Driven by ``artifact_integrity_event`` rows, so it asserts only
     #: what has actually been *detected*. Absence of this reason is not a
     #: verification claim: an artifact nobody has read has been checked
-    #: by nothing. See ADR 0014 and
+    #: by nothing. See
     #: ``backend/scripts/ops/verify_artifact_integrity.py``.
     artifact_integrity_failed = "artifact_integrity_failed"
     missing_required_identity = "missing_required_identity"
@@ -181,15 +180,10 @@ class HardFailReason(str, Enum):
     #: The stored record reports more than one imaginary mode and does
     #: not say which one is the reaction coordinate.
     #:
-    #: This replaced ``frequency_source_has_multiple_imaginary_modes_for_validated_ts``,
-    #: which ADR 0008 §9 named as a duplicate of the upload-time rule and
-    #: ADR 0012 turned into a live contradiction: a record accepted with
-    #: a warning at upload was hard-failed at read time by the surviving
-    #: copy of the retired count-based gate. The question asked here is
-    #: no longer a question about physics — "is n_imag one?" — but about
-    #: persisted state: does the record carry the designation the
-    #: blocking tier requires? A record that passed upload validation
-    #: always does, so the two tiers can no longer disagree.
+    #: The question asked here is not a question about physics — "is n_imag
+    #: one?" — but about persisted state: does the record carry the
+    #: designation the blocking tier requires? A record that passed upload
+    #: validation always does, so the two tiers cannot disagree.
     frequency_source_reaction_coordinate_not_designated_for_validated_ts = (
         "frequency_source_reaction_coordinate_not_designated_for_validated_ts"
     )
@@ -345,15 +339,12 @@ class EvidenceEvaluation(BaseModel):
     order and a diff between two records lines up check-for-check. It
     is not arbitrary and consumers may rely on it.
 
-    **Membership matches the old buckets exactly.** A check appears in
-    the map with the outcome whose bucket it used to occupy, and only
+    **Membership.** A check appears in the map with its outcome, and only
     then. The one class of check that is absent is a warning-kind check
-    that did not fire, which was equally absent from all four arrays:
-    warning-kind checks carry zero weight, so counting a non-fired one
-    as ``passed`` would make the number of ``passed`` values disagree
-    with :attr:`passed_count`. Consequently
-    ``passed_count == len([n for n, o in checks.items() if o is passed])``
-    still holds, as it did for ``len(passed_checks)``.
+    that did not fire: warning-kind checks carry zero weight, so counting
+    a non-fired one as ``passed`` would make the number of ``passed``
+    values disagree with :attr:`passed_count`. Consequently
+    ``passed_count == len([n for n, o in checks.items() if o is passed])``.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -449,7 +440,7 @@ class TransitionStateScopedAssessmentOutcome(str, Enum):
 class TransitionStateScopedAssessmentTask(BaseModel):
     """The one fixed question the badge asks, as the request body ``POST .../evidence/select`` takes.
 
-    Evidence only (owner decision O1): which declared saddle targets are supported by the evidence for a conventional
+    Evidence only: which declared saddle targets are supported by the evidence for a conventional
     first-order saddle, with no energy asked and no reactive-connectivity requirement. Send these fields to the
     evidence-selection endpoint of the same entry and the answer is the one in ``outcome`` and ``units``.
     """
@@ -510,8 +501,8 @@ def frequency_result_designates_its_reaction_coordinate(n_imag: Optional[int], m
     """Whether a frequency result passes the required ``reaction_coordinate_designated_for_ts`` check.
 
     One imaginary mode needs no designation, more than one needs a designated mode, none or an unrecorded count fails
-    (ADR 0012). It is the single rule the trust rubric and the saddle-point block share when several declared targets
-    each pin a frequency result (owner decision, 2026-10-19): the result that passes is the one both describe.
+    It is the single rule the trust rubric and the saddle-point block share when several declared targets
+    each pin a frequency result: the result that passes is the one both describe.
     """
     if n_imag is None or n_imag == 0:
         return False
@@ -526,7 +517,7 @@ class TransitionStateTrustContext:
 
     Check runners are pure and issue no queries, so the scoped assessment (which does) is run first and handed in.
     ``declared_curvature_refs`` are the public refs of the calculations the entry's declared targets pin in role
-    ``curvature``; the frequency-presence checks use them to choose the representative result (owner decision O2).
+    ``curvature``; the frequency-presence checks use them to choose the representative result.
     The evaluator takes this as a required keyword argument with no default: a caller that forgets it fails loudly
     instead of silently falling back to the unscoped answer.
     """

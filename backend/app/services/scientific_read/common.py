@@ -5,7 +5,7 @@ Centralizes:
   pagination bounds, include-token validation, temperature-range coherence)
 - review-rank lookup
 - review summary construction from a ``RecordReview`` set
-- temperature coverage computation per spec D8
+- temperature coverage computation
 - review-status filtering
 
 Each service module imports from here so the rules are defined once.
@@ -140,21 +140,16 @@ def validate_pagination(offset: int, limit: int) -> tuple[int, int]:
       (``composed_search_candidate_limit_exceeded``, "narrow the
       query"); reporting it generically here was the inconsistency.
 
-    All three used to be spelled ``invalid_pagination``, and the two
-    below carried their real name as a *second* token inside the message
-    (``"invalid_pagination: limit_too_large: …"``). A message naming two
-    candidate codes cannot pick one honestly, so
-    :func:`app.api.error_contract.validation_detail_code` refused to
-    promote either and a client received the generic ``validation_error``
-    — the code was catalogued, exported, and unreachable on these two
-    paths. One token per message is now checked statically by
+    A message naming two candidate codes cannot pick one honestly, so
+    :func:`app.api.error_contract.validation_detail_code` would refuse to
+    promote either and a client would receive the generic
+    ``validation_error``. One token per message is checked statically by
     ``tests/api/test_error_contract_catalogue_gate.py``.
 
     Both caps are published in ``context``
     --------------------------------------
     ``limit_too_large`` and ``offset_too_large`` are
-    :attr:`~app.api.code_catalogue.Shape.relationship` codes as of
-    Calvin's overrule of 2026-08-18: each asserts that a supplied value
+    :attr:`~app.api.code_catalogue.Shape.relationship` codes: each asserts that a supplied value
     and a server-side cap are in the wrong order, and the code names
     neither. A refusal that does not state the limit cannot be acted on
     without guessing, and both caps are *settings* — a deployment that
@@ -166,11 +161,10 @@ def validate_pagination(offset: int, limit: int) -> tuple[int, int]:
     configuration, and the supplied value is the caller's own request
     echoed back. Neither measures the corpus.
 
-    ``message_prefix=True`` keeps ``str(exc)`` byte-identical to the
-    plain ``ValueError`` these replaced, so the published ``detail`` does
-    not move; only the route into ``code`` changes, which is why the
-    catalogue entries move to
-    :attr:`~app.api.code_catalogue.Surface.coded_exception`.
+    ``message_prefix=True`` keeps ``str(exc)`` identical to a plain
+    ``ValueError``'s, so the published ``detail`` is the sentence itself;
+    the ``code`` is declared on the exception, so the catalogue entries are
+    on :attr:`~app.api.code_catalogue.Surface.coded_exception`.
     """
     if offset < 0:
         raise ValueError("invalid_pagination: offset must be >= 0")
@@ -320,7 +314,7 @@ def validate_includes(
     - Tokens not in ``legal`` raise ValueError → 422.
     - Empty / duplicate input is normalized to a set.
 
-    Phase D: callers pass ``internal_tokens={"internal_ids"}`` so the
+    Callers pass ``internal_tokens={"internal_ids"}`` so the
     ``internal_ids`` opt-in stays out of the ``all`` expansion. Callers
     that genuinely want everything must say ``include=all,internal_ids``.
     """
@@ -380,11 +374,9 @@ def validate_temperature_range(
         # was written; this one is the same shape and had nothing.
         #
         # ``message_prefix=True`` keeps ``str(exc)`` -- and so the
-        # response's ``detail`` -- byte-identical to the plain
-        # ``ValueError`` this replaced. Only the route into ``code``
-        # changes, from promoted-out-of-the-sentence to declared on the
-        # exception, which is why the catalogue entry moves to
-        # ``Surface.coded_exception``. Both values are the caller's own
+        # response's ``detail`` -- identical to a plain ``ValueError``'s.
+        # The ``code`` is declared on the exception, so the catalogue entry
+        # is on ``Surface.coded_exception``. Both values are the caller's own
         # query parameters, so nothing here is a row id.
         raise CodedValueError(
             "invalid_temperature_range",
@@ -409,8 +401,8 @@ def visible_statuses(
 ) -> set[RecordReviewStatus]:
     """Compute the set of review statuses visible per the request.
 
-    Combines the default-trust posture (D5) with an optional ``min_review_status``
-    threshold (D7, shallow). Rejected and deprecated statuses are excluded
+    Combines the default-trust posture with an optional ``min_review_status``
+    threshold (shallow). Rejected and deprecated statuses are excluded
     unless their respective opt-in flag is set; ``min_review_status`` further
     restricts the set to statuses at or above the threshold.
 
@@ -418,7 +410,7 @@ def visible_statuses(
     search and subresource-list service calls to decide which records are
     visible, so the ``curated`` record floor cannot be forgotten by an
     endpoint. (A detail read and a returned record's linked evidence follow
-    the evidence rule instead, ADR 0023.) Under ``profile=curated`` the floor
+    the evidence rule instead.) Under ``profile=curated`` the floor
     is raised to ``approved`` and the ``include_rejected`` /
     ``include_deprecated`` opt-ins are overridden — "only approved records,
     but also the rejected ones" is not a coherent request, and honouring it
@@ -427,7 +419,7 @@ def visible_statuses(
     The floor only ever *narrows*: a caller who passes a stricter
     ``min_review_status`` than the profile requires keeps their stricter
     value. Outside a scientific HTTP request the profile is ``exploratory``,
-    so this function behaves exactly as it did before Stage 3.
+    so this function applies no profile floor.
     """
     profile_floor = current_read_profile().review_floor
 
@@ -545,7 +537,7 @@ def build_pagination(
 
 
 # ---------------------------------------------------------------------------
-# Temperature coverage (D8)
+# Temperature coverage
 # ---------------------------------------------------------------------------
 
 
@@ -556,7 +548,7 @@ def temperature_coverage(
     record_min: float | None,
     record_max: float | None,
 ) -> TemperatureCoverage:
-    """Compute the TemperatureCoverage fragment per D8.
+    """Compute the TemperatureCoverage fragment.
 
     - If ``requested_min`` is supplied, full coverage requires record_min <= requested_min.
     - If ``requested_max`` is supplied, full coverage requires record_max >= requested_max.
@@ -619,7 +611,7 @@ def slice_for_pagination(
 
 
 # ---------------------------------------------------------------------------
-# Public-ref bulk loaders (Phase B)
+# Public-ref bulk loaders
 # ---------------------------------------------------------------------------
 
 
@@ -629,7 +621,7 @@ def refs_for_ids(
     """Bulk-load ``{id: public_ref}`` for ``model_cls`` over the given ids.
 
     Always single SQL round-trip; returns an empty dict for empty input.
-    Used by Phase B service builders to populate ``*_ref`` sibling fields
+    Used by service builders to populate ``*_ref`` sibling fields
     without an N+1 query per record.
     """
     id_list = [i for i in ids if i is not None]
@@ -651,10 +643,10 @@ def ids_below_review_floor(
 ) -> set[int]:
     """Which of ``record_ids`` the active read profile's review floor hides from a LIST.
 
-    The record floor only: since step 7 of ADR 0023 the detail-by-ref gate (``handles.py``) no longer mirrors it, and answers
-    404 for the withheld set alone. For the RECORD floor on a count or a matching filter (owner decision D5): a count of
+    The record floor only: the detail-by-ref gate (``handles.py``) does not mirror it, and answers
+    404 for the withheld set alone. For the RECORD floor on a count or a matching filter: a count of
     records must not include a record the profile hides. A count or level of a returned record's linked EVIDENCE uses the
-    evidence rule instead (``ids_withheld_as_evidence``, ADR 0023). It is not a ref rule: refs are withheld at the
+    evidence rule instead (``ids_withheld_as_evidence``). It is not a ref rule: refs are withheld at the
     response boundary by ``ref_guard``. Without a review floor (exploratory, or outside a scientific request) nothing is
     hidden and no query is made. Otherwise one statement.
     """
@@ -677,9 +669,9 @@ def review_floor_predicate(id_column: Any, record_type: SubmissionRecordType, *,
     ``profile`` defaults to the request's. A streaming caller, which outlives the request context, passes the profile it
     captured while the request was alive.
 
-    The RECORD floor, for a count or flag of records a list would show (owner decision D5) and for matching filters. The
+    The RECORD floor, for a count or flag of records a list would show and for matching filters. The
     count or flag of a returned record's linked evidence ("this entry has an IRC", "3 calculations") is
-    :func:`linked_evidence_predicate` since step 3 of ADR 0023. A missing review row reads as ``not_reviewed``, as everywhere
+    :func:`linked_evidence_predicate`. A missing review row reads as ``not_reviewed``, as everywhere
     else.
     """
     from app.services.scientific_read.handles import status_hidden_under_profile
@@ -707,7 +699,7 @@ def where_visible(stmt: Any, predicate: Any) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# The evidence rule (owner decision 2026-10-25, DR/ADR 0023)
+# The evidence rule
 # ---------------------------------------------------------------------------
 #
 # Three things are assigned to three rules under the curated profile. They must not be mixed up.
@@ -718,8 +710,7 @@ def where_visible(stmt: Any, predicate: Any) -> Any:
 #
 #   DETAIL-BY-REF  ``resolve_path_handle`` -> ``_gated_status`` in ``handles.py``, and the legacy detail reads
 #                  (``_legacy_reads.py``). Under ``curated`` they answer 404 for the withheld set below (rejected /
-#                  deprecated) only and serve every other record, badged (step 7 of ADR 0023, amending ADR 0006's second
-#                  seam). What a served detail embeds (a ``/full`` participant, a supersession successor, the usage a
+#                  deprecated) only and serve every other record, badged. What a served detail embeds (a ``/full`` participant, a supersession successor, the usage a
 #                  reference row lists) follows the evidence rule: ``detail_visible_statuses``, ``shown_predicate``.
 #
 #   EVIDENCE RULE  this section. Covers LINKED EVIDENCE of a returned record (source calculations, levels derived from
@@ -731,17 +722,16 @@ def where_visible(stmt: Any, predicate: Any) -> Any:
 # cannot be lifted by request. Under exploratory nothing is withheld as evidence, so every function here answers
 # "visible" and issues no query.
 #
-# STATUS (steps 2 to 7 of ADR 0023): matching in search, browse and select (``linked_evidence_predicate`` and
+# STATUS: matching in search, browse and select (``linked_evidence_predicate`` and
 # ``ids_withheld_as_evidence`` in every filter on linked calculations and observations), the service counts, flags and derived
 # levels of a returned record, the response-level ref guard (``ref_guard.py``: pointers in responses, the document modes, the
 # selection loaders' unavailable-evidence seam, the export batcher), the legacy entity reads, the ML export's conformer refs,
 # the trust evaluators (``trust_floor.py``) and the selection loaders' own evidence populations (``evidence_usable_statuses``
 # and ``evidence_visible_statuses`` in the structure, statmech, network and relative-energy loaders and the source-finding
-# gate) call this section. Named exception: the ML export's energy rows keep their calculations approved-only (owner decision
-# Q7, ``ml_dataset.ml_energy_row_floor``), and the made-under comparisons (step 6: a stored stamp is compared with a
+# gate) call this section. Named exception: the ML export's energy rows keep their calculations approved-only (``ml_dataset.ml_energy_row_floor``), and the made-under comparisons (a stored stamp is compared with a
 # profile-free recomputation, so the answer is the same under every profile; ``public_assessments._reproducibility_summary``).
-# Step 7: detail-by-ref (``resolve_path_handle``, the legacy detail reads) answers 404 for the withheld set only, and the
-# records a served detail embeds follow this rule. Nothing is still on the earlier rule (D6): the record floor decides lists,
+# Detail-by-ref (``resolve_path_handle``, the legacy detail reads) answers 404 for the withheld set only, and the
+# records a served detail embeds follow this rule. The record floor decides lists,
 # searches and selects, and every other record a read serves or names, that is not withheld, is shown badged.
 
 #: Review statuses whose linked evidence is withheld under a profile with a review floor.
@@ -776,7 +766,7 @@ def linked_evidence_withheld_values(*, profile: Any = None) -> list[str]:
 def read_profile_block(*, profile: Any = None) -> dict[str, Any]:
     """The ``read_profile`` block of a selection manifest: the profile, its review floor, and the evidence rule it applied.
 
-    ``linked_evidence_withheld`` is what ADR 0023 adds in manifest format 4: the review statuses whose linked evidence the
+    ``linked_evidence_withheld`` is, from manifest format 4, the review statuses whose linked evidence the
     profile withheld (``["deprecated", "rejected"]`` under ``curated``, ``[]`` otherwise).
     """
     profile = profile if profile is not None else current_read_profile()
@@ -818,7 +808,7 @@ def detail_visible_statuses(
     """The review statuses a DETAIL read shows of the records it embeds (a ``/full`` participant, a conformer group).
 
     Under ``curated`` a served detail shows every embedded record that is not in the withheld set (``rejected``,
-    ``deprecated``), badged (ADR 0023 step 7, owner decision Q9): the approved floor decides which records a list returns,
+    ``deprecated``), badged: the approved floor decides which records a list returns,
     not what a detail page rests on. The caller's own ``min_review_status`` still narrows, and the ``include_*`` opt-ins stay
     overridden. Without a floor (exploratory) this is :func:`visible_statuses`, so the default behaviour is unchanged.
     """
@@ -836,7 +826,7 @@ def evidence_usable_statuses(min_review_status: RecordReviewStatus | None = None
 
     The evidence-rule counterpart of ``visible_statuses(min_review_status=..., include_rejected=False,
     include_deprecated=False)``: the same set without the profile's record floor, because the floor decides which RECORDS a
-    select returns, not what a returned record rests on (ADR 0023). Terminal statuses are out; the caller's own
+    select returns, not what a returned record rests on. Terminal statuses are out; the caller's own
     ``min_review_status`` still narrows. It does not read the request's profile, so it is the same pure function of the
     caller's floor under every profile; under ``exploratory`` it equals ``visible_statuses(...)``, so an exploratory
     selection is unchanged. A replay judges a recorded manifest by this function, not by the process's own profile.
@@ -852,7 +842,7 @@ def shown_predicate(id_column: Any, record_type: SubmissionRecordType, *, detail
 
     A LIST (a search row, a count of what a list would show) keeps the approved record floor
     (:func:`review_floor_predicate`). A served DETAIL embeds its records as linked evidence, so under ``curated`` it shows
-    everything but the withheld set, badged (:func:`linked_evidence_predicate`, ADR 0023 step 7). ``None`` when the profile
+    everything but the withheld set, badged (:func:`linked_evidence_predicate`). ``None`` when the profile
     has no floor, so an exploratory statement is unchanged either way.
     """
     if detail:

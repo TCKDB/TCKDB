@@ -284,7 +284,7 @@ def validate_reaction_charge_conservation(
     destroyed by rearranging bonds, so the summed formal charge of the
     reactants equals that of the products. ``[OH-] + [H] -> H2O`` is not a
     reaction that is hard to compute — it is not a reaction, because it loses
-    an electron on the way across. Under ADR 0008 that is a **definition**, not
+    an electron on the way across. That is a **definition**, not
     an expectation: no correct calculation can produce it, so the check blocks
     rather than warns, and it sits beside
     :func:`validate_reaction_elemental_balance` because it is the same
@@ -310,7 +310,7 @@ def validate_reaction_charge_conservation(
     **Conservation, not neutrality.** A reaction may carry any net charge as
     long as both sides carry the same one. Requiring neutrality would refuse
     every ion-molecule reaction in the literature, which is exactly the false
-    positive ADR 0008 disqualifies a blocking check for.
+    positive a blocking check must not produce.
 
     **Electron-transferring processes balance here too.** Associative
     detachment (``OH- + H -> H2O + e-``), dissociative attachment,
@@ -325,8 +325,8 @@ def validate_reaction_charge_conservation(
     Charge conservation is definitional only if the participant list can be
     *complete*; with no way to name the electron, the rule would in fact be
     asserting "every participant was declared", which is an expectation about
-    the depositor rather than a definition of a reaction, and ADR 0008
-    disqualifies an expectation from blocking. The electron is what makes the
+    the depositor rather than a definition of a reaction, and an expectation
+    must not block. The electron is what makes the
     stated claim the claim actually enforced.
 
     Declaring one exempts nothing. Unlike a ``pseudo`` participant, an
@@ -429,7 +429,7 @@ def refuse_null_reaction_entry(
 ) -> None:
     """Refuse a bare reaction entry whose two sides are the same species entries.
 
-    Since the species key is the constitution (DR-0038), ``Z-2-butene -> E-2-butene`` has one
+    Since the species key is the constitution, ``Z-2-butene -> E-2-butene`` has one
     species on both sides, and the graph reaction (``chem_reaction``) accepts that. A reaction
     entry with the very same species entries on both sides (compared as multisets, so the order of
     the participants does not matter) converts nothing into nothing *unless the deposit carries
@@ -444,8 +444,8 @@ def refuse_null_reaction_entry(
 
     A transition state deposited later against an existing reaction entry is not affected: it
     attaches to the entry and creates no reaction entry, so this check does not run. The rule is
-    enforced on write from DR-0038's third part onward: a bare same-entries reaction entry cannot be
-    created now, and a degenerate reaction arrives with its transition state or kinetics. A database
+    enforced on write: a bare same-entries reaction entry cannot be
+    created, and a degenerate reaction arrives with its transition state or kinetics. A database
     whose entries were merged by the stereo-identity migration could in principle already hold one
     (the merge re-points structure participants generically); nothing here repairs such a row, since
     existing data is development data and a migration would stop with a list instead.
@@ -530,10 +530,10 @@ def validate_transition_state_composition(
     reaction it is attached to cannot be that reaction's transition state,
     whatever else is true of it — it is a contradiction of exactly the class
     ``validate_reaction_elemental_balance`` already refuses one column to the
-    left, and definitional under ADR 0008 rather than an expectation. Nothing
-    checked it before this function: the elemental-balance rule compares
-    reactants against products and has never mentioned the transition state, so
-    a saddle point with the wrong atoms was accepted.
+    left, and definitional rather than an expectation. The elemental-balance
+    rule compares reactants against products and does not mention the
+    transition state, so this check is what catches a saddle point with the
+    wrong atoms.
 
     The check must hold for **every** reaction, mapped or not. An atom map
     catches a formula mismatch implicitly, but only where a map was supplied,
@@ -551,7 +551,7 @@ def validate_transition_state_composition(
     Multiplicity is deliberately not checked. Spin is not conserved the way
     charge and atoms are: two doublets may react over a singlet or a triplet
     surface, and spin-forbidden reactions are real chemistry. A multiplicity
-    rule would fire on correct novel results, which ADR 0008 disqualifies.
+    rule would fire on correct novel results, which a blocking check must not do.
 
     The pseudo exemption is narrower here than in the balance checks, on purpose
     ----------------------------------------------------------------------------
@@ -790,7 +790,7 @@ def validate_ts_evidence_participant_composition(
 
     Why this blocks
     ---------------
-    Definitional under ADR 0008, and the register's own consistency demands it.
+    Definitional, and the register's own consistency demands it.
     "These saddle-point atoms become C2H4" while those atoms are C2O2H2 is a
     contradiction no correct calculation can produce — the same class of claim
     as :func:`validate_transition_state_composition`, one level finer. Crucially,
@@ -930,7 +930,7 @@ def validate_ts_evidence_participant_composition(
                         # No row ids: ``participant_key`` and
                         # ``participant_index`` are the depositor's own
                         # payload coordinates and ``smiles`` is what they
-                        # wrote (DR-0028 Requirement 2).
+                        # wrote.
                         context={
                             "field": field_path,
                             "participant_key": participant_key,
@@ -1036,12 +1036,11 @@ def _transition_state_element_counts(
     depositor's isotope labelling, while ``_element_counts_for_species`` reads
     RDKit's title-case ``GetSymbol()``. Comparing them raw makes a saddle point
     written ``CL``, ``c`` or ``D`` contradict a reaction it is in fact made of,
-    which refuses correct chemistry over a string — the failure ADR 0008 puts
-    out of bounds for a blocking check. ``b4e7c1d20f83`` canonicalises the case
-    at ingestion, which makes ``CL`` and ``c`` rare here rather than absent;
-    ``D`` and ``T`` are never absent from rows deposited before
-    ``docs/adr/0022`` (which stored them verbatim and cannot be rewritten), and
-    are resolved here for those. Both halves of the resolution therefore stay.
+    which refuses correct chemistry over a string — a failure a blocking check
+    must not have. Ingestion canonicalises the case, which makes ``CL`` and
+    ``c`` rare here rather than absent; ``D`` and ``T`` can be present in rows
+    that stored them verbatim, and are resolved here for those. Both halves of
+    the resolution therefore stay.
     """
 
     if transition_state_geometry_id is not None:
@@ -1311,8 +1310,8 @@ def resolve_chem_reaction(
     """Resolve or create the graph-identity reaction layer for an upload.
 
     :param warnings_out: Optional sink. When a graph reaction with the same participants and the
-        opposite ``reversible`` value is stored, a ``reaction_reversible_twin`` warning is appended
-        (ADR 0008 warn tier): the deposit is accepted and attached to the reaction it named, and the
+        opposite ``reversible`` value is stored, a ``reaction_reversible_twin`` warning is appended:
+        the deposit is accepted and attached to the reaction it named, and the
         depositor is told the other one exists. Identity is unchanged.
     :returns: Existing or newly created ``ChemReaction`` row.
     """

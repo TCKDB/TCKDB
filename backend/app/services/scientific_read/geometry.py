@@ -108,7 +108,7 @@ def get_geometry(
     # ``docs/specs/public_read_abuse_controls.md``.
     cap = settings.max_geometry_atoms_public
     if cap and geometry.natoms is not None and geometry.natoms > cap:
-        # A relationship code as of 2026-08-18: a supplied geometry's
+        # A relationship code: a supplied geometry's
         # size and a configured cap, neither named by the code. Both
         # numbers are publishable.
         #

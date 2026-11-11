@@ -6,7 +6,7 @@ species identity, energy (when applicable), level of theory, software,
 optional conformer context, geometry IDs, validation, review state, and
 provenance.
 
-Composition strategy (additive on top of Phase 6):
+Composition strategy (additive on top of ``search_species``):
 
 1. Resolve species/species_entries via :func:`search_species`. If
    ``species_entry_id`` was supplied as a handle, validate it exists
@@ -246,7 +246,7 @@ def search_species_calculations(
     )
     _validate_ranking(request)
 
-    # Phase C: reconcile species_id+species_ref, species_entry_id+
+    # Reconcile species_id+species_ref, species_entry_id+
     # species_entry_ref, and level_of_theory_id+level_of_theory_ref.
     species_pair = reconcile_species_pair(
         session,
@@ -503,7 +503,7 @@ def _resolve_species_entry_context(
 ) -> dict[int, SpeciesCalculationsSpeciesContext]:
     """Return mapping from species_entry_id → SpeciesCalculationsSpeciesContext.
 
-    Phase C: callers pre-reconcile id/ref pairs and pass the effective
+    Callers pre-reconcile id/ref pairs and pass the effective
     integer ids in. Falls back to ``request.species_id`` / ``request.
     species_entry_id`` for backwards compatibility.
     """
@@ -541,9 +541,9 @@ def _resolve_species_entry_context(
         }
 
     # Path 3: chemistry-first via search_species. Require at least one
-    # identifier (matching Phase 6 search_thermo behavior). Phase C adds
-    # species_ref / species_entry_ref / level_of_theory_ref as valid
-    # identifier sources, but those are already consumed by the
+    # identifier (matching search_thermo behavior). The
+    # species_ref / species_entry_ref / level_of_theory_ref filters are valid
+    # identifier sources too, but those are already consumed by the
     # reconcile pass above — if we got here, none of those resolved.
     if not any(
         v is not None
@@ -633,7 +633,7 @@ def _query_candidate_calculations(
 ) -> list[_CalcRow]:
     """Pull calculations for the resolved species_entries with column filters.
 
-    Phase C: ``effective_lot_id`` is the reconciled
+    ``effective_lot_id`` is the reconciled
     level_of_theory_id (after merging the optional
     ``level_of_theory_ref``). Falls back to
     ``request.level_of_theory_id`` for backwards compatibility.
@@ -971,7 +971,7 @@ def _load_freq_summaries(
 ) -> dict[int, CalculationFreqResultSummary]:
     """Bulk-project ``calc_freq_result`` for a whole page, in one statement.
 
-    The two mode counts ADR 0012 needs ride along as correlated
+    The two imaginary-mode counts ride along as correlated
     aggregates on the same ``SELECT`` — the identical construction
     :func:`app.services.scientific_read.calculations._build_freq_summary`
     uses for a single record, widened from ``= :id`` to ``IN (:ids)``.
@@ -1027,11 +1027,11 @@ def _load_freq_summaries(
             imaginary_mode_tau_cm1=row.imaginary_mode_tau_cm1,
             imaginary_mode_tau_basis=row.imaginary_mode_tau_basis,
             imaginary_mode_structural_flag=row.imaginary_mode_structural_flag,
-            # ADR 0012's rule for when this count cannot honestly be
+            # The rule for when this count cannot honestly be
             # taken has exactly one implementation, and it is the one the
             # calculation detail surface uses. Re-deriving it here would
             # make two surfaces able to disagree about the same stored
-            # row, which is the failure that decision exists to prevent.
+            # row.
             n_imag_at_or_above_tau=_count_at_or_above_tau(
                 tau_cm1=row.imaginary_mode_tau_cm1,
                 n_imag=row.n_imag,

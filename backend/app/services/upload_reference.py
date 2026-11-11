@@ -55,19 +55,18 @@ an id this API issued it (see the schema rules' one sanctioned
 exception). Since #230 both spellings arrive here.
 
 They share a code per kind of row, and that is the point rather than an
-economy. #195 landed because the *status* used to depend on how the
-caller spelled the name — 404 for an id, 422 for a ref, for one condition
-— and "which spelling did you use" is not a distinction a depositor can
-act on. Splitting the *code* on the same axis would rebuild that defect
-one field down: a missing statmech is repaired by depositing a statmech,
+economy. The *status* must not depend on how the
+caller spelled the name — "which spelling did you use" is not a distinction
+a depositor can act on. Splitting the *code* on the same axis would
+reintroduce that dependence one field down: a missing statmech is repaired by depositing a statmech,
 whether the payload asked for it by ``statmech_ref`` or by
 ``existing_statmech_id``. ``context['field']`` says which field asked,
 which is the part a client actually branches on.
 
 What the two spellings do **not** share is disclosure. A public ref is
 echoed back, because the caller wrote it and quoting it is what makes the
-refusal diagnosable. A row id is **not**: DR-0028 Requirement 2 and
-:func:`app.api.errors.not_found` both refuse it, on the grounds that a row
+refusal diagnosable. A row id is **not**: :func:`app.api.errors.not_found`
+refuses it, on the grounds that a row
 id is an implementation detail of one database instance which no public
 surface is keyed on, and a client that learns to read one builds against
 something TCKDB never promised to keep stable. Whoever needs it is the
@@ -170,12 +169,12 @@ def unknown_reference(
         quoting it is what makes the refusal diagnosable.
     :param row_id: A **database row id** the caller supplied in an
         ``existing_*_id`` field. Logged and never returned, because a row
-        id is not a public surface (DR-0028 Requirement 2). ``field``
+        id is not a public surface. ``field``
         already says which citation failed, which is the half a client
         can act on.
     :param remedy: What to do about it, in one sentence.
     :param extra: Further structured context. Never a database primary
-        key (DR-0028 Requirement 2); a public ref or a digest is fine.
+        key; a public ref or a digest is fine.
     :raises TypeError: If neither or both of ``ref`` and ``row_id`` are
         given. A programming error rather than a refusal, so it is not a
         coded 4xx: silently guessing which disclosure rule was meant is

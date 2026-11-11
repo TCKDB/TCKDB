@@ -1,4 +1,4 @@
-"""What a linked composite calculation says about geometry and frequency levels (ADR 0021, R1).
+"""What a linked composite calculation says about geometry and frequency levels.
 
 :func:`app.services.calculation_levels.derive_levels` takes a plain
 :class:`~app.services.calculation_levels.RoleCalcInfo` per linked calculation.

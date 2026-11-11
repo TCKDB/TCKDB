@@ -122,7 +122,7 @@ def structure_comment(
     multiplicity: int | None = None,
     isotope_key: str | None = None,
 ) -> str:
-    """The ``SMILES=`` traceability text for one species entry, with its stereo (DR-0038).
+    """The ``SMILES=`` traceability text for one species entry, with its stereo.
 
     The species SMILES is the stereo-blind constitution, so an entry's stereo is printed beside it
     rather than left to be read as "not distinguished":

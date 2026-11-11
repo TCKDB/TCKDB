@@ -26,11 +26,10 @@ the wrapped workflow raises, control never reaches
 its own. There is therefore no orphan-submission state to clean up on the
 synchronous path.
 
-**The audit event does not get a vote on the science.** An earlier version of
-this note argued the coupling was a feature — "the whole transaction rolls
-back together" — and that reasoning is what produced the 2026-08-05 incident
-one line further down, where a failing idempotency receipt destroyed the
-upload it receipted for. The two directions are not symmetric:
+**The audit event does not get a vote on the science.** Coupling the two so
+that "the whole transaction rolls back together" would let a failing
+audit row destroy the upload it describes. The two directions are not
+symmetric:
 
 * Workflow fails → the audit event is meaningless and must roll back. Kept.
 * Audit event fails → the science is already correct, already persisted, and
@@ -488,11 +487,9 @@ def audit_sync_upload_failure(kind: SubmissionKind) -> Callable:
     inside the function it wraps, and the route function is not where an
     upload finishes. ``get_write_db`` commits in dependency *teardown*, after
     the route has returned — so a commit-time failure raises outside this
-    ``try`` entirely and used to leave **no failed-upload audit row for
+    ``try`` entirely and would leave **no failed-upload audit row for
     precisely the failure class that matters most**: the one where the
-    response was already determined and the work is already gone. The
-    2026-08-05 incident was exactly such a failure, and it is invisible in the
-    audit tables for exactly this reason.
+    response was already determined and the work is already gone.
 
     The intent (who, what kind) is therefore parked on the write session under
     :data:`SYNC_UPLOAD_AUDIT_KEY` *before* the handler runs, so

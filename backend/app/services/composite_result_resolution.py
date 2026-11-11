@@ -1,4 +1,4 @@
-"""Persisting a program-run composite energy, and the checks around it (ADR 0021, P3a).
+"""Persisting a program-run composite energy, and the checks around it.
 
 A ``composite`` calculation is one composite energy at a scheme-bound level of
 theory. This module owns the rules that decide whether such a calculation is
@@ -8,12 +8,12 @@ output) reported: TCKDB never stores a total it computed itself.
 
 What is refused, and why
 ------------------------
-Every refusal is a block-tier check under ADR 0008, because each asserts a
+Every refusal is a block-tier check, because each asserts a
 definition rather than an expectation:
 
 * ``composite_assembled_not_accepted`` -- ``assembly = assembled`` means the
   energy is arithmetic over other deposited calculations, which only a
-  user-built scheme (``extrapolation`` / ``additive``, ADR 0021 P5) can say. An
+  user-built scheme (``extrapolation`` / ``additive``) can say. An
   assembled composite at a named method, or at a level bound to no scheme, is
   refused: there is no recipe to check its total against. (The wire refuses the
   same shape earlier; this is the seam's own guard.)
@@ -38,8 +38,7 @@ The warning tier
 ----------------
 :func:`collect_named_composite_deposit_warnings` answers a *new* ``opt`` or
 ``sp`` at a catalogued named-method level with ``named_composite_deposited_as_opt``
-or ``..._sp``. Owner decision 7 (2026-10-01): warn now, refuse once the ARC
-adapter ships the composite shape. Refusing today would block every real
+or ``..._sp``. It warns and does not refuse: refusing would block every real
 CBS-QB3 deposit, because the producer cannot yet send the right shape.
 """
 
@@ -295,9 +294,9 @@ def collect_named_composite_deposit_warnings(
     or ``sp`` it is a calculation that was not what ran, and it is invisible to
     the composite level rules. The deposit is kept exactly as sent.
 
-    **Warns, never refuses (owner decision 7, ADR 0021).** The ARC adapter
+    **Warns, never refuses.** The ARC adapter
     cannot yet send the ``composite`` shape, so refusing now would block every
-    real deposit; the refusal follows once it does.
+    real deposit.
 
     :param session: Active SQLAlchemy session.
     :param calculation_ids: Every calculation id the request persisted (or

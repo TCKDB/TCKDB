@@ -72,7 +72,7 @@ from app.versioning import same_value
 #: longer holds rules, rule matches, pair checks, edges, overridden or unused edges, opposing pairs or cycles, and the
 #: request no longer holds an objective, a reference model or reference outputs. Version 3: the request records its
 #: filters and its eligibility settings, and the population records the funnel (counted in solves). Version 4: ``visibility`` records the review statuses
-#: whose linked evidence the profile withheld (ADR 0023).
+#: whose linked evidence the profile withheld.
 MANIFEST_FORMAT_VERSION = 4
 MANIFEST_FORMAT_NAME = "network_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(

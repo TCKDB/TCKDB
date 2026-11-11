@@ -62,10 +62,10 @@ What is deliberately not compared
 **Elements, not nuclides.** ``D`` and ``T`` name hydrogen, so they count as the
 hydrogen they are, and ``[2H]`` counts as ``H``, so an isotopologue is never a
 composition mismatch. The nuclide they also name is not ignored, only judged
-elsewhere: ``parse_xyz`` reads a ``D``/``T`` spelling as a 2H/3H declaration
-(``docs/adr/0022``), and isotope agreement is a separate rule with its own code
+elsewhere: ``parse_xyz`` reads a ``D``/``T`` spelling as a 2H/3H
+declaration, and isotope agreement is a separate rule with its own code
 (:func:`~app.services.species_resolution.assert_geometry_isotopes_match_identity`),
-which owns it under ADR 0008 section 9.
+which owns it.
 
 **Counts, not positions.** No coordinate is read. A scan point at 5 A, an IRC
 endpoint in a product well, a constitutional isomer and a dissociated fragment
@@ -83,7 +83,7 @@ What never appears in the refusal
 ---------------------------------
 Row ids. ``context`` names the field the depositor wrote, which is the
 identifier they can act on; the ids of the rows that disagreed go to the log,
-where the operator is (DR-0028 Requirement 2).
+where the operator is.
 """
 
 from __future__ import annotations

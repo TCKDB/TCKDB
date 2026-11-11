@@ -2,7 +2,7 @@
 
 What a local key is
 -------------------
-An upload payload never carries a database id (DR-0029 Requirement 1).
+An upload payload never carries a database id.
 When a thermo record has to say which calculations produced its number,
 or a torsion has to name its rotor scan, or a solve has to cite the jobs
 behind it, the payload writes a *local key* — a string the same request
@@ -12,83 +12,60 @@ the payload is resolved through it.
 
 Why the lookup is a function and not a subscript
 ------------------------------------------------
-It was a subscript, twenty-one times: nineteen across the three bundle
-workflows and one each in the standalone thermo and transport product
-workflows. A key naming nothing was a ``KeyError``: an unhandled 500
-with nothing in it saying which key was wrong, where the honest answer
-is a 422 naming the key and the keys that *are* declared.
+A raw subscript on the key map turns a key naming nothing into a ``KeyError``:
+an unhandled 500 with nothing in it saying which key was wrong, where the
+honest answer is a 422 naming the key and the keys that *are* declared.
 
-The usual defence was that the request schema already refuses an
-undeclared key before the workflow runs. That defence was true of most
-sites and *false* of two, and it was false in the way this arrangement
-always fails: the guard lives in ``tckdb_schemas`` — a different
-distributable package from the workflow it protects — so the two drift
-without anything going red. ``NetworkPDepUploadRequest`` narrows a
-**species** statmech's source and torsion keys to that species's own
-calculations and does not do the same for a **transition state**'s, so a
-PDep TS statmech naming a key nothing declared reached
-``_persist_statmech_block`` and raised ``KeyError`` out of the route.
-That is not a hypothetical: ``tests/api/test_api_pdep_ts_statmech_
-undeclared_key.py`` provokes it on the wire.
+The usual defence is that the request schema already refuses an
+undeclared key before the workflow runs. That defence does not hold
+everywhere: the guard lives in ``tckdb_schemas`` — a different
+distributable package from the workflow it protects — so the two can drift
+without anything going red, and some schema guards are conditional on a
+branch. ``NetworkPDepUploadRequest`` narrows a **species** statmech's
+source and torsion keys to that species's own calculations and does not do
+the same for a **transition state**'s, so the workflow's resolver is what
+refuses a PDep TS statmech naming a key nothing declared, with a 422
+naming the key. ``tests/api/test_api_pdep_ts_statmech_undeclared_key.py``
+asserts it on the wire.
 
 Keeping the schema checks is deliberate. They refuse one layer earlier,
 they run in a client that never talks to a server, and a duplicated
-check costs nothing while a missing one costs a 500. What changes here is
-that the workflow no longer *depends* on them being right.
+check costs nothing while a missing one costs a 500. The workflow does
+not *depend* on them being right.
 
-The other six namespaces, and what measuring them found
---------------------------------------------------------
-Calculation keys were done first and the work deliberately stopped
-there, because a species key and a channel key are different keys with
-different remedies. Six more namespaces were then measured across
-``computed_reaction`` and ``network_pdep`` — species, network state,
-network channel, micro reaction, transition state, geometry — for 27
-cross-reference reads. The expectation going in was that the schema
-coverage would be uneven. It was, and worse than the calculation-key
-pass found:
+The other namespaces
+--------------------
+Species, network state, network channel, micro reaction, transition state
+and geometry keys are resolved the same way:
 
-* ``computed_reaction`` was clean. Every one of its cross-references is
-  narrowed by ``ComputedReactionUploadRequest.validate_species_key_refs``
-  before the workflow runs.
-* ``network_pdep`` had **five** wire-reachable 500s, in five of the six
-  namespaces. Four of them — a solve's ``state_energies[].state_key``
-  and its ``channel_barriers[]`` channel, micro-reaction and
-  transition-state keys — are guarded only inside the
-  ``kind == 'computed'`` branch of
+* ``computed_reaction``: every cross-reference is narrowed by
+  ``ComputedReactionUploadRequest.validate_species_key_refs`` before the
+  workflow runs.
+* ``network_pdep``: a solve's ``state_energies[].state_key`` and its
+  ``channel_barriers[]`` channel, micro-reaction and transition-state keys
+  are guarded by the schema only inside the ``kind == 'computed'`` branch of
   ``validate_mechanistic_channel_evidence``, so a ``reported`` solve
-  (ADR 0010: k(T,P) transcribed from a paper, holding none of the
-  master-equation inputs) walked straight past them into a ``KeyError``.
-  The comment above that branch says a reported solve "still has to point
-  it at a real path"; for three of those four fields it did not.
-* The fifth is the #218 asymmetry again, on a different field.
-  ``NetworkSpeciesIn`` narrows a species calculation's ``geometry_key``
+  (k(T,P) transcribed from a paper, holding none of the master-equation
+  inputs) is not guarded by the schema, so the workflow's resolvers refuse
+  an undeclared key, each with a coded 422 naming the key.
+* ``NetworkSpeciesIn`` narrows a species calculation's ``geometry_key``
   to that species's own conformer geometries; ``TransitionStateIn`` has
   no such validator, and ``validate_key_references`` checks TS
   calculations against the *global* geometry namespace. So a transition
   state's calculation could legally name a later transition state's
-  geometry, which the workflow had not resolved yet. The same shape of
-  gap, found the same way: by asking whether the guard covers *both*
-  branches rather than assuming that one implies the other.
-
-The lesson the calculation-key pass drew — that a guard in a different
-distributable package drifts silently — is only half of it. Four of these
-five gaps are in ``backend/app/schemas``, the *same* package as the
-workflow. What they have in common is not distance but conditionality:
-a guard that runs for one member of an enum and not the other, and a
-workflow that runs for both.
+  geometry, which the workflow has not resolved yet.
 
 What the refusal carries
 ------------------------
 The offending field, the key as the depositor wrote it, and the keys that
 are declared — because naming the alternatives is what turns a refusal
 into a mechanical fix. Never a row id: the ids are the *values* of these
-maps and they stay there, out of anything a depositor reads (DR-0028
-Requirement 2).
+maps and they stay there, out of anything a depositor reads.
 
 Where the codes live now, and why not here
 ------------------------------------------
 The codes this module raises are *defined* in
-:mod:`tckdb_schemas.local_key_codes` and re-exported below. ADR 0017: a
+:mod:`tckdb_schemas.local_key_codes` and re-exported below. A
 refusal's code and context belong to the check, not to the layer that
 happens to run it. The request-schema validators that refuse these same
 mistakes one layer earlier may not import ``app`` (the wire package's
@@ -123,7 +100,7 @@ from app.api.error_contract import CodedValueError
 
 #: Re-exported so no backend import had to move when the codes did, and so
 #: this module still reads as the place the seam's codes come from. They are
-#: *defined* in :mod:`tckdb_schemas.local_key_codes` — see ADR 0017 and that
+#: *defined* in :mod:`tckdb_schemas.local_key_codes` — see that
 #: module's docstring — because a request-schema validator refuses the same
 #: mistake one layer earlier and may not import ``app``.
 __all__ = [
@@ -245,7 +222,7 @@ def resolve_declared_key(
         f"{available} {remedy}".rstrip(),
         # Built by the wire package's helper, not spelled out here, so the
         # request-schema validator that refuses this same mistake one layer
-        # earlier cannot report a different set of facts (ADR 0017).
+        # earlier cannot report a different set of facts.
         context=undeclared_key_context(field=field, key=key, declared=known),
         message_prefix=False,
     )
@@ -260,7 +237,7 @@ def resolve_calculation_key(
 ) -> T:
     """Resolve one upload-local *calculation* key, or refuse with a code.
 
-    The seam every raw calc-key subscript now goes through, in all five
+    The seam every raw calc-key subscript goes through, in all five
     workflows that resolve a calculation by local key —
     ``computed_species``, ``computed_reaction``, ``network_pdep``,
     ``thermo`` and ``transport``.

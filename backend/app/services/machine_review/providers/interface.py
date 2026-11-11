@@ -105,7 +105,7 @@ class MachineReviewProvider(Protocol):
 #: :class:`MachineReviewStatus` carries all five because the *stored* review
 #: uses all five; the prompt asks for three. Nothing enforced that gap, so a
 #: model could pick either reserved token and have it believed all the way to
-#: the surface. MEASURED consequence before this guard: a model answering
+#: the surface. Without this guard, a model answering
 #: ``{"status": "not_run"}`` produced a recorded audit event and a page that
 #: told an admin "the machine reviewer is switched off in this deployment, so
 #: no provider was asked anything and nothing was recorded" -- three

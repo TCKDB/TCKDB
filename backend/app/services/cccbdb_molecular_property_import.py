@@ -27,8 +27,7 @@ Design contract
   dedupe pre-check. A second import of the same payloads yields
   ``duplicate`` dispositions instead of new rows, and opens no new
   submission (see below).
-* **Every inserted row is linked to a submission (Phase C-E5 review round
-  3).** Mirrors ``app.services.thermoml_cp_import``: one
+* **Every inserted row is linked to a submission.** Mirrors ``app.services.thermoml_cp_import``: one
   ``Submission(source_kind=bulk_import)`` is opened per run whenever the
   run's dedupe pre-check finds at least one row that would newly insert,
   every row this run actually inserts is linked to it via
@@ -202,14 +201,14 @@ class CCCBDBMolecularPropertyImportResult:
 # ---------------------------------------------------------------------------
 
 
-# _IdentityResolution / _identity_hint / _resolve_identity now live in
-# app.services.external_observation_identity (Phase C-E3 extraction);
+# _IdentityResolution / _identity_hint / _resolve_identity live in
+# app.services.external_observation_identity;
 # imported above and aliased so the rest of this module (and any external
 # caller importing these private names) sees identical behavior.
 
 
 # ---------------------------------------------------------------------------
-# Submission wrapper (Phase C-E5 review round 3)
+# Submission wrapper
 # ---------------------------------------------------------------------------
 
 

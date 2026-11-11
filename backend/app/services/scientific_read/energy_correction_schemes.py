@@ -129,7 +129,7 @@ def build_energy_correction_scheme_record(
     """Project one EnergyCorrectionScheme row into the public record shape.
 
     ``detail`` is True for the scheme's own detail read: its applications to transition-state entries are then linked
-    evidence, shown under ``curated`` unless withheld (ADR 0023 step 7). A search row keeps the record floor.
+    evidence, shown under ``curated`` unless withheld. A search row keeps the record floor.
     """
     atom_n = _count_atom_params(session, ecs.id)
     bond_n = _count_bond_params(session, ecs.id)
@@ -243,8 +243,8 @@ def applied_target_visible(*, detail: bool = False):
     """Condition on ``AppliedEnergyCorrection``: its target is not a transition-state entry the profile hides.
 
     ``None`` under the default profile. A species or reaction entry is a scoping parent, never hidden; the application of
-    a scheme to a transition-state entry the record floor hides is not listed by a search (owner decision D5). The scheme's
-    own detail (``detail=True``) lists it unless the entry is withheld (ADR 0023 step 7).
+    a scheme to a transition-state entry the record floor hides is not listed by a search. The scheme's
+    own detail (``detail=True``) lists it unless the entry is withheld.
     """
     visible = shown_predicate(
         AppliedEnergyCorrection.target_transition_state_entry_id,
@@ -466,12 +466,11 @@ def _build_lot_summary(
 def _build_software_release_summary(
     session: Session, software_release_id: int | None
 ) -> SoftwareReleaseSummary | None:
-    """ECS stores ``software_release_id`` (correction-scheme-provenance
-    plan v2 §3) -- a real FK to ``software_release``. Build the summary
+    """ECS stores ``software_release_id`` -- a real FK to
+    ``software_release``. Build the summary
     from an actual release→software join; never fabricate one.
 
-    ``FrequencyScaleFactor`` gained the same release grain in its own
-    sibling revision (correction-scheme-provenance plan v2 §6), and
+    ``FrequencyScaleFactor`` has the same release grain, and
     ``app.services.scientific_read.frequency_scale_factors`` has a
     same-named function of the same shape -- kept as a distinct helper
     rather than merged, since the two surfaces share no base module.

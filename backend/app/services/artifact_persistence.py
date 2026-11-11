@@ -256,7 +256,7 @@ def _store_and_record(
         # point at it are affected, not just this upload. Relabelling it
         # ``ArtifactStorageUnavailable`` told the uploader to retry a
         # condition retrying cannot fix, and discarded the one moment TCKDB
-        # had noticed. Record it, then let it out as itself (ADR 0014).
+        # had noticed. Record it, then let it out as itself.
         record_from_error(
             exc,
             detected_during=(

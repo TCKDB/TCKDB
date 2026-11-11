@@ -18,7 +18,7 @@ formula or SMILES (those are proposal-only signals, surfaced as
 warnings).
 
 :func:`ground_state_minimum_entries_for_species` is the shared definition
-of "compatible entry" behind that rule (Phase C-E5 review round 2). It has
+of "compatible entry" behind that rule. It has
 a second caller with a different consequence drawn from the same query:
 the curator-only ``attach_observation_identity`` service
 (``app/services/observation_identity_attach.py``) accepts *any* member of

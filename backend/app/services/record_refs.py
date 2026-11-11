@@ -5,7 +5,7 @@ The private review surfaces address records by their internal database id:
 machine-review projection uses the stringified id as its matching key (see
 ``app.services.machine_review.audit_adapter``'s "Internal-id addressing").
 That is workable for machinery, but a *reader* cannot look up a row id --
-DR-0028 Req 2 keeps internal ids out of what they are shown, and
+internal ids are kept out of what they are shown, and
 ``public_ref`` is the identifier every scientific read route already answers
 to. This module is the one place that crosses from one to the other.
 
@@ -19,13 +19,9 @@ same refusal :mod:`app.services.scientific_read.supersession` makes about
 public ref is the prerequisite for naming its rows, not something a caller
 may work around.
 
-``molecular_property_observation`` (``MolecularPropertyObservation``) used to
-be the second exception -- Phase C-E1 added the enum member without a public
-ref. Phase C-E5 gave the table ``public_ref`` (migration ``d2f4a7c1b8e6``,
-``mpo_`` prefix) alongside its first public read
-(``GET /scientific/species-entries/{id}/observations``), so it now resolves
-through this module like every other ref-bearing type; nothing here had to
-change to pick that up, since the set below is derived from the column, not
+``molecular_property_observation`` (``MolecularPropertyObservation``) carries
+``public_ref`` (``mpo_`` prefix), so it resolves through this module like
+every other ref-bearing type; the set below is derived from the column, not
 retyped.
 
 The mapping from record type to table is not written here -- it is
@@ -112,10 +108,8 @@ def resolve_record_public_refs(
 #: ``ValueError``. A coded refusal raised anywhere beneath such a handler loses
 #: its ``code`` and ``context``.
 #:
-#: ``tests/api/test_coded_exception_reraise_gate`` caught exactly that shape on
-#: 2026-09-14, while this helper still lived in ``app/api/routes/admin.py``.
-#: **It would not catch it here:** that gate walks ``backend/app/api`` only, so
-#: moving the helper into the service layer moved it out of the gate's reach.
+#: ``tests/api/test_coded_exception_reraise_gate`` catches that shape, but it
+#: walks ``backend/app/api`` only, so it does not reach this service-layer helper.
 #: The lookup below is what keeps the property, not the gate.
 _RECORD_TYPE_BY_VALUE: dict[str, SubmissionRecordType] = {
     record_type.value: record_type for record_type in SubmissionRecordType

@@ -113,7 +113,7 @@ no test can enter is the failure mode this repository produces most.
 
 What ``context`` may carry
 --------------------------
-No database primary key (DR-0028 Requirement 2), which rules out the
+No database primary key, which rules out the
 selection ids and the group ids — the obvious way to disambiguate and the
 one that is not available. Every discriminator here is a public-surface
 value instead: a group **label**, a group **public ref**, an assignment

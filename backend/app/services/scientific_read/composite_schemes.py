@@ -1,4 +1,4 @@
-"""Service implementation for the composite-scheme detail read (ADR 0021).
+"""Service implementation for the composite-scheme detail read.
 
 ``GET /scientific/composite-schemes/{ref}`` returns one recipe: its identity,
 its terms and their level-of-theory inputs, and the levels of theory bound to

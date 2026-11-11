@@ -5,7 +5,7 @@ made of the wrong elements. It should not shrug when its own object
 store hands back bytes that are not what it stored. This module is where
 that position stops being a log line: a detected digest mismatch becomes
 an ``artifact_integrity_event`` row, and the trust evaluator reads those
-rows at read time (ADR 0014).
+rows at read time.
 
 Two properties are load-bearing and neither is negotiable:
 
@@ -329,13 +329,7 @@ def digests_with_recorded_breaks(
     clean read would turn an incident log into a download log.
 
     A projection of :func:`latest_integrity_observations` rather than a
-    second query. It used to be its own ``SELECT sha256, finding`` with
-    its own ``ORDER BY``, and its docstring described a batching caller
-    in the trust read paths that it does not have -- the evaluator reads
-    the ``integrity_events`` relationship instead. Two spellings of
-    "latest" agreed on every population anyone could construct, which is
-    the argument for collapsing them while they still do rather than
-    after they stop.
+    second query, so there is one definition of "latest".
     """
     if not sha256s:
         return frozenset()
