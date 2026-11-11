@@ -83,7 +83,6 @@ def _statement(*, key: str, match: NameMatchMode, visible: set[RecordReviewStatu
             survivor.id.label("species_id"),
             survivor.public_ref.label("species_ref"),
             survivor.smiles.label("smiles"),
-            molecular_formula_expr(survivor.smiles).label("formula"),
         )
         .join(named, named.id == SpeciesName.species_id)
         .join(survivor, survivor.id == func.coalesce(named.merged_into_species_id, named.id))
@@ -98,10 +97,11 @@ def _statement(*, key: str, match: NameMatchMode, visible: set[RecordReviewStatu
         .order_by(SpeciesName.name_key, survivor.id, SpeciesName.id)
         .subquery("name_matches")
     )
-    return (
-        select(inner)
-        .order_by(inner.c.name_key, collate(inner.c.species_ref, "C"), inner.c.name_id)
-        .limit(limit + 1)
+    order = (inner.c.name_key, collate(inner.c.species_ref, "C"), inner.c.name_id)
+    page = select(inner).order_by(*order).limit(limit + 1).subquery("name_page")
+    # The formula (an RDKit call) is computed for the listed rows only, not for every match.
+    return select(page, molecular_formula_expr(page.c.smiles).label("formula")).order_by(
+        page.c.name_key, collate(page.c.species_ref, "C"), page.c.name_id
     )
 
 
@@ -116,6 +116,8 @@ def search_species_names(session: Session, *, q: str, match: NameMatchMode, limi
     savepoint = session.begin_nested()
     try:
         session.execute(text(f"SET LOCAL statement_timeout = {limit_ms}"))
+        # JIT compilation costs more than this read takes to run.
+        session.execute(text("SET LOCAL jit = off"))
         rows = session.execute(_statement(key=key, match=match, visible=visible, limit=limit)).all()
     finally:
         savepoint.rollback()

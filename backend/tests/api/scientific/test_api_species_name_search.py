@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import event, func, select, text
 from starlette.requests import Request
 
-from app.api.config import settings
+from app.api.config import Settings, settings
 from app.api.rate_limit import _classify
 from app.db.models.common import (
     RecordReviewStatus,
@@ -385,6 +385,7 @@ def test_the_read_sets_a_local_statement_timeout(client, db_session, monkeypatch
     finally:
         event.remove(engine, "before_cursor_execute", _before)
     assert "SET LOCAL statement_timeout = 321" in seen
+    assert "SET LOCAL jit = off" in seen
     assert seen.index("SET LOCAL statement_timeout = 321") < next(
         i for i, s in enumerate(seen) if "species_name" in s and s.lstrip().upper().startswith("SELECT")
     )
@@ -569,3 +570,7 @@ def test_an_ip_refused_request_costs_no_credential_budget(client, monkeypatch):
     assert codes[-1].json()["bucket"] == "name_search_ip"
     credential = next(k for k in rate_limit._STORE._store if k[0] == "name_search" and k[1].startswith("apikey:"))
     assert rate_limit._STORE._store[credential].count == 2
+
+
+def test_the_default_timeout_has_headroom():
+    assert Settings().name_search_statement_timeout_ms >= 2000
