@@ -109,14 +109,14 @@ describe("GeometryDetailPage identity (#321)", () => {
         page()
         expect(await screen.findByRole("heading", { name: /^Geometry of XeF6/ })).toBeVisible()
         expect(screen.queryByRole("heading", { name: /^Geometry of CH4/ })).not.toBeInTheDocument()
-        expect(screen.queryByText(/computed on this page from atom symbols/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/Formula worked out from the atoms/)).not.toBeInTheDocument()
     })
 
     it("falls back to the client-derived Hill formula, labelled as such, when identity is absent", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ identity: null }))))
         page()
         expect(await screen.findByRole("heading", { name: /^Geometry of CH4/ })).toBeVisible()
-        expect(screen.getByText(/computed on this page from atom symbols/)).toBeVisible()
+        expect(screen.getByText(/Formula worked out from the atoms; none was served/)).toBeVisible()
     })
 
     it("renders the ambiguous case distinctly -- falls back to the Hill formula (never guesses an owner) and shows the owner list", async () => {
@@ -154,7 +154,7 @@ describe("GeometryDetailPage identity (#321)", () => {
         // `TransitionStateEntryPage`, which has its own Reaction-section
         // lede, does) -- it has no Reaction section of its own for a
         // TS-owned geometry, so it must keep the one explanation.
-        expect(screen.getByText(/no canonical SMILES/i)).toBeVisible()
+        expect(screen.getByText(/This SMILES is the depositor's label, not an identity key/)).toBeVisible()
     })
 
     it("renders no submission row when the key is absent (anonymous caller)", async () => {
@@ -297,23 +297,13 @@ describe("GeometryDetailPage", () => {
         expect(within(details).queryByText(/failed/i)).not.toBeInTheDocument()
     })
 
-    it("points to the Produced by / Used as input by tables, rather than repeating every ref inline", async () => {
+    it("says validation lives on the calculation, without repeating every ref inline", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
         await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         const details = screen.getByRole("heading", { name: "Record details" }).closest("section") as HTMLElement
-        expect(within(details).getByText(/Produced by.*Used as input by/s)).toBeVisible()
+        expect(within(details).getByText(/Validation lives on the producing or consuming calculation/)).toBeVisible()
         expect(within(details).queryAllByRole("link")).toHaveLength(0)
-    })
-
-    it("says nothing about a validation pointer when a geometry has no producers or consumers at all", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({
-            provenance: { produced_by: [], used_as_input_by: [] },
-        }))))
-        page()
-        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
-        const details = screen.getByRole("heading", { name: "Record details" }).closest("section") as HTMLElement
-        expect(within(details).queryByText(/Produced by/)).not.toBeInTheDocument()
     })
 
     it("renders every atom row in the coordinate table, in payload order", async () => {
@@ -517,9 +507,9 @@ describe("GeometryDetailPage", () => {
         await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         const produced = screen.getByRole("heading", { name: "Produced by" }).closest("section") as HTMLElement
         const used = screen.getByRole("heading", { name: "Used as input by" }).closest("section") as HTMLElement
-        expect(within(produced).getByText(/^0 calculations emitted this geometry/)).toBeVisible()
-        expect(within(used).getByText(/^Calculations consumed this geometry/)).toBeVisible()
-        expect(within(used).queryByText(/\d+ calculations? consumed/)).toBeNull()
+        expect(within(produced).getByText(/^0 calculations produced this geometry/)).toBeVisible()
+        expect(within(used).getByText(/^Calculations that used it as input/)).toBeVisible()
+        expect(within(used).queryByText(/\d+ calculations? used it as input/)).toBeNull()
     })
 
     it("counts the producers and consumers it lists", async () => {
@@ -528,8 +518,8 @@ describe("GeometryDetailPage", () => {
         await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         const produced = screen.getByRole("heading", { name: "Produced by" }).closest("section") as HTMLElement
         const used = screen.getByRole("heading", { name: "Used as input by" }).closest("section") as HTMLElement
-        expect(within(produced).getByText(/^2 calculations emitted this geometry/)).toBeVisible()
-        expect(within(used).getByText(/^3 calculations consumed this geometry/)).toBeVisible()
+        expect(within(produced).getByText(/^2 calculations produced this geometry/)).toBeVisible()
+        expect(within(used).getByText(/^3 calculations used it as input/)).toBeVisible()
     })
 
     it("renders a genuinely empty producer list distinctly from an archive-dropped field", async () => {
@@ -691,7 +681,7 @@ describe("GeometryDetailPage", () => {
             const section = table.closest("section") as HTMLElement
             // Finding #9: plain wording, no `coordinate_units`-on-the-wire jargon --
             // the guarantee (stored in ångström; bohr is a display conversion) stays.
-            expect(within(section).getByText(/Stored in ångström; bohr here is a display conversion/)).toBeVisible()
+            expect(within(section).getByText(/Stored in ångström; bohr is a display conversion/)).toBeVisible()
             expect(within(section).queryByText(/coordinate_units/)).not.toBeInTheDocument()
             expect(within(section).getByText(new RegExp(ANGSTROM_TO_BOHR.toFixed(10).replace(".", "\\.")))).toBeVisible()
             expect(within(section).queryByText(/\(converted\)/i)).not.toBeInTheDocument()

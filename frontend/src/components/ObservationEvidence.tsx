@@ -71,6 +71,8 @@ export function ObservationEvidence({ row, singlePoints, optimisations }: {
                         <ul className="shape-cell-list">
                             {row.energies.map((energy) => {
                                 const state = energy.kind === "sp" ? singlePoints : optimisations
+                                // A calculation listed under "Found by" already shows its level, program and review there.
+                                const listed = row.foundBy.some((calculation) => calculation.ref === energy.ref)
                                 return (
                                     <li key={energy.ref} className="observation-energy">
                                         {energy.hartree === null
@@ -80,10 +82,10 @@ export function ObservationEvidence({ row, singlePoints, optimisations }: {
                                         <br />
                                         <ValueSource
                                             source={{ recordType: "calculation", ref: energy.ref }}
-                                            did={energy.type}
-                                            levels={energy.levelLabel ? [{ role: "at", label: energy.levelLabel }] : []}
-                                            programs={energy.program ? [energy.program] : []}
-                                            review={energy.review}
+                                            did={listed ? undefined : energy.type}
+                                            levels={!listed && energy.levelLabel ? [{ role: "at", label: energy.levelLabel }] : []}
+                                            programs={!listed && energy.program ? [energy.program] : []}
+                                            review={listed ? undefined : energy.review}
                                         />
                                     </li>
                                 )

@@ -106,7 +106,8 @@ describe("EnergyProfile", () => {
     it("states the server's definition, which carries electronic energy and no zero-point correction, once", async () => {
         mount(read())
         await loaded()
-        expect(screen.getByText(DEFINITION)).toBeInTheDocument()
+        expect(screen.getByText("Electronic energy, no zero-point correction.")).toBeVisible()
+        expect(screen.getByText("Each molecule's energy at this level from this program.")).not.toBeVisible()
         expect(document.body.textContent?.match(/no zero-point correction/g)).toHaveLength(1)
     })
 
@@ -129,8 +130,8 @@ describe("EnergyProfile", () => {
     it("says the axis is set per profile when there are several, and names the order truthfully", async () => {
         mount(read())
         await loaded()
-        expect(screen.getByRole("group", { name: /axis is set for each profile/ })).toBeInTheDocument()
-        expect(screen.getByText(/Listed by transition-state entry \(approved first, then newest deposited first\), then level of theory and program in alphabetical order\./)).toBeInTheDocument()
+        expect(screen.getByRole("group", { name: /Each profile has its own axis/ })).toBeInTheDocument()
+        expect(screen.getByText(/By TS entry, then level and program\./)).toBeInTheDocument()
     })
 
     it("adds the level ref to picker options that would otherwise read the same", async () => {

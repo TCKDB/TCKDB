@@ -304,8 +304,7 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
         <div className="record-identity-known">
             {explainTransitionStateIdentity && (
                 <p className="note record-identity-note">
-                    Transition states have no canonical SMILES the way a species does; the unmapped SMILES below,
-                    where deposited, is a depositor-supplied label, not a deduped identity key.
+                    This SMILES is the depositor's label, not an identity key.
                 </p>
             )}
             <dl className="kv-list record-identity-facts">

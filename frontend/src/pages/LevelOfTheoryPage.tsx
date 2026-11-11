@@ -85,11 +85,6 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                                 <span className="t-kicker record-identity-kicker">Level of theory · provenance vocabulary</span>
                             </div>
                             <h1 className="t-display-1 record-identity-title">{title}</h1>
-                            <p className="t-body section-intro">
-                                What a calculation run at this level of theory carries: the identity six fields
-                                that define it, the software observed running it, the correction parameters
-                                deposited against it, and its frequency scale factor, where any are deposited.
-                            </p>
                             <div className="record-identity-known">
                                 <dl className="kv-list record-identity-facts">
                                     <div>
@@ -179,8 +174,7 @@ function SoftwareSection({ breakdown, available }: {
         <section className="ledger-section" aria-labelledby="lot-software-heading">
             <SectionHeading
                 id="lot-software-heading"
-                kicker="Observed provenance"
-                intro="Software (and workflow tool) actually observed running a calculation at this level of theory, and how many. A package or tool with zero calculations at this level does not appear here."
+                intro="Software seen at this level, with counts."
             >
                 Observed software
             </SectionHeading>
@@ -321,8 +315,6 @@ function CorrectionSchemesSection({ schemes, available }: { schemes: EnergyCorre
         <section className="ledger-section" aria-labelledby="lot-schemes-heading">
             <SectionHeading
                 id="lot-schemes-heading"
-                kicker="Deposited evidence"
-                intro="Energy-correction schemes deposited against this level of theory, rendered as their real per-element or per-bond parameter tables."
             >
                 Correction schemes
             </SectionHeading>
@@ -337,23 +329,16 @@ function CorrectionSchemesSection({ schemes, available }: { schemes: EnergyCorre
                 // recorded, and regardless of whether it matches the
                 // observed software above or not; it states the
                 // distinction, not an absence.
-                <p className="note">
-                    Observed software above names what ran the calculations recorded at this level of theory; a
-                    correction scheme's software names who computed its own parameter values, not who applies them.
-                </p>
+                <p className="note">A scheme's software computed its parameters; it is not the software that ran these calculations.</p>
             )}
             {hasSchemes ? (
                 groupSchemesByKind(rows).map(([kind, group]) => (
                     <CorrectionSchemeKindGroup key={kind} schemes={group} />
                 ))
             ) : (
-                <div className="correction-scheme-absence-list">
-                    {LOT_SCOPED_SCHEME_KINDS.filter((kind) => !depositedKinds.has(kind)).map((kind) => (
-                        <p key={kind} className="empty-projection">
-                            No {SCHEME_KIND_LABELS[kind].toLowerCase()} scheme is deposited for this level of theory.
-                        </p>
-                    ))}
-                </div>
+                <p className="empty-projection">
+                    Not deposited: {LOT_SCOPED_SCHEME_KINDS.filter((kind) => !depositedKinds.has(kind)).map((kind) => SCHEME_KIND_LABELS[kind].toLowerCase()).join(", ")}.
+                </p>
             )}
         </section>
     )
@@ -516,8 +501,6 @@ function FrequencyScaleFactorSection({ groups, available }: { groups: LevelOfThe
         <section className="ledger-section" aria-labelledby="lot-fsf-heading">
             <SectionHeading
                 id="lot-fsf-heading"
-                kicker="Deposited evidence"
-                intro="Frequency scale factor value(s) actually observed for this level of theory."
             >
                 Frequency scale factor
             </SectionHeading>
@@ -583,8 +566,7 @@ function UsageSection({ rows, available, total }: { rows: LevelOfTheoryUsage[] |
         <section className="ledger-section" aria-labelledby="lot-usage-heading">
             <SectionHeading
                 id="lot-usage-heading"
-                kicker="Deposited evidence"
-                intro={`${total} calculation${total === 1 ? "" : "s"} attribute this level of theory. Up to 50 are listed below; see the full set on the calculation search.`}
+                intro={`${total} calculation${total === 1 ? "" : "s"}; first 50 listed. All on calculation search.`}
             >
                 Calculations at this level of theory
             </SectionHeading>

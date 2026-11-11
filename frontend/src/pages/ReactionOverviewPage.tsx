@@ -112,6 +112,7 @@ function ChooserDocument({ reactionRef, headerRecord, total, kineticsTotal, reco
     reviewSummary: { approved: number; under_review: number; not_reviewed: number; deprecated: number; rejected: number; total: number }
 }) {
     const first = headerRecord
+    const headerSourceNote = chooserHeaderSourceNote(first.reaction_entry_ref, total)
     const formulaOnly = !equationNeedsStructure(first.reactants, first.products)
     useDocumentTitle("Reaction", equationText(first.reactants, first.products, first.reversible))
     return (
@@ -133,7 +134,7 @@ function ChooserDocument({ reactionRef, headerRecord, total, kineticsTotal, reco
                                     <ReactionEquation reactants={first.reactants} products={first.products} reversible={first.reversible} formulaOnly={formulaOnly} />
                                 </h1>
                                 <Lede>{reactionOverviewLede(total)}</Lede>
-                                <p className="t-body section-intro reaction-header-source">{chooserHeaderSourceNote(first.reaction_entry_ref, total)}</p>
+                                {headerSourceNote && <p className="note reaction-header-source">{headerSourceNote}</p>}
                                 <div className="record-identity-known">
                                     <dl className="kv-list record-identity-facts">
                                         <div>
@@ -157,7 +158,6 @@ function ChooserDocument({ reactionRef, headerRecord, total, kineticsTotal, reco
                 )}
             >
                 <section className="ledger-section" aria-labelledby="entries-heading">
-                    <p className="t-kicker section-kicker">Deposited records</p>
                     <SectionHeading id="entries-heading">Reaction entries</SectionHeading>
                     {/* kineticsTotal counts the rate records of the entries on the first page of this list. */}
                     {kineticsTotal >= 2 && <p><Link className="compare-link" to={`/reactions/${reactionRef}/compare`}>Compare these values</Link></p>}
@@ -206,10 +206,9 @@ function ChooserDocument({ reactionRef, headerRecord, total, kineticsTotal, reco
                 </section>
 
                 <section className="ledger-section" aria-labelledby="review-heading">
-                    <p className="t-kicker section-kicker">Curation status</p>
                     <SectionHeading id="review-heading">Review, across all entries</SectionHeading>
                     <EvidenceChecklist
-                        heading={`Review counts across the ${total} ${total === 1 ? "entry" : "entries"} under this reaction`}
+                        heading="Review counts"
                         // No `tone` on these rows -- a true collapsed-summary
                         // roll-up (the real total, not the fixed 6-row
                         // count) must come from the caller. See

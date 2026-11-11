@@ -165,15 +165,12 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                         />
                         {isotopeLabelled && (
                             <p className="note">
-                                Formula and element labels include the isotope mass numbers stored on this
-                                geometry's atoms (superscript prefix, e.g. ²H). The owning entry's formula
-                                lists elements only, so it is not used here.
+                                Mass numbers shown (e.g. ²H) come from this geometry's atoms.
                             </p>
                         )}
                         {formulaIsFallback && (
                             <p className="note">
-                                Formula computed on this page from atom symbols — the archive did not serve a formula
-                                for this geometry's owning entry.
+                                Formula worked out from the atoms; none was served.
                             </p>
                         )}
                     </header>
@@ -194,7 +191,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
 
                 <ProvenanceSection
                     title="Produced by"
-                    description={`${countLead(producedByAvailability, producedBy.length)} emitted this geometry as an output. A role, where recorded, says which output this geometry was for that calculation.`}
+                    description={`${countLead(producedByAvailability, producedBy.length)} ${producedByAvailability === "absent" ? "that produced" : "produced"} this geometry.`}
                     links={producedBy}
                     availability={producedByAvailability}
                     showRole
@@ -203,7 +200,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
 
                 <ProvenanceSection
                     title="Used as input by"
-                    description={`${countLead(usedAsInputByAvailability, usedAsInputBy.length)} consumed this geometry as an input. This list is never merged with or inferred from the producer list above: the same geometry can appear in both, and a calculation can appear in both lists at once.`}
+                    description={`${countLead(usedAsInputByAvailability, usedAsInputBy.length)} ${usedAsInputByAvailability === "absent" ? "that used" : "used"} it as input. Listed separately from Produced by.`}
                     links={usedAsInputBy}
                     availability={usedAsInputByAvailability}
                     showRole={false}
@@ -221,11 +218,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                         <div><dt>Validation</dt><dd>not recorded for this geometry</dd></div>
                     </dl>
                     <p className="note">
-                        This geometry record carries no validation field of its own. A geometry-vs-formula check,
-                        where one was recorded, lives on the calculation that produced or consumed it, not here.
-                        {(producedBy.length > 0 || usedAsInputBy.length > 0) && (
-                            <> See "Geometry validation" on the producing or consuming calculations, listed with links in the "Produced by" and "Used as input by" tables above.</>
-                        )}
+                        Validation lives on the producing or consuming calculation.
                     </p>
                 </section>
             </PageShell>
@@ -291,7 +284,7 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
         <section className="ledger-section" aria-labelledby="coordinates-heading">
             <SectionHeading
                 id="coordinates-heading"
-                intro="Every atom in this geometry, in the order the archive returned them. This table is the text version of the picture above, and it shows whether or not the picture does."
+                intro="Atoms in archive order."
             >
                 Atoms and coordinates
             </SectionHeading>
@@ -314,8 +307,7 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
                         <button type="button" aria-pressed={elementDisplay === "number"} onClick={() => setElementDisplay("number")}>Number</button>
                     </fieldset>
                     <p className="note coordinate-toggle-note">
-                        Stored in ångström; bohr here is a display conversion only, at 1 Å = {ANGSTROM_TO_BOHR.toFixed(10)} bohr
-                        (CODATA 2018 Bohr radius). Both units are shown to 6 decimal places; hover an ångström number for the stored value.
+                        Stored in ångström; bohr is a display conversion (1 Å = {ANGSTROM_TO_BOHR.toFixed(10)} bohr). 6 decimals; hover for the stored value.
                     </p>
                 </div>
             )}
@@ -360,7 +352,7 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
 function RawXyzSection({ xyzText }: { xyzText: string | null }) {
     return (
         <section className="ledger-section" aria-labelledby="xyz-heading">
-            <SectionHeading id="xyz-heading" intro="The archive's own XYZ-format text for this geometry, selectable as deposited.">
+            <SectionHeading id="xyz-heading">
                 Raw XYZ
             </SectionHeading>
             {xyzText ? (

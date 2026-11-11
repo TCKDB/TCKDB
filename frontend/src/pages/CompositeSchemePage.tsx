@@ -152,8 +152,6 @@ function TermsSection({ record }: { record: CompositeSchemeRecord }) {
         <section className="ledger-section" aria-labelledby="composite-terms-heading">
             <SectionHeading
                 id="composite-terms-heading"
-                kicker="Recipe"
-                intro="The terms the total is built from, in order. Each input level carries the weight it has in its term, where the term has fixed weights."
             >
                 Terms
             </SectionHeading>
@@ -225,8 +223,6 @@ function BoundLevelsSection({ record }: { record: CompositeSchemeRecord }) {
         <section className="ledger-section" aria-labelledby="composite-bound-heading">
             <SectionHeading
                 id="composite-bound-heading"
-                kicker="Provenance vocabulary"
-                intro="Levels of theory whose energy this recipe names. A calculation run at one of them is a composite calculation of this recipe."
             >
                 Levels of theory bound to this recipe
             </SectionHeading>

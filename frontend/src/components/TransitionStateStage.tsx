@@ -31,7 +31,7 @@ export function TransitionStateStage({ transitionStateEntryRef, geometryRef: kno
                 <>
                     <ViewerStage key={geometryRef} atoms={atoms} formula={`transition state ${transitionStateEntryRef}`} xyzText={geometry.status === "ready" ? geometry.data.xyz_text ?? null : null} />
                     <p className="note">
-                        Drawn from <Link to={`/geometries/${geometryRef}`}><code className="t-preserve-case">{geometryRef}</code></Link>, the first final geometry deposited for this entry.
+                        First deposited final geometry: <Link to={`/geometries/${geometryRef}`}><code className="t-preserve-case">{geometryRef}</code></Link>.
                     </p>
                 </>
             )}

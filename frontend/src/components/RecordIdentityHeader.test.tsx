@@ -102,14 +102,14 @@ describe("RecordIdentityHeader", () => {
         }
     })
 
-    it("renders the 'no canonical SMILES' note for a transition-state identity by default", () => {
+    it("renders the depositor-label SMILES note for a transition-state identity by default", () => {
         renderHeader({ identity: tsIdentity })
-        expect(screen.getByText(/no canonical SMILES/i)).toBeVisible()
+        expect(screen.getByText(/This SMILES is the depositor's label, not an identity key/)).toBeVisible()
     })
 
     it("omits the 'no canonical SMILES' note when explainTransitionStateIdentity=false -- the caller's own Reaction section covers it instead", () => {
         renderHeader({ identity: tsIdentity, explainTransitionStateIdentity: false })
-        expect(screen.queryByText(/no canonical SMILES/i)).not.toBeInTheDocument()
+        expect(screen.queryByText(/not an identity key/i)).not.toBeInTheDocument()
     })
 
     it("renders no submission row at all when the key is absent (anonymous caller)", () => {

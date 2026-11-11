@@ -75,8 +75,7 @@ const GEOMETRY_ROLE_ORDER = ["irc_forward", "irc_reverse"]
 // along with it. Ties within a stage keep their original relative order
 // (a stable sort, via the `index` tiebreak below).
 export const CALCULATION_ROW_ORDER_NOTE =
-    "Rows are grouped by stage (opt, freq, sp, irc, path search), and keep the order the archive returned "
-    + "within a stage. That is a display order for reading, not a ranking: no row is preferred over another."
+    "By stage, then archive order. Not a ranking."
 
 const STAGE_ORDER: Record<string, number> = {
     opt: 0,
@@ -281,26 +280,26 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                     <EnergyProfile entryRef={reaction.reaction_entry_ref} speciesLabels={speciesLabels} onlyTransitionState={entry.transition_state_entry_ref} />
                 ) : (
                     <section className="energy-profile" aria-labelledby="energy-heading">
-                        <SectionHeading id="energy-heading" kicker="How the energy changes">Energy hill</SectionHeading>
+                        <SectionHeading id="energy-heading">Energy hill</SectionHeading>
                         <p className="empty-projection">This entry does not name its reaction entry, so no energy profile can be drawn for it.</p>
                     </section>
                 )}
 
                 <section className="ledger-section" aria-labelledby="shape-heading">
-                    <SectionHeading id="shape-heading" kicker="Its 3D structure">Shape</SectionHeading>
+                    <SectionHeading id="shape-heading">Shape</SectionHeading>
                     <TransitionStateStage transitionStateEntryRef={entry.transition_state_entry_ref} geometryRef={stageGeometryRef(record)} />
                 </section>
 
                 <section className="ledger-section" aria-labelledby="imaginary-heading">
-                    <SectionHeading id="imaginary-heading" kicker="The motion over the hill">Imaginary frequency</SectionHeading>
+                    <SectionHeading id="imaginary-heading">Imaginary frequency</SectionHeading>
                     <p className="note">
-                        The <Term term="imaginary-frequency">imaginary frequency</Term> is the one motion that carries the transition state downhill.
+                        The <Term term="imaginary-frequency">imaginary frequency</Term> is the motion over the barrier.
                     </p>
                     <SaddlePointStatement saddlePoint={record.saddle_point} evidence={evidence} />
                 </section>
 
                 <section className="ledger-section" aria-labelledby="checks-heading">
-                    <SectionHeading id="checks-heading" kicker="What was recorded" intro="Each check is either recorded with its outcome or not recorded. Not recorded means nobody deposited it; it does not mean the check failed.">
+                    <SectionHeading id="checks-heading" intro="Not recorded means not deposited, not failed.">
                         Checks
                     </SectionHeading>
                     <div className="table-scroll tse-scroll" tabIndex={0} role="region" aria-label="Checks on this transition state">
@@ -336,11 +335,10 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 </section>
 
                 <section className="ledger-section" aria-labelledby="trust-irc-heading">
-                    <SectionHeading id="trust-irc-heading" kicker="Two separate questions">Trust and IRC</SectionHeading>
+                    <SectionHeading id="trust-irc-heading">Trust and IRC</SectionHeading>
                     <div className="tse-pair">
                         <section className="tse-pair-card" aria-labelledby="trust-card-heading">
                             <h3 className="t-heading-2" id="trust-card-heading">Trust</h3>
-                            <p className="note">Asks how much of the evidence TCKDB expects for a saddle point was deposited, by a fixed list of checks.</p>
                             {trust ? (
                                 <>
                                     <p>
@@ -360,7 +358,6 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                         </section>
                         <section className="tse-pair-card tse-irc-summary" aria-labelledby="irc-card-heading">
                             <h3 className="t-heading-2" id="irc-card-heading">IRC</h3>
-                            <p className="note">Asks whether a reaction-path calculation connects this saddle point to the reactants and products it was deposited for.</p>
                             <IrcStatus
                                 validation={validation}
                                 evidence={evidence}
@@ -373,7 +370,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 </section>
 
                 <section className="ledger-section" aria-labelledby="reaction-context">
-                    <SectionHeading id="reaction-context" kicker="Reaction context" intro="A transition state is identified by the reaction it connects, not a molecular graph of its own.">
+                    <SectionHeading id="reaction-context">
                         Reaction
                     </SectionHeading>
                     <dl className="kv-list">
@@ -394,8 +391,6 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 <section className="ledger-section" aria-labelledby="siblings-ledger">
                     <SectionHeading
                         id="siblings-ledger"
-                        kicker="Reaction context"
-                        intro="Other candidate transition-state entries attached to the same reaction as this one."
                     >
                         Other saddle points deposited for this reaction
                     </SectionHeading>
@@ -460,7 +455,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
             )}
             {siblingsFailed && (
                 <section className="ledger-section" aria-labelledby="siblings-ledger-error">
-                    <SectionHeading id="siblings-ledger-error" kicker="Reaction context">
+                    <SectionHeading id="siblings-ledger-error">
                         Other saddle points deposited for this reaction
                     </SectionHeading>
                     <p className="empty-projection">Could not load sibling saddle points for this reaction.</p>
@@ -468,14 +463,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
             )}
 
             <section className="ledger-section" aria-labelledby="calc-ledger">
-                {/* SHOULD-FIX-6 ("record-page residuals" re-review): every
-                    OTHER section on this page carries a kicker; this one
-                    didn't, which read as arbitrary rather than a signal.
-                    "Machine detail" matches the kicker
-                    `ConformerObservationPage` uses for the same section
-                    (its own "Calculation evidence" heading) -- the same
-                    category, worded the same way, on both pages. */}
-                <SectionHeading id="calc-ledger" kicker="Machine detail">Calculation evidence</SectionHeading>
+                <SectionHeading id="calc-ledger">Calculation evidence</SectionHeading>
                 <EvidencePills evidence={evidence} entryRef={entry.transition_state_entry_ref} />
                 {calculationsAvailability === "populated" ? (
                     <>
@@ -494,8 +482,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
             <section className="ledger-section" aria-labelledby="geometry-ledger">
                 <SectionHeading
                     id="geometry-ledger"
-                    kicker="Stored coordinates"
-                    intro="These are stored geometry objects linked from this entry's calculation output — the saddle point itself and, where an IRC ran, the reaction-path points either side of it."
+                    intro="Saddle point and, where an IRC ran, its endpoints."
                 >
                     Geometry records
                 </SectionHeading>
@@ -557,7 +544,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
             </section>
 
             <section className="ledger-section" aria-labelledby="review-ledger">
-                <SectionHeading id="review-ledger" kicker="Review & trust">Review history</SectionHeading>
+                <SectionHeading id="review-ledger">Review history</SectionHeading>
                 {reviewAvailability === "populated" ? (
                     onlyDefaultReviewRow ? (
                         <p className="empty-projection">Not yet reviewed — no review events recorded.</p>
@@ -685,7 +672,7 @@ function structureAssessmentSentence(assessment: StructureAssessment): string {
             return `Declared targets, first-order saddle question: ${sentence}${contested ? " A declared target is contested — needs investigation." : ""}`
         }
         case "no_declared_target":
-            return "No saddle target is declared, so the structure assessment has nothing to assess."
+            return "Not assessed: no saddle target declared."
         case "not_assessed_on_lists":
             return "Not assessed on lists."
         case "not_assessed_over_bound":
@@ -740,7 +727,7 @@ function EvidencePills({ evidence, entryRef }: { evidence: EvidenceSummary; entr
                     )
                 })}
             </ul>
-            <p className="note">Presence says this entry carries that stage, not that its result was favourable.</p>
+            <p className="note">Present means deposited, not passed.</p>
         </>
     )
 }
@@ -761,7 +748,7 @@ function IrcStatus({ validation, evidence, ircCalc, forwardPointCount, reversePo
     reversePointCount: number
 }) {
     if (validation.irc === "present") {
-        return <p><strong>IRC validation passed</strong> — a structured pass/fail evidence record was deposited for this entry.</p>
+        return <p><strong>IRC validation passed</strong> (deposited record).</p>
     }
     if (validation.irc === "failed") {
         return <p><strong>IRC validation failed</strong> — a structured evidence record was deposited for this entry, but it did not pass.</p>

@@ -170,8 +170,8 @@ describe("ConformerObservationPage", () => {
         serve()
         page()
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
-        expect(screen.getByText(/One deposit that found this conformer/)).toBeVisible()
-        expect(screen.getByText(/3 calculations: those that found this geometry/)).toBeVisible()
+        expect(screen.getByText(/One deposit of this conformer\./)).toBeVisible()
+        expect(screen.getByText(/3 calculations, in archive order \(not dependency order\)/)).toBeVisible()
         const kickerRow = document.querySelector(".record-identity-kicker-row") as HTMLElement
         expect(kickerRow.querySelector("svg")).not.toBeNull()
         expect(within(kickerRow).getByText("reviewed")).toBeVisible()
@@ -202,14 +202,14 @@ describe("ConformerObservationPage", () => {
         expect(container.querySelector('a[href="/species-entries/spe_demo"]')).not.toBeNull()
     })
 
-    it("draws the observation's first final geometry with a Show in 3D button and a sentence about its shape", async () => {
+    it("draws the observation's first final geometry with a Show in 3D button", async () => {
         serve()
         page()
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         const figure = await screen.findByRole("figure", { name: "Picture of this conformer" })
         expect(await within(figure).findByRole("img", { name: /Ball-and-stick picture of CH3/ })).toBeVisible()
         expect(within(figure).getByRole("button", { name: "Show in 3D" })).toBeVisible()
-        expect(within(figure).getByText(/2 atoms, O and H, 0\.98 Å apart\./)).toBeVisible()
+        expect(within(figure).getByText(/Final geometry of this observation\./)).toBeVisible()
     })
 
     it("shows each energy with its level, program and review beneath it, and the calculations that found the geometry", async () => {
