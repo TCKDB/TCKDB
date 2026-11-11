@@ -61,6 +61,8 @@ NOT_SCIENTIFIC: dict[str, str] = {
     'request_body_too_large': _R03,
     'applied_energy_correction_source_key_undeclared': _R11,
     'applied_energy_correction_value_conflict': _R13,
+    'applied_energy_correction_note_not_stored': _R13,
+    'applied_energy_correction_reused_hidden': _R13,
     'archive_release_artifacts_differ': _R05,
     'archive_unreadable': _R05,
     'artifact_object_missing': _R05,

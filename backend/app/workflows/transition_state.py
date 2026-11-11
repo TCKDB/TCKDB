@@ -217,6 +217,7 @@ def persist_transition_state_upload(
     # 6. Applied energy corrections targeting this saddle point. The schema
     #    has already refused every key this payload has no namespace for, so
     #    there is no source calculation or conformer to resolve.
+    applied_correction_ids: list[int] = []
     for index, correction in enumerate(request.applied_energy_corrections):
         assert_bac_total_has_required_components(
             session,
@@ -224,7 +225,7 @@ def persist_transition_state_upload(
             field=f"applied_energy_corrections[{index}]",
             target_transition_state_entry_id=ts_entry.id,
         )
-        create_applied_energy_correction(
+        applied = create_applied_energy_correction(
             session,
             correction,
             target_transition_state_entry_id=ts_entry.id,
@@ -234,6 +235,7 @@ def persist_transition_state_upload(
             field=f"applied_energy_corrections[{index}]",
             warnings_out=warnings,
         )
+        applied_correction_ids.append(applied.id)
 
     # 7. Atom map (ADR 0011). Participant geometries are stored as plain
     #    geometries and checked against the species they claim to be: a map is
@@ -307,6 +309,10 @@ def persist_transition_state_upload(
     ]
     targets.extend(
         RecordRef(SubmissionRecordType.calculation, c.id) for c in additional_calcs
+    )
+    targets.extend(
+        RecordRef(SubmissionRecordType.applied_energy_correction, aid)
+        for aid in applied_correction_ids
     )
     note_anchor(session, "", SubmissionRecordType.transition_state_entry, ts_entry.id)
     note_anchor(session, "primary_opt", SubmissionRecordType.calculation, primary_calc.id)

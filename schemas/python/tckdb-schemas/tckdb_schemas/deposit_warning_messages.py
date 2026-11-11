@@ -375,6 +375,14 @@ RENDERED: dict[str, str] = {
     "energy_level_stored_without_source_calculations": (
         "The declared energy level of theory was stored, but no source calculations were linked to the record."
     ),
+    "applied_energy_correction_note_not_stored": (
+        "A correction for this entry, scheme and role was already recorded, so this deposit was linked to it "
+        "and the note sent with it was not stored. The stored note, if any, was kept."
+    ),
+    "applied_energy_correction_reused_hidden": (
+        "The correction this deposit was linked to is rejected or deprecated, so reads hide it by default. "
+        "The deposit's own correction was not stored separately."
+    ),
     "composite_delta_prefer_scheme_terms": (
         "The correction was applied with the role of a composite delta. Focal-point deltas (core-valence, "
         "higher-order triples, relativistic, DBOC) will become composite-scheme terms, which can name every "
@@ -2088,6 +2096,7 @@ def _closed_values(key: str, code: str) -> Any:
     static: dict[str, Any] = {
         "action": frozenset(_VERSION_ACTIONS),
         "application_role": frozenset({"composite_delta"}),
+        "review_status": frozenset({"rejected", "deprecated"}),
         "confidence": frozenset({"definitive", "derived", "heuristic"}),
         "coordinate_kind": _SCAN_COORDINATE_KINDS,
         "pattern": _SCAN_PATTERNS,

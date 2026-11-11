@@ -24,7 +24,12 @@ from tckdb_schemas.local_key_codes import (
 from app.api.error_contract import CodedValueError
 from app.chemistry.species import species_smiles_has_any_bonds
 from app.chemistry.units import convert_energy_to_hartree
-from app.db.models.common import AtomParamApplication, EnergyUnit
+from app.db.models.common import (
+    AtomParamApplication,
+    EnergyUnit,
+    RecordReviewStatus,
+    SubmissionRecordType,
+)
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     AppliedEnergyCorrectionComponent,
@@ -49,6 +54,7 @@ from app.services.calculation_resolution import (
 )
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_declared_key
+from app.services.record_review import get_record_review
 from app.services.provenance_warnings import (
     collect_composite_delta_warnings,
     collect_energy_correction_scheme_provenance_warnings,
@@ -776,6 +782,12 @@ def assert_bac_total_has_required_components(
 #: An applied correction with this dedup key is already stored with a different total or breakdown.
 W_APPLIED_CORRECTION_VALUE_CONFLICT = "applied_energy_correction_value_conflict"
 
+#: A reused correction already carries a different note; the incoming note was not stored.
+W_APPLIED_CORRECTION_NOTE_NOT_STORED = "applied_energy_correction_note_not_stored"
+
+#: The correction a deposit was linked to is rejected or deprecated, so reads hide it by default.
+W_APPLIED_CORRECTION_REUSED_HIDDEN = "applied_energy_correction_reused_hidden"
+
 
 def _find_applied_correction(
     session: Session, key: Mapping[str, object]
@@ -820,50 +832,76 @@ def _public_ref(session: Session, model: type, row_id: int) -> str | None:
     return getattr(row, "public_ref", None)
 
 
+def _hartree(value: float, unit) -> float | None:
+    return convert_energy_to_hartree(value, EnergyUnit(unit.value))
+
+
+def _close(a: float | None, b: float | None) -> bool:
+    return a is not None and b is not None and abs(a - b) <= _PARAM_VALUE_ABS_TOL
+
+
 def _same_total(
     stored: AppliedEnergyCorrection, payload: AppliedEnergyCorrectionUploadPayload
 ) -> bool:
-    """Whether the stored total equals the payload's.
-
-    Same unit: exact equality. Different units: both converted to hartree and
-    compared within ``_PARAM_VALUE_ABS_TOL``.
-    """
-    if stored.value_unit.value == payload.value_unit.value:
-        return stored.value == payload.value
-    stored_h = convert_energy_to_hartree(stored.value, stored.value_unit)
-    supplied_h = convert_energy_to_hartree(payload.value, EnergyUnit(payload.value_unit.value))
-    return (
-        stored_h is not None
-        and supplied_h is not None
-        and abs(stored_h - supplied_h) <= _PARAM_VALUE_ABS_TOL
+    """Whether both totals, in hartree, agree within ``_PARAM_VALUE_ABS_TOL``."""
+    return _close(
+        _hartree(stored.value, stored.value_unit), _hartree(payload.value, payload.value_unit)
     )
 
 
-def _assert_same_applied_value(
+def _same_components(
+    session: Session,
+    stored: AppliedEnergyCorrection,
+    payload: AppliedEnergyCorrectionUploadPayload,
+) -> bool:
+    """Whether the component sets match.
+
+    Kind, key and multiplicity are exact. The parameter value is compared
+    within ``_PARAM_VALUE_ABS_TOL``, and the contribution in hartree within the
+    same tolerance.
+    """
+    rows = sorted(
+        session.scalars(
+            select(AppliedEnergyCorrectionComponent).where(
+                AppliedEnergyCorrectionComponent.applied_correction_id == stored.id
+            )
+        ),
+        key=lambda c: (c.component_kind.value, c.key, c.multiplicity, c.contribution_value),
+    )
+    supplied = sorted(
+        payload.components,
+        key=lambda c: (c.component_kind.value, c.key, c.multiplicity, c.contribution_value),
+    )
+    if len(rows) != len(supplied):
+        return False
+    return all(
+        (r.component_kind.value, r.key, r.multiplicity) == (c.component_kind.value, c.key, c.multiplicity)
+        and _close(r.parameter_value, c.parameter_value)
+        and _close(
+            _hartree(r.contribution_value, stored.value_unit),
+            _hartree(c.contribution_value, payload.value_unit),
+        )
+        for r, c in zip(rows, supplied)
+    )
+
+
+def _reconcile_reused_correction(
     session: Session,
     stored: AppliedEnergyCorrection,
     payload: AppliedEnergyCorrectionUploadPayload,
     *,
     field: str | None,
+    warnings_out: list[UploadWarning] | None,
 ) -> None:
     """Refuse a payload whose total or components differ from the stored row.
 
-    Components compare as an exact multiset of ``(kind, key, multiplicity,
-    parameter_value, contribution_value)``.
+    A matching payload is reused; the warnings for a dropped note and for a
+    rejected or deprecated stored row are added to ``warnings_out``.
     """
-    stored_components = sorted(
-        (c.component_kind.value, c.key, c.multiplicity, c.parameter_value, c.contribution_value)
-        for c in session.scalars(
-            select(AppliedEnergyCorrectionComponent).where(
-                AppliedEnergyCorrectionComponent.applied_correction_id == stored.id
-            )
-        )
-    )
-    supplied_components = sorted(
-        (c.component_kind.value, c.key, c.multiplicity, c.parameter_value, c.contribution_value)
-        for c in payload.components
-    )
-    if _same_total(stored, payload) and stored_components == supplied_components:
+    same_total = _same_total(stored, payload)
+    same_components = _same_components(session, stored, payload)
+    if same_total and same_components:
+        _warn_on_reuse(session, stored, payload, field=field, warnings_out=warnings_out)
         return
 
     context: dict[str, object] = {
@@ -886,24 +924,62 @@ def _assert_same_applied_value(
         context["frequency_scale_factor_ref"] = _public_ref(
             session, FrequencyScaleFactor, stored.frequency_scale_factor_id
         )
-    context["differs"] = [
-        name
-        for name, differs in (
-            ("value", not _same_total(stored, payload)),
-            ("components", stored_components != supplied_components),
-        )
-        if differs
-    ]
+    context.update(
+        stored_value=stored.value,
+        stored_unit=stored.value_unit.value,
+        supplied_value=payload.value,
+        supplied_unit=payload.value_unit.value,
+        differs=[
+            name
+            for name, differs in (("value", not same_total), ("components", not same_components))
+            if differs
+        ],
+    )
     raise CodedValueError(
         W_APPLIED_CORRECTION_VALUE_CONFLICT,
-        "An applied energy correction for this target, scheme and role is "
-        "already recorded with a different value or component breakdown. "
-        "The same scheme applied to the same entry has to give the same "
-        "numbers; send matching values, or a different scheme if these are "
-        "a different correction.",
+        "A correction for this entry, scheme and role is already recorded in the database or "
+        "earlier in this upload, and its total or components differ from the one sent "
+        f"(stored {stored.value!r} {stored.value_unit.value}, sent {payload.value!r} "
+        f"{payload.value_unit.value}). If the value depends on this deposit's geometry or "
+        "calculation, name the source calculation (source_calculation_key) so each deposit's "
+        "correction is recorded separately.",
         context=context,
         message_prefix=False,
     )
+
+
+def _warn_on_reuse(
+    session: Session,
+    stored: AppliedEnergyCorrection,
+    payload: AppliedEnergyCorrectionUploadPayload,
+    *,
+    field: str | None,
+    warnings_out: list[UploadWarning] | None,
+) -> None:
+    """Warn when a reused row dropped the incoming note or is rejected or deprecated."""
+    if warnings_out is None:
+        return
+    where = field or "applied_energy_correction"
+    if payload.note is not None and payload.note != stored.note:
+        warnings_out.append(
+            UploadWarning.from_code(field=where, code=W_APPLIED_CORRECTION_NOTE_NOT_STORED)
+        )
+    review = get_record_review(
+        session,
+        record_type=SubmissionRecordType.applied_energy_correction,
+        record_id=stored.id,
+    )
+    if review is not None and review.status in (
+        RecordReviewStatus.rejected,
+        RecordReviewStatus.deprecated,
+    ):
+        warnings_out.append(
+            UploadWarning.from_code(
+                field=where,
+                code=W_APPLIED_CORRECTION_REUSED_HIDDEN,
+                context={"review_status": review.status.value},
+            )
+        )
 
 
 def create_applied_energy_correction(
@@ -995,9 +1071,13 @@ def create_applied_energy_correction(
             applied = _find_applied_correction(session, key)
             if applied is None:
                 raise
-            _assert_same_applied_value(session, applied, payload, field=field)
+            _reconcile_reused_correction(
+                session, applied, payload, field=field, warnings_out=warnings_out
+            )
     else:
-        _assert_same_applied_value(session, applied, payload, field=field)
+        _reconcile_reused_correction(
+            session, applied, payload, field=field, warnings_out=warnings_out
+        )
 
     if warnings_out is not None:
         warnings_out.extend(
