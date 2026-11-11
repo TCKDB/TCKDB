@@ -84,7 +84,7 @@ Only a calculation whose *type* is ``composite`` takes part in those checks. A
 calculation of another type linked under the role ``composite`` is the legacy
 shape: it is accepted, answered with a ``composite_role_on_non_composite_calculation``
 warning, and
-otherwise ignored here exactly as it was before the type existed.
+otherwise ignored here.
 
 Enforced by default on every write path that links role-tagged source
 calculations -- there is no longer an ensemble-vs-standalone split, because
@@ -173,7 +173,8 @@ W_ONE_ELECTRON_HF_SUBSTITUTION = "one_electron_hf_substitution"
 W_STATMECH_ENERGY_LEVEL_AMBIGUOUS = "statmech_energy_level_ambiguous"
 W_THERMO_ENERGY_LEVEL_AMBIGUOUS = "thermo_energy_level_ambiguous"
 
-#: A record links both an 'sp' and a 'composite' as its energy. Two energies for one record is the ambiguity R2' exists to remove.
+#: A record links both an 'sp' and a 'composite' as its energy. Two energies
+#: for one record is the ambiguity R2' exists to remove.
 W_STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED = "statmech_energy_sp_and_composite_linked"
 W_THERMO_ENERGY_SP_AND_COMPOSITE_LINKED = "thermo_energy_sp_and_composite_linked"
 

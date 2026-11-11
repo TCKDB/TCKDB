@@ -1159,8 +1159,8 @@ def persist_computed_reaction_upload(
 
     # An assembled composite's inputs are written, and its total checked, now
     # that every calculation exists, every ``depends_on`` edge is wired and
-    # every inline artifact has been through single-point reconciliation
-    # Before the review policy, which can freeze them.
+    # every inline artifact has been through single-point reconciliation,
+    # and before the review policy, which can freeze them.
     sp_energy_warnings.extend(
         finalize_composite_inputs(
             session,
