@@ -306,3 +306,5 @@ def method_identity_key(name: str) -> str:
     for pattern, replacement in _SUFFIX_COMPILED:
         key = pattern.sub(replacement, key)
     return key
+
+__all__ = ["NAME_ALIASES", "SUFFIX_ALIASES", "SUFFIX_RULES", "MethodAlias", "method_identity_key"]

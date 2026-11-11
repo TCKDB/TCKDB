@@ -37,8 +37,8 @@ The method goes through the identity key every method comparison uses
 ``-gd2``, ``-gd3``, ``-gd3bj``) is removed, and the remainder is looked up. A dispersion suffix never changes the class.
 A basis is a separate column and is never part of the method. A bare ``-d`` is NOT stripped: ``wb97x-d``, ``b97-d``,
 ``b3lyp-d`` and ``b2plyp-d`` are table entries. The exact key is tried first, so a table row that ends in a dispersion
-suffix (``b97-d3``) wins over its stem (``b97``). The SQL twin
-(``scientific_read/lot_identity_filters.method_stem_key_sql``) is built from the same suffix rule, and
+suffix (``b97-d3``) wins over its stem (``b97``). The server's SQL twin
+of the stem key is built from the same suffix rule, and
 ``method_family_matches`` turns the table into a predicate, so a filter and this function cannot disagree.
 
 Classification choices (every entry is in the table below)
@@ -575,7 +575,7 @@ class MethodClassFilter:
         return frozenset(keep), MethodFamily.unclassified in families and not bounded
 
     def matches(self, name: str | None) -> bool:
-        """In-memory twin of the SQL predicate (``lot_identity_filters.method_family_matches``)."""
+        """In-memory twin of the SQL predicate (the server's method-family filter)."""
         if not self.active:
             return True
         keys, unclassified = self.keys()
@@ -594,6 +594,7 @@ __all__ = [
     "CLASSIFICATION_VERSION",
     "DFT_BY_RUNG",
     "DISPERSION_STRIP_PATTERN",
+    "DISPERSION_SUFFIXES",
     "MAX_DFT_RUNG",
     "MIN_DFT_RUNG",
     "OTHER_BY_FAMILY",

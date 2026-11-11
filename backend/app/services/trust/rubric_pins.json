@@ -471,7 +471,7 @@
     {
       "name": "computed_transition_state",
       "version": 2,
-      "reason": "Method-family classifier and method-name key moved into tckdb_schemas; table and rules unchanged."
+      "reason": "Method-family classifier and method-name key moved into tckdb_schemas; table and rules unchanged. MethodClassFilter.keys and .matches read CLASSIFICATION directly, the same single-version object the registry held."
     }
   ]
 }

@@ -18,7 +18,7 @@ from tckdb_schemas.method_names import method_identity_key
 
 F = MethodFamily
 
-# (name, family, dft_rung). Expected values were recorded from the backend's classifier before it moved.
+# (name, family, dft_rung). Expected values were fixed for the classifier.
 PARITY = [
     ("dlpno-ccsd(t)-f12", F.wavefunction, None),
     ("ccsd(t)-f12/ri", F.unclassified, None),

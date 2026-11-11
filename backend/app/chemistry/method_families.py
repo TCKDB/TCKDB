@@ -29,6 +29,8 @@ from tckdb_schemas.method_families import (
 
 from app.versioning import VersionRegistry
 
+# A new classification version lands in the table in tckdb_schemas.method_families, then is registered here.
+
 #: The registry the classification is held in: one name, one current version.
 CLASSIFICATIONS: VersionRegistry[dict[str, MethodClass]] = VersionRegistry(
     "method_family_classifications", startup_checked=True

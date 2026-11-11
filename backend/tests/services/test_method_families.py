@@ -313,8 +313,13 @@ def test_family_and_rung_are_never_an_order_key_a_tie_break_or_a_select_default(
             if isinstance(node, (ast.ImportFrom, ast.Import)):
                 names = [node.module or ""] if isinstance(node, ast.ImportFrom) else [a.name for a in node.names]
                 imported = list(names)
-                if isinstance(node, ast.ImportFrom) and (node.module or "") == "tckdb_schemas":
-                    imported += [f"tckdb_schemas.{a.name}" for a in node.names]
+                if isinstance(node, ast.ImportFrom):
+                    module = node.module or ""
+                    if node.level:
+                        package = ["app", *path.relative_to(APP).with_suffix("").parts]
+                        base = package[: len(package) - node.level]
+                        module = ".".join([*base, *([module] if module else [])])
+                    imported = [module, *[f"{module}.{a.name}" for a in node.names]]
                 if any(n.startswith(("app.chemistry.method_families", "tckdb_schemas.method_families")) for n in imported):
                     importers.add(rel)
             if isinstance(node, ast.Call):
