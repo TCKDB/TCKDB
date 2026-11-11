@@ -104,7 +104,7 @@ describe("ArchiveHomePage: the search", () => {
     it("renders the exact-identifier search, defaulting to species mode, and no structure search", () => {
         server.use(...countHandlers())
         page()
-        expect(screen.getByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")).toBeInTheDocument()
+        expect(screen.getByLabelText("Molecule: name, formula, SMILES, InChI, InChIKey or TCKDB ref")).toBeInTheDocument()
         expect(screen.getByRole("radio", { name: "Molecules" })).toHaveAttribute("aria-checked", "true")
         expect(screen.getByRole("radio", { name: "Reactions" })).toHaveAttribute("aria-checked", "false")
         expect(screen.queryByText("Structure search")).not.toBeInTheDocument()
@@ -125,9 +125,9 @@ describe("ArchiveHomePage: the search", () => {
         server.use(...countHandlers())
         page()
         const links = within(screen.getByText("Try").closest("div") as HTMLElement).getAllByRole("link")
-        expect(links.map((link) => link.textContent)).toEqual(["CH4", "[OH]", "O=O", "[CH3],[OH] <> CO"])
+        expect(links.map((link) => link.textContent)).toEqual(["CH4", "water", "[OH]", "O=O", "[CH3],[OH] <> CO"])
         expect(links.map((link) => link.getAttribute("href"))).toEqual([
-            "/?q=CH4", "/?q=%5BOH%5D", "/?q=O%3DO", `/?q=${encodeURIComponent("[CH3],[OH] <> CO")}`,
+            "/?q=CH4", "/?q=water", "/?q=%5BOH%5D", "/?q=O%3DO", `/?q=${encodeURIComponent("[CH3],[OH] <> CO")}`,
         ])
     })
 })
