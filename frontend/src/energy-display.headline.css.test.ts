@@ -11,14 +11,11 @@ function extractRule(source: string, selector: string): string {
 }
 
 /**
- * Owner report ("record-page residuals" re-review, item 2): the
- * calculation page's headline electronic energy ("-348.435045 hartree")
- * rendered at roughly 1.5x body size, mono, next to a small label -- the
- * owner called it "iffy". `.energy-display-value--headline` used to take
- * the `--type-data-large` step; it now takes the SAME `--type-data` step
- * every other value on the page (and `.energy-display-value`, the
- * non-headline sibling class right above it in the same file) already
- * uses. The unit toggle (`.energy-toggle`) is untouched by this fix.
+ * The calculation page's headline electronic energy ("-348.435045 hartree")
+ * sits next to a small label, so `.energy-display-value--headline` takes the
+ * SAME `--type-data` step as every other value on the page (and
+ * `.energy-display-value`, the non-headline sibling class right above it in
+ * the same file), not `--type-data-large`. The unit toggle (`.energy-toggle`) is untouched by this fix.
  */
 describe(".energy-display-value--headline (defect: oversized headline energy)", () => {
     const rule = extractRule(css, ".energy-display-value--headline")

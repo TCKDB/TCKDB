@@ -22,11 +22,10 @@ printing the diff and the exact fix.
 Why this exists
 ---------------
 A producer adapter lives in another repository and is written against the
-contract it was told about. On 2026-09-23 (#520) a thermo block carrying an
-enthalpy began to require ``enthalpy_reference_kind: "formation_298k"``, and
-on 2026-09-24 (#536) ``reference_pressure_bar`` stopped being defaulted.
-The ARC adapter learned neither, and every thermo deposit it made was
-refused -- because the only places either rule was written down were a
+contract it was told about. A thermo block carrying an enthalpy requires
+``enthalpy_reference_kind: "formation_298k"`` and ``reference_pressure_bar``
+is not defaulted; a producer that does not know either rule has every thermo
+deposit refused, if the only places the rules are written down are a
 workflow function and a code comment. This file is the producer-facing
 place, and it cannot fall behind because it is rendered from the code that
 enforces the rules and compared against the committed copy in CI.
@@ -1495,8 +1494,8 @@ class SharedGroup:
     def key(self) -> str:
         """A name that depends only on which surfaces own the group, not on how many groups there are.
 
-        Groups used to be numbered by size and order, so adding one code that made a new owner set
-        renumbered every later group and moved every link to them in the contract diff (#686). The
+        Numbering groups by size and order would renumber every later group, and move every link to
+        them in the contract diff, whenever one code added a new owner set. The
         owner set is what makes a group one group, so a hash of it is stable under adding or removing
         codes, and changes only when the set of surfaces that share them does. It is a set, so the
         titles are sorted first: the order the surfaces are listed in does not move it.

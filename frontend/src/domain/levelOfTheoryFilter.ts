@@ -2,9 +2,8 @@ import type { CoreTreatmentValue, LevelOfTheoryRecord } from "../api/methodsApi"
 
 /**
  * The `/methods` index's level-of-theory filter. `coreTreatment` is the one
- * facet the SERVER filters (the API's own `core_treatment` parameter, ADR
- * 0021, P7a), so changing it re-queries; the other facets narrow what is
- * already in the browser, as they always did (see `MethodsIndexPage.tsx`).
+ * facet the SERVER filters (the API's own `core_treatment` parameter), so changing it re-queries; the other facets narrow what is
+ * already in the browser (see `MethodsIndexPage.tsx`).
  */
 export type LevelOfTheoryFilter = {
     query: string
@@ -36,7 +35,7 @@ export function isLotFilterActive(filter: LevelOfTheoryFilter): boolean {
 
 /**
  * Narrows the already-fetched rows in the browser rather than re-querying per
- * keystroke. MEASURED before designing: the browse endpoint's `method`/`basis`
+ * keystroke. The browse endpoint's `method`/`basis`
  * filters are exact-match, not substring (`_run_lot_query`,
  * `backend/app/services/scientific_read/level_of_theory_search.py`), so
  * sending partially-typed text would silently return zero rows for almost any

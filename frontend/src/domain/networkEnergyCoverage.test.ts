@@ -35,7 +35,7 @@ describe("computeSpeciesEnergyCoverage", () => {
         expect(computeSpeciesEnergyCoverage([], {})).toEqual({ withThermo: 0, total: 0 })
     })
 
-    // MUTATION TABLE (a): hardcode the energy-coverage figure instead of
+    // Mutation check: hardcode the energy-coverage figure instead of
     // computing it. Land `return { withThermo: 0, total: 9 }` as the first
     // line of `computeSpeciesEnergyCoverage` in `networkEnergyCoverage.ts`
     // and this test goes RED -- a fixture with non-hydrazine data proves the

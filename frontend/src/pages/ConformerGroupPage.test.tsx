@@ -34,11 +34,9 @@ function page() {
 // synchronously, before the real (surviving) mount's effect has any
 // chance to observe a response. `useScientificRecord`/`useSpeciesEntry`
 // route their fetch through `api/requestCache.ts`'s `dedupedFetch`, which
-// used to run the FIRST mount's own `AbortSignal` into the shared
-// request -- so the discarded probe mount's cleanup aborted the one real
-// request before the surviving mount ever got a response of its own. See
-// `requestCache.ts`'s module docstring for the fix (subscriber counting
-// with a deferred abort).
+// counts subscribers and defers the abort, so the discarded probe mount's
+// cleanup does not abort the one real request before the surviving mount
+// gets a response of its own. See `requestCache.ts`'s module docstring.
 function strictPage() {
     return render(
         <StrictMode>
@@ -472,9 +470,9 @@ describe("ConformerGroupPage", () => {
     // docstring on `strictPage`): the SAME 404 handler as the test above,
     // under StrictMode, still has to reach the real "not found"
     // classification -- not the generic "unavailable" a misattributed
-    // AbortError used to produce (the discarded probe mount's own cleanup
-    // aborted the ONE real request before the surviving mount's effect
-    // ever received the 404).
+    // AbortError would produce (the discarded probe mount's own cleanup
+    // must not abort the ONE real request before the surviving mount's effect
+    // receives the 404).
     it("shows the same specific not-found state under React.StrictMode's double-invoked effects", async () => {
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => {
             return HttpResponse.json({}, { status: 404 })
@@ -497,7 +495,7 @@ describe("ConformerGroupPage", () => {
     })
 
     it("gives a malformed-ref 422 (code invalid_handle) its own non-retryable state", async () => {
-        // This surface previously had no 422 coverage at all. `invalid_handle`
+        // `invalid_handle`
         // (distinct from `handle_type_mismatch`, the only code every other
         // page's 422 test exercised) is what live traffic actually returns
         // for a malformed-but-right-prefix ref — pinning it here guards the
@@ -514,7 +512,7 @@ describe("ConformerGroupPage", () => {
         expect(screen.getByRole("alert")).toBeVisible()
     })
 
-    // Review follow-up (SHOULD-FIX #1): the automatic `Retry-After` wait
+    // The automatic `Retry-After` wait
     // (`requestScientificJson`) can run up to a minute
     // (`rate_limit_anon_read_per_minute`, `backend/app/api/config.py`) --
     // during it, the page must say "the archive is busy, retrying
@@ -554,9 +552,8 @@ describe("ConformerGroupPage", () => {
         expect(attempt).toBe(2)
     })
 
-    // Wording pin (SHOULD-FIX #3): plain language, not operator vocabulary
-    // -- "about 30 seconds", never the abbreviated "30s" the pre-fix copy
-    // used ("Wait about 2s and try again").
+    // Wording pin: plain language, not operator vocabulary
+    // -- "about 30 seconds", never the abbreviated "30s".
     it("uses plain-language wording for the terminal rate-limited state, spelling out the wait", async () => {
         vi.useFakeTimers()
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => (

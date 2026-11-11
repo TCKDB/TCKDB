@@ -14,8 +14,7 @@ const MODES: { value: Mode; label: string }[] = [
 ]
 
 /**
- * One page, two modes (owner's call is implicit here, not the backend's:
- * `/auth/register` and `/auth/login` are separate endpoints, but a reader
+ * One page, two modes (`/auth/register` and `/auth/login` are separate endpoints, but a reader
  * arriving at this page has one goal -- get signed in -- and a mode
  * toggle states that up front the same way `IdentifierSearch`'s
  * Species/Reactions switch does, rather than sending a reader who picked

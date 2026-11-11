@@ -61,8 +61,7 @@ describe("MethodsIndexPage: loads and renders the three provenance-vocabulary ta
         page()
         expect(await screen.findByRole("heading", { name: "Methods", level: 1 })).toBeVisible()
         // The link covers the WHOLE identity (method AND basis), not method
-        // alone -- owner: "the highlighting of the Method but not basis is
-        // weird". Its accessible name is "b3lyp/def2tzvp" (`lotLabel()`),
+        // alone. Its accessible name is "b3lyp/def2tzvp" (`lotLabel()`),
         // never a bare "b3lyp".
         const lotLink = await screen.findByRole("link", { name: "b3lyp/def2tzvp" })
         expect(lotLink).toHaveAttribute("href", "/methods/lot_one")
@@ -84,9 +83,7 @@ describe("MethodsIndexPage: loads and renders the three provenance-vocabulary ta
     })
 
     /**
-     * MUTATION TABLE (a): grouping key for the index. `docs/plans/
-     * methods-surface.md` §0 ruling 1 (`plan-methods-surface-v2`, not
-     * committed to this repo): the index groups by `level_of_theory_ref`,
+     * Mutation check: grouping key for the index: the index groups by `level_of_theory_ref`,
      * never by `(method, basis)` display text -- two distinct levels can
      * share a method and basis while differing only in dispersion,
      * solvent, or spin treatment. This fixture is constructed exactly to
@@ -120,11 +117,9 @@ describe("MethodsIndexPage: loads and renders the three provenance-vocabulary ta
     })
 
     /**
-     * Owner: "the not recorded and solvent not recorded ... like it
-     * suggests that someone missed it when rather these are records
-     * without, so should be like none instead." A NULL dispersion/solvent
-     * now states the chemistry plainly instead of implying a deposit gap.
-     * MUTATION TABLE (a): reverting the solvent cell back to
+     * A NULL dispersion/solvent
+     * states the chemistry plainly instead of implying a deposit gap.
+     * Mutation check: reverting the solvent cell back to
      * `record.level_of_theory.solvent ?? "not recorded"` must fail this
      * test.
      */
@@ -164,8 +159,7 @@ describe("MethodsIndexPage: the levels-of-theory filter", () => {
     }
 
     /**
-     * Owner: "i do wonder the bigger the LoT, how easy is it to search?"
-     * MUTATION TABLE (c): making `filterLevelOfTheoryRecords` a no-op (e.g.
+     * Mutation check: making `filterLevelOfTheoryRecords` a no-op (e.g.
      * always returning `records` unfiltered) must fail this test -- both
      * rows would stay visible after typing "b3lyp".
      */

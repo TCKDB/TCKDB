@@ -158,14 +158,14 @@ def test_example_script_help_runs():
     assert "--level-of-theory-ref" in out
     assert "--smiles" in out
     assert "--json" in out
-    # Phase D: the opt-in flag for restoring integer IDs is documented.
+    # The opt-in flag for restoring integer IDs is documented.
     assert "--include-internal-ids" in out
 
 
 def test_includes_helper_appends_internal_ids_only_when_flag_set():
     """``_includes(args, ...)`` appends ``internal_ids`` only on opt-in.
 
-    Phase D: by default scientific reads no longer carry integer ids;
+    By default scientific reads carry no integer ids;
     the example helper threads the opt-in token into every request
     when ``--include-internal-ids`` is supplied.
     """
@@ -344,12 +344,12 @@ def test_print_kinetics_record_leads_with_refs():
 
 
 # ---------------------------------------------------------------------------
-# Phase D: printers tolerate missing *_id fields (refs-only responses)
+# Printers tolerate missing *_id fields (refs-only responses)
 # ---------------------------------------------------------------------------
 
 
 def test_print_species_record_works_without_ids():
-    """Phase D default responses omit ``*_id`` keys entirely."""
+    """Default responses omit ``*_id`` keys entirely."""
     module = _load_module()
     record = {
         # No species_id; only the ref.
@@ -384,7 +384,7 @@ def test_print_species_record_works_without_ids():
 
 
 def test_print_kinetics_record_works_without_ts_chain_ids():
-    """Phase D: non-TS provenance has refs=null and no integer ids."""
+    """Non-TS provenance has refs=null and no integer ids."""
     module = _load_module()
     record = {
         "reaction": {

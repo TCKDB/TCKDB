@@ -2,26 +2,22 @@
 """Refuse a distributed package version that two different packages could claim.
 
 WHY
-    On 2026-08-16 two agents branched from ``clients/python/pyproject.toml``
-    at ``0.46.0``. Both followed the standing rule that a change to
-    ``tckdb-client`` bumps the version, and both chose ``0.47.0``. The first
-    merged. The second still carried ``-0.46.0 / +0.47.0``.
+    Two branches cut from the same ``clients/python/pyproject.toml`` version
+    (say ``0.46.0``) can each follow the standing rule that a change to
+    ``tckdb-client`` bumps the version, and both choose ``0.47.0``. The first
+    merges; the second still carries ``-0.46.0 / +0.47.0``.
 
-    Git did not notice. Both sides of the merge held the byte-identical line
-    ``version = "0.47.0"``, so there was no conflict, no entry in the merge
+    Git does not notice. Both sides of the merge hold the byte-identical line
+    ``version = "0.47.0"``, so there is no conflict, no entry in the merge
     stat, and nothing for a reviewer scanning the diff to catch. One version
-    number then described two different packages.
+    number then describes two different packages.
 
-    That is not hypothetical here. Walking the first-parent history of
-    ``main`` (this file's ``--audit`` mode does it) finds five versions of
-    ``tckdb-schemas`` that have *already* shipped with two or three
-    different distributed contents each: ``0.2.0``, ``0.8.0``, ``0.14.0``,
-    ``0.30.0`` and ``0.33.0``. The ``0.2.0`` and ``0.8.0`` collisions are
+    Walking the first-parent history of ``main`` (this file's ``--audit``
+    mode does it) finds versions of ``tckdb-schemas`` that shipped with two
+    or three different distributed contents each. Some collisions are
     substantive -- new enum members and changed upload-schema fields, not
-    typography. And ``0.8.0`` is the version the annotated tag
-    ``tckdb-schemas-v0.8.0`` pins "for tckdb-adapters/tckdb_arc (Phase 1)",
-    so an ARC-side pin of ``tckdb-schemas==0.8.0`` resolves to one of two
-    genuinely different packages depending on when it was fetched.
+    typography -- and a pin such as ``tckdb-schemas==0.8.0`` then resolves to
+    one of two genuinely different packages depending on when it was fetched.
 
 WHAT IS CHECKED
     For each covered package (see ``PACKAGES``), given a base ref and a head
@@ -82,9 +78,8 @@ WHY NOT BUMP AT MERGE TIME INSTEAD
     author to collide with. It is rejected here for three reasons, and the
     trade is real rather than obvious.
 
-    It contradicts the standing rule that every change to the client bumps
-    the version, which is a rule contributors already follow and which
-    keeps the number reviewable *in the diff that earns it*. It moves the
+    It contradicts the rule that every change to the client bumps
+    the version, which keeps the number reviewable *in the diff that earns it*. It moves the
     decision to a moment when nobody is looking at the change -- the number
     would be chosen by whoever presses merge, or by a bot, and a wrong one
     would land unreviewed. And it needs write access from CI to the

@@ -13,10 +13,8 @@ import "../evidence-checklist.css"
  * card rendered inside `ReactionKineticsSection.tsx:228`), and
  * `/reactions` (`ReactionOverviewPage.tsx`, the cross-entry review-counts
  * card). `TransitionStateEntryPage.tsx` does NOT render this component
- * (an earlier version of this docstring claimed it did -- measured zero
- * instances; that page's own present/absent checklist is a different,
- * hand-built shape this component's pill CLASSES happen to match, not a
- * consumer of it). Every one of the real sites renders the SAME
+ * (that page's own present/absent checklist is a different,
+ * hand-built shape this component's pill CLASSES happen to match). Every one of the real sites renders the SAME
  * structure: `.card.card--derived.coverage-card` > a `Disclosure`
  * (`components/Disclosure.tsx`) whose summary is the heading plus a
  * factual roll-up, and whose body is `.kv-list.coverage-checklist` (one
@@ -27,22 +25,13 @@ import "../evidence-checklist.css"
  * component owns its own CSS" convention `RecordIdentityHeader` /
  * `RefsDisclosure` / `EnergyDisplay` each already follow.
  *
- * Owner report this fixes ("box sizes are different and the 'Evidence
- * present on this observation' box is in line with the other boxes when I
- * thought it would be underneath them. It should be lists for the
- * evidence, nicely presented. CONSISTENCY."): the calculation page's own
- * evidence card already sat on its own full-width row, below any tile
- * row, with its facts as a going-down list — the other three pages
- * rendered a one-line inline sentence sitting IN THE SAME grid row as
- * their metric tiles instead, at a different height and a different
- * shape. This component is that ONE shape, extracted so a fifth page
- * cannot reintroduce a sixth variant.
+ * One shape for every evidence card: each sits on its own full-width row,
+ * below any tile row, with its facts as a going-down list, so a fifth page
+ * cannot introduce a sixth variant.
  *
- * Collapsible (owner: "Evidence blocks should be expandable rather" — the
- * reaction-entry page alone renders six always-open rows and runs ~7000px
- * tall). Built on the shared `Disclosure` primitive rather than a new
+ * Collapsible (the reaction-entry page alone renders six rows). Built on the shared `Disclosure` primitive rather than a new
  * mechanism, so it inherits the one canonical `<details>`/`<summary>`
- * chrome the rest of the app already uses. **Collapsed by default**
+ * chrome the rest of the app uses. **Collapsed by default**
  * (`Disclosure`'s own `defaultOpen` contract: read once, on mount; the
  * reader's own click/keyboard toggle owns `open` after that) -- WHEN a
  * true roll-up is available. The collapsed `<summary>` carries the
@@ -60,33 +49,23 @@ import "../evidence-checklist.css"
  *   supply its own true roll-up via the `summary` prop (e.g. "4 joined
  *   records", "3 of 3 stages covered") -- computed by the caller from the
  *   same data the rows themselves come from, never restated from the row
- *   count. **There is no numeric fallback here.** An earlier version of
- *   this component collapsed behind a bare `"N rows"` count when no
- *   `summary` was supplied -- MEASURED (independent review) that number
- *   is actively misleading: it is the number of CATEGORY rows (fixed per
- *   card shape) restated as if it answered the heading's own question
- *   ("Joined-record review counts" collapsing to "6 rows" while the real
- *   total was 4; a conformer group's coverage collapsing to the SAME "3
- *   rows" whether every stage is fully covered or none is at all -- two
- *   opposite evidence states rendered identically). When no `summary` is
+ *   count. **There is no numeric fallback here.** A bare `"N rows"` count
+ *   would be misleading: it is the number of CATEGORY rows (fixed per
+ *   card shape) restated as if it answered the heading's own question,
+ *   and it reads the same whether every stage is covered or none is. When no `summary` is
  *   supplied and no tone-derived roll-up can be computed, this component
  *   renders the card OPEN (`defaultOpen={true}`) instead of collapsing it
- *   behind nothing meaningful -- a reader sees the real rows rather than
- *   a number that answers a different question than the one asked.
+ *   behind nothing meaningful -- a reader sees the real rows.
  *
  * `heading` is the box's own `.t-label` — always specific to what the
  * page is summarizing ("Evidence on this calculation" / "Evidence on this
- * geometry" / ...; one pattern across all four pages, post-review), never
+ * geometry" / ...), never
  * restated a second time as a row label unless the row genuinely names a
  * different fact.
  *
  * A row's `value` is plain text ONLY for a count ("4 of 4 observations") --
  * every bounded-vocabulary status word is a pill, on every page, with no
- * exception (owner decision, post-review of 2bd17511: the calculation
- * page's own "absent"/"not applicable"/outcome words used to render as
- * plain text, the one place on the app this rule didn't reach; that was
- * an inconsistency this component exists to remove, not a case to
- * preserve). `tone: "pill"` renders a positive/neutral report ("present",
+ * exception. `tone: "pill"` renders a positive/neutral report ("present",
  * "recorded", an actual outcome like "passed"/"stable") as the plain
  * `.value-pill`; `tone: "pill-muted"` renders the absent/negative case
  * ("absent", "not applicable", "not recorded") as `.value-pill

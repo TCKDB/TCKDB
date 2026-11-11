@@ -1,7 +1,6 @@
-"""``QCRecord`` -> ``ConformerUploadRequest``-shaped dict (C-Q1).
+"""``QCRecord`` -> ``ConformerUploadRequest``-shaped dict.
 
-Implements the C1 mapping table from
-``docs/research/tckdb-phase-c-implementation-plan.md``. One QCSchema
+Implements the QCSchema-to-conformer-upload mapping. One QCSchema
 document (already family-dispatched and strictly validated by
 :mod:`tckdb_qcschema.reader`) becomes exactly one primary calculation:
 
@@ -33,7 +32,7 @@ this module can make is a whole-document refusal (a raised
 partial per-field drop, so there is never a "mapping produced a payload
 that quietly dropped a fatally-important field" state to report on. The
 bucket exists in the shape because :class:`MappingReport` is shared
-vocabulary with the ThermoML importer (C-E2), which does have partial
+vocabulary with the ThermoML importer, which does have partial
 per-row rejections within one article.
 """
 
@@ -641,7 +640,7 @@ def _build_atomic(record: QCRecord, report: MappingReport) -> tuple[dict, str | 
             # (issue #573). TCKDB has no energy column on a freq result, and
             # the one other place -- an sp sibling in additional_calculations
             # -- would be wired to this freq by a single_point_on edge, a role
-            # whose parent must be an opt (DR-0028; see
+            # whose parent must be an opt (see
             # _DEPENDENCY_ROLE_TO_PARENT_TYPE in the backend's
             # calculation_resolution). The value stays in the raw artifact
             # and is named here instead of being dropped silently.

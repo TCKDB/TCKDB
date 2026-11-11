@@ -6,10 +6,7 @@ import { seriesColor } from "./thermoCpChartLayout"
 import { type ArrheniusUnitFamily, arrheniusUnitConversionFactor, arrheniusUnitFamily, familyUnits } from "./arrheniusUnits"
 
 /**
- * PR 4 of `docs/plans/pressure-dependent-network-surface.md` (§2.4/§5),
- * extended by the stacked-panel/unit-control follow-up (owner: "shouldn't
- * they all stack on one graph... why is there no control for changing the
- * y axis"): layout/shaping helpers for the k(T,P) chart. This module does
+ * Layout/shaping helpers for the k(T,P) chart. This module does
  * NOT evaluate Chebyshev or PLOG -- it only builds the request grid this
  * page sends to `POST /scientific/networks/{ref}/kinetics/evaluate`
  * (`api/networkKineticsEvalApi.ts`) and shapes the ALREADY-EVALUATED
@@ -21,7 +18,7 @@ import { type ArrheniusUnitFamily, arrheniusUnitConversionFactor, arrheniusUnitF
  * ever").
  *
  * Two grouping levels, not one: `groupKtpFitsByChannel` (channel identity,
- * chemistry label, unchanged from PR 4) and, layered on top of it,
+ * chemistry label) and, layered on top of it,
  * `groupKtpChannelsByUnitFamily` (which of those channels can share a
  * y-axis at all). `per_s` (unimolecular) and `cm3_mol_s` (bimolecular) are
  * different PHYSICAL DIMENSIONS -- overlaying them on one axis would not
@@ -197,9 +194,9 @@ export function groupKtpFitsByChannel(
 
 // ---------------------------------------------------------------------------
 // Model-kind labelling. Overlaying channels on one panel (below) means
-// COLOUR is now spent on channel identity, not model kind -- `modelKindColor`
+// COLOUR is spent on channel identity, not model kind -- `modelKindColor`
 // stays as a fixed, kind-only hue used ONLY for the one shared "how to read
-// this" legend swatch (never for an actual plotted line any more); the real
+// this" legend swatch (never for an actual plotted line); the real
 // per-line encoding is `channelSeriesColor` (hue = channel) tinted by
 // `modelKindStrokeColor` and widened/thinned by `modelKindStrokeWidth` (both
 // below), which is what a `<polyline>` actually renders.
@@ -227,9 +224,9 @@ export function modelKindColor(modelKind: string): string {
 
 // ---------------------------------------------------------------------------
 // Overlaid-channel series encoding -- colour is CHANNEL identity, model kind
-// is a tint + stroke-width pair layered on that same hue. Chosen over the
-// brief's other option (colour by channel, model kind as weight/opacity
-// alone) because opacity alone reads poorly once dashed (out-of-range)
+// is a tint + stroke-width pair layered on that same hue. Chosen over
+// colour by channel with model kind as weight/opacity
+// alone, because opacity alone reads poorly once dashed (out-of-range)
 // segments are layered on top -- a thin, already-faded PLOG dash becomes
 // very hard to see against a busy multi-channel panel. Tinting the hue
 // toward white keeps every model-kind variant fully opaque (so a dashed
@@ -245,8 +242,7 @@ export function modelKindColor(modelKind: string): string {
 /** Stable per-channel hue, indexed by a channel's position in the FULL
  *  (unfiltered) channel-group list -- so a channel's colour never changes
  *  when a DIFFERENT channel is toggled on or off elsewhere in the fieldset
- *  (the same "fixed, not per-panel-index" principle the old per-model-kind
- *  colour followed, now applied to channel identity instead). Cycles
+ *  (a "fixed, not per-panel-index" colour). Cycles
  *  through `seriesColor`'s 8 tokens; a selection carrying more than 8
  *  channels at once reuses hues -- an intentional trade against the
  *  alternative (an unbounded, eventually indistinguishable palette), and
@@ -299,8 +295,7 @@ export function modelKindStrokeWidth(modelKind: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// One panel per UNIT FAMILY -- the scientific constraint this PR's brief
-// leads with: `per_s` (s^-1) and `cm3_mol_s` (cm^3 mol^-1 s^-1) are
+// One panel per UNIT FAMILY -- the scientific constraint: `per_s` (s^-1) and `cm3_mol_s` (cm^3 mol^-1 s^-1) are
 // different DIMENSIONS and can never share a y-axis, so "all selected
 // channels on one graph" is only true WITHIN one family. Mirrors
 // `arrheniusChartLayout.ts`'s own `buildArrheniusChartData` almost exactly
@@ -330,7 +325,7 @@ export interface KtpFamilyPanel {
      *  concentration unit to convert to) this is `["per_s"]`, length ONE,
      *  mirroring `arrheniusChartLayout.ts`'s own `ArrheniusPanel.availableUnits`
      *  verbatim. `NetworkKtpChart.tsx` renders no unit control at all when
-     *  `.length <= 1` -- per this PR's brief, a single-option panel gets no
+     *  `.length <= 1`: a single-option panel gets no
      *  control, not a disabled one (unlike the Arrhenius chart's own
      *  always-shown-disabled convention) -- but that gate lives in the
      *  COMPONENT, not as an extra blanking rule in this field itself. */

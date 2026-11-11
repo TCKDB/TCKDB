@@ -18,10 +18,9 @@
 # HOW THIS SCRIPT'S OWN DEATH BECOMES VISIBLE
 #   Every failure of this checker looks, from the outside, exactly like a
 #   healthy deployment: silence. The timer never got enabled, the unit failed
-#   on a missing EnvironmentFile, ExecStart points at a path the repo has since
+#   on a missing EnvironmentFile, ExecStart points at a path that has
 #   moved, the host is off -- in every one of those cases nothing is pushed and
-#   nothing complains, and the previous version of this script had no way to
-#   tell you. Two mechanisms now close that, and they are deliberately in
+#   nothing complains. Two mechanisms cover that, and they are deliberately in
 #   different failure domains:
 #
 #     1. TCKDB_DEADMAN_URL. Pinged once per COMPLETED run, whatever the
@@ -195,9 +194,8 @@ else
     # Prefer jq; fall back to grep/sed so a host without jq still alerts.
     #
     # `degraded` is parsed on BOTH paths, because it is now part of the
-    # decision and not just of the message. The old fallback put a literal
-    # "(install jq for detail)" here, which was harmless while only `status`
-    # decided anything and would have been a permanent false alarm now.
+    # decision and not just of the message. A literal placeholder such as
+    # "(install jq for detail)" would be a permanent false alarm.
     if command -v jq >/dev/null 2>&1; then
         status="$(jq -r '.status // "unparseable"' <<<"$response")"
         degraded="$(jq -r '(.degraded // []) | join(", ")' <<<"$response")"
@@ -345,8 +343,7 @@ if [[ -n "$DEADMAN_URL" ]]; then
     # the host that could not be reached, and curl's exit code, which
     # separates DNS (6) from refused (7) from an HTTP error (22) from a
     # timeout (28). curl's own stderr is dropped for the same reason rather
-    # than trusted to be discreet. The CI watchdog has always withheld this;
-    # the two scripts used to disagree about a rule one of them already kept.
+    # than trusted to be discreet. The CI watchdog withholds it too.
     curl -sS --fail --max-time 20 -o /dev/null "$DEADMAN_URL" 2>/dev/null
     ping_rc=$?
     if [[ $ping_rc -ne 0 ]]; then

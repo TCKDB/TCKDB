@@ -15,9 +15,7 @@ import {
 import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, splitLinkTemplate } from "../domain/dependencyWording"
 
 /**
- * The Related-calculations section's graph -- the owner's ask ("I think
- * this can be presented as a graph instead") for what used to be plain
- * sentences with links. This calculation is the centre node; every
+ * The Related-calculations section's graph. This calculation is the centre node; every
  * PARENT edge (`dependency.direction === "child"`, this calc is the
  * child -- see `buildDependencyGraphModel`'s own docstring for why that
  * reads backwards) draws above it, every CHILD edge below, arrows always
@@ -42,18 +40,15 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * calculation, so a link back to itself would be pointless) but
  * `ReactionTransitionStatesSection.tsx` does: on the reaction entry page
  * the centre node is the transition state's own `ts_opt`, a calculation
- * the reader is NOT already viewing, so leaving it unlinked there was the
- * owner's second complaint ("not clickable link to the calc"). When linked,
+ * the reader is NOT already viewing, so the node is linked there. When linked,
  * the pill+ref content wraps in the SAME `.dep-graph-node-link` a
  * parent/child node uses (hover/focus/visible-affordance CSS all apply
  * unchanged) and gets an accessible name of `${pill.label} ${node.ref}`
  * (e.g. "Optimisation calc_xxx") -- the two visible text runs (the pill's
  * own text, then the ref line) concatenated in their own on-screen reading
- * order, nothing inserted between them. Review finding (SC 2.5.3, Label in
- * Name): an earlier version inserted the word "calculation" between the
- * two -- `"Optimisation calculation calc_xxx"` -- which is a real word in
- * the accessible name that never appears on screen, breaking the visible
- * label into two non-contiguous pieces of the name. A parent/child node
+ * order, nothing inserted between them (WCAG SC 2.5.3, Label in Name: a
+ * word that never appears on screen must not sit inside the accessible
+ * name). A parent/child node
  * has only ONE visible text run (its ref alone, no pill), so `${prefix}
  * ${ref}` was already safe there -- the prefix is never visible, and the
  * ref is a contiguous, unbroken tail of the name.
@@ -64,11 +59,10 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * container width (`ResizeObserver` on this component's own wrapper),
  * compared against `computeWideLayout(...).width` -- narrow renders as
  * soon as the container is narrower than the wide layout's own natural
- * width, never a fixed breakpoint. MEASURED (post-review): a fixed
- * `680px` media query let the wide layout scale ITSELF down (`width:
+ * width, never a fixed breakpoint. A fixed
+ * `680px` media query would let the wide layout scale ITSELF down (`width:
  * 100%`, no floor) on any container between 680px and its own natural
- * width -- at a 1100px container with 3 children the SVG scaled to
- * 0.913x, taking its smallest text (`--type-label-font`, 11.52px) below
+ * width, taking its smallest text (`--type-label-font`, 11.52px) below
  * this app's own accessible floor. Comparing against the real container
  * width switches to the narrow layout before any such shrink can happen.
  * `containerWidth` starts `null` (not yet measured, or `ResizeObserver`
@@ -85,10 +79,8 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * collide as the same accessible name within this section).
  *
  * `centreSubject` (default `null`) answers the OTHER question a linked
- * centre node still didn't answer -- owner report on the reaction-entry
- * page's graph: "what the fuck is it? a ts? a random ass molecule?...
- * there is no real indication except before it some tiny ass text that no
- * one is going to read". The type pill says WHAT KIND ("Optimisation");
+ * centre node does not answer: WHOSE calculation it is. The type pill says
+ * WHAT KIND ("Optimisation");
  * the ref line says WHICH ONE (`calc_xxx`); neither says WHOSE --
  * `ReactionTransitionStatesSection.tsx` is the one caller that has an
  * answer (the TS entry this `ts_opt` belongs to) and passes it as a THIRD
@@ -177,13 +169,11 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType, cent
                 // to be one CSS px (the box-sizing estimate in
                 // `domain/dependencyGraphLayout.ts` is written in px), so
                 // this is always the layout math's own computed width.
-                // MEASURED (post-review): with only a `maxWidth` cap, the
+                // With only a `maxWidth` cap, the
                 // ACTIVE layout (even after the `isNarrow` switch already
-                // picked the narrower one) still shrank below its own
+                // picked the narrower one) would shrink below its own
                 // natural size on a container narrower than THAT layout's
-                // own width -- a 600px viewport rendered the narrow layout
-                // at 0.89x (labels 10.26px), 400px at 0.57x (6.6px), both
-                // under the accessible floor. `.dep-graph`'s own
+                // own width, under the accessible text floor. `.dep-graph`'s own
                 // `overflow-x: auto` (calculation-dependency-graph.css) is
                 // what a container narrower than this fixed width does
                 // instead: the SECTION scrolls horizontally, the graph's

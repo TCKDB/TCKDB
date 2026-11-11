@@ -4,18 +4,12 @@ import type { ConformerGroupFingerprint } from "../api/speciesEntryApi"
  * Turns a conformer group's numeric fingerprint into what a reader on the
  * species-entry page's conformer picker actually needs: what THIS basin
  * is, numerically, and -- when the entry has more than one group sharing
- * rotors -- how it differs from its siblings. Directly answers the
- * owner's report: "here is group 1 and 2 and then they see text about
- * what a group is so to speak but not what exactly group 1 or 2 is
- * numerically."
+ * rotors -- how it differs from its siblings.
  *
- * Three things this module is careful never to get wrong, all corrected
- * from an earlier draft against the owner's own read of it and a fresh
- * measurement of the live archive:
+ * Three things this module is careful never to get wrong:
  *
  * - **Never render the bin index.** `quantized_bin` is an internal
- *   integer with no meaning to a reader -- the owner: "I just think
- *   showing bin 23, 3 makes no sense to the user right?" -- in the same
+ *   integer with no meaning to a reader -- in the same
  *   category as `fingerprint_hash`. What a reader can actually use is the
  *   DEGREE RANGE the bin denotes (`quantizedBin * binWidthDeg` to
  *   `(quantizedBin + 1) * binWidthDeg`), derived from `bin_width_deg`

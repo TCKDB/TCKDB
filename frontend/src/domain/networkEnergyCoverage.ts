@@ -1,9 +1,5 @@
 /**
  * Pure computation behind the network entry page's "Energy coverage" card
- * (`docs/plans/pressure-dependent-network-surface.md` §2.3/§3.2, PR 2 of
- * that plan). The plan's own §1 measurement found "0 of 7 states have
- * relative energies deposited" when joined against species-level thermo --
- * but that number is a fact about ONE archive snapshot, not a constant.
  * Every count this module produces is derived from whatever payload the
  * caller hands it; nothing here is a literal figure. A regression that
  * hardcodes a coverage number instead of calling these functions is exactly

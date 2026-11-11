@@ -11,7 +11,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 // `backend/app/schemas/reads/scientific_species_calculations.py`,
 // `SpeciesCalculationsSearchRecord.energy`). The species entry page uses
 // this, filtered to `calculation_type=sp`, to surface the single-point
-// energy the owner asked to see directly on the entry page rather than only
+// energy directly on the entry page rather than only
 // reachable by following a link to the calculation detail page -- the
 // `conformers/search` shape the rest of the entry page reads from
 // (`api/speciesEntryApi.ts`) deliberately does NOT carry `results` on its

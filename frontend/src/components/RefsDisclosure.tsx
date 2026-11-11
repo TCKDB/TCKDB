@@ -15,8 +15,7 @@ export type RefEntry = { label: string; value: string; to?: string }
  * ever substitutes a label for the ref itself. See the design review:
  * "it's good we have them exposed... but it makes it look messy."
  *
- * The rule this component's callers follow (owner decision: "yes show
- * each record's own ref inline"): a record's OWN public ref never goes
+ * The rule this component's callers follow: a record's OWN public ref never goes
  * in this list -- it renders inline, outside this component, as the
  * FIRST fact in the identity block (`RecordIdentityHeader`'s `ownRef`
  * prop for a page that composes that header; hand-matched markup on the
@@ -32,13 +31,8 @@ export type RefEntry = { label: string; value: string; to?: string }
  * caller whose disclosure sits INSIDE another already-boxed container --
  * `ConformerSelector.tsx`'s `.conformer-card` is the one real consumer
  * today. Composes the shared `.disclosure--inset` modifier
- * (`design-system.css`) rather than a page-scoped override: this used to
- * be `species-entry.css`'s own `.conformer-card .refs-disclosure`
- * rule (plus its `[open] summary` border-bottom removal), the tested fix
- * for a double-border bug reported against that page -- named and moved
- * here (reviewer's proposal) so a THIRD page needing this exact shape
- * composes it via a class instead of growing a second page-scoped
- * override of its own.
+ * (`design-system.css`) rather than a page-scoped override, so any page
+ * needing this exact shape composes it via a class.
  */
 export function RefsDisclosure({ refs, label = "References", inset }: { refs: RefEntry[]; label?: string; inset?: boolean }) {
     return (
@@ -91,24 +85,19 @@ const VISUALLY_HIDDEN_STYLE: CSSProperties = {
  * `srLabel` lets a caller describe what's being copied when "reference"
  * is not honest — a raw XYZ block is a text blob, not a ref — while every
  * existing call site (which passes only `value`/`label`) keeps its exact
- * previous aria-label by relying on the default.
+ * aria-label by relying on the default.
  *
  * `navigator.clipboard` is undefined outside a secure context (plain
- * `http://`, not `localhost`) — previously this silently did nothing on
- * click, which a reader has no way to distinguish from "it worked, I just
- * didn't notice". Both that case and a rejected `writeText` (permission
- * denied) now flip to an "unavailable" state.
+ * `http://`, not `localhost`), and `writeText` can reject (permission
+ * denied). Both cases flip to an "unavailable" state.
  *
  * That state is announced through a SEPARATE `role="status"` region, not
  * by rewriting `aria-label` per state. `aria-label` overrides an
- * element's accessible name outright — MEASURED, an earlier version of
- * this component set `aria-label` to `Copy ${label} ${srLabel}` with no
- * state in it, so the name read "Copy SMILES reference" in idle,
- * "Copied", AND "Unavailable" alike: a screen-reader user got no signal
- * a click did anything, let alone that it failed. "Unavailable" is a
- * FAILURE notice — shipping it silent is worse than the no-op it
- * replaced, which is exactly what this diff's own history says it set
- * out to fix. The house rule this follows (see `LazySection` in
+ * element's accessible name outright, so `aria-label` stays fixed at
+ * `Copy ${label} ${srLabel}`: the name reads the same in idle,
+ * "Copied", AND "Unavailable". The status region is what tells a
+ * screen-reader user a click did anything, let alone that it failed.
+ * "Unavailable" is a FAILURE notice, so it must not be silent. The house rule this follows (see `LazySection` in
  * `pages/CalculationDetailPage.tsx`): a `role="status"`/`aria-live`
  * region holds a short MESSAGE, never a payload — "Copied" or "Copy
  * unavailable", never the copied value itself, so assistive tech is not
@@ -155,13 +144,9 @@ export function CopyButton({ value, label, srLabel = "reference" }: { value: str
     </>
 }
 
-// FLAGGED GAP, not fixed here (out of scope on this branch — see the
-// worktree brief): `[data-copy-unavailable="true"]` has a rule only in
+// Known gap: `[data-copy-unavailable="true"]` has a rule only in
 // `geometry-detail.css:83` (`.geometry-page .copy-button[...]`, a warm
 // amber `#a15c00`), a stylesheet the species-entry page never loads.
-// MEASURED: the SAME "unavailable" state renders amber on the geometry
+// The SAME "unavailable" state renders amber on the geometry
 // page and idle grey (no visual change at all) on the entry page — this
-// shared component grew a state one of its two consumers cannot render.
-// `species-entry.css` is owned by a parallel branch
-// (`frontend/evidence-in-prose`) and is off-limits here; route this gap
-// there rather than editing it from this branch.
+// shared component has a state one of its two consumers cannot render.

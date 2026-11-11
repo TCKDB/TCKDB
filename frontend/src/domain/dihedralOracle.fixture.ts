@@ -8,7 +8,7 @@
  * build ever executes RDKit for. See geometryMeasure.test.ts's
  * "external oracle" describe block for why this fixture exists: a test
  * suite whose expected values were read off this module's own output
- * cannot catch a self-consistent sign error (see PR #295's review) --
+ * cannot catch a self-consistent sign error --
  * only a second, independent source of truth can.
  *
  * Generation method: rdMolTransforms.GetDihedralDeg (and SetDihedralDeg

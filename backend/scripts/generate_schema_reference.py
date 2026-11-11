@@ -16,9 +16,8 @@ prose, and ``backend/schema.dbml`` (``scripts/generate_dbml.py``) is a
 generated entity diagram. None of the three is a column-level reference a
 depositor can search: what does this column mean, is it nullable, what does
 it default to, what are the accepted enum values. Hand-writing one would
-drift the same way a hand-written ``schema.dbml`` used to -- see that
-script's own docstring for the day an enum member went missing from a
-document nobody was comparing against the models. This script reads the
+drift the same way a hand-written ``schema.dbml`` would: an enum member can go
+missing from a document nobody compares against the models. This script reads the
 same ``Base.metadata`` and ``Base.registry.mappers`` generate_dbml.py reads,
 so it is modelled closely on it: same import bootstrap, same deterministic
 sorting discipline, same ``--check`` contract.

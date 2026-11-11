@@ -69,9 +69,8 @@ for field in ("key", "api_key", "token", "plain_key", "secret"):
 
 # Mask "abcdef...wxyz" -- never log the full key.
 #
-# ASCII only. The ellipsis here used to be U+2026, which nothing checked
-# because scripts/check_runtime_ascii.py only walked *.py. It now walks *.sh
-# too, so this line is covered by the same gate as the Python emission sites.
+# ASCII only: scripts/check_runtime_ascii.py walks *.sh as well as *.py, so
+# this line is covered by the same gate as the Python emission sites.
 mask_key() {
     local k="$1"
     local n=${#k}

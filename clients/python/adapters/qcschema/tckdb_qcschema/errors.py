@@ -101,15 +101,14 @@ E_ARTIFACT_TOO_LARGE = "artifact_too_large"
 E_ALREADY_IMPORTED = "already_imported"
 
 # ---------------------------------------------------------------------------
-# Export (C-Q3)
+# Export
 # ---------------------------------------------------------------------------
 
 #: A document whose top-level ``provenance.creator`` is exactly ``"TCKDB"``
 #: -- i.e. one this adapter itself exported -- is refused on import. Without
 #: this, an export could be re-imported and treated as independent evidence
 #: of a second ESS job, which it is not: it is TCKDB's own stored numbers
-#: reformatted. See ``exporter.py``'s ``provenance.creator="TCKDB"`` and the
-#: "reimport refused" note in the C-Q3 brief.
+#: reformatted. See ``exporter.py``'s ``provenance.creator="TCKDB"``.
 E_TCKDB_EXPORT_REIMPORT_REFUSED = "tckdb_export_reimport_refused"
 
 #: The calculation's ``type`` is not one this adapter can export --
@@ -231,7 +230,7 @@ E_SCAN_GRID_INVALID = "scan_grid_invalid"
 #: A grid point's final geometry does not hold the dihedral its grid key
 #: says it does (recomputed from the Cartesian coordinates, compared modulo
 #: 360 degrees). TCKDB stores the coordinate value as the coordinate
-#: itself (ADR 0020), so a key that disagrees with its own geometry cannot
+#: itself, so a key that disagrees with its own geometry cannot
 #: be stored as that value.
 E_SCAN_COORDINATE_GEOMETRY_MISMATCH = "scan_coordinate_geometry_mismatch"
 
@@ -267,8 +266,8 @@ E_EXPORT_SCAN_POINT_INCOMPLETE = "export_scan_point_incomplete"
 E_EXPORT_SCAN_GRID_NOT_INTEGRAL = "export_scan_grid_not_integral"
 
 #: A stored coordinate value disagrees with the dihedral recomputed from
-#: that point's own stored geometry. ADR 0020 fixes the value as the
-#: coordinate itself; the scans deposited before it hold a sweep relative
-#: to the first point instead, and exporting those as TorsionDrive grid
-#: angles would label every point with the wrong angle.
+#: that point's own stored geometry. The stored value is the coordinate
+#: itself; a scan whose values are a sweep relative to the first point
+#: does not match, and exporting it as TorsionDrive grid angles would
+#: label every point with the wrong angle.
 E_EXPORT_SCAN_COORDINATE_NONCONFORMING = "export_scan_coordinate_nonconforming"

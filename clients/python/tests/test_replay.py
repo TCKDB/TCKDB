@@ -689,7 +689,7 @@ def test_large_response_body_is_truncated(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Tests — computed_species (DR-0029)
+# Tests — computed_species
 # ---------------------------------------------------------------------------
 
 

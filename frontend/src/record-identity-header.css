@@ -4,10 +4,9 @@
  * record page that renders it. Own stylesheet per this project's
  * convention (see the header comment in `entry-science.css`).
  *
- * design/foundations PR B ("record pages" consolidation): the identity
- * facts and the (optional) submission-provenance row now render through
- * the shared `.kv-list` primitive (`design-system.css`) rather than this
- * file's own bespoke grid/dt/dd rules -- this file keeps only what
+ * The identity facts and the (optional) submission-provenance row render
+ * through the shared `.kv-list` primitive (`design-system.css`); this file
+ * keeps only what
  * `.kv-list` does not already cover: the kicker/pill row, the h1's own
  * spacing, the wide-fact override, and the three prose states (absent /
  * ambiguous / the TS "no canonical SMILES" note).
@@ -62,11 +61,10 @@
    30+ char ref) -- laid out the same way `refs-disclosure.css`'s own
    `.ref-item` lays out a ref row: flex, `align-items: baseline`, gap
    between the value and the button.
-   `flex-wrap: wrap` (post-review fix, PR 381): an EARLIER version of
-   this rule kept the row on one line and let the value wrap via
-   `.kv-list dd`'s own `overflow-wrap: anywhere` (design-system.css)
-   whenever the row didn't fit -- fine for a short fact, but MEASURED
-   broken for a 30+ char own-ref value: the `.kv-list` column
+   `flex-wrap: wrap`: keeping the row on one line and letting the value wrap
+   via `.kv-list dd`'s own `overflow-wrap: anywhere` (design-system.css)
+   whenever the row doesn't fit is fine for a short fact, but breaks
+   a 30+ char own-ref value: the `.kv-list` column
    (`minmax(16rem, 1fr)`, 256px) minus the button (45px) and gap (8px)
    leaves ~203px for a ~234-242px ref, so the ref itself shrank to fit
    and `overflow-wrap: anywhere` split it MID-TOKEN
@@ -111,13 +109,13 @@
     margin: 0;
 }
 
-/* SHOULD-FIX-7 ("record-page residuals" re-review): both the "no
+/* Both the "no
    canonical SMILES" note and the identity facts `.kv-list` that follows
    it inside `.record-identity-known` own no margin of their own (the
    note: `.record-identity-note { margin: 0 }` above; the `.kv-list`:
    `design-system.css`'s own "carries no external-spacing opinion"
-   contract) -- MEASURED 10px baseline-to-cap on calc-freq/geometry pages
-   where NEITHER side owned the gap. `display: grid; gap: var(--s-3)`
+   contract) -- with neither side owning the gap, the two sit 10px apart
+   baseline-to-cap on calc-freq/geometry pages. `display: grid; gap: var(--s-3)`
    here gives the wrapper the gap instead, the same "the container owns
    spacing between its children" pattern `.record-identity-header` (just
    above) already uses one level up. */

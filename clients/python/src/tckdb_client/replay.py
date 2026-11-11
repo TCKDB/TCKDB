@@ -1,6 +1,6 @@
 """Offline payload bundle replay engine.
 
-Walks a TCKDB Offline Payload Bundle directory (DR-0027), dispatches
+Walks a TCKDB Offline Payload Bundle directory, dispatches
 each sidecar by ``payload_kind``, and POSTs the saved payload via the
 existing ``TCKDBClient``. Sidecar status updates are atomic. The engine
 is chemistry-blind: it reads the bundle layout and the dispatch table

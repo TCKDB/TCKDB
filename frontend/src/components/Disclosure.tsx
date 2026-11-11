@@ -1,6 +1,6 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react"
 
-// No `import "../design-system.css"` here (post-review, PR D): `index.css`
+// No `import "../design-system.css"` here: `index.css`
 // already `@import`s `design-system.css` once, globally, from `main.tsx` --
 // every route this component can possibly render on has it loaded before
 // this component ever mounts. A component-local import on top of that is
@@ -40,11 +40,8 @@ export interface DisclosureProps {
 /**
  * The one canonical `<details>`/`<summary>` disclosure the app renders
  * through -- see the file header comment above `.disclosure` in
- * `design-system.css` for the review finding this replaces (7 different
- * `<summary>` styles measured across the live site, 5 different box
- * styles, and no chevron anywhere -- callers relied on the bare UA
- * triangle, sized by whatever font the summary happened to inherit,
- * 11px to 30px across those 7).
+ * `design-system.css` for the shared `<summary>`, box and chevron styling
+ * that replaces per-caller styles.
  *
  * `defaultOpen` sets the details element's initial `open` state without
  * making it a React-controlled prop: once mounted, native `<details>`

@@ -28,9 +28,7 @@ type UsersState =
  * that; this is the surface that uses it.
  *
  * Scope is deliberately accounts and roles only. Submissions and the
- * reviewer queue are their own surface (task #222) and sharing a shell
- * with them is a decision to make when that one is built, not a thing to
- * assume now.
+ * reviewer queue are their own surface and do not share this shell.
  *
  * The role check below is a courtesy, not a control. Every route this
  * page calls is gated on `require_admin` server-side; hiding the page

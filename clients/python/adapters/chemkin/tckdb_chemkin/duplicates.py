@@ -1,4 +1,4 @@
-"""Import-report warnings for wrong ``DUPLICATE`` flags (spec §6, DR-0036).
+"""Import-report warnings for wrong ``DUPLICATE`` flags (spec §6).
 
 CHEMKIN readers disagree about what to do with a model whose ``DUPLICATE``
 markers are wrong. Cantera refuses to load it. This module only *reports*: it

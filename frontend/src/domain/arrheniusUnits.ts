@@ -1,5 +1,5 @@
 // Unit algebra for `ArrheniusAUnits` (`backend/app/db/models/common.py`) --
-// the ONE place this PR's cm<->m<->molecule conversion factors are defined.
+// the ONE place the cm<->m<->molecule conversion factors are defined.
 // `arrheniusChartLayout.ts` (series/panel conversion) and `ArrheniusChart.tsx`
 // (the k(T) table's own conversion) both import the FACTOR from here rather
 // than each deriving their own -- a wrong factor is a silently-wrong
@@ -62,7 +62,7 @@ export const FAMILY_NAME: Record<ArrheniusUnitFamily, string> = {
  *  1e6 (1e-6 here), a value in m⁶ units smaller by 1e12 (1e-12). "Per
  *  molecule" is smaller than "per mole" by N_A (order 2) or N_A² (order 3,
  *  since a termolecular rate constant carries TWO concentration factors).
- *  Sourced verbatim from this PR's own brief -- do not re-derive by hand
+ *  Do not re-derive by hand
  *  elsewhere; import `arrheniusUnitConversionFactor` instead. */
 const FACTOR_FROM_BASE: Record<string, number> = {
     per_s: 1,
@@ -77,8 +77,8 @@ const FACTOR_FROM_BASE: Record<string, number> = {
 /** The order family a raw `A_units` token belongs to, or `null` for an
  *  unrecorded (`null`/`undefined`) or unrecognised (not one of
  *  `ArrheniusAUnits`'s seven values -- a future addition this file hasn't
- *  learned yet) token. `null` here is the signal every caller in this PR
- *  uses to refuse conversion entirely, per the plan's own invariant: a
+ *  learned yet) token. `null` here is the signal every caller
+ *  uses to refuse conversion entirely: a
  *  record whose units this file cannot place in a family converts to
  *  nothing, and keeps its current "unrecorded units" treatment. */
 export function arrheniusUnitFamily(units: string | null | undefined): ArrheniusUnitFamily | null {

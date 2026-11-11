@@ -7,16 +7,11 @@ import { requestScientificJson, ScientificApiError, ScientificRateLimitError } f
 // The archive's anonymous-read budget (`rate_limit_anon_read_per_minute`,
 // `backend/app/api/config.py:85`) answers an over-budget request with 429
 // and an integer-seconds `Retry-After` header
-// (`backend/app/api/rate_limit.py:391`). Before this file, NOTHING in the
-// frontend read status 429 specially (`grep -rn 429 frontend/src` found
-// nothing) -- every caller's generic catch-all rendered "unavailable" for
-// what was actually a transient, self-clearing throttle. That is bug #2
-// from the owner's report: pressing Back on a species-entry page triggered
-// a burst of requests, tripped the limit, and the page stuck on "Entry
-// unavailable ... Try again later" until the owner waited out the window
-// and refreshed by hand.
+// (`backend/app/api/rate_limit.py:391`). A 429 is a transient,
+// self-clearing throttle, so it must not be rendered as a generic
+// "unavailable" by callers' catch-alls.
 //
-// `requestScientificJson` now does that wait automatically: on a 429 it
+// `requestScientificJson` waits automatically: on a 429 it
 // reads `Retry-After`, sleeps that long, and retries ONCE. Only a second
 // consecutive 429 (the archive still over budget a full window later)
 // surfaces to the caller, as the distinct `ScientificRateLimitError`
@@ -102,7 +97,7 @@ describe("requestScientificJson: 429 handling", () => {
         await expect(requestScientificJson("/api/v1/scientific/probe")).rejects.toBeInstanceOf(ScientificApiError)
     })
 
-    // Review follow-up (SHOULD-FIX #1): the wait itself needs to be
+    // The wait itself is
     // observable so a caller can render "the archive is busy, retrying in
     // Ns" instead of a plain, indefinite "Loading …" for however long the
     // wait runs (up to a minute -- `rate_limit_anon_read_per_minute`,
@@ -139,10 +134,10 @@ describe("requestScientificJson: 429 handling", () => {
         expect(onRateLimitedForOk).not.toHaveBeenCalled()
     })
 
-    // Nit fix: `Retry-After` is legally EITHER an integer-seconds count
+    // `Retry-After` is legally EITHER an integer-seconds count
     // (what the live API sends) OR an HTTP-date (RFC 9110 §10.2.3) -- the
-    // date form used to silently fall back to the 5s default because
-    // `Number.parseInt` on a string starting with a weekday name is `NaN`.
+    // date form must not fall back to the 5s default that
+    // `Number.parseInt` would give, since parsing a string starting with a weekday name is `NaN`.
     it("parses an HTTP-date Retry-After, not just the integer-seconds form", async () => {
         vi.useFakeTimers()
         const now = new Date("2026-01-01T00:00:00.000Z")

@@ -157,7 +157,7 @@ describe("CompositeSchemePage", () => {
     })
 })
 
-describe("CompositeSchemePage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("CompositeSchemePage -- no depositor-typed text", () => {
     it("prints no note on a user-built recipe, while the scheme name (which can carry level-of-theory keywords) is still shown", async () => {
         const planted = plantSentinels({ scheme: core(), terms: EXTRAPOLATION_TERMS }, ["note"])
         expectPlanted(planted)

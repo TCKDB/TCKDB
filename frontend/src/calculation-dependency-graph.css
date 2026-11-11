@@ -17,11 +17,10 @@
 /* `ReactionTransitionStatesSection.tsx`'s own IRC note, rendered directly
    above the graph, only when this TS entry actually has an IRC slot --
    the one thing the graph itself genuinely cannot say (which species the
-   IRC connects). Everything else that used to sit in a caption block here
-   (the reaction equation, and what the centre node's optimisation is OF)
-   is gone: the equation restates the page's own `<h1>`, and the subject
-   now lives ON the centre node itself (`CalculationDependencyGraph.tsx`'s
-   `centreSubject`) -- see this section's own docstring. Plain `.note`
+   IRC connects). The reaction equation is not repeated here (it restates
+   the page's own `<h1>`), and the subject of the centre node's optimisation
+   lives ON the centre node itself (`CalculationDependencyGraph.tsx`'s
+   `centreSubject`). Plain `.note`
    styling (design-system.css), no wrapper needed for a single line.
    `margin` here (not left to `.note`'s own, which sets none) separates it
    from the heading above and the graph below. */
@@ -63,8 +62,8 @@
 /* The centre node's type pill -- the only node in the graph with a known
    `type` (see the component's own docstring for why parent/child nodes
    never get one). A real `<rect rx>` behind the text, `.value-pill`'s own
-   COLOUR AND RADIUS treatment (design-system.css) -- review finding: bare
-   uppercase SVG text read as a label, not a pill. Colour/radius only,
+   COLOUR AND RADIUS treatment (design-system.css): bare
+   uppercase SVG text reads as a label, not a pill. Colour/radius only,
    not the whole rule: the font is the SVG label step, not `.value-pill`'s
    own, and the stroke deliberately differs too. `--accent-300` (not
    `.value-pill`'s own `--line` border) is what actually shows: the pill's
@@ -131,10 +130,9 @@
     outline-offset: 3px;
 }
 
-/* Static clickable affordance (review finding: a linked node rendered as
-   a plain box with plain `--ink` text -- indistinguishable from a
-   satellite type pill's own text at a glance, no cue at all until the
-   pointer happened to hover it). The house link treatment
+/* Static clickable affordance (a linked node rendered as
+   a plain box with plain `--ink` text would be indistinguishable from a
+   satellite type pill's own text at a glance, with no cue until hover). The house link treatment
    (`.kv-list a`/`.data-table a`/`.card a`/`.note a`, design-system.css)
    is accent-coloured and underlined WITHOUT needing hover -- this is the
    same treatment applied to the ref text of any node this component
@@ -160,9 +158,8 @@
    design-system.css) AND the node's own border switching to a thicker
    accent stroke -- belt and suspenders, since the outline alone can be
    hard to see against the node's own already-drawn border at the box's
-   corners. MEASURED (post-review): an earlier version suppressed the
-   outline entirely (`outline: none`) and relied on the border-stroke
-   change alone, which review found too subtle to count as "focus
+   corners. Suppressing the outline (`outline: none`) and relying on the
+   border-stroke change alone is too subtle to count as "focus
    visible" on a box already drawn with a 1.5px `--line` stroke. */
 .dep-graph-node-link:focus-visible {
     outline: 3px solid var(--focus-ring);
@@ -196,10 +193,9 @@
     text-transform: var(--type-label-transform);
 }
 
-/* The pre-existing sentence list, demoted below the graph as its text
+/* The sentence list, below the graph as its text
    equivalent (screen readers / Ctrl+F) rather than hidden -- `.note`'s
-   own size and colour (design-system.css), not the body-prose size the
-   list used to render at when it was this section's only content. */
+   own size and colour (design-system.css), not body-prose size. */
 .dep-graph-sentences {
     display: flex;
     flex-direction: column;

@@ -9,7 +9,7 @@ import {
     formatEnergyForDisplay,
 } from "./energyUnits"
 
-// Hand-checked constants from the brief -- these four numbers are the
+// Hand-checked constants -- these four numbers are the
 // contract, not an implementation detail, so they are pinned literally
 // rather than derived from anything else in this module.
 describe("hand-checked conversion factors", () => {

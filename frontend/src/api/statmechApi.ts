@@ -6,7 +6,7 @@ import { pageQuery, parsePagedRef, type PageRequest } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 // ---------------------------------------------------------------------------
-// Shape notes (measured 2026-08-29 against a hosted TCKDB deployment,
+// Shape notes (from
 // backend/app/schemas/reads/scientific_statmech.py and
 // backend/app/services/scientific_read/{statmech,species_statmech}.py):
 //
@@ -30,7 +30,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 //   this slice, matching the calculation-page precedent.
 //
 // - `available_sections` (`AvailableStatmechSections`) is GENUINELY
-//   MEASURED here, not hardcoded — verified by reading
+//   derived server-side, not hardcoded — see
 //   `build_statmech_record` in `services/scientific_read/statmech.py`:
 //   every flag is a real `bool(...)` over freshly-queried rows
 //   (`has_source_calculations=bool(source_rows)`,
@@ -245,7 +245,7 @@ const statmechRecordSchema = z.object({
     literature: literatureSchema.nullable().optional(),
     evidence_summary: evidenceSummarySchema,
     available_sections: availableSectionsSchema,
-    // Additive (owner decision, 2026-09): geometry/frequency/energy can each
+    // Additive: geometry/frequency/energy can each
     // be at a different level of theory. Absent on an older API response —
     // `domain/productLevels.ts`'s `resolveProductLevels` derives the same
     // three from `source_calculations[]` below when this is missing, so
@@ -312,7 +312,7 @@ export async function loadEntryStatmech(
  * Refetch the same entry-scoped list with exactly one additional heavy
  * include token. Unlike the calculation surface's per-record
  * `loadCalculationSection`, this token is not addressed to one record — it
- * is a request-time decision that gates that field on EVERY record the list
+ * is a request-time choice that gates that field on EVERY record the list
  * returns (see the module docstring, "measured...at the LIST level too").
  * Callers read only the one field the token gates
  * (`readStatmechSectionField`), once per record, matched by that record's

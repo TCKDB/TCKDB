@@ -232,7 +232,7 @@ Notes:
 
 **Notes**
 
-- **Phase D (default):** scientific read responses expose only public
+- **Default:** scientific read responses expose only public
   refs (``*_ref``). Integer primary keys (``*_id``) and bare
   integer-id arrays (``input_geometry_ids``, ``supporting_calculation_ids``,
   …) are hidden by default. Their ref-bearing object-array siblings
@@ -260,8 +260,7 @@ Notes:
 - Path parameters like ``reaction_entry_id`` / ``species_entry_id``
   accept either an integer PK or a public ref of the matching prefix
   (``rxe_...`` / ``spe_...``). A wrong-prefix ref returns 422
-  (``handle_type_mismatch``); an unknown ref returns 404. The path
-  parameter shape did **not** change in Phase D — only the response.
+  (``handle_type_mismatch``); an unknown ref returns 404.
 - Supplying both ``*_id`` and ``*_ref`` for the same filter is allowed
   only when they resolve to the same row; otherwise the backend returns
   422 with a stable ``<resource>_handle_conflict`` code.
@@ -282,8 +281,8 @@ Notes:
 
 Raw artifact bytes are served only to authenticated callers -- always, on
 every deployment. Unredacted ESS logs can carry producer-side scratch
-paths, usernames and cluster hostnames, so the gate has no opt-out
-(ADR 0004). Set your key first:
+paths, usernames and cluster hostnames, so the gate has no opt-out.
+Set your key first:
 
 ```bash
 export TCKDB_API_KEY=tck_...
@@ -386,8 +385,7 @@ Three CLI knobs narrow the output:
   `lot-followup`, `geometry`, `full`), keeping only the primary
   searches.
 
-Two additional flags re-target the species-calculations search itself
-(it previously hard-coded `sp` + `lowest_energy`):
+Two additional flags re-target the species-calculations search itself:
 
 - `--calculation-type <type>` — backend `calculation_type` filter
   (default `sp`; common values: `sp`, `opt`, `freq`, `scan`, `irc`,

@@ -5,8 +5,7 @@ import { parseScientificResponse, requestScientificJsonPost } from "./scientific
  * `POST /scientific/networks/{ref}/kinetics/evaluate` --
  * `backend/app/api/routes/scientific/networks.py`, schema
  * `backend/app/schemas/reads/scientific_network_kinetics_batch_evaluate.py`.
- * PR 4 of `docs/plans/pressure-dependent-network-surface.md` (§2.4/§4 A):
- * evaluates EVERY stored k(T,P) fit belonging to one network at a shared
+ * Evaluates EVERY stored k(T,P) fit belonging to one network at a shared
  * `(temperature_k, pressure_bar)` grid, in one request -- the k(T,P)
  * chart's whole reason for existing as a network-scoped batch endpoint
  * rather than one call per fit (42 on the live hydrazine network).
@@ -21,7 +20,7 @@ import { parseScientificResponse, requestScientificJsonPost } from "./scientific
  *
  * No Chebyshev/PLOG math lives here or anywhere in this frontend --
  * `points[].k` is the server's own already-evaluated value, rendered
- * as-is (invariant 2 of this PR's brief).
+ * as-is.
  */
 
 const evaluatedPointSchema = z.object({

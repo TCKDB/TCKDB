@@ -45,8 +45,7 @@ When multiple input artifacts exist for one calculation, the backfill
 parser uses the **latest input artifact by ``calculation_artifact.id``**
 (``ORDER BY id DESC LIMIT 1``), in every mode: it is the deck an upload's
 replace-all leaves standing, so a re-run, with or without ``--force``,
-does not flip a calculation that has several decks. (Before 2026-11-04 the
-earliest deck was used; the two rules disagreed with what an upload stores.)
+does not flip a calculation that has several decks.
 
 If an operator needs to point the parser at a different artifact, use
 ``--artifact-id`` (single-calculation mode only) to override the

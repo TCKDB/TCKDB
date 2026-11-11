@@ -47,10 +47,9 @@ export type MachineReviewRecordSummary = z.infer<typeof MachineReviewRecordSumma
  * when the record cannot be named. `record_id` is the internal row id, which
  * an admin-only surface may carry.
  *
- * A third field was dropped on 2026-09-14, not renamed: `record_ref`, which
- * held the machine-review stack's private matching key. That name means the
- * *public* ref everywhere else in this API, so this page was rendering a row
- * id under a heading promising a handle. It is not replaced, because on this
+ * There is no `record_ref` field: that name means the *public* ref
+ * everywhere else in this API, and the machine-review stack's private
+ * matching key must not be shown under it. It is not exposed, because on this
  * surface the matching key is always `String(record_id)` -- publishing it
  * would put a second row-id column next to the first.
  */

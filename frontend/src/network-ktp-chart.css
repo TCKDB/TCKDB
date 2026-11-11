@@ -129,7 +129,7 @@
 
 /* Model-kind legend illustration ONLY (never a plotted line's own actual
    colour, which is channel-specific -- see `NetworkKtpChart.tsx`'s own
-   header comment on the series-encoding decision): Chebyshev drawn heavier,
+   header comment on the series encoding): Chebyshev drawn heavier,
    PLOG thinner AND faded, matching `modelKindStrokeWidth`'s real 2.25px /
    1.25px split and the tint `modelKindStrokeColor` applies, so the legend
    sample and the actual plotted line agree on which visual cue means what. */

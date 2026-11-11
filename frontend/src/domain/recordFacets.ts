@@ -15,7 +15,7 @@ export type EntryFacetAxes = {
     electronic_state_label?: string | null
     term_symbol?: string | null
     stereo_label?: string | null
-    /** The entry's stereo key (DR-0038): one CIP token per potential stereo element, `null` only for an achiral species. */
+    /** The entry's stereo key: one CIP token per potential stereo element, `null` only for an achiral species. */
     stereo_descriptor?: string | null
     stereo_resolution?: string | null
     /** Stereo elements whose `?` no data can settle yet (`axial`, `cumulene`). */
@@ -55,10 +55,7 @@ function stateDetailChips(entry: Pick<EntryFacetAxes, "electronic_state_label" |
 }
 
 // Exported: reused by `SpeciesEntrySummary.tsx`'s `EntryIdentity` to print
-// a labelled "Stereochemistry" row (e.g. "E isomer", not a bare "E") now
-// that the pill row this text used to live in only is gone -- see that
-// component's own comment for the report this fixes ("why ... does it not
-// show ... E isomer like it does for Review etc.").
+// a labelled "Stereochemistry" row (e.g. "E isomer", not a bare "E").
 export function stereoChip(label: string): string {
     if (label === "Ra" || label === "Sa") return `${label} allene`
     if (label === "R" || label === "S") return `${label} enantiomer`
@@ -75,7 +72,7 @@ const NOT_REPRESENTED_TEXT: Record<string, string> = {
 /**
  * What an entry's stereo is, in words -- from the descriptor and its resolution, never from the
  * display `stereo_label` alone. `stereo_label` is deliberately NULL for an entry whose every stereo
- * element is unknown (DR-0038), so reading that NULL as "not stereochemically distinguished" says
+ * element is unknown, so reading that NULL as "not stereochemically distinguished" says
  * the opposite of the truth: the entry IS a stereo-capable molecule whose configuration nobody
  * pinned down. The cases:
  *
@@ -106,22 +103,18 @@ function isotopeChip(key: string): string {
 }
 
 /**
- * One chip of text per axis that is actually set, replacing the single
- * collapsed heading string a species entry used to resolve as:
- * `species_entry_label ?? electronic_state_label ?? "kind · state"`
- * (`SpeciesOverviewPage.tsx`'s `EntryCard`, before this module existed).
+ * One chip of text per axis that is actually set, instead of a single
+ * collapsed heading string such as
+ * `species_entry_label ?? electronic_state_label ?? "kind · state"`.
  *
- * That fallback chain is not what produced the "bare R" bug it looks
- * like it should explain. `species_entry_label` on the wire is built
+ * `species_entry_label` on the wire is built
  * server-side (`app.services.scientific_read.species_identity.species_entry_label`)
  * as a compact discriminator that joins stereo, state kind, the typed
  * `electronic_state_label`, the typed `term_symbol` and the isotope key, so it
  * MIXES computed and depositor-typed parts and cannot be split safely on the
- * client. Treating it as a complete heading also silently dropped
- * "minimum · ground".
+ * client.
  *
- * Chips close that gap structurally rather than by re-ordering the same
- * fallback: they are built ONLY from the raw axes below and never
+ * Chips are built ONLY from the raw axes below and never
  * read `species_entry_label` at all, so there is nothing left that can
  * silently stand in for the whole classification. An axis that is unset
  * (no stereochemistry, no isotopologue) contributes no chip — never a

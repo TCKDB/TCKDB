@@ -23,22 +23,13 @@ describe("EvidenceChecklist", () => {
         expect(heading).toHaveClass("t-label")
     })
 
-    // Independent review: `evidence-checklist.css` used to carry a
-    // `.coverage-card > .t-label { display: block }` rule guarding a ~4px
-    // "heading renders inline, card shrinks" regression from BEFORE this
-    // card was collapsible, when the heading span and the `<dl>` sat as
-    // direct, adjacent siblings inside `.coverage-card` (the heading's own
-    // box height affected where the `<dl>` sat directly below it). Now
-    // RETIRED: the heading lives inside `Disclosure`'s own `<summary>`,
+    // The heading lives inside `Disclosure`'s own `<summary>`,
     // and the `<dl>` lives inside a SEPARATE `.disclosure-body` sibling of
-    // that `<summary>` -- they are no longer adjacent siblings at all, so
+    // that `<summary>` -- they are not adjacent siblings, so
     // the heading's own `display` value cannot affect the `<dl>`'s
-    // position any more, regardless of what it computes to (MEASURED:
-    // still `inline`, same UA default a bare `<span>` always had -- no
-    // blockification rescues it, and none is needed). This is pinned
+    // position, regardless of what it computes to. This is pinned
     // structurally below (heading and checklist are proven to sit in
-    // different disclosure regions) rather than as a `display` assertion
-    // that would just restate an unchanged UA default.
+    // different disclosure regions) rather than as a `display` assertion.
     it("the heading (inside <summary>) and the checklist <dl> (inside .disclosure-body) are separate siblings, not adjacent boxes whose heights interact", () => {
         const { container } = render(
             <EvidenceChecklist heading="Evidence on this thing" rows={[{ label: "Optimisation", value: "present" }]} />,
@@ -76,8 +67,7 @@ describe("EvidenceChecklist", () => {
         expect(ddFor(list, "Optimisation")).toHaveTextContent("present")
         expect(ddFor(list, "Frequency")).toHaveTextContent("absent")
         // Label above value -- a real <dt>/<dd> pair per row, not a run-on
-        // sentence sharing one element (the owner report this whole
-        // component exists to fix).
+        // sentence sharing one element.
         const rows = list.querySelectorAll(":scope > div")
         expect(rows).toHaveLength(2)
         for (const row of rows) {
@@ -144,7 +134,7 @@ describe("EvidenceChecklist", () => {
         expect(screen.getByText(/First sentence\. Second sentence\./)).toHaveClass("note")
     })
 
-    // Owner: "Evidence blocks should be expandable rather" -- built on the
+    // Collapsible -- built on the
     // shared `Disclosure` primitive, collapsed by default, so a reader
     // must open it before its rows become visible.
     describe("collapsible via the shared Disclosure primitive", () => {
@@ -176,7 +166,7 @@ describe("EvidenceChecklist", () => {
             expect(ddFor(checklist, "Optimisation")).toHaveTextContent("present")
         })
 
-        // Mutation table (b): dropping `defaultOpen={false}` (or bypassing
+        // Mutation check: dropping `defaultOpen={false}` (or bypassing
         // `Disclosure` to render the body unconditionally) would make this
         // fail.
         it("MUTATION GUARD: a card would fail the closed-by-default assertion if it rendered open", () => {
@@ -225,7 +215,7 @@ describe("EvidenceChecklist", () => {
             expect(container.querySelector(".coverage-checklist-summary")).toHaveTextContent("0 present, 2 absent")
         })
 
-        // Mutation table (c): a summary that stops rendering the computed
+        // Mutation check: a summary that stops rendering the computed
         // roll-up (e.g. reverting to just the bare heading) fails this.
         it("MUTATION GUARD: the summary carries digits from the roll-up, not just the heading text", () => {
             const { container } = render(
@@ -241,19 +231,17 @@ describe("EvidenceChecklist", () => {
             expect(summary.textContent).toMatch(/\d+ present, \d+ absent/)
         })
 
-        // Independent review, this branch: an EARLIER version of this
-        // component fell back to a bare `"N rows"` count when no row
-        // carried a tone -- MEASURED on live data as actively misleading,
+        // A bare `"N rows"` count when no row
+        // carries a tone would be misleading,
         // since that number is the CARD'S OWN fixed row count (constant
         // per card shape, e.g. always 6 for the reaction-entry review
-        // card), not a fact about the archive. It restated a different
+        // card), not a fact about the archive. It would restate a different
         // question's answer as if it answered the heading's own: a
-        // reaction entry with 4 real joined records collapsed to "6
+        // reaction entry with 4 real joined records would collapse to "6
         // rows"; two conformer groups with opposite coverage (every stage
-        // fully covered vs. none at all) BOTH collapsed to "3 rows",
+        // fully covered vs. none at all) would BOTH collapse to "3 rows",
         // indistinguishable from each other. There is no numeric fallback
-        // any more -- see the two describe blocks below for what replaced
-        // it.
+        // -- see the two describe blocks below.
         describe("no numeric row-count fallback -- untoned rows need a caller-supplied `summary`, or the card opens instead", () => {
             it("a caller-supplied `summary` is used when no tone-derived roll-up exists", () => {
                 const { container } = render(
@@ -277,7 +265,7 @@ describe("EvidenceChecklist", () => {
                 expect(details.open).toBe(false)
             })
 
-            // MANDATORY guard (independent review): fails if a future
+            // Guard: fails if a future
             // regression ever makes the ROW COUNT the only number in a
             // collapsed summary again, toned or not.
             it("MUTATION GUARD: the collapsed summary's only number is never the row count -- it must come from the data, not the row list's own length", () => {
@@ -321,7 +309,7 @@ describe("EvidenceChecklist", () => {
                 expect(container.querySelector(".coverage-checklist-summary")).toBeNull()
             })
 
-            // Mutation table (d): restoring the old `"N rows"` fallback (or
+            // Mutation check: restoring the old `"N rows"` fallback (or
             // otherwise rendering a numeric summary with no real `summary`
             // and no toned rows) must turn this red.
             it("MUTATION GUARD: no `summary` and no toned rows means no numeric roll-up and an OPEN card", () => {
@@ -374,7 +362,7 @@ describe("EvidenceChecklist", () => {
             expect(container.querySelector(".coverage-checklist .value-pill")?.tagName).toBe("SPAN")
         })
 
-        // MANDATORY per the mutation table: `to` on a `pill-muted` row is
+        // `to` on a `pill-muted` row is
         // silently ignored by THIS component, regardless of what a caller
         // passes -- the enforcement lives here, not in caller discipline.
         it("MUTATION GUARD: 'to' on a pill-muted row is silently ignored, even though the caller supplied it", () => {

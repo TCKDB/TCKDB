@@ -18,9 +18,9 @@ describe("classifyIdentifier", () => {
         expect(result.valid && result.identifier.kind).toBe(kind)
     })
 
-    // The owner-reported gap this module exists to close: `rxn_`/`rxe_`/
+    // `rxn_`/`rxe_`/
     // `tse_` (at least) must be recognised, not misread as a structure
-    // query. Extended to every prefix `App.tsx` has a route for --
+    // query. Covers every prefix `App.tsx` has a route for --
     // `routedPublicRefPrefixes` in `recordModel.ts` is the authoritative
     // list, this table exercises all of it so a future prefix added there
     // without a matching route entry (or vice versa) shows up as a gap.

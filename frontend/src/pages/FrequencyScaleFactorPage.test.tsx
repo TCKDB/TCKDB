@@ -71,7 +71,7 @@ describe("FrequencyScaleFactorPage: the standalone scale-factor page", () => {
     })
 })
 
-describe("FrequencyScaleFactorPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("FrequencyScaleFactorPage -- no depositor-typed text", () => {
     it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
         // `level_of_theory.label` is rendered by the server from the level's own facets, not typed.
         const planted = plantSentinels(mockResponse(), ["note"])

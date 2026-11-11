@@ -286,7 +286,7 @@ def normalize_reaction(
 def _is_collapsible_duplicate(rxn: NormalizedReaction) -> bool:
     """A DUPLICATE reaction that is a plain / simple-third-body (modified-)
     Arrhenius rate — i.e. exactly a modified-Arrhenius term that can be summed
-    into a ``multi_arrhenius`` channel (DR-0036). Falloff / PLOG / Chebyshev
+    into a ``multi_arrhenius`` channel. Falloff / PLOG / Chebyshev
     duplicates are *not* collapsed (they are not a sum-of-Arrhenius form) and
     keep their existing one-payload-per-line handling.
     """
@@ -338,7 +338,7 @@ def _merge_multi_arrhenius(
     members: list[NormalizedReaction],
 ) -> NormalizedReaction:
     """Collapse a DUPLICATE group of (modified-)Arrhenius rates into a single
-    ``multi_arrhenius`` reaction carrying one term per member (DR-0036).
+    ``multi_arrhenius`` reaction carrying one term per member.
 
     The scalar main-line ``a``/``n``/``reported_ea`` are left unset — the
     coefficients live in ``arrhenius_entries`` — matching the backend
@@ -438,7 +438,7 @@ def normalize_mechanism(mech: Mechanism) -> NormalizedMechanism:
     """Normalize every reaction in the mechanism against its header units.
 
     A Chemkin ``DUPLICATE`` group of summable (modified-)Arrhenius rates is
-    collapsed into a single ``multi_arrhenius`` reaction (DR-0036); every other
+    collapsed into a single ``multi_arrhenius`` reaction; every other
     reaction passes through one-to-one.
     """
     normalized = [

@@ -9,7 +9,7 @@ import {
     rotorBondLabel,
 } from "./conformerFingerprint"
 
-// The owner's own worked example (spe_mbdqifmaclaakukr7agxbuq3wa, one
+// A worked example (spe_mbdqifmaclaakukr7agxbuq3wa, one
 // rotor, three groups): bins [4], [20], [18] at a 15deg width -> ranges
 // 60-75, 300-315, 270-285. Reused below because it is the exact shape a
 // correct answer must produce.
@@ -40,7 +40,7 @@ describe("parseRotorKey / rotorBondLabel", () => {
     })
 })
 
-describe("basinRangeDeg / formatDeg -- the owner's own worked example", () => {
+describe("basinRangeDeg / formatDeg -- a worked example", () => {
     it("bins [4], [20], [18] at 15deg width produce 60-75, 300-315, 270-285", () => {
         expect(basinRangeDeg(4, 15)).toEqual([60, 75])
         expect(basinRangeDeg(20, 15)).toEqual([300, 315])
@@ -66,8 +66,7 @@ describe("buildBasinRotors -- never the bin index, only the range", () => {
             representativeFoldedDeg: null,
         })
         // No `quantizedBin` property anywhere on the rendered view -- a
-        // reader must never be shown the internal bin index (the owner:
-        // "I just think showing bin 23, 3 makes no sense to the user").
+        // reader must never be shown the internal bin index.
         expect(rotors[0]).not.toHaveProperty("quantizedBin")
     })
 
@@ -95,8 +94,7 @@ describe("buildBasinRotors -- never the bin index, only the range", () => {
         expect(buildBasinRotors(rigid)).toEqual([])
     })
 
-    // The exact assertion the brief calls "the assertion that catches a
-    // zip/index bug": rotor keys NOT in sorted order, angles distinguishable
+    // The assertion that catches a zip/index bug: rotor keys NOT in sorted order, angles distinguishable
     // enough that a swapped pairing is unmistakable.
     it("preserves rotor/angle pairing even when rotor keys are not in sorted order", () => {
         const fp: ConformerGroupFingerprint = {

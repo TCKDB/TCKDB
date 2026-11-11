@@ -1,6 +1,6 @@
 // What a public page may print of a literature record's title.
 //
-// Owner decision 2026-11-03: a title is TCKDB's to show only when it came from
+// A title is TCKDB's to show only when it came from
 // the DOI/ISBN registry (`title_source == "resolved_metadata"`). A title the
 // depositor typed -- or one whose origin was never recorded (`null`, every row
 // older than the column) -- is depositor text and stays off public pages. The

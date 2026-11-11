@@ -323,10 +323,8 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
 })
 
 /**
- * The old "Reactions involving …" group that used to fire automatically
- * for every structure query is GONE from species mode -- species mode
- * means "search species", full stop (the owner's core complaint about the
- * old field was inferred intent). What replaced it: a small cross-link
+ * Species mode fires no "Reactions involving …" group automatically for a
+ * structure query -- species mode means "search species", full stop. A small cross-link
  * that switches to reaction mode and runs the participation search only
  * when the reader asks for it.
  */
@@ -398,9 +396,8 @@ describe("recognized public references route directly, regardless of which mode 
         expect(screen.queryByText(/could not be parsed/i)).not.toBeInTheDocument()
     })
 
-    // Mutation-table item (c): the exact defect fixed earlier today for the
-    // single-field search (a reaction ref fed to structure search and
-    // reported unparseable) must not reappear in the new mode-switch shape.
+    // A reaction ref fed to structure search and
+    // reported unparseable must not occur in the mode-switch shape.
     it("a rxe_ reference typed while SPECIES mode is selected still routes to the reaction-entry page, not a structure-search failure", async () => {
         // No species-search handler registered at all, and no
         // reactions/browse handler either -- `onUnhandledRequest: "error"`
@@ -473,8 +470,8 @@ describe("reaction mode: label, placeholder, and help text are reaction-specific
         expect(input.getAttribute("placeholder")).toMatch(/rxn_|rxe_/)
         expect(input.getAttribute("placeholder")).not.toContain("formula")
         expect(screen.getByText(/Both directions are searched/)).toBeVisible()
-        // The help text no longer explains arrow semantics at all -- every
-        // arrow means the same thing now (owner correction), so there is
+        // The help text does not explain arrow semantics at all -- every
+        // arrow means the same thing, so there is
         // no per-arrow behaviour left to document here.
         expect(screen.queryByText(/is forward/i)).not.toBeInTheDocument()
     })
@@ -535,10 +532,7 @@ describe("reaction mode: a bare structure is a participation search (either side
 })
 
 /**
- * Owner correction: an earlier version of this component mapped `<>`/
- * `<=>`/`<->` to "either direction" and `=>`/`->` to "forward only" -- a
- * hidden mode a reader typing `<>` had no way to discover `->` even
- * existed. "every arrow means the same thing" replaces that: all five
+ * Every arrow means the same thing: all five
  * recognised arrows split reactants from products identically and the
  * request is ALWAYS `direction=either`, regardless of which one was
  * typed. Which individual rows only matched because the archive checked
@@ -581,7 +575,7 @@ describe("reaction mode: every arrow splits reactants/products the same way and 
  * indication of HOW it matched leaves a reader unable to tell a row that
  * matched as written from one that only matched because the archive also
  * checked the opposite orientation -- exactly the information the arrow
- * used to (badly) imply and now must be stated per row instead.
+ * implies, so it is stated per row instead.
  */
 describe("reaction mode: a reverse match is labelled on the row itself, the same wording /reactions uses", () => {
     it("renders 'Matched on the reverse direction' only for a row whose matched_direction is reverse", async () => {
@@ -638,15 +632,14 @@ describe("reaction mode: a malformed equation is a parse failure, distinct from 
 })
 
 /**
- * Owner: "what if they only know the products but not the reactants they
- * are searching for? maybe they can do just `<>[NH2]`". A one-sided
- * equation now reaches the network -- sending ONLY the side actually
+ * A one-sided equation (e.g. `<>[NH2]`, for a reader who knows only the products)
+ * reaches the network -- sending ONLY the side actually
  * given, never a guessed or empty-string value for the unwritten side
  * (`buildReactionBrowseQuery`/`splitSmilesList` already omit the param
  * entirely for an empty array, the same mechanic a bare "participation"
  * query's missing `product_smiles` already relies on). Still always
  * `direction=either`, same as every other reaction-mode query -- there is
- * no separate mode this shape narrows into. OWNER MEASURED: the side
+ * no separate mode this shape narrows into. The side
  * written does not filter the result (every reaction here is reversible,
  * and either-direction matching finds a structure on whichever side it
  * actually sits) -- so this suite asserts the REQUEST shape and that rows

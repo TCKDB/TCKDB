@@ -17,11 +17,8 @@
  * (`transition_state`, `statmech`, `thermo`, `kinetics`, `transport`,
  * `network_solve`, `applied_energy_correction`, `artifact`).
  *
- * That null used to be the end of the story, and it cost the review queue
- * 30% of its rows: 385 of 1,299 could not be opened, including every
- * thermo, statmech, kinetics and energy correction in the archive. Six of
- * those eight types are not unreachable at all -- they are rendered inside
- * their parent, and the review row now says which parent. See
+ * Six of those eight types are not unreachable at all -- they are rendered
+ * inside their parent, and the review row says which parent. See
  * `resolveRecordLocation` at the bottom of this file, which is what the
  * queue calls; `recordRoute` remains the primitive underneath it, used
  * directly only where no container is available (Machine findings).
@@ -77,7 +74,7 @@ export const LINKABLE_RECORD_TYPES: readonly string[] = Object.keys(
  * queue. Eight of the seventeen record types have no page, but six of those
  * eight are *rendered*: thermo and statmech as tabs on the species entry
  * page, kinetics and transition states as sections on the reaction entry
- * page. The backend now says which parent (`container_type`/`container_ref`
+ * page. The backend says which parent (`container_type`/`container_ref`
  * on the review row), so those rows can be opened after all -- at their
  * container.
  *
@@ -108,9 +105,9 @@ export const LINKABLE_RECORD_TYPES: readonly string[] = Object.keys(
  * -constraint transaction, which is exactly how the backend test for it is
  * written. So rather than assert a cause it cannot check, the `no-page`
  * sentence states only the two things that are certainly true -- the type
- * has no page, and nothing else could be opened either. It used to read "no
- * page for this record type yet", which named the missing page as the sole
- * reason and would have been actively misleading in that case.
+ * has no page, and nothing else could be opened either. Saying "no
+ * page for this record type yet" would name the missing page as the sole
+ * reason, which would be misleading in that case.
  *
  * **One more gap the `unnamed` bullet above does not cover.** "The row is
  * gone" does not always land in `unnamed`. The list route runs

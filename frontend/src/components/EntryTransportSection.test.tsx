@@ -256,10 +256,8 @@ describe("EntryTransportSection: design-system adoption (design/species-entry)",
         expect(headingsInsideSummaries).toHaveLength(0)
     })
 
-    // Review finding (SHOULD-FIX 1, PR 366): this tab's own "N records ·
-    // review: …" line was missed by the `.note` migration -- it kept
-    // `.records-note` (now margin-only) but never gained `.note` itself,
-    // so it silently fell back to unstyled 16px body text.
+    // This tab's own "N records · review: …" line carries `.note` itself
+    // (`.records-note` is margin-only), so it is not unstyled body text.
     it("the 'N records · review: …' line renders through .note, not a bare unstyled paragraph", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
@@ -280,7 +278,7 @@ describe("EntryTransportSection: design-system adoption (design/species-entry)",
         }
     })
 
-    it("'not reviewed' renders in exactly one pill style -- .value-pill--muted, never the retired .review-badge", async () => {
+    it("'not reviewed' renders in exactly one pill style -- .value-pill--muted, never .review-badge", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("trn_one")
@@ -292,7 +290,7 @@ describe("EntryTransportSection: design-system adoption (design/species-entry)",
         }
     })
 
-    it("every record table on this tab (Source calculations, Review history) is the shared .data-table primitive inside .table-scroll, never the retired .stage-table or a stacked fallback", async () => {
+    it("every record table on this tab (Source calculations, Review history) is the shared .data-table primitive inside .table-scroll, never .stage-table or a stacked fallback", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
             mockRecord({
                 available_sections: { has_source_calculations: true, has_review: true },
@@ -367,7 +365,7 @@ describe("EntryTransportSection: paging", () => {
     })
 })
 
-describe("EntryTransportSection -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("EntryTransportSection -- no depositor-typed text", () => {
     it("prints none of the typed fields, and never wording built from the joined species label", async () => {
         const planted = plantSentinels(mockResponse(), ["note"])
         expectPlanted(planted)

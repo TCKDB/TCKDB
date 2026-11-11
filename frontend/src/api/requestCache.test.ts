@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { dedupedFetch, resetAllRequestCaches } from "./requestCache"
 
 // ---------------------------------------------------------------------------
-// Regression coverage for the StrictMode bug found in review of the
-// tab-remount/429 PR: `dedupedFetch` used to run the FIRST subscriber's own
+// Regression coverage for the StrictMode case: `dedupedFetch` must not run the FIRST subscriber's own
 // `AbortSignal` into the shared `load()` call. A second, concurrent
 // subscriber for the same `(scope, key)` joined that same promise -- so when
 // the FIRST subscriber's cleanup ran (e.g. React StrictMode's dev-only
@@ -11,7 +10,7 @@ import { dedupedFetch, resetAllRequestCaches } from "./requestCache"
 // surviving mount's effect runs), it aborted the one real request out from
 // under the second subscriber, who never gets a response of its own.
 //
-// `dedupedFetch` now owns its own `AbortController` per cache entry and
+// `dedupedFetch` owns its own `AbortController` per cache entry and
 // counts subscribers: the underlying request is only ever cancelled once
 // EVERY subscriber has left, and even then only after a deferred tick (long
 // enough for a StrictMode-shaped synchronous resubscribe to cancel it).
@@ -119,7 +118,7 @@ describe("dedupedFetch: concurrent subscribers share one request", () => {
         expect(loadCalls).toBe(2) // a fresh subscription after genuine abandonment starts a NEW request, not a resurrected one
     })
 
-    // The cache has a 5-minute TTL (review of #370: a long-lived tab should
+    // The cache has a 5-minute TTL (a long-lived tab should
     // eventually see a curation change). Without this test, CACHE_TTL_MS =
     // Infinity passes the whole suite.
     it("serves a completed response for five minutes, then refetches", async () => {

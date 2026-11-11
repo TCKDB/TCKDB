@@ -3,7 +3,7 @@ import type { CompositeEnergyVerification } from "../api/scientificSchemas"
 import { verificationView } from "../domain/compositeVerification"
 
 /**
- * How far a composite energy has been checked (ADR 0021, P7a): one badge,
+ * How far a composite energy has been checked: one badge,
  * shared by every record page's Energy fact and the composite calculation
  * page's result, so the same verification reads identically everywhere.
  * All wording and the contradiction rule live in

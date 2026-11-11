@@ -12,7 +12,7 @@ import { AppUserRoleSchema } from "./auth"
  * someone is, not how to reach them, and this would otherwise be the one
  * surface serving contact details for every account at once. Adding them
  * to this schema would not make them appear; it would make the schema
- * lie. If they are ever wanted, the decision is the backend's to revisit.
+ * lie.
  */
 export const AdminUserSchema = z.object({
     id: z.number().int(),
@@ -51,8 +51,8 @@ export type UserRoleChange = z.infer<typeof UserRoleChangeSchema>
  * just ran. A UI that invented "checked just now" would be claiming a
  * measurement nobody took.
  *
- * Carries no row ids, digests or bucket names by design (DR-0028 Req. 2
- * applies to operational reports as much as to error bodies).
+ * Carries no row ids, digests or bucket names by design, as
+ * with error bodies.
  */
 export const StorageCapacityStateSchema = z.object({
     storage_full: z.boolean(),

@@ -11,8 +11,7 @@ import { expectDepositorTextOnlyInNotes } from "../test/depositorSentinel"
 
 // ---------------------------------------------------------------------------
 // Two DISTINCT conformer groups, each with its own observations and its own
-// non-overlapping calculation/geometry refs -- required by the design brief:
-// a fixture with only one conformer can prove that the selector renders
+// non-overlapping calculation/geometry refs -- a fixture with only one conformer can prove that the selector renders
 // SOMETHING, never that it renders the SELECTED conformer's own evidence.
 // Group "conformer_1" additionally carries two observations (one with no SP
 // calculation, one with TWO), so the "1 / 4 / many" conformer-count story,
@@ -224,7 +223,7 @@ function thermoRecords() {
         {
             // Population B: no resolvable primary calculation, Arkane
             // software, no conformer link -- the real archive shape
-            // (thermo id 4, spe_dfcw4tvy6tkqxnyittmn6d3vdu), per PR #285.
+            // (thermo id 4, spe_dfcw4tvy6tkqxnyittmn6d3vdu).
             thermo_ref: "thm_two",
             scientific_origin: "computed", model_kind: "nasa",
             review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
@@ -385,9 +384,7 @@ function handlers(options: HandlerOptions = {}) {
         // Distinct energies per sp calculation ref -- a fixture where every
         // row shares one value cannot prove this page joins by the row's
         // OWN calculation_ref rather than always showing the first energy
-        // it fetched (see the design brief's recurring-defect list: "a
-        // fixture where every row was identical let a records[0] bug
-        // survive").
+        // it fetched.
         http.get("/api/v1/scientific/species-calculations/search", async ({ request }) => {
             const type = new URL(request.url).searchParams.get("calculation_type")
             if (type === "opt") {
@@ -496,10 +493,7 @@ describe("species-entry page: identity and errors", () => {
         // the identity header -- never behind the References disclosure.
         // Labeled explicitly (and honestly: this record only carries an
         // InChIKey, never a full InChI, so the label says "InChIKey").
-        // SHOULD-FIX-4 (species-entry/browse/chrome residuals re-review):
-        // these used to render as their own `.identifier-chip` pill list
-        // (`role="list"`, `aria-label="Chemical identifiers"`) -- now
-        // `RecordIdentityHeader`'s own shared `dl.kv-list.record-identity-
+        // These render in `RecordIdentityHeader`'s own shared `dl.kv-list.record-identity-
         // facts`, the same primitive every other record page's identity
         // tier uses (see `SpeciesEntrySummary.tsx`'s own comment).
         const facts = document.querySelector("dl.kv-list.record-identity-facts") as HTMLElement
@@ -515,9 +509,8 @@ describe("species-entry page: identity and errors", () => {
         // visible identifiers row above, and this entry's OWN ref
         // (`species_entry_ref`) is no longer in this list at all: it
         // renders first, inline, in the identity header's own-ref fact
-        // instead (owner decision: "yes show each record's own ref
-        // inline" -- see `RefsDisclosure.tsx`'s own docstring), so
-        // References drops from 2 rows to 1.
+        // instead (see `RefsDisclosure.tsx`'s own docstring), so
+        // References has 1 row.
         expect(screen.queryByText("spc_atp56uqux2ajao7hvckx7gx7ca")).not.toBeVisible()
         // Scoped to the entry hero -- other RefsDisclosures on this page
         // (e.g. a conformer card's own) can carry the same "References (1)"
@@ -550,10 +543,9 @@ describe("species-entry page: identity and errors", () => {
 
     // Item 5 (findability PR): "Transition states for reactions of this
     // species" links to the TS browse with `participant_smiles` prefilled
-    // to this entry's own canonical SMILES. Also pins its PLACEMENT: an
-    // earlier revision rendered it above the breadcrumb-adjacent identity
-    // block entirely (measured tops 170px for the link vs 206/243px for
-    // the eyebrow/h1 -- i.e. ABOVE both). It must render AFTER the
+    // to this entry's own canonical SMILES. Also pins its PLACEMENT: it must
+    // not render above the breadcrumb-adjacent identity
+    // block. It must render AFTER the
     // heading in document order (`PageShell` renders `identity` before
     // `children`), which a DOM-order check on `compareDocumentPosition`
     // catches and a same-page `getByRole` presence check would not.
@@ -576,11 +568,10 @@ describe("species-entry page: identity and errors", () => {
         // `heading` in the DOM -- below the identity block, not above it.
         expect(heading.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
-        // BLOCKING-1 (species-entry/browse/chrome residuals re-review): this
-        // used to be a bare `<p><Link>` with no class -- `index.css`'s
-        // `a { color: inherit; text-decoration: none }` made it read as a
-        // stray, unstyled heading (MEASURED). It renders through `.note`
-        // now (the house muted-line primitive, `.note a` gives the link
+        // It is not a bare `<p><Link>` with no class -- `index.css`'s
+        // `a { color: inherit; text-decoration: none }` would make it read as a
+        // stray, unstyled heading. It renders through `.note`
+        // (the house muted-line primitive, `.note a` gives the link
         // itself the accent/underline treatment), placed with the identity
         // block via `SpeciesEntrySummary.tsx`'s `EntryIdentity`.
         const wrappingParagraph = link.closest("p") as HTMLElement
@@ -1150,7 +1141,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
 })
 
 // ---------------------------------------------------------------------------
-// Bug #1 from the owner's report: clicking a tab used to make "the whole
+// Clicking a tab must not make "the whole
 // page load" -- and only the FIRST tab click after landing on the
 // sectionless entry URL, never the ones after. Root cause (App.tsx): the
 // sectionless route (`/species-entries/:entryRef`) rendered `<SpeciesEntryPage
@@ -1248,7 +1239,7 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
         expect(entryPageNodeBefore).not.toBeNull()
 
         // The FIRST click: sectionless URL -> `:section` URL. This is the one
-        // that used to remount the page.
+        // that would remount the page.
         await user.click(screen.getByRole("tab", { name: "Single-point energy" }))
         expect((await screen.findAllByRole("link", { name: "calc_sp_1" })).length).toBeGreaterThan(0)
         expect(screen.queryByRole("heading", { name: "Loading species entry" })).not.toBeInTheDocument()
@@ -1355,8 +1346,8 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
 })
 
 // ---------------------------------------------------------------------------
-// Paging. An entry with more conformer basins than one page holds used to show
-// the first 50 and nothing else, with no sign the list was cut.
+// Paging. An entry with more conformer basins than one page holds shows
+// a sign that the list was cut.
 // ---------------------------------------------------------------------------
 
 function manyConformers(total: number) {

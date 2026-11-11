@@ -96,7 +96,7 @@ def test_reaction_builder_refuses_a_molecules_sp_primary():
 
 # A species whose only calculation is an sp that declares no geometry has
 # nothing to count, so the useful message is the one about the type: it needs
-# an opt. The geometry message used to replace it (#623).
+# an opt.
 
 
 def _bare_sp() -> Calculation:

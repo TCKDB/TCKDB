@@ -296,8 +296,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                         // same `review_summary.total` the "Total joined
                         // records" row itself reads, never the row COUNT
                         // (fixed at 6 category rows regardless of the real
-                        // total; see `EvidenceChecklist`'s own docstring for
-                        // the defect a bare row count used to cause here).
+                        // total; see `EvidenceChecklist`'s own docstring).
                         summary={`${record.review_summary.total} joined records`}
                         rows={[
                             { label: "Approved", value: record.review_summary.approved },
@@ -315,16 +314,11 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     )
 }
 
-// The "Formula" and "SMILES" columns this table used to carry SEPARATELY
-// are now one "Species" column: since `SpeciesFace` (`../components/
-// Formula.tsx`) already leads with SMILES and brackets the formula after
-// it, a dedicated SMILES column beside it would print the exact same
-// SMILES string twice in one row. Consolidating is the deliberate call
-// here (owner ruling: "SMILES leads, formula follows in brackets",
-// applied generally) -- the Ref column this table's own earlier PR split
-// out from the Formula cell (owner: "we should add a 4th column ... that
-// is the reference rather than it being in the same column as Formula")
-// is untouched: this table still never folds the species-entry ref or
+// One "Species" column: `SpeciesFace` (`../components/
+// Formula.tsx`) leads with SMILES and brackets the formula after
+// it, so a dedicated SMILES column beside it would print the exact same
+// SMILES string twice in one row. The Ref column is separate from the
+// identity cell: this table never folds the species-entry ref or
 // its copy button into the identity cell.
 /**
  * The served `equation` string is the written form and is left as the server wrote it. When the participant rows
@@ -415,11 +409,7 @@ function NetworkSection({ state }: { state: NetworksState }) {
                         <tr key={network.network_ref}>
                             <td data-label="Network">Pressure-dependent network</td>
                             <td data-label="Ref">
-                                {/* `/networks/:ref` is a real page now (PR 2 of
-                                    `docs/plans/pressure-dependent-network-surface.md`)
-                                    -- this ref used to render as inert `<code>`
-                                    with nothing to click because the route did
-                                    not exist. */}
+                                {/* `/networks/:ref` is the network record page. */}
                                 <Link to={`/networks/${network.network_ref}`}><code className="data">{network.network_ref}</code></Link>
                                 <CopyButton value={network.network_ref} label="Network" srLabel="reference" />
                             </td>

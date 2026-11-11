@@ -51,12 +51,9 @@ describe("CopyButton", () => {
         await waitFor(() => expect(status).toHaveTextContent("Copied"))
         expect(button).toHaveTextContent("Copied")
 
-        // Accessible name is stable by design — MEASURED (the finding
-        // this fixes): an earlier version of this component set
-        // `aria-label` to the state-dependent button text, so the name
-        // read "Copy SMILES reference" whether the click had succeeded,
-        // failed, or not happened yet at all — a screen-reader user got
-        // no signal anything changed. Announce the state change via the
+        // Accessible name is stable by design: it does not follow the
+        // state-dependent button text.
+        // Announce the state change via the
         // separate `role="status"` region instead of rewriting the name
         // out from under an assistive-tech user mid-interaction.
         expect(button).toHaveAttribute("aria-label", "Copy SMILES reference")

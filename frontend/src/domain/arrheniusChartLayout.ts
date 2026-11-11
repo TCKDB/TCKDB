@@ -20,7 +20,7 @@ import {
 // `thermoCpChartLayout.ts` at the call site in `ArrheniusChart.tsx` --
 // genuinely generic (not Cp-specific) helpers, so this file does not fork
 // them. The one k(T) primitive this module needs, `arrheniusTermK`, is
-// imported from `domain/kineticsTable.ts` (PR 2's pinned maths) rather than
+// imported from `domain/kineticsTable.ts` rather than
 // re-derived -- see that module's own docstring for the hand-computed
 // values this file's own tests reuse. The unit ALGEBRA itself (which units
 // interconvert, and by what factor) lives in `domain/arrheniusUnits.ts` --
@@ -28,10 +28,10 @@ import {
 // factor of its own.
 
 // SVG pinned to a FIXED pixel size (both a `width`/`height` attribute on
-// the element, not a percentage) -- the mock's own defect (round 2 review):
-// `width:100%; max-width:720px` on the Cp chart's `<svg>` scales its
+// the element, not a percentage):
+// `width:100%; max-width:720px` on an `<svg>` scales its
 // viewBox-driven text down whenever the container is narrower than 720px,
-// and at a 680px viewport that took tick labels below the 11.52px
+// which can take tick labels below the 11.52px
 // accessibility floor. This chart never shrinks; `ArrheniusChart.tsx`
 // wraps it in a `overflow-x: auto` container instead, so a narrow viewport
 // scrolls the chart horizontally rather than shrinking its text.
@@ -39,7 +39,7 @@ export const ARRHENIUS_CHART_WIDTH = 720
 export const ARRHENIUS_CHART_HEIGHT = 340
 export const ARRHENIUS_CHART_MARGIN = { top: 16, right: 20, bottom: 40, left: 58 } as const
 
-/** ~60 samples per curve, per plan §4/PR 3's own spec -- denser than the
+/** ~60 samples per curve -- denser than the
  *  k(T) table's 12 points (`kineticsTable.ts`'s `TABLE_POINT_COUNT`), since
  *  a plotted curve needs more resolution than a text table's sampled rows,
  *  but the SAME underlying `arrheniusTermK` maths at every sample. */
@@ -67,9 +67,8 @@ export interface ArrheniusSeries {
     /** The record's OWN deposited `A_units` token, exactly as served (or
      *  `null` when unrecorded) -- kept on every series regardless of which
      *  unit its panel is CURRENTLY displaying, so a reader can always
-     *  recover what was actually deposited (this PR's own invariant: "a
-     *  record's deposited units remain visible somewhere on its own
-     *  surface"). `ArrheniusChart.tsx`'s legend states it explicitly. */
+     *  recover what was actually deposited (a record's deposited units
+     *  remain visible somewhere on its own surface). `ArrheniusChart.tsx`'s legend states it explicitly. */
     depositedUnits: string | null
     /** k(T) points, ALWAYS in `depositedUnits` -- never pre-converted. This
      *  is the one ground-truth array every display-unit conversion starts
@@ -98,8 +97,7 @@ export interface ArrheniusPanel {
      *  `<select>` offers, regardless of which of them any record in this
      *  panel actually happens to be deposited in. Empty when `orderFamily`
      *  is `null`: there is no known convertible sibling unit to offer, and
-     *  (per plan §4) a control with fewer than two options is never
-     *  rendered at all. */
+     *  a control with fewer than two options is never rendered at all. */
     availableUnits: readonly string[]
     /** The selector's initial value -- the unit MOST of this panel's own
      *  series were deposited in. Tie-break (deliberately NOT alphabetical
@@ -125,10 +123,9 @@ export interface ArrheniusChartData {
 // string -- the SAME mapping `ReactionKineticsSection.tsx`'s private
 // `aUnitLabel` uses (duplicated here, not imported: that helper is
 // module-private and this file must not reach into a page-scoped component
-// module for a formatting table; plan §4's own PR-slicing note sanctions
-// "otherwise duplicate one function and note it" for exactly this case).
+// module for a formatting table).
 // The k(T) TABLE'S own header text (`ReactionEntryPage.test.tsx:521`'s "the
-// k(T) table header names the unit" test, unmoved by this PR) must keep
+// k(T) table header names the unit" test) must keep
 // reading the same string, so this map is kept byte-identical to that one.
 const A_UNIT_LABELS: Record<string, string> = {
     per_s: "s⁻¹",
@@ -154,10 +151,8 @@ export function arrheniusUnitLabel(units: string | null | undefined): string {
  * (the SAME string the k(T) table's own caption/header show, and the panel
  * legend's "deposited: ..." chip) so the axis, the table, and the legend
  * can never disagree about which unit is meant -- one formatting function,
- * three call sites (owner's report: switching the unit used to move the
- * curve, the table, and the caption, and leave the axis reading the bare
- * "log₁₀ k" it always had, the one thing on the page that never said what
- * was actually plotted).
+ * three call sites (the axis must say what is actually plotted, not a bare
+ * "log₁₀ k").
  */
 export function arrheniusLog10AxisTitle(units: string | null | undefined): string {
     return `log₁₀ [k / ${arrheniusUnitLabel(units)}]`
@@ -166,8 +161,8 @@ export function arrheniusLog10AxisTitle(units: string | null | undefined): strin
 /**
  * ~60-point k(T) curve for one plain `arrhenius`/`modified_arrhenius`
  * (single `A`) or `multi_arrhenius` (summed) record, sampled evenly across
- * ITS OWN `record_min_k..record_max_k` -- never a shared/union range, per
- * plan §4: "each curve drawn only within its own record_min_k..record_max_k".
+ * ITS OWN `record_min_k..record_max_k` -- never a shared/union range: each curve is drawn only within its own
+ * record_min_k..record_max_k.
  * `null` when the record lacks a usable fitted range or rate parameters
  * (same absence contract as `kineticsTable.ts`'s `computeKineticsTable`).
  * A non-positive `k` (pathological parameters) is skipped rather than
@@ -212,9 +207,9 @@ export function computeArrheniusSeries(
     }
 }
 
-/** Why a record is never plotted -- named per plan §4: "records carrying
+/** Why a record is never plotted: records carrying
  *  `plog_entries`, `chebyshev`, `falloff`, or a third-body flag are
- *  EXCLUDED with a note naming the ref and the reason". A record can carry
+ *  EXCLUDED with a note naming the ref and the reason. A record can carry
  *  more than one of these at once; every applicable reason is named, none
  *  silently dropped in favour of "the first match". */
 function exclusionReasons(record: Pick<ReactionKineticsRecord, "plog_entries" | "chebyshev" | "falloff" | "is_third_body">): string[] {
@@ -265,7 +260,7 @@ function modalDepositedUnit(series: readonly ArrheniusSeries[]): string {
 
 /**
  * Splits `records` into per-ORDER-FAMILY panels (a record in `cm3_mol_s`
- * and one in `m3_mol_s` share ONE panel now -- they are the same physical
+ * and one in `m3_mol_s` share ONE panel -- they are the same physical
  * quantity, 1e6 apart, and the whole point of a per-panel unit selector is
  * to make them directly comparable; only a genuine dimensional difference,
  * e.g. `per_s` beside `cm3_mol_s`, still gets two panels) and an excluded
@@ -326,8 +321,7 @@ export function buildArrheniusChartData(records: readonly ReactionKineticsRecord
  *  `xAxisMode` state maps -- so a panel's own current unit selection
  *  survives a re-render as long as its identity (family, or unrecorded/raw
  *  token) is unchanged. Mirrors the exact grouping key
- *  `buildArrheniusChartData` used to bucket this panel's series in the
- *  first place. */
+ *  `buildArrheniusChartData` uses to bucket this panel's series. */
 export function arrheniusPanelKey(panel: ArrheniusPanel): string {
     if (panel.orderFamily != null) return `family:${panel.orderFamily}`
     const firstDeposited = panel.series[0]?.depositedUnits
@@ -357,7 +351,7 @@ export function arrheniusPanelKey(panel: ArrheniusPanel): string {
  * `-Infinity`: left in, that single point poisons `panelLog10KDomain`'s
  * `Math.min`/`Math.max` into `[-Infinity, Infinity]`, every plotted y
  * becomes `NaN`, and the WHOLE panel renders blank with no error anywhere
- * (post-merge review finding -- the underflow threshold, k < ~1.79e-308 /
+ * (the underflow threshold, k < ~1.79e-308 /
  * factor, is not realistically reachable for a real deposit, but the
  * guard is one line and the failure mode without it is silent).
  */
@@ -375,8 +369,8 @@ export function convertArrheniusSeriesUnits(series: ArrheniusSeries, toUnits: st
 }
 
 /** x-domain for one panel -- the UNION of every plotted series' own fitted
- *  range (plan §4: "x = T in K, linear, over the union of the fitted
- *  ranges"), unpadded: padding outward would draw axis space beyond any
+ *  range (x = T in K, linear, over the union of the fitted
+ *  ranges), unpadded: padding outward would draw axis space beyond any
  *  curve's own stated validity. Takes the panel's SERIES directly (not the
  *  whole `ArrheniusPanel`) so it composes with a panel's current unit
  *  selection without needing to know about it -- the temperature domain

@@ -19,14 +19,12 @@ const NBSP = " "
  * (`./Formula.tsx`): SMILES leads, in `code.data`, with the served
  * `formula` -- still typeset with subscripts -- following in parentheses
  * (`formula` is a §3A field an older/pre-deployment response can omit, in
- * which case the SMILES stands alone). This is the fix for the owner's
- * own reported defect: `rxn_fktlilofmrdaylunqva2hbltpq` rendered as
- * "CH3OS <=> CH3OS" because a formula-only face cannot tell reactant
+ * which case the SMILES stands alone). A formula-only face cannot tell reactant
  * `[CH2]SO` and product `OC[S]` apart -- they share a formula and nothing
  * else. Deliberately NOT `SpeciesEntryLink` here (unlike every other formula
  * link in this app) -- that component renders its optional stereo-label
  * suffix (`species_entry_label`, e.g. "Z") as bare inherited-size text
- * with no wrapping element to scope. MEASURED (post-review): composed
+ * with no wrapping element to scope. Composed
  * into this h1 at `--type-display-2` (36px display face), "· Z isomer" inherited
  * the full 36px and read as the single largest, most prominent text on
  * the chooser page -- a plain-English aside outweighing the chemistry

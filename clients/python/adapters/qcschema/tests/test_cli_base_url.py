@@ -1,9 +1,9 @@
 """The CLI's network commands report an unusable API as one line (#568).
 
 ``export`` and ``import --upload`` pointed at a site root rather than its
-``/api/v1`` root used to die with ``TypeError: string indices must be
-integers``: the web app answered every path with an HTML page and a 200,
-and the adapter indexed it. They now print one ``ERROR [...]`` line and
+``/api/v1`` root would die with ``TypeError: string indices must be
+integers`` if the web app's HTML page (answered with a 200 for every path)
+were indexed. They print one ``ERROR [...]`` line and
 exit 1, with no traceback.
 
 A real local HTTP server rather than a stub client: the defect lived in the
@@ -115,8 +115,8 @@ def test_import_upload_against_a_site_root_stops_before_posting(serve, capsys, m
     line = _one_error_line(capsys.readouterr().err)
     assert rc == 1
     assert line.startswith("ERROR [TCKDBUnexpectedResponseError]: GET ")
-    # The duplicate pre-check used to read the HTML as "no records" and go
-    # on to POST the deposit to the web site. Now nothing is posted.
+    # The duplicate pre-check must not read the HTML as "no records" and go
+    # on to POST the deposit to the web site; nothing is posted.
     assert [method for method, _path in state.requests] == ["GET"]
 
 

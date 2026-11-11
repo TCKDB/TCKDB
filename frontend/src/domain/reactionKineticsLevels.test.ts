@@ -171,9 +171,9 @@ describe("deriveKineticsLevelsFallback -- energy and the resolver-disagreement f
         expect(energyFallbackNote).toBeNull()
     })
 
-    // The live "resolver disagreement" case (plan §7): a kinetics record's
+    // The "resolver disagreement" case: a kinetics record's
     // own cited sp calculation is not among this page's known calculations
-    // at all (verified live on kin_spkzatwjlvmmnja3i5im4fl7hq pre-deploy).
+    // at all.
     it("substitutes primary_level_of_theory and RETURNS a fallback note when the cited sp is not among calculationsByRef", () => {
         const calculationsByRef = buildCalculationsByRef([]) // sp ref not known here
         const { levels, energyFallbackNote } = deriveKineticsLevelsFallback(

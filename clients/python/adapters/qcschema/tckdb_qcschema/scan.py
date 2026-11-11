@@ -59,7 +59,7 @@ per-point optimizations            retained only (raw artifact)
 The stored coordinate value is the grid angle the document names for the
 point, and it is only stored after the dihedral recomputed from that point's
 own final geometry agrees with it (modulo 360 degrees) within
-:data:`DIHEDRAL_TOLERANCE_DEGREES`: ADR 0020 fixes the stored value as the
+:data:`DIHEDRAL_TOLERANCE_DEGREES`: the stored value is the
 coordinate itself, never a displacement.
 
 Relative energies are not in the document and are not computed here.
@@ -113,7 +113,7 @@ from .report_coverage import _MOLECULE_RULES, complete_mapping_report
 
 #: A recomputed dihedral must agree with the grid angle stored for it within
 #: this many degrees (after wrapping the difference into [-180, 180)). The
-#: value is the floor ADR 0020 derives for the read-time conformance check
+#: value is the floor of the read-time conformance check
 #: (``TOLERANCE_FLOOR_DEGREES`` in
 #: ``backend/app/services/scan_coordinate_conformance.py``). Measured on the
 #: real hydrogen-peroxide drive in this corpus: the largest disagreement is
@@ -122,7 +122,7 @@ DIHEDRAL_TOLERANCE_DEGREES = 1e-3
 
 #: A dihedral whose flanking bond angles are this close to collinear
 #: (``min(sin(theta_123), sin(theta_234))`` below it) is not a usable
-#: coordinate (ADR 0020), so it cannot be checked, and is refused rather
+#: coordinate, so it cannot be checked, and is refused rather
 #: than stored unchecked.
 DIHEDRAL_MIN_SIN_THETA = 0.05
 
