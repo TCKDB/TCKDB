@@ -1,42 +1,23 @@
 /*
- * Design-system foundations (PR A of a four-PR frontend consolidation).
- *
- * Two measured reviews of the live site (headless Chrome, computed styles
- * over 25 routes) found 49 distinct font sizes, 87 face/size/weight
- * combinations, 16 sizes in the 8.8-13.8px "label" band, and monospace
- * carrying 58% of all text (41% of all text mono at <=12px) -- the result
- * of every page inventing its own type and spacing choices independently.
- * This file is the one place those choices are made from now on: a type
- * scale (13 steps, weights 400/600 only -- no more browser-synthesised
- * 700, no more 9px mono labels), a 4px spacing scale, and the handful of
- * class primitives (`.kv-list`, `.card`, `.note`, `.data`, `.data-table`,
- * `.disclosure`, `.value-pill--muted`) that consolidate what review found
- * as 7 disclosure-summary styles, 5 box styles with no chevron anywhere,
- * two competing `.kv-list` definitions, and a pill rendered five different
- * ways for the same "not reviewed" fact.
+ * Design-system foundations: the one place type and spacing choices are
+ * made. A type scale (13 steps, weights 400/600 only, no browser-synthesised
+ * 700), a 4px spacing scale, and the shared class primitives (`.kv-list`,
+ * `.card`, `.note`, `.data`, `.data-table`, `.disclosure`,
+ * `.value-pill--muted`).
  *
  * Imported FIRST from `index.css` (`@import` at the very top) so every
  * page-level stylesheet -- loaded later, in whatever order a reader
  * happens to visit routes in -- can rely on these tokens and primitives
  * already being defined, and so a primitive defined here (e.g. `.kv-list`)
- * cannot lose the cascade to a page's own stale definition the way
- * `entry-science.css`'s own header comment describes happening before
- * (Vite never unloads a route chunk's CSS once injected, so whichever
- * page loaded last used to win the cascade for every route after it).
+ * cannot lose the cascade to a page's own definition (Vite never unloads a
+ * route chunk's CSS once injected, so whichever page loaded last would win
+ * the cascade for every route after it).
  *
  * Colour is NOT this file's concern -- every colour used below is a
  * `var(--token)` from `theme.css`; this file adds no new colour and no
  * hex/rgba literal of its own (`theme.css.test.ts` enforces this file the
  * same as every other non-token stylesheet).
  *
- * This PR defines the primitives and, where the canonical component is
- * ALREADY in use (`RefsDisclosure`, the ToC), wires them in. It does not
- * migrate `.stage-table`, `.review-badge`, `.tse-trust-badge`,
- * `.evidence-chip`, `.browse-entry-chip`, or `.identifier-chip-label` --
- * those are PR B/C's job; the "to retire" list below exists so that work
- * has a fixed target. (`.entry-review` migrated in PR D --
- * `SpeciesOverviewPage.tsx` now renders `.value-pill.value-pill--muted`,
- * same as the browse rows.)
  */
 
 :root {
@@ -75,7 +56,7 @@
        both these jobs plus five others (table header, disclosure
        summary, pill, button, legend) at once; this is the split.
 
-       SCIENTIFIC ERROR CLASS (recurred three times, 2026-09): every
+       SCIENTIFIC ERROR CLASS: every
        `-transform` token below that is `uppercase` -- this one, `--type-
        label-transform`, and `--type-label-strong-transform` -- gets
        applied by a LOT of shared selectors (`.t-kicker`/`.t-label`/`.t-
@@ -87,15 +68,14 @@
        header, sometimes carry a unit or quantity symbol instead --
        `s⁻¹` (seconds), `log₁₀ k` (a rate coefficient), `Cp (J/mol·K)`
        (heat capacity) -- and `text-transform: uppercase` cannot tell
-       the two apart. Shipped and re-shipped: `arrhenius-chart.css`'s
-       `s⁻¹` read `S⁻¹` (siemens, a different physical quantity) and
-       its `log₁₀ k` read `LOG₁₀ K` (kelvin, not a rate coefficient);
-       `thermo-cp-chart.css`'s `Cp (J/mol·K)` read `CP (J/MOL·K)`. Each
-       fix was a bespoke `text-transform: none` scoped to one selector
-       in one stylesheet -- correct for that one instance, but nothing
-       stopped the FOURTH stylesheet (a table header, a legend, a new
-       chart) from reintroducing the exact same defect with a selector
-       name none of the previous fixes could have named in advance.
+       `arrhenius-chart.css`'s `s⁻¹` would read `S⁻¹` (siemens, a
+       different physical quantity) and its `log₁₀ k` would read `LOG₁₀ K`
+       (kelvin, not a rate coefficient); `thermo-cp-chart.css`'s
+       `Cp (J/mol·K)` would read `CP (J/MOL·K)`. A bespoke
+       `text-transform: none` scoped to one selector fixes only that one
+       instance; nothing else stops a new stylesheet (a table header, a
+       legend, a new chart) from reintroducing the same defect under a
+       selector name not known in advance.
 
        `.t-preserve-case` (declared at the very end of this file -- see
        that rule's own comment for why) is the shared escape hatch: apply
@@ -122,14 +102,14 @@
     --type-label-transform: none;
 
     /* `--type-label-strong` -- same face/size/tracking as `--type-label`,
-       weight 600 instead of 400. Post-review addition: `.data-table th`
-       needed the label step at a heavier weight (a table header has to
+       weight 600 instead of 400. `.data-table th`
+       needs the label step at a heavier weight (a table header has to
        stand out from the label-weight `dt`s around it), and an inline
        `font-weight: 600` override bolted onto `--type-label-font` would
        have been a 14th ad-hoc style outside the scale -- the exact
        pattern this file exists to stop. Named here instead, so any
-       future "bold label" need (a second table header, PR B's
-       `.stage-table` migration) reaches for this step rather than
+       future "bold label" need (a second table header)
+       reaches for this step rather than
        reinventing its own override. */
     --type-label-strong-font: 600 .8125rem/1.3 var(--sans);
     --tracking-label: .1em; /* wide tracking for the one uppercase label ("On this page") */
@@ -168,10 +148,8 @@
 
     /* ---------------------------------------------------------------
      * Spacing scale -- 4px base (.25rem), eight steps: .25 .5 .75 1 1.5
-     * 2 3 4 rem. Replaces 42 distinct spacing literals measured across
-     * the app with one shared vocabulary; existing per-page spacing is
-     * NOT migrated in this PR (that is page-restructuring work, out of
-     * scope here) -- these tokens back only the new primitives below.
+     * 2 3 4 rem. These tokens back the primitives below; per-page spacing
+     * may still use its own values.
      * ------------------------------------------------------------- */
     --s-1: .25rem;
     --s-2: .5rem;
@@ -188,13 +166,11 @@
      * 44rem); this caps a CONTAINER that holds other content -- a
      * header block that needs to line its right edge up with the wide
      * evidence strip/tables rendered below it, not with a sentence's
-     * readable width. Post-review fix: `.record-header`
-     * (`calculation-detail.css`) was on `--measure-note` when that
-     * token was still 92rem and happened to match the page's other wide
-     * elements; narrowing `--measure-note` to a genuine prose width
-     * (44rem) for PR A's text-measure fix silently narrowed this
-     * container too, breaking the alignment the rule exists for. A
-     * second, purpose-named token is what keeps "prose gets narrower"
+     * readable width. `.record-header`
+     * (`calculation-detail.css`) uses this token rather than
+     * `--measure-note`, which is a genuine prose width (44rem) and would
+     * narrow the container, breaking the alignment the rule exists for. A
+     * second, purpose-named token keeps "prose gets narrower"
      * and "this container stays wide" independently adjustable instead
      * of coupled by accident.
      * ------------------------------------------------------------- */
@@ -230,24 +206,17 @@
    that references it. */
 
 /* ---------------------------------------------------------------------
- * Disclosure primitive -- see `components/Disclosure.tsx`. Consolidates
- * what review measured as 7 different `<summary>` styles and 5 different
- * box styles with NO chevron anywhere (the bare UA triangle, sized by
- * whatever font the summary happened to inherit, 11px to 30px across
- * those 7) into one box, one chevron, one summary typography.
+ * Disclosure primitive -- see `components/Disclosure.tsx`: one box, one
+ * chevron, one summary typography.
  *
  * `RefsDisclosure.tsx` composes this primitive (passing its own
- * `refs-disclosure` class alongside `.disclosure`). Retiring the third
- * disclosure box style ("header copy and inset disclosure" PR): what
- * used to be `species-entry.css`'s own `.conformer-card`-scoped override
- * (border-top only, no radius, no background -- the tested fix for a
- * double-border bug reported on the conformer card, before References)
- * is now the named `.disclosure--inset` modifier below, composed by
- * `RefsDisclosure`'s own `inset` prop instead of grown as a THIRD
- * page-scoped box style. `species-entry.css.test.ts` and
- * `ConformerSelector.test.tsx` still pin the same DOM/CSS shape, updated
- * to assert the modifier and the absence of the page-level override
- * rather than deleted.
+ * `refs-disclosure` class alongside `.disclosure`). The border-top-only,
+ * no-radius, no-background variant (the fix for a double border on the
+ * conformer card, before References) is the named `.disclosure--inset`
+ * modifier below, composed by `RefsDisclosure`'s own `inset` prop rather
+ * than a page-scoped override. `species-entry.css.test.ts` and
+ * `ConformerSelector.test.tsx` pin the modifier and the absence of a
+ * page-level override.
  * ------------------------------------------------------------------- */
 .disclosure {
     border: 1px solid var(--line);
@@ -300,9 +269,8 @@
  * radius, no background -- the card itself already supplies the box, so
  * a second full box (border on all four sides + radius + background)
  * double-draws the boundary between the card's previous block and this
- * disclosure's own top edge. Originated as the fix for a real double-
- * border bug (owner: "I am seeing two faint grey line breaks before the
- * REFERENCE section" -- `.conformer-basin-identity`'s own border-bottom
+ * disclosure's own top edge. It fixes a double-
+ * border (`.conformer-basin-identity`'s own border-bottom
  * stacking directly against `.refs-disclosure`'s border-top); named here
  * so a third page needing the same shape composes this modifier instead
  * of growing its own page-scoped override.
@@ -329,41 +297,28 @@
 }
 
 /* ---------------------------------------------------------------------
- * Key/value list -- ONE definition, replacing the two competing
- * `.kv-list` rules this PR deletes (`calculation-detail.css:186-207`,
- * bare `.kv-list` at .6875rem; `entry-science.css:102-120`, scoped
- * `.science-record .kv-list` at .64rem). Both existed because a bare
- * `.kv-list` rule risked the SAME route-chunk-CSS-leakage bug
- * `entry-science.css`'s own header comment describes (Vite never
- * unloads a route's CSS, so whichever page loaded last would win the
- * cascade on every route after it) -- defining it once here, always
- * loaded first, removes the reason either page needed its own copy.
+ * Key/value list -- ONE definition, used by every page. A bare
+ * `.kv-list` rule in a page stylesheet would leak across routes (Vite
+ * never unloads a route's CSS, so whichever page loaded last would win
+ * the cascade on every route after it); defining it once here, loaded
+ * globally before any page stylesheet, avoids that.
  * ------------------------------------------------------------------- */
 .kv-list {
-    /* Post-review fix: the two deleted per-page rules this consolidates
-       (`calculation-detail.css`'s old `margin: 1rem 1.1rem 1.1rem` and
-       `entry-science.css`'s scoped `margin: 1rem 0 0`) each zeroed the
-       UA default for their own page and imposed their own -- neither
-       carried over here, so a bare `<dl class="kv-list">` fell back to
-       the browser's default `dl` margin (block ~1em, inline 0),
-       different from BOTH prior values and different top vs. bottom.
-       Zeroing it here instead of picking one of the two old asymmetric
-       values makes the primitive itself carry no opinion on external
+    /* A bare `<dl class="kv-list">` would otherwise take the
+       browser's default `dl` margin (block ~1em, inline 0).
+       Zeroing it makes the primitive itself carry no opinion on external
        spacing -- the caller's own layout (card padding, a preceding
        heading's margin, `PageShell`'s section rhythm) already supplies
        it, and a component that owns no margin composes predictably
-       wherever it's dropped, which two DIFFERENT hand-tuned margins
-       never did in the first place. */
+       wherever it's dropped. */
     margin: 0;
     display: grid;
-    /* Widened 12rem -> 16rem (design/foundations PR E, "record-page
-       residuals" re-review, SHOULD-FIX-3): 12rem (192px) was narrower
+    /* Column minimum is 16rem (256px): 12rem (192px) would be narrower
        than a typical 26-30 char ref at --type-data-font (13px mono,
        ~7.8px/char, ~200-235px) -- combined with `dd`'s own `overflow-wrap:
        anywhere` below, that squeeze broke refs mid-token with a single
        orphaned character ("tse_aq5ktxlu27nvul3hmdwp / uyuz4e",
-       "lot_…76hj76 / u", MEASURED at 1920 across calc/geometry/TS/
-       conformer pages). 16rem (256px) comfortably fits those refs whole. */
+       "lot_…76hj76 / u"). 16rem comfortably fits those refs whole. */
     grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
     gap: var(--s-3) var(--s-5);
 }
@@ -387,28 +342,18 @@
     font: var(--type-data-font);
 }
 
-/* Companion note to the column widening above (post-review pass): the
-   12rem -> 16rem widening above is what actually fixes all six required
-   routes -- `.data`/`code` need no rule of their own beyond what
-   `.kv-list dd` already declares. A prior draft of this fix also tried
-   inserting a `<wbr>` after every `_` in a rendered ref, plus a
-   `word-break: keep-all` rule here, on the theory that a still-too-wide
-   ref should prefer breaking at that `<wbr>`/a hyphen over an arbitrary
-   character. Retired (re-review): `word-break: keep-all` only ever
-   affects CJK line breaking, so it changed nothing for these Latin/
-   underscore refs, and a controlled before/after on the six required
-   routes showed the `<wbr>` insertion was neutral-to-harmful -- it could
-   split a ref ("tse_" / "aq5ktxlu27nvul3hmdwpuyuz" / "4e") that had room
-   to sit whole, and did split one on
-   `/calculations/calc_mxhadodv3hsdead3rnmofh3xyi` at 680/1100 that
-   `origin/main` rendered unbroken. `overflow-wrap: anywhere` on
-   `.kv-list dd` (above) is still what a too-wide value (a 64-hex-
+/* Companion note to the column widening above: the
+   12rem -> 16rem widening above is what fixes the long-ref routes --
+   `.data`/`code` need no rule of their own beyond what
+   `.kv-list dd` already declares. There is no `word-break: keep-all`
+   (it only affects CJK line breaking, so it does nothing for Latin/
+   underscore refs) and no `<wbr>` insertion into rendered refs (it can
+   split a ref that has room to sit whole). `overflow-wrap: anywhere` on
+   `.kv-list dd` (above) is what a too-wide value (a 64-hex-
    character geometry/software hash, no `_`, no `-`,
    `GeometryDetailPage.tsx`'s "Geometry hash" row) falls back on to wrap
-   instead of overflowing into the next column -- switching it to
-   `normal` was a real, MEASURED regression caught screenshotting this
-   fix (the hash row overlapped the FORMAT column beside it), which is
-   why this stays `anywhere`, not `normal`. */
+   instead of overflowing into the next column; `normal` would let the hash
+   row overlap the FORMAT column beside it. */
 
 /* Put on the `<div>` wrapping one dt/dd pair that should span the full row
    width (a long value that would otherwise fight its neighbour column for
@@ -425,50 +370,36 @@
  * Pill -- `.value-pill` is the site-wide convention for a categorical,
  * bounded-vocabulary value (entry kind, electronic state, review status,
  * scale kind): a rounded pill REPLACING a value's plain-text form, never
- * sitting alongside it. Originated in `calculation-detail.css` for
- * `CalculationDetailPage.tsx`, then moved to `index.css` (the one
- * stylesheet every route loads) once a second page needed it, then here
- * (post-review, PR D) once BOTH it and `.value-pill--muted` needed to live
- * in the same file for the cascade below to hold.
+ * sitting alongside it. `.value-pill` and `.value-pill--muted` live in
+ * this one file for the cascade below to hold.
  *
  * `.value-pill--muted` is a DIFFERENT axis shown as its own, visually
  * distinct pill next to a `.value-pill` -- e.g. curation/review status
  * beside classification -- so two pills that are deliberately not the same
  * kind of fact do not also look like the same kind of fact.
  *
- * BUG this fixed (measured post-review): `.value-pill` used to live in
- * `index.css`, loaded AFTER this file's `@import` -- so on an element
- * carrying both classes, `index.css`'s `.value-pill` (equal specificity,
- * later in the cascade) won over this file's `.value-pill--muted`, and the
- * "muted" pill rendered identically to the base pill. Worse: `Disclosure.
- * tsx` used to `import "../design-system.css"` itself, so Vite emitted a
- * SECOND copy of this file into whichever route chunk imported Disclosure
- * -- once that chunk's stylesheet loaded (e.g. after navigating to the
- * species-overview page), its `.value-pill--muted` copy landed AFTER
- * `index.css`'s `.value-pill` in the DOCUMENT, flipping the cascade back
- * the other way. Two independent fixes, so neither a future reordering nor
- * a future duplicate-chunk regression can reintroduce this: (1) both
- * classes now live in ONE file, `.value-pill` declared BEFORE
- * `.value-pill--muted`; (2) the muted rule's own selector,
- * `.value-pill.value-pill--muted`, carries HIGHER specificity than a bare
- * `.value-pill` regardless of source order. `Disclosure.tsx` no longer
- * imports this file at all (`index.css` already does, once, globally).
+ * Both classes live in ONE file, `.value-pill` declared BEFORE
+ * `.value-pill--muted`, and the muted rule's selector,
+ * `.value-pill.value-pill--muted`, has HIGHER specificity than a bare
+ * `.value-pill`. Both safeguards matter: the single file keeps another
+ * `.value-pill` rule (e.g. in `index.css`, loaded after this file's
+ * `@import`) or a second copy of this file in a route chunk from landing
+ * later in the document, and the higher specificity keeps the muted rule
+ * winning over the base rule on an element carrying both classes.
+ * `Disclosure.tsx` therefore does not import this file (`index.css`
+ * already does, once, globally).
  * ------------------------------------------------------------------- */
-/* `letter-spacing: normal` (measured fix, 2026-09): `letter-spacing` is
+/* `letter-spacing: normal`: `letter-spacing` is
    inherited as an already-resolved LENGTH, not recomputed per descendant
    font-size -- so a `.value-pill` sitting inside `.t-display-1` (a big
    heading with `letter-spacing: -.03em`, computed at THAT element's own
-   ~64px font) inherited a fixed ~-1.8px tracking meant for 64px text onto
+   ~64px font) would inherit a fixed ~-1.8px tracking meant for 64px text onto
    this pill's 11.52px text, cramming several characters into the space of
-   one and rendering as illegible overlapping glyphs. Found via
-   `CorrectionSchemePage.tsx`'s new level-of-theory pill inside its `<h1>`
-   ("b3lyp/def2tzvp" measured, live: `letter-spacing: -1.8px` computed,
-   glyphs visibly overlapping in a screenshot) -- but the SAME defect
-   already existed, unnoticed, on `FrequencyScaleFactorPage.tsx`'s
-   scale-kind pill (also inside a `.t-display-1` heading; measured live:
-   identical `-1.8px`). Fixed at the shared rule so both call sites (and
-   any future one) are covered, not with a one-off override at either
-   page. */
+   one and rendering as illegible overlapping glyphs. This affects
+   `CorrectionSchemePage.tsx`'s level-of-theory pill and
+   `FrequencyScaleFactorPage.tsx`'s scale-kind pill, both inside a
+   `.t-display-1` heading; the shared rule covers both call sites (and
+   any other) without a one-off override at either page. */
 .value-pill {
     display: inline-block;
     padding: .2rem .6rem;
@@ -493,11 +424,6 @@
     white-space: nowrap;
 }
 
-/* Pill classes NOT migrated in this PR -- PR B/C's job. Listed here so
-   the consolidation has a fixed target rather than needing rediscovery:
-   `.review-badge`, `.tse-trust-badge`, `.evidence-chip`,
-   `.browse-entry-chip`, `.identifier-chip-label`. */
-
 /* One chip of a participant's facet chips (`ParticipantChips`). An inline-block is atomic: the chip moves to the
    next line as a unit when it fits there, and wraps inside itself (anywhere, so a long isotopologue SMILES cannot
    push the page wider) only when it is wider than the line. `text-decoration: inherit` keeps a link's underline
@@ -511,8 +437,8 @@
 }
 
 /* ---------------------------------------------------------------------
- * Note -- a short muted explanatory line, capped to the (now narrower)
- * note measure rather than running the full page width.
+ * Note -- a short muted explanatory line, capped to the note
+ * measure rather than running the full page width.
  * ------------------------------------------------------------------- */
 .note {
     max-width: var(--measure-note);
@@ -563,8 +489,8 @@
 }
 
 /* ---------------------------------------------------------------------
- * Data table -- NOT yet wired to any page (`.stage-table` migrates in
- * PR B); defined and tested here so PR B has a fixed target.
+ * Data table -- `.data-table` and `.table-scroll`, used by the record
+ * tables across pages.
  * ------------------------------------------------------------------- */
 .table-scroll {
     overflow-x: auto;
@@ -590,8 +516,7 @@
 .data-table td.num {
     text-align: right;
     font: var(--type-data-font);
-    /* MEASURED at 680 (SHOULD-FIX-3, "record-page residuals" re-review):
-       a NASA-7 coefficient in scientific notation ("-5.91781e-08") broke
+    /* A NASA-7 coefficient in scientific notation ("-5.91781e-08") broke
        across two lines as "-5.91781e- / 8" -- a numeric column has no
        word to break at in the first place, so it never needs to wrap. */
     white-space: nowrap;
@@ -603,22 +528,18 @@
     /* Inside a table the wrapper already scrolls, so an identifier must not
        be breakable: with `.data`'s `overflow-wrap: anywhere` in force, auto
        table layout shrank ref columns to min-content and a `calc_…` cell
-       wrapped into three-character lines twelve rows tall at 680 (PR C
-       review). Refs stay whole; the table scrolls. */
+       wrapped into three-character lines. Refs stay whole; the table
+       scrolls. */
     overflow-wrap: normal;
     white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------------
- * Links inside a primitive -- PR B review (BLOCKING-2, "record pages"
- * consolidation): `.record-context a` / `.basin-context a` used to style
- * ref links inside a record page's header `dl` (a calc ref, a species-
- * entry link, a RECORD-column link); both are retired now that those
- * `dl`s and tables compose `.kv-list`/`.data-table` instead, but neither
- * primitive carried its own `a` rule, and `index.css`'s global default
- * (`a { color: inherit; text-decoration: none }`) made every one of
- * those links visually indistinguishable from plain text -- MEASURED
- * across all five record pages this primitive set serves. One rule, the
+ * Links inside a primitive: neither `.kv-list`/`.data-table` nor
+ * `.card`/`.note` carries its own `a` rule, and `index.css`'s global default
+ * (`a { color: inherit; text-decoration: none }`) would make every link
+ * inside them (a calc ref, a species-entry link, a RECORD-column link)
+ * visually indistinguishable from plain text. One rule, the
  * same house link treatment `.record-breadcrumbs a` already uses
  * (`index.css`), covers every primitive a link can sit inside: the
  * key/value list, the data table, a card, and a note. */
@@ -676,13 +597,11 @@
  * (0,1,0) loses that fight on specificity alone, before `!important` even
  * enters into it -- doubling the class raises this rule to (0,2,0), which
  * beats (0,1,1) outright, in any spec-correct cascade. Declaring it last
- * additionally covers this project's actual TEST environment: MEASURED
- * directly (a throwaway jsdom probe, three rules, three orderings) that
- * this repo's jsdom/`vite.config.ts`'s `test.css: true` setup resolves
+ * additionally covers this project's TEST environment: the jsdom/`vite.config.ts` `test.css: true` setup resolves
  * `getComputedStyle` by LAST DECLARATION WINS, full stop -- ignoring both
- * specificity and `!important` entirely. A same-specificity `!important`
- * rule declared earlier in a file LOST to a later, non-important,
- * LOWER-specificity rule in that probe. `!important` is kept anyway (a
+ * specificity and `!important` entirely. In that probe a same-specificity `!important`
+ * rule declared earlier in a file loses to a later, non-important,
+ * lower-specificity rule. `!important` is kept anyway (a
  * real browser's cascade does honour it, and it costs nothing here), but
  * "declared after everything it needs to beat, in this same file" is the
  * only property that is provably reachable by this project's own

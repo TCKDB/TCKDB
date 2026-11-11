@@ -1,9 +1,6 @@
 /**
- * Path builders for the methods surface (`docs/plans/methods-surface.md`,
- * `plan-methods-surface-v2`, not committed to this repo -- see PR 3's own
- * brief). Three ref kinds get their own thin route family, exactly the
- * three dead-ref kinds §2.4 of that plan found rendered as unlinked text
- * across the site: a level of theory, a deposited energy-correction
+ * Path builders for the methods surface. Three ref kinds get their own
+ * thin route family: a level of theory, a deposited energy-correction
  * scheme, and a frequency scale factor.
  *
  * Kept as one-line functions in their own module (not inlined at each call
@@ -24,7 +21,7 @@ export function frequencyScaleFactorPath(ref: string): string {
     return `/methods/frequency-scale-factors/${ref}`
 }
 
-/** A composite recipe (CBS-QB3, a CCSD(T)/CBS extrapolation, ...): ADR 0021, P7b.
+/** A composite recipe (CBS-QB3, a CCSD(T)/CBS extrapolation, ...).
  *  `GET /scientific/composite-schemes/{ref}` is its read; this is its page. */
 export function compositeSchemePath(ref: string): string {
     return `/methods/composite-schemes/${ref}`

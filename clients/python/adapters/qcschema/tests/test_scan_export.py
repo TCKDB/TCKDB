@@ -11,7 +11,7 @@ The route cases there are the backend scan corpus
 for ``torsiondrive_v1``, ``torsiondrive_v2`` and ``torsiondrive_2d_v2`` --
 so what is exported here is what the importer stored.
 
-What the round trip requires (the brief's bar, not a looser one):
+What the round trip requires:
 
 * the same grid points, exactly (an exact count and the same angles);
 * each grid point's energy **exactly** equal (``==``) to the document's;
@@ -284,7 +284,7 @@ def test_fractional_grid_spacing_is_refused_not_rounded() -> None:
 
 
 def test_value_past_180_is_wrapped_and_reported() -> None:
-    """-90 stored as 270 is the same physical angle (ADR 0020 allows it)."""
+    """-90 stored as 270 is the same physical angle."""
 
     def edit(stub):
         for point in stub.scan["points"]:

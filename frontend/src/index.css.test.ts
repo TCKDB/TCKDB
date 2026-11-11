@@ -74,13 +74,9 @@ describe(".archive-shell > main (the flexible child that absorbs slack)", () => 
     })
 })
 
-// PR D (design-system adoption on the index/record pages): the home hero
-// and the record-placeholder/not-found pages used to share ONE clamped h1
-// size (the site's largest, 5rem/80px), and a second, stale override
-// (`.record-placeholder h1 { font-size: 3.6rem }`, further down this same
-// file) forced placeholders to an unclamped 57.6px regardless. The two now
-// diverge onto their own named type-scale steps, with the stale override
-// removed -- every rule below pins one piece of that so a later edit that
+// The home hero and the record-placeholder/not-found pages use their own
+// named type-scale steps, with no `.record-placeholder h1 { font-size: 3.6rem }`
+// override -- every rule below pins one piece of that so a later edit that
 // quietly reintroduces a literal size (or the duplicate override) fails
 // here instead of shipping unnoticed.
 describe(".home-hero h1 -- display-1, the site's one true display headline", () => {
@@ -115,11 +111,8 @@ describe(".record-placeholder h1 -- display-2, one step down from the hero", () 
     })
 })
 
-// SHOULD-FIX-14 (species-entry/browse/chrome residuals re-review): this
-// used to be `--type-body` plus a local `font-family: var(--serif)`
-// override -- one of three near-identical bespoke "serif prose lede"
-// declarations across the site (with `.browse-intro`/`.evidence-linkage-
-// story`). Now the named `--type-lede` step (design-system.css).
+// The named `--type-lede` step (design-system.css), with no local
+// `font-family` override.
 describe(".home-lede -- the one editorial intro, the named --type-lede step", () => {
     it("uses var(--type-lede-font) capped at --measure-prose, with no local font-family override", () => {
         const rule = extractRule(homeCss, ".home-lede")
@@ -186,17 +179,13 @@ describe(".record-placeholder p:last-child -- body copy under the shared prose m
 })
 
 // ---------------------------------------------------------------------------
-// SHOULD-FIX-10 (species-entry/browse/chrome residuals re-review): the site
+// the site
 // chrome every route renders (nav, brand, theme toggle, footer,
 // breadcrumbs) carried five more off-scale sizes -- 13.12px/12.16px/13.6px/
 // 11px/11.52px -- none matching a named type-scale step. Each maps onto a
 // named step now; this locks the mapping so a future one-off size cannot
 // silently creep back in. `.home-card`/`.archive-footer`/`.search-help`
-// were ALSO independently flagged by an earlier "record-page residuals"
-// re-review pass and fixed on `main` before this branch rebased onto it --
-// those three are re-asserted here (matching the values `main` landed,
-// not re-litigated) rather than duplicated under two different describe
-// blocks.
+// are asserted here too, under this one describe block.
 // ---------------------------------------------------------------------------
 describe("site chrome maps onto the named type scale, not bespoke sizes (item 10)", () => {
     it(".site-nav a uses --type-ui, not a bare .82rem/600", () => {
@@ -230,10 +219,7 @@ describe("site chrome maps onto the named type scale, not bespoke sizes (item 10
         expect(rule).not.toMatch(/var\(--mono\)/)
     })
 
-    // Landed on `main` at --type-label (400 weight, matching the
-    // original's own unweighted `.7rem` rule) before this branch rebased
-    // -- kept as `main` left it rather than re-bolding to
-    // --type-label-strong.
+    // Uses --type-label (400 weight) rather than --type-label-strong.
     it(".home-card .home-card-count uses --type-data, not a bare size", () => {
         const rule = extractRule(homeCss, ".home-card .home-card-count")
         expect(rule).toMatch(/font:\s*var\(--type-data-font\)/)
@@ -242,13 +228,13 @@ describe("site chrome maps onto the named type scale, not bespoke sizes (item 10
 })
 
 /**
- * SHOULD-FIX-14 ("record-page residuals" re-review): the `.archive-shell
+ * the `.archive-shell
  * .ref-item-label, .archive-shell .copy-button` accessibility-pass floor
- * override is retired now that both classes are fixed at source in
- * `refs-disclosure.css` itself.
+ * override is absent: both classes are styled at source in
+ * `refs-disclosure.css`.
  */
-describe("the retired .archive-shell .ref-item-label / .copy-button floor override is gone", () => {
-    it("index.css no longer declares this rule", () => {
+describe("the .archive-shell .ref-item-label / .copy-button floor override is absent", () => {
+    it("index.css does not declare this rule", () => {
         expect(css).not.toMatch(/\.archive-shell\s+\.ref-item-label/)
         expect(css).not.toMatch(/\.archive-shell\s+\.copy-button/)
     })

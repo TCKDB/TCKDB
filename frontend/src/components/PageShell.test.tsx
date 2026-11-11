@@ -44,15 +44,13 @@ describe("PageShell: contents position in document order", () => {
 })
 
 /**
- * ToC-top-alignment (follow-up to PR #321/#322/#323): the owner's chosen
- * mockup over the rejected "keep the header full-width, just tighten the
- * sticky offset" alternative -- "the ToC column starts level with the
+ * ToC-top-alignment: the ToC column starts level with the
  * identity/header block, just under the breadcrumbs, with the header
- * narrowing to make room". That is only true if `identity` renders INSIDE
+ * narrowing to make room. That is only true if `identity` renders INSIDE
  * `.page-shell-content` (the flex row's own content column), not as a
  * sibling ABOVE `.page-shell-layout` spanning full width -- a full-width
  * sibling is exactly what a reader would see if `PageShell` reverted to
- * its pre-follow-up shape, so this test asserts the containment directly
+ * a header spanning the full width, so this test asserts the containment directly
  * rather than only asserting `identity` renders somewhere on the page.
  */
 describe("PageShell: the identity slot renders inside the content column", () => {

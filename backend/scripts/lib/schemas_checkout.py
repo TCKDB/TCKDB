@@ -7,7 +7,7 @@ when it resolves elsewhere: the editable install in a ``git worktree`` points at
 the checkout it was installed from, so the worktree's own wire-model edits are
 invisible. For the tests that is a green that tested another branch; for the
 generator it is a contract rendered from another branch's models and stamped
-with this branch's version. The reasoning is recorded at length on
+with the checked-out version. The reasoning is recorded at length on
 ``_assert_schemas_package_is_this_checkout`` in ``tests/conftest.py``.
 
 Loaded by path (``backend/scripts`` is not a package), and it imports nothing

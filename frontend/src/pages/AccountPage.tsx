@@ -30,9 +30,8 @@ type KeysState =
     | { status: "ready"; keys: ApiKeyMetadata[] }
 
 /**
- * `/account` -- the one page this PR adds behind a "you need a session"
- * gate (never an existing page, per the brief: reads stay public
- * everywhere else). Lists the signed-in user's own API keys, with create
+ * `/account` -- the page behind a "you need a session"
+ * gate (reads stay public everywhere else). Lists the signed-in user's own API keys, with create
  * and revoke.
  *
  * The plaintext key `POST /auth/api-keys` returns is shown exactly once

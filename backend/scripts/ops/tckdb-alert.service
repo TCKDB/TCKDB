@@ -30,12 +30,12 @@ ExecStart=/home/YOUR_USER/tckdbv2/backend/scripts/ops/tckdb_alert_check.sh
 # not a unit failure -- without this, systemd marks the unit failed and the
 # journal fills with noise about the checker rather than about TCKDB.
 #
-# This is only safe because the script no longer lets 1 mean two things. bash
-# exits 1 when it dies on an unbound variable, so this line used to tell
-# systemd that an accidental death partway through the script was a success,
-# and OnFailure= never fired for it -- the one class of failure that produces
-# no push of its own. tckdb_alert_check.sh now reports 2 for any exit taken
-# before a verdict exists, and 2 is deliberately absent from this list.
+# This is only safe because the script does not let 1 mean two things. bash
+# exits 1 when it dies on an unbound variable, so treating 1 as success would
+# hide an accidental death partway through the script, and OnFailure= would
+# never fire for it -- the one class of failure that produces no push of its
+# own. tckdb_alert_check.sh reports 2 for any exit taken before a verdict
+# exists, and 2 is deliberately absent from this list.
 # Do not add it.
 SuccessExitStatus=0 1
 

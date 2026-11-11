@@ -134,7 +134,7 @@ describe("ConformerSinglePointTab", () => {
         expect(within(rowFor("co_1")).getByText(/-1\.000000 hartree/)).toBeVisible()
     })
 
-    it("does not repeat the hartree/conversion-rule sentence that used to sit under the energy toggle", async () => {
+    it("does not repeat the hartree/conversion-rule sentence under the energy toggle", async () => {
         page([{
             conformer_observation: { conformer_observation_ref: "co_1" },
             calculations: [{ calculation_ref: "calc_sp_1", type: "sp" }],

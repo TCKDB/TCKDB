@@ -123,9 +123,7 @@ describe("when the archive refuses", () => {
         await userEvent.click(await screen.findByRole("button", { name: "Download" }))
 
         const alert = await screen.findByRole("alert")
-        // Until 2026-09-14 a 404 also covered "exists, but not approved and
-        // not yours", so the copy had to name both and the reader could not
-        // tell which applied. Authentication is the whole gate now.
+        // A 404 means only that no file has that digest; authentication is the whole gate.
         expect(alert).toHaveTextContent(/no file with that digest is in the archive/i)
         expect(alert.textContent).not.toMatch(/deposits|approved/i)
     })

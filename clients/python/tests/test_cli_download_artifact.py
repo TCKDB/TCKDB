@@ -151,10 +151,8 @@ def test_an_unreadable_artifact_exits_not_found_and_says_why(
 
     assert rc == cli.EXIT_NOT_FOUND
     err = capsys.readouterr().err
-    # One reason since 2026-09-14. A 404 used to also cover "exists, but
-    # not approved and not yours", so the message had to name both and the
-    # caller could not tell which applied. Authentication is the whole gate
-    # now, so this can be taken literally.
+    # One reason: authentication is the whole gate, so a 404 can be taken
+    # literally as "no such artifact".
     assert "is in the archive" in err
     assert "deposits" not in err
 
@@ -176,7 +174,7 @@ def test_a_connection_failure_is_a_plain_failure(
 class TestArtifactDownloadName:
     """``<kind>_<ref><ext>`` -- what the file IS, which record, what format.
 
-    MEASURED on the hosted instance 2026-09-14: 317 artifacts of kind
+    On the hosted instance, 317 artifacts of kind
     ``output_log`` are all called ``input.log``, and 246 of kind
     ``input`` are all called ``input.gjf``. That is Gaussian's
     convention (``g16 input.gjf`` writes ``input.log``), so the recorded

@@ -1,4 +1,4 @@
-"""The emitted payload validates against the wire package (C-Q1)."""
+"""The emitted payload validates against the wire package."""
 
 from __future__ import annotations
 

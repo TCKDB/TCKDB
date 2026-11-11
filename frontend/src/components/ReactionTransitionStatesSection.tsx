@@ -25,7 +25,7 @@ const ENTRY_STATUS_STAGES: { key: string; label: string }[] = [
 ]
 
 /**
- * The Transition states section (plan §2 item 5): one block per
+ * The Transition states section: one block per
  * `TransitionStateInFull`. Renders the entry's own ref/review, its status
  * as the guess -> optimized -> validated stage strip (a single muted pill
  * for `rejected`, which is not a step on that flow), a calculations-by-
@@ -38,35 +38,28 @@ const ENTRY_STATUS_STAGES: { key: string; label: string }[] = [
  * renders, not a fork) whenever this entry's `dependencies[]` is
  * non-empty.
  *
- * Owner complaint, round 1 (2026-09): "in reaction we see Optimisation but
- * no idea what the optimisation is of? and its not clickable link to the
- * calc?". Fixed two ways:
+ * Two opt-in props of `CalculationDependencyGraph` make the centre node say what it is:
  * - `centreLinked` (opt-in on `CalculationDependencyGraph`) -- the centre
  *   node here is the TS's own `ts_opt`, a calculation the reader is NOT
  *   already viewing (unlike on `CalculationDetailPage.tsx`, where it IS
  *   the page), so it gets the same link affordance a parent/child node
  *   has.
  * - `centreSubject` (also opt-in on `CalculationDependencyGraph`) -- the
- *   node itself now carries a third row naming what the optimisation is
+ *   node itself carries a third row naming what the optimisation is
  *   OF ("Transition state"), a real link to this TS entry so the
  *   `tse_...` ref stays reachable from the node area, never printed in
  *   prose above the graph. See that component's own docstring for the
  *   full design.
  *
- * Owner complaint, round 2 (2026-09), on an earlier version of this fix
- * that put the subject and the reaction equation in a caption block ABOVE
- * the graph instead: "This does need repeating what reaction since the
- * top of the page says which reaction" -- the page's own `<h1>` already IS
- * that equation, a few screens up, on the one page this graph ever renders
- * on. The equation caption (and the `reactants`/`products`/`reversible`
- * props that existed only to feed it) is gone; the subject moved onto the
- * node itself per the round-1 fix above, so it isn't stated twice either.
+ * The page's own `<h1>` already IS the reaction equation, so no
+ * equation caption (or `reactants`/`products`/`reversible` props) is
+ * rendered above the graph; the subject sits on the
+ * node itself (`centreSubject`), so it isn't stated twice either.
  * What remains above the graph is a single, OPTIONAL note on what the
  * graph does/doesn't show about the IRC -- genuinely something the graph
  * itself cannot say, kept only when this TS entry actually has an IRC slot
- * (`ts.calculations.ts_irc`, `hasIrc` below) -- 17 of 34 live TS entries
- * have only opt/freq/sp, and an unconditional version of this note used to
- * name "the IRC" for those too, asserting one was run when none was.
+ * (`ts.calculations.ts_irc`, `hasIrc` below), so the note never names
+ * "the IRC" for an entry where none was run.
  */
 export function ReactionTransitionStatesSection({ transitionStates, calculations }: {
     transitionStates: ReactionTransitionStateInFull[]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Emit the backend acceptance corpus (C-Q2) from the adapter's own fixtures.
+"""Emit the backend acceptance corpus from the adapter's own fixtures.
 
 Runs the real ``tckdb_qcschema`` mapper (:func:`tckdb_qcschema.reader.read_document`
 + :func:`tckdb_qcschema.mapping.build_conformer_upload_payload`) -- the exact
@@ -25,7 +25,7 @@ adapter's own business (already covered by ``tests/test_corpus.py``) and
 have nothing for a backend route to accept.
 
 Intentionally NOT wired into any test run: this is a generator, invoked by
-hand (see docs/research/tckdb-phase-c-implementation-plan.md, C-Q2) when the
+hand when the
 adapter's fixtures change. Requires the adapter's own dependencies
 (qcelemental==0.51.2 pinned) -- run it in the ``tckdb_qcschema_psi4`` conda
 environment:

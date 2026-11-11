@@ -1,4 +1,4 @@
-"""Family dispatch and validation for MolSSI QCSchema documents (C-Q1).
+"""Family dispatch and validation for MolSSI QCSchema documents.
 
 A QCSchema document is either "family v1" or "family v2" -- two disjoint
 sets of pydantic classes qcelemental ships as ``qcelemental.models.v1`` and
@@ -67,7 +67,7 @@ family-specific class validation is attempted, and ``False`` there refuses
 ``job_failed`` immediately, uniformly, for either shape. Only once that
 gate has passed does the reader attempt strict class validation.
 
-TCKDB exports (C-Q3)
+TCKDB exports
 ---------------------
 :mod:`tckdb_qcschema.exporter` turns a stored calculation back into a
 QCSchema document with top-level ``provenance.creator="TCKDB"``. Such a

@@ -18,10 +18,8 @@
  * `ThemeToggle`).
  *
  * Two shapes, one slot: a bare "Sign in" link when the visitor has no
- * session, and the account menu below when they do. `.auth-status` and
- * `.auth-status-signout` are gone with the flat row of header links they
- * styled -- everything a signed-in reader used to reach from the bar now
- * lives inside `.account-menu-popup`.
+ * session, and the account menu below when they do. Everything a signed-in
+ * reader can reach from the bar lives inside `.account-menu-popup`.
  * ------------------------------------------------------------------- */
 .auth-status-link {
     color: var(--ink-2);

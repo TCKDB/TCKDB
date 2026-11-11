@@ -77,8 +77,7 @@
     list-style: none;
 }
 
-/* SHOULD-FIX-12 (species-entry/browse/chrome residuals re-review): was a
-   bare `.74rem` -- `--type-data` (mono, .8125rem, no case transform) is
+/* `--type-data` (mono, .8125rem, no case transform) is
    the named step here, not `--type-label` (which would force this
    ALL-CAPS): the legend text is `groupLegendLabel`'s own mixed-case
    phrase, "Conformer Group 1 (thm_a1) — 2 identical records" -- a real
@@ -114,8 +113,7 @@
     flex: none;
 }
 
-/* SHOULD-FIX-12 (re-review): was `.64rem` (10.24px) -- the smallest text
-   on the site, below the 11px accessibility floor. `--type-label-strong`
+/* `--type-label-strong`
    (mono, uppercase, 600 .72rem) is the named step for a short, weighted
    status flag like "selected". */
 .cp-chart-legend-label {
@@ -133,14 +131,10 @@
     text-transform: var(--type-label-strong-transform);
 }
 
-/* Grid, not the plain block box this used to be: `.cp-chart-axis-title--y`
+/* Grid, not a plain block box: `.cp-chart-axis-title--y`
    needs a column of its OWN, reserved in real layout, not a slice of empty
-   space it has to hope is there. The old layout (`position: relative` panel,
-   `position: absolute; left: -2.1rem` title) pushed the rotated title
-   entirely to the LEFT of the panel's own box -- painted space this
-   component never owns, clipped by the page's own left edge on every real
-   page (a review finding: the title never rendered at all, screenshotted
-   at 1920px). The grid's first column IS owned space, so the title can
+   space it has to hope is there. The rotated title sits in the grid's first
+   column, which is owned space, so it can
    never be cut off by a neighbour it doesn't control. */
 .cp-chart-panel {
     display: grid;
@@ -187,8 +181,7 @@
     dominant-baseline: hanging;
 }
 
-/* SHOULD-FIX-12 (re-review): was `.68rem` (10.88px), below the 11px
-   floor -- `--type-label` (mono, uppercase, .72rem) is the named step
+/* `--type-label` (mono, uppercase, .72rem) is the named step
    for a short axis-title label. */
 .cp-chart-axis-title {
     margin: .3rem 0 0;
@@ -204,8 +197,7 @@
     text-align: center;
 }
 
-/* SCIENTIFIC ERROR fixed here (live-site review finding, matches the
-   defect `arrhenius-chart.css` already fixes for its own Y title): the
+/* Scientific correctness (the same rule `arrhenius-chart.css` applies to its own Y title): the
    shared `.cp-chart-axis-title` rule above inherits `--type-label-transform`
    (design-system.css) = `uppercase` -- correct for the X title
    ("Temperature (K)", ordinary English prose), but this Y title's own text

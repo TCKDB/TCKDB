@@ -340,8 +340,8 @@ KNOWN_UNFIXED: tuple[dict[str, str], ...] = (
 )
 
 
-#: Defects this file previously published as measured-but-unfixed, and that
-#: have since been fixed. They stay on the page: a defect that is recorded
+#: Defects this file published as measured-but-unfixed, and that
+#: have been fixed. They stay on the page: a defect that is recorded
 #: while it is open and deleted the moment it closes leaves a reader unable to
 #: tell a problem that was solved from one that was never found.
 #:

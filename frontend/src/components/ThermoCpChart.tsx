@@ -49,7 +49,7 @@ const visuallyHiddenStyle = {
 // Cp vs. temperature, per DEPOSITED thermo record, overlaid — never
 // combined and never Boltzmann-averaged across conformers. A species entry
 // can carry several thermo records (one per conformer observation); the
-// owner explicitly wants to see whether those conformers AGREE, which a
+// chart overlays them so a reader can see whether those conformers AGREE, which a
 // single averaged line would hide, and averaging would require relative
 // conformer energies this archive largely does not have — this component
 // would be computing science, not archiving it. Each record gets its own
@@ -69,21 +69,11 @@ const visuallyHiddenStyle = {
 // the archive's own numbers — same rule `GeometryDetailPage.tsx`'s Å/bohr
 // toggle follows for coordinates.
 //
-// There used to be a second panel here plotting residuals (measured minus
-// NASA-7 fit, as a percentage of the fit) on its own scale, underneath this
-// one. It was removed: checked against a real record
-// (`thm_5dzg66kvcuslgw6swkuc7gduiu`), the archive's stored "measured"
-// points reproduce the NASA-7 fit to four decimal places at every checked
-// temperature (300 K: 122.212 vs 122.212, residual 0.0001; 1000 K: 306.454
-// vs 306.453, residual 0.0003; 2400 K: 381.075 vs 381.074, residual
-// 0.0004) — 0.000% of Cp across the range, on all 65 thermo records this
-// archive holds. The stored "raw" points were evidently evaluated FROM the
-// polynomial in the first place, so a residual plot compared a curve with
-// itself and was flat by construction, not because the fit was good. A
-// residual chart needs measured points genuinely INDEPENDENT of the fit --
-// no record in this archive has that today. Re-add the panel only once one
-// does; see `domain/thermoNasa.ts`'s own module comment for where the
-// removed computation lived.
+// There is no residuals panel: the archive's stored "measured" points
+// reproduce the NASA-7 fit to four decimal places (they were evaluated FROM
+// the polynomial), so a residual plot would compare a curve with itself and
+// be flat by construction. A residual chart needs measured points genuinely
+// INDEPENDENT of the fit; see `domain/thermoNasa.ts`'s own module comment.
 // ---------------------------------------------------------------------------
 
 export function ThermoCpChart({ records, conformers, selectedConformerGroupRef, partialList = false }: {

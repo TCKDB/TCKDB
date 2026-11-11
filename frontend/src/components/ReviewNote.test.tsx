@@ -30,7 +30,7 @@ describe("ReviewNote", () => {
         expect(screen.getByText(NOTE)).toBeVisible()
     })
 
-    // MUTATION TABLE (required, brief item 3): a record with NO note must
+    // Mutation check: a record with NO note must
     // render NOTHING -- not an empty box, not a heading with no body. This
     // is the absence-vs-zero rule this codebase applies everywhere else.
     it("renders nothing at all when note is null", () => {

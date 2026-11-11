@@ -30,7 +30,7 @@ const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not re
 
 /**
  * `/methods/composite-schemes/:schemeRef` -- a composite recipe (CBS-QB3, G4,
- * a CCSD(T)/CBS extrapolation, a focal-point sum), ADR 0021, P7b. The page
+ * a CCSD(T)/CBS extrapolation, a focal-point sum). The page
  * answers "what is this number built from": each term with its operation,
  * component and formula, each input level with its cardinal number and
  * weight, the levels of theory bound to the recipe, and the levels the recipe
@@ -122,7 +122,7 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                                     {/* The note is TCKDB's own text only for a catalogued named method (the one path that
                                         writes it: `composite_scheme_resolution.py` `get_or_create_named_method_scheme`);
                                         a user-built recipe never gets one, so a note on any other kind is
-                                        not TCKDB's and is not printed (owner decision 2026-11-03). */}
+                                        not TCKDB's and is not printed. */}
                                     {scheme.kind === "named_method" && scheme.note && <div><dt>Note</dt><dd>{scheme.note}</dd></div>}
                                 </dl>
                             </div>

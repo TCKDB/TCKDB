@@ -134,8 +134,7 @@ export async function listReviewQueue(options: {
  * Transition one record's review status.
  *
  * Addressed by `record_type` + `record_id` because that is what the route
- * takes. The page reads `record_public_ref` and writes the id; see the
- * note in `docs/plans/reviewer-surface-walkthrough.md`.
+ * takes. The page reads `record_public_ref` and writes the id.
  *
  * `note` is optional to the backend. The page requires one for EVERY
  * transition, not only the judgements -- a bare "approved" with no

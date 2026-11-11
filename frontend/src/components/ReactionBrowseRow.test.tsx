@@ -49,17 +49,17 @@ function record(overrides: Partial<ReactionBrowseRecord> = {}): ReactionBrowseRe
     } as ReactionBrowseRecord
 }
 
-// The row must render the SHARED `ReactionEquation` component (PR 2), not a
+// The row must render the SHARED `ReactionEquation` component, not a
 // forked plain-text rendering: formulas carry subscripts, and the arrow
 // reflects `reversible`. Each assertion here is precise enough that
 // mutating the corresponding field in `record()` (or swapping which prop
 // the row passes to `ReactionEquation`) makes the assertion fail -- not a
 // loose substring check that would still pass on a differently-wrong row.
 //
-// Owner-reported-defect fix: participants no longer render as individual
-// `/species-entries/:ref` links on this row (that was the bug -- almost
-// every pixel of the equation was a species link, crowding out the
-// reaction link). `ReactionBrowseRow` now passes `linkParticipants=false`,
+// Participants do not render as individual
+// `/species-entries/:ref` links on this row (almost
+// every pixel of the equation would be a species link, crowding out the
+// reaction link). `ReactionBrowseRow` passes `linkParticipants=false`,
 // so the formula/subscript/chip content still renders, just as plain text.
 describe("ReactionBrowseRow: equation rendering (via the shared ReactionEquation component, participants UNLINKED)", () => {
     it("renders each participant's formula WITH subscripts, not the bare formula string -- but as plain text, no per-participant <a>", () => {
@@ -146,8 +146,7 @@ describe("ReactionBrowseRow: review pill", () => {
 // ONE boolean and checks BOTH the true-state text and the false-state text
 // disappear/appear correctly -- a test that only checked `toContain("no")`
 // would also pass if the row rendered "no transition state" while actually
-// reading `has_kinetics`, per the PR 2 review finding on this exact trap
-// ("not reviewed" satisfying a loose `toContain("no")`). Every assertion
+// reading `has_kinetics` ("not reviewed" satisfying a loose `toContain("no")`). Every assertion
 // here is an exact string, not a substring.
 describe("ReactionBrowseRow: has-kinetics / has-transition-state pills, read from their OWN field", () => {
     it("has_kinetics=true, has_transition_state=true: both positive pills render, neither negative one does", () => {
@@ -203,17 +202,15 @@ describe("ReactionBrowseRow: has-kinetics / has-transition-state pills, read fro
     })
 })
 
-// Ref + link target (owner-reported inconsistency, fixed here): the row's
-// TITLE now links `/reactions/:reaction_ref` (the CHOOSER -- "it should not
-// go straight to the entry it should go to the reaction and there the user
-// selects the relevant entry - like how we do with species"), never
+// Ref + link target: the row's
+// TITLE links `/reactions/:reaction_ref` (the CHOOSER, where the reader
+// selects the relevant entry, as with species), never
 // `/reaction-entries/:reaction_entry_ref` directly. The one deposit this row
 // itself represents is still reachable, as a SECOND, sibling link in the
 // footer (`.browse-row-entry-link`) -- `SpeciesBrowseRow`'s own
-// identity-link/entry-link shape, carried over. The identity ref
+// identity-link/entry-link shape. The identity ref
 // (`reaction_ref`) sits in the data face, outside any anchor, so a
-// drag-select over it does not start a link drag -- same non-goal as
-// before, just showing the identity ref now instead of the entry ref.
+// drag-select over it does not start a link drag.
 describe("ReactionBrowseRow: ref, link targets, and the stretched-link/selectable-ref split", () => {
     it("renders the reaction (identity) ref in a code.data element", () => {
         renderRow(record({ reaction_ref: "rxn_specific" }))
@@ -224,8 +221,8 @@ describe("ReactionBrowseRow: ref, link targets, and the stretched-link/selectabl
         expect(ref).toHaveClass("data")
     })
 
-    // MUTATION CHECK (mutation table item a): pointing the title back at
-    // `/reaction-entries/:ref` is the exact owner-reported defect this test
+    // MUTATION CHECK: pointing the title back at
+    // `/reaction-entries/:ref` directly is what this test
     // guards against.
     it("the title links to /reactions/:reaction_ref (the chooser), never /reaction-entries/:ref directly", () => {
         renderRow(record({ reaction_entry_ref: "rxe_specific", reaction_ref: "rxn_specific" }))
@@ -261,11 +258,8 @@ describe("ReactionBrowseRow: ref, link targets, and the stretched-link/selectabl
         expect(ref.closest("a")).toBeNull()
     })
 
-    // Review follow-up: an earlier revision of this row set
-    // `aria-label={record.equation ?? undefined}` on the link, reaching
-    // for "an exact, testable string" the way `TransitionStateBrowseRow`
-    // does. Measured live via Chrome's accessibility tree, that was a
-    // WCAG 2.5.3 "Label in Name" failure -- `record.equation` is the raw
+    // `aria-label={record.equation ?? undefined}` on the link would be
+    // a WCAG 2.5.3 "Label in Name" failure -- `record.equation` is the raw
     // SMILES-joined served string (e.g. "[NH2] + [NH2] <=> NN"), which
     // shares no words with the rendered formula text a sighted user sees
     // ("H2N + H2N ⇌ H4N2"), so a voice-control user saying "click H2N"
@@ -370,14 +364,12 @@ describe("ReactionBrowseRow: stretched-link CSS mechanic (computed styles)", () 
     })
 })
 
-// Review follow-up (round 2): `matched_direction` is served on every row
-// (measured live -- present even on an unfiltered query, where it is
-// "forward") but was previously dropped on the floor entirely. Live
-// example: `product_smiles=O` returns `rxe_ed66mj3ohtyien5rm2x3sb3rdu`
-// ("O + [CH3] <=> C + [OH]", water on the REACTANT side of the served
-// equation) with `matched_direction: "reverse"` -- without rendering that
-// fact, a reader searching for water-as-product sees water on the wrong
-// side with nothing explaining why the filter "misfired". Tested in BOTH
+// `matched_direction` is served on every row (present even on an
+// unfiltered query, where it is "forward"). Example: `product_smiles=O`
+// returns a reaction ("O + [CH3] <=> C + [OH]", water on the REACTANT side
+// of the served equation) with `matched_direction: "reverse"` -- without
+// rendering that fact, a reader searching for water-as-product sees water on
+// the wrong side with nothing explaining why the filter "misfired". Tested in BOTH
 // directions, per the finding: "forward" (and its absence/null) must stay
 // SILENT, not just "reverse" must speak -- a component that rendered the
 // note unconditionally, or read the wrong field, would still pass a

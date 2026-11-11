@@ -12,7 +12,7 @@ import { participantChips, type ParticipantFacets } from "../domain/participantF
  * server's joined discriminator (stereo, state kind, state label, term symbol,
  * isotope key), and the state label and term symbol in it are depositor-typed;
  * a joined string cannot be taken apart on the client without guessing which
- * part is which (owner decision 2026-11-03). Pages that have the structured
+ * part is which. Pages that have the structured
  * fields (`stereo_label`, `electronic_state_kind`, `isotope_key`) show them
  * through `facetChips`.
  */

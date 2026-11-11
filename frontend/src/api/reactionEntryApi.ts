@@ -5,22 +5,21 @@ import { parseScientificResponse, requestScientificJson, ScientificApiError } fr
 /**
  * `GET /scientific/reaction-entries/{ref}/full` --
  * `backend/app/api/routes/scientific/provenance.py`, schema
- * `backend/app/schemas/reads/scientific_provenance.py`. See
- * `docs/plans/reaction-entry-page.md` §2/§3 for the information
- * architecture and the additive fields this schema tolerates being absent.
+ * `backend/app/schemas/reads/scientific_provenance.py`. The schema tolerates
+ * additive fields being absent.
  *
  * Requests `include=species,kinetics,transition_states,calculations,networks`
  * in ONE round trip -- every section this page renders, matching
- * `transitionStateEntryApi.ts`'s own eager-fetch precedent. `networks` is a
- * §3C-additive include token (not deployed as of this PR): a pre-deployment
- * API either 422s on the unknown token or simply omits the key from its
+ * `transitionStateEntryApi.ts`'s own eager-fetch precedent. `networks` is an
+ * additive include token: an API that predates it either 422s on the unknown
+ * token or simply omits the key from its
  * response depending on how strictly it validates `include` -- either way
  * `networks` comes back `undefined` here, and `loadReactionEntryNetworks`
  * below is the documented one-request fallback
  * (`networks/search?reaction_entry_ref=...&include=reactions`) the page
  * falls back to when that happens. `formula`/`stoichiometry` on each
- * participant and `levels` on each kinetics record are likewise §3A/§3B
- * additive fields, marked optional here so today's (pre-PR-1) live API
+ * participant and `levels` on each kinetics record are likewise additive
+ * fields, marked optional here so an API that predates them
  * still parses -- see `domain/reactionEquation.ts` and
  * `domain/productLevels.ts`'s `resolveProductLevels` for the client-side
  * fallbacks each absence triggers.
@@ -51,7 +50,7 @@ const literatureSummarySchema = z.object({
 }).passthrough()
 
 // `ScientificLevelsSummary` -- geometry/frequency/energy levels of theory
-// plus `energy_source`, and (ADR 0021, P7a) `notation`, the `*_source`
+// plus `energy_source`, and `notation`, the `*_source`
 // fields, `composite_energy_verification` and `legacy_composite_shape`:
 // the SAME shape `productLevelsSchema` (`scientificSchemas.ts`) models for
 // statmech/thermo records, so this reuses that schema rather than a
@@ -230,8 +229,7 @@ const transitionStateInFullSchema = z.object({
 
 // ---------------------------------------------------------------------------
 // calculations (top-level evidence summaries -- used to resolve levels for
-// a kinetics record whose `levels` was not served, per plan §7's live
-// oddity note: a kinetics record's own `ts_*_calculation_ref` provenance
+// a kinetics record whose `levels` was not served: a kinetics record's own `ts_*_calculation_ref` provenance
 // can name a calculation this section does not carry, in which case that
 // role's level falls back to `provenance.primary_level_of_theory` -- see
 // `deriveKineticsLevelsFallback` in `domain/reactionKineticsLevels.ts`.)
@@ -321,22 +319,18 @@ function fetchFull(ref: string, include: string[], signal?: AbortSignal, onRateL
 let networksIncludeSupported: boolean | null = null
 
 /**
- * `networks` (§3C) is not yet a legal `include` token on the live,
- * pre-deployment API -- MEASURED against the real archive (verification
- * pass, 2026-09-07): asking for it does not silently omit the section the
- * way an unrecognised-but-tolerated token would; the endpoint rejects the
- * WHOLE request with HTTP 422 `unknown_include_token`. A naive "always ask
- * for five tokens" implementation therefore breaks this entire page
- * against today's archive, not just the Networks section -- caught by
- * this PR's own headless-Chrome verification pass, not assumed from the
- * schema docstring alone.
+ * `networks` is not a legal `include` token on every archive: an archive
+ * that does not know it does not silently omit the section; the endpoint
+ * rejects the WHOLE request with HTTP 422 `unknown_include_token`. Always
+ * asking for five tokens would therefore break the entire page, not just
+ * the Networks section.
  *
  * So the eager fetch tries all five tokens first (the zero-extra-request
- * path once PR 1 deploys, and the path every call after the first uses
- * once `networksIncludeSupported` is known `true`). Only the FIRST call
+ * path, and the path every call after the first uses once
+ * `networksIncludeSupported` is known `true`). Only the FIRST call
  * against an archive that rejects the token pays for finding that out:
  * on that specific rejection, this retries once, immediately, with
- * `networks` dropped -- the four tokens every deployed archive to date
+ * `networks` dropped -- the four tokens every archive
  * accepts -- and remembers the answer in `networksIncludeSupported` for
  * every later navigation in this session. Any OTHER error (a genuine 404,
  * a rate limit, an unrelated 422) is not retried and propagates as-is;

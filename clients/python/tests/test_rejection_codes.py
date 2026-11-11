@@ -67,13 +67,11 @@ def test_a_known_code_round_trips() -> None:
 def test_every_member_says_what_status_it_arrives_at() -> None:
     """No member without an indication of what it means for retrying.
 
-    This used to read "every member is in ``VALIDATION`` or ``CONFLICT``",
-    which was the same property while 422 and 409 were the only statuses
-    a member could arrive at. They no longer are: the enum now carries the
+    The enum carries more than 422 and 409 members: the
     404 that names a missing record, the 426 that asks the client to
-    upgrade, and the 429 that asks it to wait, and those are exactly the
+    upgrade, and the 429 that asks it to wait are exactly the
     codes whose retry advice a caller most needs. The property being
-    protected was never "in one of two sets" -- it was "not told about a
+    protected is not "in one of two sets" -- it is "not told about a
     code with nothing to do about it" -- so it is asserted against the
     status map, which covers every member.
 

@@ -84,13 +84,12 @@ describe("shape cards: a list of cards that shrink to fit", () => {
 })
 
 // ---------------------------------------------------------------------------
-// SHOULD-FIX-5 (species-entry/browse/chrome residuals re-review): the
-// linkage connector arrow used to be `align-self: center`, vertically
-// centred against the WHOLE 350px-tall column -- against a short tile it
-// hung ~150px below the number it points away from (MEASURED). It also
-// only hid/rotated below the 880px VIEWPORT breakpoint, which never fired
-// at 1100px where the ToC rail alone narrows the row below the ~836px
-// three steps need -- MEASURED, the third tile wraps with no arrow there.
+// The linkage connector arrow is `align-self: start` (not centred against
+// the WHOLE column, which would hang it ~150px below the number it points
+// away from beside a short tile), and it hides/rotates by container
+// wrap-safety rather than only below the 880px VIEWPORT breakpoint, which
+// does not fire at 1100px where the ToC rail alone narrows the row below the
+// ~836px three steps need.
 // ---------------------------------------------------------------------------
 describe("linkage connector alignment and wrap-safe hiding", () => {
     it(".linkage-flow is a named inline-size container, so a container query can key off its own rendered width rather than the viewport's", () => {
@@ -127,12 +126,10 @@ describe("linkage connector alignment and wrap-safe hiding", () => {
 })
 
 // ---------------------------------------------------------------------------
-// SHOULD-FIX-3 (species-entry/browse/chrome residuals re-review): MEASURED,
-// the entry/statmech/thermo tabs ran 51-68% mono by visible character
-// count -- these rules were most of it: full prose sentences and metric
-// summaries set in monospace, the face this house's own type scale
-// reserves for an identifier or number. Locks each one onto a named sans
-// step (never `var(--mono)`) so a future edit cannot silently revert it.
+// Full prose sentences and metric
+// summaries are not set in monospace, the face this house's own type scale
+// reserves for an identifier or number. Locks each rule onto a named sans
+// step (never `var(--mono)`).
 // ---------------------------------------------------------------------------
 describe("mono is reserved for identifiers and numbers, not prose (item 3)", () => {
     it.each([

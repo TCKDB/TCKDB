@@ -7,8 +7,7 @@
  * from that one stored hartree number, never from another converted
  * value, and never fed back into anything the archive holds.
  *
- * Conversion factors are CODATA/NIST values, hand-checked against the
- * brief:
+ * Conversion factors are CODATA/NIST values, hand-checked:
  *   1 hartree = 2625.4996394799 kJ/mol
  *             = 627.50947 kcal/mol
  *             = 27.211386245988 eV

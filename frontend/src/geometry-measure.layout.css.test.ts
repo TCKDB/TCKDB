@@ -11,13 +11,10 @@ function extractRule(source: string, selector: string): string {
 }
 
 /**
- * Owner report ("record-page residuals" re-review, item 1): the
- * measurements panel floated to the right of and below the 3D picture
- * instead of sitting directly under it. `margin: 0 auto` centred this
- * panel inside the FULL page column while `.viewer-stage` (the canvas's
- * own card, `geometry-viewer.css`) sat left-aligned at a much narrower
- * width -- MEASURED (CDP, 1920px viewport): stage at x=180 w=576, panel
- * at x=536 w=576, a ~40px vertical gap but no shared left edge.
+ * The measurements panel sits directly under the 3D picture: it must not
+ * use `margin: 0 auto`, which would centre it in the FULL page column while
+ * `.viewer-stage` (the canvas's own card, `geometry-viewer.css`) is
+ * left-aligned at a narrower width.
  *
  * jsdom cannot lay anything out, so it cannot see the actual floating --
  * that was confirmed with a real Chromium instance (see the PR body's
@@ -27,7 +24,7 @@ function extractRule(source: string, selector: string): string {
 describe(".viewer-measurements (defect: floats right of/below the picture)", () => {
     const rule = extractRule(css, ".viewer-measurements")
 
-    it("no longer carries `margin: 0 auto` (which centred it in the wrong column)", () => {
+    it("does not carry `margin: 0 auto` (which centred it in the wrong column)", () => {
         expect(rule).not.toMatch(/margin:\s*0\s+auto/)
     })
 

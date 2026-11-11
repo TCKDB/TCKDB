@@ -55,8 +55,7 @@ function scale(a: Vec3, factor: number): Vec3 {
  * product immediately before `Math.acos`. Two unit vectors' dot product is
  * mathematically bounded to `[-1, 1]`, but floating-point division
  * (`dot(v1, v2) / (|v1| * |v2|)`) can push a value that is mathematically
- * exactly ±1 to e.g. `1.0000000000000002` — MEASURED here, not
- * hypothetical: `angle({x:1,y:1,z:1}, ORIGIN, {x:2,y:2,z:2})` (three
+ * exactly ±1 to e.g. `1.0000000000000002` — for example `angle({x:1,y:1,z:1}, ORIGIN, {x:2,y:2,z:2})` (three
  * exactly-collinear points, same direction) computes a raw cosine of
  * `1.0000000000000002`, and `angle({x:1,y:1,z:1}, ORIGIN,
  * {x:-1,y:-1,z:-1})` (collinear, opposite direction) computes
@@ -154,23 +153,20 @@ export function angle(a: Vec3, b: Vec3, c: Vec3): number {
  * passed anyway, because they were built by recording that version's own
  * output — a self-consistent suite cannot detect a self-consistent sign
  * error. Only comparing against RDKit, a source that does not share this
- * module's code, exposed it (PR #295's review; see the git history of
- * this function and of `geometryMeasure.test.ts`'s "external oracle"
- * describe block for the fix).
+ * module's code, exposed it (see `geometryMeasure.test.ts`'s "external oracle"
+ * describe block).
  *
  * Returns `NaN` for every degenerate case that leaves the a-b-c or b-c-d
  * half-plane undefined, not only the b-and-c-coincide case: `b` and `c`
  * coinciding (zero-length central bond, no axis to measure a torsion
  * around); `a`-`b` or `c`-`d` coinciding (the a-b-c or b-c-d vertex vector
- * has no direction); and — the case an earlier version of this function
- * missed — any three of the four points being collinear or
+ * has no direction); and any three of the four points being collinear or
  * near-collinear, which makes `n1` or `n2` a (near-)zero vector with no
  * well-defined plane to measure from. That last case is real and
  * reachable from actual clicks, not just a defensive contract boundary:
  * any linear fragment a reader can click (CO₂, HCN, acetylene, the
  * near-linear H···H–C of an abstraction saddle point) puts three of the
- * four picked atoms on one line. Returning `0°` for that case (as an
- * earlier version of this function did, since `atan2(0, 0)` is exactly
+ * four picked atoms on one line. Returning `0°` for that case (`atan2(0, 0)` is exactly
  * `0`, not `NaN`) would be a silent wrong answer indistinguishable from a
  * genuine syn-periplanar torsion — see `GeometryViewer.tsx`'s
  * `formatDegrees` for how the DOM surfaces this `NaN` honestly instead.
@@ -219,9 +215,7 @@ export function dihedral(a: Vec3, b: Vec3, c: Vec3, d: Vec3): number {
     // -(b2hat x n1)), which is a mirror-image reading of every torsion:
     // magnitude right, sign backwards, indistinguishable from the correct
     // answer without an external check. See geometryMeasure.test.ts's
-    // "external oracle" describe block (RDKit-verified) and PR #295's
-    // review for the measured 200/200 mismatch this operand order
-    // produced before the fix.
+    // "external oracle" describe block (RDKit-verified).
     const m1 = cross(scale(b2, 1 / b2Length), n1)
     const x = dot(n1, n2)
     const y = dot(m1, n2)

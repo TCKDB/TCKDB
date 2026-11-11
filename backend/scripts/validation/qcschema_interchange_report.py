@@ -2,8 +2,7 @@
 """QCSchema interchange demonstration: a Psi4 Hessian through TCKDB and back,
 and the same molecule's Gaussian record beside it.
 
-Phase C work package C-Q4 (``docs/research/tckdb-phase-c-implementation-plan.md``,
-C1 "Demonstration"). The write-up is ``docs/validation/qcschema_interchange.md``.
+The write-up is ``docs/validation/qcschema_interchange.md``.
 
 Inputs are committed fixtures and nothing else
 ----------------------------------------------
@@ -75,7 +74,7 @@ read needs it; see the exporter's "calculation-id gap"). Then:
 The raw-artifact POST that ``tckdb-qcschema import --upload`` also makes is not
 repeated: it writes to the object store, which this script never contacts. The
 backend corpus test ``backend/tests/api/test_api_qcschema_fixtures.py`` covers
-it for the C-Q2 corpus.
+it for that corpus.
 
 The cross-program comparison (measured, never judged)
 -----------------------------------------------------
@@ -98,7 +97,7 @@ Gaussian:
 * Hessian symmetry and the element-wise Hessian difference;
 * the rigid-body residue before projection: the six lowest eigenvalues of the
   unprojected mass-weighted Hessian and the curvature along each rigid-body
-  direction, both as signed wavenumbers -- the units of the Phase B frame
+  direction, both as signed wavenumbers -- the units of the frame
   bound ``FRAME_CONSISTENCY_TOLERANCE_CM1`` (100 cm^-1,
   ``backend/app/chemistry/normal_modes.py``), which is reported beside them.
 
@@ -1139,7 +1138,7 @@ def markdown_summary(report: dict[str, Any]) -> str:
 
 
 def paper_generator(session: Session) -> dict[str, Any]:
-    """Registered in ``backend/scripts/paper/registry.py``.
+    """Registered in the publication-snapshot registry (``registry.py``).
 
     The same report without the checkout commit, which a restored deposit's
     byte comparison could not reproduce from a different checkout. Reads the

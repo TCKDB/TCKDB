@@ -8,17 +8,13 @@ function token(value: string) {
 }
 
 /**
- * A species row leads with STRUCTURE AND FORMULA -- the brief's own
- * distinction from the transition-state row, which has no formula and
- * leads with the reaction it connects instead. `SpeciesFace` (owner
- * ruling: SMILES leads, formula follows in parentheses) renders SMILES
+ * A species row leads with STRUCTURE AND FORMULA, unlike the transition-state row, which has no formula and
+ * leads with the reaction it connects instead. `SpeciesFace` (SMILES
+ * leads, formula follows in parentheses) renders SMILES
  * alone (never falling back to the public ref, matching
  * `IdentifierSearch`'s `MatchHeadline` rule) when the archive computed no
- * formula for this species (#251). The title used to be formula-only with
- * a SEPARATE `.browse-row-smiles` line underneath carrying the SMILES --
- * retired here (along with that now-dead CSS rule, `browse.css`) because
- * `SpeciesFace` already puts the SMILES in the title; a second line below
- * would just repeat it.
+ * formula for this species (#251). `SpeciesFace` already puts the SMILES
+ * in the title, so there is no separate SMILES line.
  */
 export function SpeciesBrowseRow({ record }: { record: SpeciesBrowseRecord }) {
     return (

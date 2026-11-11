@@ -11,7 +11,7 @@ Usage::
 Read-only: fetches (if needed)/verifies the archive, selects and
 schema-validates one article, parses it, and maps its heat-capacity
 tables to ``MolecularPropertyObservationCreate`` payload JSON. Never
-writes to the database -- persistence is Phase C-E3. See
+writes to the database. See
 ``backend/app/importers/thermoml/cli.py`` for the runner.
 """
 

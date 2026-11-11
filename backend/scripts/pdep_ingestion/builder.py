@@ -548,7 +548,7 @@ def build_network_pdep_payload(
                     scan_calc["artifacts"] = [art]
             calculations.append(scan_calc)
 
-        # Statmech interpretation (PR #19 added NetworkSpeciesIn.statmech).
+        # Statmech interpretation (`NetworkSpeciesIn.statmech`).
         statmech = _build_statmech(
             inp,
             info,
@@ -1017,12 +1017,11 @@ def build_network_pdep_payload(
 
     # Arkane declares one energy-transfer model for the network and the master
     # equation applies it to every collisionally-stabilised well. Deposit it as
-    # exactly that: one ``network_wide`` entry. This used to be expanded into
-    # the (well x bath component) cross product to satisfy the old per-pair
-    # contract, which copied a single number N times and made the record look
-    # as though N values had been determined. The scope token now says what the
-    # run actually specified, and the upload warns about the limitation instead
-    # of the payload fabricating specificity (ADR 0009).
+    # exactly that: one ``network_wide`` entry, not the
+    # (well x bath component) cross product, which would copy a single number N
+    # times and make the record look as though N values had been determined.
+    # The scope token says what the run actually specified, and the upload
+    # warns about the limitation instead of the payload fabricating specificity.
     if inp.energy_transfer:
         et = inp.energy_transfer
         solve["energy_transfer"] = [

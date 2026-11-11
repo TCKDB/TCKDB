@@ -6,17 +6,17 @@ import { describe, expect, it } from "vitest"
 // and a new stylesheet absent from that list would be unexamined, not
 // passing, which is indistinguishable from the outside. `import.meta.glob`
 // enumerates what actually exists under `src/**/*.css` instead -- recursive
-// (post-review, review of 2bd17511: the sibling guards above only glob
-// `./*.css`, since every stylesheet they care about is flat under `src/`
-// today; this one globs `./**/*.css` so a future component-owned sheet
+// (the sibling guards above only glob
+// `./*.css`, since every stylesheet they care about is flat under `src/`;
+// this one globs `./**/*.css` so a component-owned sheet
 // placed under a subdirectory, e.g. `components/`, is still covered).
 const STYLESHEET_SOURCES = import.meta.glob("./**/*.css", { query: "?raw", import: "default", eager: true }) as Record<string, string>
 const ALL_STYLESHEETS: Record<string, string> = Object.fromEntries(
     Object.entries(STYLESHEET_SOURCES).map(([path, css]) => [path.replace(/^\.\//, ""), css]),
 )
 
-/** Strips `/* ... *\/` block comments so a comment mentioning a retired
- *  class name in prose (explaining why it's gone) can never be mistaken
+/** Strips `/* ... *\/` block comments so a comment mentioning a
+ *  class name in prose can never be mistaken
  *  for a live declaration -- same helper `value-pill-scope.css.test.ts`/
  *  `design-system.css.test.ts`/`theme.css.test.ts` each carry their own
  *  copy of, for the same reason. */
@@ -25,9 +25,8 @@ function stripComments(source: string): string {
 }
 
 /**
- * Post-review fix (review of 2bd17511): the FIRST version of this guard
- * only matched a selector immediately followed by `{` at the start of its
- * own line (`^\s*SELECTOR\s*\{`) -- MEASURED, that pattern let every one
+ * The guard matches more than a selector immediately followed by `{` at the
+ * start of its own line (`^\s*SELECTOR\s*\{`); that pattern alone lets every one
  * of these through as a "declares no rule" false pass: a page-scoped
  * descendant selector (`.geometry-page .coverage-checklist {}`), a
  * bespoke nested override (`.coverage-checklist dt {}`), and a bare
@@ -64,24 +63,21 @@ function declaredIn(className: string): string[] {
  * css`, `EnergyDisplay` -> `energy-display.css`). `.ledger-summary--single`
  * is a `.ledger-summary` variant used directly in page markup (not a
  * class the component itself renders), so it stays in `conformer-
- * group.css` next to `.ledger-summary`. `.validation-card` (the geometry
- * page's former bespoke, non-`--derived` evidence-box class) is retired
- * outright -- declared nowhere.
+ * group.css` next to `.ledger-summary`. `.validation-card` is declared nowhere.
  *
- * `.coverage-card` (RETIRED as a styled selector, independent review, this
- * branch): it used to carry exactly one rule, `.coverage-card > .t-label
- * { display: block }` -- see the comment below this describe block for
- * why that rule is gone. `.coverage-card` itself gets its box chrome
+ * `.coverage-card` has no rule of its own (see the comment below this
+ * describe block for why no `.coverage-card > .t-label` rule is needed).
+ * `.coverage-card` itself gets its box chrome
  * entirely from the shared `.card`/`.card--derived` classes
- * (design-system.css); it has never had a bare `.coverage-card { ... }`
- * rule of its own, so with the direct-child rule gone it is declared
+ * (design-system.css); it has no bare `.coverage-card { ... }`
+ * rule of its own, so it is declared
  * NOWHERE now, the same as `.validation-card` below -- it survives only
  * as a marker class (`EvidenceChecklist.tsx`'s own JSX + `evidence
  * checklist.css.test.ts`'s `data-component` marker, and every page-level
  * test's `.card.card--derived.coverage-card` query hook).
  */
-describe("evidence checklist card: each selector has exactly one CSS home (or none, for the retired one)", () => {
-    it(".coverage-card is declared nowhere -- retired as a styled selector, survives only as a marker class", () => {
+describe("evidence checklist card: each selector has exactly one CSS home (or none, for the unstyled one)", () => {
+    it(".coverage-card is declared nowhere -- it is only a marker class", () => {
         expect(declaredIn(".coverage-card")).toEqual([])
     })
 
@@ -93,24 +89,18 @@ describe("evidence checklist card: each selector has exactly one CSS home (or no
         expect(declaredIn(".ledger-summary--single")).toEqual(["conformer-group.css"])
     })
 
-    it(".validation-card is declared nowhere -- retired outright", () => {
+    it(".validation-card is declared nowhere", () => {
         expect(declaredIn(".validation-card")).toEqual([])
     })
 })
 
-// The `.coverage-card > .t-label { display: block }` rule this file used
-// to pin here is RETIRED (independent review, this branch): the heading
-// moved inside `Disclosure`'s own `<summary>` when the card became
-// collapsible, so that selector is no longer a direct-child path and
-// matches nothing rendered -- a test pinning its SOURCE TEXT would go red
-// the moment someone deletes the (now dead) rule, without the rendered
-// page ever changing, which is a substring guard, not a behaviour guard.
-// The rule is genuinely unnecessary now, not replaced by anything: the
-// heading and the `<dl>` it used to protect the spacing of are no longer
-// adjacent siblings at all (heading in `<summary>`, `<dl>` in a separate
-// `.disclosure-body`), so the heading's own `display` (still plain
-// `inline`, MEASURED -- nothing blockifies it) can no longer affect the
-// `<dl>`'s position. Pinned as a DOM/structure assertion in
+// No `.coverage-card > .t-label { display: block }` rule is pinned here: the
+// heading sits inside `Disclosure`'s own `<summary>`, so that selector is not
+// a direct-child path and matches nothing rendered -- a test pinning its
+// SOURCE TEXT would be a substring guard, not a behaviour guard. The
+// heading and the `<dl>` are not adjacent siblings (heading in `<summary>`,
+// `<dl>` in a separate `.disclosure-body`), so the heading's own `display`
+// cannot affect the `<dl>`'s position. Pinned as a DOM/structure assertion in
 // `EvidenceChecklist.test.tsx` instead (heading and checklist proven to
 // sit in different disclosure regions), where a regression actually
 // means something rendered differently.

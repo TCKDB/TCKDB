@@ -1,12 +1,10 @@
 #!/usr/bin/env python
-"""Backfill ADR 0012 tau on ``calc_freq_result`` rows that never got one.
+"""Backfill the imaginary-mode tau on ``calc_freq_result`` rows that never got one.
 
-``c2f7a4e8d1b6`` added ``imaginary_mode_tau_cm1`` /
-``imaginary_mode_tau_basis`` nullable and backfilled nothing: every
-``calc_freq_result`` row deposited before ADR 0012 shipped carries
-``imaginary_mode_tau_cm1 IS NULL``, meaning "never judged under ADR
-0012" rather than "judged and clean". This script judges them, using
-exactly the same resolution the upload path uses today:
+``imaginary_mode_tau_cm1`` / ``imaginary_mode_tau_basis`` are nullable.
+A ``calc_freq_result`` row with ``imaginary_mode_tau_cm1 IS NULL`` was
+never judged for tau, which is different from "judged and clean". This
+script judges such rows, using the same resolution the upload path uses:
 
 1. Read this calculation's own recorded ``calculation_parameter`` rows
    for the three keys :data:`tckdb_schemas.stationary_point.TAU_PARAMETER_KEYS`
@@ -16,28 +14,24 @@ exactly the same resolution the upload path uses today:
    calls at upload time, just fed from stored parameter rows instead of
    an upload payload.
 2. If that resolves to the conservative ``protocol_not_recorded`` row
-   (the common case -- see the module docstring of
-   ``tckdb_schemas.hessian_method_assumption`` for the 0-of-132
-   measurement that motivated this), try the ADR 0012 2026-09-04
-   amendment's assumption table
+   (the common case), try the assumption table
    (:func:`tckdb_schemas.hessian_method_assumption.infer_hessian_method`)
    against this calculation's software and level-of-theory method. Used
    only when it returns something; ``None`` leaves the row at
    ``protocol_not_recorded``, exactly as the upload path would.
 
 Only ``imaginary_mode_tau_cm1`` and ``imaginary_mode_tau_basis`` are
-written. **``imaginary_mode_structural_flag`` is never touched** -- ADR
-0012 judges it only where a reaction-coordinate mode was designated
-(``reaction_coordinate_mode_index``), and no row this script's scope
-reaches has one: they predate the column that carries it. Filling tau
-on those rows answers "how tightly can a small imaginary mode be
+written. **``imaginary_mode_structural_flag`` is never touched** -- it is
+judged only where a reaction-coordinate mode was designated
+(``reaction_coordinate_mode_index``). Filling tau
+on a row answers "how tightly can a small imaginary mode be
 trusted", not "is this record a genuine higher-order saddle", and this
 script only ever answers the first question.
 
 **Idempotent by construction.** The scope is
 ``imaginary_mode_tau_cm1 IS NULL``; every row this script writes to
 leaves that predicate false, so a second run (``--apply`` or not) finds
-nothing left to do rather than re-deciding an already-judged row.
+nothing left to do rather than re-judging an already-judged row.
 
 Usage::
 
@@ -101,7 +95,7 @@ def _resolve_row_tau(session: Session, calc: Calculation) -> TauResolution:
         rows; ``calc.software_release`` / ``calc.lot`` are read via the
         ORM relationship in the same session).
     :param calc: The owning calculation.
-    :returns: Recorded resolution, or the ADR 0012 amendment's assumed
+    :returns: Recorded resolution, or the assumed
         one when nothing was recorded and the software/method pair is
         in :func:`infer_hessian_method`'s table.
     """

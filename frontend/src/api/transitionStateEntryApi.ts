@@ -23,9 +23,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
  * check's own record: its outcome, the calculation it was reconstructed from, and the energies an
  * energy-ordering check compared.
  *
- * `trust` is requested now (it previously was not, despite being legal on
- * this endpoint) -- MEASURED on tse_aq5ktxlu27nvul3hmdwpuyuz4e:
- * `include=trust` serves `trust_status: "well_supported"` and
+ * `trust` is requested: `include=trust` serves `trust_status: "well_supported"` and
  * `evidence.checks.irc_evidence_present: "passed"` on the SAME entry
  * whose `validation.irc` (already requested, no extra cost) says
  * `"absent"` -- the two blocks read as contradictory on the page until
@@ -102,8 +100,7 @@ const calculationSchema = z.object({
     // `version` is served alongside the name ('Gaussian' + '16', 'ARC' +
     // '1.1.0') and is load-bearing provenance in this archive -- an ESS/
     // workflow-tool version pins the exact behaviour that produced this
-    // entry. Previously only the name reached this schema, so the page
-    // had no version to show even though the API served one.
+    // entry.
     software_release: z.object({ software: z.string(), version: z.string().nullable().optional() }).passthrough().nullable().optional(),
     workflow_tool_release: z.object({ workflow_tool: z.string(), version: z.string().nullable().optional() }).passthrough().nullable().optional(),
     // Present under `include=calculations` but was left off this table
@@ -149,10 +146,8 @@ const reviewHistoryEntrySchema = z.object({
 
 // `saddle_point` (schema `TransitionStateSaddlePointEvidence`) -- the
 // imaginary-frequency verdict, always computed server-side, null only
-// when the entry has no freq result to report. NOT served by the live
-// deployment as of this branch (additive, unit-tested backend-side only
-// so far -- see the PR body); a client hitting an older backend gets
-// `undefined` here, which this schema's `.nullable().optional()` and the
+// when the entry has no freq result to report. A client hitting an older
+// backend that omits it gets `undefined` here, which this schema's `.nullable().optional()` and the
 // page's own `?? null` treat identically to a served `null`.
 // `basis` (read as a plain string, so a future token never breaks the page) says which frequency result this is:
 // `latest_direct_frequency` (the newest attached) or `declared_curvature_witness` (the one a declared saddle target pins).
@@ -247,10 +242,8 @@ export async function loadTransitionStateGeometries(ref: string, signal?: AbortS
 // `.created_at`, and (under `include=calculations`) per-calc level of
 // theory + software -- everything "Other saddle points deposited for
 // this reaction" needs. `created_at` is what tells three same-label,
-// same-level-of-theory siblings apart (MEASURED: three "TS4 ·
-// MRCI+Davidson/... · Molpro (version not recorded) · NOT REVIEWED" rows
-// on TS8's own siblings list, indistinguishable without it) alongside
-// their own ref.
+// same-level-of-theory siblings apart (e.g. rows with the same label, level and
+// software are otherwise indistinguishable) alongside their own ref.
 // ---------------------------------------------------------------------------
 
 const siblingRecordSchema = z.object({

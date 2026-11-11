@@ -8,8 +8,7 @@ defect in the adapter's walk cannot pass by agreeing with itself.
 
 Corpus: every ``outcome: route`` case of the adapter's own fixtures, every
 document of the backend corpus (``backend/tests/fixtures/qcschema/``), and
-both families of the Psi4 B3LYP/def2-TZVP water Hessian from the C-Q4
-demonstration.
+both families of the Psi4 B3LYP/def2-TZVP water Hessian.
 """
 
 from __future__ import annotations

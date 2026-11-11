@@ -38,7 +38,7 @@ describe("describeMadeUnder", () => {
         expect(w.sentence).not.toMatch(/pending/i)
     })
 
-    it("version 0: worded as stamped before the 2026-10 versioning reset, never as a raw v0, and still stale", () => {
+    it("version 0: worded as stamped before versioning, never as a raw v0, and still stale", () => {
         const w = describeMadeUnder({
             ...base, assessed_version: 0, current_version: 1, state: "stale", stale_reason: "rubric_version",
         })

@@ -42,10 +42,9 @@ describe("evenTicks", () => {
 describe("formatTicks", () => {
     it("uses one shared decimal precision for every tick on the axis (the {1,2,5}×10^n step niceTicks actually produces)", () => {
         // Step 0.5 straddles the OLD per-value magnitude threshold at 10: a
-        // prior version of this function chose precision per VALUE (2
-        // decimals below 10, 1 decimal at/above 10), which rendered this
-        // exact evenly spaced axis as "8.50, 9.00, 9.50, 10.0, 10.5" -- a
-        // review finding ("one axis can read 8.50, 10.0, 100"). Every tick
+        // choosing precision per VALUE (2 decimals below 10, 1 decimal
+        // at/above 10) would render this evenly spaced axis as
+        // "8.50, 9.00, 9.50, 10.0, 10.5". Every tick
         // here must carry the SAME one-decimal precision instead.
         expect(formatTicks([8.5, 9, 9.5, 10, 10.5])).toEqual(["8.5", "9.0", "9.5", "10.0", "10.5"])
     })

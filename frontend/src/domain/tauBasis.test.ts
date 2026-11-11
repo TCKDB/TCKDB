@@ -77,7 +77,7 @@ describe("isAssumedTauBasis", () => {
     })
 })
 
-// Copy-rule invariant (brief item 4): "assumed" must appear in rendered
+// Copy-rule invariant: "assumed" must appear in rendered
 // text whenever an assumed_* basis is rendered, and NEVER otherwise.
 // Checked both directions, across every basis this module knows about.
 describe("the word \"assumed\"", () => {

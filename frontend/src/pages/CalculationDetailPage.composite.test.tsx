@@ -8,7 +8,7 @@ import CalculationDetailPage from "./CalculationDetailPage"
 import { resetAllRequestCaches } from "../api/requestCache"
 import "../design-system.css"
 
-// A composite calculation page (ADR 0021, P7b): the verification the server
+// A composite calculation page : the verification the server
 // sends, its contradiction marker, the term numbering, the inputs as links,
 // and the conformer row without the depositor's label.
 

@@ -17,11 +17,10 @@
  * TIME, from a real measured container width (`ResizeObserver`) compared
  * against `computeWideLayout(...).width` -- never a fixed breakpoint and
  * never two SVGs left in the DOM for CSS to choose between. A fixed
- * `680px` media query (an earlier version of this module) let the wide
+ * `680px` media query would let the wide
  * layout scale itself down via `width: 100%` on any container narrower
- * than its own natural width but wider than 680px -- MEASURED: at a
- * 1100px container with 3 children the SVG scaled to 0.913x, and its
- * smallest text (`--type-label-font`, 11.52px) rendered at 10.52px, below
+ * than its own natural width but wider than 680px, pushing its
+ * smallest text (`--type-label-font`, 11.52px) below
  * this app's own accessible floor. Comparing the real container width to
  * the wide layout's own computed width switches to the narrow layout
  * BEFORE any such shrink happens, so the wide layout only ever renders at
@@ -169,7 +168,7 @@ const CENTRE_PAD_BOTTOM = 12
 export const CENTRE_H = CENTRE_PAD_TOP + PILL_H + CENTRE_PILL_GAP + CENTRE_REF_LINE_H + CENTRE_PAD_BOTTOM
 
 // The centre node's optional SUBJECT row -- "an optimisation OF WHAT"
-// (owner: "what the fuck is it? a ts? a random ass molecule?"), inserted
+// (a ts? a plain molecule?), inserted
 // BETWEEN the type pill and the ref line rather than replacing either --
 // the pill still answers WHAT KIND of calculation, the ref line still
 // answers WHICH one, and this row alone answers WHOSE. Same small font
@@ -187,7 +186,7 @@ export const CENTRE_SUBJECT_GAP_BOTTOM = 6
  * subject, or `CENTRE_H` widened by the subject row and its own two gaps
  * (replacing the plain `CENTRE_PILL_GAP` the no-subject case uses)
  * otherwise. Exported so `CalculationDependencyGraph.tsx` can re-derive
- * the SAME box height this module used to size the node, rather than
+ * the SAME box height this module uses to size the node, rather than
  * re-deriving a second copy of the split -- mirrors how `CENTRE_PAD_TOP`
  * is already shared this way for the pill's own vertical offset. */
 export function centreContentHeight(hasSubject: boolean): number {
@@ -470,13 +469,9 @@ export function computeWideLayout(model: DependencyGraphModel, extraMargin = 0):
     // outward side, only the plain `WIDE_MARGIN`. Once a label is wider
     // than its own node box, that flat margin alone is not enough and
     // the label's own background rect can stick out past `[0, svgWidth]`
-    // -- MEASURED (post-review, longer edge-label wording, using this
-    // archive's real `calc_<26 lowercase-alnum>` refs, 31 characters ->
-    // a 257px node box): a lone child box with `optimized_from`'s
-    // original 43-character label ("starting geometry for the fine
-    // optimisation", 339px) landed 17px past x=0. That specific label
-    // was shortened in review (see `dependencyWording.ts`) and no longer
-    // clips at this exact box width, but the fix stays: it is a general
+    // -- a label wider than its node box (e.g. a lone child box with a
+    // long edge label next to a 31-character `calc_<26 lowercase-alnum>`
+    // ref, a 257px node box) can land past x=0. This is a general
     // guard against any tier whose one label genuinely outgrows its own
     // box, not tied to today's specific strings or ref length.
     // `outerLabelOverhang` is how much EXTRA half-width the margin needs

@@ -37,10 +37,7 @@ COOKIE_FILE="${TCKDB_COOKIE_FILE:-$DEFAULT_COOKIE_FILE}"
 AUTH_ENV_FILE="${TCKDB_AUTH_ENV_FILE:-$DEFAULT_AUTH_ENV_FILE}"
 
 TCKDB_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# extract_api_key / mask_key / require_api_key. This file used to hold its own
-# copies; dev_login.sh held a `jq -r '.key'` that could not tell a missing key
-# from a real one, and the two versions of "read the key out of the response"
-# is how that survived. See scripts/lib/auth_key.sh.
+# extract_api_key / mask_key / require_api_key live in scripts/lib/auth_key.sh.
 # shellcheck source=lib/auth_key.sh
 source "$TCKDB_SCRIPT_DIR/lib/auth_key.sh"
 
@@ -79,12 +76,9 @@ print_json() {
     fi
 }
 
-# extract_api_key and mask_key now live in scripts/lib/auth_key.sh, sourced
+# extract_api_key and mask_key live in scripts/lib/auth_key.sh, sourced
 # above. The reason the document is passed to python3 as an *argument* rather
-# than on stdin is recorded there: this file used to pipe it into a heredoc'd
-# `python3 - <<'PY'`, and a heredoc *is* the process's stdin, so the pipe was
-# discarded and `create-key` could not succeed against any response at all --
-# a failure whose message pointed at the server for a bug in this file.
+# than on stdin is recorded there.
 
 require_cookie_file() {
     [[ -s "$COOKIE_FILE" ]] || die "no session cookie at '$COOKIE_FILE'. Run: $0 login"

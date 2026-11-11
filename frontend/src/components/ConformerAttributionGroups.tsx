@@ -11,11 +11,7 @@ import { Disclosure } from "./Disclosure"
  * claims only what is true of its own members — see
  * `domain/conformerEvidence.ts`'s `partitionByConformerLink`.
  *
- * Visual priority answers the owner's report directly: "he opened the
- * Thermochemistry tab having selected conformer_2, and what sits there is
- * another conformer's record under a heading he has to read carefully to
- * notice. The tab answers a question he did not ask." So the selected
- * conformer's own group is THE ANSWER -- rendered first, and plainly, even
+ * Visual priority: the selected conformer's own group is THE ANSWER -- rendered first, and plainly, even
  * (especially) when it has nothing: an empty `thisConformer` bucket prints
  * its empty text with emphasis, before anything else on the panel. Records
  * traced to a DIFFERENT conformer are context, not the answer -- demoted

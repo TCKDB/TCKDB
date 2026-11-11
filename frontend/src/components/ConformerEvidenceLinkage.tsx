@@ -47,12 +47,8 @@ function stagingSentence(conformer: ConformerProjection): string | null {
 }
 
 /**
- * Answers the owner's own confusion directly: "they see 2 distinct Geoms
- * but then 4 conformers... 14 calculation rows but only 12 I see (opt 4/4,
- * freq 4/4, sp 3/4)." Every one of those numbers is correct; they are
- * three different UNITS printed as if they were comparable. But naming the
- * units was still the wrong answer to a different question he actually
- * asked -- "is the 7 opt also including the pre-opt?" -- which is about
+ * Three different UNITS (distinct geometries, conformers, calculation rows)
+ * are easy to read as comparable figures, and a reader also wants to know
  * what happened to THIS molecule, not what each figure counts. The
  * conformer card above already states the counts (how many observations,
  * how many calculation rows, per-stage coverage) -- repeating them here in

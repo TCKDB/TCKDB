@@ -1,9 +1,8 @@
 #!/usr/bin/env python
-"""Scan the pinned NIST ThermoML bulk archive for the Phase C ideal-gas Cp pilot.
+"""Scan the pinned NIST ThermoML bulk archive for the ideal-gas Cp pilot.
 
-WP0 of the Phase C implementation plan (``docs/research/tckdb-phase-c-implementation-plan.md``,
-section "C0 -- preconditions and the pilot species scan") is a read-only measurement, not a
-guess: find every single-component ``PureOrMixtureData`` block in the archive whose property is
+This is a read-only measurement, not a guess: find every single-component
+``PureOrMixtureData`` block in the archive whose property is
 "Molar heat capacity at constant pressure, J/K/mol", whose phase is "Ideal gas" or "Gas", whose
 method is experimental (an ``eMethodName`` element -- not a ``Prediction`` and not an
 ``sMethodName``-only or ``CriticalEvaluation`` block), and whose compound's standard InChIKey is
@@ -40,7 +39,9 @@ a ``DataReport`` holds ``Compound`` elements (``RegNum/nOrgNum`` -> ``sStandardI
 ``sCommonName``) and ``PureOrMixtureData`` blocks. A block is single-component when it has exactly
 one ``Component``. Each ``Property`` carries ``Property-MethodID/PropertyGroup/*/ePropName`` and,
 as a ``choice``, one of ``eMethodName`` (an enumerated, genuinely experimental method label),
-``sMethodName`` (free-text, free text; in this archive the strings are 'statistical thermodynamics' and 'Predicted', never a calorimetric method but not what this scan's brief asks for),
+``sMethodName`` (free text; in this archive the strings are 'statistical
+thermodynamics' and 'Predicted', never a calorimetric method, so it is not
+experimental for this scan),
 ``CriticalEvaluation`` or ``Prediction``. Phase comes from ``PropPhaseID/ePropPhase`` when present,
 else the block's ``PhaseID/ePhase``. ``NumValues`` entries carry the temperature (via a
 ``Variable``/``VariableValue`` pair whose ``VariableType`` is ``eTemperature``) and the Cp value
@@ -93,7 +94,7 @@ EXIT_DIGEST_MISMATCH = 2
 EXIT_ARCHIVE_NOT_FOUND = 3
 
 #: NIST records API entry for ark:/88434/mds2-2422, component ``ThermoML.v2020-09-30.tgz``,
-#: cross-checked against ``ThermoML.v2020-09-30.tgz.sha256`` -- both read 2026-09-19.
+#: cross-checked against ``ThermoML.v2020-09-30.tgz.sha256``.
 PINNED_ARCHIVE_SHA256 = "231161b5e443dc1ae0e5da8429d86a88474cb722016e5b790817bb31c58d7ec2"
 PINNED_ARCHIVE_SIZE = 189433115
 
@@ -590,7 +591,7 @@ class ScanSummary:
     # from when no playground species has a qualifying eMethodName record (finding 4).
     free_method_candidates: list[Candidate] = field(default_factory=list)
     # Compounds with sStandardInChI but no sStandardInChIKey, referenced by a qualifying block
-    # (finding 6); previously silently dropped.
+    # (finding 6); kept rather than dropped.
     compounds_without_inchikey: list[dict] = field(default_factory=list)
 
 
@@ -806,8 +807,8 @@ def main(argv: list[str] | None = None) -> int:
             summary.coverage_by_compound.values(), key=lambda b: b["n_values"], reverse=True
         )[:10],
         # The sMethodName-only, single-component "Ideal gas"/"Gas" Cp set (finding 4): survives
-        # even when the archive has zero playground hits, since scan_archive no longer discards
-        # an article's skip counters/free-method matches just because it has no eMethodName hit.
+        # even when the archive has zero playground hits, since scan_archive keeps
+        # an article's skip counters/free-method matches even when it has no eMethodName hit.
         "free_method_ideal_gas_candidates": [
             c.to_json() for c in sorted(summary.free_method_candidates, key=_candidate_rank_key, reverse=True)
         ],

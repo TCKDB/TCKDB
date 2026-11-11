@@ -13,8 +13,8 @@ describe("reviewPillClass", () => {
     })
 
     // Mutation check: always including "value-pill" (never bare
-    // "value-pill--muted") matters -- PR D moved `.value-pill--muted`'s
-    // selector to the compound `.value-pill.value-pill--muted`, so a
+    // "value-pill--muted") matters -- `.value-pill--muted`'s
+    // selector is the compound `.value-pill.value-pill--muted`, so a
     // caller carrying only the muted class renders unstyled.
     it("always includes the base 'value-pill' class, even for the muted case", () => {
         expect(reviewPillClass("not_reviewed").split(" ")).toContain("value-pill")

@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { ABSENT, chargeDisplay, chargeText, entryCountDisplay, formulaTokens, spinDisplay, spinWord } from "./chemistryFormat"
 
-// These rules were pinned only by `backend/tests/api/test_landing_page.py`,
-// which is being deleted along with `landing.py`. This file is now the only
-// place that would fail if the regexes/tables in `chemistryFormat.ts` drift
-// from the rules they were ported from.
+// This file is the place that fails if the regexes/tables in
+// `chemistryFormat.ts` drift from the rules they were ported from.
 
 describe("formulaTokens", () => {
     it("splits a simple formula into element/count pairs", () => {
@@ -121,7 +119,7 @@ describe("spinDisplay", () => {
         // `stateCell`, which would style this the same as a missing value.
         // Resolved here: presence of *a* multiplicity is real information
         // and must not collapse into the same rendering as no multiplicity
-        // at all. See the module-level decision note near `spinDisplay`.
+        // at all. See the module-level note near `spinDisplay`.
         expect(spinDisplay(9)).toBe("9")
     })
 
@@ -154,7 +152,7 @@ describe("entryCountDisplay", () => {
 
 describe("ABSENT", () => {
     it("is the lowercase, mid-sentence-safe spelling", () => {
-        // See the project-wide decision recorded in quantityFormat.ts's
+        // See quantityFormat.ts's
         // module docstring: this is the one spelling used everywhere a
         // value is missing, chosen specifically because it reads correctly
         // both standalone ("Sigma: not recorded") and inline

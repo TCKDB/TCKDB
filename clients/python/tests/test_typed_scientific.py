@@ -150,7 +150,7 @@ def test_detail_and_composed_record_types_are_distinct_and_exported() -> None:
 
 
 def test_observation_record_carries_a_required_identity_basis() -> None:
-    """Phase C-E5 review round 3 (R2). ``identity_basis`` distinguishes
+    """``identity_basis`` distinguishes
     *how* a returned observation got its species-entry identity (importer
     auto-match vs. curator attach) -- not whether it has one, which is
     structurally guaranteed by the route (see ``ObservationRecord``'s

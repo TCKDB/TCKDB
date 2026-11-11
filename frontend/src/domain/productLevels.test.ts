@@ -15,7 +15,7 @@ const b3lyp: LevelOfTheory = { method: "b3lyp", basis: "def2tzvp", display: "b3l
 const ccsdt: LevelOfTheory = { method: "ccsd(t)", basis: "cc-pvtz", display: "ccsd(t)/cc-pvtz", level_of_theory_ref: "lot_sp" }
 const freqLot: LevelOfTheory = { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", level_of_theory_ref: "lot_freq" }
 
-/** The P7a fields a `levels` object that does not state them normalises to. */
+/** The composite fields a `levels` object that does not state them normalises to. */
 const NO_COMPOSITE_FACTS = {
     notation: null,
     geometry_source: null,

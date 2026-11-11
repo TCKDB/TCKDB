@@ -35,10 +35,8 @@ describe("classifyReactionQuery: bare structure or comma-list -> participation, 
 })
 
 describe("classifyReactionQuery: every recognized arrow means the same thing -- only splits sides", () => {
-    // Owner correction: an earlier version of this grammar mapped `<>`/
-    // `<=>`/`<->` to "either direction" and `=>`/`->` to "forward only" --
-    // a hidden mode a reader typing `<>` had no way to discover. Every
-    // arrow now produces the identical `{reactants, products}` shape; the
+    // No arrow selects a hidden direction mode. Every
+    // arrow produces the identical `{reactants, products}` shape; the
     // "either direction" search and the per-result "matched in reverse"
     // label live in `IdentifierSearch.tsx`, not here.
     it.each(["<=>", "<->", "<>", "=>", "->"])("splits reactants/products the same way for arrow %s", (arrow) => {
@@ -73,10 +71,7 @@ describe("classifyReactionQuery: parse failures are distinct from an empty resul
         expect(result.message).toMatch(/more than one reaction arrow/i)
     })
 
-    // Owner: "what if they only know the products but not the reactants
-    // they are searching for? maybe they can do just `<>[NH2]`". A one-
-    // sided equation now PARSES -- it used to be rejected here, back when
-    // this test asserted the opposite. See `classifyReactionQuery`'s own
+    // A one-sided equation (e.g. `<>[NH2]`, products only) PARSES. See `classifyReactionQuery`'s own
     // comment on why the unwritten side is not a narrowing convenience
     // (every reaction in this archive is reversible and every search here
     // already runs `direction=either`): the side given is sent, the other

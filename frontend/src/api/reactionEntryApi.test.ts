@@ -42,7 +42,7 @@ describe("loadReactionEntry", () => {
         expect(includeValues).toEqual(["species", "kinetics", "transition_states", "calculations", "networks"])
     })
 
-    // Pre-deployment (PR 1, `feat/reaction-full-additions`, not yet live):
+    // A response from a server without the additions:
     // `formula`/`stoichiometry` on participants, `levels` on kinetics, and
     // the whole `networks` key are all absent from a real response today.
     // This schema must still parse it, with every §3-additive field
@@ -135,12 +135,10 @@ describe("loadReactionEntry", () => {
         expect(record.networks![0].network_ref).toBe("net_a")
     })
 
-    // MEASURED against the real archive (this PR's own headless-Chrome
-    // verification pass, 2026-09-07): the live, pre-deployment API does
-    // NOT silently omit an unrecognised `include` token -- it rejects the
-    // WHOLE request with HTTP 422 `unknown_include_token`. Without this
-    // retry, the entry page 500s outright against today's archive; this
-    // test is the regression guard for that finding.
+    // An API that does not recognise an `include` token rejects the WHOLE
+    // request with HTTP 422 `unknown_include_token` instead of omitting it.
+    // Without the retry, the entry page fails outright; this test guards
+    // that retry.
     //
     // `vi.resetModules()` + a fresh dynamic import isolates this test's
     // own copy of the module-level `networksIncludeSupported` cache from

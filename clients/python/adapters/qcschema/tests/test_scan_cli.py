@@ -192,7 +192,7 @@ def test_scan_upload_posts_one_bundle(api, capsys, monkeypatch) -> None:
 
 
 def test_two_rotors_go_up_in_one_bundle_with_one_opt(api, capsys, monkeypatch) -> None:
-    """Review finding: a second rotor imported on its own posts its parent
+    """A second rotor imported on its own posts its parent
     again. Imported together, the parent is one opt and each rotor a scan
     hanging off it."""
     base_url, requests, _deposited = api

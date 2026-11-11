@@ -327,20 +327,14 @@
 /* ---------------------------------------------------------------------
    Evidence linkage — the shape behind the conformer card's own numbers:
    observations fan out to calculation rows, calculation rows converge on
-   shared geometries. Directly answers the owner's report that "2 distinct
-   Geoms but then 4 conformers... 14 calculation rows but only 12 I see" --
-   every number was already correct, it just never said what it counted.
+   shared geometries. It states what each number on the
+   conformer card counts.
    --------------------------------------------------------------------- */
 
-/* SHOULD-FIX-7 (species-entry/browse/chrome residuals re-review): this
-   used to carry `.card.card--sunken` (a sunken box) at its call site,
-   sitting between the bare `.conformer-picker` above it and the bare tab
-   strip below it -- one boxed section between two unboxed ones, the only
-   box of its kind on this page. Neither `SpeciesOverviewPage` nor any
-   record page boxes a plain content section either (a box on this page
-   means "this content is quoted/aside", e.g. `.supersession-notice` --
-   evidence for the selected conformer is neither), so this becomes bare
-   too, with the SAME top-rule rhythm `.conformer-picker` above it already
+/* Unboxed, like the bare `.conformer-picker` above it and the bare tab
+   strip below it (a box on this page means "this content is quoted/aside",
+   e.g. `.supersession-notice` -- evidence for the selected conformer is
+   neither), with the SAME top-rule rhythm `.conformer-picker` above it already
    uses -- one shared "next section starts here" boundary treatment
    rather than a second, box-shaped one. */
 .evidence-linkage {
@@ -362,9 +356,8 @@
    `.note`'s smaller step) so it still reads as the panel's thesis, not as
    another muted caption.
 
-   SHOULD-FIX-14 (species-entry/browse/chrome residuals re-review): was a
-   bespoke `1rem/1.6 var(--serif)` -- the named `--type-lede` step
-   (design-system.css) now, the same one `.tagline`/`.browse-intro` use --
+   The named `--type-lede` step
+   (design-system.css), the same one `.tagline`/`.browse-intro` use --
    see that token's own comment for why this role gets a named step
    rather than a third near-identical bespoke declaration. */
 .evidence-linkage-story {
@@ -374,12 +367,10 @@
     font: var(--type-lede-font);
 }
 
-/* `.evidence-linkage-note`/`.linkage-coverage` are RETIRED onto `.note`
-   (design-system.css) at their call sites -- both used to be their own
-   near-duplicate of that primitive (muted, capped prose width, small
-   sans text); one shared style now, per the same "one canonical style per
-   role" consolidation the rest of this page follows.
-   `.evidence-linkage-detail`'s own summary styling is RETIRED onto the
+/* `.evidence-linkage-note`/`.linkage-coverage` use `.note`
+   (design-system.css) at their call sites (muted, capped prose width, small
+   sans text).
+   `.evidence-linkage-detail`'s own summary styling comes from the
    shared `Disclosure` component -- collapsed-by-default box/chevron/
    summary chrome now comes from `.disclosure` (design-system.css) rather
    than a local summary rule that had drifted to its own mono,
@@ -398,14 +389,13 @@
     align-items: stretch;
     gap: 1rem 0;
     margin-top: 1.4rem;
-    /* SHOULD-FIX-5 (species-entry/browse/chrome residuals re-review): a
-       named container so the hide-on-wrap rule below (near
+    /* A named container so the hide-on-wrap rule below (near
        `.linkage-connector`) can key off THIS ROW'S OWN rendered width,
        not the viewport's. At 1100px viewport the reserved 14rem ToC rail
        (`page-shell.css`) leaves this row narrower than the ~836px three
        steps need side by side, so it wraps mid-row -- above the existing
-       880px viewport breakpoint below, which never fires there (MEASURED:
-       third tile wraps, connector left pointing at nothing). A container
+       880px viewport breakpoint below, which never fires there (the
+       third tile wraps, leaving the connector pointing at nothing). A container
        query catches the case a viewport media query structurally cannot:
        chrome the row's OWN box, not the window, is eating. */
     container-type: inline-size;
@@ -421,8 +411,7 @@
     padding: 0 1.25rem;
 }
 
-/* SHOULD-FIX-3 (re-review): was `600 2rem var(--serif)` -- a bespoke
-   headline size with no named step. This IS a number (the count each
+/* This is a number (the count each
    step names, "18"/"7"/"11") -- `--type-data-large`, the design system's
    own step for a headline scientific figure, is mono deliberately (per
    the "mono only where the text is an identifier or number" target this
@@ -444,23 +433,19 @@
     letter-spacing: var(--type-heading-3-tracking);
 }
 
-/* SHOULD-FIX-3 (re-review): face changed mono -> `--type-note-font`
+/* Face is `--type-note-font`
    (sans). "each a separate sighting of this basin" / "18 opt · 7 freq ·
    7 sp, in 11 optimisation chains" are prose fragments describing what
-   the number above means, not identifiers -- MEASURED, this and its
-   mono siblings were most of why this page ran 51-68% mono by visible
-   character count. */
+   the number above means, not identifiers, so they are not set in mono. */
 .linkage-step-detail {
     color: var(--muted-2);
     font: var(--type-note-font);
 }
 
-/* SHOULD-FIX-3 (re-review): face changed mono -> `--type-note-font`
-   (sans) on the LIST -- "— 2 calculation outputs" is prose, not an
-   identifier. The geometry ref itself (`code` below) keeps `--type-data-
-   font` (mono) explicitly now that it no longer inherits it from this
-   parent -- "mono only where the text is an identifier or number", never
-   zero mono on this page. */
+/* `--type-note-font` (sans) on the list -- "— 2 calculation outputs" is
+   prose, not an identifier. The geometry ref itself (`code` below) sets
+   `--type-data-font` (mono) explicitly: mono only where the text is an
+   identifier or number. */
 .linkage-geometry-list {
     margin: .4rem 0 0;
     padding: 0;
@@ -480,11 +465,9 @@
     display: flex;
     flex: none;
     align-items: center;
-    /* SHOULD-FIX-5 (re-review): this used to be centered on the cross
-       axis against the WHOLE column -- against a short tile (a "1
-       observations" step with little detail text under it, next to a
-       taller sibling) the arrow hung well below the number it belongs
-       next to (MEASURED, ~150px below on a 350px-tall column). `start`
+    /* Centring on the cross axis against the WHOLE column would hang the
+       arrow well below the number it belongs next to when a tile is short
+       beside a taller sibling. `start`
        plus a top margin approximating the number's own baseline keeps
        the arrow level with `.linkage-step-count` (2rem/line-height 1)
        regardless of how much text renders beneath either step. */
@@ -523,7 +506,7 @@
 /* ---------------------------------------------------------------------
    Entry tabs — a real ARIA tablist. One flat row, one accent, no second
    color marking "this is a computed product": the selected conformer
-   already carries that distinction now.
+   already carries that distinction.
    --------------------------------------------------------------------- */
 
 .entry-tabs {
@@ -538,8 +521,7 @@
 .entry-tabs a {
     padding: .1rem 0 .9rem;
     color: var(--ink-2);
-    /* `--type-ui` (design-system.css) -- was a literal 500 originally,
-       replaced with a literal 400/600 pair, now the named UI step so this
+    /* `--type-ui` (design-system.css): the named UI step, so this
        tablist shares its face/size with every other UI control on the
        page (chart toggles, disclosure summaries). Weight itself is still
        overridden per state, never left at `--type-ui`'s own default 600:
@@ -581,10 +563,9 @@
 
 .tab-panel { margin-top: 2rem; }
 
-/* `.geometry-list`/`.geometry-item`/`.geometry-meta` (review finding,
-   NIT, PR 366): DELETED -- dead, no component in this page's scope
-   renders these classes; `ConformerGeometryTab.tsx` renders the geometry
-   tab through `.checklist` (entry-science.css) instead. */
+/* No `.geometry-list`/`.geometry-item`/`.geometry-meta` rules:
+   `ConformerGeometryTab.tsx` renders the geometry
+   tab through `.checklist` (entry-science.css). */
 
 /* ---------------------------------------------------------------------
    Records grouped by whether they trace to the selected conformer's own
@@ -607,8 +588,7 @@
    opened this tab to ask. Emphasized relative to the plain `.empty-projection`
    wording every OTHER empty state on this page uses, so it reads as an
    answer rather than a caption easy to skim past. */
-/* SHOULD-FIX-3 (re-review): was `600 .92rem/1.55 var(--sans)` -- a
-   bespoke size next to `--type-heading-3` (sans 600 .875rem), the
+/* `--type-heading-3` (sans 600 .875rem) is the
    nearest named step for a short, emphasized statement like this one.
    `line-height` stays its own wider value (this can run to two lines
    inside the box; `--type-heading-3`'s own 1.4 was tuned for a
@@ -643,9 +623,7 @@
     border-left: 2px solid var(--line);
 }
 
-/* SHOULD-FIX-3 (re-review): was a bare `font-size: .95rem` override (on
-   the base rule's serif `--type-heading-2`) -- another off-scale size.
-   `--type-heading-3` (sans 600 .875rem) is the demoted-heading step this
+/* `--type-heading-3` (sans 600 .875rem) is the demoted-heading step this
    page already uses elsewhere for "a heading, but a secondary one"
    (`entry-science.css`'s `.model-block-heading`, this same fix's own
    change to statmech's per-record card heading -- see that component's
@@ -659,15 +637,13 @@
 
 /* `.linkage-flow`'s three steps (`flex: 1 1 14rem` + `0 1.25rem` padding
    each, plus two connectors) have an intrinsic width around 836px -- wider
-   than the 680px breakpoint everything else on this page stacks at. Below
-   680px that gap is moot (the 680px rule below already stacks it), but the
-   681-836px tablet band (an iPad portrait at 768px, for instance) sat
-   between the two: too narrow for three steps side by side, too wide to
-   trigger the 680px stack, so the row wrapped mid-flow and left a "→"
-   pointing at nothing. This own breakpoint, above the tablet band, covers
-   it; the shared 680px rule below still handles the narrower stack for
-   phones (it doesn't need its own linkage rules once this one exists,
-   since a max-width media query still applies at any narrower width). */
+   than the 680px breakpoint everything else on this page stacks at. The
+   681-836px tablet band (an iPad portrait at 768px, for instance) is too
+   narrow for three steps side by side but too wide to trigger the 680px
+   stack, so without this breakpoint the row would wrap mid-flow and leave
+   a "→" pointing at nothing. This breakpoint, above the tablet band,
+   stacks the row; a max-width media query still applies at any narrower
+   width, so phones need no separate linkage rules. */
 @media (max-width: 880px) {
     .linkage-flow { flex-direction: column; }
     .linkage-step { flex: none; padding: 0; }

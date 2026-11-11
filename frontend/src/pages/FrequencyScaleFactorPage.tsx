@@ -16,10 +16,8 @@ const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not re
 
 /**
  * `/methods/frequency-scale-factors/:fsfRef` -- the thin standalone FSF
- * page (methods-surface plan §4.3, `plan-methods-surface-v2`, not
- * committed to this repo), the link target for the dead-ref site §2.4
- * found (`EntryStatmechSection.tsx`'s `FrequencyScaleFactorDetail`, which
- * used to print `fsf.frequency_scale_factor_ref` in an unlinked `<code>`)
+ * page, the link target for
+ * `EntryStatmechSection.tsx`'s `FrequencyScaleFactorDetail`
  * and for every distinct provenance row a LOT page's own "Frequency scale
  * factor" disclosure lists.
  */
@@ -78,7 +76,7 @@ function FrequencyScaleFactorDetail({ record }: { record: FrequencyScaleFactorRe
                                     </div>
                                     <div><dt>Software</dt><dd>{softwareLabel(record.software_release) ?? "not recorded"}</dd></div>
                                     <div><dt>Workflow tool</dt><dd>{toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}</dd></div>
-                                    {/* No `fsf.note`: depositor free text (house rule, owner decision 2026-11-03). */}
+                                    {/* No `fsf.note`: depositor free text (house rule). */}
                                 </dl>
                             </div>
                         </div>

@@ -47,8 +47,7 @@ function page() {
  * fields" from "always show the first row", and a fixture whose two
  * lists happen to share an order cannot catch a client-side re-sort. One
  * calculation (`calc_opt_two`) is deliberately present in BOTH lists —
- * measured live behaviour (calc_htgb7s5nakuw52eqhcxpvilpoq on
- * geom_or52ifyemdi3eewsjym2fuvo3a), not a hypothetical — so a mutation
+ * a case that can occur, not a hypothetical — so a mutation
  * that merges, sums, or conflates the two lists is observable.
  *
  * `geom_hash` is a full 64-character hex string, not a short placeholder
@@ -260,8 +259,8 @@ describe("GeometryDetailPage", () => {
         expect(within(context).getByText("angstrom")).toBeVisible()
     })
 
-    // Item 1/7, design/foundations PR B: mutation check for header order
-    // (the kicker-row/h1 that `RecordIdentityHeader` now owns, ahead of
+    // Header order
+    // (the kicker-row/h1 that `RecordIdentityHeader` owns, ahead of
     // this page's own provenance `.kv-list`) and the table primitive
     // (`.data-table`, never `.stage-table`) -- see the identical checks on
     // `ConformerGroupPage.test.tsx`/`ConformerObservationPage.test.tsx`.
@@ -638,7 +637,7 @@ describe("GeometryDetailPage", () => {
     })
 
     describe("coordinate table units toggle (ångström <-> bohr)", () => {
-        it("defaults to ångström — the owner's own instruction was 'starts with angstrom cause that's how it's stored'", async () => {
+        it("defaults to ångström, the unit the coordinates are stored in", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
             await screen.findByRole("heading", { name: /^Geometry of CH4/ })
@@ -917,8 +916,7 @@ describe("GeometryDetailPage", () => {
             const { container } = page()
             await screen.findByRole("heading", { name: /^Geometry of CH4/ })
 
-            // `.basin-intro` retired (design/foundations PR B) -- this
-            // header's intro paragraph now goes through `RecordIdentityHeader`'s
+            // This header's intro paragraph goes through `RecordIdentityHeader`'s
             // own `intro` prop, which composes `.section-intro`
             // (`conformer-group.css`), the same `--measure-prose` (40rem,
             // NOT 44 -- see `index.css`) cap `SectionHeading`'s own
@@ -926,8 +924,7 @@ describe("GeometryDetailPage", () => {
             // these five record pages.
             const prose = container.querySelector(".section-intro") as HTMLElement
             const viewer = container.querySelector(".viewer-poster-stage") as HTMLElement
-            // `.stage-table` retired from this page's own tables in favour
-            // of the shared `.data-table` primitive (item 7).
+            // This page's own tables use the shared `.data-table` primitive.
             const table = container.querySelector(".data-table") as HTMLElement
             expect(prose).not.toBeNull()
             expect(viewer).not.toBeNull()
@@ -1018,7 +1015,7 @@ describe("GeometryDetailPage -- wording and keyboard", () => {
     })
 })
 
-describe("GeometryDetailPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("GeometryDetailPage -- no depositor-typed text", () => {
     it("prints none of the typed identity fields, in text or in any attribute", async () => {
         const planted = plantSentinels(mockRecord({
             identity: {

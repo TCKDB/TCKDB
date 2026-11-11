@@ -7,8 +7,8 @@ import css from "./calculation-dependency-graph.css?raw"
 
 /**
  * "Colours and type from design-system tokens only (`--accent`, `--line`,
- * `--ink`, `--muted`, the type scale); no hard-coded hex" -- the brief's
- * own constraint on this file. jsdom cannot see whether a colour LOOKS
+ * `--ink`, `--muted`, the type scale); no hard-coded hex" is this file's
+ * constraint. jsdom cannot see whether a colour LOOKS
  * right (no real paint), but a hex literal in the raw source is a
  * mechanical fact this test can catch without a browser: any `#rgb` /
  * `#rrggbb` / `#rgba` / `#rrggbbaa` literal anywhere in the file is a
@@ -82,9 +82,8 @@ describe("the SVG scales fluidly and never forces page-level horizontal overflow
  * `minWidth`/`maxWidth` inline style pins the SVG to a fixed CSS-px
  * width (the active layout's own computed width); `overflow-x: auto`
  * here is what a container NARROWER than that fixed width does instead
- * of shrinking the SVG's text. MEASURED (post-review): with no floor at
- * all, a 600px viewport scaled the narrow layout to 0.89x (labels
- * 10.26px) and 400px to 0.57x (6.6px), both under this app's 11.52px
+ * of shrinking the SVG's text. With no floor at
+ * all, a narrow viewport would scale the labels below this app's 11.52px
  * accessible floor.
  */
 describe(".dep-graph holds the text-size floor by scrolling, not shrinking", () => {
@@ -103,12 +102,10 @@ describe("the demoted sentence list uses the .note step, not body prose", () => 
         expect(match![1]).toMatch(/color:\s*var\(--muted\)/)
     })
 
-    // The rule this replaces (`.dependency-sentences li`, retired from
-    // `calculation-detail.css` -- see that file's own test) capped a
+    // `.dep-graph-sentences` caps a
     // sentence row to `--measure-note`, the "readable prose measure"
-    // step, since each row is a genuine sentence, not raw data. Pinned
-    // here in its new home so the cap itself survives the move.
-    it(".dep-graph-sentences caps to --measure-note, carrying forward calculation-detail.css's retired SHOULD-FIX-4 rule", () => {
+    // step, since each row is a genuine sentence, not raw data.
+    it(".dep-graph-sentences caps to --measure-note", () => {
         const match = /\.dep-graph-sentences\s*\{([^}]*)\}/.exec(css)
         expect(match, ".dep-graph-sentences rule not found").not.toBeNull()
         expect(match![1]).toMatch(/max-width:\s*var\(--measure-note\)/)

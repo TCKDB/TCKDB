@@ -323,7 +323,7 @@ class TestArtifactPlanPreviewReaction:
 
 
 # ---------------------------------------------------------------------
-# Demo files no longer touch private state
+# Demo files do not touch private state
 # ---------------------------------------------------------------------
 
 

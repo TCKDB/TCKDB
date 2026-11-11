@@ -1,8 +1,8 @@
 /**
  * A tiny per-loader response cache, module-scoped (lives as long as the
  * page does -- a hard reload clears it, same as any other in-memory
- * state). Exists to answer one specific complaint: on the species-entry
- * page, switching tabs and pressing Back used to refire the SAME request
+ * state). Exists so that on the species-entry
+ * page, switching tabs and pressing Back does not refire the SAME request
  * (entry projection, conformer list, per-section thermo/statmech/transport
  * lists) every time a component remounted, even though nothing about the
  * underlying record had changed. Sixty-ish requests per minute is the
@@ -22,19 +22,13 @@
  * A cache entry OWNS its own `AbortController` and its own subscriber
  * count -- `load(signal)` is called exactly ONCE per `(scope, key)` while
  * an entry is pending, using a signal this module controls, never a
- * caller's own. Earlier versions of this file instead ran the caller's
- * OWN signal into the shared fetch: whichever caller arrived first "won"
- * and every later joiner rode along on a request that caller could cancel
- * out from under them. Under `React.StrictMode` (`main.tsx`; dev-only
- * double-invoke of mount -> cleanup -> mount) that meant the discarded
- * probe mount's cleanup aborted the ONE real request before the mount
- * that stays ever got its own -- the page hung on "Loading …" forever
- * (`useSpeciesEntry`'s `AbortError`-name check swallowed it unconditionally)
- * or fell back to a generic `unavailable`/`could not be displayed` state
- * instead of the real classification (`useScientificRecord`'s
- * `controller.signal.aborted` check saw ITS OWN, un-aborted signal and
- * proceeded to misclassify someone else's abort). Subscriber counting
- * fixes both: an `AbortError` now ALWAYS means "this shared request was
+ * caller's own. Running a caller's own signal into the shared fetch would
+ * let whichever caller arrived first cancel the request out from under
+ * every later joiner; under `React.StrictMode` (`main.tsx`; dev-only
+ * double-invoke of mount -> cleanup -> mount) the discarded probe mount's
+ * cleanup would abort the ONE real request before the mount that stays
+ * got its own. Subscriber counting avoids that: an `AbortError`
+ * ALWAYS means "this shared request was
  * cancelled because nobody wants it any more", so both hooks can treat it
  * uniformly as "do nothing, a fresher effect run (or a real unmount) will
  * handle this" -- see `useScientificRecord.ts` / `useSpeciesEntry.ts`.

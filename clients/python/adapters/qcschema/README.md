@@ -67,7 +67,7 @@ on an integer grid, with a constrained optimization at every grid point.
   one: relaxed, every coordinate a proper dihedral, whole-degree values that
   agree with each point's stored geometry. Bond, angle and improper scans,
   rigid scans, and scans whose values are a sweep relative to the first point
-  (the convention of scans deposited before ADR 0020) are refused with a
+  are refused with a
   code, never relabelled. What the document does not carry is listed in
   `extras.tckdb.export_report`.
 

@@ -70,10 +70,11 @@ export async function throwForFailedResponse(response: Response): Promise<never>
             if ("detail" in body && typeof body.detail === "string") detail = body.detail
             // FastAPI's request-validation errors put a LIST here, one entry
             // per rejected field ({loc, msg, type}), not a string. Without
-            // this branch the most common registration failure -- a password
-            // under 8 characters -- fell through to `response.statusText`,
-            // which HTTP/2 leaves empty, so the user was told
-            // "Request failed (422)" and never which field was wrong.
+            // this branch, a password under 8 characters -- the most common
+            // registration failure -- would fall through to
+            // `response.statusText`, which HTTP/2 leaves empty, so the user
+            // would be told "Request failed (422)" and never which field was
+            // wrong.
             else if ("detail" in body && Array.isArray(body.detail)) {
                 const parts = body.detail
                     .map((entry) => {

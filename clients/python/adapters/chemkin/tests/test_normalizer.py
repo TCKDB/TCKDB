@@ -88,7 +88,7 @@ def test_simple_third_body_form(norm):
 
 def test_duplicate_collapses_to_multi_arrhenius(norm):
     # The R6 DUPLICATE pair (two identical-equation Arrhenius lines) collapses
-    # into a single multi_arrhenius reaction carrying both terms (DR-0036).
+    # into a single multi_arrhenius reaction carrying both terms.
     r6 = by_index(norm, 5)
     assert r6.model_kind == "multi_arrhenius"
     assert r6.duplicate
