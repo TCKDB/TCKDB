@@ -113,7 +113,7 @@ describe("reaction compare page", () => {
         expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/Compare rate coefficients for/)
         expect(titleHasKind(document.title, "/reactions/:ref/compare")).toBe(true)
         expect(document.title).toMatch(/Compare · TCKDB$/)
-        expect(screen.getByText(/never fills a value in from another record/)).toBeInTheDocument()
+        expect(screen.getByText(/nothing is filled in from another record/)).toBeInTheDocument()
         expect(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByRole("link", { name: "Reactions" })).toBeInTheDocument()
     })
 
@@ -250,7 +250,7 @@ describe("reaction compare page", () => {
     it("names the order and offers the list view with sort buttons", async () => {
         await open()
         await table()
-        expect(screen.getAllByText(/in the order each group first appears/).length).toBeGreaterThan(0)
+        expect(screen.getAllByText(/Grouped by level and program/).length).toBeGreaterThan(0)
         expect(screen.getAllByText(/approved first, then newest deposited first/).length).toBeGreaterThan(0)
         const list = await screen.findByRole("region", { name: "Rate records as a list" })
         const button = within(list).getAllByRole("button", { name: /Activation energy/ })[0]

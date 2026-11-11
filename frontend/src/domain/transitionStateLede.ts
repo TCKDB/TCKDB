@@ -10,5 +10,5 @@ function composed(text: string): LedeWord {
 export function transitionStateEntryLede(entry: { status: string }, calculationCount: number): LedeText {
     const status = composed(words(entry.status) ?? "not recorded")
     const calculations = composed(`${calculationCount} ${calculationCount === 1 ? "calculation" : "calculations"}`)
-    return ledeText`The saddle point between the reactants and products of this reaction, as one depositor computed it: status ${status}, ${calculations}. A reaction can have several of these, and none is chosen for you.`
+    return ledeText`The saddle point of this reaction from one deposit: status ${status}, ${calculations}.`
 }

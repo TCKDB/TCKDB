@@ -771,11 +771,6 @@ function ResultsSection({ results, type, availability, contradicted, verificatio
     compositeScheme: NonNullable<CalculationRecord["level_of_theory"]>["composite_scheme"]
 }) {
     const legacyText = legacyShapeText(legacyShape)
-    // The heading names the same source ResultBody dispatches on
-    // (`results.kind`) rather than `type`, so the two can never disagree —
-    // falling back to `type` only when there is no result to read a kind
-    // from at all.
-    const kindLabel = results ? typeLabel(results.kind) : typeLabel(type)
     return (
         <section className="ledger-section" aria-labelledby="results-heading">
             {/* No kicker here (SHOULD-FIX-6, "record-page residuals"
@@ -784,7 +779,7 @@ function ResultsSection({ results, type, availability, contradicted, verificatio
                 only when it adds a category the title lacks, the same
                 rule "Review"'s kicker below satisfies and this one
                 didn't. */}
-            <SectionHeading id="results-heading" intro={`The primary scientific result for this ${kindLabel.toLowerCase()} calculation.`}>
+            <SectionHeading id="results-heading">
                 Result
             </SectionHeading>
             {availability === "populated" && results ? <ResultBody results={results} /> : (
@@ -1021,7 +1016,7 @@ function DependenciesSection({ dependencies, ownRef, ownType, availability, cont
     return (
         <section className="ledger-section" aria-labelledby="dependencies-heading">
             {/* No kicker (SHOULD-FIX-6): repeated this section's own title. */}
-            <SectionHeading id="dependencies-heading" intro="Other calculations this one was built from, or that were built from it.">
+            <SectionHeading id="dependencies-heading">
                 Related calculations
             </SectionHeading>
             {availability === "populated" ? (
@@ -1060,7 +1055,7 @@ function GeometriesSection({
     return (
         <section className="ledger-section" aria-labelledby="geometries-heading">
             {/* No kicker (SHOULD-FIX-6): repeated this section's own title. */}
-            <SectionHeading id="geometries-heading" intro="Links to the full coordinate records this calculation consumed and produced.">
+            <SectionHeading id="geometries-heading">
                 Geometries
             </SectionHeading>
             {sameGeometry ? (
@@ -1348,7 +1343,7 @@ function OnDemandSections({ calculation, available, geometryValidationState, ope
     return (
         <section className="ledger-section" aria-labelledby="further-evidence-heading">
             {/* No kicker (SHOULD-FIX-6): repeated this section's own title. */}
-            <SectionHeading id="further-evidence-heading" intro="Machine-parsed detail and additional checks, loaded from the archive on request.">
+            <SectionHeading id="further-evidence-heading">
                 Further evidence
             </SectionHeading>
             <div className="geometry-groups">

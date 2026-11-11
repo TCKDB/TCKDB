@@ -107,8 +107,7 @@ function UsageSection({ rows, available, total }: { rows: FrequencyScaleFactorUs
         <section className="ledger-section" aria-labelledby="fsf-usage-heading">
             <SectionHeading
                 id="fsf-usage-heading"
-                kicker="Deposited evidence"
-                intro={`${total} statmech record${total === 1 ? "" : "s"} use this scale factor.`}
+                intro={`${total} statmech record${total === 1 ? "" : "s"}.`}
             >
                 Used by
             </SectionHeading>

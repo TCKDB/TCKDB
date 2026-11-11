@@ -244,10 +244,8 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.queryByText("SMILES", { selector: "dt" })).not.toBeInTheDocument()
         expect(screen.queryByText("InChIKey")).not.toBeInTheDocument()
 
-        // Neither duplicate "no canonical SMILES" sentence is rendered --
-        // only the Reaction section's own lede survives.
+        // Neither "no canonical SMILES" sentence is rendered.
         expect(screen.queryAllByText(/no canonical SMILES/i)).toHaveLength(0)
-        expect(screen.getByText(/A transition state is identified by the reaction it connects/)).toBeVisible()
 
         // Reaction context the API serves.
         expect(screen.getByText("R Addition MultipleBond")).toBeVisible()
@@ -537,7 +535,7 @@ describe("TransitionStateEntryPage", () => {
         [{ status: "assessed", outcome: "qualified_evidence", contested_target_count: 1 },
             /A declared target is contested — needs investigation\./],
         [{ status: "no_declared_target", declared_targets: 0 },
-            /No saddle target is declared, so the structure assessment has nothing to assess\./],
+            /Not assessed: no saddle target declared\./],
         [{ status: "not_assessed_over_bound", refusal_code: "structure_selection_evidence_too_large" },
             /Not run: the evidence is over the server's size limits/],
         [{ status: "not_assessed_on_lists" }, /Not assessed on lists\./],
@@ -1243,8 +1241,7 @@ describe("transition-state entry page: orders and picks that are now stated", ()
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: mockRecord() })))
         page()
         await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
-        expect(screen.getByText(/Rows are grouped by stage \(opt, freq, sp, irc, path search\)/)).toBeVisible()
-        expect(screen.getByText(/not a ranking: no row is preferred over another/)).toBeVisible()
+        expect(screen.getByText("By stage, then archive order. Not a ranking.")).toBeVisible()
     })
 
     it("names the stage a sibling's level of theory and software were read from, and reads both from that one calculation", async () => {
@@ -1634,18 +1631,19 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         expect(value.querySelector("data")).toHaveAttribute("title", `stored as ${sign}1234.5678`)
     })
 
-    it("trust card: asks how much of the expected evidence was deposited", async () => {
+    it("trust card: states the status and how many checks passed", async () => {
         withRecord({ trust: { trust_status: "well_supported", evidence: { passed_count: 5, possible_count: 6, checks: {} } } })
         page()
         const trust = await screen.findByRole("region", { name: "Trust" })
-        expect(trust).toHaveTextContent("Asks how much of the evidence TCKDB expects for a saddle point was deposited, by a fixed list of checks.")
+        expect(trust).toHaveTextContent("well supported")
+        expect(trust).toHaveTextContent("5 of 6 checks passed")
     })
 
     it("hill: says its comparison is TCKDB's own, and does not name this entry's ref or review on the hill's facts", async () => {
         withRecord()
         page()
         await screen.findByRole("group", { name: /Energy relative to the reactants/ })
-        expect(screen.getByText("The hill is TCKDB's own comparison at one level and one program; the depositor's ordering check may use other energies.")).toBeVisible()
+        expect(screen.getByText("TCKDB's comparison at one level and program; the depositor's check may use other energies.")).toBeVisible()
         expect(screen.queryByText("Transition-state entry", { selector: "dt" })).toBeNull()
     })
 
@@ -1657,7 +1655,7 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         page()
         const picker = await screen.findByLabelText("Profile")
         expect(within(picker).getAllByRole("option")).toHaveLength(2)
-        expect(screen.getByText(/Listed by level of theory, then program, in alphabetical order\./)).toBeVisible()
+        expect(screen.getByText(/By level, then program\./)).toBeVisible()
         expect(screen.queryByText(/approved first/)).toBeNull()
         await user.selectOptions(picker, "1")
         expect(screen.getByRole("group", { name: /Energy relative to the reactants/ })).toHaveTextContent("+40.0 kJ/mol")
@@ -1727,10 +1725,10 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         expect(rows[0]).toHaveTextContent("reports 1 imaginary frequency. That is a result, not a recorded check.")
         expect(rows[2]).toHaveTextContent("none to link")
         for (const row of rows) expect(within(row).queryByRole("link")).toBeNull()
-        expect(screen.getByText(/Not recorded means nobody deposited it/)).toBeVisible()
+        expect(screen.getByText(/Not recorded means not deposited, not failed\./)).toBeVisible()
     })
 
-    it("shows trust and IRC side by side, each with what it asks", async () => {
+    it("shows trust and IRC side by side", async () => {
         withRecord({
             trust: { trust_status: "well_supported", evidence: { passed_count: 5, possible_count: 6, checks: {} } },
         })
@@ -1738,10 +1736,8 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         const trust = await screen.findByRole("region", { name: "Trust" })
         const irc = screen.getByRole("region", { name: "IRC" })
         expect(trust.parentElement).toBe(irc.parentElement)
-        expect(trust).toHaveTextContent("Asks how much of the evidence TCKDB expects")
         expect(trust).toHaveTextContent("well supported")
         expect(trust).toHaveTextContent("5 of 6 checks passed")
-        expect(irc).toHaveTextContent("Asks whether a reaction-path calculation connects")
         expect(irc).toHaveTextContent("IRC ran")
     })
 

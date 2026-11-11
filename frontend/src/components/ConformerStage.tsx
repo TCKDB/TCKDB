@@ -1,13 +1,11 @@
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { loadGeometryAtoms } from "../api/geometryApi"
-import { shapeSummary } from "../domain/geometryShape"
 import { useLoaded } from "../hooks/useLoaded"
 import { ViewerStage } from "./ViewerStage"
 
 /**
- * The picture of a conformer group or observation, with the interactive 3D view on request, and under it one sentence
- * about the shape worked out from the stored coordinates. `drawnFrom` says which stored geometry the picture is.
+ * The picture of a conformer group or observation, with the interactive 3D view on request. `drawnFrom` says which stored geometry the picture is.
  */
 export function ConformerStage({ geometryRef, formula, drawnFrom }: {
     geometryRef: string | null
@@ -16,7 +14,6 @@ export function ConformerStage({ geometryRef, formula, drawnFrom }: {
 }) {
     const geometry = useLoaded(loadGeometryAtoms, geometryRef)
     const atoms = geometry.status === "ready" ? geometry.data.atoms ?? [] : []
-    const summary = shapeSummary(atoms)
     return (
         <figure className="viewer-figure" aria-label="Picture of this conformer">
             {geometryRef === null && <p className="empty-projection">No picture: no geometry is stored here.</p>}
@@ -30,7 +27,7 @@ export function ConformerStage({ geometryRef, formula, drawnFrom }: {
                 <>
                     <ViewerStage key={geometryRef} atoms={atoms} formula={formula} xyzText={geometry.data.xyz_text ?? null} />
                     <figcaption>
-                        {summary} {drawnFrom}{" "}
+                        {drawnFrom}{" "}
                         <Link to={`/geometries/${geometryRef}`}>Open the geometry</Link>.
                     </figcaption>
                 </>

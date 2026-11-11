@@ -115,13 +115,13 @@ function Ledger({ group }: { group: ConformerGroup }) {
                 <ConformerStage
                     geometryRef={pictureGeometryFromLinks(group.geometries ?? [])}
                     formula={formula}
-                    drawnFrom="Drawn from the first final geometry deposited for this conformer; other observations of it may differ slightly."
+                    drawnFrom="First deposited final geometry."
                 />
 
                 <section className="ledger-section" aria-labelledby="observation-ledger">
                     <SectionHeading
                         id="observation-ledger"
-                        intro={`One entry for each time this conformer was deposited: how its geometry was found and every energy computed on it. Methods stay on their own calculations, so different levels stay visible. ${evidence.optimization_chain_count} optimisation ${evidence.optimization_chain_count === 1 ? "chain" : "chains"} in all.`}
+                        intro={`${evidence.optimization_chain_count} optimisation ${evidence.optimization_chain_count === 1 ? "chain" : "chains"}.`}
                     >
                         Observations
                     </SectionHeading>
@@ -161,7 +161,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                 <section className="ledger-section" aria-labelledby="used-by-heading">
                     <SectionHeading
                         id="used-by-heading"
-                        intro="The thermochemistry and rate coefficients that name this conformer. A record that names no conformer is not listed here."
+                        intro="Records naming no conformer are not listed."
                     >
                         Used by
                     </SectionHeading>
@@ -194,7 +194,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                 <section className="ledger-section" aria-labelledby="geometry-ledger">
                     <SectionHeading
                         id="geometry-ledger"
-                        intro={`${evidence.geometry_count} stored ${evidence.geometry_count === 1 ? "geometry" : "geometries"} linked from calculation output. This is not a count of conformers.`}
+                        intro={`${evidence.geometry_count} ${evidence.geometry_count === 1 ? "geometry" : "geometries"}. This is not a count of conformers.`}
                     >
                         Geometries
                     </SectionHeading>
