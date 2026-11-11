@@ -518,9 +518,15 @@ span.browse-row-title {
    separate `.value-pill`s, and this class only spaces them apart. */
 .browse-entry-chip {
     display: flex;
+    flex-wrap: wrap;
+    min-width: 0;
     align-items: center;
     gap: .4rem;
     font-size: .76rem;
+}
+
+.browse-entry-chip > span {
+    white-space: normal;
 }
 
 .browse-entry-kind-pill a {
@@ -562,6 +568,12 @@ span.browse-row-title {
 
 .browse-row-footer .browse-ref {
     margin-top: 0;
+}
+
+.browse-row-footer,
+.browse-row-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 /* The reaction row's second, secondary link -- the one deposit the row
