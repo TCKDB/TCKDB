@@ -258,6 +258,8 @@ export interface LayoutEdge {
     labelY: number
     labelWidth: number
     labelHeight: number
+    /** Which end of the label box the text hugs; the end nearest its own line. Default: centred. */
+    labelAnchor?: "start" | "end"
     /** Narrow layout only: the lane `x` this edge's stub and label both
      * anchor to (`labelX - labelWidth / 2 === laneX`, checked directly by
      * `dependencyGraphLayout.test.ts`). Undefined for a wide-layout edge,
@@ -287,6 +289,8 @@ function centrePillFor(ownType: string): { width: number; height: number; label:
 const WIDE_GAP_X_MIN = 24
 const WIDE_MARGIN = 24
 const WIDE_BAND_STEP = 26
+// Extra drop length per edge, so each label gets its own slot beside a drop.
+const WIDE_LABEL_SLOT = LABEL_H + 10
 
 function layoutWideRow(
     refs: string[], rowCenterX: number, gapX: number,
@@ -358,8 +362,8 @@ function outerLabelOverhang(tierEdges: DependencyGraphEdgeSpec[], refs: string[]
     if (refs.length === 0) return 0
     const labelWidthFor = (ref: string) =>
         Math.max(0, ...tierEdges.filter((e) => e.otherRef === ref).map((e) => smallTextBoxWidth(e.label)))
-    const leftOverhang = labelWidthFor(refs[0]) + LABEL_GAP - widths[0] / 2
-    const rightOverhang = labelWidthFor(refs[refs.length - 1]) + LABEL_GAP - widths[widths.length - 1] / 2
+    const leftOverhang = labelWidthFor(refs[0]) / 2 - widths[0] / 2
+    const rightOverhang = labelWidthFor(refs[refs.length - 1]) / 2 - widths[widths.length - 1] / 2
     return Math.max(0, leftOverhang, rightOverhang)
 }
 
@@ -384,7 +388,8 @@ function boxesOverlap(a: Box, b: Box): boolean {
 
 /** Puts each label beside its sibling-end vertical drop (right, then left) or above its horizontal run, at
  * the first spot `LABEL_CLEAR` px clear of every edge segment, node and earlier label. */
-function placeWideLabels(edges: LayoutEdge[], nodes: LayoutNode[], centreRef: string, width: number): void {
+function placeWideLabels(edges: LayoutEdge[], nodes: LayoutNode[], centreRef: string, width: number): boolean {
+    let allFit = true
     const segs: Box[] = []
     for (const e of edges) {
         const p = pathPoints(e.path)
@@ -431,14 +436,18 @@ function placeWideLabels(edges: LayoutEdge[], nodes: LayoutNode[], centreRef: st
                 && !obstacles.some((o) => boxesOverlap(inflated, o))
                 && !placed.some((o) => boxesOverlap(inflated, o))
         }
-        const chosen = cands.find(fits) ?? cands[0]
+        const found = cands.find(fits)
+        if (!found) allFit = false
+        const chosen = found ?? cands[0]
         placed.push(chosen)
         e.labelX = chosen.x + w / 2
         e.labelY = chosen.y + h / 2
+        e.labelAnchor = chosen.x + w / 2 < v1.x ? "end" : "start"
     }
+    return allFit
 }
 
-export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
+export function computeWideLayout(model: DependencyGraphModel, extraMargin = 0): GraphLayout {
     const { ownRef, ownType, centreSubjectLabel, parentRefs, childRefs, edges } = model
     const centreWidth = centreNodeWidth(ownRef, centreSubjectLabel)
     const centreH = centreContentHeight(Boolean(centreSubjectLabel))
@@ -454,8 +463,8 @@ export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
     // app's own minimum node box (140px).
     const maxParentLabelW = Math.max(0, ...parentEdges.map((e) => smallTextBoxWidth(e.label)))
     const maxChildLabelW = Math.max(0, ...childEdges.map((e) => smallTextBoxWidth(e.label)))
-    const parentGapX = Math.max(WIDE_GAP_X_MIN, maxParentLabelW + 2 * LABEL_GAP - NODE_MIN_W)
-    const childGapX = Math.max(WIDE_GAP_X_MIN, maxChildLabelW + 2 * LABEL_GAP - NODE_MIN_W)
+    const parentGapX = Math.max(WIDE_GAP_X_MIN, maxParentLabelW / 2 + 16)
+    const childGapX = Math.max(WIDE_GAP_X_MIN, maxChildLabelW / 2 + 16)
 
     const parentWidths = parentRefs.map(nodeWidth)
     const childWidths = childRefs.map(nodeWidth)
@@ -482,7 +491,7 @@ export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
     // adding it to BOTH sides keeps the row (still centred on `centreX`)
     // entirely inside the SVG regardless of which end the long label
     // sits on.
-    const outerMargin = WIDE_MARGIN + Math.max(
+    const outerMargin = WIDE_MARGIN + extraMargin + Math.max(
         outerLabelOverhang(parentEdges, parentRefs, parentWidths),
         outerLabelOverhang(childEdges, childRefs, childWidths),
     )
@@ -491,8 +500,8 @@ export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
 
     const parentEdgeCount = parentEdges.length
     const childEdgeCount = childEdges.length
-    const parentTierGap = parentRefs.length > 0 ? WIDE_BAND_STEP * (parentEdgeCount + 1) : 0
-    const childTierGap = childRefs.length > 0 ? WIDE_BAND_STEP * (childEdgeCount + 1) : 0
+    const parentTierGap = parentRefs.length > 0 ? (WIDE_BAND_STEP + WIDE_LABEL_SLOT) * parentEdgeCount + WIDE_BAND_STEP : 0
+    const childTierGap = childRefs.length > 0 ? (WIDE_BAND_STEP + WIDE_LABEL_SLOT) * childEdgeCount + WIDE_BAND_STEP : 0
 
     let cursorY = WIDE_MARGIN
     const nodes: LayoutNode[] = []
@@ -540,7 +549,7 @@ export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
         if (edge.tier === "parent" && parentRow) {
             const box = parentRow.boxes.get(edge.otherRef)!
             const bandIndex = parentBandOrder.get(edge)!
-            const bandY = parentTierBottomY + WIDE_BAND_STEP * bandIndex
+            const bandY = parentTierBottomY + WIDE_LABEL_SLOT * parentEdgeCount + WIDE_BAND_STEP * bandIndex
             const path = `M ${box.x} ${parentTierBottomY} L ${box.x} ${bandY} L ${centreX} ${bandY} L ${centreX} ${centreTopY}`
             const width = smallTextBoxWidth(edge.label)
             edgesOut.push({
@@ -563,178 +572,75 @@ export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
         }
     }
 
-    placeWideLabels(edgesOut, nodes, ownRef, svgWidth)
+    // A lone sibling under the centre leaves no room beside its drop; widen only as far as needed.
+    if (!placeWideLabels(edgesOut, nodes, ownRef, svgWidth) && extraMargin < 400) {
+        return computeWideLayout(model, extraMargin + 12)
+    }
     return { width: svgWidth, height: svgHeight, nodes, edges: edgesOut }
 }
 
 // ---------------------------------------------------------------------------
-// Narrow layout: single vertical column (parents, then centre, then
-// children), each non-centre node's edge routed through its OWN lane in a
-// side gutter -- both the lane's `x` (unique per edge, across BOTH tiers)
-// and the entry/exit point on the centre's own edge (staggered per lane
-// index, parents above `centreCenterY`, children below it) are unique per
-// edge, so N siblings stacked in the same tier -- or a parent and a child
-// sharing a lane index -- never share so much as one (x, y) point.
+// Narrow layout: one column, parents then centre then children. A spine
+// runs down the left of the column; each satellite hangs off it by a short
+// branch with its label on the branch, so the whole graph fits a phone.
 // ---------------------------------------------------------------------------
 
 const NARROW_MARGIN = 20
-const NARROW_GAP_Y = 14
-const NARROW_TIER_GAP_MIN = 22
-const NARROW_LANE_GUTTER = 20
-// How far each successive lane's entry/exit point sits from
-// `centreCenterY` -- parents at `centreCenterY - STEP * laneIndex`
-// (above), children at `centreCenterY + STEP * laneIndex` (below). MUST
-// exceed `LABEL_H` (18) so two lanes' 18px-tall label bands (each
-// centred ON its own entry/exit point) never overlap each other.
-// `computeNarrowLayout` grows the CENTRE NODE'S OWN HEIGHT (see
-// `centreHeightFor` below) so that even the farthest lane's point --
-// `NARROW_ENTRY_STAGGER * laneCount` from `centreCenterY` -- still lands
-// ON the centre box's own border, never floating outside it. MEASURED
-// (post-review): with a FIXED centre height, lane 2's point sat 8px
-// below the box and lane 3's 30px below it -- the box was never resized
-// for lane count at all.
-const NARROW_ENTRY_STAGGER = LABEL_H + 10
-
-/** The centre node's own height in the narrow layout -- at least the
- * base `CENTRE_H` (room for the pill + ref line), but grown so the
- * farthest staggered entry/exit point (`NARROW_ENTRY_STAGGER *
- * maxLaneCount` from `centreCenterY`) lands ON THE DRAWN BORDER, not
- * just within the box's flat half-height. `+ 2 * NODE_RX` reserves a
- * margin on each side for the rounded corner (`rx={NODE_RX}` on the
- * rendered `<rect>`) -- MEASURED (post-review): the previous formula put
- * the deepest lane's point exactly AT the half-height line, which is
- * INSIDE the corner's rounded cut, not on the rect's actual path; the
- * point sat 3.31px off the rounded border's centreline, visibly short of
- * the arc at 4x zoom. `maxLaneCount` is the more loaded side (parents or
- * children) -- the OTHER side's points, staggered by the same step, are
- * then automatically within bounds too. */
-function centreHeightFor(maxLaneCount: number, hasSubject: boolean): number {
-    return Math.max(centreContentHeight(hasSubject), NARROW_ENTRY_STAGGER * maxLaneCount * 2 + 2 * NODE_RX)
-}
+const NARROW_INDENT = 28
+const NARROW_SPINE_X = 12
+const NARROW_DROP = 14
+const NARROW_GAP_Y = NARROW_DROP + 3 + LABEL_H + 6
 
 export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
     const { ownRef, ownType, centreSubjectLabel, parentRefs, childRefs, edges } = model
     const pill = centrePillFor(ownType)
-    // Every node in the narrow column is drawn at the SAME width
-    // (`colWidth`, the widest ref/pill among them), not each node's own
-    // narrower `nodeWidth(ref)` -- MEASURED (post-review): a path's
-    // node-side endpoint is always drawn at `x = rightEdgeX =
-    // centerX + colWidth / 2`, the shared COLUMN edge; a node narrower
-    // than `colWidth` has its OWN right border to the left of that,
-    // so the endpoint landed in the gap beside the box, not ON it.
-    // Uniform width makes every node's own border coincide with
-    // `rightEdgeX` exactly.
-    const allWidths = [centreNodeWidth(ownRef, centreSubjectLabel), ...parentRefs.map(nodeWidth), ...childRefs.map(nodeWidth)]
-    const colWidth = Math.max(...allWidths)
-    const centerX = NARROW_MARGIN + colWidth / 2
-
-    const parentEdges = edges.filter((e) => e.tier === "parent")
-    const childEdges = edges.filter((e) => e.tier === "child")
-    const laneCount = Math.max(parentEdges.length, childEdges.length, 1)
-    const gutterX = centerX + colWidth / 2 + NARROW_LANE_GUTTER
+    const centreW0 = centreNodeWidth(ownRef, centreSubjectLabel)
+    const satW = Math.max(...[...parentRefs, ...childRefs].map(nodeWidth), centreW0 - NARROW_INDENT, 0)
+    const colWidth = satW + NARROW_INDENT
     const maxLabelWidth = Math.max(0, ...edges.map((e) => smallTextBoxWidth(e.label)))
-    // A modest fixed step is enough between lanes -- each lane's own
-    // LABEL sits at its centre-side end (`entryY`/`exitY`, tightly
-    // clustered near `centreCenterY` and staggered by
-    // `NARROW_ENTRY_STAGGER`), never at the raw `nodeY` a deeper lane's
-    // node-side stub runs through, so lanes no longer need the widest
-    // label's own width just to keep two lanes' LABELS apart -- only
-    // enough that neighbouring lanes' vertical runs read as visually
-    // distinct.
-    const laneStep = 24
-    // The SVG's own width still has to reach past the LAST lane's own
-    // label (left-anchored there, extending further right by its own
-    // width) -- `maxLabelWidth`, not just the lane positions themselves.
-    const svgWidth = gutterX + laneStep * laneCount + LABEL_GAP + maxLabelWidth + NARROW_MARGIN
-
-    const centreH = centreHeightFor(Math.max(parentEdges.length, childEdges.length), Boolean(centreSubjectLabel))
-
-    // Reserves enough room between the nearest sibling row and the centre
-    // node for every staggered entry/exit point (see `NARROW_ENTRY_
-    // STAGGER`'s own comment) to land inside the gap, never inside a
-    // sibling row.
-    const parentTierGap = Math.max(NARROW_TIER_GAP_MIN, NARROW_ENTRY_STAGGER * parentEdges.length + 10)
-    const childTierGap = Math.max(NARROW_TIER_GAP_MIN, NARROW_ENTRY_STAGGER * childEdges.length + 10)
+    const left = NARROW_MARGIN
+    const spineX = left + NARROW_SPINE_X
+    const svgWidth = Math.max(colWidth, NARROW_SPINE_X + LABEL_GAP + maxLabelWidth) + 2 * NARROW_MARGIN
+    const centreH = centreContentHeight(Boolean(centreSubjectLabel))
 
     const nodes: LayoutNode[] = []
+    const tops = new Map<string, number>()
     let y = NARROW_MARGIN
-    const parentCenters = new Map<string, number>()
-    for (const ref of parentRefs) {
-        const centerY = y + NODE_H / 2
-        nodes.push({ ref, tier: "parent", type: null, x: centerX, y: centerY, width: colWidth, height: NODE_H })
-        parentCenters.set(ref, centerY)
+    const addSat = (ref: string, tier: "parent" | "child") => {
+        nodes.push({ ref, tier, type: null, x: left + NARROW_INDENT + satW / 2, y: y + NODE_H / 2, width: satW, height: NODE_H })
+        tops.set(ref, y)
         y += NODE_H + NARROW_GAP_Y
     }
-    if (parentRefs.length > 0) y += parentTierGap - NARROW_GAP_Y
-
-    const centreCenterY = y + centreH / 2
+    parentRefs.forEach((ref) => addSat(ref, "parent"))
+    const centreTop = y
     nodes.push({
-        ref: ownRef, tier: "centre", type: ownType, x: centerX, y: centreCenterY,
+        ref: ownRef, tier: "centre", type: ownType, x: left + colWidth / 2, y: centreTop + centreH / 2,
         width: colWidth, height: centreH, pill,
     })
-    y += centreH
+    y += centreH + NARROW_GAP_Y
+    childRefs.forEach((ref) => addSat(ref, "child"))
+    const svgHeight = (childRefs.length > 0 ? y - NARROW_GAP_Y : y - NARROW_GAP_Y) + NARROW_MARGIN
+    const centreBottom = centreTop + centreH
 
-    if (childRefs.length > 0) y += childTierGap
-
-    const childCenters = new Map<string, number>()
-    for (const ref of childRefs) {
-        const centerY = y + NODE_H / 2
-        nodes.push({ ref, tier: "child", type: null, x: centerX, y: centerY, width: colWidth, height: NODE_H })
-        childCenters.set(ref, centerY)
-        y += NODE_H + NARROW_GAP_Y
-    }
-    const svgHeight = (childRefs.length > 0 ? y - NARROW_GAP_Y : y) + NARROW_MARGIN
-
-    const rightEdgeX = centerX + colWidth / 2
-    // Every label is LEFT-anchored at its own lane (`labelX` is the box's
-    // CENTER, so `laneX + halfWidth` puts its left edge exactly at the
-    // lane) -- keeps the whole label box at x >= laneX > rightEdgeX,
-    // strictly clear of every node in the column regardless of y.
-    //
-    // `labelY` sits AT the centre-side endpoint (`entryY`/`exitY`), never
-    // the midpoint toward the sibling's own `nodeY` -- MEASURED
-    // (post-review): a midpoint label can land at almost any y across the
-    // whole column, and a DEEPER lane's stub (which crosses every
-    // shallower lane's x at that stub's OWN node's y, the same "shared
-    // trunk" geometry the wide layout's band ordering exists to avoid)
-    // then has a real chance of running straight through it. `entryY`/
-    // `exitY` are tightly clustered within `NARROW_ENTRY_STAGGER` of
-    // `centreCenterY` (a band sized to the centre node's OWN height, see
-    // `centreHeightFor`), well clear of every stub, which only ever runs
-    // at a sibling's own `nodeY` -- far out in the column, never inside
-    // that band.
     const edgesOut: LayoutEdge[] = []
-    let parentLane = 0
-    let childLane = 0
     for (const edge of edges) {
+        const top = tops.get(edge.otherRef)!
+        const dropX = left + NARROW_INDENT + 20
+        const width = smallTextBoxWidth(edge.label)
+        const labelX = spineX + LABEL_GAP + width / 2
         if (edge.tier === "parent") {
-            parentLane += 1
-            const laneX = gutterX + laneStep * parentLane
-            const nodeY = parentCenters.get(edge.otherRef)!
-            // Staggered entry point (never the bare `centreCenterY`) --
-            // see the section docstring above: this is what keeps a
-            // parent's lane-1 stub and a child's lane-1 stub, which
-            // otherwise share both `laneX` and `centreCenterY`, from
-            // coinciding. Always ON the centre box's own rounded border,
-            // clear of the corner's cut (`centreHeightFor` sized the box,
-            // margin for `NODE_RX` included, for exactly this).
-            const entryY = centreCenterY - NARROW_ENTRY_STAGGER * parentLane
-            const path = `M ${rightEdgeX} ${nodeY} L ${laneX} ${nodeY} L ${laneX} ${entryY} L ${rightEdgeX} ${entryY}`
-            const width = smallTextBoxWidth(edge.label)
+            const branchY = top + NODE_H + NARROW_DROP
+            const path = `M ${dropX} ${top + NODE_H} L ${dropX} ${branchY} L ${spineX} ${branchY} L ${spineX} ${centreTop}`
             edgesOut.push({
                 role: edge.role, label: edge.label, fromRef: edge.otherRef, toRef: ownRef, path,
-                labelX: laneX + LABEL_GAP + width / 2, labelY: entryY - LABEL_H / 2 - 5, labelWidth: width, labelHeight: LABEL_H, laneX,
+                labelX, labelY: branchY + 3 + LABEL_H / 2, labelWidth: width, labelHeight: LABEL_H, laneX: spineX, labelAnchor: "start",
             })
         } else {
-            childLane += 1
-            const laneX = gutterX + laneStep * childLane
-            const nodeY = childCenters.get(edge.otherRef)!
-            const exitY = centreCenterY + NARROW_ENTRY_STAGGER * childLane
-            const path = `M ${rightEdgeX} ${exitY} L ${laneX} ${exitY} L ${laneX} ${nodeY} L ${rightEdgeX} ${nodeY}`
-            const width = smallTextBoxWidth(edge.label)
+            const branchY = top - NARROW_DROP
+            const path = `M ${spineX} ${centreBottom} L ${spineX} ${branchY} L ${dropX} ${branchY} L ${dropX} ${top}`
             edgesOut.push({
                 role: edge.role, label: edge.label, fromRef: ownRef, toRef: edge.otherRef, path,
-                labelX: laneX + LABEL_GAP + width / 2, labelY: exitY + LABEL_H / 2 + 5, labelWidth: width, labelHeight: LABEL_H, laneX,
+                labelX, labelY: branchY - 3 - LABEL_H / 2, labelWidth: width, labelHeight: LABEL_H, laneX: spineX, labelAnchor: "start",
             })
         }
     }

@@ -223,7 +223,13 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType, cent
                             height={edge.labelHeight}
                             className="dep-graph-edge-label-bg"
                         />
-                        <text x={edge.labelX} y={edge.labelY} className="dep-graph-edge-label-text" textAnchor="middle" dominantBaseline="middle">
+                        <text
+                            x={edge.labelAnchor === "start" ? edge.labelX - edge.labelWidth / 2 : edge.labelAnchor === "end" ? edge.labelX + edge.labelWidth / 2 : edge.labelX}
+                            y={edge.labelY}
+                            className="dep-graph-edge-label-text"
+                            textAnchor={edge.labelAnchor ?? "middle"}
+                            dominantBaseline="middle"
+                        >
                             {edge.label}
                         </text>
                     </g>
@@ -255,15 +261,8 @@ function DependencyGraphNode({ node, centreLinked, centreSubject }: {
     if (node.tier === "centre" && node.pill) {
         const { pill } = node
         const hasSubject = Boolean(centreSubject)
-        // The pill(+subject)+ref content block is `centreContentHeight
-        // (hasSubject)` tall regardless of the node's OWN height -- the
-        // narrow layout grows a centre node past that to fit staggered
-        // lane entries (`centreHeightFor`), but the content itself never
-        // grows to match. MEASURED (post-review, pre-subject-row): pinning
-        // the block to the box's TOP (`top + 10`) left a 64.6px gap below
-        // the ref line and only 10px above it on a 3-child, 680px narrow
-        // graph. `contentTop` re-centres the whole block in the node's
-        // actual height, so the gap splits evenly top and bottom instead.
+        // The pill(+subject)+ref block is `centreContentHeight(hasSubject)` tall; `contentTop` centres it
+        // in the node's actual height.
         const contentTop = top + (node.height - centreContentHeight(hasSubject)) / 2
         // Matches `domain/dependencyGraphLayout.ts`'s own `CENTRE_PAD_TOP`
         // (10) / `CENTRE_PILL_GAP` (8) / `CENTRE_REF_LINE_H` (24) /

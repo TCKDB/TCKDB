@@ -286,11 +286,10 @@ describe.each([1, 2, 3, 4])("narrow layout, N=%i siblings per tier", (n) => {
             assertNoLabelNodeIntersections(layout, `narrow p=${parentCount} c=${childCount}`)
         })
 
-        it(`is a single x column -- every node shares the SAME x (parents=${parentCount}, children=${childCount})`, () => {
+        it(`satellites share one x, indented from the centre column (parents=${parentCount}, children=${childCount})`, () => {
             const model = buildDependencyGraphModel("calc_own_ref_abcdefghijklmnopqrstuv", "opt", makeDependencies(parentCount, childCount))
             const layout = computeNarrowLayout(model)
-            const xs = new Set(layout.nodes.map((n) => n.x))
-            expect(xs.size).toBe(1)
+            expect(new Set(layout.nodes.filter((n) => n.tier !== "centre").map((n) => n.x)).size).toBeLessThanOrEqual(1)
         })
 
         it(`every lane label is anchored at x >= its own laneX (parents=${parentCount}, children=${childCount})`, () => {
@@ -314,6 +313,59 @@ describe.each([1, 2, 3, 4])("narrow layout, N=%i siblings per tier", (n) => {
             const model = buildDependencyGraphModel("calc_own_ref_abcdefghijklmnopqrstuv", "opt", makeDependencies(parentCount, childCount))
             const layout = computeNarrowLayout(model)
             assertPathEndpointsOnNodeBorders(layout, `narrow p=${parentCount} c=${childCount}`)
+        })
+    }
+})
+
+/** Distance from a label rect to the nearest point of a segment. */
+function rectToSegmentDistance(rect: Rect, p1: { x: number; y: number }, p2: { x: number; y: number }): number {
+    const sx1 = Math.min(p1.x, p2.x), sx2 = Math.max(p1.x, p2.x)
+    const sy1 = Math.min(p1.y, p2.y), sy2 = Math.max(p1.y, p2.y)
+    const dx = Math.max(sx1 - (rect.x + rect.w), rect.x - sx2, 0)
+    const dy = Math.max(sy1 - (rect.y + rect.h), rect.y - sy2, 0)
+    return Math.hypot(dx, dy)
+}
+
+function assertLabelsBesideOwnLine(layout: GraphLayout, label: string) {
+    const segments = pathSegments(layout)
+    for (const { key, rect } of labelRects(layout)) {
+        const dists = segments.map((s) => ({ key: s.key, d: rectToSegmentDistance(rect, s.p1, s.p2) }))
+        const nearest = Math.min(...dists.map((x) => x.d))
+        const own = Math.min(...dists.filter((x) => x.key === key).map((x) => x.d))
+        expect(own, `${label}: label of ${key} is ${own}px from its own line`).toBeLessThanOrEqual(12)
+        expect(own, `${label}: label of ${key} is nearer another edge (${nearest}px) than its own (${own}px)`).toBeLessThanOrEqual(nearest + 0.01)
+    }
+}
+
+// Widths the wide layout had before labels moved beside the drops, for refs `calc_` + 26 characters.
+const MAIN_WIDE_WIDTH = [335, 708, 1104, 1500]
+const REAL_REF = (tier: string, i: number) => `calc_${tier}${i}abcdefghijklmnopqrst`
+
+function realRefModel(parentCount: number, childCount: number) {
+    const own = "calc_ownabcdefghijklmnopqrstuvw"
+    const deps = makeDependencies(parentCount, childCount).map((d, i) => d.direction === "child"
+        ? { ...d, parent_calculation_ref: REAL_REF("parent", i), child_calculation_ref: own }
+        : { ...d, parent_calculation_ref: own, child_calculation_ref: REAL_REF("child", i - parentCount) })
+    return buildDependencyGraphModel(own, "opt", deps)
+}
+
+describe.each([1, 2, 3, 4])("labels sit beside their own line, N=%i", (n) => {
+    for (const [parentCount, childCount] of [[n, 0], [0, n], [n, n]] as const) {
+        const model = () => buildDependencyGraphModel("calc_own_ref_abcdefghijklmnopqrstuv", "opt", makeDependencies(parentCount, childCount))
+        it(`wide (parents=${parentCount}, children=${childCount})`, () => {
+            assertLabelsBesideOwnLine(computeWideLayout(model()), "wide")
+        })
+        it(`narrow (parents=${parentCount}, children=${childCount})`, () => {
+            assertLabelsBesideOwnLine(computeNarrowLayout(model()), "narrow")
+        })
+        it(`narrow layout fits a 350px phone (parents=${parentCount}, children=${childCount})`, () => {
+            expect(computeNarrowLayout(realRefModel(parentCount, childCount)).width).toBeLessThanOrEqual(350)
+        })
+        it(`wide width stays within the old width (parents=${parentCount}, children=${childCount})`, () => {
+            const width = computeWideLayout(realRefModel(parentCount, childCount)).width
+            // A lone sibling sits straight under the centre, so its label needs width beside the drop.
+            expect(width).toBeLessThanOrEqual(n === 1 ? 520 : MAIN_WIDE_WIDTH[n - 1] + 1)
+            if (n <= 3) expect(width).toBeLessThanOrEqual(1128)
         })
     }
 })
