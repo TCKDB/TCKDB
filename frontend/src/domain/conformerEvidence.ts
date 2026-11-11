@@ -413,9 +413,8 @@ export type ConformerContextLike = Array<{ conformer_group_ref: string }> | null
  * entry-scoped statmech list returns EVERY conformer_group_ref a record was
  * actually computed against — a first-class field, not a client-side guess,
  * and genuinely multi-valued: an ensemble-level statmech treatment can
- * legitimately span several basins (measured live on
- * `spe_mbdqifmaclaakukr7agxbuq3wa`: one statmech record names all three of
- * that entry's conformer groups). Returns every ref, in the wire's own
+ * legitimately span several basins (one statmech record can name all
+ * of an entry's conformer groups). Returns every ref, in the wire's own
  * order — never just the first, since reading only `conformerContext[0]`
  * would file a record naming `[conformer_1, conformer_2, conformer_3]`
  * under "From Conformer Group 1" no matter which conformer was selected.

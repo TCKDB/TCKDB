@@ -97,11 +97,10 @@ export function classifyReactionQuery(input: string): ReactionQueryClassificatio
     // rather than a narrowing convenience: every reaction in this archive
     // is reversible and every search here already runs `direction=either`
     // (see this module's own top comment), so `<> [NH2]` and a bare
-    // `[NH2]` participation query hit the exact same rows -- OWNER
-    // MEASURED, `[NH2]` is a stored reactant in 4 reactions and a stored
-    // product in none, and `product_smiles=[NH2]&direction=either` still
-    // returns those same 4 (an either-direction match finds it on whichever
-    // side it actually sits). The side written does not filter anything;
+    // `[NH2]` participation query hit the exact same rows -- e.g.
+    // `[NH2]` stored only as a reactant is still returned by
+    // `product_smiles=[NH2]&direction=either` (an either-direction match
+    // finds it on whichever side it actually sits). The side written does not filter anything;
     // `IdentifierSearch.tsx` sends only the side actually given (the empty
     // side contributes no query param at all, matching how a bare
     // "participation" query already sends only `reactant_smiles`), and each

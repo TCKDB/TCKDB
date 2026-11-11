@@ -356,9 +356,8 @@
    `.note`'s smaller step) so it still reads as the panel's thesis, not as
    another muted caption.
 
-   was a
-   bespoke `1rem/1.6 var(--serif)` -- the named `--type-lede` step
-   (design-system.css) now, the same one `.tagline`/`.browse-intro` use --
+   The named `--type-lede` step
+   (design-system.css), the same one `.tagline`/`.browse-intro` use --
    see that token's own comment for why this role gets a named step
    rather than a third near-identical bespoke declaration. */
 .evidence-linkage-story {
@@ -390,14 +389,13 @@
     align-items: stretch;
     gap: 1rem 0;
     margin-top: 1.4rem;
-    /* a
-       named container so the hide-on-wrap rule below (near
+    /* A named container so the hide-on-wrap rule below (near
        `.linkage-connector`) can key off THIS ROW'S OWN rendered width,
        not the viewport's. At 1100px viewport the reserved 14rem ToC rail
        (`page-shell.css`) leaves this row narrower than the ~836px three
        steps need side by side, so it wraps mid-row -- above the existing
-       880px viewport breakpoint below, which never fires there (MEASURED:
-       third tile wraps, connector left pointing at nothing). A container
+       880px viewport breakpoint below, which never fires there (the
+       third tile wraps, leaving the connector pointing at nothing). A container
        query catches the case a viewport media query structurally cannot:
        chrome the row's OWN box, not the window, is eating. */
     container-type: inline-size;
@@ -413,8 +411,7 @@
     padding: 0 1.25rem;
 }
 
-/* was `600 2rem var(--serif)` -- a bespoke
-   headline size with no named step. This IS a number (the count each
+/* This is a number (the count each
    step names, "18"/"7"/"11") -- `--type-data-large`, the design system's
    own step for a headline scientific figure, is mono deliberately (per
    the "mono only where the text is an identifier or number" target this
@@ -436,23 +433,19 @@
     letter-spacing: var(--type-heading-3-tracking);
 }
 
-/* face changed mono -> `--type-note-font`
+/* Face is `--type-note-font`
    (sans). "each a separate sighting of this basin" / "18 opt · 7 freq ·
    7 sp, in 11 optimisation chains" are prose fragments describing what
-   the number above means, not identifiers -- MEASURED, this and its
-   mono siblings were most of why this page ran 51-68% mono by visible
-   character count. */
+   the number above means, not identifiers, so they are not set in mono. */
 .linkage-step-detail {
     color: var(--muted-2);
     font: var(--type-note-font);
 }
 
-/* face changed mono -> `--type-note-font`
-   (sans) on the LIST -- "— 2 calculation outputs" is prose, not an
-   identifier. The geometry ref itself (`code` below) keeps `--type-data-
-   font` (mono) explicitly now that it no longer inherits it from this
-   parent -- "mono only where the text is an identifier or number", never
-   zero mono on this page. */
+/* `--type-note-font` (sans) on the list -- "— 2 calculation outputs" is
+   prose, not an identifier. The geometry ref itself (`code` below) sets
+   `--type-data-font` (mono) explicitly: mono only where the text is an
+   identifier or number. */
 .linkage-geometry-list {
     margin: .4rem 0 0;
     padding: 0;
@@ -570,10 +563,9 @@
 
 .tab-panel { margin-top: 2rem; }
 
-/* `.geometry-list`/`.geometry-item`/`.geometry-meta` (review finding,
-   NIT, PR 366): DELETED -- dead, no component in this page's scope
-   renders these classes; `ConformerGeometryTab.tsx` renders the geometry
-   tab through `.checklist` (entry-science.css) instead. */
+/* No `.geometry-list`/`.geometry-item`/`.geometry-meta` rules:
+   `ConformerGeometryTab.tsx` renders the geometry
+   tab through `.checklist` (entry-science.css). */
 
 /* ---------------------------------------------------------------------
    Records grouped by whether they trace to the selected conformer's own
@@ -596,8 +588,7 @@
    opened this tab to ask. Emphasized relative to the plain `.empty-projection`
    wording every OTHER empty state on this page uses, so it reads as an
    answer rather than a caption easy to skim past. */
-/* was `600 .92rem/1.55 var(--sans)` -- a
-   bespoke size next to `--type-heading-3` (sans 600 .875rem), the
+/* `--type-heading-3` (sans 600 .875rem) is the
    nearest named step for a short, emphasized statement like this one.
    `line-height` stays its own wider value (this can run to two lines
    inside the box; `--type-heading-3`'s own 1.4 was tuned for a
@@ -632,9 +623,7 @@
     border-left: 2px solid var(--line);
 }
 
-/* was a bare `font-size: .95rem` override (on
-   the base rule's serif `--type-heading-2`) -- another off-scale size.
-   `--type-heading-3` (sans 600 .875rem) is the demoted-heading step this
+/* `--type-heading-3` (sans 600 .875rem) is the demoted-heading step this
    page already uses elsewhere for "a heading, but a secondary one"
    (`entry-science.css`'s `.model-block-heading`, this same fix's own
    change to statmech's per-record card heading -- see that component's

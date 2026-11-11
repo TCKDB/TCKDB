@@ -690,7 +690,7 @@ describe("building curator tasks for a submission", () => {
          * carries a `key`. Walking BACK, react-query answers from its cache
          * (`gcTime`, five minutes by default): data never goes undefined,
          * nothing unmounts, and the `key` is the only thing left that drops
-         * the tally. MEASURED: without the key this test fails and the
+         * the tally. Without the key this test fails and the
          * one above still passes.
          */
         serveAnyInspection()

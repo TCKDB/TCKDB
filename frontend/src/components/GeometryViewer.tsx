@@ -95,7 +95,7 @@ import "../geometry-measure.css"
  * `false`), so mouse drag and multi-finger touch gestures reach 3Dmol
  * and work exactly as 3Dmol implements them — but "3Dmol implements
  * them" is not the same claim as "every gesture rotates the model".
- * Measured live via `getView()` before/after each gesture: two-finger
+ * Per `getView()` before/after each gesture: two-finger
  * touch is zoom-only (the rotation quaternion is unchanged, only camera
  * distance moves) and three-finger touch translates the model; neither
  * rotates it. One-finger touch is the gesture that *would* rotate, and
@@ -120,8 +120,8 @@ import "../geometry-measure.css"
  *     two or more touch points (pinch, two-finger drag) is deliberately
  *     left alone and reaches 3Dmol normally;
  *   - a `touchstart` event under the same one-finger/multi-finger rule.
- *     This one is easy to think unnecessary (the reviewer's original
- *     proposal named only wheel/touchmove) — it is not. Measured live:
+ *     This one is easy to think unnecessary (it might seem enough to intercept only
+ *     wheel/touchmove) — it is not:
  *     3Dmol's `touchstart` handler (`_handleMouseDown`) also calls
  *     `preventDefault()` unconditionally, and Chromium suppresses
  *     scrolling for the *entire* touch sequence once its `touchstart`
@@ -424,16 +424,12 @@ const STYLE_SPECS: Record<StyleMode, Record<string, unknown>> = {
     // der Waals radius when scale is omitted, which is exactly a
     // spacefill/CPK representation, not an arbitrary shrunken sphere.
     spacefill: { sphere: {} },
-    // NOT `{ line: { linewidth: 2 } }` — that was the first version of
-    // this spec, and it rendered as an essentially empty box. WebGL
+    // NOT `{ line: { linewidth: 2 } }`: WebGL
     // clamps `gl.lineWidth()` to 1.0 in Chromium/ANGLE regardless of the
     // requested value (a longstanding, spec-permitted WebGL1 limitation,
-    // not a 3Dmol bug), so `linewidth: 2` was a silent no-op — 3Dmol drew
+    // not a 3Dmol bug), so `linewidth: 2` is a silent no-op and 3Dmol draws
     // 1px element-coloured lines (grey carbon, white hydrogen) on a white
-    // background. Measured on a real 704×704 render: no pixel darker
-    // than 200/255, and only 0.021% of pixels darker than 240/255 at
-    // all — effectively invisible, vs. ball & stick's minimum pixel
-    // value of 2 with 1.5% of the image below 200. A `stick` spec draws
+    // background, effectively invisible. A `stick` spec draws
     // actual cylinder geometry (rasterised, not a 1px GL line), so it
     // renders with real contrast regardless of the lineWidth clamp, at a
     // thin enough radius to still read as "wireframe" rather than
@@ -740,11 +736,9 @@ export function GeometryViewer({
         // scrolling for an *entire* touch sequence once its `touchstart`
         // has been prevented — even if every subsequent `touchmove` in
         // that same sequence is never prevented at all. Intercepting only
-        // `touchmove` (as first written, following the reviewer's
-        // proposal literally) left the swipe-traps-the-page-instead-of-
-        // scrolling regression fully in place; leaving `touchstart`
-        // itself un-intercepted was the gap. See this component's PR
-        // description for the measured before/after.
+        // `touchmove` would leave the swipe-traps-the-page-instead-of-
+        // scrolling behaviour fully in place; `touchstart` must be
+        // intercepted too.
         function handleWheelCapture(event: WheelEvent) {
             event.stopPropagation()
         }

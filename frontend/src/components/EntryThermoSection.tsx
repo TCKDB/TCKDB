@@ -426,9 +426,7 @@ const GROUP_ID_SUFFIX = "-group"
 /**
  * One card for N deposited thermo records that report IDENTICAL scientific
  * content (`domain/identicalRecordGroups.ts`'s `thermoRecordFingerprint`)
- * -- the finding measured live: seven ethene thermo records, all H298 =
- * 62.84 kJ/mol, S298 = 218.80 J/mol·K, identical NASA-7 coefficients,
- * rendered as seven full cards. The shared scientific content renders ONCE
+ * -- instead of one full card per record. The shared scientific content renders ONCE
  * -- from the group's first record; every member reports the identical
  * body by construction of the fingerprint -- via the same `ThermoRecordBody`
  * a single-record card uses, so nothing about the science itself is a
@@ -437,8 +435,7 @@ const GROUP_ID_SUFFIX = "-group"
  * summary, it only collapses a default DISPLAY that would otherwise repeat
  * the same numbers N times.
  *
- * Provenance is NOT part of that shared display: the live case this fix
- * was written against is seven ethene records citing SEVEN DIFFERENT
+ * Provenance is NOT part of that shared display: a live case is seven ethene records citing SEVEN DIFFERENT
  * primary/single-point calculations and seven different statmech refs --
  * `showProvenance={false}` below drops the representative's own
  * `ProvenanceBlock` from the shared body (rendering only one record's

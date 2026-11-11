@@ -371,8 +371,8 @@ describe("EntryStatmechSection", () => {
 
         // The identifier (the scale factor's own ref) renders as plain
         // monospace text, inside a `<code>` element (now a link into its
-        // own `/methods/frequency-scale-factors/:fsfRef` page,
-        // methods-surface plan PR 3) -- never inside a `.value-pill`.
+        // own `/methods/frequency-scale-factors/:fsfRef` page)
+        // -- never inside a `.value-pill`.
         const refDd = ddFor(card, "Frequency scale factor ref")
         expect(refDd).toBe("fsf_pill_check")
         const refLink = within(card).getByRole("link", { name: "fsf_pill_check" })
@@ -969,10 +969,9 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         expect(within(refsTable).getByText("sm_g3")).toBeVisible()
     })
 
-    // BLOCKING-2 (species-entry/browse/chrome residuals re-review): MEASURED
-    // at 1920 before this fix, the 8th column ("Workflow tool") clipped at
-    // the `.table-scroll` edge with no scroll affordance. The structural
-    // guarantee this table now keeps is "at most 9 columns (6 original,
+    // An eighth column ("Workflow tool") would clip at
+    // the `.table-scroll` edge at 1920 with no scroll affordance. The structural
+    // guarantee this table keeps is "at most 9 columns (6 original,
     // ALWAYS plus the three Geometry/Frequencies/Energy level-of-theory
     // columns) -- "Record software"/"Workflow tool" render as a
     // provenance row beneath each record's own row instead of two more
@@ -1001,9 +1000,9 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         })
     })
 
-    // BLOCKING-2 (species-entry/browse/chrome residuals re-review): "Record
-    // software"/"Workflow tool" are no longer their own `<td data-label>`
-    // columns -- they moved to a `.data-table-provenance-row` spanning the
+    // "Record
+    // software"/"Workflow tool" are not their own `<td data-label>`
+    // columns -- they sit in a `.data-table-provenance-row` spanning the
     // row directly beneath each record's own row, so the table fits at
     // 1920 without clipping (see `IdenticalStatmechGroupRefs`'s own
     // comment). This finds that sibling row rather than a named cell.
@@ -1170,10 +1169,9 @@ describe("EntryStatmechSection: design-system adoption (design/species-entry)", 
         expect(headingsInsideSummaries).toHaveLength(0)
     })
 
-    // this tab's own "N records ·
-    // review: …" line was missed by the `.note` migration -- it kept
-    // `.records-note` (now margin-only) but never gained `.note` itself,
-    // so it silently fell back to unstyled 16px body text.
+    // This tab's own "N records ·
+    // review: …" line carries `.records-note` (margin-only) and must also
+    // carry `.note`, or it falls back to unstyled 16px body text.
     it("the 'N records · review: …' line renders through .note, not a bare unstyled paragraph", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()

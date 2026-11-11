@@ -199,7 +199,7 @@ describe("the three theme blocks define the same set of token names", () => {
 })
 
 /**
- * Accessibility pass (review finding 10): `--faint` and `--muted-2` back
+ * Accessibility: `--faint` and `--muted-2` back
  * the smallest, most-repeated text in the app -- browse `spc_` refs,
  * `.ref-item-label` captions, the COPY button label, the conformer-card
  * coverage line, filter hints -- and measured well under WCAG AA's 4.5:1

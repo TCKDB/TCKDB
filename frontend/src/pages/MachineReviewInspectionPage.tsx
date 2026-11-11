@@ -198,7 +198,7 @@ function runFailureMessage(error: unknown): string {
  * dies with or without a key. Walking BACK to one already visited,
  * react-query answers from cache (`gcTime`, five minutes by default), data
  * never goes undefined, nothing unmounts, and the key is the only thing
- * left that drops the stale result. MEASURED both ways, by the tests that
+ * left that drops the stale result. Covered by the tests that
  * walk 7 -> 9 and 7 -> 9 -> 7.
  */
 function MachineReviewRunner({ submissionId }: { submissionId: number }) {
@@ -443,7 +443,7 @@ function failureMessage(error: unknown): string {
  * minutes by default): walk BACK to a submission already visited and its
  * data arrives synchronously, `query.data` never goes undefined, nothing
  * unmounts, and without the key the old tally sits under the new
- * submission's findings. MEASURED, both ways, by the two tests that walk
+ * submission's findings. Covered by the two tests that walk
  * 7 -> 9 and 7 -> 9 -> 7.
  */
 function CuratorTaskBuilder({ submissionId }: { submissionId: number }) {
@@ -763,7 +763,7 @@ function MachineReviewInspectionPage() {
                         are two children of one fragment, so React reconciles
                         them as a keyed list, and giving both of them
                         `key={data.submission_id}` makes two siblings share a
-                        key. MEASURED, not feared: with the bare id, walking
+                        key: with the bare id, walking
                         7 -> 9 -> 7 left submission 9's run outcome mounted
                         beside submission 7's empty one -- two status regions,
                         the stale one still reading "recorded 3 findings"

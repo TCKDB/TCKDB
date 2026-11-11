@@ -256,10 +256,8 @@ describe("EntryTransportSection: design-system adoption (design/species-entry)",
         expect(headingsInsideSummaries).toHaveLength(0)
     })
 
-    // this tab's own "N records ·
-    // review: …" line was missed by the `.note` migration -- it kept
-    // `.records-note` (now margin-only) but never gained `.note` itself,
-    // so it silently fell back to unstyled 16px body text.
+    // This tab's own "N records · review: …" line carries `.note` itself
+    // (`.records-note` is margin-only), so it is not unstyled body text.
     it("the 'N records · review: …' line renders through .note, not a bare unstyled paragraph", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()

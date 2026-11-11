@@ -329,7 +329,7 @@ describe("GeometryViewer", () => {
             expect(sawTouchMoveOnCanvas).toBe(true)
         })
 
-        it("a one-finger touchstart is ALSO intercepted, not just touchmove — measured live in a real browser (Playwright/Chromium): 3Dmol's own touchstart handler (_handleMouseDown) calls preventDefault() unconditionally too, and Chromium suppresses scrolling for the WHOLE touch sequence once touchstart has been prevented, even when every later touchmove in that sequence is left alone. Intercepting only touchmove reproduces the scroll trap; this is not redundant with the touchmove interception above", async () => {
+        it("a one-finger touchstart is ALSO intercepted, not just touchmove: 3Dmol's own touchstart handler (_handleMouseDown) calls preventDefault() unconditionally too, and Chromium suppresses scrolling for the WHOLE touch sequence once touchstart has been prevented, even when every later touchmove in that sequence is left alone. Intercepting only touchmove reproduces the scroll trap; this is not redundant with the touchmove interception above", async () => {
             render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
             const container = await waitFor(() => {
                 const el = document.querySelector(".viewer-canvas") as HTMLElement

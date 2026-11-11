@@ -28,8 +28,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
  * say as an equation" on its own -- those need per-species-entry
  * (`/species-entries/{ref}/thermo`) and per-reaction-entry
  * (`/reaction-entries/{ref}/full`) follow-up requests, composed here in
- * `loadNetworkEntry` exactly the way the PR 0 mock's own build process
- * gathered them by hand (see that mock's "What was fetched" section).
+ * `loadNetworkEntry`.
  */
 
 // ---------------------------------------------------------------------------
@@ -282,7 +281,7 @@ type SolveFetch =
 const NETWORK_INCLUDE = ["states", "channels", "solves"]
 
 /**
- * Composes everything `NetworkEntryPage`'s PR 2 sections need into one
+ * Composes everything `NetworkEntryPage`'s sections need into one
  * `useScientificRecord`-shaped load: the network detail itself, the first
  * solve's own state-energy/channel-barrier figures (if a solve exists), a
  * thermo-presence check for every unique participant species entry (the

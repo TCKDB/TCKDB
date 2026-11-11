@@ -148,7 +148,7 @@ export function CopyButton({ value, label, srLabel = "reference" }: { value: str
 // worktree brief): `[data-copy-unavailable="true"]` has a rule only in
 // `geometry-detail.css:83` (`.geometry-page .copy-button[...]`, a warm
 // amber `#a15c00`), a stylesheet the species-entry page never loads.
-// MEASURED: the SAME "unavailable" state renders amber on the geometry
+// The SAME "unavailable" state renders amber on the geometry
 // page and idle grey (no visual change at all) on the entry page — this
 // shared component grew a state one of its two consumers cannot render.
 // `species-entry.css` is owned by a parallel branch

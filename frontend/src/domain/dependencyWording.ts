@@ -92,11 +92,9 @@ export const DEPENDENCY_ROLE_WORDING: Record<string, DependencyRoleWording> = {
         // always an optimisation in both cases.
         childSentence: "This is the fine optimisation; its starting geometry came from {link}",
         parentSentence: "This calculation's geometry was the starting point for {link}",
-        // Shortened again post-review: even the type-neutral 38-char
-        // version still overflowed the narrow layout's container at
-        // 680px on a real page (666px content in a 640px container,
-        // `dependencyGraphLayout.test.ts`'s narrow-layout-width check).
-        // Dropping "starting" costs no meaning here -- every edge in
+        // Kept short so the label fits the narrow layout's container at
+        // 680px (`dependencyGraphLayout.test.ts`'s narrow-layout-width
+        // check). Omitting "starting" costs no meaning here -- every edge in
         // this table is inherently about a STARTING geometry (that's
         // what the arrow direction already says) -- and lands this
         // label in the same "geometry for X" family as freq_on/

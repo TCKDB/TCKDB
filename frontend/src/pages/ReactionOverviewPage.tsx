@@ -251,7 +251,7 @@ function ChooserDocument({ reactionRef, headerRecord, firstPageEntryRefs, total,
 function ParticipantCell({ participant, separator }: { participant: ReactionOverviewParticipant; separator: boolean }) {
     return (
         // No `className` here -- there is no CSS rule for this wrapper
-        // (round-2 review: a styling hook with nothing hooked to it), and
+        // (a styling hook with nothing hooked to it), and
         // this component needs no styling of its own beyond the inline
         // flow its children already produce.
         <span>
@@ -265,8 +265,8 @@ function ParticipantCell({ participant, separator }: { participant: ReactionOver
             {/* Parenthesised, NOT another " · " -- the between-participant
                 separator above is ALSO " · ", so a stereo-label chip using
                 the same glyph read as a third product in a multi-
-                participant cell ("H2 ... · H2N2 ... · Z isomer"). Round-2
-                review finding: parentheses keep the chip visually bound
+                participant cell ("H2 ... · H2N2 ... · Z isomer"). Parentheses keep
+                the chip visually bound
                 to the participant it immediately follows. */}
             <ParticipantChips chips={participantChips(participant)} style="paren" />
         </span>

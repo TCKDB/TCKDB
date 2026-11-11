@@ -67,7 +67,7 @@ describe("SpeciesEntryLink", () => {
         expect(link.querySelector("code.data")?.textContent).toBe("[N-]=[NH2+]")
     })
 
-    // Post-review fix: when there is neither a SMILES nor a formula (any
+    // When there is neither a SMILES nor a formula (any
     // caller, on an entry whose species SMILES does not parse), the base
     // text falls back to the entry's own ref as `<code className="data">`
     // -- NEVER the literal words "Species entry", which would repeat the

@@ -68,7 +68,7 @@ function baseRecord(overrides: Record<string, unknown> = {}) {
                     created_at: "2026-07-21T11:59:29Z",
                 },
                 level_of_theory: null,
-                // Measured live shape (#439, deployed): empty
+                // Fixture shape: empty
                 // `software_release_ref` (the row stores a vendor, not a
                 // release, to point at), `workflow_tool_release` null.
                 software_release: { software_release_ref: "", software: "Gaussian", version: null },
@@ -221,7 +221,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
      * fact about the archive, never rendered as "not applicable" (a claim
      * about chemistry this archive cannot make). Constructed fixture: a
      * LOT with `correction_schemes: []` and `has_correction_schemes:
-     * false` -- the wb97xd/CCSD(T)-F12 shape measured live.
+     * false` -- the wb97xd/CCSD(T)-F12 shape.
      */
     it("states a missing correction scheme as a plain archive-side absence, never 'not applicable'", async () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({

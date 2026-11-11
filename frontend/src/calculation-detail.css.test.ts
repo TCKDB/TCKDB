@@ -45,8 +45,7 @@ describe(".dependency-sentences is no longer declared here (moved to calculation
 })
 
 /**
- * `.section-note` was a one-off `.8rem` --
- * mapped onto the shared `--type-note-font` step, matching
+ * `.section-note` uses the shared `--type-note-font` step, matching
  * `geometry-detail.css`'s byte-identical copy of this same rule.
  */
 describe(".section-note uses --type-note-font, not a literal .8rem", () => {
@@ -62,8 +61,8 @@ describe(".section-note uses --type-note-font, not a literal .8rem", () => {
  * label-less-TS-owner ref fallback in `CalculationDetailPage`'s h1 (`<code
  * className="data calc-headline-ref">`) was rendering at `.data`'s own
  * `--type-data-font` size (13px mono) sitting on the baseline of the
- * surrounding 52px serif h1 -- MEASURED. `.calc-headline-ref { font-size:
- * inherit }` is the fix; this is the SOURCE assertion for it. The
+ * surrounding 52px serif h1. `.calc-headline-ref { font-size:
+ * inherit }` prevents that; this is the SOURCE assertion for it. The
  * existing RTL test on `CalculationDetailPage.test.tsx` only pins
  * `toHaveClass("data", "calc-headline-ref")` -- jsdom does not apply
  * stylesheets, so that test cannot see whether the class actually DOES

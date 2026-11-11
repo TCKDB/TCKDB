@@ -85,9 +85,9 @@ describe(".viewer-canvas (defect 2: only 2 of 4 borders visible)", () => {
 
 /**
  * `margin: 0 auto`
- * centred the viewer picture and its caption inside the page while every
- * other block on this page sits flush left -- MEASURED ~350px gutter at
- * 1920. Both are left-aligned now (`margin: 0`).
+ * would centre the viewer picture and its caption inside the page while every
+ * other block on this page sits flush left (a ~350px gutter at 1920).
+ * Both are left-aligned (`margin: 0`).
  */
 describe(".viewer-stage / .viewer-caption are left-aligned, not centred", () => {
     it(".viewer-stage no longer auto-centres", () => {

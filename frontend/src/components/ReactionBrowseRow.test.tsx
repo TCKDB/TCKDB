@@ -49,7 +49,7 @@ function record(overrides: Partial<ReactionBrowseRecord> = {}): ReactionBrowseRe
     } as ReactionBrowseRecord
 }
 
-// The row must render the SHARED `ReactionEquation` component (PR 2), not a
+// The row must render the SHARED `ReactionEquation` component, not a
 // forked plain-text rendering: formulas carry subscripts, and the arrow
 // reflects `reversible`. Each assertion here is precise enough that
 // mutating the corresponding field in `record()` (or swapping which prop
@@ -146,8 +146,7 @@ describe("ReactionBrowseRow: review pill", () => {
 // ONE boolean and checks BOTH the true-state text and the false-state text
 // disappear/appear correctly -- a test that only checked `toContain("no")`
 // would also pass if the row rendered "no transition state" while actually
-// reading `has_kinetics`, per the PR 2 review finding on this exact trap
-// ("not reviewed" satisfying a loose `toContain("no")`). Every assertion
+// reading `has_kinetics` ("not reviewed" satisfying a loose `toContain("no")`). Every assertion
 // here is an exact string, not a substring.
 describe("ReactionBrowseRow: has-kinetics / has-transition-state pills, read from their OWN field", () => {
     it("has_kinetics=true, has_transition_state=true: both positive pills render, neither negative one does", () => {

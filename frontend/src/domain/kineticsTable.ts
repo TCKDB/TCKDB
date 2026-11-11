@@ -25,8 +25,8 @@ export interface KineticsTableRow {
 
 /**
  * k(T) sampled at `TABLE_POINT_COUNT` evenly spaced temperatures over the
- * record's own fitted range -- the table equivalent for the Arrhenius
- * chart PR 3 ships (plan §4/§6: "PR 2 owns cards + the k(T) TABLE only").
+ * record's own fitted range -- the table equivalent of the Arrhenius
+ * chart.
  * Only computed for a plain `arrhenius`/`modified_arrhenius` record (a
  * single `A`) or `multi_arrhenius` (summed over its own terms) -- a
  * pressure-dependent form (PLOG/Chebyshev/falloff) has no single k(T)

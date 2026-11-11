@@ -42,7 +42,7 @@ describe("loadReactionEntry", () => {
         expect(includeValues).toEqual(["species", "kinetics", "transition_states", "calculations", "networks"])
     })
 
-    // Pre-deployment (PR 1, `feat/reaction-full-additions`, not yet live):
+    // A response from a server without the additions:
     // `formula`/`stoichiometry` on participants, `levels` on kinetics, and
     // the whole `networks` key are all absent from a real response today.
     // This schema must still parse it, with every §3-additive field

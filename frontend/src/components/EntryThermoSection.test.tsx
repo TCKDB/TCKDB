@@ -261,8 +261,8 @@ describe("EntryThermoSection", () => {
 
         // Values are formatted through `domain/quantityFormat.ts`'s
         // `formatQuantity("thermo_h298_kj_mol"/"thermo_s298_j_mol_k", ...)`
-        // now, at the 2dp precision ported from `landing.py`'s digits table
-        // -- not the raw double the old local `formatQuantity` printed. See
+        // at the 2dp precision ported from `landing.py`'s digits table
+        // -- not the raw double. See
         // `quantityFormat.test.ts` for the rounding rule itself; this test
         // stays about *binding*, so it only needs values that expose a
         // swap, which "111.10" vs "222.20" etc. still do.
@@ -471,8 +471,8 @@ describe("EntryThermoSection", () => {
     // `model_kind` (not all of NASA-7/NASA-9/Wilhoit/points), so a `nasa` record
     // carries no empty "NASA-9 polynomial", "Wilhoit form" or "Evaluated
     // points" box beneath its NASA-7 table. Only the
-    // ONE block matching the record's own declared `model_kind` renders
-    // now; the other three model-kind headings are absent entirely, not
+    // ONE block matching the record's own declared `model_kind` renders;
+    // the other three model-kind headings are absent entirely, not
     // present-with-an-absence-line.
     it("renders only the ONE model block matching the record's own model_kind — never the other three as empty boxes", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
@@ -1366,8 +1366,8 @@ describe("EntryThermoSection: identical-value records group under one card", () 
             expect(cellAt(row, "Freq calculation")).toBe(`calc_${suffix}_freq`)
             expect(cellAt(row, "SP calculation")).toBe(`calc_${suffix}_sp`)
             expect(cellAt(row, "Statmech ref")).toBe(`sm_${suffix}`)
-            // the Statmech ref cell renders as
-            // `.data` now, like every other ref column in this table.
+            // The Statmech ref cell renders as
+            // `.data`, like every other ref column in this table.
             const statmechCell = row.querySelector('td[data-label="Statmech ref"]') as HTMLElement
             expect(statmechCell.querySelector(".data")).not.toBeNull()
         }
@@ -1502,13 +1502,12 @@ describe("EntryThermoSection: design-system adoption (design/species-entry)", ()
         expect(headingsInsideSummaries).toHaveLength(0)
     })
 
-    // the "N records · review: …"
+    // The "N records · review: …"
     // line carries `.records-note` (layout-only, entry-science.css) at
     // every call site, but must ALSO carry `.note` (design-system.css) --
-    // `.records-note` was stripped down to margin-only, so without `.note`
-    // this line silently falls back to 16px unstyled body ink with no
-    // max-width, on exactly the two tabs (statmech, transport) where the
-    // migration was missed.
+    // `.records-note` is margin-only, so without `.note`
+    // this line falls back to 16px unstyled body ink with no
+    // max-width.
     it("the 'N records · review: …' line renders through .note, not a bare unstyled paragraph", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
@@ -1618,7 +1617,7 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
         expect(within(card).getByText("all at the same level")).toBeInTheDocument()
     })
 
-    // Review finding: `productLevelsAgree` alone treats all-three-`null` as
+    // `productLevelsAgree` alone treats all-three-`null` as
     // agreeing (a shared "not recorded" fact, correct for its OTHER
     // callers) -- reachable here via a literature-origin thermo record
     // with no `levels`, no `source_calculations`, and no

@@ -97,7 +97,7 @@ describe("requestScientificJson: 429 handling", () => {
         await expect(requestScientificJson("/api/v1/scientific/probe")).rejects.toBeInstanceOf(ScientificApiError)
     })
 
-    // the wait itself needs to be
+    // The wait itself is
     // observable so a caller can render "the archive is busy, retrying in
     // Ns" instead of a plain, indefinite "Loading …" for however long the
     // wait runs (up to a minute -- `rate_limit_anon_read_per_minute`,

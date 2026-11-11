@@ -115,7 +115,7 @@ function handleReactionEntry(ref: string, equation: string, status = "not_review
 }
 
 // ---------------------------------------------------------------------------
-// k(T,P) evaluate -- POST /networks/{ref}/kinetics/evaluate (PR 4)
+// k(T,P) evaluate -- POST /networks/{ref}/kinetics/evaluate
 // ---------------------------------------------------------------------------
 
 function ktpPoint(temperatureK: number, pressureBar: number, k: number, inRange = true) {
@@ -345,7 +345,7 @@ describe("NetworkEntryPage -- composition_hash never renders where chemistry bel
         // energies" disclosure -- `toBeInTheDocument`, not `toBeVisible`
         // (jest-dom's `toBeVisible` treats a closed `<details>`'s content as
         // not visible by design; presence, not visibility, is what this
-        // guard checks). `findAllByText`, not `findByText`: PR 3's network
+        // guard checks). `findAllByText`, not `findByText`: the network
         // diagram section (below) legitimately renders the SAME
         // `composition.state_label` a second time in its own accessible
         // states table -- two honest, independent renderings of the same
@@ -614,7 +614,7 @@ describe("NetworkEntryPage — an unreadable solve degrades, it does not blank t
     })
 })
 
-describe("NetworkEntryPage -- k(T,P) chart (PR 4)", () => {
+describe("NetworkEntryPage -- k(T,P) chart", () => {
     it("renders BOTH fits for the default channel -- a Chebyshev and a PLOG series, never collapsed to one", async () => {
         handleEverything()
         const { container } = page()

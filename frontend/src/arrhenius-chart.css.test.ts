@@ -24,7 +24,7 @@ function extractRule(source: string, selector: string): string {
 // stylesheet under src/ including this one, by `theme.css.test.ts`'s
 // `import.meta.glob("./*.css", ...)` discovery -- see that file's own
 // "DISCOVERED, never enumerated" comment. This file only needs to check
-// the two defects specific to THIS chart's own spec (plan §4/PR 3): the
+// the two rules specific to THIS chart: the
 // SVG is pinned to a fixed pixel size rather than scaled by its container,
 // and the x-axis title is pinned to the chart's own width rather than
 // centred in a wider grid column.
@@ -67,12 +67,12 @@ describe(".arrhenius-chart-scroll -- contains the fixed-width SVG without forcin
     })
 })
 
-// The mock's OTHER round-2 defect: the x-axis title was centred in its grid
+// The x-axis title is pinned to the plot box, not centred in its grid
 // COLUMN (which can be wider than the plotted chart on a wide viewport),
 // rather than under the chart itself. `.arrhenius-chart-axis-title--x`
 // itself only centres text within whatever box it's given; the box's own
 // offset/width is pinned to the PLOT box (not the full SVG box, whose own
-// left/right margins are asymmetric -- a later review finding, ~19px off)
+// left/right margins are asymmetric, ~19px off)
 // at the call site (`style={{ marginLeft: left, width: plotWidth }}`,
 // `ArrheniusChart.tsx`), and sits inside the SAME `.arrhenius-chart-scroll`
 // container as the SVG so the two always scroll together and stay aligned.

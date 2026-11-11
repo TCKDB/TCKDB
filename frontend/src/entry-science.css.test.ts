@@ -40,12 +40,9 @@ describe("`.review-badge`/`.evidence-chip` are fully retired (one pill style: `.
 })
 
 describe("`.evidence-full-checklist` keeps only spacing; dead `.section-heading` is retired", () => {
-    // Review finding (NIT, PR 366): dropping `.evidence-full-checklist`
-    // ENTIRELY (this test's own original assertion) left the disclosure's
-    // now-visible border sitting flush against `ProvenanceBlock`'s "Level
-    // of theory" row immediately below it once `Disclosure` gave it a
-    // real box -- harmless as plain text flow before that box existed,
-    // visibly broken once it did. The rule stays, margin-only.
+    // Dropping `.evidence-full-checklist` entirely would leave the
+    // disclosure's border sitting flush against `ProvenanceBlock`'s "Level
+    // of theory" row immediately below it. The rule stays, margin-only.
     it("keeps a margin-only `.evidence-full-checklist` rule -- no summary/colour/font styling (that's `Disclosure`'s job now), just the spacing `Disclosure` has no opinion on", () => {
         const rule = /\.evidence-full-checklist\s*\{([^}]*)\}/.exec(stripComments(css))
         expect(rule).not.toBeNull()
@@ -94,8 +91,7 @@ describe("science-record card: one border/radius/padding, owned by `.card` (desi
     })
 })
 
-// BLOCKING-2 (species-entry/browse/chrome residuals re-review): the
-// "Software"/"Workflow tool" provenance row `IdenticalStatmechGroupRefs`
+// The "Software"/"Workflow tool" provenance row `IdenticalStatmechGroupRefs`
 // (EntryStatmechSection.tsx) renders beneath each record's own row in the
 // "Records in this group" table -- moved out of the table's own columns
 // so it fits at 1920 without clipping (see that component's own comment).

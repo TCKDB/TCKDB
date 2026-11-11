@@ -46,7 +46,7 @@ function mockResponse(overrides: Record<string, unknown> = {}) {
                 label: null,
                 display: "b3lyp/def2tzvp",
             },
-            // Measured live shape (#439, deployed): software backfilled
+            // Fixture shape: software backfilled
             // cleanly on both schemes (empty `software_release_ref` --
             // the row stores a vendor, not a release, to point at);
             // workflow_tool_release stayed null (only 10 of 416

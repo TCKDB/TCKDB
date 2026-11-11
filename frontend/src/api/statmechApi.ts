@@ -30,7 +30,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 //   this slice, matching the calculation-page precedent.
 //
 // - `available_sections` (`AvailableStatmechSections`) is GENUINELY
-//   MEASURED here, not hardcoded — verified by reading
+//   derived server-side, not hardcoded — see
 //   `build_statmech_record` in `services/scientific_read/statmech.py`:
 //   every flag is a real `bool(...)` over freshly-queried rows
 //   (`has_source_calculations=bool(source_rows)`,

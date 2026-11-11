@@ -64,10 +64,9 @@ describe("copy buttons on the record pages are tap-sized on phones and touch scr
 })
 
 /**
- * `.empty-projection` was `.9rem` with no
- * width cap -- the `CalculationDetailPage` "Not recorded on this
- * calculation: …" instance of this shared class ran 140 characters per
- * line, MEASURED.
+ * `.empty-projection` is capped in width so the `CalculationDetailPage` "Not recorded on this
+ * calculation: …" instance of this shared class does not run to 140 characters per
+ * line.
  */
 describe(".empty-projection: capped width, on-scale typography", () => {
     it("declares max-width: var(--measure-note) and font: var(--type-note-font)", () => {

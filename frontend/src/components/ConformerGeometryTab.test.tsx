@@ -60,7 +60,7 @@ describe("ConformerGeometryTab", () => {
         // Asserted on the raw `style` attribute, not `toHaveStyle` --
         // jsdom's default anchor stylesheet already renders `<a>` underlined
         // with no inline style at all, so `toHaveStyle` would pass against a mutant with NO `textDecoration` in
-        // `linkStyle` (MEASURED: `toHaveStyle({ textDecoration:
+        // `linkStyle` (`toHaveStyle({ textDecoration:
         // "underline" })` is vacuous for an `<a>` in this environment).
         // Reading the attribute string directly requires this component's
         // OWN inline style to be the one setting it.

@@ -47,8 +47,7 @@ function page() {
  * fields" from "always show the first row", and a fixture whose two
  * lists happen to share an order cannot catch a client-side re-sort. One
  * calculation (`calc_opt_two`) is deliberately present in BOTH lists —
- * measured live behaviour (calc_htgb7s5nakuw52eqhcxpvilpoq on
- * geom_or52ifyemdi3eewsjym2fuvo3a), not a hypothetical — so a mutation
+ * a case that can occur, not a hypothetical — so a mutation
  * that merges, sums, or conflates the two lists is observable.
  *
  * `geom_hash` is a full 64-character hex string, not a short placeholder

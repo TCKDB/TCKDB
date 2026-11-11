@@ -200,10 +200,10 @@ describe("ReactionOverviewPage", () => {
         expect(cell.textContent).toContain("(Z isomer)")
     })
 
-    // Round-2 review finding: the between-participant separator ("·") and
-    // the stereo-chip's own separator were the SAME glyph, so a two-
-    // product cell read "H2 ... · H2N2 ... · Z isomer" -- "Z isomer"
-    // looked like a THIRD product rather than a label on H2N2. Asserting
+    // The between-participant separator ("·") and the stereo-chip's own
+    // separator must differ: with the same glyph a two-
+    // product cell would read "H2 ... · H2N2 ... · Z isomer" -- "Z isomer"
+    // looking like a THIRD product rather than a label on H2N2. Asserting
     // the exact cell text (not just `.toContain`) proves the chip is
     // parenthesised and therefore distinguishable from the participant
     // separator, which uses the same "·" character either way.

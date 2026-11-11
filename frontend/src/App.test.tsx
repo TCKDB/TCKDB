@@ -343,8 +343,7 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     // generic `heading`/`ref` string-equality checks (which assumed the
     // old placeholder's fixed "Reaction" title).
     //
-    // `/methods` is no longer `RecordPlaceholderPage` either (methods-surface
-    // plan PR 3) -- it is `MethodsIndexPage`, which fires its own three
+    // `/methods` is no longer `RecordPlaceholderPage` either -- it is `MethodsIndexPage`, which fires its own three
     // requests (`level-of-theories/browse`, `meta/software`,
     // `meta/workflow-tools`) this shared table's per-path handler setup
     // does not provide. Same treatment as `/reactions` above: its own
@@ -509,7 +508,7 @@ describe("browse kind paths: each of the four renders BrowsePage with its own ki
         )
         window.history.replaceState({}, "", "/reactions")
         render(<App />)
-        // Each kind names itself now (`BROWSE_KIND_CONTENT`) -- was the
+        // Each kind names itself (`BROWSE_KIND_CONTENT`), rather than sharing the
         // SAME "Browse the archive" heading on all four kind paths.
         expect(await screen.findByRole("heading", { name: "Browse reactions" })).toBeVisible()
         expect(window.location.pathname).toBe("/reactions")
@@ -817,8 +816,7 @@ it("an rxe_ ref handed to /reactions/:ref redirects to /reaction-entries/:ref wi
     })))
     window.history.replaceState({}, "", "/reactions/rxe_abc")
     render(<App />)
-    // MEASURED gap this closes (post-review): the OLD `RecordPlaceholderPage`
-    // route ALSO rendered the literal text "rxe_abc" (its own `{ref &&
+    // A placeholder route would ALSO rendered the literal text "rxe_abc" (its own `{ref &&
     // <code>{ref}</code>}` line), at the UNCHANGED url `/reactions/rxe_abc`
     // -- so a `findByText("rxe_abc")` assertion alone passed identically
     // whether or not the redirect actually fired, and stayed green when

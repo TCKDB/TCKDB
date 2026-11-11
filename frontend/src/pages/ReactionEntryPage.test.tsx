@@ -161,7 +161,7 @@ function handleFull(payload: object) {
  * deliberately re-surfaces a calculation ref in BOTH the "Calculations by
  * stage" table AND the dependency graph that draws the same calculations
  * as nodes -- a real, intentional second mention, not a duplication bug.
- * `kin_` joined this carve-out in PR 3 (`ArrheniusChart.tsx`): the same
+ * `kin_` is also in this carve-out (`ArrheniusChart.tsx`): the same
  * kinetics ref legitimately re-surfaces in the chart's own legend chip and
  * its k(T)-table `Disclosure` heading, alongside the record card's own
  * "Kinetics ref" fact -- the SAME "intentional second mention naming what
@@ -525,7 +525,7 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
         expect(tsSection.textContent).not.toMatch(/^Reaction:/)
     })
 
-    // Round-1 fix (still standing): the centre node itself carries what
+    // The centre node itself carries what
     // the optimisation is OF, via a real link to the TS entry inside the
     // node -- no caption needed above the graph to say it in prose.
     it("names the dependency graph centre node's own subject as a link inside the node, from the page's own served TS ref", async () => {
@@ -662,8 +662,8 @@ describe("ReactionEntryPage -- rounded temperature ranges", () => {
 })
 
 describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table formatting", () => {
-    // Round-2 review finding: A=9444750000 (the live `rxe_snamm...` route)
-    // rendered as a bare 10-digit integer -- fixed via `formatArrheniusValue`.
+    // A=9444750000 renders via `formatArrheniusValue`, not as a bare
+    // 10-digit integer.
     it("a large A renders in scientific notation, never as a bare 10-digit integer", async () => {
         const record = kineticsRecordFixture(undefined)
         record.parameters = { A: 9444750000, A_units: "per_s", n: 0, Ea_kj_mol: 0 }
@@ -740,11 +740,11 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
         expect(headers).toEqual(["T (K)", "k (cm³ mol⁻¹ s⁻¹)", "log₁₀ k"])
     })
 
-    // Round-2 review finding: `.data-table th` (design-system.css)
-    // uppercases every header via `text-transform`, which rendered this
-    // table's "k (cm³ mol⁻¹ s⁻¹)" header as "K (CM³ MOL⁻¹ S⁻¹)" -- visually
-    // indistinguishable from "T (K)" -- even though the underlying
-    // `textContent` (asserted above) was already correctly lowercase.
+    // `.data-table th` (design-system.css) uppercases every header via
+    // `text-transform`, which would render this table's "k (cm³ mol⁻¹ s⁻¹)"
+    // header as "K (CM³ MOL⁻¹ S⁻¹)" -- visually indistinguishable from
+    // "T (K)" -- even though the underlying `textContent` (asserted above)
+    // is lowercase.
     // `vite.config.ts`'s `test.css: true` makes `getComputedStyle` honor
     // real stylesheet rules in this test environment, so this checks the
     // COMPUTED style, not just the DOM text a CSS-blind assertion cannot

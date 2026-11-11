@@ -27,9 +27,9 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
 }
 
 /**
- * The "reaction" browse kind (PR 4b): leads with the equation (via the
- * shared `ReactionEquation` component PR 2 shipped -- imported, not
- * forked, per the plan's own instruction), then family, review, and the
+ * The "reaction" browse kind: leads with the equation (via the
+ * shared `ReactionEquation` component -- imported, not
+ * forked), then family, review, and the
  * two availability flags.
  *
  * Link target is `/reactions/:reaction_ref` (the CHOOSER), not
@@ -83,8 +83,7 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
  * needs to select or click through, so leaving them inside the click
  * target does not cost anything.
  *
- * `matched_direction` (review follow-up, round 2; behaviour re-checked
- * after PR #418): a reactant/product SMILES search matches ONLY the stored
+ * `matched_direction`: a reactant/product SMILES search matches ONLY the stored
  * side named UNLESS the reader ticks "Also match the reverse direction"
  * (`DirectionField`, `BrowseFilterForm.tsx`), which sends `direction=either`
  * and can then surface a reverse match -- e.g. a `productSmiles` search for
@@ -126,8 +125,7 @@ export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) 
                         sentence -- e.g. "H2N + H2N reacts reversibly with
                         H4N2". A served `record.equation` string (raw
                         SMILES-joined form, e.g. "[NH2] + [NH2] <=> NN") is
-                        NOT a substitute: measured live via Chrome's
-                        accessibility tree, that string shares zero words
+                        NOT a substitute: that string shares zero words
                         with the rendered formula text, a WCAG 2.5.3 "Label
                         in Name" failure -- a voice-control user saying
                         "click H2N" cannot activate the row, and a screen

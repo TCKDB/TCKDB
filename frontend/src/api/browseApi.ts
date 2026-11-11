@@ -27,7 +27,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
  * hits the sibling `/transition-states/browse` endpoint, whose row shape is
  * genuinely different (no formula -- a transition state is identified by
  * the reaction it connects, not a molecular graph). "reaction" hits
- * `/reactions/browse` (PR 4b) -- rows carry reactant/product participants
+ * `/reactions/browse` -- rows carry reactant/product participants
  * (with formula and stoichiometry) and availability flags
  * (`has_kinetics`/`has_transition_state`) rather than a single molecular
  * graph or a linked TS.
@@ -56,8 +56,8 @@ export const BROWSE_KIND_LABELS: Record<BrowseKind, string> = {
  * (`species` naming that `vdw` is catalogued separately, and vice versa --
  * the two hit the same `/species/browse` endpoint under the hood, which is
  * exactly the distinction a reader cannot see from the URL alone).
- * `breadcrumbLabel` is the honest per-path breadcrumb trail end (was the
- * literal string "Browse" on every one of the four paths).
+ * `breadcrumbLabel` is the honest per-path breadcrumb trail end (not the
+ * literal string "Browse" on every path).
  */
 export const BROWSE_KIND_CONTENT: Record<BrowseKind, { eyebrow: string; heading: string; intro: string; breadcrumbLabel: string }> = {
     species: {
@@ -208,7 +208,7 @@ export type BrowseFilters = {
     participantSmiles: string
     family: string
 
-    // Reaction-only filters (PR 4b): `/reactions/browse` has no charge,
+    // Reaction-only filters: `/reactions/browse` has no charge,
     // multiplicity, or provenance axis of its own (a reaction is not a
     // single calculation owner the way a species or transition state is --
     // measured against the live endpoint, which accepts exactly `family,
@@ -274,7 +274,7 @@ const EVIDENCE_DEFAULTS = {
     participantSmiles: "",
 }
 
-/** Reaction-only filters (PR 4b) -- cleared on a switch away from "reaction". See `BrowseFilters.reactantSmiles`'s own comment for why these have no provenance/composition counterpart. */
+/** Reaction-only filters -- cleared on a switch away from "reaction". See `BrowseFilters.reactantSmiles`'s own comment for why these have no provenance/composition counterpart. */
 const REACTION_ONLY_DEFAULTS = {
     reactantSmiles: "", productSmiles: "", direction: "",
     hasKinetics: "" as EvidenceFlagState, hasTransitionState: "" as EvidenceFlagState,
@@ -505,7 +505,7 @@ export function splitSmilesList(value: string): string[] {
 }
 
 /**
- * `/scientific/reactions/browse` (PR 4b, §3D of the plan) -- deliberately
+ * `/scientific/reactions/browse` -- deliberately
  * NOT built on `sharedQueryParams`: that helper sends charge, multiplicity,
  * and the six provenance params, none of which this endpoint accepts
  * (verified live -- `GET /reactions/browse` answers exactly `family,
@@ -697,7 +697,7 @@ const transitionStateBrowseResponseSchema = z.object({
 }).passthrough()
 
 /**
- * `/reactions/browse` row shape (PR 4b), as served by
+ * `/reactions/browse` row shape, as served by
  * `GET /scientific/reactions/browse?limit=2`. FLAT, unlike the
  * `transition_state`/`reaction` split `TransitionStateBrowseRecord` nests
  * (`transitionStateEntryCoreSchema`/`transitionStateCoreSchema`/

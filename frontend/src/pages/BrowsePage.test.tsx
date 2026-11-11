@@ -395,7 +395,7 @@ describe("browse page: kind selection queries the right endpoint with the right 
     // reactions of this species") relies on this: `?participant_smiles=`
     // must be seeded into `filters` on the initial mount, not silently
     // dropped the way every OTHER filter field already is. The link itself
-    // now points straight at the canonical `/transition-states` path (not
+    // points straight at the canonical `/transition-states` path (not
     // the legacy `/species?kind=transition_state`), so that is what this
     // test exercises. Asserted two ways: the SMILES field actually shows
     // the seeded value (proves the FORM state was seeded, not just the
@@ -1067,7 +1067,7 @@ describe("browse page: the six provenance selects work on species, not just tran
 })
 
 // ---------------------------------------------------------------------------
-// PR 4b: the "reaction" browse kind, end to end through the real page --
+// The "reaction" browse kind, end to end through the real page --
 // kind selection, query building, row rendering (two DISTINCT rows, same
 // "records[0] hardcode" guard the species/TS fixtures above use), the
 // family vocabulary dropdown, and this kind's own empty-state wording.

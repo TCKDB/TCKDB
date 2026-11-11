@@ -54,15 +54,11 @@
    content, alongside the `.t-label` heading) -- meant to read as quieter
    than the heading, so a reader's eye lands on the heading first and the
    roll-up reads as supporting detail, not a second heading.
-   MEASURED (independent review): muting only the COLOUR was not enough --
-   with no `font` of its own, this span inherited `.disclosure > summary`'s
-   own `font: var(--type-ui-font)` (13px/600, design-system.css), which is
-   LARGER and BOLDER than the `.t-label` heading beside it (.72rem/400,
-   `--type-label-font`) -- the roll-up was the loudest text on the
-   collapsed card, the opposite of this comment's own stated intent. Given
-   its own explicit `font` here (smaller AND lighter than the heading, not
-   just a different colour) so the visual weight actually matches what the
-   card is meant to look like. */
+   Muting only the COLOUR is not enough: without a `font` of its own this
+   span would inherit `.disclosure > summary`'s `font: var(--type-ui-font)`
+   (13px/600, design-system.css), which is LARGER and BOLDER than the
+   `.t-label` heading beside it (.72rem/400, `--type-label-font`). It has
+   its own explicit `font` here (smaller AND lighter than the heading). */
 .coverage-checklist-summary {
     color: var(--muted);
     font: 400 .72rem/1.3 var(--sans);

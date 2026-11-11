@@ -43,13 +43,11 @@ function stripComments(source: string): string {
  * `.value-pill--muted` are DEFINED there -- that is the primitive itself,
  * not a page restyling it.
  */
-// the original version of this pattern only
-// matched a selector ending directly in `{` (`\.value-pill\s*\{`) -- it
-// missed a `:hover`/`:focus-visible` pseudo-class, a compound selector
+// A selector ending directly in `{` is not the only way to restyle the
+// primitive: a `:hover`/`:focus-visible` pseudo-class, a compound selector
 // (`.foo.value-pill`), an attribute selector, a combinator
-// (`.value-pill > span`), or a comma-separated selector list
-// (`.value-pill, .other-thing`), any of which restyles the primitive just
-// as much as a bare `{` does. The lookahead below requires only that
+// (`.value-pill > span`) or a comma-separated selector list
+// (`.value-pill, .other-thing`) restyle it just as much. The lookahead below requires only that
 // `.value-pill`/`.value-pill--muted` be followed by a character that can
 // legally follow a class name in a selector (whitespace, `,`, `.`, `:`,
 // `{`, `[`, or a combinator) -- i.e. it matches the class name ANYWHERE

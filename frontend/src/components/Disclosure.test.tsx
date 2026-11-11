@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-// `Disclosure.tsx` no longer imports `design-system.css` itself (post-
-// review, PR D -- see that file's own comment: the component's production
+// `Disclosure.tsx` does not import `design-system.css` itself (see
+// that file's own comment: the component's production
 // callers all already get it via `index.css`'s single global `@import`).
 // This test file DOES need it, though: the "never uppercases" test below
 // asserts a real computed style, and without an actual `.disclosure >
@@ -56,7 +56,7 @@ describe("Disclosure", () => {
 
     // Neither jsdom nor @testing-library/user-event implements the UA
     // "activation behaviour" that translates a real browser's Enter/Space
-    // keypress on a focused `<summary>` into a click (MEASURED: jsdom's
+    // keypress on a focused `<summary>` into a click (jsdom's
     // own `HTMLDetailsElement`/`HTMLElement` implementation wires up
     // click-driven toggling -- see the passing click test above -- but
     // has no keydown handling at all; user-event's keydown behavior table
@@ -104,7 +104,7 @@ describe("Disclosure", () => {
         expect(details.className.split(" ")).toEqual(expect.arrayContaining(["disclosure", "refs-disclosure"]))
     })
 
-    // Post-review (PR D): a caller whose disclosure sits beside another
+    // A caller whose disclosure sits beside another
     // heading it does not itself render (`SpeciesOverviewPage.tsx`'s
     // per-state-group `EntryStateGroup`, associating "Deposited records"
     // back to that group's own `<h3>`) needs a way to set attributes on the

@@ -144,7 +144,7 @@ describe("arrheniusLog10AxisTitle -- the dimensionally correct ratio form, never
     })
 })
 
-describe("buildArrheniusChartData -- per-ORDER-FAMILY panel split (defect fix: no longer per raw A_units token)", () => {
+describe("buildArrheniusChartData -- per-ORDER-FAMILY panel split (not per raw A_units token)", () => {
     it("a page mixing per_s and cm3_mol_s records gets two panels (different order families), each holding only its own family's series", () => {
         const perSRecord = record({
             kinetics_ref: "kin_unimolecular",
@@ -366,7 +366,7 @@ describe("arrheniusPointX / panelXDomain -- the inverse-temperature (1000/T) axi
     })
 })
 
-// Review finding: every fixture elsewhere in this file uses the SAME
+// Every fixture elsewhere in this file uses the SAME
 // 300-3000 K range for every record, so a bug that sampled a record across
 // the PANEL's wider union domain instead of its own range would change
 // nothing observable in any of those tests. This block uses two records

@@ -8,10 +8,8 @@ afterEach(cleanup)
 
 /**
  * a section kicker earns its place only when it adds a
- * category the title itself lacks. MEASURED: four `SectionHeading`s on
- * `CalculationDetailPage`/`GeometryDetailPage` passed their own title
- * straight back in as `kicker` ("Result" over "Result"). A reviewer then
- * caught the equality-only version of this rule missing the same defect
+ * category the title itself lacks. A kicker equal to its own title
+ * ("Result" over "Result") restates it; the equality-only version of this rule would miss the same defect
  * in near-restated form ("Structure" over "Structure view", "Review" over
  * "Review history") -- widened from exact equality to "kicker is a
  * case-insensitive prefix of the title" (equality is the trivial case of
@@ -38,7 +36,7 @@ describe("SectionHeading suppresses a kicker that is a prefix of its own title",
         expect(screen.queryByText("STRUCTURE VIEW", { selector: ".section-kicker" })).toBeNull()
     })
 
-    // The case an equality-only rule missed (re-review finding): a kicker
+    // The case an equality-only rule missed : a kicker
     // that is only the title's OWN leading words still reads as a plain
     // restatement once stacked visually ("REVIEW" / "Review history").
     it("suppresses a kicker that is a leading-words prefix of the title, not just an exact match", () => {

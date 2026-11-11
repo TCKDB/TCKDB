@@ -108,7 +108,7 @@ describe("TransitionStateBrowseRow: pill is status only, no depositor label anyw
 
 // Job 1: the fact that actually distinguishes several TS deposits of the
 // SAME reaction is which reaction deposit each belongs to
-// (`reaction.reaction_entry_ref`) -- MEASURED live: level of theory,
+// (`reaction.reaction_entry_ref`) -- level of theory,
 // software and the deposited date (truncated to a plain date) are not
 // enough on their own, since real same-reaction deposits share all three.
 describe("TransitionStateBrowseRow: the reaction deposit ref distinguishes same-reaction rows", () => {

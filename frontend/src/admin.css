@@ -27,8 +27,8 @@
    the other one.
 
    `index.css` resets every anchor to `color: inherit; text-decoration: none`,
-   so without this rule that link renders as plain prose -- MEASURED, by
-   screenshotting the page: "Machine findings" in Record review's lede was
+   so without this rule that link renders as plain prose:
+   "Machine findings" in Record review's lede would be
    indistinguishable from the words either side of it. Matched to
    `.record-breadcrumbs a` (`index.css`), the house treatment for a link in
    running text, rather than inventing a third one. */
@@ -64,9 +64,8 @@
 
    The row-header semantics are worth keeping (a screen reader announces
    the username with each cell in the row), so the markup stays `<th>`
-   and only the presentation is put back. MEASURED by rendering the real
-   markup against the real stylesheets in headless Chrome -- jsdom
-   applies no CSS, so no test in this suite could see it. */
+   and only the presentation is put back. jsdom applies no CSS, so no test
+   in this suite can see the difference. */
 .admin-page .data-table tbody th {
     color: var(--ink);
     font: var(--type-value-font);

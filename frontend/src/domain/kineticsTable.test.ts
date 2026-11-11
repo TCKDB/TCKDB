@@ -4,8 +4,7 @@ import { arrheniusTermK, computeKineticsTable, kineticsAt, convertKineticsTableR
 // A=3025.44 cm³ mol⁻¹ s⁻¹, n=3.11242, Ea=39.9711 kJ/mol, 300–3000 K --
 // `kin_spkzatwjlvmmnja3i5im4fl7hq`'s own live values, independently
 // hand-computed (python, not this module) as k(300 K) = 17028.619...,
-// k(3000 K) = 40467390077148.48 -- the same figures (to displayed
-// precision) the PR 0 design-review mock's own hand-computed table cited.
+// k(3000 K) = 40467390077148.48 -- hand-computed to displayed precision.
 const A = 3025.44
 const n = 3.11242
 const Ea = 39.9711
@@ -63,8 +62,8 @@ describe("computeKineticsTable", () => {
     // The literal `12` here is deliberate, not `TABLE_POINT_COUNT` --
     // comparing the module's own output against its own (possibly
     // mutated) constant would pass unconditionally regardless of what
-    // that constant is set to. MEASURED (post-review): changing
-    // `TABLE_POINT_COUNT` from 12 to 6 left a `toHaveLength(TABLE_POINT_COUNT)`
+    // that constant is set to: changing
+    // `TABLE_POINT_COUNT` from 12 to 6 would leave a `toHaveLength(TABLE_POINT_COUNT)`
     // version of this assertion green.
     it("samples exactly 12 points, first and last at the record's own fitted range", () => {
         const rows = computeKineticsTable(record())!

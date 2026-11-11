@@ -6,9 +6,9 @@ import { describe, expect, it } from "vitest"
 // and a new stylesheet absent from that list would be unexamined, not
 // passing, which is indistinguishable from the outside. `import.meta.glob`
 // enumerates what actually exists under `src/**/*.css` instead -- recursive
-// (post-review, review of 2bd17511: the sibling guards above only glob
-// `./*.css`, since every stylesheet they care about is flat under `src/`
-// today; this one globs `./**/*.css` so a future component-owned sheet
+// (the sibling guards above only glob
+// `./*.css`, since every stylesheet they care about is flat under `src/`;
+// this one globs `./**/*.css` so a component-owned sheet
 // placed under a subdirectory, e.g. `components/`, is still covered).
 const STYLESHEET_SOURCES = import.meta.glob("./**/*.css", { query: "?raw", import: "default", eager: true }) as Record<string, string>
 const ALL_STYLESHEETS: Record<string, string> = Object.fromEntries(
@@ -25,9 +25,8 @@ function stripComments(source: string): string {
 }
 
 /**
- * Post-review fix (review of 2bd17511): the FIRST version of this guard
- * only matched a selector immediately followed by `{` at the start of its
- * own line (`^\s*SELECTOR\s*\{`) -- MEASURED, that pattern let every one
+ * The guard matches more than a selector immediately followed by `{` at the
+ * start of its own line (`^\s*SELECTOR\s*\{`); that pattern alone lets every one
  * of these through as a "declares no rule" false pass: a page-scoped
  * descendant selector (`.geometry-page .coverage-checklist {}`), a
  * bespoke nested override (`.coverage-checklist dt {}`), and a bare

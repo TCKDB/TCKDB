@@ -15,7 +15,7 @@ import { BrowseFilterForm } from "./BrowseFilterForm"
  * only `EvidenceFields` (Status + a collapsed "Show only entries with..."
  * checkbox row for the seven `has_*` flags), and the transition-state-only
  * `TransitionStateFindabilityFields` (SMILES + Family). Fixtures mirror the
- * MEASURED live archive vocabulary (see the design brief), not invented
+ * archive's real vocabulary, not invented
  * values: Gaussian genuinely has two version strings that look like
  * duplicates and are not (`"16"` vs `"Gaussian 16, Revision C.02"`, a
  * parsed output banner deposited into the version column -- issue #305),
@@ -418,9 +418,9 @@ const FINDABILITY_ONLY_LABELS = ["SMILES", "Family"]
 // see: rendering correctly for TS while staying broken for the other two
 // would pass a suite that only ever mounts with TS.
 //
-// "reaction" (PR 4b) is EXCLUDED from this loop, not silently swept in by
+// "reaction" is EXCLUDED from this loop, not silently swept in by
 // iterating `BROWSE_KINDS` -- `/reactions/browse` accepts none of charge,
-// multiplicity, or the six provenance params (measured live; see
+// multiplicity, or the six provenance params (see
 // `buildReactionBrowseQuery`'s own comment), so showing these selects for
 // that kind would be the exact "looks active while doing nothing" failure
 // this whole describe block exists to rule OUT for the other three kinds.
@@ -839,8 +839,8 @@ describe("structure search mode gates its dependent controls", () => {
 })
 
 // ---------------------------------------------------------------------------
-// PR 4b: the "reaction" browse kind's own findability/evidence fields.
-// `/reactions/browse` (measured live) has NO charge/multiplicity/
+// The "reaction" browse kind's own findability/evidence fields.
+// `/reactions/browse` has NO charge/multiplicity/
 // composition/provenance axis, so this kind's field set looks nothing like
 // the other three -- Reactant structures, Product structures, Family
 // (shared vocabulary with the TS kind), and a two-flag "Show only entries

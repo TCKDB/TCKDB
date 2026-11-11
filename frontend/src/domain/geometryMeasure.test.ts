@@ -93,12 +93,9 @@ describe("dihedral", () => {
     // convention by design, so the fixtures below read as "theta in,
     // theta out" rather than needing a separate negation step.
     //
-    // A PRIOR VERSION of this file's expectations had this backwards
-    // (theta=+60 asserted to produce dihedral() === -60) because they
-    // were written by recording `dihedral()`'s own output at the time,
-    // not derived independently — see `geometryMeasure.ts`'s dihedral()
-    // docstring for the sign-inversion bug this masked and the "external oracle" block below for why a
-    // self-consistent suite could not have caught it on its own.
+    // The expectations are derived independently of `dihedral()`'s own
+    // output; the "external oracle" block below checks them against RDKit,
+    // since a self-consistent suite could not catch a sign inversion.
     const p1 = { x: -1, y: 1, z: 0 }
     const p2 = { x: 0, y: 0, z: 0 }
     const p3 = { x: 1, y: 0, z: 0 }

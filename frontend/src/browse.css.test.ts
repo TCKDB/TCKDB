@@ -124,7 +124,6 @@ describe("no off-token divider colour", () => {
     })
 })
 
-// Post-review (PR D) fix:
 describe(".browse-count -- the shared --type-label step, not a hand-rolled .72rem/.04em pair", () => {
     it("uses var(--type-label-font)", () => {
         const rule = extractRule(css, ".browse-count")
@@ -180,16 +179,15 @@ describe("status/empty lines -- --type-note, not a bare .92rem", () => {
     })
 })
 
-// Review follow-up (PR 4b, round 2): the reaction browse row RE-CREATED the
-// stereo-chip defect `reaction-entry.css.test.ts` already guards for the
+// The reaction browse row needs the stereo-chip rule `reaction-entry.css.test.ts` guards for the
 // entry/chooser pages (`.record-identity-title .reaction-equation-chip` /
 // `.record-identity-title code.data`) -- that fix's selector never reaches
 // this row, and `reaction-entry.css` is not even in the browse page's CSS
-// chunk. MEASURED before this fix (real Chrome): the chip and the formula
-// beside it both rendered at the row title's own 20px `--type-heading-2-
-// font` step, ratio 1.00, in accent color with a permanent underline
-// (`.card a`) -- an English aside ("· S enantiomer") reading as equally
-// prominent as the chemistry, live on 4+ of the first 20 unfiltered rows.
+// chunk. Uncapped, the chip and the formula
+// beside it both render at the row title's own 20px `--type-heading-2-
+// font` step, in accent color with a permanent underline
+// (`.card a`) -- an English aside ("· S enantiomer") would read as equally
+// prominent as the chemistry.
 //
 // This is a SOURCE-TEXT regex against the stylesheet, the same technique
 // `reaction-entry.css.test.ts` uses for the identical bug, not a
@@ -208,7 +206,7 @@ describe("reaction browse row -- equation code in the heading", () => {
     })
 })
 
-// Review follow-up: the ENTIRE point of this PR -- making the reaction
+// Making the reaction
 // browse card one click target for the reaction entry -- lives in a single
 // CSS rule, `.reaction-browse-row .browse-row-title::after`. jsdom does
 // not compute pseudo-element styles at all (confirmed: `getComputedStyle`
@@ -218,9 +216,9 @@ describe("reaction browse row -- equation code in the heading", () => {
 // row and footer ancestors are positioned. Without a SOURCE-TEXT assertion
 // here, that one line could be deleted entirely and the whole rendered
 // test suite would stay green while the on-page click target collapsed
-// from the full card down to a sliver around the equation text (MEASURED:
-// deleting this rule drops on-target click points from 2940/2940 to
-// 170/2940 in a real browser, with 57 unrelated tests still passing).
+// from the full card down to a sliver around the equation text (deleting this rule
+// shrinks the on-target click area in a real browser while the
+// unrelated tests still pass).
 // Same source-text technique the stereo-chip suite above uses, for the
 // same reason: no computed-pixel assertion can catch this class of
 // regression here.

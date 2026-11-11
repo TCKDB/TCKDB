@@ -62,8 +62,8 @@
 /* The centre node's type pill -- the only node in the graph with a known
    `type` (see the component's own docstring for why parent/child nodes
    never get one). A real `<rect rx>` behind the text, `.value-pill`'s own
-   COLOUR AND RADIUS treatment (design-system.css) -- review finding: bare
-   uppercase SVG text read as a label, not a pill. Colour/radius only,
+   COLOUR AND RADIUS treatment (design-system.css): bare
+   uppercase SVG text reads as a label, not a pill. Colour/radius only,
    not the whole rule: the font is the SVG label step, not `.value-pill`'s
    own, and the stroke deliberately differs too. `--accent-300` (not
    `.value-pill`'s own `--line` border) is what actually shows: the pill's
@@ -130,10 +130,9 @@
     outline-offset: 3px;
 }
 
-/* Static clickable affordance (review finding: a linked node rendered as
-   a plain box with plain `--ink` text -- indistinguishable from a
-   satellite type pill's own text at a glance, no cue at all until the
-   pointer happened to hover it). The house link treatment
+/* Static clickable affordance (a linked node rendered as
+   a plain box with plain `--ink` text would be indistinguishable from a
+   satellite type pill's own text at a glance, with no cue until hover). The house link treatment
    (`.kv-list a`/`.data-table a`/`.card a`/`.note a`, design-system.css)
    is accent-coloured and underlined WITHOUT needing hover -- this is the
    same treatment applied to the ref text of any node this component

@@ -11,7 +11,7 @@ import {
 /**
  * Pins every `edgeLabel`/`childSentence`/`parentSentence` this table
  * produces as a LITERAL string, for all seven `CalculationDependencyRole`
- * values (`backend/app/db/models/common.py`). Review finding: the
+ * values (`backend/app/db/models/common.py`). The
  * component test (`CalculationDependencyGraph.test.tsx`) asserted
  * `dependencyEdgeLabel(role)` against the very table that defines it --
  * a wording change (e.g. "optimized from" -> "optimised from") stayed

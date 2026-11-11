@@ -25,8 +25,8 @@ h1 { font: var(--type-display-2-font); letter-spacing: var(--type-display-2-trac
 .skip-link { position: fixed; z-index: 3; top: -4rem; left: 1rem; padding: .65rem .9rem; background: var(--surface); color: var(--accent-700); border: 1px solid var(--accent); } .skip-link:focus { top: 1rem; }
 .skip-link:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 
-/* `.value-pill` / `.value-pill--muted` moved to `design-system.css`
-   (post-review, PR D): both must live in ONE file, in the right order, for
+/* `.value-pill` / `.value-pill--muted` moved to `design-system.css`:
+   both must live in ONE file, in the right order, for
    the cascade to resolve correctly on an element carrying both classes --
    see that file's own comment above `.value-pill` for the bug this fixes
    (a route-dependent cascade flip measured between `.value-pill` here and
@@ -65,16 +65,13 @@ main:focus, main h1[tabindex="-1"]:focus { outline: none; }
 .brand span { display: grid; width: 1.25rem; height: 1.25rem; place-items: center; border-radius: .25rem; background: var(--accent); color: var(--surface); font: var(--type-label-strong-font); letter-spacing: var(--type-label-strong-tracking); text-transform: var(--type-label-strong-transform); }
 button:focus-visible, input:focus-visible, .search-results a:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 /* `.eyebrow` -- the site's standalone kicker (as opposed to `.t-label`'s
-   repeated dt/th/legend role). Was its own one-off .72rem/.19em pair;
-   now sized and tracked off the shared `--type-kicker` step (still
-   .72rem, tracking narrowed .19em -> .10em -- MEASURED as the widest
-   tracking of any label-band style on the site, an outlier next to
-   every other kicker/label use, not a deliberate design choice). */
+   repeated dt/th/legend role). Sized and tracked off the shared
+   `--type-kicker` step (.72rem, .10em tracking), in line with every other
+   kicker/label use. */
 .eyebrow { margin: 0 0 1.35rem; color: var(--accent); font: var(--type-kicker-font); letter-spacing: var(--type-kicker-tracking); text-transform: var(--type-kicker-transform); }
 .record-placeholder h1 { margin: 0; font: var(--type-display-2-font); letter-spacing: var(--type-display-2-tracking); }
 .identifier-search { margin: 0 auto; max-width: 45rem; text-align: left; }
-/* was
-   `600 .78rem var(--mono)` -- `--type-label-strong` (mono, uppercase,
+/* `--type-label-strong` (mono, uppercase,
    600 .72rem) is the named step for a short, weighted field label like
    this one ("Exact species identifier"). */
 .identifier-search label { display: block; margin: 0 0 .5rem; color: var(--ink-2); font: var(--type-label-strong-font); letter-spacing: var(--type-label-strong-tracking); text-transform: var(--type-label-strong-transform); }
@@ -293,8 +290,7 @@ button:focus-visible, input:focus-visible, .search-results a:focus-visible { out
 /* The path/ref chip is an identifier, not an accent-tinted UI chip -- data
    step, plain colour, same treatment `.browse-ref` gets. */
 .record-placeholder code { display: inline-block; margin: 1.25rem 0; overflow-wrap: anywhere; color: var(--muted); font: var(--type-data-font); }.record-placeholder p:last-child { max-width: var(--measure-prose); color: var(--ink-2); font: var(--type-body-font); letter-spacing: var(--type-body-tracking); }
-/* was
-   `.72rem var(--mono)` (11.52px, mono) -- a mixed-case trail of category
+/* A mixed-case trail of category
    labels ("Species", "Species entry", "Calculation", …), never a raw
    identifier, so mono here was never earning its "this is an identifier"
    meaning. `--type-note` (sans, .8125rem/1.5) is the named step for a

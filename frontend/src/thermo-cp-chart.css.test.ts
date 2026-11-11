@@ -20,11 +20,10 @@ function extractRule(source: string, selector: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// the Cp
-// chart carried three more bespoke sizes -- `.74rem`/`.64rem`/`.68rem`,
-// the last two below the site's own 11px accessibility floor and `.64rem`
-// (10.24px) the smallest text anywhere on the site, MEASURED. Each maps
-// onto a named type-scale step now.
+// The Cp
+// chart's sizes map onto named type-scale steps rather than bespoke
+// `.74rem`/`.64rem`/`.68rem` values (the last two are below the site's own
+// 11px accessibility floor).
 // ---------------------------------------------------------------------------
 describe(".cp-chart-legend-item -- --type-data (mono, no case transform)", () => {
     it("uses var(--type-data-font), not a bare .74rem", () => {

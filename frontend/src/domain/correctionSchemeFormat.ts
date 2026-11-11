@@ -42,9 +42,7 @@ export function schemeKindLabel(kind: string): string {
  * -- or answers a fixed, misleading number -- defeats the point of
  * collapsing it. A live scheme here is atom-XOR-bond-XOR-component (never
  * two of the three at once), so the sum is exactly the one table's own
- * row count -- "8 parameters" for `ecs_q5potmkzrmm6ynh2behv5kbfdu`
- * (atom-keyed), "45 parameters" for `ecs_5dzse4an2emubgyxge2dpj4ae4`
- * (bond-keyed), measured live.
+ * row count.
  */
 export function schemeParameterRollup(evidence: {
     atom_param_count: number

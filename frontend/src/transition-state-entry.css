@@ -17,19 +17,18 @@
  */
 
 /* The saddle-point verdict -- the first evidence statement on the page,
-   directly under the identity block, per the finding that the imaginary
+   directly under the identity block, so the imaginary
    frequency (the one fact that says "is this actually a saddle point")
-   was nowhere on the page at all. Was a hard-coded `44rem`, now the
-   shared `--measure-note` token it happened to already match (item 10:
-   "no text block wider than `--measure-note`"). */
+   is on the page. Width is the
+   shared `--measure-note` token ("no text block wider than
+   `--measure-note`"). */
 .tse-saddle-point {
     max-width: var(--measure-note);
-    /* BLOCKING-2 ("record-page residuals" re-review): was `margin: var(--s-4)
-       0 0` -- no BOTTOM margin, and the `.kv-list` immediately following
-       (this page's Reaction-section facts) also owns no top margin of its
+    /* The `.kv-list` immediately following
+       (this page's Reaction-section facts) owns no top margin of its
        own (the primitive's own contract: it carries no external-spacing
-       opinion -- see `design-system.css`'s `.kv-list` comment), so the two
-       sat 10px apart, MEASURED. The box needs to own the gap on BOTH
+       opinion -- see `design-system.css`'s `.kv-list` comment), so a box
+       with a top margin only would sit 10px from it. The box needs to own the gap on BOTH
        sides since neither of its neighbours will. */
     margin: var(--s-4) 0 var(--s-5);
     padding: var(--s-3) var(--s-4);
@@ -75,10 +74,9 @@
    other record pages follows; this file keeps only what `.card` does
    not already cover. */
 .tse-irc-summary p {
-    /* MEASURED (, "record-page residuals" re-review): 126
-       characters per line with no cap -- the same "genuine prose needs a
-       readable measure" fix `--measure-note` already exists for; this
-       card just never composed it. */
+    /* Without a cap this prose runs ~126
+       characters per line; `--measure-note` is the readable measure for
+       genuine prose. */
     max-width: var(--measure-note);
     margin: 0;
     color: var(--ink-2);
@@ -168,10 +166,10 @@
 
 .tse-siblings-list code { font: var(--type-data-font); color: var(--muted-2); }
 
-/* MEASURED at 1100px: the Energy column squeezed Stage into "STAG / E"
+/* At 1100px the Energy column would squeeze Stage into "STAG / E"
    and rows into "fre / q" -- `.data-table th`/`td`'s shared
-   `overflow-wrap: anywhere` (`design-system.css`) breaking a short,
-   never-long token mid-word once five columns had to share the width.
+   `overflow-wrap: anywhere` (`design-system.css`) breaks a short
+   token mid-word once five columns share the width.
    Scoped to `.tse-page` (this page's own root class) rather than edited
    on the shared `.data-table` rule itself -- `ConformerObservationPage`/
    `ConformerGroupPage` also render `.data-table` now (item 7), but their

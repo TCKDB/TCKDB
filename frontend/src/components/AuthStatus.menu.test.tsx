@@ -223,8 +223,7 @@ describe("opening and closing", () => {
          * Escape is pressed. There are two Escape handlers -- one on the
          * trigger, one on the popup -- and a test that pressed Escape with
          * focus still on the trigger passed with the popup's handler
-         * deleted. MEASURED: deleting it was a mutation that escaped, which
-         * is what moved this test to the keyboard path.
+         * deleted, so this test uses the keyboard path.
          */
         meIs("admin")
         renderStatus()

@@ -318,7 +318,7 @@ describe("clearInapplicableFilters: the structure filter is species/vdw-only com
 })
 
 // ---------------------------------------------------------------------------
-// PR 4b: the "reaction" browse kind -- /scientific/reactions/browse.
+// The "reaction" browse kind -- /scientific/reactions/browse.
 // The endpoint accepts EXACTLY `family,
 // reactant_smiles, product_smiles, has_kinetics, has_transition_state,
 // min_review_status, include_rejected, include_deprecated, offset, limit`

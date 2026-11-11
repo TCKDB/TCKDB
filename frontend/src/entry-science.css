@@ -56,10 +56,8 @@
     letter-spacing: var(--type-heading-2-tracking);
 }
 
-/* Review finding (NIT, PR 366): was a bespoke `.72rem var(--mono)` size
-   next to `.data`'s own `--type-data` step -- a second mono size for the
-   same "raw identifier" role. The ref itself is `.data` now (className
-   at each call site); this rule keeps only the muted colour `.data` has
+/* The ref itself is `.data` (className
+   at each call site), using its own `--type-data` step; this rule keeps only the muted colour `.data` has
    no opinion on. */
 .science-record-heading .data {
     color: var(--muted);
@@ -197,8 +195,7 @@
     border-radius: var(--radius);
 }
 
-/* BLOCKING-2 (species-entry/browse/chrome residuals re-review): the second
-   row `IdenticalStatmechGroupRefs` renders per record -- "Record software"
+/* The second row `IdenticalStatmechGroupRefs` renders per record -- "Record software"
    and "Workflow tool", demoted out of the table's own columns (see that
    component's own comment for why) into one `.note`-weight line spanning
    the row beneath it. `border-bottom` here is the row's own separator

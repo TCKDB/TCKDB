@@ -35,8 +35,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 //   not assume other values exist today.
 //
 // - `atoms` does carry more than `symbols` + `coords`: each row has its own
-//   `atom_index`, and measured live data (geom_qcnisbgb4abax5oxym3dtjxu34)
-//   shows atom_index is 1-based while `symbols`/`coords` are plain
+//   `atom_index`, which is 1-based while `symbols`/`coords` are plain
 //   0-indexed arrays in the same order. They are two views of the same
 //   underlying atom list, not independent data.
 //

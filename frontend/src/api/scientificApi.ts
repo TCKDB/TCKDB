@@ -202,7 +202,7 @@ export const REACTION_SEARCH_LIMIT = 5
  * The backend match is a literal string comparison against the stored
  * SMILES per participant (not RDKit-canonicalized) and, for `reactants`/
  * `products` with more than one entry, an ALL-of-these-together (AND)
- * match on that one side -- both measured live against
+ * match on that one side -- both against
  * `/scientific/reactions/browse` (`?reactant_smiles=NN&direction=either`
  * -> 20, `?reactant_smiles=NN&reactant_smiles=[H]&direction=either` -> 0).
  * This function does not resolve the reader's typed spelling to the

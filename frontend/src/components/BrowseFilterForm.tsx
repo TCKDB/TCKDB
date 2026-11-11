@@ -32,7 +32,7 @@ export function BrowseFilterForm({ kind, filters, onChange }: {
     filters: BrowseFilters
     onChange: (patch: Partial<BrowseFilters>) => void
 }) {
-    // "reaction" (PR 4b) shows none of charge/multiplicity/the six
+    // "reaction" shows none of charge/multiplicity/the six
     // provenance selects -- `/reactions/browse` accepts none of them (see
     // `buildReactionBrowseQuery`'s own comment). Showing a field that the
     // request silently drops would look active while doing nothing, the
@@ -170,7 +170,7 @@ function TransitionStateFindabilityFields({ filters, onChange }: { filters: Brow
 }
 
 /**
- * The "reaction" kind's own findability fields (PR 4b): two structure
+ * The "reaction" kind's own findability fields: two structure
  * fields, and the family dropdown. `family` reuses the SAME
  * `loadReactionFamilies` vocabulary call (and the same
  * count-filtering/`display_name` handling) as

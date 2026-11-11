@@ -8,7 +8,7 @@ import css from "./transition-state-entry.css?raw"
  *  in prose (this file's own comments mention `.tse-page` and
  *  `.data-table` repeatedly, describing WHY the rule below is scoped the
  *  way it is) can never be mistaken for the live selector itself --
- *  PR B review finding: without this, `match![1]` below could capture text
+ *  Without this, `match![1]` below could capture text
  *  reaching back into the preceding doc comment, which also contains the
  *  literal string `.tse-page` -- the test would keep passing even if the
  *  real selector's `.tse-page` prefix were deleted. Same helper
@@ -22,8 +22,8 @@ function stripComments(source: string): string {
  * jsdom does not lay out or paint anything, so it cannot see the visual
  * defect this file guards: a narrow-viewport table squeezing its first
  * ("Stage") column so tightly that short tokens wrap mid-word ("STAG" /
- * "E", "fre" / "q") -- MEASURED at 1100px on the TS entry page once the
- * Energy column (item 9) gave the table a fifth column to share width
+ * "E", "fre" / "q") at 1100px on the TS entry page, where the
+ * Energy column gives the table a fifth column to share width
  * with. What CAN be checked without a browser is the raw CSS text: that a
  * `white-space: nowrap` rule exists for the first column, and that it is
  * scoped to `.tse-page` rather than a shared (un-owned) table selector --
@@ -94,11 +94,11 @@ describe("IRC point list: wide-enough cells, forced single column below 62rem, s
 })
 
 /**
- * the saddle-point
- * verdict box had a top margin only (`var(--s-4) 0 0`); the `.kv-list`
+ * The saddle-point
+ * verdict box owns spacing on both sides: the `.kv-list`
  * immediately following it owns no top margin of its own (the shared
- * primitive's contract), so the two sat 10px apart -- MEASURED. It also
- * carried a one-off `.92rem/1.55 serif` face outside the 13-step scale.
+ * primitive's contract), so a box with a top margin only would sit 10px
+ * from it. Its typography stays on the type scale.
  */
 describe("saddle-point box: owns spacing on both sides, on-scale typography", () => {
     const stripped = stripComments(css)

@@ -82,9 +82,8 @@ describe("the SVG scales fluidly and never forces page-level horizontal overflow
  * `minWidth`/`maxWidth` inline style pins the SVG to a fixed CSS-px
  * width (the active layout's own computed width); `overflow-x: auto`
  * here is what a container NARROWER than that fixed width does instead
- * of shrinking the SVG's text. MEASURED (post-review): with no floor at
- * all, a 600px viewport scaled the narrow layout to 0.89x (labels
- * 10.26px) and 400px to 0.57x (6.6px), both under this app's 11.52px
+ * of shrinking the SVG's text. With no floor at
+ * all, a narrow viewport would scale the labels below this app's 11.52px
  * accessible floor.
  */
 describe(".dep-graph holds the text-size floor by scrolling, not shrinking", () => {

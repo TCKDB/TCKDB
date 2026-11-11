@@ -71,7 +71,7 @@ import { Disclosure } from "./Disclosure"
 // The k(T) TABLE is the chart's own accessible/text equivalent (each panel's
 // `role="img"` `aria-label` is a summary sentence, not a substitute for the
 // underlying numbers) -- built with the exact same `computeKineticsTable`/
-// `arrheniusTermK` maths PR 2 pinned, reused rather than forked, and shown
+// `arrheniusTermK` maths, reused rather than forked, and shown
 // directly beneath the panels in a `Disclosure` per record.
 //
 // CONTROLS: with only ONE panel (the common case), "applies to every
@@ -217,9 +217,7 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
                 // bare ref; splitting it into its own `<code>` node here
                 // would silently create a second such node and break every
                 // test in that file using `findByText("kin_test1")` as its
-                // "wait for the page" signal (see this PR's own mutation
-                // notes -- MEASURED: 19 tests in that file went from green
-                // to a 5s timeout before this was found and fixed).
+                // "wait for the page" signal.
                 <ul className="arrhenius-chart-excluded-notes">
                     {excluded.map((item) => (
                         <li key={item.kinetics_ref} className="note">
@@ -382,14 +380,12 @@ function ArrheniusXAxisSelect({ id, xAxisMode, onSelectXAxisMode }: {
 }
 
 /**
- * The Y-axis (unit) control, always rendered -- "never silently omit the
- * y control" stands from the previous round of this fix; present-but-
- * compact is the target, not hidden. A panel with a single option
+ * The Y-axis (unit) control, always rendered, never silently omitted;
+ * present-but-compact, not hidden. A panel with a single option
  * (`per_s`'s own family, or an unrecorded/unrecognised panel's empty
  * `availableUnits`) shows the control DISABLED with the one unit it's
- * stuck at, and -- unlike the previous round, which printed
- * `yAxisUnitNote`'s full sentence directly in the layout -- the reason is
- * now on demand: a small, real `<button>` (not just a `title` on the
+ * stuck at, and the reason (`yAxisUnitNote`'s sentence) is
+ * on demand rather than printed in the layout: a small, real `<button>` (not just a `title` on the
  * disabled select, which native HTML excludes from the tab order and so
  * a sighted keyboard-only user could never reach) carries the reason via
  * BOTH `title` (mouse hover) and `aria-describedby` pointing at a
@@ -557,7 +553,7 @@ function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits, o
                         symmetric (left=58 for the y-axis tick labels,
                         right=20), so centring on the full 720px width sits
                         the title ~19px off from the plotted curve's own
-                        centre (a review finding). `marginLeft: left` +
+                        centre. `marginLeft: left` +
                         `width: plotWidth` gives this paragraph the SAME
                         horizontal box the ticks/curve are drawn in, still
                         inside `.arrhenius-chart-scroll` so it keeps

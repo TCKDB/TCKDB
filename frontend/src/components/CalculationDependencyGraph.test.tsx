@@ -380,8 +380,7 @@ describe("CalculationDependencyGraph — accessibility", () => {
  * test above) and a `computeNarrowLayout` that silently returned the wide
  * layout would BOTH stay green against every other test in this file --
  * this block is what actually exercises the ResizeObserver/measured-
- * width branch `CalculationDependencyGraph.tsx` itself gates on, per the
- * post-review fix list.
+ * width branch `CalculationDependencyGraph.tsx` itself gates on.
  */
 describe("CalculationDependencyGraph — responsive layout via ResizeObserver", () => {
     class FakeResizeObserver {
@@ -468,11 +467,9 @@ describe("CalculationDependencyGraph — responsive layout via ResizeObserver", 
         })
     })
 
-    // Review finding: with only a `maxWidth` cap (no floor), the ACTIVE
-    // layout -- even the narrow one, already chosen for being the
-    // narrower of the two -- still scaled itself down further via CSS
-    // `width: 100%` on a container narrower than ITS OWN width (600px
-    // measured at 0.89x/10.26px text, 400px at 0.57x/6.6px). `minWidth`
+    // With only a `maxWidth` cap (no floor), the ACTIVE
+    // layout would scale itself down via CSS
+    // `width: 100%` on a container narrower than ITS OWN width. `minWidth`
     // pinned to the same value as `maxWidth` is what holds the floor: at
     // ANY container width, the rendered SVG's own inline style -- not
     // just its `viewBox` -- must stay fixed at the active layout's own
@@ -494,11 +491,9 @@ describe("CalculationDependencyGraph — responsive layout via ResizeObserver", 
         }
     })
 
-    // Review finding: `pillY = top + 10` pinned the pill+ref content
+    // A fixed `pillY = top + 10` would pin the pill+ref content
     // block to the TOP of a grown centre box regardless of how much the
-    // box had grown to fit staggered lane entries -- MEASURED, a 3-child
-    // graph at 680px left 64.6px of empty space below the ref line and
-    // only 10px above it. `contentTop = top + (node.height - CENTRE_H) /
+    // box had grown to fit staggered lane entries. `contentTop = top + (node.height - CENTRE_H) /
     // 2` re-centres the block; this reads the ACTUAL rendered `<rect>`/
     // `<text>` y-attributes (not a re-derivation of that same formula) to
     // confirm the component really applies it, for every lane count this

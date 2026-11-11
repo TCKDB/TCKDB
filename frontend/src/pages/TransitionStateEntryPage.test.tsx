@@ -1097,7 +1097,7 @@ describe("TransitionStateEntryPage", () => {
                         },
                         {
                             // Same label AND same level-of-theory/software as
-                            // the row above -- MEASURED report: three
+                            // the row above -- three
                             // indistinguishable "TS4 · ... · NOT REVIEWED"
                             // rows on the hydrazine reaction's own page. The
                             // label is not rendered at all (house

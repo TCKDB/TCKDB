@@ -141,10 +141,8 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
     // `resolveProductLevels`'s own fallback path expects `source_calculations[]`
     // rows, a shape kinetics records do not carry — so when the server's
     // own `levels` is absent this record uses ITS OWN fallback
-    // (`deriveKineticsLevelsFallback`, the dependency-edge walk plan §7 and
-    // PR 398's own post-review commit describe) rather than the generic
-    // `source_calculations` derivation. When `levels` IS present (every
-    // live record, as of PR 398's deploy), `resolveProductLevels` is still
+    // (`deriveKineticsLevelsFallback`, the dependency-edge walk) rather than the generic
+    // `source_calculations` derivation. When `levels` IS present, `resolveProductLevels` is still
     // the one normaliser used everywhere else in the app (missing
     // sub-fields -> `null`, never `undefined`), so it stays the single
     // source of truth for "trust the server's own answer as-is".
@@ -212,7 +210,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
             </dl>
 
             {/* A SEPARATE `<dl>`, not appended to the facts list above --
-                MEASURED (post-review): in one shared grid, the auto-flow
+                In one shared grid, the auto-flow
                 column count let Geometry/Frequencies/Energy split across a
                 row boundary with "Software" interleaved into the same row
                 as one of them. Each `<dl>` here is its own independent

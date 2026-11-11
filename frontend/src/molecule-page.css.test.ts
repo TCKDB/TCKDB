@@ -126,12 +126,10 @@ describe("linkage connector alignment and wrap-safe hiding", () => {
 })
 
 // ---------------------------------------------------------------------------
-// MEASURED,
-// the entry/statmech/thermo tabs ran 51-68% mono by visible character
-// count -- these rules were most of it: full prose sentences and metric
-// summaries set in monospace, the face this house's own type scale
-// reserves for an identifier or number. Locks each one onto a named sans
-// step (never `var(--mono)`) so a future edit cannot silently revert it.
+// Full prose sentences and metric
+// summaries are not set in monospace, the face this house's own type scale
+// reserves for an identifier or number. Locks each rule onto a named sans
+// step (never `var(--mono)`).
 // ---------------------------------------------------------------------------
 describe("mono is reserved for identifiers and numbers, not prose (item 3)", () => {
     it.each([

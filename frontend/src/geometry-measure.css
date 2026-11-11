@@ -45,11 +45,9 @@
     gap: .75rem;
 }
 
-/* was a one-off `600
-   .82rem mono` outside the 13-step scale. `--type-ui-font` (600 .8125rem
-   sans) is the closest named step -- same weight, same register (a small
-   panel heading paired with a button, "Clear measurements", right
-   beside it and mapped onto the same step below). */
+/* `--type-ui-font` (600 .8125rem sans): same weight and register as the
+   "Clear measurements" button beside this heading, which uses the same
+   step below. */
 .viewer-measurements-header h3 {
     margin: 0;
     font: var(--type-ui-font);
@@ -57,10 +55,8 @@
     color: var(--ink);
 }
 
-/* was `.68rem` (10.88px), under the accessibility-pass
-   11px floor, and mono/uppercase -- mapped onto `--type-ui-font`, the
-   same step every other button on this page (`geometry-viewer.css`'s
-   `.viewer-controls button` et al.) now uses. */
+/* `--type-ui-font`, the same step every other button on this page
+   (`geometry-viewer.css`'s `.viewer-controls button` et al.) uses. */
 .measure-clear-button {
     padding: .35rem .75rem;
     border: 1px solid var(--control-border);

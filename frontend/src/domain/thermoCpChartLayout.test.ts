@@ -98,7 +98,7 @@ describe("groupIdenticalSeries", () => {
         expect(groups[0].members.map((m) => m.thermoRef)).toEqual(["thm_a", "thm_a2"])
     })
 
-    it("never groups two series that both plot nothing, even though their structural signature ([[],null]) is identical -- each stays its own group so a different conformer group's record is never silently dropped (the blocking review finding)", () => {
+    it("never groups two series that both plot nothing, even though their structural signature ([[],null]) is identical -- each stays its own group so a different conformer group's record is never silently dropped", () => {
         const emptyOnGroupOne = series({
             thermoRef: "thm_empty_1",
             label: "Conformer Group 1",
@@ -122,7 +122,7 @@ describe("groupIdenticalSeries", () => {
         expect(groups.map((g) => g.representative.thermoRef)).toEqual(["thm_empty_1", "thm_empty_2"])
     })
 
-    it("never groups two unplottable series from the SAME conformer group either -- identity must key on the record, not the label (a re-review mutation keyed on label passed every existing test)", () => {
+    it("never groups two unplottable series from the SAME conformer group either -- identity must key on the record, not the label", () => {
         const first = series({
             thermoRef: "thm_empty_a",
             label: "Conformer Group 1",

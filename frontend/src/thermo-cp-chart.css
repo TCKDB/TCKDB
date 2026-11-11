@@ -77,8 +77,7 @@
     list-style: none;
 }
 
-/* was a
-   bare `.74rem` -- `--type-data` (mono, .8125rem, no case transform) is
+/* `--type-data` (mono, .8125rem, no case transform) is
    the named step here, not `--type-label` (which would force this
    ALL-CAPS): the legend text is `groupLegendLabel`'s own mixed-case
    phrase, "Conformer Group 1 (thm_a1) — 2 identical records" -- a real
@@ -114,8 +113,7 @@
     flex: none;
 }
 
-/* was `.64rem` (10.24px) -- the smallest text
-   on the site, below the 11px accessibility floor. `--type-label-strong`
+/* `--type-label-strong`
    (mono, uppercase, 600 .72rem) is the named step for a short, weighted
    status flag like "selected". */
 .cp-chart-legend-label {
@@ -183,8 +181,7 @@
     dominant-baseline: hanging;
 }
 
-/* was `.68rem` (10.88px), below the 11px
-   floor -- `--type-label` (mono, uppercase, .72rem) is the named step
+/* `--type-label` (mono, uppercase, .72rem) is the named step
    for a short axis-title label. */
 .cp-chart-axis-title {
     margin: .3rem 0 0;
@@ -200,8 +197,7 @@
     text-align: center;
 }
 
-/* SCIENTIFIC ERROR fixed here (live-site review finding, matches the
-   defect `arrhenius-chart.css` already fixes for its own Y title): the
+/* Scientific correctness (the same rule `arrhenius-chart.css` applies to its own Y title): the
    shared `.cp-chart-axis-title` rule above inherits `--type-label-transform`
    (design-system.css) = `uppercase` -- correct for the X title
    ("Temperature (K)", ordinary English prose), but this Y title's own text

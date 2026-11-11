@@ -92,8 +92,8 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
 //   depends on (owner entry / geometries), not separate heavy payloads.
 //
 // - ON DEMAND (14 remaining tokens): every other heavy section, grouped
-//   under one "Further evidence" disclosure group (review finding: ten
-//   individually-headed, individually-ToC-registered sections crowded out
+//   under one "Further evidence" disclosure group (so ten
+//   individually-headed, individually-ToC-registered sections do not crowd out
 //   the two or three that actually carry data on most calculations).
 //   `available_sections` (18 booleans, one per token that has one — see
 //   `readSectionField`) tells the page which of these would return data
@@ -176,8 +176,7 @@ function evidenceTone(label: string): "pill" | "pill-muted" {
  * falls back to the calculation's own `type` when there is no result row
  * at all — a calculation whose type promises a headline must still show
  * the headline SLOT with "not recorded", never silently drop it because
- * the row happens to be missing (review finding 2: `calc_u7j7…`, an opt
- * with no result, rendered no headline at all).
+ * the row happens to be missing.
  */
 function headlineEnergy(
     type: string,
@@ -299,8 +298,7 @@ export default function CalculationDetailPage() {
  * synthesizes one `not_reviewed` row with no date and no note so
  * `review_history`'s presence flag agrees with the always-present review
  * badge. Rendered as a single line rather than a one-row table whose every
- * cell reads "not recorded" (review finding: a 3-cell table of "not
- * recorded" for a fact that is really one word, "unreviewed").
+ * cell reads "not recorded" (a fact that is really one word, "unreviewed").
  */
 function isNeverReviewed(entries: CalculationRecord["review_history"]): boolean {
     const rows = entries ?? []
@@ -493,7 +491,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             </div>
                         )}
 
-                        {/* Item 1 (BLOCKING): the TS entry is now a real link to
+                        {/* The TS entry is a real link to
                             `/transition-state-entries/:ref` -- that route exists
                             (`App.tsx:52`). `RecordIdentityHeader`'s own TS branch
                             renders the ref as plain `<code>` (a shared component
@@ -573,7 +571,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                     </header>
                 )}
             >
-            {/* No count tiles here (review finding): "Input geometries 1 /
+            {/* No count tiles here: "Input geometries 1 /
                 Output geometries 1 / Dependency edges 3" rendered cardinalities
                 a reader never asks for at display size, each duplicating a
                 section directly below that shows the same one or three links.
@@ -586,7 +584,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                     same on every record page). Renders through the shared
                     `EvidenceChecklist` component. Geometry validation
                     and SCF stability only -- Result and Convergence are dropped
-                    from this checklist (review finding: each already has its
+                    from this checklist (each already has its
                     own headline/Result-section home, so a THIRD "recorded"/
                     "absent" line for the same fact stated nothing new). The two
                     rows that remain have no section of their own when they come
@@ -1281,7 +1279,7 @@ const ON_DEMAND_SECTION_SPECS: {
     // flag exists server-side (the concept applies only to certain
     // correlated-wavefunction methods, which this client cannot derive
     // from `type` alone), so the honest move is to say nothing rather
-    // than call it "missing" on, say, a plain DFT opt (review finding).
+    // than call it "missing" on, say, a plain DFT opt.
     // The disclosure below still renders normally whenever the archive
     // DOES have one.
     { heading: "Wavefunction diagnostic", applicable: () => false, available: (a) => a.has_wavefunction_diagnostic },

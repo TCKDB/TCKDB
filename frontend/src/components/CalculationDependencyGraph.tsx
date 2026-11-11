@@ -59,11 +59,10 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * container width (`ResizeObserver` on this component's own wrapper),
  * compared against `computeWideLayout(...).width` -- narrow renders as
  * soon as the container is narrower than the wide layout's own natural
- * width, never a fixed breakpoint. MEASURED (post-review): a fixed
- * `680px` media query let the wide layout scale ITSELF down (`width:
+ * width, never a fixed breakpoint. A fixed
+ * `680px` media query would let the wide layout scale ITSELF down (`width:
  * 100%`, no floor) on any container between 680px and its own natural
- * width -- at a 1100px container with 3 children the SVG scaled to
- * 0.913x, taking its smallest text (`--type-label-font`, 11.52px) below
+ * width, taking its smallest text (`--type-label-font`, 11.52px) below
  * this app's own accessible floor. Comparing against the real container
  * width switches to the narrow layout before any such shrink can happen.
  * `containerWidth` starts `null` (not yet measured, or `ResizeObserver`
@@ -170,13 +169,11 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType, cent
                 // to be one CSS px (the box-sizing estimate in
                 // `domain/dependencyGraphLayout.ts` is written in px), so
                 // this is always the layout math's own computed width.
-                // MEASURED (post-review): with only a `maxWidth` cap, the
+                // With only a `maxWidth` cap, the
                 // ACTIVE layout (even after the `isNarrow` switch already
-                // picked the narrower one) still shrank below its own
+                // picked the narrower one) would shrink below its own
                 // natural size on a container narrower than THAT layout's
-                // own width -- a 600px viewport rendered the narrow layout
-                // at 0.89x (labels 10.26px), 400px at 0.57x (6.6px), both
-                // under the accessible floor. `.dep-graph`'s own
+                // own width, under the accessible text floor. `.dep-graph`'s own
                 // `overflow-x: auto` (calculation-dependency-graph.css) is
                 // what a container narrower than this fixed width does
                 // instead: the SECTION scrolls horizontally, the graph's

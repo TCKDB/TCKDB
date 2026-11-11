@@ -35,7 +35,7 @@ export function isLotFilterActive(filter: LevelOfTheoryFilter): boolean {
 
 /**
  * Narrows the already-fetched rows in the browser rather than re-querying per
- * keystroke. MEASURED before designing: the browse endpoint's `method`/`basis`
+ * keystroke. The browse endpoint's `method`/`basis`
  * filters are exact-match, not substring (`_run_lot_query`,
  * `backend/app/services/scientific_read/level_of_theory_search.py`), so
  * sending partially-typed text would silently return zero rows for almost any

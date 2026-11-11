@@ -231,19 +231,17 @@ describe("EvidenceChecklist", () => {
             expect(summary.textContent).toMatch(/\d+ present, \d+ absent/)
         })
 
-        // Independent review, this branch: an EARLIER version of this
-        // component fell back to a bare `"N rows"` count when no row
-        // carried a tone -- MEASURED on live data as actively misleading,
+        // A bare `"N rows"` count when no row
+        // carries a tone would be misleading,
         // since that number is the CARD'S OWN fixed row count (constant
         // per card shape, e.g. always 6 for the reaction-entry review
-        // card), not a fact about the archive. It restated a different
+        // card), not a fact about the archive. It would restate a different
         // question's answer as if it answered the heading's own: a
-        // reaction entry with 4 real joined records collapsed to "6
+        // reaction entry with 4 real joined records would collapse to "6
         // rows"; two conformer groups with opposite coverage (every stage
-        // fully covered vs. none at all) BOTH collapsed to "3 rows",
+        // fully covered vs. none at all) would BOTH collapse to "3 rows",
         // indistinguishable from each other. There is no numeric fallback
-        // any more -- see the two describe blocks below for what replaced
-        // it.
+        // -- see the two describe blocks below.
         describe("no numeric row-count fallback -- untoned rows need a caller-supplied `summary`, or the card opens instead", () => {
             it("a caller-supplied `summary` is used when no tone-derived roll-up exists", () => {
                 const { container } = render(

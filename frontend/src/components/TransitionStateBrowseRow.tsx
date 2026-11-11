@@ -154,18 +154,15 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
     const equation = record.reaction.equation ?? "Equation not recorded"
     const target = tsRowTarget(record)
 
-    // The depositor's own `transition_state.label` (e.g. "TS0"/"TS1") no
-    // longer renders here at all (house rule widened: no depositor-typed
+    // The depositor's own `transition_state.label` (e.g. "TS0"/"TS1") does
+    // not render here (no depositor-typed
     // labels on public pages -- an arbitrary producer string is meaningless
-    // to a reader and, MEASURED live, four separate deposits of the same
-    // reaction 1 saddle point all carry the identical label "TS1"). The
+    // to a reader, and separate deposits of the same saddle point can carry the identical label). The
     // fact that actually tells same-reaction deposits apart is which
     // REACTION DEPOSIT each one belongs to (`reaction.reaction_entry_ref`,
-    // already served by this endpoint) -- MEASURED against the archive:
-    // in all 4 reactions with more than one TS deposit
-    // (16 of 34 rows), at least two members within each group share
-    // identical level-of-theory, software AND deposit date once truncated
-    // to a plain date, so those two signals alone do not fully distinguish
+    // already served by this endpoint). Members of one reaction can share
+    // level-of-theory, software AND deposit date once truncated
+    // to a plain date, so those signals alone do not fully distinguish
     // them; the reaction-entry ref does, because it IS the deposit
     // identity `transition_state.reaction_entry_id` actually points at.
     const depositRef = record.reaction.reaction_entry_ref ?? null

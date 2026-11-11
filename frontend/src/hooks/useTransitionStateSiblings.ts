@@ -15,9 +15,8 @@ export type SiblingsFetchStatus = "loading" | "loaded" | "error"
  * reaction genuinely has no siblings": both return an empty
  * `siblings` array, but `status === "error"` lets the caller render a
  * short "could not load" line instead of silently claiming there are
- * none. MEASURED gap this fixes: the previous version's `.catch(() =>
- * setSiblings([]))` made a network failure look identical to zero
- * siblings.
+ * none. A `.catch(() => setSiblings([]))` would make a network failure
+ * look identical to zero siblings.
  */
 export function useTransitionStateSiblings(
     reactionRef: string | null | undefined,

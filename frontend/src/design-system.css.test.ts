@@ -45,14 +45,13 @@ describe("type scale: every step declares the exact font/tracking/transform", ()
         "heading-3": { font: "600 .875rem/1.4 var(--sans)", tracking: "0em", transform: "none" },
         "kicker": { font: "400 .8125rem/1.3 var(--sans)", tracking: "0em", transform: "none" },
         "label": { font: "400 .8125rem/1.3 var(--sans)", tracking: "0em", transform: "none" },
-        // Post-review addition: the label step at weight 600, for a
+        // The label step at weight 600, for a
         // table header that must stand out from the surrounding
         // label-weight dt/th text -- see design-system.css's own
         // comment above --type-label-strong-font.
         "label-strong": { font: "600 .8125rem/1.3 var(--sans)", tracking: "0em", transform: "none" },
         "body": { font: "400 1.0625rem/1.55 var(--sans)", tracking: "0em", transform: "none" },
-        // Post-review addition (species-entry/browse/chrome residuals
-        // re-review, item 14): a named step for a page LEDE -- serif,
+        // A named step for a page LEDE -- serif,
         // one size up from --type-body and a touch tighter in line-height
         // (a lede is a short 1-2 sentence read, not multi-paragraph body
         // copy) -- see design-system.css's own comment above
@@ -66,7 +65,7 @@ describe("type scale: every step declares the exact font/tracking/transform", ()
         "data-large": { font: "600 1.5rem/1.2 var(--mono)", tracking: "0em", transform: "none" },
     }
 
-    it("declares exactly the 15 named steps (the brief's original 13, plus post-review's --type-label-strong and --type-lede), no more, no fewer", () => {
+    it("declares exactly the 15 named steps (including --type-label-strong and --type-lede), no more, no fewer", () => {
         const fontVarNames = new Set(
             [...designSystemCss.matchAll(/--(type-[a-z0-9-]+)-font:/g)].map((m) => m[1]),
         )
@@ -118,13 +117,11 @@ describe("measures narrowed for a readable line length", () => {
     })
 })
 
-describe("--measure-wide: a separate CONTAINER measure, not a text one (post-review)", () => {
-    // MEASURED (the finding this guards): `.record-header`
-    // (`calculation-detail.css`) used `--measure-note` back when that
-    // token was still 92rem, to line its right edge up with the wide
-    // evidence strip/tables below it. Narrowing `--measure-note` to a
-    // genuine prose width (44rem, above) silently narrowed that
-    // container too. `--measure-wide` keeps "prose gets narrower" and
+describe("--measure-wide: a separate CONTAINER measure, not a text one", () => {
+    // `.record-header` (`calculation-detail.css`) lines its right edge up
+    // with the wide evidence strip/tables below it, so it takes the wide
+    // container measure, not `--measure-note` (a genuine prose width,
+    // 44rem, above). `--measure-wide` keeps "prose gets narrower" and
     // "this container stays wide" independently adjustable.
     it("design-system.css declares --measure-wide as 92rem", () => {
         expect(customProperty(designSystemCss, "measure-wide")).toBe("92rem")
@@ -265,10 +262,8 @@ describe("the kv-list primitive is defined exactly once, globally", () => {
         expect(rule![1]).toMatch(/grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(16rem,\s*1fr\)\)/)
     })
 
-    // Post-review fix: the two deleted per-page rules each zeroed the UA
-    // `dl` default margin with their OWN value (1rem 1.1rem 1.1rem vs.
-    // 1rem 0 0) and neither carried over -- a bare `<dl class="kv-list">`
-    // was falling back to the browser default, different from both.
+    // A bare `<dl class="kv-list">` would otherwise fall back to the
+    // browser default `dl` margin.
     it("margin is reset to 0 -- the primitive carries no external-spacing opinion of its own", () => {
         const rule = /\.kv-list\s*\{([^}]*)\}/.exec(designSystemCss)
         expect(rule).not.toBeNull()
@@ -284,12 +279,10 @@ describe("the kv-list primitive is defined exactly once, globally", () => {
     })
 })
 
-describe("exactly one bare .table-scroll rule across src/**/*.css (post-review)", () => {
-    // MEASURED (the finding this guards): design-system.css, entry-
-    // science.css and geometry-detail.css each defined a byte-identical
-    // `.table-scroll { overflow-x: auto }` -- the exact "duplicate bare
-    // selector, only safe because Vite never unloads a route's CSS"
-    // pattern this PR's own header comment names as the bug being fixed
+describe("exactly one bare .table-scroll rule across src/**/*.css", () => {
+    // A duplicate bare `.table-scroll { overflow-x: auto }` in several
+    // stylesheets is the "duplicate bare selector, only safe because Vite
+    // never unloads a route's CSS" pattern named in this file's header
     // for .kv-list. Scoped/compound selectors like `.science-record
     // .table-scroll .stage-table` are a DIFFERENT rule (a different
     // property, min-width, on a different element) and are not counted
@@ -377,10 +370,8 @@ describe("the note primitive", () => {
 })
 
 describe("value-pill--muted matches .value-pill's face and size EXACTLY, including line-height", () => {
-    // Post-review fix: the first cut of this rule omitted the base
-    // `.value-pill`'s `/1.3` line-height from the `font:` shorthand --
-    // pin the FULL shorthand, not just weight/size/face, so a future
-    // edit can't silently drop it again.
+    // The `font:` shorthand includes the base `.value-pill`'s `/1.3`
+    // line-height -- pin the FULL shorthand, not just weight/size/face.
     it("is 600 .72rem/1.3 sans, not a mono uppercase form", () => {
         const rule = /\.value-pill--muted\s*\{([^}]*)\}/.exec(designSystemCss)
         expect(rule).not.toBeNull()
@@ -396,7 +387,7 @@ describe("value-pill--muted matches .value-pill's face and size EXACTLY, includi
  * inside a `.t-display-1` heading (`letter-spacing: -.03em`, computed
  * at THAT heading's own ~64px) would inherit a fixed ~-1.8px tracking
  * onto the pill's own 11.52px text -- several characters cramming into
- * the space of one, measured live as illegible overlapping glyphs on
+ * the space of one, an illegible overlap of glyphs on
  * `CorrectionSchemePage.tsx`'s level-of-theory pill and
  * `FrequencyScaleFactorPage.tsx`'s scale-kind pill. Both
  * `.value-pill` and its `--muted` variant reset it explicitly so
@@ -417,7 +408,7 @@ describe("value-pill/value-pill--muted reset letter-spacing, so a pill inside a 
     })
 })
 
-describe(".kv-list dd falls back to overflow-wrap: anywhere for an unbreakable value (post-review pass)", () => {
+describe(".kv-list dd falls back to overflow-wrap: anywhere for an unbreakable value", () => {
     // What is true now: the 16rem column width (below) is what fixes all
     // six required routes, and `.data`/`code` inherit `overflow-wrap:
     // anywhere` from `.kv-list dd` directly -- no rule of their own
@@ -453,7 +444,7 @@ describe(".kv-list dd falls back to overflow-wrap: anywhere for an unbreakable v
 })
 
 describe(".data-table td.num never wraps", () => {
-    // MEASURED: a NASA-7 coefficient in scientific notation broke as
+    // A NASA-7 coefficient in scientific notation must not break as
     // "-5.91781e- / 8" at 680px -- a numeric column has nothing to
     // legitimately wrap at.
     it("declares white-space: nowrap", () => {

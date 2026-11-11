@@ -18,7 +18,7 @@ import { type ArrheniusUnitFamily, arrheniusUnitConversionFactor, arrheniusUnitF
  * ever").
  *
  * Two grouping levels, not one: `groupKtpFitsByChannel` (channel identity,
- * chemistry label, unchanged from PR 4) and, layered on top of it,
+ * chemistry label) and, layered on top of it,
  * `groupKtpChannelsByUnitFamily` (which of those channels can share a
  * y-axis at all). `per_s` (unimolecular) and `cm3_mol_s` (bimolecular) are
  * different PHYSICAL DIMENSIONS -- overlaying them on one axis would not

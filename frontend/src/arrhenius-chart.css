@@ -11,8 +11,7 @@
  * `.cp-chart-svg` scales its viewBox-driven text down whenever its
  * container is narrower than the SVG's own intrinsic size -- at a narrow
  * viewport that pushed tick labels below the 11.52px accessibility floor
- * (a round-2 review finding on the design-review mock this chart's own
- * spec calls out explicitly). `.arrhenius-chart-svg` below carries no
+ * (the chart's spec calls this out explicitly). `.arrhenius-chart-svg` below carries no
  * `width`/`height` rule at all -- the component sets both as real SVG
  * attributes (`width={720} height={340}`), which the browser never scales
  * down on its own. `.arrhenius-chart-scroll` gives the fixed-size SVG (and
@@ -293,10 +292,9 @@
 /* Pinned to the PLOT box's own width/offset via an inline `style={{
    marginLeft, width}}` at the call site (`left`/`plotWidth`, the SAME
    values the ticks and curve are drawn with) -- never centred in a grid
-   track that can be wider than the chart it describes (the mock's other
-   round-2 defect: its x-axis title centred in the grid COLUMN, not under
-   the plotted chart), and never centred on the full SVG box either (a
-   later review finding: the SVG's own left/right margins are NOT
+   track that can be wider than the chart it describes (not the
+   grid COLUMN, which can be wider than the plotted chart), and never
+   centred on the full SVG box either (the SVG's own left/right margins are NOT
    symmetric, so centring on the full width sat the title ~19px off from
    the plotted curve's actual centre). Sitting inside
    `.arrhenius-chart-scroll` alongside the SVG, this paragraph scrolls in
@@ -306,7 +304,7 @@
     text-align: center;
 }
 
-/* SCIENTIFIC ERROR fixed here (post-merge review finding): the shared
+/* Scientific correctness: the shared
    `.arrhenius-chart-axis-title` rule above inherits `--type-label-transform`
    (design-system.css) = `uppercase` -- correct for the X title ("Temperature
    (K)" / "1000 / T (K⁻¹)", ordinary English prose where case carries no

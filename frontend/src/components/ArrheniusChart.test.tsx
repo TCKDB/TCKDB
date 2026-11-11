@@ -55,7 +55,7 @@ function plogRecord(overrides: Record<string, unknown> = {}): ReactionKineticsRe
 
 // A NARROWER record than `bimolecularRecord()`'s 300-3000 K, sharing its
 // A_units so the two land in the SAME panel -- for the per-record range
-// clipping tests below. Review finding: every OTHER fixture in this file
+// clipping tests below. Every OTHER fixture in this file
 // uses one shared 300-3000 K range, so a bug that sampled a record across
 // the panel's own wider union domain (instead of its own range) would
 // change nothing observable in any of them.
@@ -101,7 +101,7 @@ function termolecularRecord(overrides: Record<string, unknown> = {}): ReactionKi
  *  by looking at the axis, never the component's or the layout module's
  *  own scale function. Used to check that plotted points land where the
  *  TICKS say they should, not merely where the same scale function that
- *  drew them would also redraw them (the review finding this replaces: a
+ *  drew them would also redraw them (a
  *  test that recomputes a point from the layout module can't see the axis
  *  and the curve disagreeing, if both re-run the same scale). */
 function deriveLinearMapping(ticks: { value: number, pixel: number }[]): (value: number) => number {
@@ -334,12 +334,9 @@ describe("ArrheniusChart -- the SVG is pinned to a fixed pixel size (defect (b) 
     })
 })
 
-// Review finding (should-fix #5): only the aria-label was ever pinned to
-// the record's OWN A_units in a test -- the y-axis title and the table's
-// own caption/header are the VISIBLE statements of what unit a reader is
-// looking at, and neither was checked against a non-cm3_mol_s fixture. A
-// component that hardcoded "cm³ mol⁻¹ s⁻¹" in either place would have
-// stayed green.
+// The aria-label, the y-axis title and the table's
+// own caption/header all state the record's own A_units, checked here against a non-cm3_mol_s fixture. A
+// component that hardcoded "cm³ mol⁻¹ s⁻¹" in either place would fail.
 //
 // The y-axis title is the primary statement of the plotted unit
 // (`log₁₀ [k / <unit>]`); there is no separate
@@ -394,7 +391,7 @@ describe("ArrheniusChart -- the y-axis title and table caption/header are pinned
     })
 })
 
-// SCIENTIFIC ERROR regression guard (post-merge review finding): the
+// Scientific-correctness guard: the
 // y-axis title's own text carries a rate-coefficient unit (e.g. "log₁₀
 // [k / s⁻¹]") -- the shared `.arrhenius-chart-axis-title` rule inherits
 // `--type-label-transform` (`uppercase`), which would render it "LOG₁₀ [K

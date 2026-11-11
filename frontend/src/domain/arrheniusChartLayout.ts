@@ -20,7 +20,7 @@ import {
 // `thermoCpChartLayout.ts` at the call site in `ArrheniusChart.tsx` --
 // genuinely generic (not Cp-specific) helpers, so this file does not fork
 // them. The one k(T) primitive this module needs, `arrheniusTermK`, is
-// imported from `domain/kineticsTable.ts` (PR 2's pinned maths) rather than
+// imported from `domain/kineticsTable.ts` rather than
 // re-derived -- see that module's own docstring for the hand-computed
 // values this file's own tests reuse. The unit ALGEBRA itself (which units
 // interconvert, and by what factor) lives in `domain/arrheniusUnits.ts` --
@@ -39,7 +39,7 @@ export const ARRHENIUS_CHART_WIDTH = 720
 export const ARRHENIUS_CHART_HEIGHT = 340
 export const ARRHENIUS_CHART_MARGIN = { top: 16, right: 20, bottom: 40, left: 58 } as const
 
-/** ~60 samples per curve, per plan §4/PR 3's own spec -- denser than the
+/** ~60 samples per curve -- denser than the
  *  k(T) table's 12 points (`kineticsTable.ts`'s `TABLE_POINT_COUNT`), since
  *  a plotted curve needs more resolution than a text table's sampled rows,
  *  but the SAME underlying `arrheniusTermK` maths at every sample. */

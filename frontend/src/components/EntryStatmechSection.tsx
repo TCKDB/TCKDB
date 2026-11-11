@@ -430,11 +430,11 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesS
  * whole group of scientifically-identical deposits).
  *
  * `showRecordEvidence` is `false` only for the group's own shared body
- * (`IdenticalStatmechRecordsCard`) -- the finding measured live: the
+ * (`IdenticalStatmechRecordsCard`): the
  * representative's "Record software: Arkane · Workflow: ARC 1.1.0", its own
- * source-calculation count, and its single freq-calculation ref were all
- * printed as though they held for the whole group, when in fact six of the
- * seven ethene records cite different freq calculations and different
+ * source-calculation count, and its single freq-calculation ref would read
+ * as though they held for the whole group, when records in a group can cite
+ * different freq calculations and different
  * software. None of `evidence_summary`, `FrequenciesBlock`, or
  * `software_release`/`workflow_tool_release` participates in
  * `statmechRecordFingerprint` -- they are real per-record facts, not shared
@@ -618,9 +618,7 @@ const STATMECH_GROUP_ID_SUFFIX = "-group"
 /**
  * One card for N deposited statmech records that report IDENTICAL
  * scientific content (`domain/identicalRecordGroups.ts`'s
- * `statmechRecordFingerprint`) -- the finding measured live: seven ethene
- * statmech records, all D2h, σ=4, 0.9990 fundamental, b3lyp/def2tzvp,
- * rendered as seven full ~500px cards. The shared scientific content
+ * `statmechRecordFingerprint`), instead of one full card per record. The shared scientific content
  * renders ONCE, from the group's first record; every member reports the
  * identical body by construction of the fingerprint -- via the same
  * `StatmechRecordBody` a single-record card uses. "Show all" mounts every

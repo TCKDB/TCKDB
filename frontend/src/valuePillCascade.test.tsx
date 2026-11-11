@@ -50,7 +50,7 @@ describe("`.value-pill.value-pill--muted` actually renders muted, not the base p
         const muted = container.querySelector("#muted") as HTMLElement
 
         // jsdom's CSS engine does not resolve `var()` to a hex/rgb value --
-        // MEASURED: `getComputedStyle` hands back the winning declaration's
+        // `getComputedStyle` hands back the winning declaration's
         // raw text (`"var(--accent-700)"`, `"var(--muted)"`), not a
         // resolved colour. That raw text is still exactly what this bug
         // needs: `.value-pill` and `.value-pill--muted` reference DIFFERENT
@@ -64,7 +64,7 @@ describe("`.value-pill.value-pill--muted` actually renders muted, not the base p
     // A rendered check for the SPECIFICITY defense (fix 2) specifically --
     // "does `.value-pill.value-pill--muted` keep winning even against a
     // bare `.value-pill` rule injected later" -- was tried here and
-    // dropped: MEASURED, jsdom's `getComputedStyle` does not weigh selector
+    // dropped: jsdom's `getComputedStyle` does not weigh selector
     // specificity across separate `<style>` elements at all, only source
     // order (confirmed by swapping which rule loads last and watching
     // jsdom's answer flip every time, contradicting real CSS's specificity

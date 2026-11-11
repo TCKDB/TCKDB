@@ -285,10 +285,10 @@ function AccountMenu({
                 // Closing synchronously unmounts the focused menu item
                 // BEFORE the browser performs the default Tab, which leaves
                 // it with no element to move from -- so it restarts at the
-                // top of the document. MEASURED in real Chrome: Tab from the
-                // first item landed on "Skip to content", i.e. a keyboard
-                // user was thrown to the top of the page by tabbing out of a
-                // menu. That is worse than the plain links this replaced.
+                // top of the document: Tab from the
+                // first item would land on "Skip to content", i.e. a keyboard
+                // user would be thrown to the top of the page by tabbing out of a
+                // menu.
                 //
                 // Deferring keeps the item mounted for the default, so focus
                 // lands on the next tabbable element after the menu, and the

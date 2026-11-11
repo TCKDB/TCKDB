@@ -23,8 +23,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
  * check's own record: its outcome, the calculation it was reconstructed from, and the energies an
  * energy-ordering check compared.
  *
- * `trust` is requested -- MEASURED on tse_aq5ktxlu27nvul3hmdwpuyuz4e:
- * `include=trust` serves `trust_status: "well_supported"` and
+ * `trust` is requested: `include=trust` serves `trust_status: "well_supported"` and
  * `evidence.checks.irc_evidence_present: "passed"` on the SAME entry
  * whose `validation.irc` (already requested, no extra cost) says
  * `"absent"` -- the two blocks read as contradictory on the page until
@@ -245,10 +244,8 @@ export async function loadTransitionStateGeometries(ref: string, signal?: AbortS
 // `.created_at`, and (under `include=calculations`) per-calc level of
 // theory + software -- everything "Other saddle points deposited for
 // this reaction" needs. `created_at` is what tells three same-label,
-// same-level-of-theory siblings apart (MEASURED: three "TS4 ·
-// MRCI+Davidson/... · Molpro (version not recorded) · NOT REVIEWED" rows
-// on TS8's own siblings list, indistinguishable without it) alongside
-// their own ref.
+// same-level-of-theory siblings apart (e.g. rows with the same label, level and
+// software are otherwise indistinguishable) alongside their own ref.
 // ---------------------------------------------------------------------------
 
 const siblingRecordSchema = z.object({

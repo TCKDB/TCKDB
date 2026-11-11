@@ -13,7 +13,7 @@
  *
  * `RefsDisclosure` composes `components/
  * Disclosure.tsx` (`<Disclosure className="refs-disclosure" …>`), so the
- * box chrome, chevron, and summary typography (review finding: SEVEN
+ * box chrome, chevron, and summary typography (SEVEN
  * different jobs — kicker, field label, table header, disclosure
  * summary, pill, button, legend — done by one uppercase-tracked mono
  * style; this was one of those seven) all come from `.disclosure` in
@@ -58,17 +58,9 @@
     gap: .5rem;
 }
 
-/* fixed AT SOURCE
-   instead of `index.css`'s `.archive-shell .ref-item-label,
-   .archive-shell .copy-button` accessibility-pass floor override --
-   `.ref-item-label` was `.6rem` (9.6px, floored to 11px there),
-   `.ref-item-value`/`.ref-item a` were `.72rem` with `overflow-wrap:
-   anywhere` (a long ref broke mid-token, "lot_…76hj76" / "u"), and
-   `.copy-button` was `.58rem` (9.28px, also floored). Mapped onto the
-   named steps this design system already has for exactly these roles --
-   `--type-label`, `--type-data`, `--type-ui` -- so the size is correct
-   here rather than patched at a distance by a specificity trick. The
-   `index.css` has no floor override for these two classes. */
+/* Sizes come from the named steps for these roles -- `--type-label`,
+   `--type-data`, `--type-ui` -- set here at the source; `index.css` has
+   no size override for these two classes. */
 .ref-item-label {
     flex: none;
     color: var(--faint);

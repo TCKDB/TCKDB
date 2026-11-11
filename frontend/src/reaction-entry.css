@@ -26,7 +26,7 @@
 
 /* `ReactionEquation.tsx`'s two sizing fixes for participant text composed
    into the `.record-identity-title` h1 (`--type-display-2`, 36px serif) --
-   see that component's own docstring for the MEASURED reports both fix.
+   see that component's own docstring for what both fix.
    `code.data` sets its own fixed `font: var(--type-data-font)` (13px
    mono), which read as illegibly tiny inside a 36px h1 (the SMILES
    fallback for a participant with no served `formula`); `inherit` lets it
@@ -64,11 +64,11 @@
 /* The Geometry/Frequencies/Energy facts (`ProductLevelsFact`) get their
    OWN `<dl>`, never appended to a page's other facts in one shared list --
    `ReactionKineticsSection.tsx` and `ReactionTransitionStatesSection.tsx`
-   both do this. MEASURED (post-review): in one shared grid, the auto-flow
-   column count split the three levels across a row boundary with an
+   both do this. In one shared grid, the auto-flow
+   column count would split the three levels across a row boundary with an
    unrelated fact ("Software") interleaved into the same row as one of
    them -- a `<dl>` is its own independent grid, so a group can never spill
-   into an unrelated one this way again. */
+   into an unrelated one this way. */
 .reaction-product-levels {
     margin-top: 1.5rem;
 }
@@ -89,10 +89,10 @@
 
 /* `.data-table th` (design-system.css) uppercases every header via
    `--type-label-strong-transform` -- correct for an ordinary column
-   name, but MEASURED (post-review round 2) to render this table's own
+   name, but it would render this table's own
    "k (cm³ mol⁻¹ s⁻¹)" header as "K (CM³ MOL⁻¹ S⁻¹)", indistinguishable
-   from the adjacent "T (K)" column and silently reintroducing the exact
-   ambiguity round 1's fix (naming the unit) was meant to remove -- a
+   from the adjacent "T (K)" column and reintroducing the ambiguity that
+   naming the unit removes -- a
    textContent-only test cannot see this, since the rendered TEXT node is
    still lowercase; only the computed style differs. Scoped to this one
    table only, never a page-wide override of the shared primitive. */

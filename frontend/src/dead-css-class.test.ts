@@ -1,20 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 /**
- * four
- * stylesheets this PR's own brief named as carrying dead classes --
- * `molecule-page.css`, `entry-science.css`, `browse.css`, `index.css` --
- * plus everything else the same re-review's retirement list named
- * (`.evidence-chip`, `.empty-stage`, `.geometry-list`, `.identifier-chip*`)
- * were already gone or out of this PR's file scope by the time this test
- * was written (grepped: `.evidence-chip` was already comment-only,
- * `.empty-stage`/`.geometry-list` live in `conformer-group.css`, PR E's
- * file). What THIS test guards is the general defect, not just the named
- * instances: every class selector in these four files must have at least
+ * Guards the general defect of a dead class: every class selector in the four
+ * stylesheets `molecule-page.css`, `entry-science.css`, `browse.css` and `index.css` must have at least
  * one real `.tsx` consumer (not a test, not a comment), so a future class
  * that stops being rendered gets caught here instead of accumulating the
- * same way `.browse-row-ts-label` did (found and removed by this same PR
- * -- zero consumers, not even in a test).
+ * same way `.browse-row-ts-label` did (zero consumers, not even in a test).
  *
  * DISCOVERED, never enumerated -- same `import.meta.glob` technique
  * `design-system.css.test.ts`/`value-pill-scope.css.test.ts` already use
@@ -83,8 +74,7 @@ function hasComponentConsumer(className: string): boolean {
 
 // Explicit allowlist, with a REASON for each entry -- per the brief
 // ("allow an explicit allowlist with reasons"). A `Set` here (the
-// original shape) let an entry get added with no reason at all, silently
-// -- review finding (post-approval): "the allowlist grows silently".
+// plain list) would let an entry get added with no reason at all, silently.
 // `Map<className, reason>` makes a reason-less addition a type error, and
 // the tests below additionally enforce that the reason actually SAYS
 // something (>= 20 chars, not just a placeholder) and that the token it

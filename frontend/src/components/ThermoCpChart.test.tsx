@@ -278,7 +278,7 @@ describe("ThermoCpChart — collapsing records that plot as the exact same line"
         expect(screen.getByTestId("legend-thm_alpha_v2")).toHaveTextContent("Conformer Group 1 (thm_alpha_v2)")
     })
 
-    it("never collapses two records that both plot nothing, when they trace to DIFFERENT conformer groups -- the blocking review finding (repro shape: one plottable record plus one empty record per group)", () => {
+    it("never collapses two records that both plot nothing, when they trace to DIFFERENT conformer groups (repro shape: one plottable record plus one empty record per group)", () => {
         // Mirrors the review's own repro: [fit-on-cfg_1, empty-on-cfg_1, empty-on-cfg_2].
         renderChart([recordAlpha(), neitherOnGroup("thm_empty_1", "cg_one"), neitherOnGroup("thm_empty_2", "cg_two")])
 

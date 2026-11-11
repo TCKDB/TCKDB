@@ -47,7 +47,7 @@ describe("refs-disclosure.css: on-scale typography", () => {
         expect(refItemValueRule![1]).not.toMatch(/\.72rem/)
     })
 
-    it(".ref-item a / .ref-item-value keep overflow-wrap: anywhere, not word-break: keep-all (post-review pass)", () => {
+    it(".ref-item a / .ref-item-value keep overflow-wrap: anywhere, not word-break: keep-all", () => {
         // `word-break: keep-all` is not used: it only
         // affects CJK line breaking, so it would change nothing for these
         // refs, and this component's ref values are not run through a

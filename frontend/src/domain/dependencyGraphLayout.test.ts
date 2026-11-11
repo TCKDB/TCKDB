@@ -13,8 +13,7 @@ import {
 import { DEPENDENCY_ROLE_WORDING, dependencyEdgeLabel } from "./dependencyWording"
 
 /**
- * Geometric verification for both layouts, 1-4 siblings per tier -- the
- * exact range the post-review fix list asked this file to cover. jsdom
+ * Geometric verification for both layouts, 1-4 siblings per tier. jsdom
  * cannot measure real SVG geometry (no `getBBox`), so this tests the
  * LAYOUT MATH directly: every box this module computes, checked against
  * every other box, in plain 2D rectangle/segment arithmetic. No path
