@@ -454,7 +454,7 @@ W_N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
 #: protocol-resolved noise floor. Accepted with a warning and the deciding tau recorded;
 #: a mode at or above tau keeps the refusal under
 #: ``W_N_IMAG_CONTRADICTS_MINIMUM``; the message names a higher-order
-#: saddle point when there are two or more modes.
+#: saddle point when two or more modes are at or above tau.
 W_MINIMUM_IMAGINARY_MODES_BELOW_TAU = "minimum_imaginary_modes_below_tau"
 
 #: Two or more imaginary modes. Folded into the blocking message for
