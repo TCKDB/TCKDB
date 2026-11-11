@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { EnergyProfileRecord } from "../api/reactionEnergyProfileApi"
 import type { ReactionKineticsEntry } from "../api/reactionKineticsApi"
-import { deltaNames, deltaReason, groupDifference, groupKinetics, kineticsColumns, profilesOfGroup, reactionRows, PER_PRESSURE, PER_TERM, NEEDS_PRESSURE } from "./reactionCompare"
+import { programLabel, deltaNames, deltaReason, groupDifference, groupKinetics, kineticsColumns, profilesOfGroup, reactionRows, PER_PRESSURE, PER_TERM, NEEDS_PRESSURE } from "./reactionCompare"
 
 const lotA = { method: "wb97xd", basis: "def2tzvp", level_of_theory_ref: "lot_a" }
 const lotB = { method: "ccsdt", basis: "ccpvtz", level_of_theory_ref: "lot_b" }
@@ -109,13 +109,49 @@ describe("difference", () => {
         for (const cell of ea(groups) ?? []) expect(cell?.kind === "absent" && cell.words).toMatch(reason)
     })
 
+    it("is not formed for apparent rates at different pressures, and says so", () => {
+        const at = (bar: number) => ({ pressure_context: "apparent_at_pressure", pressure_bar: bar })
+        const groups = groupsOf(entry("a", at(1)), entry("b", at(10)))
+        expect(deltaReason(groups[0])).toMatch(/different pressure contexts/)
+        const cell = ea(groups)?.[0]
+        expect(cell?.kind === "absent" && cell.words).toMatch(/pressure contexts/)
+        expect(deltaReason(groupsOf(entry("a", at(1)), entry("b", at(1)))[0])).toBeNull()
+    })
+
+    it("gives a pair of multi-term records the single-term reason, not a missing-value one", () => {
+        const multi = { model_kind: "multi_arrhenius", parameters: {}, multi_arrhenius: [{ entry_index: 0, A: 1e9, n: 0, Ea_kj_mol: 5, A_units: "cm3_mol_s" }] }
+        const groups = groupsOf(entry("a", multi), entry("b", multi))
+        expect(deltaReason(groups[0])).toBe("Differences are formed only for single-term records")
+        const cell = ea(groups)?.[0]
+        expect(cell?.kind === "absent" && cell.words).toBe("Differences are formed only for single-term records")
+    })
+
     it("fills every row of a two-record group, never blank", () => {
         const groups = groupsOf(entry("a"), entry("b"))
         for (const candidate of reactionRows(groups)) expect(candidate.deltas?.[0], candidate.key).not.toBeNull()
     })
 })
 
+describe("program label", () => {
+    it("says energy calculation only when every record cites its energy calculation", () => {
+        const cited = { provenance: { primary_software: gaussian, ts_sp_calculation_ref: "calc_1" } }
+        expect(programLabel(groupsOf(entry("a", cited), entry("b", cited))[0])).toBe("Program of the energy calculation")
+        expect(programLabel(groupsOf(entry("a", cited), entry("b"))[0])).toBe("Program of the source calculation")
+        expect(programLabel(groupsOf(entry("a"))[0])).toBe("Program of the source calculation")
+    })
+})
+
 describe("rows", () => {
+    it.each([
+        ["already applied", { value: 3, convention: "already_applied" }, undefined],
+        ["not applied", { value: 3, convention: "not_applied" }, "k excludes reaction-path degeneracy g = 3"],
+        ["unknown", { value: 3, convention: "unknown" }, "whether k includes reaction-path degeneracy g = 3 is not stated"],
+        ["absent", null, undefined],
+    ])("notes degeneracy in the k cell: %s", (_name, degeneracy, note) => {
+        const cell = row(groupsOf(entry("a", { reaction_path_degeneracy: degeneracy }), entry("b")), "k-500")?.cells[0]
+        expect(cell?.kind === "value" ? cell.note : "absent").toBe(note)
+    })
+
     it("states direction, pressure context and degeneracy, with Not stated when absent", () => {
         const groups = groupsOf(entry("a", { direction: null, pressure_context: "high_p_limit", reaction_path_degeneracy: { value: 2, convention: "not_applied" } }))
         expect(row(groups, "direction")?.cells[0]).toEqual({ kind: "absent", words: "Not stated" })

@@ -77,9 +77,9 @@ export function groupDifference(groups: readonly KineticsGroup[]): "methods" | "
     return methods && programs ? "both" : methods ? "methods" : programs ? "programs" : null
 }
 
-/** The program line's label: the energy calculation's program when every record cites one, else the fitted record's. */
+/** The program line's label: the energy calculation's program when every record cites one, else the record's primary source calculation. */
 export function programLabel(group: KineticsGroup): string {
-    return group.columns.every((column) => column.record.provenance.ts_sp_calculation_ref) ? "Program of the energy calculation" : "Program of the fitted record"
+    return group.columns.every((column) => column.record.provenance.ts_sp_calculation_ref) ? "Program of the energy calculation" : "Program of the source calculation"
 }
 
 const sameLevel = (a: LevelOfTheory, b: LevelOfTheory) => (a.level_of_theory_ref && b.level_of_theory_ref ? a.level_of_theory_ref === b.level_of_theory_ref : lotLabel(a) === lotLabel(b))
@@ -148,7 +148,11 @@ function kCell(column: KineticsColumn, temperature: number, label: string): Comp
     if (!units) return absent(NO_UNITS)
     const cell = numberCell(label, "kinetics_k", k, aUnitsWord(units))
     const degeneracy = column.record.reaction_path_degeneracy
-    if (cell.kind === "value" && degeneracy?.convention === "not_applied") return { ...cell, note: `k excludes reaction-path degeneracy g = ${deposited(degeneracy.value)?.value ?? degeneracy.value}` }
+    if (cell.kind === "value" && degeneracy) {
+        const g = deposited(degeneracy.value)?.value ?? degeneracy.value
+        if (degeneracy.convention === "not_applied") return { ...cell, note: `k excludes reaction-path degeneracy g = ${g}` }
+        if (degeneracy.convention !== "already_applied") return { ...cell, note: `whether k includes reaction-path degeneracy g = ${g} is not stated` }
+    }
     return cell
 }
 

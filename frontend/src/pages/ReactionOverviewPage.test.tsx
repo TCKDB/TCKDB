@@ -112,6 +112,28 @@ describe("ReactionOverviewPage -- the header of the page that lists every versio
     })
 })
 
+describe("ReactionOverviewPage -- the compare link threshold", () => {
+    const counts = (first: number, second: number) => {
+        const response = searchResponse()
+        response.records[0].availability.kinetics_count = first
+        response.records[1].availability.kinetics_count = second
+        return response
+    }
+
+    it.each([[0, 0], [0, 1], [1, 0]])("offers no compare link for %i + %i rate records", async (first, second) => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(counts(first, second))))
+        page(REACTION_REF)
+        await screen.findByRole("heading", { level: 1, name: /H4N2/ })
+        expect(screen.queryByRole("link", { name: "Compare these values" })).not.toBeInTheDocument()
+    })
+
+    it.each([[1, 1], [0, 2], [2, 0]])("offers the compare link for %i + %i rate records", async (first, second) => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(counts(first, second))))
+        page(REACTION_REF)
+        expect(await screen.findByRole("link", { name: "Compare these values" })).toBeInTheDocument()
+    })
+})
+
 describe("ReactionOverviewPage", () => {
     it("an rxe_ ref redirects to /reaction-entries/:ref by prefix check alone -- no request issued", async () => {
         // No handler is registered for reactions/search at all; `server.listen`
