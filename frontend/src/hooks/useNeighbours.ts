@@ -97,7 +97,7 @@ export function useSpeciesEntryNeighbours(entryRef: string, smiles: string | nul
                 calculations: probes.calculations ?? null,
                 networks: probes.networks ?? null,
                 reactions: probes.reactions ?? null,
-            }, failed),
+            }, failed, smiles),
         }
     }, [enabled, settled, scope, entryRef, smiles])
 }

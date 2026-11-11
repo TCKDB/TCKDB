@@ -11,7 +11,7 @@ export type NeighbourNode = {
     relation: string
     /** The node's own reference, kept whole here; the drawing shortens it and every text form shows it in full. */
     ref?: string
-    /** The page it opens; `null` when it stands for several records and no single page is the right target. */
+    /** The page or section it opens; `null` only for a failed read, or when nothing lists the records yet (the node then says so). */
     to: string | null
     /** A short second line in plain words ("optimisation, b3lyp/def2tzvp"); shown when the node has no ref of its own. */
     sub?: string
@@ -30,6 +30,10 @@ const text = (value: unknown): string | null => (typeof value === "string" && va
 
 /** The count line for a group: "1 found" or "N found", straight from the read's own total. */
 const foundText = (total: number) => `${total} found`
+
+/** The reactions listing narrowed to this molecule on either side; `null` when its SMILES is not known. */
+const reactionsWithMolecule = (smiles: string | null): string | null =>
+    smiles ? `/reactions?reactant_smiles=${encodeURIComponent(smiles)}&direction=either` : null
 
 export type SpeciesEntryProbes = {
     molecule: NeighbourProbe | null
@@ -52,14 +56,16 @@ const FAILED_NODES: Record<ProbeName, Pick<NeighbourNode, "kind" | "label" | "re
 
 /**
  * Nodes for a species entry. A probe that found nothing leaves its node out; one that failed (`failed`) stays as plain
- * text saying it is not available. A group opens a record page only when the read found exactly one record; otherwise
- * it opens the section of this page that lists them, if there is one, and is plain text if not. Calculations are
- * always plain text, since no page lists them for this entry.
+ * text saying it is not available. A group opens its record's page when the read found exactly one; otherwise it opens
+ * the place that lists them: conformer groups the geometry section, calculations the per-shape calculations section of
+ * this page, reactions the reactions listing filtered to this molecule's SMILES. Several networks have no list, so
+ * that node is plain text and says "not listed yet".
  */
 export function speciesEntryNodes(
     entryRef: string,
     probes: SpeciesEntryProbes,
     failed: ReadonlySet<ProbeName> = new Set(),
+    smiles: string | null = null,
 ): NeighbourNode[] {
     const nodes: NeighbourNode[] = []
     const geometrySection = `/species-entries/${encodeURIComponent(entryRef)}/geometry`
@@ -87,7 +93,8 @@ export function speciesEntryNodes(
     if (failed.has("calculations")) unavailable("calculations")
     else if (probes.calculations && probes.calculations.total > 0) {
         nodes.push({
-            id: "calculations", ...FAILED_NODES.calculations, to: null, found: foundText(probes.calculations.total),
+            id: "calculations", ...FAILED_NODES.calculations, to: "#shape-calculations",
+            found: `${foundText(probes.calculations.total)}, listed by shape`,
         })
     }
     if (failed.has("networks")) unavailable("networks")
@@ -96,7 +103,7 @@ export function speciesEntryNodes(
         nodes.push({
             id: "networks", ...FAILED_NODES.networks,
             to: probes.networks.total === 1 && ref ? `/networks/${encodeURIComponent(ref)}` : null,
-            found: foundText(probes.networks.total),
+            found: probes.networks.total === 1 && ref ? foundText(1) : `${foundText(probes.networks.total)}, not listed yet`,
         })
     }
     if (failed.has("reactions")) unavailable("reactions")
@@ -105,7 +112,7 @@ export function speciesEntryNodes(
         const total = probes.reactions.total
         nodes.push({
             id: "reactions", ...FAILED_NODES.reactions,
-            to: total === 1 && ref ? `/reaction-entries/${encodeURIComponent(ref)}` : null,
+            to: total === 1 && ref ? `/reaction-entries/${encodeURIComponent(ref)}` : reactionsWithMolecule(smiles),
             found: `${total} reaction ${total === 1 ? "entry" : "entries"}`,
         })
     }

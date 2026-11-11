@@ -4,7 +4,8 @@ import type { NeighbourNode, ParticipantInput } from "./neighbourNodes"
 /**
  * Nodes for the "Where this record sits" map on every record page except the species entry, built only from what the
  * page has already loaded. A node whose data the page does not hold is left out, never drawn as a placeholder; a
- * count opens the page's own section when it has one.
+ * count opens the page's own section when it has one. Every node opens something; the only plain-text nodes say why
+ * ("no page yet", "not listed yet").
  */
 
 const enc = encodeURIComponent
@@ -68,7 +69,7 @@ function participantNodes(
     if (hidden > 0) {
         nodes.push({
             id: "participants-more", kind: "species-entry", label: `${hidden} more molecule ${hidden === 1 ? "version" : "versions"}`,
-            relation: moreRelation, to: moreTo, found: null,
+            relation: moreRelation, to: moreTo, found: moreTo ? null : "not listed yet",
         })
     }
     return nodes
@@ -156,7 +157,8 @@ export function calculationNodes(input: {
         nodes.push({
             id: "level-of-theory", kind: "level-of-theory", label: "Level of theory", relation: "The method it ran at",
             sub: input.levelOfTheory.label,
-            to: input.levelOfTheory.ref ? `/methods/${enc(input.levelOfTheory.ref)}` : null, found: null,
+            to: input.levelOfTheory.ref ? `/methods/${enc(input.levelOfTheory.ref)}` : null,
+            found: input.levelOfTheory.ref ? null : "no page yet",
         })
     }
     return nodes

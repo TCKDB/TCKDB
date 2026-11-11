@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Every box in "Where this record sits" opens something (Unreleased)
+
+- **Behaviour:** on a molecule version page, "Calculations" opens the "Calculations of this shape" section (it says "N found, listed by shape"), and "Reactions with this molecule" opens the reactions list filtered to the molecule when there are several. Several networks have no list yet, so that box stays text and says "not listed yet". On the other record pages, a level of theory without a page and a "more molecule versions" box the entry cannot list say "no page yet" or "not listed yet" instead of looking clickable.
+- **Schema and migration:** none. No new environment variable.
+
 ## Dependency graph edges are continuous lines (Unreleased)
 
 - **Behaviour:** in the calculation dependency graph, edge labels no longer cover any part of a line, so every edge reads as one line from parent to child with its arrowhead at the child, in both the wide and the narrow layout.
