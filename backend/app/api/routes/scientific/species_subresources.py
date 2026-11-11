@@ -15,10 +15,8 @@ expose opt-in compact ``include=assessments`` summaries; their existing
 ``include=trust`` policy remains unchanged (trust is opt-in only and
 ``include=all`` does not surface either token).
 
-``observations`` is the first public read of
-``molecular_property_observation`` — until this route, no read route named
-that table at all (grep-verified: no ``molecular_property`` hit anywhere
-under ``app/api``). Unlike its two siblings above, it is not a candidate
+``observations`` is the public read of
+``molecular_property_observation``. Unlike its two siblings above, it is not a candidate
 *product* with review-rank-selection semantics — it is a raw external
 observation — so it carries no ``include=trust`` / ``include=assessments``
 and no pick-one knob. It still shares the same
@@ -26,8 +24,8 @@ review-badge, pagination and disclosure-envelope machinery (see
 ``app/services/scientific_read/observations.py``).
 
 The path parameter accepts either the integer ``species_entry.id`` or
-a public ref of the form ``spe_…`` (the historical ``{species_entry_id}``
-template name is kept). See
+a public ref of the form ``spe_…`` (the template name stays
+``{species_entry_id}``). See
 ``docs/specs/public_identifier_policy.md`` and
 ``backend/docs/specs/trust_read_api_current.md``.
 """

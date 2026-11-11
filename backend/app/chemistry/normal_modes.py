@@ -7,7 +7,8 @@ torsional motion out. No database access, nothing persisted.
 Why this module exists
 ----------------------
 
-Two projections are made on every imaginary mode -- onto the six
+Two projections are made on each imaginary mode whose recovery reproduces
+the stored spectrum -- onto the six
 rigid-body vectors, and onto a dihedral rotation about each rotatable
 bond -- because a determination beats a threshold wherever one is
 available. TCKDB stores no displacement vectors, so there is nothing to
@@ -137,10 +138,8 @@ LINEARITY_SINGULAR_VALUE_TOLERANCE = 1e-6
 #: imaginary-mode records in the live corpus (~600 modes) the
 #: whole spectrum reproduces to 0.045 cm-1 -- with one exception, the
 #: 20.26 cm-1 mode of calculation 453, which comes back at 22.14. That is
-#: 9% in omega and **79.5 cm-2 in omega squared**, an eighth of the
-#: 625 cm-2 taken as a representative noise level: negligible
-#: error, magnified by taking a square root near zero, which is precisely
-#: why the noise floor is flat in omega squared, not in omega.
+#: 9% in omega but only **79.5 cm-2 in omega squared**: a negligible
+#: error, magnified in omega by taking a square root near zero.
 #: A purely relative tolerance would have refused that mode (1% of 20 is
 #: 0.2); the 2.0 floor accepts it, and it is the same mode a relative-only
 #: rule would be most wrong about.
@@ -212,8 +211,8 @@ DEGENERACY_WINDOW_CM1 = 1.0
 #: corpus sits near the line from either side.
 FRAME_CONSISTENCY_TOLERANCE_CM1 = 100.0
 
-#: "more than about 90% overlap means the mode is projection
-#: residue and nothing else".
+#: Overlap above about 90% means the mode is projection residue and
+#: nothing else.
 #:
 #: Kept at this figure because the measurement says it is not a
 #: tuned parameter. Across the three real ESS Hessians in
@@ -224,17 +223,16 @@ FRAME_CONSISTENCY_TOLERANCE_CM1 = 100.0
 #: between 0.01 and 0.99 would change no answer.
 RIGID_BODY_OVERLAP_THRESHOLD = 0.90
 
-#: "more than about 70% identifies a torsion".
+#: Overlap above about 70% identifies a torsion.
 #:
-#: Kept, and -- unlike when this constant was first written -- on evidence
-#: from both sides of the line.
+#: Supported by evidence from both sides of the line.
 #:
-#: The positive case is still a single mode, because only one fixture has
+#: The positive case is a single mode, because only one fixture has
 #: rotatable bonds at all: ``freq_g09.log``'s 110 cm-1 mode is **0.986** a
 #: rotation about its C-C bond, the next most torsional mode in that
 #: spectrum reaches 0.472, and everything above 675 cm-1 is below 0.10.
 #:
-#: The negative case is now the live corpus. All 18 imaginary-mode records
+#: The negative case is the live corpus. All 18 imaginary-mode records
 #: carry a genuine reaction coordinate, between them spanning
 #: 6 to 27 atoms and 0 to 7 rotatable bonds -- exactly the population most
 #: able to produce a false torsion, since a reaction coordinate in a floppy

@@ -145,8 +145,8 @@ def template_encoding(session) -> str | None:
     database and still hand ``SQL_ASCII`` to everything created next to it.
 
     That is not hypothetical: a database converted to ``UTF8`` by hand can
-    sit in a cluster whose ``template1`` was not, so the two disagree. The restore runbooks drop
-    and recreate the database, which is exactly the moment the template's
+    sit in a cluster whose ``template1`` was not, so the two disagree.
+    The restore runbooks drop and recreate the database, which is exactly the moment the template's
     encoding becomes the production database's encoding -- silently, because
     a ``SQL_ASCII`` database accepts every byte a ``UTF8`` dump contains and
     only mis-counts them afterwards.

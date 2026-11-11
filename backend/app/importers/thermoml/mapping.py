@@ -88,7 +88,7 @@ _SUPPORTED_STANDARD_STATE = "Pure compound"
 #: ``free_method_ideal_gas_candidates``), cross-checked against the
 #: pinned archive (``ThermoML.v2020-09-30.tgz``, sha256
 #: ``231161b5e443dc1ae0e5da8429d86a88474cb722016e5b790817bb31c58d7ec2``)
-#: 2026-09-20. Two distinct strings denote a statistical-mechanics
+#: Two distinct strings denote a statistical-mechanics
 #: calculation of the ideal-gas Cp reference value (never a direct
 #: measurement), so both map to ``computed``:
 #:   * "statistical thermodynamics" -- DOI 10.1016/j.jct.2013.05.032
@@ -129,7 +129,7 @@ _COMPUTED_PREDICTION_TYPES = {"Statistical mechanics", "Ab initio"}
 
 
 class ThermoMLLiteratureFragment(BaseModel):
-    """DOI/title/year/journal/authors, for C-E3's literature resolver.
+    """DOI/title/year/journal/authors, for the literature resolver.
 
     Never resolved to a ``literature_id`` here --
     ``resolve_or_create_literature`` is the only thing

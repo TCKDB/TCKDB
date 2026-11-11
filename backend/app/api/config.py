@@ -143,8 +143,7 @@ class Settings(BaseSettings):
     # ``public_max_limit`` = 200 points, about 5 KB). (b) 1 MiB is nginx's
     # documented default ``client_max_body_size`` ("Default: 1m",
     # nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size),
-    # which this deployment's frontend used for ``/api/`` until #867, so no
-    # anonymous caller loses anything it could send before.
+    # so an anonymous caller behind a default nginx loses nothing.
     # ``POST .../networks/{ref}/kinetics/export-selected`` is the exception
     # and is NOT subject to this allowance: it takes a whole selection
     # manifest (up to 9 MiB) and keeps its own cap and coded error

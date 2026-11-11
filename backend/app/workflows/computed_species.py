@@ -1396,9 +1396,9 @@ def _persist_statmech_block(
             species_entry_id=species_entry_id,
             transition_state_entry_id=transition_state_entry_id,
         )
-        # The third statmech write path, and the third to need it: a declared role must match the type of the job it
-        # names. Shared with the conformer and standalone paths through
-        # the statmech resolution service so all three refuse alike.
+        # A declared role must match the type of the job it names. Shared
+        # with the conformer and standalone paths through the statmech
+        # resolution service so all three refuse alike.
         assert_statmech_role_compatible(
             calc_row,
             role=sc.role,

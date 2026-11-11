@@ -605,10 +605,9 @@ class ApiCode:
     def is_client_facing(self) -> bool:
         """Whether a client should be able to import and branch on this.
 
-        This answers *can a caller branch on it*, and since #234 it no
-        longer doubles as *should a caller retry it*. Those are different
-        questions, and answering both with one rule is why a 5xx a client
-        genuinely needs had nowhere to go: ``artifact_object_missing`` is
+        This answers *can a caller branch on it*, not *should a caller retry
+        it*. Those are different questions, and answering both with one rule
+        would leave a 5xx a client genuinely needs with nowhere to go: ``artifact_object_missing`` is
         correctly refused here — the caller did nothing wrong, so there is
         no branch for them to write — while being precisely the code a
         retry layer must recognise. The second question is answered by

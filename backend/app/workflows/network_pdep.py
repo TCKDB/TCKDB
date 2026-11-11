@@ -312,7 +312,7 @@ def refuse_duplicate_state_compositions(
     A state is the multiset of its participants' species *entries*, and
     ``uq_network_state_network_id`` keeps one state per (network, composition). Two states that
     resolve to the same entries (two species keys that name one entry, or one state declared
-    twice) used to reach the database and surface as a raw ``IntegrityError`` (HTTP 500). They
+    twice) would reach the database and surface as a raw ``IntegrityError`` (HTTP 500). They
     are refused here, before any state row is written, naming the local state keys.
 
     :raises CodedValueError: ``network_state_duplicate_composition`` (422).
@@ -398,9 +398,8 @@ def _persist_calculation(
         )
 
     # The inline literature fragment is forwarded unresolved; the shared
-    # persistence seam resolves it (#194). This route reaches the same
-    # shared model as every other upload root, so the FK leak the
-    # network-PDep no-FK gate used to exempt is gone with it.
+    # persistence seam resolves it. This route reaches the same
+    # shared model as every other upload root.
     shared_payload = calculation_in_to_with_results_payload(calc_in)
     calculation = resolve_and_persist_calculation_with_results(
         session,
@@ -888,7 +887,7 @@ def persist_network_pdep_upload(
         # Atom map. A pressure-dependent network is a set of micro
         # reactions, and each saddle point here is one of them: the absence of
         # a map is exactly as invisible on this path as on any other, and the
-        # ADR requires it be loud enough that a depositor who *has* the
+        # absence must be loud enough that a depositor who *has* the
         # mapping notices they are being asked for it. The map itself cannot
         # be deposited here yet — see ``_PDEP_ABSENCE_DEPOSIT_PATH`` — so the call
         # passes ``None`` unconditionally and exists to report the gap.
@@ -1259,8 +1258,8 @@ def persist_network_pdep_upload(
         # ``validate_mechanistic_channel_evidence``: the coverage rules there
         # compare the supplied state/path keys against the topology, which
         # catches an undefined key as a side effect. A ``reported`` solve
-        # Is exempt from those rules and so was exempt from the
-        # side effect, and reached these subscripts with whatever it wrote.
+        # is exempt from those rules and so from the
+        # side effect, and reaches these subscripts with whatever it writes.
         species_key_by_entry_id = {
             entry.id: key for key, entry in species_key_to_entry.items()  # type: ignore[attr-defined]
         }

@@ -628,13 +628,12 @@ def _artifact_storage_unavailable_handler(
     """One exception type, three facts, three statuses, three answers.
 
     503 for a store that did not answer; 502 for one that answered "not
-    there"; 507 for one that answered "no room". The 507 branch is the
-    newest and its reasoning sits with it below, including why it is a
+    there"; 507 for one that answered "no room". The 507 branch's
+    reasoning sits with it below, including why it is a
     status change rather than a third ``Replay`` member.
 
-    The two older facts, and how they came to be told apart. Until #226
-    both left here as ``503 artifact_storage_unavailable`` with "Retry
-    later." — true of an outage, and a false instruction for the other
+    The two older facts, told apart by ``exc.missing``. "Retry later." is
+    true of an outage, and a false instruction for the other
     case: a store that answered ``NoSuchKey`` for a digest a committed
     row still points at will keep saying so no matter how long the client
     waits. ``exc.missing`` is the discriminator, set at the one place that
@@ -647,9 +646,9 @@ def _artifact_storage_unavailable_handler(
     did nothing wrong. The artifact record exists, is findable, and is
     still published; what is gone are bytes TCKDB undertook to keep. A
     404 would additionally be indistinguishable from this route's
-    deliberate "unknown or unapproved digest" answer, which would recreate
-    the very ambiguity this split removes — one pair meaning both "you may
-    not see this" and "we lost it". A 410 carries the right retry advice
+    "unknown digest" answer, which would recreate
+    the very ambiguity this split removes — one pair meaning both "there is
+    no such artifact" and "we lost it". A 410 carries the right retry advice
     but the wrong instruction: it tells a client the resource was
     withdrawn and its references may be dropped, and that reference is
     what lets an operator put the object back (see ``restore_held_object``

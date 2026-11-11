@@ -2,7 +2,7 @@
 
 The path parameter accepts either the integer
 ``species_entry.id`` or a public ref of the form ``spe_...``. The URL
-template keeps the historical ``{species_entry_id}`` name for backwards
+template keeps the ``{species_entry_id}`` name for backwards
 compatibility with OpenAPI consumers. See
 ``docs/specs/public_identifier_policy.md``.
 """

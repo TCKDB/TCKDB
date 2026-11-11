@@ -24,11 +24,10 @@ Three ways a ``code`` can be found, in descending order of trust
 is necessary but not sufficient" below.
 
 (2) and (3) read English, and reading English is how a code silently stops
-being reported when somebody rewords a sentence — which is exactly what had
-happened to the parenthesised convention the scientific checks used to use
-(``"... (reaction_mass_balance_failed)."``): the pattern below requires a
-colon, so those codes matched nothing and every chemistry refusal reached
-its client as the generic ``validation_error``. They are kept because
+being reported when somebody rewords a sentence — a parenthesised convention
+(``"... (reaction_mass_balance_failed)."``) is not matched by the pattern
+below, which requires a colon, so such a code would match nothing and the
+refusal would reach its client as the generic ``validation_error``. They are kept because
 existing details are a published surface, not because they are a good idea.
 
 What "declared" means for (3)
@@ -131,17 +130,16 @@ ValueError(message)``). No such site exists — a census of every string
 literal in both trees beginning with a ``token: `` prefix found 71 tokens,
 of which 66 are catalogued as ``message_prefix``
 and 5 are logger format strings that reach no response body
-(``manifest``, ``readyz``, ``startup``, ``status`` and ``geometry_validation``).
+(``manifest``, ``readyz``, ``startup``, ``status`` and ``geometry validation``).
 So the set of error-reachable prefixes the catalogue does not cover is
 presently empty — measured, and re-measurable, rather than asserted.
 
 What ``context`` promises, and what it does not
 ----------------------------------------------
 "Branch on ``code``, read ``context``, never parse ``detail``" is the
-published advice and it is right. It was also, until #210, an
-over-promise: ``context`` is populated by the raiser, and a large part of
-the catalogue has no raiser that can populate it. Measured on the entry
-count as this was written, 65 of 170 entries arrive by
+published advice and it is right, with one limit: ``context`` is populated
+by the raiser, and a large part of the catalogue has no raiser that can
+populate it. 65 of 170 entries arrive by
 :data:`~app.api.code_catalogue.Surface.message_prefix` — that is,
 ``raise ValueError(f"code: prose")`` — and a plain ``ValueError`` has
 nowhere to put structured facts, so :func:`error_envelope` renders
@@ -188,15 +186,13 @@ minimum supported — are already machine-readable; they are simply in
 ``detail``. "Never parse ``detail``" still holds, because parsing is what
 a sentence needs and a dict does not.
 
-One of those five is worded to stay out of the pattern. Only
-``geometry_validation`` contained an underscore, so it would be the only logger
-prefix ``_CODE_POSITION_PATTERN`` could match — a string carrying the
-shape of a declaration while declaring nothing. It reads ``"geometry
-validation: …"``, and
+One of those five is worded to stay out of the pattern: its prefix is
+``"geometry validation: …"``, with a space, because ``geometry_validation``
+would be the only logger prefix ``_CODE_POSITION_PATTERN`` could match — a
+string carrying the shape of a declaration while declaring nothing.
 ``backend/tests/api/test_error_contract_catalogue_gate.py::
-TestNoLoggerFormatStringSitsInTheCodePosition`` fails on the next one
-written the old way. The remaining four cannot match that pattern and were
-left as they are.
+TestNoLoggerFormatStringSitsInTheCodePosition`` fails on any logger prefix
+written that way. The remaining four cannot match that pattern.
 """
 
 from __future__ import annotations

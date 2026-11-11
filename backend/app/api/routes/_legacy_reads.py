@@ -1,8 +1,8 @@
 """Shared plumbing for the legacy entity reads (``GET /api/v1/{thermo,kinetics,calculations,...}``).
 
 These routes are the raw entity layer: one row per record, internal ids, a stable ``id`` ascending order. They sit
-beside the scientific reads (``/api/v1/scientific/*``), not under them, and they used to ignore every visibility rule
-the scientific reads obey. This module gives them the same three:
+beside the scientific reads (``/api/v1/scientific/*``), not under them, and they obey the same visibility rules
+as the scientific reads. This module gives them the same three:
 
 * **Default visibility.** Rejected and deprecated records are hidden unless ``include_rejected`` /
   ``include_deprecated`` is set (:class:`LegacyVisibility`), by the same function the scientific reads use
@@ -12,8 +12,9 @@ the scientific reads obey. This module gives them the same three:
   and counts. A record's own detail route serves it unless it is rejected or deprecated, and a
   withheld one
   answers exactly as an id that names nothing.
-* **Linked evidence.** The floor decides which rows a list returns; a detail route answers 404 for a withheld record only (step 7). What a returned
-  row NAMES (a pointer column, an embedded record such as a conformer group's observations) is linked evidence: under
+* **Linked evidence.** The floor decides which rows a list returns; a detail route answers 404 for a withheld
+  record only. What a returned row NAMES (a pointer column, an embedded record such as a conformer group's
+  observations) is linked evidence: under
   ``curated`` only a rejected or deprecated record is blanked or dropped, and one that is merely below the floor is named as
   it is under the default profile. These payloads carry raw ids and no badge field, so the response says the badge in the
   ``X-TCKDB-Review-Status`` header (:data:`REVIEW_STATUS_HEADER`). An id-typed filter naming a withheld record is rewritten to name

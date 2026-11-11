@@ -157,11 +157,10 @@ def scientific_release_artifact(
     publication. Nothing that happened to the corpus afterwards — new uploads,
     review advancing, a DOI being attached — can change what this returns.
 
-    It deliberately does **not** re-render and compare. That is what it used to
-    do, returning 409 on any mismatch, which meant a single ordinary upload for
-    a released species made the citation stop resolving: the candidate set had
-    legitimately grown, the file legitimately differed, and the operator was
-    told to go looking for tampering. Whether the live database still agrees is
+    It deliberately does **not** re-render and compare: a single ordinary
+    upload for a released species would make the citation stop resolving,
+    because the candidate set legitimately grew and the file legitimately
+    differs. Whether the live database still agrees is
     reported, non-fatally, by ``GET .../manifest`` under ``live_divergence``.
 
     The response carries ``ETag`` and ``X-TCKDB-Content-SHA256`` so a client can

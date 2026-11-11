@@ -2,7 +2,7 @@
 
 The path parameter accepts either the integer
 ``reaction_entry.id`` or a public ref of the form ``rxe_...``. The URL
-template keeps the historical ``{reaction_entry_id}`` name for backwards
+template keeps the ``{reaction_entry_id}`` name for backwards
 compatibility with OpenAPI consumers.
 """
 

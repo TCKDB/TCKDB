@@ -94,7 +94,7 @@ def persist_transport_upload(
         calculations_by_key[calc_in.key] = calc_row
 
     # An assembled composite's inputs are written, and its total checked, now
-    # that every inline calculation exists and the key namespace is complete
+    # that every inline calculation exists and the key namespace is complete.
     # Always run: the write is not optional when the caller
     # collects no warnings.
     composite_input_warnings = finalize_composite_inputs(

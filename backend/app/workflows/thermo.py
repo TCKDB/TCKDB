@@ -194,9 +194,8 @@ def _resolve_source_calculation(
     database; missing rows produce 404, cross-species or role/type
     mismatches produce 422.
 
-    Since #230 the 404 carries ``unknown_calculation_ref`` and a
-    ``context`` naming this field, rather than the generic
-    ``resource_not_found`` with nothing in it. Same code as the public-ref
+    The 404 carries ``unknown_calculation_ref`` and a
+    ``context`` naming this field. Same code as the public-ref
     spelling on ``/uploads/kinetics``, on purpose: the row that is missing
     is the same kind of row and the repair is the same, so making the code
     depend on the spelling would rebuild the defect #195 removed from the
@@ -255,7 +254,7 @@ def _resolve_statmech_id(
     different species entry produces 422. The error detail names the field
     but does not leak internal identifiers.
 
-    The 404 carries ``unknown_statmech_ref`` since #230 — the same code
+    The 404 carries ``unknown_statmech_ref`` — the same code
     ``/uploads/kinetics`` uses for a ``statmech_ref`` that names nothing,
     because the missing row and its repair are identical and only the
     spelling differs. ``context['field']`` is what tells the two apart.
@@ -386,7 +385,7 @@ def persist_thermo_upload(
         calculations_by_key[calc_in.key] = calc_row
 
     # An assembled composite's inputs are written, and its total checked, now
-    # that every inline calculation exists and the key namespace is complete
+    # that every inline calculation exists and the key namespace is complete.
     # Always run: the write is not optional when the caller
     # collects no warnings.
     composite_input_warnings = finalize_composite_inputs(

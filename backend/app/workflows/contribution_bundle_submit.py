@@ -97,7 +97,8 @@ def _append_import_audit(
     Lowest failure probability in this workflow, largest blast radius: it runs
     after the biggest payload the API accepts has been fully imported. The
     event's ``summary`` is ``Text`` and its ``details_json`` is ``JSONB`` — the
-    two column types that can fail at commit — so it is flushed
+    two column types that can fail at commit on non-ASCII text in a database
+    whose encoding is not UTF-8 — so it is flushed
     inside a ``SAVEPOINT``, after an explicit flush that puts the whole import
     outside the savepoint's reach.
 
@@ -556,13 +557,13 @@ def rehearse_contribution_bundle_submit(
 ) -> Exception | None:
     """Run :func:`submit_contribution_bundle` and undo it; return its refusal.
 
-    This is how ``/bundles/dry-run`` answers "will this submit?" (#577). It
-    used to answer from the read-only preview alone, which is only submit's
-    *gate*: every check inside ``persist_thermo_upload`` /
+    This is how ``/bundles/dry-run`` answers "will this submit?". The
+    read-only preview alone is only submit's *gate*: every check inside
+    ``persist_thermo_upload`` /
     ``persist_kinetics_upload`` -- the enthalpy-reference rule, reference
     resolution, ownership, role/type, reaction anchoring, database
-    constraints -- ran on submit and never on a dry run, so a bundle could
-    pass one and be refused by the other. Copying those checks into the
+    constraints -- would run on submit and never on a dry run, so a bundle
+    could pass one and be refused by the other. Copying those checks into the
     preview would give the two routes a second place to disagree, so the
     dry run calls the very function the submit route calls, inside
     :func:`app.workflows.rehearsal.rehearsal` -- which rolls it back,

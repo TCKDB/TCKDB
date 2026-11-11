@@ -1832,7 +1832,7 @@ def translate_cis_trans(frame: StereoFrame, word: str) -> list[str] | None:
 
 
 def parse_supplied_label(frame: StereoFrame, label: str) -> list[str]:
-    """Validate a supplied label against the molecule it labels (D5).
+    """Validate a supplied label against the molecule it labels.
 
     :raises CodedValueError: ``species_stereo_label_invalid`` when the label does
         not have one token per stereo element, a token of the wrong kind for its

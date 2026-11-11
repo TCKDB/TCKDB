@@ -461,11 +461,8 @@ def _selection_record(
 ) -> ReleaseSelectionRecord:
     """Read back exactly the row just written.
 
-    This used to page the whole ledger at ``limit=200`` and scan for the ref,
-    which capped a release at 200 selections: the 201st POST fell off the end
-    of the first page, raised 500, and rolled the new row back. A curator
-    simply could not build a larger release — while the read service's own
-    comments assume "a mature release has thousands of selections".
+    Paging the whole ledger and scanning for the ref would cap a release at
+    the page size, while a mature release has thousands of selections.
     """
     record = get_release_selection(session, release_handle, selection_ref)
     if record is None:  # pragma: no cover - defensive; just-written row

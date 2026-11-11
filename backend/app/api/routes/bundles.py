@@ -92,7 +92,7 @@ def dry_run_bundle(
         except CodedValidationError:
             outcome = "over_cap"
             raise
-        # A leftover safeguard: ``authenticate_api_key`` no longer leaves
+        # A leftover safeguard: ``authenticate_api_key`` does not leave
         # ``api_key.last_used_at`` unflushed in this session (the stamp is
         # written on its own connection), but a dry run never commits, so
         # anything pending would only be held locks for the whole rehearsal.

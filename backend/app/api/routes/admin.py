@@ -534,8 +534,7 @@ class AdminCuratorTaskResponse(BaseModel):
     the eighteen ``SubmissionRecordType`` members (``thermo``, ``statmech``,
     ``kinetics``, ``transition_state``, ``network_solve``,
     ``applied_energy_correction``) name a table with no page of its own; a
-    curator task against one of those used to render as inert text, exactly
-    the defect PR #488 fixed on the record-review queue. Both are ``null``
+    curator task against one of those would render as inert text. Both are ``null``
     together, for the same four reasons documented on
     :func:`~app.services.record_containers.resolve_record_containers` --
     never a partial pair a client could not address.
@@ -767,11 +766,8 @@ def get_curator_task(
 ) -> AdminCuratorTaskResponse:
     """Return one curator task by id (admin only); 404 ``curator_task_not_found``.
 
-    The 404 comes from the same service helper the four write routes use.
-    It used to come from a private copy in this module that raised a bare
-    ``HTTPException``, so reading a missing task said ``http_404`` while
-    assigning the same missing task said ``curator_task_not_found`` — one
-    condition with two contracts, and a client could branch on only one.
+    The 404 comes from the same service helper the four write routes use,
+    so a missing task is ``curator_task_not_found`` on read and write alike.
     """
     return _curator_task_response(session, get_curator_task_or_404(session, task_id))
 
@@ -1129,8 +1125,8 @@ class AdminEnergyCorrectionSchemeProvenanceRequest(BaseModel):
     the upload path. An admin can correct a row at the same grain the
     column carries (``software_release_id``): "Gaussian 16, Revision C.02",
     not merely "Gaussian". ``{"software": {"name": "Gaussian"}}``
-    resolves to the version-less release row for that program; that is a complete, honest value on its own, not a degraded
-    one.
+    resolves to the version-less release row for that program; that is a
+    complete, honest value on its own, not a degraded one.
     """
 
     model_config = ConfigDict(extra="forbid")

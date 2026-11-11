@@ -77,10 +77,7 @@ async def _lifespan(app: FastAPI):
 #: ``_docs_kwargs``. ``SWAGGER_PATH`` is documentation-only: nothing in
 #: code imports it (FastAPI's own ``/docs`` default is what actually
 #: applies), and it is spelled out here only so a reader of this module
-#: sees all three doc paths named in one place. ``REDOC_PATH`` used to
-#: live in ``app/api/landing.py`` (the dead root-``/`` HTML page,
-#: deleted) because the landing page linked to ReDoc; it moved here, and
-#: only here, with that page's deletion.
+#: sees all three doc paths named in one place.
 SWAGGER_PATH = "/docs"
 REDOC_PATH = "/redoc"
 OPENAPI_PATH = "/openapi.json"
