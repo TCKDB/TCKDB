@@ -508,6 +508,30 @@ describe("GeometryDetailPage", () => {
             .not.toBeInTheDocument()
     })
 
+    it("states a count in each intro only when the archive returned the list", async () => {
+        const dropped = mockRecord()
+        delete (dropped.provenance as Record<string, unknown>).used_as_input_by
+        dropped.provenance.produced_by = []
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(dropped)))
+        page()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const produced = screen.getByRole("heading", { name: "Produced by" }).closest("section") as HTMLElement
+        const used = screen.getByRole("heading", { name: "Used as input by" }).closest("section") as HTMLElement
+        expect(within(produced).getByText(/^0 calculations emitted this geometry/)).toBeVisible()
+        expect(within(used).getByText(/^Calculations consumed this geometry/)).toBeVisible()
+        expect(within(used).queryByText(/\d+ calculations? consumed/)).toBeNull()
+    })
+
+    it("counts the producers and consumers it lists", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        const produced = screen.getByRole("heading", { name: "Produced by" }).closest("section") as HTMLElement
+        const used = screen.getByRole("heading", { name: "Used as input by" }).closest("section") as HTMLElement
+        expect(within(produced).getByText(/^2 calculations emitted this geometry/)).toBeVisible()
+        expect(within(used).getByText(/^3 calculations consumed this geometry/)).toBeVisible()
+    })
+
     it("renders a genuinely empty producer list distinctly from an archive-dropped field", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({
             provenance: { produced_by: [], used_as_input_by: mockRecord().provenance.used_as_input_by },

@@ -354,6 +354,15 @@ describe("ConformerGroupPage", () => {
         expect(within(checklist).getAllByText("1 of 2 observations")).toHaveLength(2)
     })
 
+    it("links the calculation that produced each observation's geometry output", async () => {
+        serve()
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        const output = document.querySelector(".observation-geometries") as HTMLElement
+        expect(within(output).getByRole("link", { name: "calc_opt" })).toHaveAttribute("href", "/calculations/calc_opt")
+        expect(within(output).getByRole("link", { name: "geo_one" })).toHaveAttribute("href", "/geometries/geo_one")
+    })
+
     it("lists the stored geometries with the calculations that produced them", async () => {
         serve()
         page()

@@ -60,6 +60,12 @@ function sectionAvailability<T>(value: T[] | null | undefined): SectionAvailabil
     return "populated"
 }
 
+/** "3 calculations", or "Calculations" when the archive did not return the list, so no count is claimed. */
+function countLead(availability: SectionAvailability, count: number): string {
+    if (availability === "absent") return "Calculations"
+    return `${count} ${count === 1 ? "calculation" : "calculations"}`
+}
+
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
@@ -188,7 +194,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
 
                 <ProvenanceSection
                     title="Produced by"
-                    description={`${producedBy.length} ${producedBy.length === 1 ? "calculation" : "calculations"} emitted this geometry as an output. A role, where recorded, says which output this geometry was for that calculation.`}
+                    description={`${countLead(producedByAvailability, producedBy.length)} emitted this geometry as an output. A role, where recorded, says which output this geometry was for that calculation.`}
                     links={producedBy}
                     availability={producedByAvailability}
                     showRole
@@ -197,7 +203,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
 
                 <ProvenanceSection
                     title="Used as input by"
-                    description={`${usedAsInputBy.length} ${usedAsInputBy.length === 1 ? "calculation" : "calculations"} consumed this geometry as an input. This list is never merged with or inferred from the producer list above: the same geometry can appear in both, and a calculation can appear in both lists at once.`}
+                    description={`${countLead(usedAsInputByAvailability, usedAsInputBy.length)} consumed this geometry as an input. This list is never merged with or inferred from the producer list above: the same geometry can appear in both, and a calculation can appear in both lists at once.`}
                     links={usedAsInputBy}
                     availability={usedAsInputByAvailability}
                     showRole={false}
