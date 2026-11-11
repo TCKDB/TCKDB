@@ -28,7 +28,7 @@ function NavItemLink({ item, className }: { item: NavItem; className?: string })
     </NavLink>
 }
 
-/** A search box that hands its text to the home page's exact-identifier search. */
+/** A search box that hands its text to the home page search. */
 function SiteSearch() {
     const navigate = useNavigate()
     const [text, setText] = useState("")
@@ -42,7 +42,7 @@ function SiteSearch() {
             type="search"
             maxLength={MAX_SEARCH_LENGTH}
             aria-label="Search molecules and reactions"
-            placeholder="Search by SMILES, formula, InChI"
+            placeholder="Search by name, formula, SMILES"
             autoComplete="off"
             value={text}
             onChange={(event) => setText(event.target.value)}

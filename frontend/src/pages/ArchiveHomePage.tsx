@@ -10,9 +10,10 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
 import { useHomeCounts, type CountKey } from "../hooks/useHomeCounts"
 import { useHomeExample } from "../hooks/useHomeExample"
 
-/** Each runs the exact-identifier search; an equation is written the way that search reads one. */
+/** Each runs the exact search (a name such as water is searched by name); an equation is written the way that search reads one. */
 const TRY_EXAMPLES: { label: string; query: string }[] = [
     { label: "CH4", query: "CH4" },
+    { label: "water", query: "water" },
     { label: "[OH]", query: "[OH]" },
     { label: "O=O", query: "O=O" },
     { label: "[CH3],[OH] <> CO", query: "[CH3],[OH] <> CO" },

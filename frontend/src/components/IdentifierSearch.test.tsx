@@ -72,7 +72,7 @@ async function switchToReactions(user: ReturnType<typeof userEvent.setup>) {
 }
 
 async function searchSpecies(user: ReturnType<typeof userEvent.setup>, value: string) {
-    await user.type(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), value)
+    await user.type(await screen.findByLabelText("Molecule: name, formula, SMILES, InChI, InChIKey or TCKDB ref"), value)
     await user.click(screen.getByRole("button", { name: "Search" }))
 }
 
@@ -120,10 +120,10 @@ function reactionsBrowseHandler(records: unknown[] = [], total = records.length)
 describe("Species mode is the default and is labelled/placeholder-ed for species only", () => {
     it("shows the species-only label, placeholder, and help text by default", async () => {
         page()
-        const input = await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")
+        const input = await screen.findByLabelText("Molecule: name, formula, SMILES, InChI, InChIKey or TCKDB ref")
         expect(input.getAttribute("placeholder")).toContain("spc_/spe_ ref")
         expect(input.getAttribute("placeholder")).not.toMatch(/rxn_|rxe_/)
-        expect(screen.getByText(/Names such as "water" are not searched/)).toBeVisible()
+        expect(screen.getByText("Formula, SMILES, InChI, InChIKey, TCKDB ref, or a name such as water.")).toBeVisible()
     })
 })
 
@@ -271,7 +271,7 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
             HttpResponse.json({ code: "rate_limited" }, { status: 429, headers: { "Retry-After": "20" } })
         )))
         page()
-        fireEvent.change(await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"), { target: { value: "CH3" } })
+        fireEvent.change(await screen.findByLabelText("Molecule: name, formula, SMILES, InChI, InChIKey or TCKDB ref"), { target: { value: "CH3" } })
         fireEvent.click(screen.getByRole("button", { name: "Search" }))
 
         vi.useFakeTimers()
@@ -441,12 +441,11 @@ describe("identifier option ordering (species mode)", () => {
         expect(choices.map((button) => button.textContent)).toEqual(["SMILES", "Formula"])
     })
 
-    it("names SMILES ahead of formula in the input placeholder", async () => {
+    it("lists the accepted kinds in the input placeholder, name first", async () => {
         page()
-        const placeholder = (await screen.findByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref"))
+        const placeholder = (await screen.findByLabelText("Molecule: name, formula, SMILES, InChI, InChIKey or TCKDB ref"))
             .getAttribute("placeholder") ?? ""
-        expect(placeholder).toContain("SMILES")
-        expect(placeholder.indexOf("SMILES")).toBeLessThan(placeholder.indexOf("formula"))
+        expect(placeholder).toBe("Name, formula, SMILES, InChI, InChIKey or spc_/spe_ ref")
     })
 
     it("the ambiguity picker never appears in reaction mode -- reactions have no formula concept", async () => {
@@ -463,13 +462,13 @@ describe("identifier option ordering (species mode)", () => {
 describe("reaction mode: label, placeholder, and help text are reaction-specific", () => {
     it("updates the accessible label, placeholder, and help text the moment reaction mode is selected", async () => {
         const user = userEvent.setup(); page()
-        expect(screen.getByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")).toBeInTheDocument()
+        expect(screen.getByLabelText("Molecule: name, formula, SMILES, InChI, InChIKey or TCKDB ref")).toBeInTheDocument()
 
         await switchToReactions(user)
 
         // Mutation-table item (b): the label must not stay on the species
         // wording once reaction mode is active.
-        expect(screen.queryByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")).not.toBeInTheDocument()
+        expect(screen.queryByLabelText("Molecule: name, formula, SMILES, InChI, InChIKey or TCKDB ref")).not.toBeInTheDocument()
         const input = screen.getByLabelText("Reaction: exact equation, SMILES or TCKDB ref")
         expect(input.getAttribute("placeholder")).toMatch(/rxn_|rxe_/)
         expect(input.getAttribute("placeholder")).not.toContain("formula")
