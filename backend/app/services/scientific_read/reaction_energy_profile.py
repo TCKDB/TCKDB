@@ -206,9 +206,14 @@ class _Point:
 
 
 def _lowest(points: list[_Point]) -> _Point:
-    """Single points before optimisation energies; the lowest energy wins, ties by calculation ref."""
+    """Single points first; else optimisation energies, explicitly converged ones before unrecorded ones.
+
+    Within the chosen group the lowest energy wins, ties by calculation ref.
+    """
     single_points = [p for p in points if p.energy_type == "single_point"]
-    return min(single_points or points, key=lambda p: (p.energy, p.calculation_ref))
+    optimisations = [p for p in points if p.energy_type != "single_point"]
+    converged = [p for p in optimisations if not p.convergence_unrecorded]
+    return min(single_points or converged or optimisations, key=lambda p: (p.energy, p.calculation_ref))
 
 
 def _owner_points(
@@ -303,6 +308,7 @@ def _visible_ts_entries(
     include_rejected: bool,
     include_deprecated: bool,
     min_review_status: RecordReviewStatus | None,
+    hidden_by_scope: dict[str, dict[str, int]],
 ) -> list[tuple[TransitionStateEntry, RecordReviewStatus]]:
     """The reaction entry's own transition-state entries the request shows, in display order, with their badges.
 
@@ -322,15 +328,15 @@ def _visible_ts_entries(
     visible = visible_statuses(
         min_review_status=min_review_status, include_rejected=include_rejected, include_deprecated=include_deprecated
     )
-    record_hidden_by_default(
-        hidden_by_default_from_statuses(
-            [badges[e.id].status for e in entries],
-            include_rejected=include_rejected,
-            include_deprecated=include_deprecated,
-            min_review_status=min_review_status,
-        ),
-        scope=("energy_profile_ts", reaction_entry_id),
+    block = hidden_by_default_from_statuses(
+        [badges[e.id].status for e in entries],
+        include_rejected=include_rejected,
+        include_deprecated=include_deprecated,
+        min_review_status=min_review_status,
     )
+    record_hidden_by_default(block, scope=("energy_profile_ts", reaction_entry_id))
+    if block is not None:
+        hidden_by_scope["transition_state_entries"] = dict(block.counts)
     shown = [(e, badges[e.id].status) for e in entries if badges[e.id].status in visible]
     shown.sort(key=lambda pair: (REVIEW_RANK[pair[1]], -pair[0].created_at.timestamp(), -pair[0].id))
     return shown
@@ -366,6 +372,7 @@ def build_energy_profiles(
     include_rejected: bool = False,
     include_deprecated: bool = False,
     min_review_status: RecordReviewStatus | None = None,
+    hidden_by_scope: dict[str, dict[str, int]] | None = None,
 ) -> tuple[list[ReactionEnergyProfile], list[EnergyProfileUnavailable]]:
     """Profiles and unavailable entries for one reaction entry's own participants and transition-state entries."""
     sides = _participants(session, reaction_entry_id)
@@ -376,6 +383,7 @@ def build_energy_profiles(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         min_review_status=min_review_status,
+        hidden_by_scope=hidden_by_scope if hidden_by_scope is not None else {},
     )
     by_species, by_ts = _owner_points(
         session,
@@ -516,6 +524,7 @@ def build_cited_energies(
     include_rejected: bool,
     include_deprecated: bool,
     min_review_status: RecordReviewStatus | None,
+    hidden_by_scope: dict[str, dict[str, int]],
 ) -> list[KineticsCitedEnergies]:
     """The energy calculations each visible kinetics record of the entry cites, with their energies (bulk statements)."""
     visible = visible_statuses(
@@ -530,15 +539,15 @@ def build_cited_energies(
         .where(Kinetics.reaction_entry_id == reaction_entry_id)
     ).all()
     statuses = {kid: (status or RecordReviewStatus.not_reviewed) for kid, _ref, status in kinetics}
-    record_hidden_by_default(
-        hidden_by_default_from_statuses(
-            statuses.values(),
-            include_rejected=include_rejected,
-            include_deprecated=include_deprecated,
-            min_review_status=min_review_status,
-        ),
-        scope=("energy_profile", reaction_entry_id),
+    block = hidden_by_default_from_statuses(
+        statuses.values(),
+        include_rejected=include_rejected,
+        include_deprecated=include_deprecated,
+        min_review_status=min_review_status,
     )
+    record_hidden_by_default(block, scope=("energy_profile", reaction_entry_id))
+    if block is not None:
+        hidden_by_scope["kinetics_records"] = dict(block.counts)
     shown = {kid: ref for kid, ref, _s in kinetics if statuses[kid] in visible}
     if not shown:
         return []
@@ -616,12 +625,22 @@ def get_reaction_energy_profile(
     include_deprecated: bool = False,
     min_review_status: RecordReviewStatus | None = None,
 ) -> ReactionEnergyProfileResponse:
+    hidden_by_scope: dict[str, dict[str, int]] = {}
     profiles, unavailable = build_energy_profiles(
         session,
         reaction_entry_id,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         min_review_status=min_review_status,
+        hidden_by_scope=hidden_by_scope,
+    )
+    cited = build_cited_energies(
+        session,
+        reaction_entry_id,
+        include_rejected=include_rejected,
+        include_deprecated=include_deprecated,
+        min_review_status=min_review_status,
+        hidden_by_scope=hidden_by_scope,
     )
     return ReactionEnergyProfileResponse(
         request=EnergyProfileRequestEcho(
@@ -629,15 +648,10 @@ def get_reaction_energy_profile(
             include_rejected=include_rejected,
             include_deprecated=include_deprecated,
             min_review_status=min_review_status,
+            hidden_by_default_by_scope=hidden_by_scope,
         ),
         reaction_entry_ref=reaction_entry_ref,
         profiles=profiles,
         unavailable=unavailable,
-        cited_by_kinetics=build_cited_energies(
-            session,
-            reaction_entry_id,
-            include_rejected=include_rejected,
-            include_deprecated=include_deprecated,
-            min_review_status=min_review_status,
-        ),
+        cited_by_kinetics=cited,
     )

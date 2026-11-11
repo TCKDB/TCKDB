@@ -239,9 +239,11 @@ def test_kinetics_citations_are_their_own_block(client, db_session, world):
     )
     freq = make_calculation(db_session, type=CalculationType.freq, species_entry_id=world["a"].id)
     db_session.add(KineticsSourceCalculation(kinetics_id=kinetics.id, calculation_id=freq.id, role=KineticsCalculationRole.freq))
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=cited.id, status=RecordReviewStatus.rejected)
     db_session.flush()
     body = client.get(url(world["rxn"])).json()
     (block,) = body["cited_by_kinetics"]
+    assert block["calculations"][0]["review_status"] == "rejected"
     assert block["kinetics_ref"] == kinetics.public_ref and other_kinetics.public_ref not in str(body["cited_by_kinetics"])
     (calc,) = block["calculations"]
     assert calc["role"] == "reactant_energy" and calc["calculation_ref"] == cited.public_ref
@@ -261,6 +263,8 @@ def test_rejected_kinetics_are_hidden_by_default_and_counted(client, db_session,
     body = client.get(url(world["rxn"])).json()
     assert body["cited_by_kinetics"] == []
     assert body["request"]["hidden_by_default"]["counts"]["rejected"] == 1
+    by_scope = body["request"]["hidden_by_default_by_scope"]
+    assert by_scope["kinetics_records"]["rejected"] == 1 and by_scope["transition_state_entries"]["rejected"] == 0
     shown = client.get(url(world["rxn"]), params={"include_rejected": "true"}).json()
     assert [b["kinetics_ref"] for b in shown["cited_by_kinetics"]] == [rejected.public_ref]
 
@@ -308,6 +312,8 @@ def test_a_rejected_ts_entry_is_hidden_by_default_and_counted(client, db_session
     body = client.get(url(world["rxn"])).json()
     assert body["profiles"] == [] and body["unavailable"] == []
     assert body["request"]["hidden_by_default"]["counts"]["rejected"] == 1
+    by_scope = body["request"]["hidden_by_default_by_scope"]
+    assert by_scope["transition_state_entries"]["rejected"] == 1 and by_scope["kinetics_records"]["rejected"] == 0
     shown = client.get(url(world["rxn"]), params={"include_rejected": "true"}).json()
     assert shown["profiles"][0]["transition_state_entry_review_status"] == "rejected"
     assert client.get(url(world["rxn"]), params={"profile": "curated"}).json()["profiles"] == []
@@ -339,6 +345,18 @@ def test_unconverged_optimisations_are_excluded_and_unrecorded_ones_marked(clien
     assert profile["transition_state"]["calculation_ref"] == ts_ok.public_ref
     assert profile["transition_state"]["convergence_unrecorded"] is True
     assert profile["energy_types"] == ["optimization", "single_point"]
+
+
+def test_a_converged_optimisation_wins_over_a_lower_unrecorded_one(client, db_session, world):
+    _sp(db_session, owner=world["a"], lot=world["lot"], release=world["orca"], energy=-40.0)
+    _sp(db_session, owner=world["b"], lot=world["lot"], release=world["orca"], energy=-75.0)
+    _sp(db_session, owner=world["c"], lot=world["lot"], release=world["orca"], energy=-115.1)
+    unrecorded = _opt(db_session, world, world["tse"], -115.0, None)
+    converged = _opt(db_session, world, world["tse"], -114.9, True)
+    (profile,) = client.get(url(world["rxn"])).json()["profiles"]
+    ts = profile["transition_state"]
+    assert ts["calculation_ref"] == converged.public_ref and ts["convergence_unrecorded"] is False
+    assert unrecorded.public_ref not in str(profile)
 
 
 def test_a_single_point_wins_over_a_lower_optimisation_energy(client, db_session, world):

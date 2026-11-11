@@ -37,10 +37,14 @@ class EnergyProfileUnavailableCode(str, Enum):
 
 class EnergyProfileRequestEcho(ProfiledRequestEcho):
     reaction_entry_ref: str
-    #: These three apply to the kinetics records listed in ``cited_by_kinetics``.
+    #: These three apply to the transition-state entries and to the kinetics records in ``cited_by_kinetics``;
+    #: ``min_review_status`` also narrows the calculations a point may come from (rejected and deprecated ones are never used).
     include_rejected: bool = False
     include_deprecated: bool = False
     min_review_status: RecordReviewStatus | None = None
+    #: What the default hid, split by kind: ``transition_state_entries`` and ``kinetics_records`` (the summed count is in
+    #: ``hidden_by_default``). Empty when the profile hides nothing by default (curated).
+    hidden_by_default_by_scope: dict[str, dict[str, int]] = Field(default_factory=dict)
 
 
 class EnergyProfileSoftware(BaseModel):

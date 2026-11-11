@@ -18979,6 +18979,16 @@
               }
             ]
           },
+          "hidden_by_default_by_scope": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "title": "Hidden By Default By Scope",
+            "type": "object"
+          },
           "include_deprecated": {
             "default": false,
             "title": "Include Deprecated",
@@ -105201,7 +105211,7 @@
     },
     "/api/v1/scientific/reaction-entries/{reaction_entry_ref}/energy-profile": {
       "get": {
-        "description": "One profile per transition-state entry, level of theory and program: reactants, transition state, products.\n\nEvery point of a profile comes from this reaction entry's own participants and transition-state entries, at one level\nfrom one program; programs are never mixed. A transition-state entry with no complete profile is listed under\n``unavailable`` with a code. Nothing is ranked or chosen between profiles. ``cited_by_kinetics`` lists, per kinetics\nrecord, the energy calculations the record cites, apart from the profiles. Transition-state entries and kinetics records\nfollow the list rules (``include_rejected``, ``include_deprecated``, ``min_review_status``, the curated floor; hidden ones\nare counted in ``request.hidden_by_default``). The calculations behind each point are evidence: rejected and deprecated\nones are never used, and each point carries its review badge.",
+        "description": "One profile per transition-state entry, level of theory and program: reactants, transition state, products.\n\nEvery point of a profile comes from this reaction entry's own participants and transition-state entries, at one level\nfrom one program; programs are never mixed. A transition-state entry with no complete profile is listed under\n``unavailable`` with a code. Nothing is ranked or chosen between profiles. ``cited_by_kinetics`` lists, per kinetics\nrecord, the energy calculations the record cites, apart from the profiles. Transition-state entries and kinetics records\nfollow the list rules (``include_rejected``, ``include_deprecated``, ``min_review_status``, the curated floor; hidden ones\nare counted in ``request.hidden_by_default``, split by kind in ``request.hidden_by_default_by_scope``).\n``min_review_status`` also narrows the calculations a point may come from. The calculations behind each point are evidence: rejected and deprecated\nones are never used, and each point carries its review badge.",
         "operationId": "reaction_entry_energy_profile_api_v1_scientific_reaction_entries__reaction_entry_ref__energy_profile_get",
         "parameters": [
           {

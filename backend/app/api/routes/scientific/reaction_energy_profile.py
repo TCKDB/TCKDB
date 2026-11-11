@@ -40,7 +40,8 @@ def reaction_entry_energy_profile(
     ``unavailable`` with a code. Nothing is ranked or chosen between profiles. ``cited_by_kinetics`` lists, per kinetics
     record, the energy calculations the record cites, apart from the profiles. Transition-state entries and kinetics records
     follow the list rules (``include_rejected``, ``include_deprecated``, ``min_review_status``, the curated floor; hidden ones
-    are counted in ``request.hidden_by_default``). The calculations behind each point are evidence: rejected and deprecated
+    are counted in ``request.hidden_by_default``, split by kind in ``request.hidden_by_default_by_scope``).
+    ``min_review_status`` also narrows the calculations a point may come from. The calculations behind each point are evidence: rejected and deprecated
     ones are never used, and each point carries its review badge.
     """
     if not is_ref_handle(reaction_entry_ref):
