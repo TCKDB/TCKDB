@@ -98,7 +98,7 @@ def _constitution_of(mol: Chem.Mol) -> Chem.Mol:
 
 
 def constitution_smiles(smiles: str) -> str:
-    """Flatten a query SMILES to the species key (DR-0038).
+    """Flatten a query SMILES to the species key.
 
     ``C/C=C/C`` and ``CC=CC`` are one species, so an exact match on
     ``species.smiles`` has to compare constitutions. An unparseable query is

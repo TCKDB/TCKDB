@@ -10,8 +10,7 @@ is an HTTP call, a recorded fixture, or a stub. Three things follow, and all
 three are the reason for the shape:
 
 * CI exercises the real parse and the real prompt against a **committed
-  response fixture**, so the wire shape is covered with no network and no key
-  (plan §7.1: "CI never calls the API").
+  response fixture**, so the wire shape is covered with no network and no key.
 * No model supplier becomes a hard dependency of the backend. The default
   transport (:mod:`app.services.machine_review.providers.openai_transport`)
   speaks the OpenAI-compatible ``/chat/completions`` shape, which every major
@@ -32,8 +31,8 @@ not the authority on that.
 Errors are **raised, not swallowed**. A transport failure, a timeout, malformed
 JSON or a contract violation all propagate to the service layer, which converts
 them into an advisory ``machine_review_failed`` result. That conversion lives
-in one place on purpose (plan §7.1: "never a raise past the boundary, never an
-upload failure"), and a provider that quietly returned a pass on error would
+in one place on purpose (never a raise past the boundary, never an
+upload failure), and a provider that quietly returned a pass on error would
 defeat it.
 """
 

@@ -1,6 +1,6 @@
 // What a calculation used for its DFT grid and SCF convergence, and how the archive knows (computed on read,
 // `backend/app/services/scientific_read/effective_settings.py`). This module maps the server's closed tokens to the
-// words a reader sees. Nothing here prints a depositor-typed string (house rule, owner decision 2026-11-03): a value
+// words a reader sees. Nothing here prints a depositor-typed string (house rule): a value
 // is printed only when it belongs to a closed set below, and every key and state is looked up in a fixed table.
 
 export type EffectiveSettingName = "grid" | "scf_convergence"

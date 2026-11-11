@@ -161,10 +161,9 @@ describe("public archive shell", () => {
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "O" })).toBeVisible()
         // The entry's OWN ref is visible at rest, first in the identity
-        // block -- never behind the collapsed References disclosure (owner
-        // decision: "yes show each record's own ref inline"). Only the
-        // RELATED parent-species ref lives in that disclosure now (1, not
-        // 2/3) -- InChIKey moved to the always-visible chemistry-
+        // block -- never behind the collapsed References disclosure. Only the
+        // RELATED parent-species ref lives in that disclosure (1 ref); the
+        // InChIKey is in the always-visible chemistry-
         // identifiers row above, alongside SMILES.
         expect(screen.getByText(entryRef)).toBeVisible()
         await user.click(screen.getByText(bySummaryText("References (1)")))
@@ -209,12 +208,12 @@ describe("public archive shell", () => {
             http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({
                 records: [{ species_ref: speciesRef, species_entry_ref: entryRef, smiles: "CCO", charge: 0, multiplicity: 1 }],
             })),
-            // Species mode no longer fires a reaction-participation lookup on
-            // its own (that used to be automatic; it is now the explicit
+            // Species mode does not fire a reaction-participation lookup on
+            // its own (that is the explicit
             // "Also search reactions involving …" cross-link, reaction mode's
             // job) -- no `/reactions/browse` handler is registered here, and
             // this file's server is `onUnhandledRequest: "error"`, so a
-            // regression that brought the old automatic fetch back would fail
+            // regression that brought back an automatic fetch would fail
             // this test for that reason alone.
         )
         const user = userEvent.setup(); render(<App />)
@@ -316,10 +315,9 @@ describe("public archive shell", () => {
 })
 
 const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
-    // Each browse kind now names itself in its own h1 (`BROWSE_KIND_CONTENT`,
-    // `api/browseApi.ts`) -- was the SAME "Browse the archive" on all four
-    // kind paths, the owner's own repeated complaint ("Why is the browse
-    // reactions with the species/transition/vanderwaals browsing page?").
+    // Each browse kind names itself in its own h1 (`BROWSE_KIND_CONTENT`,
+    // `api/browseApi.ts`), not the same "Browse the archive" on all four
+    // kind paths.
     ["/species", "Browse molecules", undefined],
     ["/species/spc_abcde234567abcde234567abcd", "H2O", speciesRef],
     // The h1 states what the record IS, not the producer's own deposited label. The fixture below sets
@@ -345,8 +343,7 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     // generic `heading`/`ref` string-equality checks (which assumed the
     // old placeholder's fixed "Reaction" title).
     //
-    // `/methods` is no longer `RecordPlaceholderPage` either (methods-surface
-    // plan PR 3) -- it is `MethodsIndexPage`, which fires its own three
+    // `/methods` is no longer `RecordPlaceholderPage` either -- it is `MethodsIndexPage`, which fires its own three
     // requests (`level-of-theories/browse`, `meta/software`,
     // `meta/workflow-tools`) this shared table's per-path handler setup
     // does not provide. Same treatment as `/reactions` above: its own
@@ -496,9 +493,7 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
     })
 })
 
-// The site nav's "Reactions" link used to be a dead end -- `/reactions`
-// rendered `RecordPlaceholderPage`, not the working reaction browse (only
-// reachable via `/species?kind=reaction`). It is `BrowsePage` now, same
+// The site nav's "Reactions" link goes to `BrowsePage`, the same
 // component as `/species`/`/vdw-complexes`/`/transition-states`, with the
 // "reaction" kind fixed by the route -- so it gets its own test (per the
 // comment on its removal from `publicRoutes` above), not the generic
@@ -513,7 +508,7 @@ describe("browse kind paths: each of the four renders BrowsePage with its own ki
         )
         window.history.replaceState({}, "", "/reactions")
         render(<App />)
-        // Each kind names itself now (`BROWSE_KIND_CONTENT`) -- was the
+        // Each kind names itself (`BROWSE_KIND_CONTENT`), rather than sharing the
         // SAME "Browse the archive" heading on all four kind paths.
         expect(await screen.findByRole("heading", { name: "Browse reactions" })).toBeVisible()
         expect(window.location.pathname).toBe("/reactions")
@@ -536,10 +531,9 @@ describe("browse kind paths: each of the four renders BrowsePage with its own ki
     })
 })
 
-// `/methods` used to render `RecordPlaceholderPage` (a bare "Methods" h1,
-// no data) -- it is `MethodsIndexPage` now (methods-surface plan PR 3),
-// so it gets its own dedicated test, same treatment `/reactions` got
-// above when IT stopped being the placeholder.
+// `/methods` renders `MethodsIndexPage`, not `RecordPlaceholderPage`,
+// so it gets its own dedicated test, same treatment `/reactions` gets
+// above.
 describe("/methods renders the real methods index, not RecordPlaceholderPage", () => {
     it("shows the Methods h1 and a level-of-theory row from level-of-theories/browse", async () => {
         server.use(
@@ -822,8 +816,7 @@ it("an rxe_ ref handed to /reactions/:ref redirects to /reaction-entries/:ref wi
     })))
     window.history.replaceState({}, "", "/reactions/rxe_abc")
     render(<App />)
-    // MEASURED gap this closes (post-review): the OLD `RecordPlaceholderPage`
-    // route ALSO rendered the literal text "rxe_abc" (its own `{ref &&
+    // A placeholder route would ALSO rendered the literal text "rxe_abc" (its own `{ref &&
     // <code>{ref}</code>}` line), at the UNCHANGED url `/reactions/rxe_abc`
     // -- so a `findByText("rxe_abc")` assertion alone passed identically
     // whether or not the redirect actually fired, and stayed green when
@@ -835,13 +828,12 @@ it("an rxe_ ref handed to /reactions/:ref redirects to /reaction-entries/:ref wi
     expect(window.location.pathname).toBe("/reaction-entries/rxe_abc")
 })
 
-// The owner-reported gap this project exists to close: the home-page search
-// only recognised `spc_`/`spe_`; a `rxn_`/`rxe_`/`tse_` reference fell
-// through every branch and was sent to the archive as a SMILES structure
-// query. These three exercise the SAME public-reference vocabulary the
+// The home-page search recognises `rxn_`/`rxe_`/`tse_` references as well as
+// `spc_`/`spe_` (rather than sending them to the archive as a SMILES structure
+// query). These three exercise the SAME public-reference vocabulary the
 // tests above already exercise via `window.history.replaceState` (a
 // direct link/bookmark), but arrived by TYPING into `IdentifierSearch` on
-// the home page instead -- the actual path the owner's report was about.
+// the home page instead.
 describe("the home-page identifier search recognizes and routes public references beyond spc_/spe_", () => {
     const REF_BODY = "aaaaaaaaaaaaaaaaaaaaaaaaaa"
 
@@ -936,13 +928,13 @@ describe("unmatched routes (finding #12)", () => {
         render(<App />)
         expect(await screen.findByRole("heading", { name: "No page at this address" })).toBeVisible()
         expect(screen.getByText("/this-route-does-not-exist")).toBeVisible()
-        // Not the home page, which this route used to silently redirect to.
+        // Not the home page, which this route does not redirect to.
         expect(screen.queryByLabelText("Molecule: name, formula, SMILES, InChI, InChIKey or TCKDB ref")).not.toBeInTheDocument()
     })
 
     it("shows the not-found page for a plausible-looking but wrong tab segment, not the first tab", async () => {
         server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [overviewSpecies()] })))
-        // A guess at a tab route (the real one is `/sp`) used to silently
+        // A guess at a tab route (the real one is `/sp`) does not
         // render the Geometry tab -- SpeciesEntryPage's own default -- with
         // no signal the URL was wrong.
         window.history.replaceState({}, "", `/species-entries/${entryRef}/single-point`)

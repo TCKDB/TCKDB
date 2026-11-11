@@ -13,7 +13,7 @@ database:
   ref; each must exist and belong to the record's own species entry, and what
   is *stored* is the calculation's public ref, never the key and never an id.
 
-Three layers, none of which may be removed because the others exist (ADR 0017):
+Three layers, none of which may be removed because the others exist:
 the request schema refuses a self-contradicting declaration first; the workflow
 calls :func:`resolve_thermo_declarations`, which re-derives every check from
 the declaration itself rather than trusting that validation ran (a payload built

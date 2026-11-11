@@ -1,7 +1,7 @@
 """Upload-side hook: reconcile a composite calculation's energy with its output log.
 
 Sibling of :mod:`app.services.sp_energy_extraction`, for calculations of type
-``composite`` (ADR 0021, P3b). It reads the Gaussian composite summary block of
+``composite``. It reads the Gaussian composite summary block of
 an attached output log and compares it with the deposited ``composite_result``
 (:func:`app.services.composite_energy_reconciliation.reconcile_composite_energy`).
 

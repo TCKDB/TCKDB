@@ -2,7 +2,7 @@
 
 See docs/specs/browse_order.md.
 
-Provenance keys are always present per Phase 2.2; TS-chain fields are populated
+Provenance keys are always present; TS-chain fields are populated
 only for TS-backed records. Evidence completeness uses the L1 kinetics
 checklist; TS-related predicates are ``False`` (not missing) for non-TS-backed
 records and never gate validity.
@@ -241,7 +241,7 @@ _TRUST_EAGER_LOADS = (
 KINETICS_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
 
 # Pressure-dependent / third-body child collections are part of every
-# kinetics record now (DR-0032 read exposure); eager-load them on the base
+# kinetics record; eager-load them on the base
 # query to avoid an N+1 over plog/chebyshev/falloff/third-body children.
 _PDEP_EAGER_LOADS = (
     selectinload(Kinetics.plog_entries),
@@ -354,9 +354,10 @@ def get_reaction_kinetics(
 ) -> ScientificReactionKineticsResponse:
     """Return kinetics records for a reaction entry, sorted by review status, then newest.
 
-    ``detail`` is True when a served detail embeds these records (``/reaction-entries/{id}/full``): under ``curated`` they
-    are then shown with their badge unless rejected or deprecated, and so are the transition-state entries they name (ADR 0023
-    step 7, owner decision Q9). The list route itself (``detail=False``) keeps the approved record floor.
+    ``detail`` is True when a served detail embeds these records (``/reaction-entries/{id}/full``): under ``curated``
+    they are then shown with their badge unless rejected or deprecated, and
+    so are the transition-state entries they name. The list route itself
+    (``detail=False``) keeps the approved record floor.
 
     Order: review_rank ASC, created_at DESC, id DESC (the order the exports
     list records in). Coverage and evidence are reported per
@@ -364,8 +365,8 @@ def get_reaction_kinetics(
     ``coverage_temperature_max_k`` do not filter, they only fill ``temperature_coverage``.
     Every matching record is returned; the read never picks one.
 
-    Filters apply shallow per D7. Provenance keys are always present, with
-    null TS-chain fields for non-TS-backed records (Phase 2.2). TS-related
+    Filters apply shallow. Provenance keys are always present, with
+    null TS-chain fields for non-TS-backed records. TS-related
     evidence checklist items are ``False`` for non-TS-backed records but do
     not gate visibility or order.
 
@@ -404,7 +405,7 @@ def get_reaction_kinetics(
         raise not_found("reaction_entry", row_id=reaction_entry_id)
     reaction_entry_ref = entry.public_ref
 
-    # Phase C: reconcile level_of_theory_id + level_of_theory_ref.
+    # Reconcile level_of_theory_id + level_of_theory_ref.
     lot_id_or_match = reconcile_level_of_theory_pair(
         session,
         id_value=request.level_of_theory_id,
@@ -450,7 +451,7 @@ def get_reaction_kinetics(
     )
     # One source calculation has to match every supplied provenance field at once (level of theory, software, method,
     # basis, workflow tool, method family, DFT rung): a record never matches through two different calculations.
-    # Evidence rule (ADR 0023): a source calculation the profile withholds (rejected or deprecated under curated) contributes nothing to a match; an unreviewed one does. The record's own
+    # Evidence rule: a source calculation the profile withholds (rejected or deprecated under curated) contributes nothing to a match; an unreviewed one does. The record's own
     # LINK to it stays a fact of the record (the ref guard withholds the ref); what the calculation was run at is a fact
     # about the hidden record. There is no "primary" calculation for a filter.
     provenance = source_provenance_kwargs(request, level_of_theory_id=effective_lot_id)
@@ -515,7 +516,7 @@ def get_reaction_kinetics(
         sc.calculation_id for srcs in sources_by_kinetics.values() for sc in srcs
     }
     calc_meta = _calc_metadata(session, all_source_calc_ids)
-    # How far each cited composite energy has been checked (ADR 0021, P7a): derived now,
+    # How far each cited composite energy has been checked: derived now,
     # in bulk for the whole entry.
     composite_verifications = verify_composite_calculations(
         session,
@@ -544,7 +545,7 @@ def get_reaction_kinetics(
         },
     )
 
-    # DR-0036: sum-of-Arrhenius terms + network-bridge public refs.
+    # Sum-of-Arrhenius terms + network-bridge public refs.
     arrhenius_terms = _arrhenius_terms(
         session,
         [
@@ -562,7 +563,7 @@ def get_reaction_kinetics(
         session, {k.determination_id for k in kinetics_rows if k.determination_id}
     )
 
-    # DR-0032: resolve third-body collider species → public refs (batched to
+    # Resolve third-body collider species → public refs (batched to
     # avoid an N+1 over the eager-loaded third_body_efficiencies children).
     collider_refs = _species_refs(
         session,
@@ -645,9 +646,8 @@ def get_reaction_kinetics(
         ts_opt_calc_id = provenance.ts_opt_calculation_id
         ts_sp_calc_id = provenance.ts_sp_calculation_id
         ts_freq_calc_id = provenance.ts_freq_calculation_id
-        # NOTE: ts_freq_calc_id is intentionally not yet fed into the
-        # evidence breakdown below — see plan.md discovered-issues
-        # 2026-07-02 (TS frequency evidence omitted from kinetics trust).
+        # NOTE: ts_freq_calc_id is not fed into the evidence breakdown
+        # below (a known gap).
         # It IS fed into ``levels`` (see _build_kinetics_levels).
 
         # ``ts_opt_calc_id`` (a direct citation) is structurally always
@@ -1367,7 +1367,7 @@ def _scf_stabilities(
 
 
 def _ts_entry_ids_for_reaction(session: Session, reaction_entry_id: int, *, detail: bool = False) -> set[int]:
-    # A transition-state ENTRY is a record (ADR 0023, Q3): only the entries that clear the record floor count here, as in
+    # A transition-state ENTRY is a record: only the entries that clear the record floor count here, as in
     # ``/reactions/browse``; a served detail that embeds these records (``detail=True``) shows the entries it does not
     # withhold, badged (step 7, Q9). The calculations under a shown entry are evidence (see ``_ts_calc_types_for_entries``).
     rows = session.scalars(
@@ -1391,7 +1391,7 @@ def _ts_calc_types_for_entries(
             select(Calculation.transition_state_entry_id, Calculation.type).where(
                 Calculation.transition_state_entry_id.in_(ts_entry_ids)
             ),
-            # The evidence checklist counts the calculation types the evidence rule shows (ADR 0023).
+            # The evidence checklist counts the calculation types the evidence rule shows.
             linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
         )
     ).all()
@@ -1541,7 +1541,7 @@ def _workflow_tool_release_summaries(
 def _arrhenius_terms(
     session: Session, kinetics_ids: list[int]
 ) -> dict[int, list[MultiArrheniusTerm]]:
-    """Load sum-of-Arrhenius terms for ``multi_arrhenius`` records (DR-0036)."""
+    """Load sum-of-Arrhenius terms for ``multi_arrhenius`` records."""
     if not kinetics_ids:
         return {}
     rows = session.scalars(
@@ -1569,7 +1569,7 @@ def _arrhenius_terms(
 def _network_kinetics_refs(
     session: Session, network_kinetics_ids: set[int]
 ) -> dict[int, str]:
-    """Public refs for linked ``network_kinetics`` counterparts (DR-0036)."""
+    """Public refs for linked ``network_kinetics`` counterparts."""
     if not network_kinetics_ids:
         return {}
     rows = session.execute(
@@ -1581,7 +1581,7 @@ def _network_kinetics_refs(
 
 
 def _species_refs(session: Session, species_ids: set[int]) -> dict[int, str]:
-    """Public refs for third-body collider species (DR-0032)."""
+    """Public refs for third-body collider species."""
     if not species_ids:
         return {}
     rows = session.execute(
@@ -1591,7 +1591,7 @@ def _species_refs(session: Session, species_ids: set[int]) -> dict[int, str]:
 
 
 # ---------------------------------------------------------------------------
-# Pressure-dependent / third-body read blocks (DR-0032)
+# Pressure-dependent / third-body read blocks
 # ---------------------------------------------------------------------------
 
 
@@ -1809,9 +1809,9 @@ def _ts_energy_calc(
     """The calculation cited as the transition state's energy.
 
     Taken from the ``ts_energy`` role only, and only if it is a single point or
-    a composite energy. It used to be the first ``sp`` found under *any* role,
-    so a reactant's single point (role ``reactant_energy``) was reported as the
-    transition state's whenever it was listed first.
+    a composite energy. The first ``sp`` found under *any* role is not taken,
+    because a reactant's single point (role ``reactant_energy``) would be
+    reported as the transition state's whenever it was listed first.
     """
     for sc in by_role.get(KineticsCalculationRole.ts_energy, []):
         meta = calc_meta.get(sc.calculation_id)
@@ -1905,7 +1905,7 @@ def _build_kinetics_levels(
     :func:`app.services.calculation_levels.derive_levels`'s roles:
     ``ts_opt_calc_id`` -> ``opts``, ``ts_freq_calc_id`` -> ``freqs``,
     ``ts_sp_calc_id`` -> ``sps`` -- or ``composites`` when that calculation's
-    type is ``composite`` (ADR 0021: a ``ts_energy`` citation may be a
+    type is ``composite`` (a ``ts_energy`` citation may be a
     program-run composite energy, which then outranks an ``sp`` exactly as it
     does everywhere else). No ``importeds`` are fed
     (kinetics provenance has no such concept), and the
@@ -2000,7 +2000,7 @@ def _without_levels_from_withheld_calculations(
     freq_calc_id: int | None,
     sp_calc_id: int | None,
 ) -> ScientificLevelsSummary:
-    """Null the levels that come from a calculation the evidence rule withholds (ADR 0023).
+    """Null the levels that come from a calculation the evidence rule withholds.
 
     A level is a fact about the calculation that supplied it. When that calculation is withheld (rejected or deprecated
     under ``curated``) the level and its source are nulled together, not re-derived from what is left: the opt's level

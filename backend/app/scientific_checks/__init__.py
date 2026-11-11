@@ -14,14 +14,10 @@ Nothing in the code distinguishes the two populations. A generator
 cannot tell :func:`validate_reaction_charge_conservation` from
 ``max_length=64`` by inspection, and the machine-readable codes the
 scientific checks emit — ``reaction_mass_balance_failed`` and the rest —
-used to live inside f-string message bodies, discoverable only by reading
-and reportable to nobody. They now travel as attributes of the exception
-that carries the refusal, which is a change this package forced: the
-register asked "which checks emit a code?" and the honest answer, once
-somebody looked, was "none of them, to any consumer". The
-earlier hand-written audit at ``docs/reviews/validation_check_audit.md``
-hit exactly this wall: it covers the Pydantic tier only, and every
-conservation law in the database is absent from it.
+travel as attributes of the exception that carries the refusal, rather
+than inside f-string message bodies, so they are discoverable and
+reportable to a consumer. A hand-written audit of the Pydantic tier alone
+would omit every conservation law in the database.
 
 The inclusion test
 ------------------
@@ -123,7 +119,7 @@ from types import ModuleType
 
 
 class CheckTier(str, Enum):
-    """Consequence of a check firing, in ADR 0008's vocabulary.
+    """Consequence of a check firing.
 
     ``block`` and ``warn`` carry the same string values as
     :class:`tckdb_schemas.stationary_point.ValidationTier`, which is the
@@ -133,7 +129,7 @@ class CheckTier(str, Enum):
     ``StationaryPointFinding`` can have.
     """
 
-    #: Refuse the payload. ADR 0008 reserves this for definitions and
+    #: Refuse the payload. Reserved for definitions and
     #: contracts: a check may block only if no correct calculation could
     #: produce the record it refuses.
     block = "block"
@@ -145,21 +141,19 @@ class CheckTier(str, Enum):
 
     #: Labels a stored record at read time without refusing anything —
     #: a :class:`~app.services.trust.models.HardFailReason` in the trust
-    #: evaluator. ADR 0008 names this consequence in prose ("labelling")
-    #: alongside refusal, annotation and referral, but the enum only ever
-    #: carried three of the four, so a position enforced solely at read
-    #: time had no honest tier to declare. It is not ``structural``: the
+    #: evaluator. A position enforced solely at read
+    #: time needs an honest tier to declare. It is not ``structural``: the
     #: record can be represented, it is simply labelled once TCKDB knows
     #: something about it. Reserved for facts TCKDB observes about a
     #: record *after* it was accepted, where refusing at upload was never
     #: possible because the fact did not exist yet.
     label = "label"
 
-    #: Referred to ``machine_review`` under a versioned rubric. ADR 0008
-    #: puts every cross-check against external reference data here.
+    #: Referred to ``machine_review`` under a versioned rubric. Every
+    #: cross-check against external reference data is here.
     review = "review"
 
-    #: Not an ADR 0008 consequence tier. The position is enforced by the
+    #: Not a consequence tier. The position is enforced by the
     #: *shape* of the schema — a NOT NULL discriminator, a check
     #: constraint, a trigger — so there is no runtime check to place in a
     #: tier, and a record violating it cannot be represented at all.
@@ -208,14 +202,10 @@ class CodeChannel(str, Enum):
     trust_label = "trust_label"
 
     #: Enforced only by PostgreSQL, so the refusal arrives through the
-    #: integrity handler as a 409 rather than a 422. It used to mean "the
-    #: client is told *something*, but not which check", because the
-    #: handler classified every violation by SQLSTATE and reported
-    #: ``state_conflict`` for all of them -- a guarantee that is
-    #: *stronger* than a Python check, since no write path can bypass it,
-    #: paired with the weakest thing a client could be told about it.
-    #: A constraint that declares
-    #: :attr:`DatabaseConstraint.rejection_code` is now named: the handler
+    #: integrity handler as a 409 rather than a 422. A constraint is a
+    #: guarantee *stronger* than a Python check, since no write path can
+    #: bypass it. A constraint that declares
+    #: :attr:`DatabaseConstraint.rejection_code` is named: the handler
     #: keys on ``diag.constraint_name`` and reports the scientific code.
     #: The channel still exists to say *which status* carries it, because
     #: 409-with-a-code and 422-with-a-code are different retry advice.
@@ -392,9 +382,9 @@ Enforcement = PythonCheck | DatabaseConstraint | DesignPosition
 # Where a check's threshold comes from
 # ---------------------------------------------------------------------------
 #
-# Until ADR 0012 every numeric line in the register was a literal in
-# Python, so naming it in ``tier_rationale`` was honest. ADR 0012's tau
-# is not: it is *read from the execution provenance the record carries*,
+# A numeric line that is a literal in Python can be named in
+# ``tier_rationale`` honestly. The imaginary-mode tau
+# is not one: it is *read from the execution provenance the record carries*,
 # and two deposits of the same structure legitimately get different
 # values. A register that rendered it as "roughly 50 cm-1" would state a
 # constant the code does not have, which is precisely the drift this
@@ -492,7 +482,7 @@ class ScientificCheck:
     """One scientific guarantee TCKDB makes about chemistry.
 
     An entry is a *claim*, not a code location: the same claim may be
-    enforced in more than one place, and ADR 0008 cares which. The atom
+    enforced in more than one place, and which matters. The atom
     map's "an element does not change across a reaction" is stated once
     at the wire boundary and once as a check constraint, and listing
     both in one entry is what lets a reader see that a second write path
@@ -505,8 +495,8 @@ class ScientificCheck:
         client can match on.
     :param asserts: What the check asserts, in one sentence a chemist
         would recognise. Not a description of the implementation.
-    :param tier: ADR 0008 consequence tier.
-    :param tier_rationale: Why that tier, in ADR 0008's terms — for
+    :param tier: Consequence tier.
+    :param tier_rationale: Why that tier — for
         ``block``, why no correct calculation could produce the record;
         for ``warn``, what correct novel result it could otherwise fire
         on.
@@ -537,7 +527,7 @@ class ScientificCheck:
         declared as a :class:`ConstantThreshold` or a
         :class:`ProvenanceThreshold`. Empty where the check is purely
         structural. Declaring the *kind* is the point: a register that
-        printed ADR 0012's τ as a number would be claiming the code
+        printed the imaginary-mode τ as a number would be claiming the code
         holds a constant it does not have, and would hide what happens
         when the provenance τ is read from is missing.
     """

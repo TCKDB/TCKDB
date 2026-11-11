@@ -4,9 +4,9 @@ Every ``POST /uploads/<kind>`` route builds its response warnings in two
 halves: the ones derivable from the *request alone* (identity reconciliation,
 stationary-point findings, linearity, provenance, reference shape), and the
 ones the persistence workflow appends through ``warnings_out`` while it
-resolves rows. Those routes used to spell the first half inline, so any other
+resolves rows. Spelling the first half inline in each route would let any other
 path that persists the same request -- ``/bundles/submit``, the background job
-worker -- could not reproduce it and silently dropped it (#647).
+worker -- silently drop it.
 
 This module is the one place the first half is assembled, in the order the
 direct routes always produced it. The routes, the bundle importer and the

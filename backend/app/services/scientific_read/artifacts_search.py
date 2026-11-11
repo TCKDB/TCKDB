@@ -139,7 +139,7 @@ def search_artifacts(
     _enforce_at_least_one_filter(request)
 
     # Resolve ref filters to integer ids. Unknown ref of the right
-    # prefix → empty short-circuit (Phase C semantics).
+    # prefix → empty short-circuit.
     calc_id, short_circuit = _resolve_filter_ref(
         session, Calculation, request.calculation_ref, "calculation"
     )

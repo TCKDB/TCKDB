@@ -85,11 +85,9 @@ const observationCoreSchema = z.object({
 // A sibling in the `observations` list is a lean ref+review projection
 // (`ConformerObservationSiblingSummary` in
 // backend/app/schemas/reads/scientific_conformer.py), not a nested copy
-// of this whole record. It used to be: every sibling carried its own
-// calculations/geometries/selections/review_history (and a duplicated
-// copy of `conformer_group`/`species`), which made an observation
-// detail response scale linearly with basin size for a sibling ledger
-// that renders only a ref and, sometimes, a review pill (issue #269).
+// of this whole record: it carries no calculations/geometries/selections/
+// review_history or copy of `conformer_group`/`species`, since the sibling
+// ledger renders only a ref and, sometimes, a review pill.
 // The full record for any one sibling is one hop away, at that
 // sibling's own detail endpoint.
 const siblingObservationSchema = z.object({

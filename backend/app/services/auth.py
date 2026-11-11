@@ -469,10 +469,7 @@ def authenticate_api_key(
 ) -> Optional[AppUser]:
     """Resolve a raw API key to its owning user, or ``None`` if invalid.
 
-    This function only reads. It used to set ``last_used_at`` on the
-    caller's session, which was lost on every route whose session never
-    commits and, on the routes that flush, held the key's row lock for the
-    whole request (#587). Recording use is now the caller's job, through
+    This function only reads. Recording use is the caller's job, through
     *on_authenticated*, called with the key id once the key has been accepted
     (see :func:`record_api_key_use`).
     """

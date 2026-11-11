@@ -1,6 +1,6 @@
 """Public reference (handle) generation for hosted TCKDB scientific reads.
 
-Implements Phase A of the public identifier policy. See
+Implements the public identifier policy. See
 ``docs/specs/public_identifier_policy.md`` for the contract.
 
 Two ref categories per spec:
@@ -23,8 +23,7 @@ Both forms produce a 26-character body after the prefix to match
 ULID character length. Per the spec, the bodies are URL-safe and
 case-insensitive (always lowercase).
 
-Phase A scope: helpers only. No API responses change. No
-``include=internal_ids`` token. Public refs are populated at row
+Public refs are populated at row
 INSERT time via a global SQLAlchemy ``before_insert`` listener wired
 in at the bottom of this module.
 """
@@ -65,7 +64,7 @@ PREFIXES: dict[str, str] = {
     "FrequencyScaleFactor": "fsf",
     "EnergyCorrectionScheme": "ecs",
     "GroupAdditivityScheme": "gasch",
-    # Composite recipe (ADR 0021). Content-derived from ``definition_hash``:
+    # Composite recipe. Content-derived from ``definition_hash``:
     # the same recipe is the same ref on any TCKDB instance.
     "CompositeScheme": "csch",
     # Events / provenance (opaque)
@@ -105,12 +104,12 @@ PREFIXES: dict[str, str] = {
     # two rows with identical bytes are two distinct upload events and
     # must stay separately citable, same reasoning as ArtifactIntegrityEvent.
     "CalculationArtifact": "art",
-    # Custody of stored evidence (ADR 0014). Opaque: an observation about
+    # Custody of stored evidence. Opaque: an observation about
     # an object at a moment is an event, and the log is deliberately
     # append-only, so two observations of one digest must be separately
     # citable rather than collapsing onto a content-derived ref.
     "ArtifactIntegrityEvent": "aie",
-    # Curation overlay / citable releases (Stage 3). Opaque: a curation
+    # Curation overlay / citable releases. Opaque: a curation
     # decision is an event, not a content-derived identity.
     "CurationPolicy": "cpol",
     "DatasetRelease": "rel",
@@ -119,7 +118,7 @@ PREFIXES: dict[str, str] = {
     # Rights basis of a deposit (B1). Opaque: an attestation is an event by
     # an actor, and a correction is a new event that supersedes it.
     "SubmissionRightsAttestation": "sra",
-    # Molecular-property observation (Phase C-E5). Opaque: two rows with
+    # Molecular-property observation. Opaque: two rows with
     # identical scalar bytes from two distinct import/attach events must
     # stay separately citable -- same reasoning as CalculationArtifact.
     "MolecularPropertyObservation": "mpo",
@@ -250,8 +249,8 @@ def _canonical_lot(obj: Any) -> str:
 def _canonical_species(obj: Any) -> str:
     """Species identity: ``(smiles, charge, multiplicity, stereo_kind)``.
 
-    Must track the species dedup key (DR-0031). ``smiles`` is the stereo-blind
-    constitution key (DR-0038): a stereo mark never reaches it, so the ref does
+    Must track the species dedup key. ``smiles`` is the stereo-blind
+    constitution key: a stereo mark never reaches it, so the ref does
     not move with how much stereo a depositor wrote. Rows keyed under the old
     rule keep the ref they were given (a ref is a citation, never recomputed).
     Keying the public ref on
@@ -394,7 +393,7 @@ def _canonical_conformer_assignment_scheme(obj: Any) -> str:
 def _canonical_frequency_scale_factor(obj: Any) -> str:
     """FrequencyScaleFactor identity matches the table's natural uniqueness.
 
-    Per the model (correction-scheme-provenance plan v2 §6), the natural
+    Per the model, the natural
     identity is the full tuple ``(level_of_theory_id,
     software_release_id, scale_kind, value, source_literature_id,
     workflow_tool_release_id)`` -- ``software_release_id`` replaced the
@@ -524,7 +523,7 @@ def generate_ref_for(obj: Any) -> str:
     - Event/opaque classes use ``make_opaque_ref``.
 
     :raises ValueError: if the object's class name is not in PREFIXES,
-        i.e. the class isn't on the Phase A ref-bearing list.
+        i.e. the class isn't on the ref-bearing list.
     """
     cls_name = type(obj).__name__
     prefix = PREFIXES.get(cls_name)

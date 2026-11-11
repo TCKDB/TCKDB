@@ -1,4 +1,4 @@
-"""QCSchema ``Molecule`` -> TCKDB geometry and identity (C-Q1).
+"""QCSchema ``Molecule`` -> TCKDB geometry and identity.
 
 Bohr-to-angstrom conversion, atom-resolved isotope labelling, ghost/fragment
 refusal, integer charge/multiplicity, and SMILES identity resolution with no
@@ -26,16 +26,12 @@ from .errors import (
 #: CODATA bohr radius in Angstrom, identical to
 #: ``backend/app/services/hessian_parsing.py:69`` (the constant already
 #: governing every other Hessian-adjacent geometry TCKDB stores). Measured
-#: 2026-09-19 against the pinned qcelemental==0.51.2 release:
+#: against the pinned qcelemental==0.51.2 release:
 #: ``qcelemental.constants.bohr2angstroms == 0.52917721067`` -- bit-identical
 #: to this literal at float64 precision (``decimal.Decimal`` of both prints
-#: the same 53-significant-bit expansion). The plan anticipated a ~4.4e-10
-#: relative divergence between a CODATA-2014 and a qcelemental CODATA-2018
-#: value; that divergence was not reproducible against the version actually
-#: pinned here, so this adapter uses the literal (not
+#: the same 53-significant-bit expansion). This adapter uses the literal (not
 #: ``qcelemental.constants.bohr2angstroms``) to stay byte-identical to the
-#: backend constant regardless of a future qcelemental bump, and records the
-#: measurement rather than the anticipated number.
+#: backend constant regardless of a future qcelemental bump.
 BOHR_TO_ANGSTROM = 0.52917721067
 
 #: Absolute tolerance, in amu, for comparing a declared atomic mass against

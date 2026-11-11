@@ -4,7 +4,7 @@
  * on `/calculations/{ref}`, the species entry's own fields) into one
  * small union `RecordIdentityHeader.tsx` knows how to render.
  *
- * Three absences this module keeps textually distinct, per the brief:
+ * Three absences this module keeps textually distinct:
  *
  * - `{ kind: "species_entry" | "transition_state_entry", ... }` -- a
  *   known, unambiguous owner. A transition-state owner NEVER carries
@@ -44,8 +44,7 @@ export type TransitionStateIdentity = {
     transitionStateRef?: string
     transitionStateEntryRef?: string
     // No `label` field here -- `transition_state.label` (e.g. "TS0") is a
-    // depositor-typed string this app never renders (house rule, widened
-    // 2026-09), so this type carries nothing for `RecordIdentityHeader` to
+    // depositor-typed string this app never renders (house rule), so this type carries nothing for `RecordIdentityHeader` to
     // accidentally read and display.
 }
 

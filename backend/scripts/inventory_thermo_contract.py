@@ -1,4 +1,4 @@
-"""Print Phase A legacy/queue incompatibilities as NDJSON; never writes rows.
+"""Print legacy/queue incompatibilities as NDJSON; never writes rows.
 
 Run from backend with PYTHONPATH=. and the intended database environment.
 """

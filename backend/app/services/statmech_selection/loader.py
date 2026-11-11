@@ -122,7 +122,7 @@ class PopulationScan:
     removed_by_filters: int = 0
     removed_by_floor: int = 0
     terminal_excluded: dict[str, int] = field(default_factory=dict)
-    #: The evidence rule (ADR 0023): the statuses at which a source calculation or a declared member is not withheld
+    #: The evidence rule: the statuses at which a source calculation or a declared member is not withheld
     #: (``evidence_shown``) and may be used (``evidence_usable``, over the caller's own floor). The profile's record floor
     #: decides the candidates only. Under exploratory they equal ``profile_statuses`` and ``effective_statuses``.
     evidence_shown: frozenset[RecordReviewStatus] = frozenset()
@@ -479,7 +479,7 @@ def load_population(session: Session, scan: PopulationScan, request: StatmechReq
         ).all()
     )
     ids = [r.id for r in rows]
-    profile = scan.evidence_shown  # linked evidence: the evidence rule, not the record floor (ADR 0023)
+    profile = scan.evidence_shown  # linked evidence: the evidence rule, not the record floor
 
     # --- the calculations, once, at their own review states -------------------------------------------------------
     calc_ids = _calc_ids_of(session, ids)

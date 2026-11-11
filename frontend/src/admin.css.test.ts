@@ -12,8 +12,7 @@ import adminCss from "./admin.css?raw"
  *
  * `index.css` resets every anchor site-wide to `color: inherit;
  * text-decoration: none`, so without a rule of its own that link renders as
- * plain prose -- MEASURED by screenshotting the page before the rule
- * existed: "Machine findings" inside Record review's lede was
+ * plain prose: "Machine findings" inside Record review's lede would be
  * indistinguishable from the words either side of it. A rendering test
  * would not catch it either; the link would still be present, still be an
  * anchor, still carry the right href, and still look like nothing.

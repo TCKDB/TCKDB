@@ -70,13 +70,9 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
 
 # Legacy grouping name for declared filters without a backing path.
 # The service rejects these before querying; none is treated as a no-op.
-# ``software`` moved out of this group once ``energy_correction_scheme``
-# gained a ``software_id`` column (correction-scheme-provenance plan v1).
-# ``software_version`` moved out too once the release-grain column
-# (``software_release_id``, plan v2 §3-4, PR 1) got a read-side join here
-# (PR 2, plan §10) -- alongside replacing ``_build_software_release_summary``'s
-# fabricated release object with a real one. ``used_by_thermo`` remains
-# deferred: it has no backing path yet.
+# ``software`` and ``software_version`` are not in this group: both have a
+# backing path (``software_id`` and ``software_release_id``).
+# ``used_by_thermo`` remains deferred: it has no backing path yet.
 _DEFERRED_FILTER_FIELDS: tuple[str, ...] = ("used_by_thermo",)
 
 
@@ -179,7 +175,7 @@ def search_energy_correction_schemes(
         stmt = stmt.where(ex if request.has_corrections else ~ex)
     if request.used_by_calculation is not None:
         # An application counts when its target is shown by the read profile and its source calculation is not withheld
-        # by the evidence rule (rejected / deprecated under curated, ADR 0023): the filter matches through that
+        # by the evidence rule (rejected / deprecated under curated): the filter matches through that
         # linked calculation, so a not-reviewed one counts.
         ex = where_visible(
             where_visible(

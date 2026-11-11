@@ -1,4 +1,4 @@
-"""Parametrized corpus test over ``tests/fixtures/<case>/`` (C-Q1).
+"""Parametrized corpus test over ``tests/fixtures/<case>/``.
 
 Every case is one real or hand-derived QCSchema document plus a
 ``meta.json`` naming its expected outcome. This is the mutation-checked
@@ -75,7 +75,7 @@ def _xyz(point: dict) -> list[list[float]]:
 
 def _assert_values_are_the_stored_geometry(case: str, stored_atoms: list, points: list) -> None:
     """Every stored coordinate value is the dihedral its own stored geometry
-    holds over its own stored atoms (ADR 0020), recomputed here from what the
+    holds over its own stored atoms, recomputed here from what the
     payload stores -- the xyz text and the 1-based quartets -- not from the
     document. A value paired with another coordinate's atoms fails this."""
     for point in points:

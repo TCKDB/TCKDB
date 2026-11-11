@@ -3,13 +3,11 @@
 A calculation cites a release whose ``version`` is NULL: the program was
 recorded, its version was not. If the calculation's own stored output log
 carries the program's startup banner, the version is *observed* there --
-DR-0008's "parsed" source -- and the citation can be made exact.
+the "parsed" source -- and the citation can be made exact.
 
-Until #305 decision (c) the ingest seam never did this for deposited logs.
-DR-0008 reconciliation ran only inside parameter extraction, which reads
-only ``input`` artifacts, and an input deck carries no version banner; so
-``observed_software_banner`` is NULL across the archive even where the
-``output_log`` holding the banner was stored. New uploads now go through
+Parameter extraction reads only ``input`` artifacts, and an input deck
+carries no version banner, so ``observed_software_banner`` can be NULL even
+where the ``output_log`` holding the banner was stored. Uploads go through
 ``software_banner_extraction`` at ingest, which applies the same rule
 (:func:`~app.services.calculation_resolution.banner_supplies_missing_version`)
 and the same re-point; this module reads the output logs already stored.
@@ -18,7 +16,7 @@ What it does, per calculation citing the target release
 --------------------------------------------------------
 1. Load its artifacts, ``output_log`` first then ``input``, and take the
    first one whose banner names a program and a version.
-2. Refuse to act on anything but DR-0008's ``enriched`` outcome: the banner
+2. Refuse to act on anything but the ``enriched`` outcome: the banner
    must name the *same* program and only fill fields the release left NULL,
    ``version`` among them. A banner naming another program, or disagreeing
    with a declared field, is reported and left alone -- correcting a
@@ -67,7 +65,7 @@ For each fillable calculation the plan lists the stored reproducibility
 assessments whose context hash covers its release columns (they go stale),
 and any *approved* thermo/statmech record citing it as a source -- the
 accepted-science trigger guards only the calculation's own approval. For a
-Gaussian banner the build string is filled as well (DR-0008 ``enriched``),
+Gaussian banner the build string is filled as well (``enriched``),
 so the target can be a near-duplicate of an existing build-less release;
 the plan says so.
 
@@ -188,7 +186,7 @@ class CalculationOutcome:
     approved_product_refs: tuple[str, ...] = ()
     #: The banner also fills ``build`` (Gaussian), so the target is a
     #: sibling of any existing build-less release with the same version and
-    #: revision -- DR-0008's ``enriched`` rule, kept as is.
+    #: revision -- the ``enriched`` rule.
     fills_build: bool = False
 
 
@@ -464,7 +462,7 @@ def apply_release_fill(
         ).one()
         parsed, _program, _failure = _observe_banner(session, calc, load_bytes)
         declared = software_release_to_declared_ref(calc.software_release)
-        # The ingest seam's own rule (DR-0008; #305 decision (c)): records
+        # The ingest seam's own rule: records
         # observed_software_banner + software_reconciliation_status, and
         # re-points at the release the banner describes. Its identity-
         # correction branch cannot fire here because banner_names_other_program was

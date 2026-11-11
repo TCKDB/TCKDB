@@ -3,9 +3,8 @@
 #
 # WHY THIS EXISTS
 #   backend-nightly.yml is the only job that runs the third of the test suite
-#   the two PR gates never touch. On 2026-08-10 it was found to have failed on
-#   every run back to 2026-07-31 -- eleven consecutive nights -- and nobody
-#   knew, because a red scheduled workflow produces no email, no push and no
+#   the two PR gates never touch. It can fail on every run for days and nobody
+#   knows, because a red scheduled workflow produces no email, no push and no
 #   red mark anywhere a human passes. A gate whose failure nobody sees is not
 #   a gate; it is a job that costs 40 minutes of CI a night and buys nothing.
 #

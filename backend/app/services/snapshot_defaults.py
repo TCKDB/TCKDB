@@ -26,7 +26,7 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     ("kinetics", "t0_k"): 1.0,
     # level_of_theory.core_treatment: a level stored before the column existed
     # did not state it, which is NULL, and a NULL is not part of its hash
-    # either (ADR 0021). A level that states frozen_core or all_electron
+    # either. A level that states frozen_core or all_electron
     # includes the column, so its digest differs, as its identity does.
     ("level_of_theory", "core_treatment"): None,
     # level_of_theory.relativistic_hamiltonian / pno_truncation / ri_approximation: same shape
@@ -88,7 +88,7 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
 }
 
 
-#: Columns a digest NEVER includes, whatever they hold (DR-0038). They are not something a record
+#: Columns a digest NEVER includes, whatever they hold. They are not something a record
 #: claims; they are derived from, or bookkeeping about, columns the digest already covers:
 #:
 #: * ``species_entry.stereo_descriptor`` / ``stereo_resolution`` / ``stereo_smiles`` are derived

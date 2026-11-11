@@ -4,10 +4,9 @@ One question, asked in several places: does this statmech describe a species
 that has vibrational modes? A single atom does not, so a missing ``freq``
 source is expected for it and noise for everyone else.
 
-The answer used to be "no rotational constants and no torsions, so an
-atom". That is a statement about what the depositor chose to *send*, not
-about the species: on the real ARC run fixtures 26 of 45 polyatomic statmech
-blocks carry neither, and every one of them was treated as an atom (#608).
+"No rotational constants and no torsions" is not the test: that is a
+statement about what the depositor chose to *send*, not about the species,
+and polyatomic statmech blocks can carry neither.
 
 Evidence, strongest first
 -------------------------

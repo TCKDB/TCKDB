@@ -1,4 +1,4 @@
-"""Composite schemes: lazy catalogue rows and level-of-theory binding (ADR 0021, P2).
+"""Composite schemes: lazy catalogue rows and level-of-theory binding.
 
 A level of theory whose method is a catalogued named composite method
 (``CBS-QB3``, ``G4``, ``W1U``, ...) is an ordinary ``level_of_theory`` row. This
@@ -120,7 +120,7 @@ def _internal_level_id(session: Session, level: InternalLevel | None) -> int | N
     from app.services.calculation_resolution import resolve_level_of_theory_ref
 
     # Method, basis and, when the catalogue states it, the core treatment: a
-    # frozen-core and an all-electron level are two levels (ADR 0021, decision 8),
+    # frozen-core and an all-electron level are two levels,
     # so an internal level that depends on it must resolve to the right one.
     row = resolve_level_of_theory_ref(
         session,
@@ -271,7 +271,7 @@ def add_scheme_term_input(
 
 
 # ---------------------------------------------------------------------------
-# User-built schemes (ADR 0021, P5)
+# User-built schemes
 # ---------------------------------------------------------------------------
 
 
@@ -441,7 +441,7 @@ def term_positions_for(session: Session, definition: Any) -> list[int]:
 def scheme_definition_canonical_json(definition: Any, resolved: list[list[_ResolvedInput]]) -> str:
     """The canonical JSON a user scheme's ``definition_hash`` is taken over.
 
-    What is in it (ADR 0021, section 2.4): the ``kind``; the terms **in canonical
+    What is in it: the ``kind``; the terms **in canonical
     order** (:func:`canonical_term_order`: a sum has no order, so none is imposed by
     the depositor), each with its operation, energy component, formula and exponent;
     and for each input, sorted by slot then cardinal number, its slot, its declared

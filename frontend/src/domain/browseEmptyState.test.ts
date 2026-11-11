@@ -3,8 +3,8 @@ import { archiveEmptyMessage, filteredEmptyMessage, pagedPastEndMessage } from "
 
 /**
  * Direct unit coverage for the "reaction" kind's own empty-state copy (PR
- * 4b) -- the three functions this module exports were previously only
- * exercised indirectly, through rendered text in `BrowsePage.test.tsx`.
+ * 4b) -- the three functions this module exports, covered directly
+ * here as well as through rendered text in `BrowsePage.test.tsx`.
  * Each assertion pins the archive-fact framing (never "none exist", the
  * house rule against asserting from absence) and, for `archiveEmptyMessage`
  * specifically, that "reaction" gets its OWN sentence rather than silently

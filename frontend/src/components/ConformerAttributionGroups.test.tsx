@@ -23,9 +23,8 @@ function renderGroups(attribution: ConformerAttribution<Rec>) {
 }
 
 describe("ConformerAttributionGroups", () => {
-    // The owner's exact report: "he opened the Thermochemistry tab having
-    // selected conformer_2, and what sits there is another conformer's
-    // record under a heading he has to read carefully to notice." A
+    // A conformer is selected, and another conformer's
+    // record must not sit there under a heading a reader has to read carefully to notice.
     // selected conformer with ZERO records of its own must say so plainly,
     // and the OTHER conformer's records must not render as though they
     // belonged to the selected one.
@@ -124,8 +123,8 @@ describe("ConformerAttributionGroups", () => {
 
     it("omits the no-conformer-link group entirely when nothing falls into it", () => {
         renderGroups({ thisConformer: [{ id: "mine" }], otherConformers: [], noLink: [] })
-        // An empty bucket used to print its heading and explanation for
-        // nothing, directly under a card stating the conformer WAS derived --
+        // An empty bucket prints no heading or explanation under
+        // a card stating the conformer WAS derived --
         // which read as a contradiction. Assert the selected conformer's own
         // record still renders, so this cannot pass by the whole section
         // failing to mount.

@@ -158,7 +158,7 @@ describe("changing a role", () => {
 describe("what the page does not show", () => {
     it("renders no email address even if one somehow arrives in the payload", async () => {
         /**
-         * The backend withholds `email` from this route by decision. This
+         * The backend withholds `email` from this route. This
          * asserts the page is not a second place that would leak it: the
          * payload below carries one, and it must not reach the document.
          */
@@ -178,12 +178,11 @@ describe("what the page does not show", () => {
 
     it("carries no in-page nav duplicating the header menu", async () => {
         /**
-         * There used to be a `<nav className="admin-nav">` here with links
+         * The page has no `<nav className="admin-nav">` with links
          * to Record review, Machine findings and Machine-review inspection.
          * The header's account menu offers all three from every route, so
-         * the block was a second copy of the same navigation on one of the
-         * routes it pointed at -- two things to keep in step, and the owner
-         * read the duplication as the defect rather than the styling.
+         * such a block would be a second copy of the same navigation on one of
+         * the routes it pointed at -- two things to keep in step.
          *
          * Asserted as "no link to those three paths ANYWHERE on this page",
          * not "no element with that class": re-adding the block under a new

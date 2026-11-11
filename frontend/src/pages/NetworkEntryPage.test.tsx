@@ -115,7 +115,7 @@ function handleReactionEntry(ref: string, equation: string, status = "not_review
 }
 
 // ---------------------------------------------------------------------------
-// k(T,P) evaluate -- POST /networks/{ref}/kinetics/evaluate (PR 4)
+// k(T,P) evaluate -- POST /networks/{ref}/kinetics/evaluate
 // ---------------------------------------------------------------------------
 
 function ktpPoint(temperatureK: number, pressureBar: number, k: number, inRange = true) {
@@ -246,7 +246,7 @@ function solvesWithReview(review: { status: string; note?: string | null }) {
 }
 
 describe("NetworkEntryPage -- review note", () => {
-    // MUTATION TABLE (required, brief item 3): a record with no note must
+    // Mutation check: a record with no note must
     // render an empty container nowhere -- there must be no review-note
     // disclosure at all when neither the network's nor the solve's review
     // carries one. The default fixture's reviews are both `{ status:
@@ -259,7 +259,7 @@ describe("NetworkEntryPage -- review note", () => {
         expect(screen.queryByText("Network solve review note", { exact: false })).toBeNull()
     })
 
-    // MUTATION TABLE (required, brief item 2): if the page rendered the
+    // Mutation check: if the page rendered the
     // review status pill but dropped the note, this goes red.
     it("shows the solve's review note -- the real one on the live archive -- once its disclosure is opened", async () => {
         const user = userEvent.setup()
@@ -304,7 +304,7 @@ describe("NetworkEntryPage -- energy coverage is computed live, never hardcoded"
         expect(await screen.findByText(/none of the 2 participant species entries carry a thermo/)).toBeVisible()
     })
 
-    // MUTATION TABLE (a): hardcode the energy-coverage figure instead of
+    // Mutation check: hardcode the energy-coverage figure instead of
     // computing it (e.g. always render "0 of 2" regardless of the fixture).
     // This test lands a DIFFERENT thermo-presence fixture (1 of 2 species
     // entries covered) and asserts the DIFFERENT resulting sentence -- a
@@ -345,7 +345,7 @@ describe("NetworkEntryPage -- composition_hash never renders where chemistry bel
         // energies" disclosure -- `toBeInTheDocument`, not `toBeVisible`
         // (jest-dom's `toBeVisible` treats a closed `<details>`'s content as
         // not visible by design; presence, not visibility, is what this
-        // guard checks). `findAllByText`, not `findByText`: PR 3's network
+        // guard checks). `findAllByText`, not `findByText`: the network
         // diagram section (below) legitimately renders the SAME
         // `composition.state_label` a second time in its own accessible
         // states table -- two honest, independent renderings of the same
@@ -395,7 +395,7 @@ describe("NetworkEntryPage -- structured stereo facets tell isomeric states apar
     })
 })
 
-describe("NetworkEntryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("NetworkEntryPage -- no depositor-typed text", () => {
     it("prints none of the fields a depositor typed, in text, SVG text, ids or any attribute", async () => {
         const detail = networkDetailFixture()
         // The server's state label embeds each participant's `species_entry_label`; plant the typed parts there.
@@ -497,9 +497,7 @@ describe("NetworkEntryPage -- reactions table", () => {
 })
 
 describe("NetworkEntryPage — every ref that has a record page is a link to it", () => {
-    // The page originally rendered these as inert <code>, which is the same
-    // dead-end this PR's own ReactionEntryPage change removed in the opposite
-    // direction. Each assertion names the route the ref must reach, so a
+    // Each assertion names the route the ref must reach, so a
     // wrong-route regression fails here rather than 404ing in a browser.
     it("the reaction entry ref links to /reaction-entries/:ref", async () => {
         handleNetworkDetail(networkDetailFixture())
@@ -616,7 +614,7 @@ describe("NetworkEntryPage — an unreadable solve degrades, it does not blank t
     })
 })
 
-describe("NetworkEntryPage -- k(T,P) chart (PR 4)", () => {
+describe("NetworkEntryPage -- k(T,P) chart", () => {
     it("renders BOTH fits for the default channel -- a Chebyshev and a PLOG series, never collapsed to one", async () => {
         handleEverything()
         const { container } = page()
@@ -642,7 +640,7 @@ describe("NetworkEntryPage -- k(T,P) chart (PR 4)", () => {
         // for the whole page) is indistinguishable from the correct
         // behaviour on a one-channel fixture, since both produce exactly
         // one call. This is the fixture that actually exercises the
-        // distinction (confirmed via mutation -- see this PR's report).
+        // distinction.
         handleNetworkDetail(networkDetailFixture({
             channels: [
                 {
@@ -766,8 +764,7 @@ describe("NetworkEntryPage -- k(T,P) chart (PR 4)", () => {
 })
 
 // ---------------------------------------------------------------------------
-// k(T,P) x-axis mode (owner: "And why can't I change temp to 1/temp" -- the
-// Arrhenius chart already has this control, this chart did not). Mirrors
+// k(T,P) x-axis mode (the Arrhenius chart has the same control). Mirrors
 // `ArrheniusChart.test.tsx`'s own "the x-axis mode control" describe block,
 // same fixture-independent assertions: default mode, switching re-projects
 // and reverses, switching back restores, and the axis title follows the
@@ -936,10 +933,8 @@ describe("NetworkEntryPage — the k(T,P) y-axis title sits in the grid track bu
 })
 
 // ---------------------------------------------------------------------------
-// k(T,P) stacked-panel / unit-control follow-up (owner: "shouldn't they all
-// stack on one graph... why is there no control for changing the y axis").
-// A network with THREE channels across the two families actually observed
-// on the live archive: `channel_1` isomerization/`per_s`, `channel_2`
+// k(T,P) stacked-panel / unit-control behaviour.
+// A network with THREE channels across two families: `channel_1` isomerization/`per_s`, `channel_2`
 // association/`cm3_mol_s`, `channel_3` exchange/`cm3_mol_s` -- exercises
 // both "same family stacks" and "different families never mix" at once.
 // ---------------------------------------------------------------------------
@@ -1021,8 +1016,8 @@ describe("NetworkEntryPage -- k(T,P) chart stacks selected channels by unit fami
         expect(wraps).toHaveLength(2)
         // Every wrap holds exactly one of the two families' channel(s) --
         // never both `channel_1` and `channel_2` inside the SAME wrap. A
-        // mutation that merges the two into one shared panel (the exact
-        // defect this PR's brief warns against) makes this assertion fail:
+        // mutation that merges the two into one shared panel makes this
+        // assertion fail:
         // one wrap would then carry both data-testids at once.
         for (const wrap of wraps) {
             const hasIso = wrap.querySelector('[data-testid="ktp-line-nk_iso_cheb"]') !== null
@@ -1104,9 +1099,7 @@ describe("NetworkEntryPage -- k(T,P) chart stacks selected channels by unit fami
         const axisTitleAfter = assocWrap.querySelector(".arrhenius-chart-axis-title--y")!.textContent
         const lineAfter = assocWrap.querySelector('[data-testid="ktp-line-nk_assoc_cheb"] polyline')!.getAttribute("points")
         // The axis title names the NEW unit -- a mutation that converts the
-        // plotted values but leaves the title reading the old unit (the
-        // exact defect the Arrhenius chart's own owner caught once already)
-        // fails this line.
+        // plotted values but leaves the title reading the old unit fails this line.
         expect(axisTitleAfter).toBe("log₁₀ [k / m³ mol⁻¹ s⁻¹]")
         expect(axisTitleAfter).not.toBe(axisTitleBefore)
         // The plotted line itself actually moved (m3_mol_s = cm3_mol_s *

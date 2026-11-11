@@ -44,7 +44,7 @@ error is logged and swallowed, matching the sibling energy hook.
 a file whose whole purpose is to be one) and still stored nothing, it returns a
 warn-tier :class:`UploadWarning` naming why, as the sibling hooks do. These are
 their own codes (``hessian_not_stored_*``), not the geometry-link block codes
-reused as warnings, so the refuse-versus-warn split of ADR 0008 stays clean. A
+reused as warnings, so the refuse-versus-warn split stays clean. A
 log that simply carries no matrix -- most freq logs, every ORCA output log --
 is not a failure and says nothing, and neither does losing a race to a
 concurrent uploader that stored the same Hessian.

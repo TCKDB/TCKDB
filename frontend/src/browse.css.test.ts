@@ -18,12 +18,10 @@ function extractRule(source: string, selector: string): string {
     return match[1]
 }
 
-// PR D (design-system adoption on the index/record pages): the browse page
-// used to define its own 57.6px/700 h1, its own row box style, an 11px
-// faint ref, and duplicate label/hint/pagination typography rather than
-// pointing at the shared type scale. Every rule below pins one of those
-// migrations so a later edit that quietly reverts one fails here instead of
-// shipping unnoticed.
+// The browse page uses the shared type scale (no own h1 size, row box
+// style, 11px faint ref, or duplicate label/hint/pagination typography).
+// Every rule below pins one of those so a later edit that quietly reverts
+// one fails here instead of shipping unnoticed.
 describe(".browse-header h1 -- the shared display-2 step", () => {
     it("uses var(--type-display-2-font), not its own literal clamp", () => {
         const rule = extractRule(css, ".browse-header h1")
@@ -31,15 +29,15 @@ describe(".browse-header h1 -- the shared display-2 step", () => {
         expect(rule).not.toMatch(/font-size:\s*clamp/)
     })
 
-    it("no longer carries the 4px accent left-bar on .browse-header", () => {
+    it("does not carry the 4px accent left-bar on .browse-header", () => {
         const rule = extractRule(css, ".browse-header")
         expect(rule).not.toMatch(/border-left/)
     })
 })
 
 describe(".browse-row -- box styling comes from the shared .card primitive", () => {
-    it("no longer declares its own padding/border/border-radius/background", () => {
-        // `.browse-row` used to be its own rule with a box style; it is now
+    it("does not declare its own padding/border/border-radius/background", () => {
+        // `.browse-row` has no rule with a box style; it is
         // only ever mentioned in a comment (both row components add `.card`
         // alongside it in `SpeciesBrowseRow.tsx`/`TransitionStateBrowseRow.tsx`).
         // A real `.browse-row {` rule reappearing here would mean the box
@@ -64,12 +62,12 @@ describe(".browse-row-provenance -- --type-value", () => {
 })
 
 describe(".browse-row-evidence -- --type-note", () => {
-    it("is its own rule (no longer grouped with .browse-row-smiles/.browse-row-ts-label) and uses var(--type-note-font)", () => {
+    it("is its own rule (not grouped with .browse-row-smiles/.browse-row-ts-label) and uses var(--type-note-font)", () => {
         const rule = extractRule(css, ".browse-row-evidence")
         expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
     })
 
-    it(".browse-row-smiles/.browse-row-ts-label no longer share a rule with .browse-row-evidence", () => {
+    it(".browse-row-smiles/.browse-row-ts-label do not share a rule with .browse-row-evidence", () => {
         expect(css).not.toMatch(/\.browse-row-smiles,\s*\n?\s*\.browse-row-ts-label,\s*\n?\s*\.browse-row-evidence/)
     })
 })
@@ -81,7 +79,7 @@ describe("the ref is a data run, not an 11px faint one-off", () => {
         expect(rule).not.toMatch(/font-size:/)
     })
 
-    it("the old .browse-row-ref selector no longer has a rule of its own (a comment may still name it for history)", () => {
+    it("the old .browse-row-ref selector has no rule of its own", () => {
         expect(css).not.toMatch(/\.browse-row-ref\s*\{/)
     })
 })
@@ -121,12 +119,11 @@ describe(".browse-pagination button -- --type-ui", () => {
 })
 
 describe("no off-token divider colour", () => {
-    it("--divider is no longer referenced in this file", () => {
+    it("--divider is not referenced in this file", () => {
         expect(css).not.toMatch(/var\(--divider\)/)
     })
 })
 
-// Post-review (PR D) fix:
 describe(".browse-count -- the shared --type-label step, not a hand-rolled .72rem/.04em pair", () => {
     it("uses var(--type-label-font)", () => {
         const rule = extractRule(css, ".browse-count")
@@ -136,7 +133,7 @@ describe(".browse-count -- the shared --type-label step, not a hand-rolled .72re
 })
 
 // ---------------------------------------------------------------------------
-// SHOULD-FIX-11 (species-entry/browse/chrome residuals re-review): the
+// the
 // browse page carried its own bespoke sizes -- `.76rem`/`.78rem`/`.84rem`/
 // `.86rem`/`.92rem`, none matching a named type-scale step -- across the
 // row meta line, the kind selector, the filter checkboxes, and the status/
@@ -150,14 +147,10 @@ describe(".browse-row-meta -- --type-note, not a bare mono .76rem", () => {
     })
 })
 
-// `.browse-row-smiles` (once tested here for its own consolidated rule)
-// was RETIRED alongside `SpeciesBrowseRow.tsx`'s switch to `SpeciesFace`
-// (SMILES-leads-formula-in-brackets change): the SMILES now renders
-// inside the row's own title, so a second line repeating it had zero
-// remaining consumers. See this file's own `.browse-row-smiles` rule
-// removal comment for the fuller history.
-describe(".browse-row-smiles -- retired, no rule left in the stylesheet", () => {
-    it("has no rule of its own any more", () => {
+// `.browse-row-smiles` has no rule: `SpeciesBrowseRow.tsx` renders the
+// SMILES inside the row's own title through `SpeciesFace`.
+describe(".browse-row-smiles -- no rule in the stylesheet", () => {
+    it("has no rule of its own", () => {
         expect(css).not.toMatch(/\.browse-row-smiles\s*\{/)
     })
 })
@@ -186,16 +179,15 @@ describe("status/empty lines -- --type-note, not a bare .92rem", () => {
     })
 })
 
-// Review follow-up (PR 4b, round 2): the reaction browse row RE-CREATED the
-// stereo-chip defect `reaction-entry.css.test.ts` already guards for the
+// The reaction browse row needs the stereo-chip rule `reaction-entry.css.test.ts` guards for the
 // entry/chooser pages (`.record-identity-title .reaction-equation-chip` /
 // `.record-identity-title code.data`) -- that fix's selector never reaches
 // this row, and `reaction-entry.css` is not even in the browse page's CSS
-// chunk. MEASURED before this fix (real Chrome): the chip and the formula
-// beside it both rendered at the row title's own 20px `--type-heading-2-
-// font` step, ratio 1.00, in accent color with a permanent underline
-// (`.card a`) -- an English aside ("· S enantiomer") reading as equally
-// prominent as the chemistry, live on 4+ of the first 20 unfiltered rows.
+// chunk. Uncapped, the chip and the formula
+// beside it both render at the row title's own 20px `--type-heading-2-
+// font` step, in accent color with a permanent underline
+// (`.card a`) -- an English aside ("· S enantiomer") would read as equally
+// prominent as the chemistry.
 //
 // This is a SOURCE-TEXT regex against the stylesheet, the same technique
 // `reaction-entry.css.test.ts` uses for the identical bug, not a
@@ -214,7 +206,7 @@ describe("reaction browse row -- equation code in the heading", () => {
     })
 })
 
-// Review follow-up: the ENTIRE point of this PR -- making the reaction
+// Making the reaction
 // browse card one click target for the reaction entry -- lives in a single
 // CSS rule, `.reaction-browse-row .browse-row-title::after`. jsdom does
 // not compute pseudo-element styles at all (confirmed: `getComputedStyle`
@@ -224,9 +216,9 @@ describe("reaction browse row -- equation code in the heading", () => {
 // row and footer ancestors are positioned. Without a SOURCE-TEXT assertion
 // here, that one line could be deleted entirely and the whole rendered
 // test suite would stay green while the on-page click target collapsed
-// from the full card down to a sliver around the equation text (MEASURED:
-// deleting this rule drops on-target click points from 2940/2940 to
-// 170/2940 in a real browser, with 57 unrelated tests still passing).
+// from the full card down to a sliver around the equation text (deleting this rule
+// shrinks the on-target click area in a real browser while the
+// unrelated tests still pass).
 // Same source-text technique the stereo-chip suite above uses, for the
 // same reason: no computed-pixel assertion can catch this class of
 // regression here.

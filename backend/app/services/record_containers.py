@@ -48,8 +48,7 @@ left a reader of any one of them with a different idea of what null meant.
    (an importer may deposit an identity-unresolved observation, see that
    model's module docstring) -- every other owning key below is either NOT
    NULL or covered by an XOR ``CHECK``. The resolver does not assume a
-   constraint it cannot see, so this was already handled correctly; it is
-   just no longer hypothetical.
+   constraint it cannot see.
 4. **The owner no longer exists,** so it cannot be named.
 
 Callers get ``None`` for all four and must present it as "cannot be linked",
@@ -266,10 +265,7 @@ def resolve_record_containers(
     # goes in so that ``resolve_record_public_refs`` can group it; handing it
     # one pair at a time would look identical here and cost a round trip per
     # distinct parent -- which on a real page, where rows do not share a
-    # parent, is a round trip per row. Reproduced 2026-09-16; it passed all
-    # 44 tests until ``test_a_page_whose_rows_have_DIFFERENT_parents_still
-    # _costs_two`` was written, because every cost test then in the file put
-    # its whole page under one shared parent.
+    # parent, is a round trip per row.
     container_refs = resolve_record_public_refs(session, set(container_ids.values()))
 
     resolved: dict[tuple[SubmissionRecordType, int], RecordContainer] = {}

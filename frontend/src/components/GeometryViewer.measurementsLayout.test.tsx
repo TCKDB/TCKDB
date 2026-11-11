@@ -3,11 +3,8 @@ import { cleanup, render, waitFor } from "@testing-library/react"
 import { GeometryViewer } from "./GeometryViewer"
 
 /**
- * Owner report ("record-page residuals" re-review, item 1): the
- * measurements panel rendered to the right of and below the 3D picture
- * instead of directly under it (see the CSS-source test in
- * `../geometry-measure.layout.css.test.ts` and the PR body's CDP rects
- * for the real-browser measurement). jsdom does not lay anything out, so
+ * The measurements panel renders directly under the 3D picture (see the
+ * CSS-source test in `../geometry-measure.layout.css.test.ts`). jsdom does not lay anything out, so
  * it cannot see the float itself -- what it CAN confirm is the one thing
  * that made the float possible even to reach: `.viewer-measurements`
  * must render as a DOM sibling immediately after `.viewer-stage`, both

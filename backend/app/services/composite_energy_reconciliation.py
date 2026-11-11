@@ -1,4 +1,4 @@
-"""Reconcile a deposited composite energy against the program's own log (ADR 0021, P3b).
+"""Reconcile a deposited composite energy against the program's own log.
 
 A ``composite`` calculation carries the numbers the producer read (or the
 program printed): ``e0_hartree``, ``electronic_energy_hartree`` and
@@ -21,7 +21,7 @@ nothing deposited,      ``absent``
 log not readable
 ======================  =====================================================
 
-Always **warn**, never refuse (ADR 0008 tier for ``composite_energy_log_mismatch``):
+Always **warn**, never refuse (for ``composite_energy_log_mismatch``):
 the log is evidence, and the producer's number is kept exactly as sent.
 
 What is compared, and with which tolerance

@@ -1,6 +1,6 @@
 """Service helpers for conformer group resolution.
 
-Implements DR-0005: torsional basin matching for conformer grouping.
+Torsional basin matching for conformer grouping.
 When no torsion fingerprint can be made (a single atom, a failed computation) the structure joins the entry's
 existing no-fingerprint group, or starts a new ``conformer_N`` group. The depositor's conformer label is never read.
 
@@ -357,7 +357,7 @@ def resolve_conformer_group(
 ) -> tuple[ConformerGroup, TorsionFingerprint | None, ConformerAssignmentScheme | None]:
     """Resolve or create a conformer group for an uploaded observation.
 
-    Uses torsional basin matching (DR-0005) when geometry data is available.
+    Uses torsional basin matching when geometry data is available.
     A structure with no fingerprint (single atom, failed computation) joins the entry's existing no-fingerprint
     group, or starts a new ``conformer_N`` group; the depositor's label plays no part.
     This function resolves only the basin-level ``ConformerGroup``; callers
@@ -484,7 +484,7 @@ def _merge_inline(session: Session, kept_id: int, absorbed_ids: Sequence[int], *
     """Merge younger groups into the oldest one the upload linked, when no approved record is involved.
 
     Every observation, thermo target, statmech basin declaration and ensemble member, and selection of an absorbed
-    group goes to the kept group (each of those would, by D5, follow an observation that now lives there). The
+    group goes to the kept group (each of those follows an observation that now lives there). The
     emptied row is kept, with no representative and ``merged_into_conformer_group_id`` naming the survivor, so a
     cited group ref still resolves. Reviews of both groups reset: neither is the group that was reviewed.
     """

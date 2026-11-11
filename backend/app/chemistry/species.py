@@ -68,6 +68,21 @@ def formal_charge(mol: Chem.Mol) -> int:
     return sum(atom.GetFormalCharge() for atom in mol.GetAtoms())
 
 
+def electron_count_from_smiles(smiles: str, charge: int) -> int | None:
+    """The number of electrons of a species: the atomic numbers of its atoms, implicit hydrogens included, minus its net charge.
+
+    Isotopes count as their element (D and T have one electron). ``None`` when RDKit cannot read the SMILES.
+
+    :param smiles: The species' stored SMILES.
+    :param charge: The species' stored net charge.
+    """
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None
+    return sum(atom.GetAtomicNum() + atom.GetTotalNumHs() for atom in mol.GetAtoms()) - charge
+
+
 def spin_multiplicity(mol: Chem.Mol) -> int:
     """Estimate spin multiplicity from radical electrons.
 
@@ -209,9 +224,9 @@ def element_counts_from_smiles(smiles: str) -> Counter[str]:
       their own spelling: they disagree about capitalisation (``CL``, ``cl``)
       and a hand-written file may write hydrogen's isotopes as elements
       (``D``, ``T``). ``b4e7c1d20f83`` canonicalises the case on the way in,
-      which makes the first of those rare rather than impossible. Since
-      ``docs/adr/0022`` (2026-10-03) ``parse_xyz`` stores a ``D``/``T`` as
-      ``H`` plus a mass number, so only rows deposited before that still hold
+      which makes the first of those rare rather than impossible.
+      ``parse_xyz`` stores a ``D``/``T`` as
+      ``H`` plus a mass number, so only older rows still hold
       the ``D``/``T`` symbol — which cannot be rewritten, so this call stays. RDKit's
       ``GetSymbol()`` produces neither spelling, so this call is a no-op on
       this side — it is here so that both sides of every comparison are counted
@@ -455,7 +470,7 @@ def canonical_species_identity(
     stripped, every stereo mark removed) plus charge and multiplicity, and the
     InChIKey of that same molecule. ``C/C=C/C`` and ``CC=CC`` are one species;
     which stereoisomer a deposit is lives on the species entry
-    (:mod:`app.chemistry.stereo`, DR-0038).
+    (:mod:`app.chemistry.stereo`).
 
     :param payload: Upload-facing species-entry identity payload.
     :returns: ``(canonical_smiles, inchi_key)`` for the constitution.
@@ -474,7 +489,7 @@ def canonical_species_identity(
     hint. The uploaded ``multiplicity`` is authoritative — this is what
     lets singlet CH₂ (SMILES ``[CH2]`` implies a triplet) and the singlet/
     triplet O₂ states be represented. Species identity carries multiplicity
-    as part of its unique key; see DR-0031 (key now stereo-blind, DR-0038).
+    as part of its unique key (the key is stereo-blind).
 
     Isotope labels are stripped before canonicalization. Isotopologues share
     one molecular graph and one potential energy surface, so they share a

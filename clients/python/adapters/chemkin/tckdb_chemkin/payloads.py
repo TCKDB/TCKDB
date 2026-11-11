@@ -369,7 +369,7 @@ def build_all_payloads(
         warnings.extend(rxn.warnings)
         # ``normalized.reactions`` has already collapsed each CHEMKIN
         # ``DUPLICATE`` group of summable (modified-)Arrhenius rates into one
-        # ``multi_arrhenius`` reaction (spec §6, DR-0036), so this is one
+        # ``multi_arrhenius`` reaction (spec §6), so this is one
         # payload per logical reaction.
         kinetics_payloads.append(build_kinetics_payload(rxn, resolved, config))
 

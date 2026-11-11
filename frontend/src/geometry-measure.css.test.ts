@@ -11,13 +11,13 @@ function extractRule(source: string, selector: string): string {
 }
 
 /**
- * SHOULD-FIX-10 ("record-page residuals" re-review): `.viewer-measurements-
+ * `.viewer-measurements-
  * header h3` was `600 .82rem mono` and `.measure-clear-button` was `.68rem`
  * (10.88px, under the 11px accessibility-pass floor) -- both one-off sizes
  * outside the 13-step scale. Mapped onto `--type-ui-font`, matching the
  * button vocabulary `geometry-viewer.css`'s own viewer controls now use.
  */
-describe("measurements panel heading/button use --type-ui (SHOULD-FIX-10)", () => {
+describe("measurements panel heading/button use --type-ui", () => {
     it(".viewer-measurements-header h3 uses --type-ui-font, not a literal .82rem mono", () => {
         const rule = extractRule(css, ".viewer-measurements-header h3")
         expect(rule).toMatch(/font:\s*var\(--type-ui-font\)/)

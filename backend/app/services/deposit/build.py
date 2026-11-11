@@ -35,7 +35,7 @@ the script head, a release that does not verify, an account outside the
 author allowlist, an actor reference resolving outside it, a non-empty
 output directory, or a molecular-property observation about one of the
 release's covered species with no rights basis compatible with the
-release's ``data_license`` (Phase C-E5; see
+release's ``data_license`` (see
 :func:`_assert_observations_have_rights_basis`). Refusal messages name
 usernames only -- never an email or a database id.
 
@@ -234,9 +234,7 @@ class SourceBinding:
     alembic_head: str
     tree_clean: bool
     #: Untracked, unignored paths at build time. Reported, never refused: an
-    #: untracked file cannot change any tracked member the deposit copies,
-    #: and the author's checkout deliberately keeps ``paper/`` and
-    #: ``.agents/`` untracked and unignored.
+    #: untracked file cannot change any tracked member the deposit copies.
     untracked_paths: tuple[str, ...] = ()
     #: Which refusals were armed when the binding was taken. Recorded in the
     #: manifest so a build made with a switch off (only tests do that) is
@@ -614,7 +612,7 @@ def _assert_observations_have_rights_basis(
 ) -> None:
     """Refuse to bundle the evidence archive over an unattested observation.
 
-    Phase C-E5. ``molecular_property_observation`` is not in
+    ``molecular_property_observation`` is not in
     ``SELECTABLE_RECORD_TYPES`` or ``CANDIDATE_SOURCES``
     (``app/db/models/dataset_release.py`` /
     ``app/services/release/records.py``), so the frozen release artifacts

@@ -3,7 +3,7 @@ import { lotLabel } from "../api/scientificSchemas"
 import { words } from "./provenanceFormat"
 
 // ---------------------------------------------------------------------------
-// Wording and arithmetic display for a composite recipe (ADR 0021, P7a/P7b).
+// Wording and arithmetic display for a composite recipe.
 // The server derives each input's `coefficient` and each term's `linearity`;
 // nothing here recomputes a weight. This module only SHOWS them: a number as
 // an exact fraction where one exists, and a term as the sum it stands for.

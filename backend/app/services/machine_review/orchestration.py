@@ -276,8 +276,8 @@ def run_fake_record_machine_review(
       ``failed_to_produce_review`` (only reachable for ``run_*``; a current
       record still skips without needing a clock).
 
-    The default-review path now goes through the producer interface rather than
-    being constructed inline. No real provider is called.
+    The default-review path goes through the producer interface. No real
+    provider is called.
     """
 
     def _produce(context: MachineReviewEvidenceContext) -> RecordMachineReview:

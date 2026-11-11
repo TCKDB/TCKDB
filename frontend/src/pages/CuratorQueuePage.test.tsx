@@ -202,9 +202,8 @@ describe("who can open the queue", () => {
 describe("what the page says it is", () => {
     it("is titled Machine findings, and never by its old name", async () => {
         /**
-         * The rename is the fix for the actual complaint: the owner could
-         * not tell this page from `/review-queue` because "Curator queue"
-         * and "Review queue" both named an audience rather than a subject.
+         * The page is told apart from `/review-queue` by a name that states a
+         * subject, not an audience.
          *
          * Both halves are asserted. The heading alone would still pass with
          * the old name left lying in the lede or an empty state, and a
@@ -223,7 +222,7 @@ describe("what the page says it is", () => {
         queueIs([])
         renderPage()
 
-        // ADR 0016's separation, said where a curator reads it rather than
+        // The separation between findings and endorsement, said where a curator reads it rather than
         // only in a doc. A button labelled "Close" on a list of findings
         // invites the opposite reading.
         expect(
@@ -400,8 +399,7 @@ describe("how a row names the record it concerns", () => {
     })
 
     it("says so when the backend could not name the record, without saying \"cannot be named\"", async () => {
-        // #488 shipped "cannot be named" for exactly this case and the
-        // owner called it rubbish; it must not reappear on this page.
+        // "cannot be named" must not appear on this page.
         meIs(admin)
         queueIs([task({ record_type: "applied_energy_correction", record_public_ref: null })])
         renderPage()
@@ -431,9 +429,8 @@ describe("how a row names the record it concerns", () => {
         expect(link).toHaveAttribute("href", "/species-entries/spe_xyz")
         expect(link).toHaveAttribute("target", "_blank")
         // Same guarantee as the own-page link: `rel="noopener noreferrer"`
-        // stops the new tab from getting a handle back to this one. Unpinned
-        // here previously -- removing `rel` from the container link left
-        // every other assertion in this file passing.
+        // stops the new tab from getting a handle back to this one. Removing `rel`
+        // from the container link would leave every other assertion passing.
         expect(link).toHaveAttribute("rel", "noopener noreferrer")
         expect(link).toHaveTextContent(/shown on species entry/i)
     })
@@ -945,9 +942,9 @@ describe("everything a row owns stays with that row", () => {
         await user.selectOptions(await screen.findByLabelText("Showing"), "all")
         await user.click(rowButton("spc_vu7cuk4s37szxaudjpf355tqda", "Start review"))
 
-        // An earlier version left the row reading "needs review" with a live
-        // "Start review" button under a task the server had already closed --
-        // and a test asserted that as correct. A state conflict is precisely
+        // The row must not keep reading "needs review" with a live
+        // "Start review" button under a task the server has already closed.
+        // A state conflict is precisely
         // the case where the row on screen is the row that is now wrong.
         expect(await screen.findByRole("alert")).toHaveTextContent(/Cannot start review/)
         await waitFor(async () =>
@@ -1250,7 +1247,7 @@ describe("when the archive says something this build does not understand", () =>
         ])
         renderPage()
 
-        // Neither token drives a decision, so an unfamiliar one is shown
+        // Neither token drives behaviour, so an unfamiliar one is shown
         // as-is. Treating them as strict enums took the whole page down.
         await screen.findByRole("table")
         expect(bodyRows()[0][1]).toBe("blocking")

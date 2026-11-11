@@ -7,7 +7,7 @@ export const speciesEntrySummarySchema = z.object({
     species_entry_kind: z.string(),
     electronic_state_kind: z.string(),
     stereo_label: z.string().nullable().optional(),
-    // DR-0038: the key (`null` only for an achiral species), how much of it is known, and the
+    // The key (`null` only for an achiral species), how much of it is known, and the
     // elements no data can settle yet. `stereo_label` is only the display text of the key and is
     // NULL while nothing is resolved -- never read that NULL as "achiral".
     stereo_descriptor: z.string().nullable().optional(),

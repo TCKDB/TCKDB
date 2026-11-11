@@ -1,7 +1,6 @@
 /**
  * Builds the reactant/product SIDES of a reaction equation from
- * `/full`'s `species.reactants[]`/`species.products[]` participants --
- * see `docs/plans/reaction-entry-page.md` §4 "Reaction equation".
+ * `/full`'s `species.reactants[]`/`species.products[]` participants.
  *
  * A depositor can list the SAME species entry more than once on one side
  * (an equation written out atom by atom, e.g. `[NH2] + [NH2] <=> NN`

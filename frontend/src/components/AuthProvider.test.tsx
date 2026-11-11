@@ -60,8 +60,8 @@ describe("AuthProvider seeding", () => {
          * must not render the same.
          *
          * `fetchMe` already separates them (401 returns null, anything else
-         * throws). The provider used to catch every rejection and set
-         * `signed-out`, discarding that. The cost is concrete: during an API
+         * throws). The provider keeps that distinction rather than setting
+         * `signed-out` on every rejection. The cost of conflating them is concrete: during an API
          * restart a signed-in curator reloads, is told "Sign in", and is
          * bounced off /account while their cookie is still valid. They then
          * retype a password to replace a session they never lost.

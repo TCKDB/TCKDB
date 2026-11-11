@@ -9,7 +9,7 @@ import { useAuth } from "../hooks/useAuth"
  * Shown only to a signed-in reader. That is not a permission check --
  * `require_auth` on the route is -- it is a promise not to offer an
  * action that cannot work: raw artifact bytes are gated on every
- * deployment with no opt-out (ADR 0004), so a download control offered
+ * deployment with no opt-out, so a download control offered
  * to an anonymous visitor is a button whose only outcome is a 401.
  *
  * While the archive's sign-in state is still unknown (the initial

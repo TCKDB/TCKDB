@@ -21,7 +21,7 @@ function series(overrides: Partial<CpChartSeries> = {}): CpChartSeries {
 }
 
 describe("computeTemperatureDomain", () => {
-    it("clamps the low end at 0 K rather than padding outward -- a live record with t_low near 0 K used to pad straight through zero into negative kelvin (the review finding this replaced)", () => {
+    it("clamps the low end at 0 K rather than padding outward -- a record with t_low near 0 K must not pad through zero into negative kelvin", () => {
         const nearZeroRecord = series({
             fitted: { low: [{ temperatureK: 10, cpDisplay: 20 }], high: [{ temperatureK: 3000, cpDisplay: 130 }] },
             measured: [],
@@ -45,11 +45,11 @@ describe("computeTemperatureDomain", () => {
 })
 
 describe("niceTicks", () => {
-    it("matches the review finding's own example: 0, 500, 1000, ... for a 0-3000 domain", () => {
+    it("ticks 0, 500, 1000, ... for a 0-3000 domain", () => {
         expect(niceTicks([0, 3000], 5)).toEqual([0, 500, 1000, 1500, 2000, 2500, 3000])
     })
 
-    it("rounds a would-be-fractional step to a round number -- the Cp-axis half of the review finding ('20.8, 49.7, 78.7, 108, 137')", () => {
+    it("rounds a would-be-fractional step to a round number -- not '20.8, 49.7, 78.7, 108, 137'", () => {
         // span 126.5 / 5 = 25.3 raw -> the nearest {1,2,5}x10^n step is 20,
         // never a float that reproduces the raw division.
         const ticks = niceTicks([12.4, 138.9], 5)
@@ -98,7 +98,7 @@ describe("groupIdenticalSeries", () => {
         expect(groups[0].members.map((m) => m.thermoRef)).toEqual(["thm_a", "thm_a2"])
     })
 
-    it("never groups two series that both plot nothing, even though their structural signature ([[],null]) is identical -- each stays its own group so a different conformer group's record is never silently dropped (the blocking review finding)", () => {
+    it("never groups two series that both plot nothing, even though their structural signature ([[],null]) is identical -- each stays its own group so a different conformer group's record is never silently dropped", () => {
         const emptyOnGroupOne = series({
             thermoRef: "thm_empty_1",
             label: "Conformer Group 1",
@@ -122,7 +122,7 @@ describe("groupIdenticalSeries", () => {
         expect(groups.map((g) => g.representative.thermoRef)).toEqual(["thm_empty_1", "thm_empty_2"])
     })
 
-    it("never groups two unplottable series from the SAME conformer group either -- identity must key on the record, not the label (a re-review mutation keyed on label passed every existing test)", () => {
+    it("never groups two unplottable series from the SAME conformer group either -- identity must key on the record, not the label", () => {
         const first = series({
             thermoRef: "thm_empty_a",
             label: "Conformer Group 1",
@@ -163,7 +163,7 @@ describe("groupIdenticalSeries", () => {
 })
 
 describe("groupLegendLabel", () => {
-    it("names the count for a collapsed group, rather than the bare conformer label seven identical chips used to repeat", () => {
+    it("names the count for a collapsed group, rather than repeating the bare conformer label once per identical chip", () => {
         const members = [series({ thermoRef: "thm_a" }), series({ thermoRef: "thm_b" }), series({ thermoRef: "thm_c" })]
         const group = { representative: members[0], members }
         expect(groupLegendLabel(group, [group])).toBe("Conformer Group 1 — 3 identical records")

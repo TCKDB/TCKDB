@@ -1005,7 +1005,7 @@ class LiteratureLinkedRecord(TypedDict, total=False):
     network_ref: str | None
     network_solve_ref: str | None
     # Whether a linked network solve derived its k(T,P) here ("computed") or
-    # transcribed them from this very publication ("reported") -- see ADR 0010.
+    # transcribed them from this very publication ("reported").
     # Present only for ``record_type == "network_solve"``.
     #
     # Optional here, unlike the server, where the field is required and has no
@@ -1680,7 +1680,7 @@ class NetworkSelectedKineticsExport(TypedDict):
 
 
 class ObservationRecord(TypedDict, total=False):
-    """One ``molecular_property_observation`` row (Phase C-E5).
+    """One ``molecular_property_observation`` row.
 
     Not a *product* with candidacy/selection semantics like
     :class:`ThermoDetailRecord` -- a raw external measurement, so there is
@@ -1689,7 +1689,7 @@ class ObservationRecord(TypedDict, total=False):
     found by its owning species entry, so unresolved observations
     (nullable ``species_entry_id`` on the backend) are structurally
     unreachable -- there is no *status* field asking "does this row have an
-    identity". ``identity_basis`` (review round 3, R2) answers the
+    identity". ``identity_basis`` answers the
     different question of *how* it got one: an importer's automatic
     single-InChIKey match (``"external_identifier_match"``) or a curator's
     later judgement call through the identity-attach service

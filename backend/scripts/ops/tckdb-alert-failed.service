@@ -30,8 +30,8 @@ EnvironmentFile=-/home/YOUR_USER/.config/tckdb-alert.env
 # Two guards on the push itself, because an alerting unit that exits 0 without
 # alerting anyone is worse than one that is obviously broken:
 #
-#   1. An unset TCKDB_NTFY_TOPIC used to POST to `https://ntfy.sh/` -- ntfy
-#      answers that URL, curl was happy, the unit went green and nobody was
+#   1. An unset TCKDB_NTFY_TOPIC would POST to `https://ntfy.sh/` -- ntfy
+#      answers that URL, curl is happy, the unit goes green and nobody is
 #      told. There is no fallback topic to use instead (the topic IS the
 #      address, and it is a secret), so this refuses and says so in the
 #      journal. The unit then stays failed, which is visible in

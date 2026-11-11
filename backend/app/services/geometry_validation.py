@@ -40,7 +40,7 @@ version would trade a visible gap for an invisible one.
 
 Where the formula rule blocks
 -----------------------------
-Per ADR 0008 §9, where the same fact is checked in more than one tier the
+Where the same fact is checked in more than one tier the
 blocking tier owns it and the others cite it. Formula agreement between a
 structure and the identity it is deposited under is owned by two blocking
 rules that between them cover every geometry:
@@ -58,10 +58,7 @@ geometry no calculation could have produced, and such a deposit is now refused
 before this service runs. What stays live, and is why the row still exists, is
 the RMSD signal: a ``warning`` on a converged structure that moved further
 than the threshold from its input is a suspicion about a *correct-formula*
-deposit, which is exactly the expectation tier this service belongs to. The
-note that used to stand here — that refusing an output geometry would wrongly
-reject "an optimisation that drifted" — confused connectivity with
-composition. A drifted or dissociated optimisation keeps its atoms and passes
+deposit, which is exactly the expectation tier this service belongs to. A drifted or dissociated optimisation keeps its atoms and passes
 the blocking rule, as the methane-at-5-A case above shows.
 
 Not in scope here:
@@ -178,11 +175,9 @@ def validate_calculation_geometry(
             atom_mapping=None,
             n_mappings=output_mapping.n_mappings,
             validation_status=ValidationStatus.fail,
-            # Says what was actually compared. The sentence this replaced
-            # claimed the output was "not graph-isomorphic to species SMILES",
-            # which named a test this function has never run: the mapping falls
+            # Says what was actually compared: the mapping falls
             # back to per-element counts whenever bond perception from the XYZ
-            # fails. A stored reason is read by curators and quoted in reviews,
+            # fails, so the reason must not claim graph isomorphism. A stored reason is read by curators and quoted in reviews,
             # so it may not describe a stronger check than the one that ran.
             validation_reason=f"Output geometry does not match the declared "
             f"species SMILES (mapping status: {output_mapping.status}). The "
@@ -434,10 +429,10 @@ def run_and_persist_geometry_validation(
 
     # The write is isolated for the same reason the ``except`` above exists:
     # this is best-effort by policy and must never abort the upload. Catching
-    # the chemistry call alone did not deliver that, because the row was added
-    # without a flush — so its INSERT was emitted by whatever flushed next, in
-    # practice the route's COMMIT, outside every guard here. That is the
-    # 2026-08-05 shape: a verdict *about* a calculation taking the calculation
+    # the chemistry call alone would not deliver that, because the row is added
+    # without a flush — so its INSERT would be emitted by whatever flushes next, in
+    # practice the route's COMMIT, outside every guard here. The failure
+    # shape is a verdict *about* a calculation taking the calculation
     # with it. ``isolated_best_effort`` flushes inside a savepoint so an
     # unstorable ``atom_mapping``/``validation_reason`` fails where it can be
     # absorbed.

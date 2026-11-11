@@ -23,7 +23,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         # operational state. A restore that dropped them would resurrect
         # as sound every record the source database had labelled
         # ``artifact_integrity_failed`` — a silent trust regression
-        # created by the archive itself. See ADR 0014.
+        # created by the archive itself.
         "artifact_integrity_event",
         "applied_energy_correction_component",
         "applied_group_additivity",
@@ -34,12 +34,12 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "deposit_warning",
         # Which deposit warnings were retired, and why.
         "deposit_warning_retirement",
-        # An assembled composite's inputs (ADR 0021): the slot each cited
+        # An assembled composite's inputs: the slot each cited
         # calculation fills. Evidence: a restore that dropped them would hand back
         # a composite energy with no recipe slots behind it.
         "calc_composite_input",
-        # What comparing a program-run composite with its output log concluded
-        # (ADR 0021, P7a). Evidence: a restore that dropped it would hand back
+        # What comparing a program-run composite with its output log concluded.
+        # Evidence: a restore that dropped it would hand back
         # confirmed energies reading as unchecked.
         "calc_composite_log_check",
         "calc_composite_result",
@@ -58,7 +58,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "calc_scan_point_coordinate_value",
         "calc_scan_result",
         "calc_scf_stability",
-        # Deposited parts of a single point's electronic energy (ADR 0021).
+        # Deposited parts of a single point's electronic energy.
         # Results, not state: a restore that dropped them would hand back a
         # single point whose SCF/correlation split a composite scheme cites.
         "calc_sp_energy_component",
@@ -74,7 +74,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "calculation_parameter",
         "calculation_parameter_vocab",
         "chem_reaction",
-        # Composite recipes and their level-of-theory binding (ADR 0021).
+        # Composite recipes and their level-of-theory binding.
         # Identity and its side table: a restore that dropped the binding
         # would hand back a CBS-QB3 level that no longer names its recipe.
         "composite_scheme",
@@ -92,7 +92,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "energy_correction_scheme_bond_param",
         "energy_correction_scheme_component_param",
         "execution_environment_manifest",
-        # Source custody (Phase C-E1): the database/collection a document
+        # Source custody: the database/collection a document
         # was fetched from, and the immutable per-document snapshot
         # metadata (digest, parser/mapping versions) an observation cites.
         # See app/db/models/external_source.py.
@@ -215,7 +215,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
 
 
 # ``accepted_science_repair`` and its change record are the account of a
-# declared repair to an accepted record (ADR 0015). They are excluded not
+# declared repair to an accepted record. They are excluded not
 # because that account is unimportant but because the row cannot be
 # transplanted: its meaning is carried by ``xact_id``, a transaction id from
 # *this* cluster's counter, and every check deciding whether a declaration is
@@ -225,7 +225,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
 # construction and misleading by shape. The repaired *value* travels with the
 # science, which is what a restored database has to get right; the operational
 # account of how it got there stays with the deployment that performed it and
-# with that deployment's backup, which ADR 0001 already separates from this
+# with that deployment's backup, which is separate from this
 # projection.
 EXCLUDED_TABLES: Mapping[str, str] = {
     "accepted_science_repair": "deployment-local repair record keyed on a cluster transaction id",
@@ -259,10 +259,10 @@ EXCLUDED_COLUMNS: Mapping[str, Mapping[str, str]] = {
 # revision's own audit trail, and a revision that skipped it on an empty
 # database would behave differently on every deployment. So a database
 # produced by nothing but ``alembic upgrade head`` is *not* empty in these
-# tables (measured 2026-09-19: two rows at head ``a55cc983501a``, declared by
-# ``b8e3f1a7c250`` and ``53b1e7dece9d``), and the archive CLI refused every
+# tables (two rows at head, declared by ``b8e3f1a7c250`` and
+# ``53b1e7dece9d``), and a restore that required them empty would refuse every
 # fresh restore target with ``Target contains rows in table
-# 'accepted_science_repair'``. The in-process tests never saw it because their
+# 'accepted_science_repair'``. The in-process tests cannot see it because their
 # "fresh target" helper deletes these rows along with everything else.
 #
 # Both tables are already excluded from the archive (the rows are keyed on a

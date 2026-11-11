@@ -6,11 +6,9 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 import GeometryDetailPage from "./GeometryDetailPage"
 
 /**
- * A post-review fix: `GeometryDetailPage.test.tsx` had a test titled
- * "forwards this geometry's own xyz_text to the viewer section" that
- * actually only checked the separate Raw XYZ block — passing
- * `xyzText={null}` to `<GeometryViewer>` left every test in that file
- * green. This file closes that seam directly, by mocking
+ * `GeometryDetailPage.test.tsx` only checks the separate Raw XYZ block —
+ * passing `xyzText={null}` to `<GeometryViewer>` would leave every test in
+ * that file green. This file closes that seam directly, by mocking
  * `../components/GeometryViewer` to record the exact props it receives
  * (mirroring the pattern `GeometryDetailPage.errorBoundary.test.tsx`
  * already uses, and split into its own file for the same reason: `vi.mock`

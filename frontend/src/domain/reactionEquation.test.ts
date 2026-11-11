@@ -15,7 +15,7 @@ describe("buildEquationSides", () => {
         expect(sides.products).toEqual([{ speciesEntryRef: "spe_b", chips: [], smiles: "C", formula: "CH4", coefficient: 1 }])
     })
 
-    // The case named in the brief: `[NH2] + [NH2] <=> NN` -- two SEPARATE
+    // `[NH2] + [NH2] <=> NN` -- two SEPARATE
     // participant rows sharing one `species_entry_ref` (a depositor writing
     // the equation out atom by atom, stoichiometry 1 each), collapsed into
     // ONE displayed reactant with an EXACT summed coefficient of 2, never a

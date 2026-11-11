@@ -1,5 +1,5 @@
 /* `components/CompositeVerification.tsx` -- how far a composite energy has
- * been checked (ADR 0021, P7a). Owns its own stylesheet, imported once from
+ * been checked. Owns its own stylesheet, imported once from
  * the component, like `EvidenceChecklist`/`ReviewNote`.
  *
  * Confirmed and neutral states reuse the site's pill primitives

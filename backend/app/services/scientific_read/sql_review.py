@@ -5,14 +5,14 @@ Why this module exists
 Every scientific search needs the same two things from ``record_review``:
 
 1. **visibility** — drop candidates whose review status the caller cannot see
-   (the default trust posture, ``min_review_status``, and Stage 3's curated
+   (the default trust posture, ``min_review_status``, and the curated
    profile floor);
 2. **rank** — order survivors by ``review_rank`` (approved first).
 
 Both were historically done in Python, which forced the service to load the
 *entire* candidate set before it could filter or order it. On the deployed
 55-species database that is invisible. At catalog scale it has two failure
-modes, both measured on the Stage 4 benchmark corpus:
+modes, both measured on the benchmark corpus:
 
 - **Latency.** Broad searches materialize thousands of rows and every badge,
   availability count and section id for them, to return a page of 50.

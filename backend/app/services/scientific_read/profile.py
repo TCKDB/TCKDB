@@ -30,8 +30,8 @@ returned record's linked evidence shows):
    function every read service already calls to decide which review statuses
    are visible to a list, search or select. ``curated`` raises the record floor
    to ``approved`` there, so it cannot be forgotten by an endpoint. (A detail
-   page and a returned record's linked evidence follow the evidence rule of
-   ADR 0023 instead: they are served badged, and only ``rejected`` and
+   page and a returned record's linked evidence follow the evidence rule
+   instead: they are served badged, and only ``rejected`` and
    ``deprecated`` are withheld.)
 2. :func:`app.services.scientific_read.internal_ids.apply_internal_ids_visibility`
    — the one function every enveloped scientific route returns through, which

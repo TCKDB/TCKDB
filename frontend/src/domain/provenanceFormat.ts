@@ -8,8 +8,7 @@
 /**
  * A software release prints its own name in some deployments ("Gaussian
  * 16") and not in others ("16"). Concatenating unconditionally gives the
- * second case a stutter ("Gaussian Gaussian 16") — the exact live defect
- * this brief was written against (`CalculationDetailPage.tsx:239,244`) —
+ * second case a stutter ("Gaussian Gaussian 16") —
  * so the name is prepended only when the version does not already open
  * with it. Ported from `landing.py:2218-2230`.
  */

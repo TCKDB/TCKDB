@@ -67,14 +67,11 @@ def get_curator_task_or_404(
 ) -> MachineReviewCuratorTask:
     """Load one task, or raise the 404 that names *why* it is a 404.
 
-    Public, and deliberately so. This was private, and the read endpoint
-    consequently grew its own copy in ``app.api.routes.admin`` that raised
-    a bare ``HTTPException(404)``. One condition — a task id naming no row
-    — then answered ``code="http_404"`` on ``GET`` and
-    ``code="curator_task_not_found"`` on every write route, decided by
-    which route noticed. A private helper that four writers need and one
-    reader also needs is not private; exporting it is what makes the
-    duplicate unnecessary rather than merely discouraged.
+    Public, and deliberately so: a helper that four writers and one
+    reader need is not private. A duplicate that raised a bare
+    ``HTTPException(404)`` would answer one condition — a task id naming no
+    row — with ``code="http_404"`` on ``GET`` and
+    ``code="curator_task_not_found"`` on every write route.
     """
     task = session.get(MachineReviewCuratorTask, task_id)
     if task is None:

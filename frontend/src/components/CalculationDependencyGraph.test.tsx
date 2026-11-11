@@ -9,9 +9,8 @@ import { CalculationDependencyGraph, type CentreSubject } from "./CalculationDep
 afterEach(cleanup)
 
 /**
- * The owner's ask ("I think this can be presented as a graph instead...
- * Would read/flow better") for what used to be plain Related-calculations
- * sentences with links -- see `CalculationDependencyGraph.tsx`'s own
+ * The graph form of the Related-calculations section
+ * -- see `CalculationDependencyGraph.tsx`'s own
  * docstring for the layout/accessibility design this exercises.
  *
  * `window.matchMedia` is not implemented by jsdom (confirmed against this
@@ -112,7 +111,7 @@ describe("CalculationDependencyGraph — nodes", () => {
 // since ITS centre node (the TS's own `ts_opt`) is NOT the page the reader
 // is on, unlike `CalculationDetailPage.tsx`. The default-false case is
 // already covered by the "does not render the centre node as a link" test
-// above (mutation table item (b): flip the default to `true` and that
+// above: flip the default to `true` and that
 // exact test goes red, catching a regression on `CalculationDetailPage`'s
 // own call site, which never passes this prop at all).
 describe("CalculationDependencyGraph — centreLinked opt-in", () => {
@@ -134,7 +133,7 @@ describe("CalculationDependencyGraph — centreLinked opt-in", () => {
         expect(link).toHaveAccessibleName("Optimisation calc_own_ref")
     })
 
-    // SC 2.5.3 Label in Name: review finding -- an earlier version inserted
+    // SC 2.5.3 Label in Name: the accessible name must not insert
     // the word "calculation" between the pill text and the ref
     // ("Optimisation calculation calc_own_ref"), a word that never appears
     // on screen, which breaks the two VISIBLE text runs (pill, then ref)
@@ -163,10 +162,8 @@ describe("CalculationDependencyGraph — centreLinked opt-in", () => {
     })
 })
 
-// The owner's core defect report on the reaction-entry page's graph:
-// "what the fuck is it? a ts? a random ass molecule?... there is no real
-// indication except before it some tiny ass text that no one is going to
-// read". `centreSubject` puts the answer ON the node itself.
+// The reaction-entry page's graph: `centreSubject` puts the answer to "what is this
+// calculation of?" ON the node itself.
 const SUBJECT: CentreSubject = { label: "Transition state", ref: "tse_own1", href: "/transition-state-entries/tse_own1" }
 
 describe("CalculationDependencyGraph — centreSubject opt-in", () => {
@@ -178,7 +175,7 @@ describe("CalculationDependencyGraph — centreSubject opt-in", () => {
         expect(within(centreNode).queryByTestId("dep-node-subject-calc_own_ref")).toBeNull()
     })
 
-    it("renders the subject's visible label and links it to its own href, separately from the calc link (mutation table item (a))", () => {
+    it("renders the subject's visible label and links it to its own href, separately from the calc link", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
         ], "calc_own_ref", "opt", true, SUBJECT)
@@ -208,7 +205,7 @@ describe("CalculationDependencyGraph — centreSubject opt-in", () => {
         expect(within(centreNode).getAllByRole("link")).toHaveLength(1)
     })
 
-    it("grows the centre node's own content-block height to fit the subject row (mutation table item (a))", () => {
+    it("grows the centre node's own content-block height to fit the subject row", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
         ], "calc_own_ref", "opt", true, SUBJECT)
@@ -303,8 +300,8 @@ describe("CalculationDependencyGraph — edge labels reuse the sentence-list wor
     })
 
     it("falls back to the raw (spaced) role token for a role with no bespoke wording, same as the sentence list", () => {
-        // All seven CalculationDependencyRole values are bespoke as of the
-        // 2026-09 wording rewrite (`dependencyWording.ts`) -- only a role
+        // All seven CalculationDependencyRole values are bespoke in the
+        // `dependencyWording.ts` -- only a role
         // this backend enum has not shipped yet exercises the fallback.
         renderGraph([
             { role: "some_future_role", direction: "child", parent_calculation_ref: "calc_scan_owner", child_calculation_ref: "calc_own_ref" },
@@ -383,8 +380,7 @@ describe("CalculationDependencyGraph — accessibility", () => {
  * test above) and a `computeNarrowLayout` that silently returned the wide
  * layout would BOTH stay green against every other test in this file --
  * this block is what actually exercises the ResizeObserver/measured-
- * width branch `CalculationDependencyGraph.tsx` itself gates on, per the
- * post-review fix list.
+ * width branch `CalculationDependencyGraph.tsx` itself gates on.
  */
 describe("CalculationDependencyGraph — responsive layout via ResizeObserver", () => {
     class FakeResizeObserver {
@@ -471,11 +467,9 @@ describe("CalculationDependencyGraph — responsive layout via ResizeObserver", 
         })
     })
 
-    // Review finding: with only a `maxWidth` cap (no floor), the ACTIVE
-    // layout -- even the narrow one, already chosen for being the
-    // narrower of the two -- still scaled itself down further via CSS
-    // `width: 100%` on a container narrower than ITS OWN width (600px
-    // measured at 0.89x/10.26px text, 400px at 0.57x/6.6px). `minWidth`
+    // With only a `maxWidth` cap (no floor), the ACTIVE
+    // layout would scale itself down via CSS
+    // `width: 100%` on a container narrower than ITS OWN width. `minWidth`
     // pinned to the same value as `maxWidth` is what holds the floor: at
     // ANY container width, the rendered SVG's own inline style -- not
     // just its `viewBox` -- must stay fixed at the active layout's own
@@ -497,11 +491,9 @@ describe("CalculationDependencyGraph — responsive layout via ResizeObserver", 
         }
     })
 
-    // Review finding: `pillY = top + 10` pinned the pill+ref content
+    // A fixed `pillY = top + 10` would pin the pill+ref content
     // block to the TOP of a grown centre box regardless of how much the
-    // box had grown to fit staggered lane entries -- MEASURED, a 3-child
-    // graph at 680px left 64.6px of empty space below the ref line and
-    // only 10px above it. `contentTop = top + (node.height - CENTRE_H) /
+    // box had grown to fit staggered lane entries. `contentTop = top + (node.height - CENTRE_H) /
     // 2` re-centres the block; this reads the ACTUAL rendered `<rect>`/
     // `<text>` y-attributes (not a re-derivation of that same formula) to
     // confirm the component really applies it, for every lane count this

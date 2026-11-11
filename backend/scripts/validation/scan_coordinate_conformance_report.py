@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 """Report, per deposited scan series, whether coordinate_value matches its geometry.
 
-ADR 0020 (``docs/adr/0020-a-scan-coordinate-value-is-the-coordinate-itself.md``)
-fixes ``calc_scan_point_coordinate_value.coordinate_value`` as the internal
+``calc_scan_point_coordinate_value.coordinate_value`` is the internal
 coordinate itself, at that point's own sampled geometry, in that coordinate's
 own unit -- never a displacement, never anchored to ``start_value``. This
 script runs the read-time conformance check
@@ -11,11 +10,8 @@ calculation reachable in a database and prints, per coordinate series: the
 classification, the residual distribution, the implied constant where a
 systematic pattern was found, and how many points could not be judged at all.
 
-This is the diagnostic ADR 0020 explicitly asks for **ahead of** the
-corrective migration: "the correction of the 46 already-deposited series and
-the conformance check that finds non-conforming deposits are decided [in ADR
-0020]; ... implemented separately." This script's output is what that later
-migration is written from, one series at a time -- it does not write
+This is a diagnostic for finding non-conforming deposits. Its output can be
+used to correct them one series at a time -- it does not write
 anything itself, and it does not touch ``start_value``/``end_value`` to
 compute an expected value.
 
@@ -41,11 +37,10 @@ Usage::
 
 Exit status, on the same principle as ``project_imaginary_modes.py``: ``1``
 when at least one coordinate series is classified as anything other than
-``conforms`` or ``insufficient_data`` -- the finding an operator (or the
-follow-up migration) needs to look at -- and ``2`` when the scope resolved to
+``conforms`` or ``insufficient_data`` -- the finding an operator needs to look at -- and ``2`` when the scope resolved to
 no scan calculations, because a confident "nothing to report" over an empty
 set is exactly the failure mode that script was built to close. ``0`` means
-every *checkable* scan coordinate series in scope conforms to ADR 0020.
+every *checkable* scan coordinate series in scope conforms.
 
 ``insufficient_data`` is deliberately excluded from the exit-1 accounting: it
 is not a conformance verdict, it means too few checkable points existed to
@@ -54,11 +49,6 @@ at every point, is the common case) -- counting it as "does not conform"
 would put a structurally unrelated absence in the same bucket as an actual
 non-conforming deposit. It is still printed, in its own section, because
 "nothing was measured" and "nothing was found wrong" are different findings.
-
-On the corpus this was built against, every series is expected to exit ``1``:
-all 46 deposited scan series predate ADR 0020 and hold ADR 0019's superseded
-relative-sweep convention. That is this script doing its job, not a defect in
-it.
 """
 
 from __future__ import annotations
@@ -165,7 +155,7 @@ def main() -> int:
     # insufficient_data is not a conformance verdict at all -- it means the
     # series had too few checkable points to say anything (e.g. an
     # ``improper`` coordinate, correctly reported not_applicable at every
-    # point). Counting it as "does not conform to ADR 0020" would put a
+    # point). Counting it as "does not conform" would put a
     # structurally unrelated absence in the same bucket as an actual
     # non-conforming deposit, so it gets its own, separate accounting.
     uncheckable: list[str] = []

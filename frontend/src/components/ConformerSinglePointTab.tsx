@@ -42,12 +42,9 @@ function buildRows(observations: NonNullable<ConformerProjection["observations"]
 }
 
 /**
- * A table, not a card per observation: this tab used to render one
- * `science-record` article per observation, each with its OWN hartree
- * value and its OWN five-button unit toggle -- eleven observations meant
- * eleven near-identical toggles for what is, underneath, one electronic
- * energy shown in one chosen unit at a time. The unit is now a single
- * control for the whole table (`unit` state below); every cell still
+ * A table, not a card per observation: the energy unit is a single
+ * control for the whole table (`unit` state below) -- one electronic
+ * energy shown in one chosen unit at a time; every cell
  * carries its unit on the value itself (`formatEnergyForDisplay` has no
  * "value only" mode -- see `domain/energyUnits.ts` -- so switching away
  * from hartree can never leave a bare, ambiguous number in a cell).

@@ -893,10 +893,6 @@ class ReviewPolicy:
     **No ingestion pathway deposits at ``under_review``**, and none should.
     That status is a claim that a human has the record open; it is entered by
     a curator through :func:`set_record_review_status`, never by an upload.
-    Both pathways used to stamp it at deposit, which is why every one of the
-    1153 ``under_review`` rows on the deployed database had a null
-    ``reviewed_by``, a null ``reviewed_at`` and a null ``first_approved_at``
-    — see revision ``c1d8f4a25b30``, which moved them.
 
     ``link_records`` only takes effect when ``submission_id`` is set.
     """

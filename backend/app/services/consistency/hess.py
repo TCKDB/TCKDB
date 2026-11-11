@@ -16,7 +16,7 @@ the thermo used is not recorded anywhere, so that cancellation is assumed,
 never verified, and every finding says so.
 
 Which formation quantity pairs with the reaction energy is fixed by the
-tunneling row's ``energy_correction_convention`` (decided 2026-09-27):
+tunneling row's ``energy_correction_convention``:
 
 * ``thermal_enthalpy_298k`` -> Tb = 298.15 K, H_i from ``h298``, ``nasa7``,
   ``nasa9`` or an exact ``point`` at 298.15 K, every term declaring one
@@ -83,11 +83,11 @@ from app.services.trust.rubrics import HESS_CONSISTENCY
 
 RUNNER = "hess_consistency"
 
-#: Stated on every finding (decided 2026-09-27): the check runs although no
+#: Stated on every finding: the check runs although no
 #: thermo record says which element-reference compilation it used.
 ELEMENT_REFERENCE_COMPILATION = "not_recorded; cancellation across terms assumed, unverifiable"
 
-#: Stated on every finding (review of #550): the tunneling row names no
+#: Stated on every finding: the tunneling row names no
 #: endpoint structures. Under ``separated_reactants`` a zero reactant energy
 #: is checked, but the product end (a post-reaction complex?) never can be,
 #: and under ``absolute`` neither end can. Separated species are assumed.

@@ -98,7 +98,7 @@ describe("TableOfContents: the reserved column", () => {
     // every other test in this describe block reads the threshold
     // symbolically off the same constant it is testing, which would keep
     // passing unchanged if that constant's VALUE drifted away from 2. This
-    // one pins the actual number the design brief asks for.
+    // one pins the actual number.
     it("renders no list at exactly 1 registered section, and a list at exactly 2", () => {
         const { rerender } = render(<Harness count={1} />)
         expect(screen.queryByRole("navigation", { name: "Sections on this page" })).not.toBeInTheDocument()
@@ -472,9 +472,8 @@ describe("TableOfContents: active-section marking", () => {
         }
     })
 
-    // The owner's exact report: "click Statistical Mechanics, it lands
-    // there, then the highlight jumps to Review History [the LAST
-    // section]." Reproduces it by clicking a section near the bottom of a
+    // After a click, the highlight must not jump to the LAST
+    // section. Reproduces it by clicking a section near the bottom of a
     // tall page whose resting-position geometry, if recomputed, would
     // read the true LAST section instead of the one actually clicked.
     it("clicking a section near the bottom of a tall page keeps THAT section active once the scroll settles, not the true last section its resting geometry would otherwise read", () => {

@@ -12,13 +12,13 @@ cite the calculation the number came from:
 * ``solve.source_calculations[]`` with the role ``well_energy`` or
   ``barrier_energy``.
 
-Until #642 any calculation type was accepted in all three, so a network could
-say a well's energy came from an IRC point or a rotor scan. The same mistake is
-already refused on the transition-state ``energy_ordering`` evidence
+A calculation type that carries no energy of that kind is refused in all three,
+so a network cannot say a well's energy came from an IRC point or a rotor scan.
+The same mistake is already refused on the transition-state ``energy_ordering`` evidence
 (``app.services.transition_state_validation``, #637); this module is that rule
 for the network route. Both read one table of which types carry which energy
 kind, :mod:`app.services.energy_source_types` (#669), which includes the
-``composite`` calculation type (ADR 0021): it carries both an electronic energy
+``composite`` calculation type: it carries both an electronic energy
 and an E0 in ``calc_composite_result``.
 
 What the route's energy kinds map to
@@ -124,7 +124,7 @@ across states and are not compared (``energy_zero_not_comparable``). The product
 states ``lowest_state``, so this is the branch that runs on real data.
 
 Tolerance: :func:`~tckdb_schemas.fragments.calculation.composite_arithmetic_tolerance_hartree`
-of the number of rounded quantities in the equation, weighted as ADR 0021 / #657 weight a
+of the number of rounded quantities in the equation, weighted as for a
 computed total (``1 + sum |d total / d x_i|``): the stated energy is one rounded quantity and
 each source energy enters multiplied by its stoichiometry, so ``n = 1 + sum(nu_i)`` for an
 absolute energy (``2A + B`` has n = 1 + 2 + 1 = 4) and ``n = 2 + sum(nu_i) + sum(nu_j)`` for the
@@ -141,7 +141,7 @@ stated the unit, in which case the rounding is accounted for and it agrees. Only
 allowance is the number contradicted and the upload refused. Precision is never inferred from the
 digits of the number.
 
-Tier (ADR 0008)
+Tier
 ---------------
 ``block``, the tier #637 used for the same mismatch: a type that cannot carry
 the stated energy is not a weaker link, it is a wrong one, and no correct
@@ -149,7 +149,7 @@ deposit produces it. The refusal is a ``CodedValueError`` so a client branches
 on the code and is told the types that would have worked. Uploads only: nothing
 here runs on a read, so stored networks are never affected.
 
-The refusal names the field the depositor wrote and never a row id (DR-0028);
+The refusal names the field the depositor wrote and never a row id;
 the id goes to the log.
 """
 
@@ -204,7 +204,7 @@ W_NETWORK_STATE_ENERGY_SOURCES_PARTIAL = "network_state_energy_sources_partial"
 
 #: A state or barrier energy states a convention that includes a vibrational term but cites only a
 #: bare electronic energy (an ``sp`` or ``opt``) for it, and the upload carries no ``freq`` of that
-#: subject anywhere. An absence, so a warning (ADR 0008): the energy may well be right.
+#: subject anywhere. An absence, so a warning: the energy may well be right.
 W_NETWORK_ENERGY_ZPE_SOURCE_ABSENT = "network_energy_zpe_source_absent"
 
 #: The conventions that add a vibrational (zero-point or thermal) term to an electronic energy.

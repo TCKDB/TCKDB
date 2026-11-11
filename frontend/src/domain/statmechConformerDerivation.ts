@@ -9,16 +9,12 @@ import { conformerLabel } from "./conformerEvidence"
  * single basin"). Its SOURCE CALCULATIONS are conformer-scoped, though --
  * every calculation this app already loads for the entry
  * (`ConformerProjection.observations[].calculations[]`, fetched once via
- * `loadEntryConformers`) carries its own conformer link. Measured live
- * (2026-09-02, 101 statmech records archive-wide with source calculations,
- * across 57 species entries): every one of the 101 resolves via this
- * function to EXACTLY one conformer group -- opt, freq and sp all trace to
- * the same observation every time today. Zero disagreement cases exist in
- * the archive right now, which is exactly why this function still has to
- * handle the disagreement case explicitly rather than assume it away: a
- * derivation that silently picked "the first" conformer the moment a second
- * archive stopped agreeing would be wrong in a way nothing today would
- * catch.
+ * `loadEntryConformers`) carries its own conformer link. Opt, freq and sp
+ * source calculations normally trace to the same observation and so to
+ * EXACTLY one conformer group, but this function handles the disagreement
+ * case explicitly rather than assume it away: a derivation that silently
+ * picked "the first" conformer when the source calculations disagreed would
+ * be wrong.
  *
  * This is a READ-TIME derivation only -- no new column, no migration. A
  * conformer this function reports is never a stored fact about the

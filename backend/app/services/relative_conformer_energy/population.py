@@ -152,7 +152,7 @@ def scan_population(session: Session, *, entry_id: int, request: RelativeEnergyR
         if group_id not in in_floor:
             continue
         status = observation_badges[r.conformer_observation_id].status
-        # The observation is evidence inside the group (ADR 0023, Q2): used and badged unless it is withheld (rejected or
+        # The observation is evidence inside the group: used and badged unless it is withheld (rejected or
         # deprecated); the caller's own floor still holds an unreviewed one out. The group above is the record.
         if status not in observation_shown:
             continue

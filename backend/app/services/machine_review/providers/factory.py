@@ -55,7 +55,7 @@ def _safe_env_name(value: str) -> str:
     The runner's ``_redact_secrets`` cannot save this one: it redacts by
     looking the configured name up in the environment, and when the "name" IS
     the key that lookup returns ``None``, so there is nothing to match on and
-    the key passes through verbatim. MEASURED with
+    the key passes through verbatim. Reproduced with
     ``LLM_PRECHECK_API_KEY_ENV=sk-live-...``: the secret appeared in full in
     the recorded event.
 

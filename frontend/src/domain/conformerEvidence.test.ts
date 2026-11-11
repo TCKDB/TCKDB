@@ -144,7 +144,7 @@ describe("geometryConvergence", () => {
 })
 
 describe("thermoConformerGroupRef", () => {
-    it("reads the real conformer_group_ref off provenance (PR #285)", () => {
+    it("reads the real conformer_group_ref off provenance", () => {
         expect(thermoConformerGroupRef({ provenance: { conformer_group_ref: "cg_one" } })).toBe("cg_one")
     })
 
@@ -158,10 +158,9 @@ describe("thermoConformerGroupRef", () => {
 describe("statmechConformerGroupRefs", () => {
     it("reads every conformer_group_ref off the include=conformers field, in the wire's own order", () => {
         expect(statmechConformerGroupRefs([{ conformer_group_ref: "cg_two" }])).toEqual(["cg_two"])
-        // The real, on-the-wire case that exposed the bug: an ensemble-level
-        // statmech treatment naming THREE groups. An earlier version of this
-        // function read only `[0]`, so this multi-element case is the one
-        // that must never regress back to a single ref.
+        // The on-the-wire case: an ensemble-level
+        // statmech treatment naming THREE groups. This multi-element case
+        // must never collapse to a single ref.
         expect(statmechConformerGroupRefs([
             { conformer_group_ref: "cg_one" },
             { conformer_group_ref: "cg_two" },
@@ -224,8 +223,8 @@ describe("partitionByConformerLink", () => {
 
     // The bug this whole section exists to close: "Thermochemistry is
     // bust... it always shows From Conformer Group 1 even if I click
-    // another group." Measured live on spe_mbdqifmaclaakukr7agxbuq3wa: one
-    // statmech record names all three of that entry's conformer groups
+    // another group." One
+    // statmech record can name all three of that entry's conformer groups
     // (`['conformer_1', 'conformer_2', 'conformer_3']`). A record naming
     // the SELECTED group anywhere in its list must file under
     // `thisConformer`, regardless of which OTHER groups it also names and
@@ -455,8 +454,8 @@ describe("describeConformerEvidence", () => {
     // equivalent of the aggregate branch's `rawOptCount === 0` guard. A
     // conformer whose loaded observations carry freq/sp but no opt at all
     // satisfies the safety condition (chainCount 0 === coverageOpt 0, every
-    // observation loaded) and used to fall through to an EMPTY `buckets`
-    // map, producing a stray "." sentence fragment.
+    // observation loaded), so it must be guarded against an EMPTY `buckets`
+    // map, which would produce a stray "." sentence fragment.
     it("says plainly that no observation has an optimization calculation, on the per-observation path, rather than a stray '.'", () => {
         const conformer = group({
             observations_summary: { total: 2 },

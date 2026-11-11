@@ -1,6 +1,6 @@
 import type { ReactionKineticsRecord } from "../api/reactionEntryApi"
 
-/** R in kJ mol⁻¹ K⁻¹ -- the same constant plan §4's future `domain/arrhenius.ts` names. */
+/** R in kJ mol⁻¹ K⁻¹. */
 export const GAS_CONSTANT_KJ_MOL_K = 8.314462618e-3
 
 /**
@@ -25,8 +25,8 @@ export interface KineticsTableRow {
 
 /**
  * k(T) sampled at `TABLE_POINT_COUNT` evenly spaced temperatures over the
- * record's own fitted range -- the table equivalent for the Arrhenius
- * chart PR 3 ships (plan §4/§6: "PR 2 owns cards + the k(T) TABLE only").
+ * record's own fitted range -- the table equivalent of the Arrhenius
+ * chart.
  * Only computed for a plain `arrhenius`/`modified_arrhenius` record (a
  * single `A`) or `multi_arrhenius` (summed over its own terms) -- a
  * pressure-dependent form (PLOG/Chebyshev/falloff) has no single k(T)
@@ -36,16 +36,15 @@ export interface KineticsTableRow {
  * Pinned against hand-computed values (`kineticsTable.test.ts`): for
  * `kin_spkzatwjlvmmnja3i5im4fl7hq` (A=3025.44 cm³ mol⁻¹ s⁻¹, n=3.11242,
  * Ea=39.9711 kJ/mol, 300–3000 K), k(300 K) = 1.7029×10⁴, k(3000 K) =
- * 4.0467×10¹³ -- the same figures the PR 0 design-review mock's own
- * hand-computed table cited.
+ * 4.0467×10¹³.
  *
- * A third-body record is gated out here too (PR 3 review finding): its
+ * A third-body record is gated out here too: its
  * rate depends on bath-gas concentration, not on temperature alone, so
  * `arrheniusTermK`'s T-only formula is not this record's actual k(T)
  * either. `ArrheniusChart.tsx` already excludes a third-body record from
  * the CHART with that exact reason -- this table is that same record's
  * one remaining surface, and it must refuse the same numbers for the same
- * reason rather than hand them out one row lower on the page.
+ * reason rather than hand them out.
  */
 export function computeKineticsTable(record: Pick<ReactionKineticsRecord, "plog_entries" | "chebyshev" | "falloff" | "is_third_body" | "temperature_coverage" | "multi_arrhenius" | "parameters">): KineticsTableRow[] | null {
     const terms = arrheniusTerms(record)
@@ -94,7 +93,7 @@ export function kineticsAt(record: TermSource & Pick<ReactionKineticsRecord, "mo
  * "the k(T) table must follow the same [unit] selection" as the chart
  * (`ArrheniusChart.tsx`). `factor` is computed ONCE by the caller via
  * `arrheniusUnitConversionFactor` (`domain/arrheniusUnits.ts`) -- this
- * function only applies an already-decided, already-legal factor; it holds
+ * function only applies an already-chosen, already-legal factor; it holds
  * no unit knowledge of its own; the SAME factor is what
  * `arrheniusChartLayout.ts`'s `convertArrheniusSeriesUnits` applies to the
  * plotted curve, so the chart and this table can never disagree about which

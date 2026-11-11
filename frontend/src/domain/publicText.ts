@@ -1,6 +1,6 @@
 // What a public page may print of a string a depositor could have typed.
 //
-// House rule (owner decision 2026-11-03, widening the 2026-09 TS-label rule):
+// House rule:
 // no depositor-typed text reaches the public DOM -- not as text, link text,
 // a pill, a tooltip, a title, an aria-label, an SVG <text>, a data
 // attribute or an element id. A depositor string can be anything, including
@@ -10,7 +10,7 @@
 // holds the few places where the frontend has to look inside a server string
 // that MIXES computed and typed parts, and keep only the computed ones.
 //
-// Exception (owner goal, 2026-11-04): an electronic-state label and a term symbol that satisfy the strict grammar
+// Exception: an electronic-state label and a term symbol that satisfy the strict grammar
 // the API enforces on write (`electronicState.ts`) are a closed vocabulary (`T1`, `²Π`), not free text, and are
 // shown so a reader can tell excited and spin states apart. Anything outside the grammar stays hidden.
 

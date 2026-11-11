@@ -517,10 +517,10 @@ describe("ConformerObservationPage", () => {
         expect(within(section).getByText("Listed in deposit order.", { exact: false })).toBeVisible()
     })
 
-    // Reproduces the owner's exact report: the same "not reviewed" status
-    // showing up eight times on one record (hero pill, a Review column on
+    // The same "not reviewed" status must not show up eight times on one
+    // record (hero pill, a Review column on
     // every calculation row, and a pill on every sibling). Review status is
-    // now shown once, in the hero -- the calculation table drops its Review
+    // shown once, in the hero -- the calculation table drops its Review
     // column entirely (calculations don't carry independent review states
     // on this surface; their evidence is the observation's own), and a
     // sibling only gets its own pill when its status genuinely differs from

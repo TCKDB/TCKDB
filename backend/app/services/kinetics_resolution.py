@@ -53,7 +53,7 @@ from app.services.upload_reference import (
 #     supporting energy source.
 #
 #: The calculation types a kinetics *energy* role accepts: a single point, or a
-#: program-run composite energy (ADR 0021; composite outranks sp in every
+#: program-run composite energy (composite outranks sp in every
 #: energy-level rule, ``app.services.calculation_levels``). Listed in the order
 #: a refusal names them.
 _ENERGY_CALCULATION_TYPES: frozenset[CalculationType] = frozenset(

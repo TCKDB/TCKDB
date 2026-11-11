@@ -136,13 +136,12 @@ def anchor_species_calculation_to_observation(
     ``conformer_key`` first does not decide between two answers, it is just
     the field that names the anchor directly.
 
-    Every outcome is now audible. An unresolvable ``conformer_key`` raises
+    Every outcome is audible. An unresolvable ``conformer_key`` raises
     (a local key that names nothing is a broken promise about the payload's
     own contents, and no correct deposit can make it mean something). An
-    unresolvable ``geometry_key`` raises, as it always did. And the case
-    that used to be a bare ``return`` -- nothing named, nothing anchored --
-    appends a warning. There is no longer a path out of this function that
-    leaves the anchor unset without recording it.
+    unresolvable ``geometry_key`` raises. And the case where nothing is
+    named and nothing anchored appends a warning. There is no path out of
+    this function that leaves the anchor unset without recording it.
 
     :param calculation: The persisted row to anchor. Mutated in place.
     :param calc_in: The payload block that produced it.

@@ -83,8 +83,7 @@ W_REPORTED_NETWORK_SOLVE = "reported_network_solve"
 W_LITERATURE_TITLE_MISMATCH = "literature_title_mismatch"
 W_LITERATURE_YEAR_MISMATCH = "literature_year_mismatch"
 
-# Energy-correction-scheme provenance gaps (correction-scheme-provenance
-# plan §4). Distinct from the request-level codes above because
+# Energy-correction-scheme provenance gaps. Distinct from the request-level codes above because
 # ``EnergyCorrectionSchemeRef`` is a nested fragment with no
 # ``scientific_origin`` of its own — these are computed from the resolved
 # scheme row itself, not from a request's declared origin.
@@ -98,14 +97,13 @@ W_ENERGY_CORRECTION_SCHEME_LITERATURE_NOT_ATTACHED = (
     "energy_correction_scheme_literature_not_attached"
 )
 
-# An applied correction with ``application_role = composite_delta`` (owner
-# decision 9, composite-levels plan). Not a definition being violated, only a
-# modelling choice the schema is about to supersede, so it warns (ADR 0008).
+# An applied correction with ``application_role = composite_delta``. Not a definition being violated, only a
+# modelling choice the schema is about to supersede, so it warns.
 W_COMPOSITE_DELTA_PREFER_SCHEME_TERMS = "composite_delta_prefer_scheme_terms"
 
 # The three EnergyCorrectionSchemeKind values whose numeric parameters are
-# literally computed by a specific program at a specific level of theory
-# (plan §1.6). atom_hf/atom_thermal/soc are physical/reference constants —
+# literally computed by a specific program at a specific level of theory.
+# atom_hf/atom_thermal/soc are physical/reference constants —
 # the software axis does not apply to them (NOT_APPLICABLE in spirit, but
 # expressed here as "never judged" rather than the sentinel object, since
 # every scheme has a kind and there is no field-not-present case to guard).
@@ -314,7 +312,7 @@ def collect_statmech_content_warnings(
     source link as a hard requirement instead.
 
     :param is_polyatomic: True when the subject is known to have more than one
-        atom, as decided by
+        atom, as determined by
         :func:`app.services.monatomic.statmech_subject_is_polyatomic` from a
         geometry, ``rigid_rotor_kind`` or the species identity. A monatomic
         species has no vibrational modes and an analytic partition function,
@@ -418,25 +416,13 @@ def collect_kinetics_content_warnings_for(
 
     **Why the parameters, and why they default to** :data:`NOT_APPLICABLE`.
 
-    This collector used to read ``interpretation_assignments``,
-    ``network_kinetics_ref`` and ``tunneling_application`` straight off a
-    ``KineticsUploadRequest``. ``BundleKineticsIn`` — the reaction bundle's
-    kinetics block, and the model the ARC adapter actually deposits through
-    — carries none of the three, but *does* carry ``tunneling_model``. So a
-    bundle could declare ``tunneling_model='eckart'`` and, the moment this
-    collector was wired to that route, be told to supply
-    ``tunneling_application``: a field that does not exist on that model,
-    on a payload whose ``SchemaBase`` is ``extra="forbid"``. A depositor
-    following the advice would get a 422.
-
     :data:`NOT_APPLICABLE` is how a caller says *there is no field here to
     fill*, as distinct from ``None``/empty meaning *there is one and it was
     left empty*. Judging is opt-in: a caller that does not pass an argument
     is not asked about it, so a new caller cannot accidentally emit advice
     it has no field to act on.
 
-    ``BundleKineticsIn`` gained all three fields in #620, so a payload with a
-    field can now be judged on it. The reaction route still does not call this
+    The reaction route does not call this
     collector: it would ask a bundle for refs to records the same request
     cannot have created yet.
 
@@ -527,9 +513,8 @@ def collect_network_solve_kind_warnings(solve) -> list[UploadWarning]:
     be told which one it is looking at.
 
     It is not an error. Published k(T,P) is ordinary, citable science, and
-    under ADR 0008 a check that would fire on a correct result must not block.
-    Refusing the deposit — which is what the contract did before ADR 0010 —
-    did not make the data better, it only kept it out, and a record annotated
+    a check that would fire on a correct result must not block.
+    Refusing the deposit does not make the data better, it only keeps it out, and a record annotated
     as reported is strictly more useful than no record at all.
 
     The warning fires on the *kind*, not on the absence of any particular
@@ -562,11 +547,10 @@ def collect_network_energy_transfer_warnings(solve) -> list[UploadWarning]:
 
     It is not an error. Arkane, RMG and MESS inputs routinely specify one
     ``SingleExponentialDown`` for the entire network, and such results are
-    published as they stand. Under ADR 0008 the check could therefore fire on
+    published as they stand. The check could therefore fire on
     a correct novel result, so it warns rather than blocks — and warning is
-    strictly better than the alternative the old contract forced, which was to
+    strictly better than the alternative, which is to
     paste one number once per well and make the record *look* well-resolved.
-    See ADR 0009.
 
     :param solve: The ``NetworkSolveIn`` block of a PDep upload request.
     """
@@ -587,7 +571,7 @@ def collect_network_energy_transfer_warnings(solve) -> list[UploadWarning]:
 
 
 # ---------------------------------------------------------------------------
-# Energy correction scheme provenance (correction-scheme-provenance plan §4)
+# Energy correction scheme provenance
 # ---------------------------------------------------------------------------
 
 
@@ -605,16 +589,15 @@ def collect_energy_correction_scheme_provenance_warnings(
     would repeat the same message on every future deposit that cites the
     same scheme.
 
-    Three checks, all non-blocking (ADR 0008: never reject a
-    scientifically correct record for missing-but-optional provenance):
+    Three checks, all non-blocking (a scientifically correct record is never
+    rejected for missing-but-optional provenance):
 
     1. **No citation.** Every new scheme without ``source_literature_id``
-       is flagged — the owner's ruling (§0.3) is that a citation is
-       "strongly advised", never required.
+       is flagged; a citation is "strongly advised", never required.
     2. **No software release, for the three kinds where it is
        load-bearing.** ``atom_hf``/``atom_thermal``/``soc`` are
        physical/reference constants the software axis does not apply to
-       (§1.6) and are never judged here. A program with no build stated
+       and are never judged here. A program with no build stated
        (a version-less release) does *not* trigger this warning — only a
        fully absent ``software_release_id`` does.
     3. **An ambiguous uncited sibling.** When this new scheme is *also*
@@ -701,7 +684,7 @@ def collect_composite_delta_warnings(
     two), and targets the entry rather than the energy. Those deltas are
     going to become composite-scheme terms.
 
-    Decided under ADR 0008 as a **warning**, not a refusal: the check
+    A **warning**, not a refusal: the check
     asserts a preference about where a number should live, not a
     definition. A ``composite_delta`` record is ordinary, reproducible
     science, and the composite-scheme shape it is meant to move to does not

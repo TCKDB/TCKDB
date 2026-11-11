@@ -19,7 +19,7 @@ separate way for a slice to go missing without any job going red:
    early did not run its share -- and no slice is empty, failed, or had a
    collection error (a test file that cannot be imported contributes no
    tests, so it would otherwise shrink the gate unnoticed);
-5. the DR-0028 error-body sweep, summed over the slices, reaches the gate's
+5. the error-body sweep, summed over the slices, reaches the gate's
    floor (``BODY_SWEEP_FLOORS`` in ``tests/conftest.py``). The floor cannot
    be held per slice -- a slice sees a fraction of the bodies -- so it is held
    here, to the sum, which is exactly the number an unsharded gate gets.

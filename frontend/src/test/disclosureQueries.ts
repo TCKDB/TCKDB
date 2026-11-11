@@ -4,13 +4,10 @@
  * see `getNodeText` in that package. `components/Disclosure.tsx` (design/
  * foundations) renders its optional trailing count in a nested
  * `<span className="disclosure-count">`, so a summary reading
- * "References (4)" is now split across two text nodes: the plain text
+ * "References (4)" is split across two text nodes: the plain text
  * node `"References"` and, inside the count span, `" (4)"`. A bare
- * `getByText("References (4)")` can no longer find it -- MEASURED across
- * four test files (`App.test.tsx`, `CalculationDetailPage.test.tsx`,
- * `SpeciesEntryPage.test.tsx`, `TransitionStateEntryPage.test.tsx`) that
- * queried a `RefsDisclosure` summary this way before this component
- * existed.
+ * `getByText("References (4)")` cannot find it (as in tests that query a
+ * `RefsDisclosure` summary).
  *
  * This matcher checks the `<summary>` element's full `textContent`
  * instead (which DOES include descendant text), scoped to `tagName ===

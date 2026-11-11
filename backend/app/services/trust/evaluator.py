@@ -119,16 +119,14 @@ def _detect_calculation_hard_fail(calc: Calculation) -> Optional[HardFailReason]
 
 
 # Temperature bounds are checked by two predicates, not one, because ``tmin ==
-# tmax`` means different things depending on what the pair describes. See ADR 0008
-# (docs/adr/0008-validation-tiers-definitions-block-expectations-warn.md).
+# tmax`` means different things depending on what the pair describes.
 #
-# Neither predicate carries an upper bound. ``invalid_temperature_range`` used to
-# fuse three claims into one condition -- ``0 < tmin`` and the ordering (both
-# definitional) plus ``tmax <= 10_000`` (an expectation, and a wrong one).
-# Shock-tube, detonation, plasma and re-entry chemistry legitimately exceed any cap
-# we could name, and ``hard_failed`` is a public quality signal, so the cap marked
-# correct high-temperature science as structurally broken. The cap is *demoted*,
-# not deleted: it survives as the graded ``temperature_range_valid`` check in
+# Neither predicate carries an upper bound. ``0 < tmin`` and the ordering are
+# definitional, but a cap such as ``tmax <= 10_000`` is an expectation, and a wrong
+# one. Shock-tube, detonation, plasma and re-entry chemistry legitimately exceed any cap
+# we could name, and ``hard_failed`` is a public quality signal, so a cap would mark
+# correct high-temperature science as structurally broken. The cap survives
+# as the graded ``temperature_range_valid`` check in
 # :mod:`app.services.trust.rubrics` (``EvidenceCheckKind.optional``), which lowers
 # completeness and explains itself as a ``missing`` outcome in ``checks`` without
 # ever labelling a record ``hard_failed``.
@@ -665,7 +663,7 @@ def _detect_transition_state_entry_hard_fail(
 
     # The badge issues NO stationary-point verdict from rubric v3 on (it no longer hard-fails on a frequency result, and it
     # certifies nothing either). A saddle claim is about a *declared target*: the geometry it evaluates, the role bundle
-    # that supports it, the surface, a usable source and the owner's persisted treatment of extra modes (ADR 0012). The
+    # that supports it, the surface, a usable source and the owner's persisted treatment of extra modes. The
     # badge has none of those, only "some frequency result is attached", and both ways of reading that were wrong:
     #
     # * "the representative (latest) result decides" lets a bad rerun on another geometry condemn a coherent older

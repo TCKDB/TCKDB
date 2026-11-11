@@ -14,15 +14,14 @@ bitwise-identical output.
 
 **The rubric does not own artifact integrity.** It re-reads output-log
 bytes and so detects custody breaks, but ``artifact_integrity_event`` is
-where that fact lives (ADR 0014) and the trust label is its consequence.
+where that fact lives and the trust label is its consequence.
 A detection here is therefore written to that table, and for any artifact
 this evaluation does not read the snapshot copies the recorded verdict
-and cites the observation it copied. Keeping a second, private opinion
-was the defect ADR 0008 names: the two tiers could disagree about the
-same record, and which answer a reader got depended on which path ran
-last.
+and cites the observation it copied. A second, private opinion would let
+the two tiers disagree about the same record, so the answer a reader got
+would depend on which path ran last.
 
-**An assembled composite is reproducible only if its inputs are** (ADR 0021, P7a). An
+**An assembled composite is reproducible only if its inputs are**. An
 assembled composite energy is arithmetic over other deposited calculations: it ran
 no program, so it has no software, logs, inputs or parameters of its own to grade,
 and grading it on those would cap every one at ``insufficient``. Its evidence *is* its
@@ -126,7 +125,7 @@ class ReproducibilityRubric:
         return VersionRef(name=self.name, version=self.version)
 
 
-#: The rubric for every record, and for species-owned statmech byte for byte as before #760.
+#: The rubric for every record except transition-state-owned statmech.
 SHARED = ReproducibilityRubric("tckdb_reproducibility", 1)
 #: The same rubric with one question changed for a transition-state-owned statmech: "is it attached to a
 #: transition-state entry?" in place of "is it attached to a species entry?". Nothing else differs.
@@ -179,9 +178,9 @@ class ArtifactVerificationStatus(str, Enum):
     """What this evaluation established about one artifact's bytes.
 
     ``unavailable`` and ``evidence_missing`` are the pair worth reading
-    carefully, because they used to be one value. Both arrive as
-    :class:`~app.services.artifact_storage.ArtifactStorageUnavailable`,
-    and until this split both were reported as ``unavailable``:
+    carefully, because both arrive as
+    :class:`~app.services.artifact_storage.ArtifactStorageUnavailable`
+    and are told apart here:
 
     * ``unavailable`` — *we could not check right now.* The store did not
       answer. It said nothing about the object, so nothing durable
@@ -190,7 +189,7 @@ class ArtifactVerificationStatus(str, Enum):
       The store did answer, and what it answered was that the key a live
       artifact row still references is not there. That is permanent until
       an operator restores the object, and it is a custody break recorded
-      in ``artifact_integrity_event`` (ADR 0014).
+      in ``artifact_integrity_event``.
 
     Collapsing them lost the fact that matters. It is deliberately not
     ``integrity_failed``: that verdict means bytes came back and were
@@ -232,23 +231,17 @@ class ReproducibilityWarning:
 
 @dataclass(frozen=True)
 class _Custody:
-    """The rubric's link to the one owner of artifact integrity (ADR 0008).
+    """The rubric's link to the one owner of artifact integrity.
 
-    The rubric re-reads output-log bytes, so it *detects* custody breaks.
-    It used to also *decide* what they meant: a warning in its own
-    snapshot, and nothing durable. The trust layer, which grades from
-    recorded ``artifact_integrity_event`` rows, therefore went on calling
-    the record sound while the reproducibility snapshot said its evidence
-    had rotted -- two tiers holding the same fact with different
-    consequences, so a reader's answer depended on which path ran last.
+    The rubric re-reads output-log bytes, so it *detects* custody breaks;
+    what they mean is recorded in ``artifact_integrity_event``, which the
+    trust layer grades from.
 
-    Both directions now go through this object. Detections are reported
+    Both directions go through this object. Detections are reported
     to the custody record (``record_break`` / ``record_missing`` /
-    ``record_repair``, each in its own transaction, ADR 0014), and the
+    ``record_repair``, each in its own transaction), and the
     rubric's verdict for an artifact it did *not* read is copied from that
-    record rather than invented -- which also closes the reverse gap,
-    where a break found by the download route on an input artifact was
-    invisible here.
+    record rather than invented.
 
     ``session_factory`` and ``storage_client`` exist so a caller can hand
     the recorder somewhere to write; the defaults are the recorder's own.
@@ -639,13 +632,10 @@ def _cited_break(
     exactly, and see expected versus observed and what discovered it,
     instead of finding a second unexplained assertion of the same fact.
 
-    A ref rather than the row id it used to be. The snapshot is served
+    A ref rather than a row id. The snapshot is served
     verbatim from ``GET /curation/reproducibility-assessments/...``, and
-    a row id there is both a thing this repo forbids on a user-facing
-    surface and, worse, unresolvable: the read surface that would have to
-    answer the lookup strips ``*_id`` keys by policy, so the citation
-    named something the reader was structurally unable to look up and a
-    curator was left matching on timestamps.
+    a row id there would be unresolvable: the read surface that would have to
+    answer the lookup strips ``*_id`` keys by policy.
 
     The verdict is derived from the cited finding rather than fixed at
     ``integrity_failed``, because "the bytes are wrong" and "the bytes are
@@ -711,7 +701,6 @@ def _verify_artifact(
             # deleting an unreferenced digest, and the purge refuses any
             # digest a row points at. So this is a custody break, and
             # custody of stored evidence is *recorded*, not logged
-            # (ADR 0014).
             #
             # This sweep is one of the very few things that systematically
             # re-reads stored artifacts, and therefore the most likely place
@@ -1128,7 +1117,7 @@ def evaluate_reproducibility(
     closure = _calculation_closure(roots)
     # One query for the whole closure. The rubric does not decide whether
     # an artifact's bytes are sound -- ``artifact_integrity_event`` does
-    # (ADR 0008) -- so it fetches that verdict once and defers to it for
+    # -- so it fetches that verdict once and defers to it for
     # every artifact it will not read itself.
     custody = _Custody(
         latest=latest_integrity_observations(

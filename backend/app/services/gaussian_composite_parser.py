@@ -1,4 +1,4 @@
-"""Read the summary block of a Gaussian composite-method log (ADR 0021, P3b).
+"""Read the summary block of a Gaussian composite-method log.
 
 A Gaussian composite job (``CBS-QB3``, ``G3``, ...) runs several internal steps
 and ends with one summary block. The block is the only place the method's own

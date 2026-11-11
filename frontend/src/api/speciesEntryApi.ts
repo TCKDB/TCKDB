@@ -22,9 +22,8 @@ const workflowToolReleaseSchema = z.object({
 
 // `software_release` / `workflow_tool_release` are measured-present on this
 // endpoint's calculation rows (live, `conformers/search?include=calculations`)
-// even though nothing here previously typed them -- `.passthrough()` already
-// carried them at runtime; these two fields just give the geometry/SP tabs a
-// typed way to read what was already on the wire, not a new request shape.
+// and are typed here so the geometry/SP tabs can read them; `.passthrough()`
+// carries them at runtime regardless.
 const calculationSchema = z.object({
     calculation_ref: z.string(),
     type: z.string(),

@@ -20,10 +20,8 @@ Coverage, and how it is kept
 ----------------------------
 ``TEST_DB_NAME`` below is the *only* thing this script will drop, and
 ``_sweep_stale_test_databases`` in ``backend/tests/conftest.py`` uses the
-identical pattern.  Migration tests used to build scratch names outside it
-(``tckdb_et_scope_migration_*``, ``tckdb_stage2_legacy_*``,
-``tckdb_exec_env_migration_*``); a run killed partway leaked those permanently
-because neither reclaimer could see them.
+identical pattern.  A scratch database named outside it would leak
+permanently if a run were killed partway, because neither reclaimer could see it.
 
 The fix was to bring the *names* inside the pattern rather than to widen the
 pattern: tests now build scratch names with ``conftest.scratch_database_name``,
@@ -88,14 +86,12 @@ import psycopg
 # braces on top of the name pattern below.
 #
 # Every entry here is a name the pattern *cannot* match, which is the only
-# shape an exception list should ever have.  It briefly held one that could:
-# ``tckdb_test_ci``, the nightly job's ambient ``DB_NAME``, which sat inside
-# ``tckdb_test%`` and so was a genuine reclaim candidate on a self-hosted
-# runner.  Naming it here made that one database safe and left the class
-# behind -- the next long-lived database someone parks in the harness's
-# namespace is reclaimable again, and nothing says so until it is gone.  The
-# nightly's database was renamed to ``tckdb_nightly_ci`` instead, putting it
-# outside the namespace the reclaimers own, and the entry was removed.
+# shape an exception list should ever have.  A name the pattern *can* match
+# (for example one inside ``tckdb_test%``) does not belong here: listing it
+# would protect that one database and leave the class unprotected -- the next
+# long-lived database parked in the harness's namespace would be reclaimable.
+# Keep long-lived databases outside the namespace the reclaimers own
+# (the nightly's is ``tckdb_nightly_ci``).
 # ``backend/tests/test_scratch_database_names.py`` asserts that it stays out.
 PROTECTED = frozenset(
     {

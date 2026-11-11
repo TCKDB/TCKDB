@@ -65,7 +65,7 @@ from app.services.software_resolution import resolve_software_release_ref
 #:
 #: Re-exported; *defined* in :mod:`tckdb_schemas.local_key_codes`, because
 #: four request schemas refuse the same mistake one layer earlier and may
-#: not import ``app`` (ADR 0017).
+#: not import ``app``.
 W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED = (
     _W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED
 )
@@ -87,7 +87,7 @@ def resolve_applied_correction_source_key(
 ) -> T | None:
     """Turn one applied-correction source key into the row it names.
 
-    Blocking, and ADR 0008 permits it because this asserts a *contract*
+    Blocking, because this asserts a *contract*
     rather than an expectation: a local key is a promise that the same
     upload declared something under that name, and if it did not, no
     correct payload can make the link mean what it says. The alternative
@@ -162,9 +162,8 @@ def resolve_or_create_scheme(
     * **No data revision**: ``(kind, name, level_of_theory_id,
       source_literature_id, software_release_id, workflow_tool_release_id)``
       over rows whose own ``data_revision`` is NULL -- matches
-      ``uq_energy_correction_scheme_identity`` (correction-scheme-provenance
-      plan v2 §3-§4), unchanged, so a deposit that does not state a
-      revision behaves exactly as it did before the column existed.
+      ``uq_energy_correction_scheme_identity``, so a deposit that does not
+      state a revision resolves on that identity alone.
     * **A data revision**: ``(kind, name, level_of_theory_id,
       source_literature_id, software_release_id, data_revision)`` over rows
       that carry one -- matches ``uq_energy_correction_scheme_identity_
@@ -535,8 +534,7 @@ def resolve_or_create_freq_scale_factor_ref(
     Dedup key: the full DB identity tuple ``(level_of_theory,
     software_release, scale_kind, value, source_literature,
     workflow_tool_release)`` — matches
-    ``uq_frequency_scale_factor_identity`` (correction-scheme-provenance
-    plan v2 §6). ``ref.software`` is a ``SoftwareReleaseRef`` (name,
+    ``uq_frequency_scale_factor_identity``. ``ref.software`` is a ``SoftwareReleaseRef`` (name,
     optionally version/revision/build): a depositor who names only the
     program resolves to the version-less release row for it, mirroring
     ``resolve_or_create_scheme``. ``note`` is descriptive and never used
@@ -722,7 +720,7 @@ def assert_bac_total_has_required_components(
     ):
         return
 
-    # A component of *any* kind used to satisfy this check, which let a
+    # A component of *any* kind would satisfy this check, and let a
     # single placeholder -- ``{"component_kind": "other", "key":
     # "unspecified", ...}`` -- re-admit the exact false shape this
     # function exists to refuse: a total with nothing behind it, now

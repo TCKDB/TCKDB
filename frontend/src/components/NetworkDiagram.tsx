@@ -18,8 +18,7 @@ import { niceTicks } from "../domain/thermoCpChartLayout"
 import { Disclosure } from "./Disclosure"
 
 /**
- * Replaces the earlier force-directed web (states as nodes, channels as
- * edges, no energy axis) with a potential-energy surface: states become
+ * A potential-energy surface: states become
  * horizontal level bars at their own deposited relative energy, and a
  * channel becomes a saddle point -- ALSO drawn as a short horizontal bar,
  * matching the reference figure's TS convention -- ONLY when it carries a
@@ -27,28 +26,16 @@ import { Disclosure } from "./Disclosure"
  * the full reasoning, including why x is connectivity-derived, never a
  * real reaction coordinate).
  *
- * READABILITY REWRITE (owner: "hard to read with lines overlapping etc",
- * checked against the group's own published PES for this exact chemical
- * system, `raghunath_n2h4_pes_fig7.1.png`, a design reference only and
- * never copied into this repo): x used to be ascending energy rank, which
- * put unrelated states next to each other and routed a connector between a
- * low and a high state straight through every level in between. x is now
- * derived from which states a deposited barrier actually connects
+ * x is derived from which states a deposited barrier actually connects
  * (`networkPesLayout.ts`'s `computeNetworkPesLayout`), so a connector never
  * has to travel further than its own two endpoints and their shared TS
  * bar -- see that module's header for the full tree-walk rationale, the
  * non-tree fallback, and how a state connected to nothing is handled
  * (never invented a connector for; grouped and captioned instead).
  *
- * SCOPE DECISION (owner's brief asked for this, explicitly, not just the
- * code): channel `kind` (isomerization/association/dissociation/exchange) and
- * `has_kinetics` still encode the drawn connectors' colour/dash -- both
- * are still meaningful facts about the 4 (today) channels that actually
- * get drawn. What does NOT carry over is the old size-based
- * degrade-to-table-only banner (`shouldDegradeNetworkDiagram`,
- * `NETWORK_DIAGRAM_NODE_THRESHOLD`): that existed because a force layout on
- * a FIXED canvas gets crowded and unstable past a node/edge count, and
- * neither failure mode applies here. A level bar's own x/y position is
+ * Channel `kind` (isomerization/association/dissociation/exchange) and
+ * `has_kinetics` encode the drawn connectors' colour/dash. There is no
+ * size-based degrade-to-table-only mode. A level bar's own x/y position is
  * computed directly from data (never a physics simulation that can
  * collapse), the SVG's `width` grows with the number of PLOTTED levels
  * (`networkPesLayout.ts`'s own `NETWORK_PES_LEVEL_GAP`) inside the SAME
@@ -56,11 +43,7 @@ import { Disclosure } from "./Disclosure"
  * uses (invariant 6) -- so a wide network scrolls instead of degrading --
  * and the connector count is separately, structurally capped by however
  * many barriers are actually deposited (never by the full channel count:
- * invariant 1 forces this regardless of network size). A 21-channel
- * network with only 4 barriers was never going to draw 21 connectors here;
- * a hypothetical future network with, say, 40 deposited barriers among 40
- * states would still be legible by the same "scroll, don't degrade" logic
- * that already covers a wide level axis.
+ * invariant 1 forces this regardless of network size).
  *
  * `states`/`channels`/`stateEnergies`/`channelBarriers` all come straight
  * off `NetworkFullRecord` -- no new fetch.
@@ -74,18 +57,16 @@ export function NetworkDiagram({ states, channels, stateEnergies, channelBarrier
     const barriers = channelBarriers ?? []
     // Layout choice is a readability judgement, not a correctness one:
     // both modes place every level at the same energy and draw the same
-    // saddle points at the same heights. Offered side by side while the
-    // owner gathers a second opinion on which reads better.
+    // saddle points at the same heights. Both are offered side by side.
     const [layoutMode, setLayoutMode] = useState<NetworkPesLayoutMode>("connectivity")
     const layout = computeNetworkPesLayout(states, stateEnergies ?? [], channels, barriers, layoutMode)
 
-    // Per-channel show/hide -- a VIEW filter only (invariant 2 of the
-    // channel-visibility brief): keyed by `channel_key`, never by index or
+    // Per-channel show/hide -- a VIEW filter only: keyed by `channel_key`, never by index or
     // position, so it survives a layout-mode switch untouched even though
     // every saddle's x/y is recomputed for the new mode. Empty by default
     // -- every drawable saddle starts visible. Lives at THIS level (not
     // inside `NetworkPesSvg`) because both the control (rendered as a
-    // sibling of the layout fieldset, per the brief) and the SVG need it.
+    // sibling of the layout fieldset) and the SVG need it.
     const [hiddenChannelKeys, setHiddenChannelKeys] = useState<Set<string>>(() => new Set())
 
     function toggleChannelVisibility(channelKey: string) {
@@ -129,15 +110,13 @@ export function NetworkDiagram({ states, channels, stateEnergies, channelBarrier
                 </fieldset>
             )}
             {/* Channel show/hide -- deliberately available in BOTH layout
-                modes (owner asked for it against the crossing-heavy energy
-                mode specifically, but a per-path toggle helps in either,
+                modes (a per-path toggle helps in either,
                 and a control that appears/disappears with the mode radio
                 above it would be more surprising than useful). Offers
                 EXACTLY `layout.saddles` -- the channels that actually got a
-                deposited barrier and a drawn saddle point (invariant 1 of
-                the channel-visibility brief) -- never the full channel
+                deposited barrier and a drawn saddle point -- never the full channel
                 list, which stays in `NetworkChannelsTable` below
-                regardless of what is hidden here (invariant 3). */}
+                regardless of what is hidden here. */}
             {layout && layout.saddles.length > 0 && (
                 <NetworkPesChannelFieldset
                     saddles={layout.saddles}
@@ -284,8 +263,8 @@ function NetworkPesSection({ layout, states, channels, barrierTotal, hiddenChann
             <NetworkPesLegend layout={layout} />
             {/* Invariant 1: 17 of 21 channels on the live archive carry no
                 deposited barrier and draw NO saddle point at all -- this is
-                the explicit statement of that count the brief asks for,
-                not a silently smaller diagram. */}
+                the explicit statement of that count, not a silently
+                smaller diagram. */}
             <p className="t-body" style={{ margin: ".6rem 0 0" }}>
                 {`${barrierTotal} of ${channels.length} channel${channels.length === 1 ? "" : "s"} `
                     + `carr${barrierTotal === 1 ? "ies" : "y"} a deposited barrier and appear${barrierTotal === 1 ? "s" : ""} below as a saddle point; `
@@ -317,7 +296,7 @@ function NetworkPesSection({ layout, states, channels, barrierTotal, hiddenChann
                 </p>
             )}
             {shownSaddleCount < layout.saddles.length && (
-                // Invariant 5 of the channel-visibility brief: a filtered
+                // A filtered
                 // view must say so, and how many of how many are actually
                 // shown, so it is never mistaken for the whole picture.
                 // Only rendered once at least one channel is hidden --
@@ -396,7 +375,7 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels, hiddenCha
     const plotLeft = NETWORK_PES_MARGIN.left
     const plotRight = layout.width - NETWORK_PES_MARGIN.right
 
-    // Invariant 2 of the channel-visibility brief: hiding is a VIEW filter,
+    // Hiding is a VIEW filter,
     // never a relayout -- this is the ONLY place a hidden channel changes
     // anything. `layout.saddles` itself, and every level's x/y, are left
     // completely untouched; a hidden saddle's own height and position are
@@ -458,14 +437,11 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels, hiddenCha
 
                 <g aria-hidden="true">
                     {visibleSaddles.map((saddle) => {
-                        // `index` used to come from the `.map` position over
-                        // ALL saddles; now that this iterates the FILTERED
-                        // list, the row-anchor index must still be the
-                        // original position in `layout.saddles` (the one
-                        // `channelIndexByKey`'s fallback and every other
-                        // saddle keyed off), not this array's own position
-                        // -- otherwise hiding an earlier channel would shift
-                        // a later one's `#channel-row-N` anchor.
+                        // `index` is the original position in `layout.saddles`
+                        // (the one `channelIndexByKey`'s fallback and every other
+                        // saddle keyed off), not the position in this filtered
+                        // array -- otherwise hiding an earlier channel would shift
+                        // the fallback row index of every later saddle.
                         const index = layout.saddles.indexOf(saddle)
                         const rowIndex = channelIndexByKey.get(saddle.channelKey) ?? index
                         // Saddles are drawn as a short horizontal BAR (like
@@ -529,8 +505,7 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels, hiddenCha
                                 />
                                 {/* A NUMBER, never `channel_key` -- the one
                                     piece of text this whole surface exists
-                                    to show (owner: "it's best to show a PES
-                                    with TS energies"), drawn ABOVE the bar
+                                    to show (the TS energy), drawn ABOVE the bar
                                     (reference figure convention, module
                                     header point 2). */}
                                 <text x={saddle.peakX} y={saddle.peakY - 10} textAnchor="middle" className="net-pes-peak-label">
@@ -596,8 +571,7 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels, hiddenCha
                                 {/* Energy caption ABOVE the bar, species
                                     label BELOW it -- the reference
                                     figure's own convention (module header
-                                    point 5), the reverse of this
-                                    component's earlier layout. The ONLY
+                                    point 5). The ONLY
                                     safe level label --
                                     `composition.state_label`, already
                                     baked into `level.label` by

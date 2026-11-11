@@ -2,15 +2,12 @@
 """Refuse non-ASCII in strings that leave the process.
 
 WHY
-    On 2026-08-04 an em dash in an upload-warning message rolled back a
-    whole upload against a ``SQL_ASCII`` database. The character carried
-    no meaning: it was a typographic habit, and an ASCII hyphen would
-    have said the same thing. That database has since been converted to
-    UTF-8 and the deployment now pins its encoding (see
-    ``backend/Dockerfile`` and ``docker-compose.yml``), so this check is
-    the second layer rather than the only one -- but the first layer is
-    a property of a host, and a host is exactly the thing that gets
-    rebuilt by someone in a hurry.
+    An em dash in an upload-warning message can roll back a whole upload
+    against a ``SQL_ASCII`` database. The character carries no meaning: it
+    is a typographic habit, and an ASCII hyphen says the same thing. A
+    database encoding is a property of a host, and a host is exactly the
+    thing that gets rebuilt by someone in a hurry, so this check does not
+    rely on it.
 
 WHAT IS IN SCOPE, AND WHY IT IS DRAWN THIS NARROWLY
     Six trees; see ``DEFAULT_TARGETS``. Three of them are backend-side
@@ -21,20 +18,13 @@ WHAT IS IN SCOPE, AND WHY IT IS DRAWN THIS NARROWLY
     ``clients/python/adapters/chemkin/tckdb_chemkin``, and the MCP
     integration ``integrations/mcp/src/tckdb_mcp``).
 
-    Each of those was added after a measurement, not before one. The
-    wire package had nine violations on the day it was first scanned.
-    The client builders had eight and the CHEMKIN adapter two, all of
-    them at emission sites, in packages this check had never been
-    pointed at. ``tckdb_mcp`` had none: it is here for coverage, so the
+    ``tckdb_mcp`` has no violations: it is here for coverage, so the
     next string written into it is checked by the pull request that
-    writes it, and nothing in this file's history should be read as
-    having repaired anything there.
+    writes it.
 
-    That is the recurring shape, and it is the reason for ``--audit``
-    below: every one of these was a correct check aimed at fewer places
-    than it should have been, and in each case the omission was found
-    by a person noticing, months late, rather than by the check saying
-    so.
+    A correct check aimed at fewer places than it should cover is the
+    failure ``--audit`` below exists to catch: it reports source files
+    that no target covers.
 
     Only string literals that are structurally *at an emission site*:
     the argument of a ``raise``, the argument of a logging call, or a
@@ -66,7 +56,7 @@ SHELL SCRIPTS
     are long explanatory prose written with em dashes, and a checker
     that fires on those gets switched off.
 
-    This was added because it was missing and the miss was concrete:
+    This is scanned because the miss is concrete:
     ``tckdb_auth.sh``'s ``mask_key`` built its output with U+2026, and
     nothing had ever looked at it, because this script only ever walked
     ``*.py``. The masked key goes to a terminal, so the character cost
@@ -134,7 +124,7 @@ CLIENT_PACKAGE_TARGET = "../clients/python/src/tckdb_client"
 #: The CHEMKIN importer adapter, which ships and versions separately from
 #: the client (``clients/python/adapters/chemkin/pyproject.toml``).
 CHEMKIN_ADAPTER_TARGET = "../clients/python/adapters/chemkin/tckdb_chemkin"
-#: The QCSchema importer adapter, a sibling of the CHEMKIN one (Phase C).
+#: The QCSchema importer adapter, a sibling of the CHEMKIN one.
 QCSCHEMA_ADAPTER_TARGET = "../clients/python/adapters/qcschema/tckdb_qcschema"
 
 #: The MCP integration. Added at zero violations -- coverage, not repair.
@@ -172,14 +162,13 @@ PAPER_SNAPSHOT_TARGET = "../scripts/paper_snapshot"
 #: own ``tests/``, which is why the target is the package directory and not
 #: the distribution directory above it.
 #:
-#: ``tckdb_client`` and ``tckdb_chemkin`` for the same reason the wire
-#: package was added, one layer further out: their strings are the ones a
+#: ``tckdb_client`` and ``tckdb_chemkin`` for the same reason as the wire
+#: package, one layer further out: their strings are the ones a
 #: contributor reads in a terminal, and the adapter's are accumulated into
 #: ``NormalizedReaction.warnings`` and carried up through an import run.
-#: Eight and two violations respectively when first scanned.
 #:
-#: ``tckdb_mcp`` scanned clean when it was added. It is on the list so that
-#: the *next* string written there is checked; nothing was repaired in it.
+#: ``tckdb_mcp`` is on the list so that the *next* string written there is
+#: checked.
 DEFAULT_TARGETS = (
     "app",
     "scripts",
@@ -218,10 +207,9 @@ TEST_TREE_REASON = (
 #: Source files no target covers, and why. Keys are repository-relative
 #: POSIX paths; a file is declared if it equals a key or lies under one.
 #:
-#: This exists so that "not scanned" is a decision on the record rather than
+#: This exists so that "not scanned" is declared rather than
 #: an absence nobody can see. ``--audit`` fails on any source file that is in
-#: neither this table nor a target, which is the state every one of the five
-#: 2026-08 encoding misses was in.
+#: neither this table nor a target.
 UNSCANNED_BY_DESIGN: tuple[tuple[str, str], ...] = (
     (
         "backend/alembic",
@@ -388,7 +376,7 @@ _ACCUMULATOR_RECEIVERS = frozenset({"warnings", "errors", "messages", "notes"})
 #: Keyword arguments carrying human-readable text that gets stored or
 #: returned. ``message`` is the one that mattered: ``UploadWarning(message=...)``
 #: rows are written to the database and served back to clients, and an
-#: ``UploadWarning`` message is what the 2026-08-04 rollback was carrying.
+#: ``UploadWarning`` message is such text.
 _TEXT_KEYWORDS = frozenset({"message", "detail", "reason", "msg"})
 
 

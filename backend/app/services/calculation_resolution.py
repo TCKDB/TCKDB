@@ -211,7 +211,7 @@ def _level_of_theory_payload(ref: LevelOfTheoryRef) -> dict[str, object]:
         "dispersion": dispersion_key,
         "solvent": component_identity_key(ref.solvent),
         "solvent_model": component_identity_key(ref.solvent_model),
-        # DR-0034: spin treatment is part of LOT identity. NULL folds to
+        # Spin treatment is part of LOT identity. NULL folds to
         # "unknown" in the hash so a row that omits it and a row that says
         # "unknown" are the same level of theory.
         "spin_treatment": (
@@ -219,9 +219,9 @@ def _level_of_theory_payload(ref: LevelOfTheoryRef) -> dict[str, object]:
             or "unknown"
         ),
     }
-    # ADR 0021: core treatment (frozen-core vs all-electron) is identity only
-    # when stated. A NULL adds no key, so every level that exists today keeps
-    # the exact hash it has. Do not fold NULL to a placeholder the way
+    # Core treatment (frozen-core vs all-electron) is identity only
+    # when stated. A NULL adds no key, so a level that does not state it keeps
+    # its hash. Do not fold NULL to a placeholder the way
     # spin_treatment does: that would re-key every row.
     core_treatment = getattr(ref.core_treatment, "value", ref.core_treatment)
     if core_treatment is not None:
@@ -315,7 +315,7 @@ def resolve_level_of_theory_ref(
     :param session: Active SQLAlchemy session.
     A ref that carries a ``composite_scheme`` is a user-built recipe: it goes
     through :func:`~app.services.composite_scheme_resolution.resolve_declared_scheme_level`,
-    which hashes the scheme's definition and binds the level to it (ADR 0021, P5).
+    which hashes the scheme's definition and binds the level to it.
 
     :param ref: Upload-facing level-of-theory reference.
     :returns: Existing or newly created ``LevelOfTheory`` row.
@@ -367,7 +367,7 @@ def resolve_level_of_theory_ref(
 
     # A catalogued named composite method (CBS-QB3, G4, ...) is bound to its
     # recipe here, on the row resolution landed on. The hash is not touched.
-    # Plain methods return without a query (ADR 0021).
+    # Plain methods return without a query.
     ensure_named_method_binding(session, level_of_theory)
 
     return level_of_theory
@@ -455,16 +455,12 @@ def refuse_workflow_tool_as_calculation_software(
     "Arkane"`` on a calculation is a category error this database cannot
     repair: the program that actually ran is simply absent. ARC (which
     orchestrates the jobs) and RMG (which generates mechanisms) are refused
-    for the same reason (owner decision on #305, 2026-09-29; reversible --
-    see ``software_resolution.WORKFLOW_TOOLS_NOT_ESS``). Accepting it is
-    what lets ``Arkane`` sit in the ``software`` registry beside Gaussian,
-    Molpro and ORCA and surface in the software vocabulary (issue #305,
-    item 1).
+    for the same reason (see ``software_resolution.WORKFLOW_TOOLS_NOT_ESS``).
 
     Refused rather than routed. Moving it to the calculation's
     ``workflow_tool_release`` would still leave the calculation naming no
     electronic-structure program, and silently rewriting a declared value is
-    what DR-0008 exists to prevent. The refusal names both fixes so the
+    what software reconciliation exists to prevent. The refusal names both fixes so the
     depositor can make the one that is true.
 
     :param software_release: The declared software ref, or ``None``.
@@ -602,7 +598,7 @@ def persist_calculation(
 
 
 # ---------------------------------------------------------------------------
-# Software provenance reconciliation (DR-0008)
+# Software provenance reconciliation
 # ---------------------------------------------------------------------------
 
 
@@ -691,7 +687,7 @@ def software_reconciliation_warning(
     Pure function over :func:`record_software_reconciliation`'s return
     value: produces a warning exactly when that call took the correction
     branch (a *name* mismatch — not a version/revision/build-only
-    mismatch, which stays silent here; DR-0008's ordinary, much larger
+    mismatch, which stays silent here; the ordinary, much larger
     warning-free case). Kept separate from ``record_software_reconciliation``
     itself so callers that do not track an ``UploadWarning`` list (the
     calculation-creation seam, which calls it with ``parsed_software=None``
@@ -724,7 +720,7 @@ def record_software_reconciliation(
 
     Runs :func:`reconcile_software_provenance` and persists the outcome on
     the ``calculation`` row (``software_reconciliation_status`` and, when a
-    banner was observed, ``observed_software_banner``). See DR-0008.
+    banner was observed, ``observed_software_banner``).
 
     This is **non-blocking provenance**, not a trust gate: nothing is ever
     rejected. Where a *declared field* is disagreed with (``version``,
@@ -732,8 +728,7 @@ def record_software_reconciliation(
     ``software_release_id`` — the parser may have mis-read a banner and
     there is nothing else here to check it against.
 
-    **Narrowed for the software identity itself** (2026-09, issue #305's
-    ARC follow-up): when the parsed banner names a *different program*
+    **Software identity:** when the parsed banner names a *different program*
     than the declared ``name``, the observed program is what actually
     ran — an artifact is real evidence; a declared name can be a stale
     value that rode along from an unrelated job (ARC's own per-job-type
@@ -743,8 +738,7 @@ def record_software_reconciliation(
     rather than discarded. Use :func:`software_reconciliation_warning` to
     turn this into a depositor-facing warning.
 
-    **A missing version is filled by re-pointing** (owner decision (c) on
-    #305, 2026-09-29): when the banner names the same program and supplies a
+    **A missing version is filled by re-pointing:** when the banner names the same program and supplies a
     version the declared release left NULL (:func:`banner_supplies_missing_
     version`), the calculation is re-pointed at the release the banner
     describes, resolved (get-or-create) from the exact version/revision/build
@@ -808,7 +802,7 @@ def record_software_reconciliation(
         banner_supplies_missing_version(result)
         and calculation.execution_environment_manifest_id is None
     ):
-        # Owner decision (c) on #305: the same program, a version the
+        # The same program, a version the
         # declaration lacked -> cite the release the banner describes.
         # ``enriched`` means every differing field was NULL on the declared
         # side, so a declared version is never overwritten. A calculation
@@ -828,7 +822,7 @@ def banner_supplies_missing_version(
 ) -> bool:
     """True when a banner fills a version the declared release left NULL.
 
-    DR-0008's ``enriched`` outcome (the same program; every field that
+    The ``enriched`` outcome (the same program; every field that
     differs was NULL on the declared side) with ``version`` among the filled
     fields. The one rule deciding a version fill, shared by ingest
     (:func:`record_software_reconciliation`) and the curator fill tool
@@ -851,13 +845,12 @@ def banner_supplies_missing_version(
 # declares it when the energy change between steps falls below a
 # threshold. A ``calc_opt_result`` row claiming ``converged = true`` while
 # reporting no usable energy anywhere is claiming a result was reached
-# without reporting it. 52 records on the deployed archive did exactly
-# this (single depositor, 2026-07-15..2026-08-02): ``converged = true``,
-# ``final_energy_hartree`` NULL, ``n_steps`` NULL, no artifact -- and every
-# one of them turned out to have a real ``sp`` calculation for the same
-# owner, so the energy was recoverable, just not from this row.
+# without reporting it: ``converged = true``,
+# ``final_energy_hartree`` NULL, ``n_steps`` NULL, no artifact. The energy
+# may still be recoverable from a real ``sp`` calculation for the same
+# owner, just not from this row.
 #
-# The settled rule (decided by the DB owner) is a disjunction, checked in
+# The rule is a disjunction, checked in
 # this order:
 #
 #   (a) a single-point calculation exists for the same owner (species_entry
@@ -1147,10 +1140,9 @@ def _persist_irc_result(
         if point.geometry is not None:
             geometry_id = resolve_geometry_payload(session, point.geometry).id
 
-        # Every point geometry is judged, whatever its direction: the checks
-        # used to sit inside the forward/reverse link branch below, so the
-        # TS-marker point (direction None) and ``both`` were stored on
-        # ``calc_irc_point.geometry_id`` unchecked (#680). A geometry already
+        # Every point geometry is judged, whatever its direction, including
+        # the TS-marker point (direction None) and ``both``, which are stored
+        # on ``calc_irc_point.geometry_id``. A geometry already
         # linked as an output geometry was checked when it was linked.
         if geometry_id is not None and geometry_id not in linked_geometry_ids:
             assert_calculation_geometry_composition(
@@ -1314,7 +1306,7 @@ def persist_calculation_result(
         )
 
     if calc_upload.freq_result is not None:
-        # ADR 0012: tau and the structural flag are *recorded*, not
+        # Tau and the structural flag are *recorded*, not
         # recomputed later. tau is read from this calculation's own
         # execution provenance, so a future parser improvement would
         # otherwise silently re-decide every historical record; and the
@@ -1329,11 +1321,10 @@ def persist_calculation_result(
         tau = calc_upload.tau_resolution()
 
         # `tau_resolution()` is the one resolution validation judged
-        # with: a recorded `freq.hessian_method` first, then ADR 0012's
-        # 2026-09-04 assumed program default from the payload's own
-        # software and level-of-theory method (owner decision 2026-10-31:
-        # applied at validation, not after it), then
-        # `protocol_not_recorded`. So the tau and basis stored here are
+        # with: a recorded `freq.hessian_method` first, then the
+        # assumed program default from the payload's own
+        # software and level-of-theory method (applied at validation, not
+        # after it), then `protocol_not_recorded`. So the tau and basis stored here are
         # exactly the ones that decided acceptance and the structural
         # flag; nothing is swapped in afterwards.
 
@@ -1342,8 +1333,8 @@ def persist_calculation_result(
         # The flag is judged only where there is a reaction coordinate to
         # judge extras against — which is exactly where a designation
         # exists. A minimum's freq result, and a plain first-order saddle
-        # with nothing to disambiguate, store NULL: "never judged under
-        # ADR 0012", which is a different fact from "judged and not
+        # with nothing to disambiguate, store NULL: "never judged", which is a
+        # different fact from "judged and not
         # flagged" and must not be collapsed into `false`.
         structural_flag: bool | None = None
         if designated is not None:
@@ -1429,7 +1420,7 @@ def persist_calculation_result(
         # The wire models refuse these on a non-sp and on a contradictory set
         # before they reach here (``check_sp_energy_components``). This is the
         # same rule re-run at the write, so a caller that builds a payload
-        # without validation cannot store one (ADR 0021). Values are stored as
+        # without validation cannot store one. Values are stored as
         # deposited; nothing is derived.
         check_sp_energy_components(
             [(c.component, c.value_hartree) for c in calc_upload.sp_energy_components],
@@ -1752,7 +1743,7 @@ _INVERTED_DEPENDENCY_ROLE_FOR_TYPE: dict[
 
 
 # Mapping from dependency role to the parent calculation's required type.
-# Mirrors DR-0028 Requirement 1's compatibility table for the parent-side
+# Mirrors the compatibility table for the parent-side
 # check on ``calculation_dependency`` rows. Roles not in the table (e.g.
 # ``arkane_source``) are scientific metadata that does not pin a specific
 # parent ``CalculationType`` and pass unconditionally.
@@ -1766,7 +1757,7 @@ _DEPENDENCY_ROLE_TO_PARENT_TYPE: dict[
     CalculationDependencyRole.irc_followup: CalculationType.irc,
 }
 # Roles whose parent may also be a ``composite`` calculation that has an output
-# geometry of its own (ADR 0021). A program-run named composite (CBS-QB3, G4, ...)
+# geometry of its own. A program-run named composite (CBS-QB3, G4, ...)
 # optimises the geometry as the first step of its recipe, so for a conformer
 # whose geometry came from one, the frequency, single-point or scan that ran on
 # that geometry hangs off the composite exactly as it would off an ``opt``. A
@@ -1876,7 +1867,7 @@ def assert_dependency_role_type_compatible(
     parent ``CalculationType``; those are accepted unconditionally.
     ``optimized_from`` accepts a parent of either ``opt`` (restart-from)
     or ``path_search`` (TS-guess generator). Bundle workflows surface
-    incompatibilities as 422 to mirror DR-0028 error semantics.
+    incompatibilities as 422.
     """
     if dependency_role_type_compatible(parent_calc, role):
         return
@@ -2224,13 +2215,12 @@ def attach_calculation_output_geometries(
     has no geometry to optimise, so its honest primary is an ``sp``, and
     that ``sp`` is the only calculation that could carry the conformer's
     geometry. Without the link the conformer reads back with no geometry at
-    all (``geometry_count`` 0, ``has_geometries`` false), which a
-    relabelled ``opt`` used to avoid by accident. Only an ``sp`` qualifies,
+    all (``geometry_count`` 0, ``has_geometries`` false). Only an ``sp`` qualifies,
     and only the primary of a one-atom conformer: any other calculation
     still gets no invented output.
 
     A second exception, for a conformer's primary calculation when it is a
-    ``composite`` (``is_conformer_primary``, ADR 0021). A named composite
+    ``composite`` (``is_conformer_primary``). A named composite
     method (CBS-QB3, G4, ...) optimises the geometry as the first step of its
     own recipe, so the one program run that produced the conformer's geometry
     is the composite, exactly as an ``opt`` primary's is. Only the primary
@@ -2337,11 +2327,11 @@ def resolve_and_persist_calculation_with_results(
         except CodedValidationError as exc:
             raise CodedValueError(exc.code, exc.detail, context=exc.context, message_prefix=False) from exc
 
-    # Every wire rule that ties the block, the level and the software together
-    # (ADR 0021): software required unless an assembled composite, and an
-    # assembled composite's scheme inline with its inputs filling every slot. The
-    # models ran it on parse; a payload built with ``model_copy`` skipped it, and
-    # this is the one seam every calculation passes through.
+    # Every wire rule that ties the block, the level and the software together:
+    # software required unless an assembled composite, and an assembled
+    # composite's scheme inline with its inputs filling every slot. The models
+    # run it on parse; a payload built with ``model_copy`` skips it, and this is
+    # the one seam every calculation passes through.
     assert_composite_calculation_shape(
         calc_upload.type,
         calc_upload.composite_result,
@@ -2378,7 +2368,7 @@ def resolve_and_persist_calculation_with_results(
     )
     resolved = resolve_calculation_create_request(session, request)
     calculation = persist_calculation(session, resolved, created_by=created_by)
-    # DR-0008: record declared software provenance at ingest. No parser
+    # Record declared software provenance at ingest. No parser
     # banner reaches this seam (the upload payload carries only the declared
     # ref), so this resolves to ``declared_only``; the parser seam
     # (extract_and_store_calculation_parameters) later upgrades the status

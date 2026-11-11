@@ -347,9 +347,8 @@ def test_batch_mode_rejects_empty_kind(files):
 
 
 def test_default_mode_also_validates_pre_dispatch(files, tmp_path):
-    """Pre-dispatch validation applies to both modes; this guard is the
-    safety property that was previously only enforced inside the
-    per-artifact loop."""
+    """Pre-dispatch validation applies to both modes; the guard is a
+    safety property of the whole call, not of one artifact."""
     captured: list = []
     client, _ = make_client(_batch_handler(captured))
     plan = [

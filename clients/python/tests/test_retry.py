@@ -421,12 +421,12 @@ class TestNonRetryableCodes:
     first, so it says nothing at all about the behaviour under test — and
     the behaviour under test *is* the number of attempts.
 
-    The two halves are deliberately in one class. Before #234 the client
-    replayed ``artifact_object_missing`` on a backoff schedule forever for
-    a condition guaranteed never to clear; the fix must not overshoot into
+    The two halves are deliberately in one class. Replaying
+    ``artifact_object_missing`` on a backoff schedule would never end, for a
+    condition guaranteed never to clear; the veto must not overshoot into
     abandoning the 503 beside it, which is a genuine outage where waiting
-    is the correct response. Asserting only the first half would leave a
-    client that stopped retrying everything looking fixed.
+    is the correct response. Asserting only the first half would pass for a
+    client that stopped retrying everything.
     """
 
     def test_the_deny_list_is_not_empty(self):

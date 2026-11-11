@@ -1,14 +1,13 @@
 #!/usr/bin/env python
-"""List stored frequency results whose ADR 0012 decision a new tau would change.
+"""List stored frequency results whose tau-based decision a new tau would change.
 
 Read-only. This script writes nothing, has no ``--apply``, and never will:
-stored ``calc_freq_result`` rows are append-only science. Since the owner
-decision of 2026-10-31, an unrecorded ``freq.hessian_method`` resolves
-through the producing program's assumed default *at validation*
-(``tckdb_schemas.hessian_method_assumption.resolve_tau_with_assumption``),
-where before it resolved to the conservative 50 cm-1 and only the stored
-value was swapped afterwards. Rows deposited under the old behaviour were
-decided at the old tau. This lists them; it does not relabel or re-decide
+stored ``calc_freq_result`` rows are append-only science. An unrecorded
+``freq.hessian_method`` resolves through the producing program's assumed
+default *at validation*
+(``tckdb_schemas.hessian_method_assumption.resolve_tau_with_assumption``).
+A stored row may have been judged at a different tau than that resolution
+gives today. This lists such rows; it does not relabel or re-decide
 any of them.
 
 The tau is resolved from stored state, which is evidence of its own and not a

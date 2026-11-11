@@ -1,8 +1,7 @@
-"""Capture pinned backend read fixtures for the exporter round trip (C-Q3).
+"""Capture pinned backend read fixtures for the exporter round trip.
 
 ``tests/test_round_trip.py`` exercises :func:`tckdb_qcschema.exporter.export_calculation`
-against a *stub* client (no live server, no database -- see the module's own
-"No live server in the adapter tests" note in the C-Q3 brief) that serves
+against a *stub* client (no live server, no database) that serves
 pinned JSON bodies recorded from a real backend. This module is how those
 bodies were produced, and how they are reproduced if the backend response
 shapes ever drift.
@@ -13,7 +12,7 @@ Not runnable in place: it depends on ``backend/tests/conftest.py``'s
 back at teardown so nothing is left behind in the database) -- reusing that
 well-tested machinery beats re-implementing DB/app wiring here, but it means
 this file is not itself a backend test module (sovereignty: nothing under
-``backend/`` changes for C-Q3). To (re)run it:
+``backend/`` changes). To (re)run it:
 
     cp clients/python/adapters/qcschema/scripts/capture_read_fixtures.py \\
         backend/tests/api/test_zzz_tmp_capture_qcschema_reads.py
@@ -26,8 +25,8 @@ this file is not itself a backend test module (sovereignty: nothing under
 
     rm backend/tests/api/test_zzz_tmp_capture_qcschema_reads.py
 
-Posts the ``energy_v1`` and ``hessian_v1`` backend corpus payloads (C-Q2,
-``backend/tests/fixtures/qcschema/<case>/payload.json`` + ``artifact.json``)
+Posts the ``energy_v1`` and ``hessian_v1`` backend corpus payloads
+(``backend/tests/fixtures/qcschema/<case>/payload.json`` + ``artifact.json``)
 through the real ``POST /uploads/conformers`` and
 ``POST /calculations/{id}/artifacts`` routes -- exactly as
 ``test_api_qcschema_fixtures.py`` does -- then issues the exact reads
@@ -41,9 +40,9 @@ server:
   geometry the matrix was computed at, which is not always the same row as
   ``input_geometries[0]`` in general even though it is for this corpus's
   water fixtures.
-* ``GET /calculations/{id}/hessian`` (C-Q2) -- 404 for ``energy_v1``
+* ``GET /calculations/{id}/hessian`` -- 404 for ``energy_v1``
   (no stored Hessian), 200 for ``hessian_v1``.
-* The legacy per-atom-isotope read (review round 2, C-Q3): for
+* The legacy per-atom-isotope read: for
   ``energy_v1`` (an ``sp`` case), ``GET /geometries?geom_hash=<hash>``
   using the calculation's own geometry link's ``geom_hash``; for
   ``hessian_v1`` (a ``freq`` case), ``GET /geometries/{id}`` using the
@@ -67,7 +66,7 @@ was called with the exact path the exporter actually builds) and
 mint, for a human re-reading the capture -- never read by the round-trip
 test itself, which only reads the response-body files).
 
-Measured 2026-09-20 against this backend: the default deployment's
+Measured against this backend: the default deployment's
 internal-id visibility policy strips ``calculation_id`` from
 ``GET /scientific/calculations/{id}`` and ``geometry_id`` from
 ``GET /scientific/geometries/{ref}`` even with ``include=internal_ids``
@@ -81,18 +80,15 @@ docstring for how ``export_calculation`` copes with this asymmetry (a
 caller must supply the integer id directly to export a ``freq`` record on
 a deployment that hides it from the scientific read).
 
-Measured again 2026-09-20 (review round 2): ``GET /geometries/{id}`` and
+Also measured: ``GET /geometries/{id}`` and
 ``GET /geometries?geom_hash=...`` are a *different* pair of routes from
 the ones above -- plain, pre-Phase-D ``/geometries/...`` routes (not
 ``/scientific/geometries/...``), gated by the exact same
 ``require_auth_for_legacy_reads`` dependency as
 ``GET /calculations/{id}/hessian`` (see ``backend/app/api/router.py``).
 Both serve ``GeometryAtomRead.isotope_mass_number`` per atom, which the
-scientific geometry read never does. This is why the earlier revision of
-this docstring and of ``exporter.py``'s module docstring, which said
-closing the isotope gap needed a backend schema change, was wrong: the
-field was already being served by a route this adapter already reads
-from (the Hessian route) for a different purpose.
+scientific geometry read never does. The isotope field is therefore served by a route this adapter already
+reads from (the Hessian route) for a different purpose.
 """
 
 from __future__ import annotations
@@ -114,8 +110,8 @@ OUT_DIR = (
     / "reads"
 )
 
-#: The two round-trip cases named in the C-Q3 brief. Deliberately a fixed
-#: pair, not "every route case in the C-Q2 corpus" -- a gradient or
+#: The two round-trip cases. Deliberately a fixed
+#: pair, not "every route case in the backend corpus" -- a gradient or
 #: optimization capture here would be fixture data nothing reads, since the
 #: exporter supports only ``sp`` and ``freq``.
 CASES = ("energy_v1", "hessian_v1")
@@ -208,7 +204,7 @@ def _capture(client, case: str) -> None:
         json.dumps(geometries, indent=2, sort_keys=True) + "\n"
     )
 
-    # Legacy per-atom-isotope read (review round 2): the exact call
+    # Legacy per-atom-isotope read: the exact call
     # tckdb_qcschema.exporter._fetch_isotope_atoms makes for this record's
     # own calculation type -- see the module docstring above.
     calc_type = record["calculation"]["type"]

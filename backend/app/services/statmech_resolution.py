@@ -85,7 +85,7 @@ logger = logging.getLogger(__name__)
 #:
 #: Re-exported; *defined* in :mod:`tckdb_schemas.local_key_codes`, because
 #: the statmech and conformer request schemas refuse the same mistake one
-#: layer earlier and may not import ``app`` (ADR 0017).
+#: layer earlier and may not import ``app``.
 W_STATMECH_CALCULATION_KEY_UNDECLARED = _W_STATMECH_CALCULATION_KEY_UNDECLARED
 
 #: A statmech source link declares a role the resolved calculation cannot
@@ -236,7 +236,7 @@ def assert_statmech_role_compatible(
 ) -> None:
     """Refuse a statmech source link whose role contradicts the calc's type.
 
-    Blocking, and ADR 0008 permits that here because this asserts a
+    Blocking, because this asserts a
     *contract* rather than an expectation: ``role='freq'`` is the claim
     that the linked job produced the vibrational frequencies this
     partition function was built from, and an ``sp`` job did not produce
@@ -244,12 +244,10 @@ def assert_statmech_role_compatible(
     is nothing to warn about — the record would assert evidence that does
     not exist.
 
-    This is DR-0028 Requirement 1, applied to the path it was written for
-    but never reached: thermo has enforced it since DR-0028
-    (:func:`app.workflows.thermo.assert_thermo_role_matches_calculation_type`)
-    while statmech accepted any pairing. Local string keys made the gap sharper
-    than row ids did — a plausible-looking wrong key resolves silently
-    where a wrong integer would more often have failed a foreign key.
+    Thermo enforces the same rule
+    (:func:`app.workflows.thermo.assert_thermo_role_matches_calculation_type`).
+    A plausible-looking wrong local key resolves silently, where a wrong
+    integer would more often have failed a foreign key.
 
     ``composite`` and ``imported`` accept any type, as they do for thermo:
     they name where a number came from, not which job produced it.
@@ -650,16 +648,9 @@ def resolve_or_create_statmech(
 # the electronic-structure software *release* the factor was fit against --
 # the same LOT in Gaussian vs ORCA (or Gaussian 16 vs Gaussian 09) can
 # legitimately need a different factor (the comment on
-# `frequency_scale_factor.software_release_id` says so; DR context: the
-# column has carried this dimension since the initial schema, at program
-# grain until the correction-scheme-provenance plan v2 §6 sibling revision
-# widened it to release grain). Nothing
-# previously checked that the software a factor was DERIVED FOR is the
-# software that actually produced the frequencies it was APPLIED TO. On the
-# deployed archive today the two always agree -- 95 statmech rows compare
-# cleanly (Gaussian/Gaussian and ORCA/ORCA) -- but that is because every
-# depositor so far happened to use one code for both roles, not because
-# anything verified it.
+# `frequency_scale_factor.software_release_id` says so). Nothing else
+# checks that the software a factor was DERIVED FOR is the
+# software that actually produced the frequencies it was APPLIED TO.
 #
 # This is a WARNING, never a refusal -- see
 # :func:`collect_converged_opt_energy_warnings` in

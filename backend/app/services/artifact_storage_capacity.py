@@ -147,7 +147,7 @@ def current_full_state(session: Session) -> Optional[StorageFullState]:
     Two indexed queries, not a walk: find the newest ``refused`` row, then
     ask whether anything after it answers it. There is no stored summary
     to keep in step with the log, which is the point — see the model
-    docstring and ADR 0007.
+    docstring.
 
     Returns the outstanding refusal, or ``None`` when none is outstanding.
     """

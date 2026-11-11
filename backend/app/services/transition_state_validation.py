@@ -92,13 +92,13 @@ W_MISSING_TS_IRC_EVIDENCE = "transition_state_missing_irc_evidence"
 W_TS_ENERGY_ORDERING_MIXED_LEVELS = "transition_state_energy_ordering_mixed_levels"
 
 #: A stated energy contradicts the energy TCKDB stores for the calculation it
-#: cites, beyond the printed-precision tolerance (issue #638). Block tier
-#: (ADR 0008): the record names a calculation and a number, and the number is
+#: cites, beyond the printed-precision tolerance. Block tier:
+#: the record names a calculation and a number, and the number is
 #: not that calculation's.
 E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH = "ts_energy_ordering_stated_energy_mismatch"
 
 #: An ``energy_ordering`` energy is taken from a calculation of a type that does not carry that
-#: kind of energy (an E0 from a single point, an energy from an IRC point). Block tier (ADR 0008):
+#: kind of energy (an E0 from a single point, an energy from an IRC point). Block tier:
 #: definitional. Sibling of the network rule's ``network_energy_source_type_mismatch``.
 E_TS_ENERGY_ORDERING_SOURCE_TYPE_MISMATCH = "ts_energy_ordering_source_type_mismatch"
 
@@ -168,7 +168,7 @@ def _assert_energy_sources_are_comparable(
     own numbers cannot make. The type rule is definitional and blocks: an
     energy taken from an IRC point, or an E0 from a bare single point, is not
     the quantity it is labelled as. Mixed levels of theory within one energy
-    kind only warn (ADR 0008): comparing across levels is usually a mistake,
+    kind only warn: comparing across levels is usually a mistake,
     but a depositor may do it deliberately (a literature well against a
     computed saddle point), and a warning leaves that legitimate case
     depositable while still naming the gap.
@@ -287,7 +287,7 @@ def _stated_energy_mismatch(
 ) -> CodedValueError:
     """The refusal for a stated energy the cited calculation does not store.
 
-    Names the participant and both values and never a row id (DR-0028).
+    Names the participant and both values and never a row id.
     """
 
     what = (
@@ -529,8 +529,7 @@ def _assert_imaginary_mode_matches_freq(
     A passing record with more than one imaginary mode must say which one is
     the reaction coordinate, because that is what ``stationary_point``
     requires of a transition state that has extra (typically torsional)
-    imaginary modes. More than one mode is not refused as such: ADR 0012
-    deliberately allows it.
+    imaginary modes. More than one mode is not refused as such.
     """
 
     freq = source.freq_result
@@ -589,7 +588,7 @@ def _assert_energy_source_belongs_to_participant(
     species. The wire schemas refuse the same mistake earlier with a list of
     the keys that would have worked; this is what stops a caller that reached
     the seam another way. The message names the field the depositor wrote and
-    never a row id (DR-0028).
+    never a row id.
     """
 
     calculation = session.get(Calculation, calculation_id)
@@ -675,7 +674,7 @@ def persist_transition_state_validation_evidence(
             "reconstruction_calculation_ids must align with the evidence records."
         )
 
-    # Definitional, therefore blocking (ADR 0008). The mappings' *shape* was
+    # Definitional, therefore blocking. The mappings' *shape* was
     # already settled at the wire boundary by ``validate_ts_evidence_set``;
     # what the mapped atoms actually **are** needs a species SMILES and so
     # needs RDKit, which the chemistry-free wire package does not have. Doing

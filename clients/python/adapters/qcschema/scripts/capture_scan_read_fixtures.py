@@ -41,12 +41,11 @@ Cases:
 
   - ``bond_scan_hand_built``: the coordinate re-declared as the O-O
     ``bond`` (atoms 1, 2), each point's value the O-O distance measured
-    from that point's own stored geometry (so it conforms to ADR 0020).
+    from that point's own stored geometry (so it conforms to the stored-value rule: the coordinate itself).
     A bond scan has no TorsionDrive representation;
   - ``relative_sweep_hand_built``: the ``torsiondrive_v1`` values rewritten
     as a sweep relative to the first point, with ``start_value`` holding
-    the first point's angle -- ADR 0019's superseded convention, the one
-    all 46 pre-ADR-0020 deposited series hold;
+    the first point's angle -- a layout the exporter refuses;
   - ``rigid_scan_hand_built``: ``is_relaxed`` set to ``false``.
 """
 

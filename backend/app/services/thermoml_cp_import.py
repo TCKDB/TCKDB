@@ -1,7 +1,6 @@
 """Workflow service: persist ThermoML Cp(T) observation payloads.
 
-Phase C-E3. Closes the gap left by the E2 importer package
-(``app.importers.thermoml``): that package turns one archive article into
+The importer package (``app.importers.thermoml``) turns one archive article into
 :class:`~app.schemas.entities.molecular_property_observation.
 MolecularPropertyObservationCreate` payloads but never touches the
 database. This module is the first ThermoML-side module allowed to write.
@@ -14,7 +13,7 @@ adds what the CCCBDB path does not need: a source-custody row
 and a submission wrapper with a ``source_terms`` rights attestation quoting
 NIST/TRC's own terms verbatim.
 
-Two public entry points, one shared core (Phase C-E6)
+Two public entry points, one shared core
 -------------------------------------------------------
 
 :func:`import_thermoml_cp_article` (the original, C-E3) persists one
@@ -202,7 +201,7 @@ _PARSER_NAME = PARSER_NAME
 #: element (which is per-document, not per-schema-file).
 _SCHEMA_ID = f"ThermoML.xsd v4.0 sha256:{XSD_SHA256}"
 
-#: Custody identity for the depositor-upload channel (Phase C-E6) -- one
+#: Custody identity for the depositor-upload channel -- one
 #: shared ``external_source`` row for every direct upload, as opposed to
 #: the NIST bulk-archive row above (``SOURCE_NAME``/``SOURCE_RELEASE``).
 #: *Who* uploaded a given document is already recorded on the submission
@@ -327,8 +326,8 @@ class ObservationDisposition:
     #: The inserted row's public ref (``mpo_...``), set only when
     #: ``action == "inserted"`` (a real commit). ``None`` for a dry-run
     #: ``would_insert`` -- no row exists yet to have a ref -- and for
-    #: ``duplicate``/``skipped``. Added for Phase C-E6 so the upload route
-    #: can report per-row outcomes without ever naming a database id.
+    #: ``duplicate``/``skipped``. Lets the upload route
+    #: report per-row outcomes without ever naming a database id.
     observation_ref: str | None = None
 
     def to_json(self) -> dict[str, Any]:
@@ -415,8 +414,8 @@ def _get_or_create_external_source(
     terms_text: str | None = None,
 ) -> ExternalSource:
     """Get-or-create keyed on ``(name, release)`` -- shared by both the
-    NIST-archive channel (Phase C-E3) and the depositor-upload channel
-    (Phase C-E6); which constants a caller passes is what distinguishes
+    NIST-archive channel and the depositor-upload channel;
+    which constants a caller passes is what distinguishes
     them (see module docstring)."""
     existing = session.scalar(
         select(ExternalSource).where(
@@ -490,8 +489,8 @@ def _get_or_create_custody(
         external_source_id=external_source.id,
         # Both channels snapshot the same document shape (a ThermoML
         # DataReport for one article), whether it came from the NIST bulk
-        # archive or was uploaded directly -- see the C-E6 PR description
-        # for why this is not a new ``ExternalSourceRecordKind`` member.
+        # archive or was uploaded directly, so no new
+        # ``ExternalSourceRecordKind`` member is needed.
         record_kind=ExternalSourceRecordKind.thermoml_article,
         source_uri=source_uri,
         source_record_key=doi,
@@ -540,8 +539,7 @@ def _raw_uri_for(
         (``allow_member_path_fallback=False``) there is no such fallback:
         an uploaded document's ``member_paths`` is a synthetic label
         (``f"upload:{filename}"``), not a retrievable location, and
-        writing it as ``raw_uri`` would point a reader at nothing (Phase
-        C-E6 review round 2, F5). So this re-raises
+        writing it as ``raw_uri`` would point a reader at nothing. So this re-raises
         ``ArtifactStorageUnavailable`` instead of swallowing it -- the
         exception has its own registered FastAPI handler
         (``app.api.errors``, ``503 artifact_storage_unavailable``), so
@@ -629,7 +627,7 @@ def _run_pipeline(
     document_noun: str,
 ) -> None:
     """Shared validate -> parse -> map -> persist core for both public
-    entry points (Phase C-E6). Mutates ``result`` in place.
+    entry points. Mutates ``result`` in place.
 
     Returns (after a single ``session.rollback()``) without persisting
     anything when the document is schema-invalid -- callers check
@@ -664,9 +662,8 @@ def _run_pipeline(
         raises :class:`ThermoMLNoSupportedContentError` immediately after
         mapping and *before* any custody row, literature row or
         object-store write -- a request the caller will see refused must
-        not leave a custody trail behind it (Phase C-E6 review round 2,
-        F1). ``False`` on the archive path preserves its original,
-        already-tested behaviour: an article with no usable content
+        not leave a custody trail behind it. ``False`` on the archive path:
+        an article with no usable content
         completes normally (``inserted_count == 0``, custody still
         recorded as "this article was checked"), because an archive scan
         across many DOIs is not a single request a client can see
@@ -679,8 +676,7 @@ def _run_pipeline(
         back to it when the object store is down is honest degraded
         provenance); ``False`` on the upload path (its ``member_paths``
         is a synthetic label pointing at nothing, so an object-store
-        outage is refused instead -- see :func:`_raw_uri_for`, Phase C-E6
-        review round 2 F5).
+        outage is refused instead -- see :func:`_raw_uri_for`).
     :param literature_doi_fallback: The DOI used for literature
         resolution when the document's own ``Citation/sDOI`` is absent.
         The archive path passes its required, operator-supplied ``doi``;
@@ -689,12 +685,10 @@ def _run_pipeline(
         may substitute for record-keying -- that synthetic key is never a
         real DOI and must never reach literature resolution). ``None``
         propagates through to skip literature resolution entirely when
-        no DOI is available from either source (Phase C-E6 review round
-        2, F4).
+        no DOI is available from either source.
     :param document_noun: The word naming the thing that was ingested in
         the ``ingestion_succeeded`` audit summary -- ``"article"`` on the
-        archive path (restoring C-E3's exact original wording, Phase C-E6
-        review round 2, F6) and ``"document"`` on the upload path (a
+        archive path and ``"document"`` on the upload path (a
         depositor's file is not "an article" in the bibliographic sense
         the archive path's wording assumes).
     """
@@ -722,7 +716,7 @@ def _run_pipeline(
     # ``literature`` row ends up created below. A depositor's file with a
     # title but no DOI (or no citation at all) still has its citation text
     # preserved as provenance, without inventing a manual literature
-    # record on their behalf (Phase C-E6 review round 2, F4).
+    # record on their behalf.
     result.mapping_report["citation"] = mapping_result.literature.model_dump(
         mode="json"
     )
@@ -730,8 +724,8 @@ def _run_pipeline(
     # archive path, or the depositor's declared filename
     # (``f"upload:{filename}"``) on the upload path -- is likewise
     # recorded here unconditionally, so a claim that a filename is
-    # "recorded on the custody row" is actually true rather than aspirational
-    # (Phase C-E6 review round 2, F8; see ``ThermoMLUploadRequest.filename``).
+    # "recorded on the custody row" is actually true (see
+    # ``ThermoMLUploadRequest.filename``).
     result.mapping_report["source_label"] = article.member_paths[0]
 
     if refuse_when_unsupported and result.payload_count == 0:
@@ -771,7 +765,7 @@ def _run_pipeline(
     # either an identifier or *both* ``kind`` and ``title``, and this
     # importer never determines a ``kind``). The file's own ``sDOI`` wins;
     # the caller-supplied ``doi`` is the fallback when the file has none
-    # (Phase C-E6 review round 2, F4) -- this is the same "caller doi
+    # -- this is the same "caller doi
     # fills in when the file's citation has none" rule ``resolve_doi``
     # already applies for record-keying, applied here to literature too.
     # When neither is present, no literature row is created at all; the
@@ -851,7 +845,7 @@ def import_thermoml_cp_article(
     retrieved_at: datetime | None = None,
 ) -> ThermoMLCpImportResult:
     """Validate, parse, map and persist one ThermoML article's Cp(T) rows,
-    selected from the pinned NIST bulk archive (Phase C-E3).
+    selected from the pinned NIST bulk archive.
 
     :param session: An open SQLAlchemy session. Per-row inserts use a
         SAVEPOINT so one bad row never breaks the outer transaction.
@@ -877,7 +871,7 @@ def import_thermoml_cp_article(
     :param retrieved_at: When the article bytes were fetched. Defaults to
         now (naive UTC, matching the column type).
 
-    See :func:`import_thermoml_cp_upload` for the Phase C-E6 sibling that
+    See :func:`import_thermoml_cp_upload` for the sibling that
     persists a directly-uploaded document instead (custody names the
     depositor-upload channel, not NIST; rights stand on the caller's own
     ``DepositRights``, not a ``source_terms`` attestation).
@@ -958,8 +952,7 @@ def _open_upload_submission_for_depositor(
     rights: DepositRights,
     doi_for_keying: str,
 ) -> UploadSubmissionContext:
-    """Open the submission wrapper for a depositor-uploaded ThermoML file
-    (Phase C-E6).
+    """Open the submission wrapper for a depositor-uploaded ThermoML file.
 
     Unlike :func:`_open_submission_with_source_terms_attestation`, no
     second attestation is recorded here: ``open_upload_submission``
@@ -989,7 +982,7 @@ def import_thermoml_cp_upload(
     retrieved_at: datetime | None = None,
 ) -> ThermoMLCpImportResult:
     """Validate, parse, map and persist one depositor-uploaded ThermoML
-    document's Cp(T) rows (Phase C-E6) -- the source-neutral sibling of
+    document's Cp(T) rows -- the source-neutral sibling of
     :func:`import_thermoml_cp_article` that lets anyone ingest a ThermoML
     file, not only the pinned NIST archive.
 
@@ -1014,7 +1007,7 @@ def import_thermoml_cp_upload(
         (``f"upload:{article.xml_sha256[:16]}"``) -- never used for
         literature resolution. Literature resolution reads the file's own
         ``sDOI`` first and falls back to this argument when the file has
-        none (Phase C-E6 review round 2, F4); when neither is present, no
+        none; when neither is present, no
         literature row is created, and no manual ``kind``+``title`` record
         is fabricated on the depositor's behalf -- the file's citation
         text (title/year/journal/authors), if any, is still preserved in
@@ -1093,7 +1086,7 @@ def _open_submission_with_source_terms_attestation(
     ``open_upload_submission`` always records ``rights`` as a
     ``depositor_agreement`` attestation (``app.services.rights.
     attest_from_deposit`` has no other basis to record) -- passing the
-    NIST/TRC terms through it anyway keeps the Phase B choke point in the
+    NIST/TRC terms through it anyway keeps the rights choke point in the
     loop and ``TERMS_TEXT`` on that row too. It is not, however, the basis
     this deposit actually stands on: nobody at deposit time "agreed" to
     license these rows, they were taken under a source's own published

@@ -1,9 +1,8 @@
 """Read the custody record: what TCKDB has observed about its own storage.
 
-The write side of ``artifact_integrity_event`` and its trust consequence
-both landed with ADR 0014; the rows themselves stayed SQL-only, so the
-question the table exists to answer -- "has this happened, and to what?"
--- was answerable only by someone with a psql prompt on the deployment.
+This answers the question ``artifact_integrity_event`` exists to answer --
+"has this happened, and to what?" -- over the API rather than at a psql
+prompt on the deployment.
 
 Aggregating here rather than paging raw observations is deliberate, and
 so is *not* aggregating at rest: see the module docstring of

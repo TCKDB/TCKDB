@@ -36,7 +36,7 @@ describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
     it("states the electronic state exactly once -- not the old state-chip AND the fact row AND a pill row", () => {
         renderEntry(baseEntry())
         // "ground" names this entry's electronic state once, in the lede sentence under the title. A mutation
-        // reintroducing the retired `.state-chip`, the fact row or a `RecordFacetChips` pill row would find more.
+        // reintroducing a `.state-chip`, the fact row or a `RecordFacetChips` pill row would find more.
         const mentions = screen.getAllByText(/ground/i)
         expect(mentions).toHaveLength(1)
         expect(mentions[0].closest(".record-lede")).not.toBeNull()
@@ -45,9 +45,7 @@ describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
     })
 
     it("renders a labelled Stereochemistry row, worded as 'E isomer' (not a bare 'E'), when stereo_label is set", () => {
-        // The owner's own report: "why ... does it not show ... E isomer
-        // like it does for Review etc. but shows the pill box of it (which
-        // I want gone)" -- measured against spe_n5nt4fz3ztsfh2otwlyyvvl2je.
+        // Worded as a labelled row, not a pill box.
         renderEntry(baseEntry({ stereo_label: "E" }))
         const facts = screen.getByRole("list", { name: "Record facts" })
         const dt = within(facts).getByText("Stereochemistry")
@@ -59,7 +57,7 @@ describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
         expect(screen.queryByText("Stereochemistry")).not.toBeInTheDocument()
     })
 
-    describe("stereochemistry is read from the descriptor and its resolution (DR-0038)", () => {
+    describe("stereochemistry is read from the descriptor and its resolution", () => {
         function stereoRow() {
             const facts = screen.getByRole("list", { name: "Record facts" })
             return within(facts).getByText("Stereochemistry").nextElementSibling
@@ -117,10 +115,9 @@ describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
     })
 })
 
-// Owner decision: "yes show each record's own ref inline". This entry IS
-// its own `RecordIdentityHeader` subject, so its own ref reaches the
-// header via the `ownRef` prop (not `identity.speciesEntryRef`, which this
-// component deliberately omits -- see the component's own comment) and
+// This entry IS its own `RecordIdentityHeader` subject, so its own ref
+// reaches the header via the `ownRef` prop (not `identity.speciesEntryRef`,
+// which the component deliberately omits -- see the component's own comment) and
 // must render first, visible at rest, and never duplicated in the
 // collapsed References disclosure below it.
 describe("EntryIdentity: own ref inline, first, never duplicated in References", () => {
@@ -150,7 +147,7 @@ describe("EntryIdentity: own ref inline, first, never duplicated in References",
     })
 })
 
-describe("EntryIdentity -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("EntryIdentity -- no depositor-typed text", () => {
     it("prints none of the typed state label, term symbol or joined label, and builds no stereo wording from them", () => {
         const planted = plantSentinels(baseEntry({
             electronic_state_kind: "excited", electronic_state_label: "x", term_symbol: "x", species_entry_label: "x",

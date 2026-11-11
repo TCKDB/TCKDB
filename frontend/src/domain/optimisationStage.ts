@@ -50,10 +50,7 @@ export const OPTIMISATION_STAGE_UNKNOWN_KICKER_SUFFIX = "deposited evidence"
  * (it is the coarse pass); a child-side one means this calculation IS the
  * refinement.
  *
- * Neither present does NOT mean this is confidently a single pass --
- * review finding: an earlier version of this page asserted a stage from an
- * absence of edges, including on a calculation with no dependency edges at
- * all (nothing to read a stage from, one way or the other). An edge that
+ * Neither present does NOT mean this is confidently a single pass: an edge that
  * doesn't exist in the archive is not evidence there is no refinement
  * stage, only that this page has no evidence of one -- so the no-edge case
  * returns `"unknown"`, never a guessed "single pass".

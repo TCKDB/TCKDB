@@ -48,7 +48,7 @@ STEREO_DISPLAY = case(
 
 
 def stereo_display(descriptor: str | None, resolution, label: str | None) -> str | None:
-    """The stereo part of an entry's discriminator label (DR-0038).
+    """The stereo part of an entry's discriminator label.
 
     ``stereo_label`` is NULL while an entry's stereo is wholly unknown, so a label built from it alone
     leaves an unresolved entry looking unlabelled. This is built from the descriptor and its resolution
@@ -71,7 +71,7 @@ def stereo_display(descriptor: str | None, resolution, label: str | None) -> str
 #: descriptor is all ``?`` (or for an achiral species, whose descriptor is NULL). Among the
 #: LIVE entries of one species there is at most one with an all-``?`` or NULL descriptor (the
 #: unique key is over live rows), so two live entries that differ in the key differ in this
-#: label too. A merged-away entry keeps its own label and is not listed (DR-0038).
+#: label too. A merged-away entry keeps its own label and is not listed.
 #: Named here because the guarantee this module makes is a restatement of
 #: that constraint: two entries of one species differ in at least one of
 #: these by construction.

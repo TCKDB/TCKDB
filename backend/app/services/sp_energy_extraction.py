@@ -73,12 +73,12 @@ def try_reconcile_sp_energy_from_output_upload(
     ``try``/``except``. Catching the exception was never enough on its own:
 
     * The fill path's in-place ``existing.electronic_energy_hartree = energy``
-      issues no SQL, so an unstorable value used to fail at the caller's
+      issues no SQL, so an unstorable value would fail at the caller's
       ``COMMIT`` — outside this guard, after the response was determined.
-      The savepoint's flush now surfaces it here instead.
-    * A database error that reached the old ``except Exception`` left the
+      The savepoint's flush surfaces it here instead.
+    * A database error caught by a bare ``except Exception`` leaves the
       transaction aborted, because nothing rolled back to a savepoint. The
-      catch-all then *hid* that until commit. Swallowing without rolling back
+      catch-all then *hides* that until commit. Swallowing without rolling back
       is worse than not swallowing at all.
     """
     # ``artifact_in.kind`` is typed against ``tckdb_schemas.enums.ArtifactKind``
@@ -89,7 +89,7 @@ def try_reconcile_sp_energy_from_output_upload(
         return None
     if calculation.type == CalculationType.composite:
         # A composite calculation's log is reconciled against its composite
-        # result, not against a single-point energy (ADR 0021, P3b).
+        # result, not against a single-point energy.
         return try_reconcile_composite_energy_from_output_log(
             session, calculation, artifact_in
         )

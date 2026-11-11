@@ -15,7 +15,7 @@
  */
 
 /* Each correction scheme is now its own collapsible `Disclosure` box
-   (owner: "expandable boxes for AEC and BAC") rather than a plain div
+   rather than a plain div
    separated from its neighbour by a top border -- the box chrome (border
    on all four sides, radius, background) comes from `.disclosure`
    itself (design-system.css); this file only adds the vertical rhythm

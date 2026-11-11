@@ -3,14 +3,10 @@
 Sibling to :mod:`app.services.sp_energy_extraction` and
 :mod:`app.services.charge_multiplicity_extraction`. Those reconcile the
 energy and the charge/multiplicity an output log states; this one
-reconciles the *software release* it states (DR-0008, issue #305 decision
-(c), 2026-09-29).
-
-Before this hook, DR-0008 reconciliation ran only inside parameter
-extraction, which reads only ``input`` artifacts -- and an input deck
-carries no version banner. So a calculation declared as "ORCA, no version"
-stayed on the version-less release even when its own output log said
-``Program Version 6.1.0``.
+reconciles the *software release* it states, so a calculation declared as
+"ORCA, no version" is not left on the version-less release when its own
+output log says ``Program Version 6.1.0``. Parameter extraction reads only
+``input`` artifacts, and an input deck carries no version banner.
 
 What it does, once per calculation per upload batch
 ---------------------------------------------------
@@ -22,10 +18,10 @@ What it does, once per calculation per upload batch
 2. **Different program: nothing done.** Correcting a declared software
    *identity* from an artifact stays where it already was, on the input
    path (``record_software_reconciliation``'s name-mismatch branch). This
-   hook is scoped to the owner's decision: the *same* program supplying a
+   hook is scoped to the *same* program supplying a
    version the declaration lacks.
 3. Same program: :func:`record_software_reconciliation` records the banner
-   and the DR-0008 status on the calculation. When the declared release
+   and the reconciliation status on the calculation. When the declared release
    has a NULL ``version`` and the banner supplies one (``enriched`` with a
    ``version`` gap), it resolves the release the banner describes and
    re-points the calculation at it -- the same resolution the curator fill
@@ -35,8 +31,8 @@ What it does, once per calculation per upload batch
    for ``2015.1.37``) agrees with it (``matched``); a declared ``build``
    the banner contradicts is a ``mismatch``, never filled around.
 
-This now runs for calculations that *declare* a version too, so their
-DR-0008 status moves from ``declared_only`` to ``matched`` / ``enriched`` /
+This runs for calculations that *declare* a version too, so their
+reconciliation status moves from ``declared_only`` to ``matched`` / ``enriched`` /
 ``mismatch`` when an output log arrives. The reproducibility rubric's
 ``calculation_metadata`` check fails on ``mismatch`` -- which is the point
 of recording it, and why agreement is judged by whole version components.

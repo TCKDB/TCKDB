@@ -32,7 +32,7 @@ import { LiteratureCitation } from "./LiteratureCitation"
 // real include-gated sections (`source_calculations`, `review` -> field
 // `review_history`) — see `api/transportApi.ts`.
 //
-// This is the surface the brief calls "the gift": `spe_bcbdjwkip75yoziblpntwzblzu`
+// For example, `spe_bcbdjwkip75yoziblpntwzblzu`
 // ([CH3]) has ZERO transport records, live. A zero-record `records: []`
 // with `pagination.total: 0` is NOT a load failure — `useEntryTransport`
 // only reaches `status: "ready"` on a successful 200 with a

@@ -356,8 +356,8 @@ def _apply_identity_filters(
         # species-owned filter plus a TS filter is an empty page, never an OR.
         stmt = stmt.where(Statmech.transition_state_entry_id == transition_state_entry_id)
     if declared_conformer_group_id is not None:
-        # The record's OWN declaration is scoped to exactly this basin
-        # (owner decision D3): not owning-entry context, not undeclared legacy
+        # The record's OWN declaration is scoped to exactly this basin:
+        # not owning-entry context, not undeclared legacy
         # rows, not ensemble members.
         stmt = stmt.where(
             Statmech.id.in_(
@@ -408,7 +408,7 @@ def _apply_method_basis_software_filters(
     those whose source-calculation graph carries a row matching the
     supplied provenance. The match is OR-across-calc: at least one
     linked source calculation the evidence rule leaves visible must match (a rejected or
-    deprecated one contributes nothing under curated, ADR 0023).
+    deprecated one contributes nothing under curated).
     """
     sub = _shown_source_calculations()
     return apply_calculation_provenance_filter(stmt, request, sub)

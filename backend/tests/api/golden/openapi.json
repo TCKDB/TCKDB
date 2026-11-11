@@ -71284,7 +71284,7 @@
         "type": "string"
       },
       "TransitionStateScopedAssessmentTask": {
-        "description": "The one fixed question the badge asks, as the request body ``POST .../evidence/select`` takes.\n\nEvidence only (owner decision O1): which declared saddle targets are supported by the evidence for a conventional\nfirst-order saddle, with no energy asked and no reactive-connectivity requirement. Send these fields to the\nevidence-selection endpoint of the same entry and the answer is the one in ``outcome`` and ``units``.",
+        "description": "The one fixed question the badge asks, as the request body ``POST .../evidence/select`` takes.\n\nEvidence only: which declared saddle targets are supported by the evidence for a conventional\nfirst-order saddle, with no energy asked and no reactive-connectivity requirement. Send these fields to the\nevidence-selection endpoint of the same entry and the answer is the one in ``outcome`` and ``units``.",
         "properties": {
           "coverage_requirement": {
             "default": "known_values",

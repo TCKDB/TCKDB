@@ -106,8 +106,8 @@ def search_reactions(
     ``match`` is the orthogonal axis and defaults to ``contains``: every
     queried species must appear in that role, and a side the caller left
     empty constrains nothing. So ``reactants=NN`` answers "what consumes
-    hydrazine?" rather than "what turns hydrazine into nothing?" — the
-    latter has no answer and used to be the question this endpoint asked.
+    hydrazine?" rather than "what turns hydrazine into nothing?", which
+    has no answer.
     ``match=exact`` restores multiset equality on both sides for callers who
     want precisely one equation and do not hold its ``reaction_ref``.
     Containment is set-based, not multiset; see
@@ -134,7 +134,7 @@ def search_reactions(
     )
     includes = filter_internal_ids_from_resolved(includes)
 
-    # Phase C: explicit reaction/reaction_entry refs are valid identifier
+    # Explicit reaction/reaction_entry refs are valid identifier
     # sources. Resolve them first so we can short-circuit (NO_MATCH) and
     # so we know whether the caller supplied any identifier at all.
     reaction_pair = reconcile_reaction_pair(
@@ -186,7 +186,7 @@ def search_reactions(
             direction=request.direction,
             match=request.match,
         )
-        # Phase C: narrow the participant-derived candidate set with
+        # Narrow the participant-derived candidate set with
         # the explicit ref filters in SQL, so we still pay only one
         # round-trip.
         if reaction_entry_ref_id is not None:
@@ -404,10 +404,9 @@ def browse_reactions(
     form).
 
     ``reactant_smiles`` / ``product_smiles`` are matched under
-    ``request.direction``, which now defaults to ``forward`` (changed
-    2026-09; it used to be a hardcoded, non-caller-selectable ``either``
-    -- see :class:`~app.schemas.reads.scientific_reactions.ReactionsBrowseRequest`
-    for the full account of why that was wrong). Under ``forward`` a
+    ``request.direction``, which defaults to ``forward`` (see
+    :class:`~app.schemas.reads.scientific_reactions.ReactionsBrowseRequest`).
+    Under ``forward`` a
     ``reactant_smiles`` group is matched only against the stored
     reactants and ``product_smiles`` only against the stored products,
     so the field names mean what they say. Under the caller-requested
@@ -657,7 +656,7 @@ def _resolve_smiles_to_species_ids(
 ) -> list[int]:
     if not smiles_list:
         return []
-    # The species key is the constitution (DR-0038): ``C/C=C/C`` and ``CC=CC`` name one species, and a species merged
+    # The species key is the constitution: ``C/C=C/C`` and ``CC=CC`` name one species, and a species merged
     # into another is kept but is not what a query resolves to.
     flat = {s: constitution_smiles(s) for s in smiles_list}
     rows = session.execute(
@@ -867,7 +866,7 @@ def _resolve_participant_species_ids(
 def _resolve_participant_refs(
     session: Session, species_entry_ids: set[int]
 ) -> dict[int, str]:
-    """Map species_entry_id → public_ref (Phase B)."""
+    """Map species_entry_id → public_ref."""
     if not species_entry_ids:
         return {}
     rows = session.execute(
@@ -912,7 +911,7 @@ def _compute_availability(
     if not entry_ids:
         return {}
 
-    # Owner decision D5: the availability flags and the kinetics count answer "what would the list show", so under
+    # The availability flags and the kinetics count answer "what would the list show", so under
     # ``?profile=curated`` they count only the records the review floor leaves visible. With no floor every predicate is
     # ``None`` and the statements are the ones they always were.
     kinetics_count_by_entry: dict[int, int] = dict.fromkeys(entry_ids, 0)
@@ -955,13 +954,13 @@ def _compute_availability(
             (TransitionStateEntry.id, SubmissionRecordType.transition_state_entry),
         ):
             path_search = where_visible(path_search, review_floor_predicate(id_column, record_type))
-        # The path search itself is evidence of the entry (ADR 0023): withheld only when rejected or deprecated.
+        # The path search itself is evidence of the entry: withheld only when rejected or deprecated.
         path_search = where_visible(path_search, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
         rows = session.execute(path_search.distinct()).all()
         has_path_search_set = {row[0] for row in rows}
 
     # has_atom_map: the reaction states which atom of its reactants and
-    # products is which atom of its transition state (ADR 0011). Advertised
+    # products is which atom of its transition state. Advertised
     # here so a search result already distinguishes a mapped reaction from an
     # unmapped one; an unmapped reaction is a true record, just an incomplete
     # one, and the flag is what makes the incompleteness visible.
@@ -969,7 +968,7 @@ def _compute_availability(
         session.scalars(
             where_visible(
                 select(ReactionAtomMap.reaction_entry_id).where(ReactionAtomMap.reaction_entry_id.in_(entry_ids)),
-                # A map of a transition-state entry the floor hides is not counted (D5).
+                # A map of a transition-state entry the floor hides is not counted.
                 review_floor_predicate(
                     ReactionAtomMap.transition_state_entry_id, SubmissionRecordType.transition_state_entry
                 ),

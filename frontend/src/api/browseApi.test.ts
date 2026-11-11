@@ -33,8 +33,7 @@ describe("hasActiveFilters: widening toggles never count as a narrowing filter",
     })
 })
 
-// The mirror-image bug the design brief calls out by name: `hasActiveFilters`
-// used to check the six provenance fields ONLY when `kind === "transition_state"`,
+// `hasActiveFilters` must check the six provenance fields on species too, not ONLY when `kind === "transition_state"`,
 // so a species query with just `method` set would report "no filters active"
 // -- collapsing a genuine narrowing filter into the archive-empty branch
 // ("nothing of this kind has been deposited") instead of the filtered-empty
@@ -104,8 +103,8 @@ describe("buildSpeciesBrowseQuery: an incomplete integer never reaches the wire"
 // `/species/browse` (species_browse.py) accepts the same six provenance
 // parameters as `/transition-states/browse` -- method/basis/
 // software(+version)/workflow_tool(+version) -- but `buildSpeciesBrowseQuery`
-// used to only ever emit the five composition/shared params, dropping all
-// six on the floor regardless of what `BrowseFilterForm` collected. Checked
+// must emit the six provenance params too, not only the five composition/shared params,
+// regardless of what `BrowseFilterForm` collected. Checked
 // on BOTH "species" and "vdw" (the same builder, see its own doc comment)
 // since a fix scoped to only one of the two kind literals would still leave
 // the other silently broken.
@@ -319,8 +318,8 @@ describe("clearInapplicableFilters: the structure filter is species/vdw-only com
 })
 
 // ---------------------------------------------------------------------------
-// PR 4b: the "reaction" browse kind -- /scientific/reactions/browse.
-// Verified live 2026-09-07: the endpoint accepts EXACTLY `family,
+// The "reaction" browse kind -- /scientific/reactions/browse.
+// The endpoint accepts EXACTLY `family,
 // reactant_smiles, product_smiles, has_kinetics, has_transition_state,
 // min_review_status, include_rejected, include_deprecated, offset, limit`
 // -- no charge, multiplicity, or provenance params, unlike the other three
@@ -354,8 +353,7 @@ describe("buildReactionBrowseQuery: only the params the live endpoint accepts ar
         expect(both.get("product_smiles")).toBe("CC=O")
     })
 
-    // The multi-structure search (item 3 of the gap brief): the live
-    // endpoint accepts REPEATED `reactant_smiles`/`product_smiles` params,
+    // The multi-structure search: the endpoint accepts REPEATED `reactant_smiles`/`product_smiles` params,
     // AND-ed by set containment against one side -- verified live,
     // `?reactant_smiles=NN` -> 20 reactions, `?reactant_smiles=NN&
     // reactant_smiles=[H]` -> 0. Comma is the one safe separator (a SMILES
@@ -389,7 +387,7 @@ describe("buildReactionBrowseQuery: only the params the live endpoint accepts ar
             expect(query.has("reactant_smiles")).toBe(false)
         })
 
-        // MUTATION CHECK (mutation table item d): a comma-joined SINGLE
+        // MUTATION CHECK: a comma-joined SINGLE
         // param (the old, wrong shape a naive `query.set` fix would
         // produce) must NOT be what is sent -- `getAll` returning a
         // one-item array whose value still contains a literal comma is
@@ -460,13 +458,13 @@ describe("buildReactionBrowseQuery: only the params the live endpoint accepts ar
         expect(query.get("offset")).toBe("40")
     })
 
-    // PR #418: the backend's own `direction` param now defaults to
+    // The backend's own `direction` param defaults to
     // `forward`. This builder must NOT send `direction` for an untouched
     // filter set -- an omitted param and the backend's own default must
     // stay in agreement, which is only guaranteed by never sending a
     // locally-hardcoded "forward" that could drift from the backend's own
     // default if it ever changes again.
-    describe("buildReactionBrowseQuery: direction (PR #418) is omitted by default and sent verbatim when set", () => {
+    describe("buildReactionBrowseQuery: direction is omitted by default and sent verbatim when set", () => {
         it("an untouched filter set (direction: \"\") sends no direction param -- agrees with a bare API call", () => {
             const query = buildReactionBrowseQuery(EMPTY_BROWSE_FILTERS, 0, 20)
             expect(query.has("direction")).toBe(false)
@@ -477,7 +475,7 @@ describe("buildReactionBrowseQuery: only the params the live endpoint accepts ar
             expect(query.get("direction")).toBe("either")
         })
 
-        // MUTATION CHECK (mutation table item a): a build that silently
+        // MUTATION CHECK: a build that silently
         // drops `direction` even when set would leave the form and the
         // outgoing request disagreeing about which orientation was asked
         // for -- exactly the defect #418's own PR body warns a frontend
@@ -601,9 +599,9 @@ describe("clearInapplicableFilters: the reaction-only fields and the shared fami
     })
 })
 
-// Review follow-up (round 2), NIT: the six provenance fields are invisible
+// The six provenance fields are invisible
 // on "reaction" (see `BrowseFilterForm`'s `!isReaction` guards) but not
-// cleared by a switch through it -- a decision, not an oversight, recorded
+// cleared by a switch through it, as documented
 // in `clearInapplicableFilters`'s own comment: the module's established
 // rule for these six fields ("only ever cleared explicitly by a reader
 // picking 'Any'") already applies uniformly, and this test pins that
@@ -622,8 +620,8 @@ describe("clearInapplicableFilters: the six provenance fields round-trip THROUGH
     })
 })
 
-// Each browse kind now lives at its own path (App.tsx) instead of behind
-// `/species?kind=`; `BROWSE_KIND_PATHS`/`browseKindForPath` is the ONE
+// Each browse kind lives at its own path (App.tsx);
+// `BROWSE_KIND_PATHS`/`browseKindForPath` is the ONE
 // place the kind<->path relationship is spelled out (`App.tsx` builds its
 // route table from the former, `BrowsePage` fixes its kind from the
 // latter). This pins the mapping TOTAL in both directions -- every

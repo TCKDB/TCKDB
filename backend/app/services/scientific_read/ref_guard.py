@@ -2,7 +2,7 @@
 
 Under ``?profile=curated`` the approved **record floor** decides which records a list, search or select returns. A
 returned record's **linked evidence** (its source calculations, its transition state, its conformer group) is shown with
-its review badge, and only evidence at ``rejected`` or ``deprecated`` is withheld (ADR 0023). A name is still a ref, and
+its review badge, and only evidence at ``rejected`` or ``deprecated`` is withheld. A name is still a ref, and
 a ref to withheld evidence proves it exists and lets a reader track it. This module is the single place that finds
 those refs in a finished response and removes them.
 
@@ -34,7 +34,7 @@ How a withheld ref is removed (:func:`withhold_in_model`)
 2. With no pointer on the way: an element of a ``list[str]`` is deleted (and the same index of an aligned
    ``*_ids`` sibling); a nullable field, or a value inside an untyped ``dict``/``Any`` subtree, becomes
    ``None`` (and a same-stem ``*_id`` sibling with it).
-3. Anything else is **unplaceable** and raises :class:`RefGuardUnplaceable` (fail closed, owner decision D4).
+3. Anything else is **unplaceable** and raises :class:`RefGuardUnplaceable` (fail closed).
    The subject of a response (``record``, the elements of ``records``) is never deleted as a pointer: a
    subject ref below the record floor means a service forgot its population filter, which is exactly what should be loud.
 4. Free text (a note, a label, a file name, a depositor URL) that names a hidden ref anywhere in its tokens is
@@ -42,7 +42,7 @@ How a withheld ref is removed (:func:`withhold_in_model`)
    what was removed would show), and text whose percent-encoding does not settle is blanked too, never refused.
    Exploratory text is untouched. A required field whose WHOLE value is a bare hidden ref is not free text: it is
    a ref in the wrong place (most likely a pointer the registry missed), so it raises :class:`RefGuardUnplaceable`
-   and the registry gets fixed (D4).
+   and the registry gets fixed.
 
 Selection documents
 -------------------
@@ -216,7 +216,7 @@ class GatedType:
 
 
 #: Gated types that have a ``record_review`` row of their own but no detail route, so the handle gate does
-#: not cover them. Owner decision D3: they are review-gated in every list and their refs appear nested in
+#: not cover them. They are review-gated in every list and their refs appear nested in
 #: other responses (supersession notices, literature links, selection disclosures).
 _NO_DETAIL_ROUTE_GATED: dict[type, SubmissionRecordType] = {
     Thermo: SubmissionRecordType.thermo,
@@ -309,13 +309,13 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         SupportingCalculationRef,
         TransitionStateEntryOwnerSummary,
         TransportSourceCalculationSummary,
-        # Owner decision D1: a visible observation whose conformer group is hidden stays visible with the group
+        # A visible observation whose conformer group is hidden stays visible with the group
         # block blanked. Registering the block is what lets the guard blank it; widening the field alone is not
         # enough (design note, "Correction from the #770 review").
         ConformerGroupCoreBlock,
         # PR-2b: the transition-state, reaction-entry (/full) and kinetics families.
         #
-        # Owner decision D1: a visible TS entry whose transition state is hidden stays visible with the owner block
+        # A visible TS entry whose transition state is hidden stays visible with the owner block
         # blanked. Registering the block is what lets the guard blank it; widening the field alone is not enough.
         TransitionStateCoreBlock,
         TransitionStateCalculationSummary,
@@ -351,7 +351,7 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         TransitionStateScopedAssessmentUnit,
         # PR-2c: the network, provenance (level of theory, corrections, literature) and analytics families.
         #
-        # Owner decision D1: a visible solve (or fit) whose network is hidden stays visible with the network block
+        # A visible solve (or fit) whose network is hidden stays visible with the network block
         # blanked. Registering each owner block is what lets the guard blank it; widening the field alone is not enough.
         NetworkContextSummary,
         NetworkKineticsNetworkContext,
@@ -415,7 +415,7 @@ class SubjectNotShown(RefGuardUnplaceable):
     """A record the read profile does not show was returned as the ANSWER of a read: the service's population filter is missing.
 
     For a list row that is a record below the record floor; for the ``record`` of a detail read it is a record in the
-    withheld set (``rejected``, ``deprecated``), which the detail gate answers 404 for (ADR 0023 step 7).
+    withheld set (``rejected``, ``deprecated``), which the detail gate answers 404 for.
 
     A subclass of :class:`RefGuardUnplaceable` (it fails the request the same way) with its own message: the remedy is the
     service's floor, not the field's optionality and not ``POINTER_MODELS``.
@@ -554,7 +554,7 @@ def classify_refs(
 ) -> RefSets:
     """Both sets from one statement (none when there is no floor, or no gated ref).
 
-    ``evidence`` (ADR 0023) is the subset of ``refs`` whose record is ``rejected`` or ``deprecated`` (:data:`WITHHELD_
+    ``evidence`` is the subset of ``refs`` whose record is ``rejected`` or ``deprecated`` (:data:`WITHHELD_
     EVIDENCE_STATUSES`) or, with ``unknown_is_hidden``, names no row (withheld equals unknown: a ref the database does not
     know reads exactly as one it withholds; the document modes and the text refusal ask this, the typed hook does not
     because its refs come from rows the service just read). A record that is merely ``not_reviewed`` or ``under_review``
@@ -828,7 +828,7 @@ def _collect_sites(root: BaseModel | dict) -> list[tuple[tuple[_Frame, ...], str
                 try:
                     refs = _refs_named_by(value, url_valued=_is_url_valued(key))
                 except ValueError as exc:
-                    # A URL-valued field the guard cannot read is refused, never kept (owner decision D4).
+                    # A URL-valued field the guard cannot read is refused, never kept.
                     raise RefGuardUnplaceable(
                         type(node).__name__, f"{_path_text((*path, (node, key)))}<unparseable URL>", "url"
                     ) from exc
@@ -1101,7 +1101,7 @@ def _collapse_empty(sites: list[tuple[tuple[_Frame, ...], str]], hidden: set[str
             if check is None or not check(node):
                 continue
             if not isinstance(container, BaseModel) or not _field_traits(type(container), key)[0]:
-                # An empty shell with nowhere to go: refuse the response, never emit it (owner decision D4).
+                # An empty shell with nowhere to go: refuse the response, never emit it.
                 raise RefGuardUnplaceable(
                     type(container).__name__,
                     f"{_path_text(path[: i + 1])}<empty {type(node).__name__}>",
@@ -1138,7 +1138,7 @@ def withhold_in_model(
     if not sites:
         return report
     # A list subject (an element of ``records``) is judged by the record floor; a detail subject (``record``) is the answer
-    # of a detail-by-ref read, which serves anything but the withheld set (ADR 0023 step 7), so it is judged by that set.
+    # of a detail-by-ref read, which serves anything but the withheld set, so it is judged by that set.
     subject_refs = {ref for path, ref in sites if _is_subject_own_ref(path, ref) and not _is_detail_subject(path)}
     found = classify_refs(session, {ref for _, ref in sites}, profile=profile, subject_refs=subject_refs)
     report.hidden = found.evidence
@@ -1371,7 +1371,7 @@ def _withhold_placeholders(session: Session, facts: Any, *, profile: ResolvedRea
             for ref in _document_string_refs(value, key):
                 seen[ref] = None
         except ValueError as exc:
-            # A URL-valued field the guard cannot read is refused, never kept (owner decision D4).
+            # A URL-valued field the guard cannot read is refused, never kept.
             raise RefGuardUnplaceable("document", str(key), "?") from exc
         return value
 
@@ -1481,7 +1481,7 @@ def refuse_hidden_refs_in_text(session: Session, texts: Mapping[str, str], *, pr
         try:
             refs = _refs_in_text(text)
         except ValueError as exc:
-            # Percent-encoding that never settles: the text cannot be read, so it is refused, never kept (D4).
+            # Percent-encoding that never settles: the text cannot be read, so it is refused, never kept.
             logger.error("ref_guard_unplaceable_text file=%s prefix=unsettled", name)
             raise RefGuardUnplaceable("text", f"{name}<unsettled encoding>", "text") from exc
         for ref in refs:

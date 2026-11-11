@@ -68,7 +68,7 @@ function baseRecord(overrides: Record<string, unknown> = {}) {
                     created_at: "2026-07-21T11:59:29Z",
                 },
                 level_of_theory: null,
-                // Measured live shape (#439, deployed): empty
+                // Fixture shape: empty
                 // `software_release_ref` (the row stores a vendor, not a
                 // release, to point at), `workflow_tool_release` null.
                 software_release: { software_release_ref: "", software: "Gaussian", version: null },
@@ -130,15 +130,14 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         const softwareTable = screen.getByRole("table", { name: "Software and workflow tools observed at this level of theory" })
         expect(within(softwareTable).getByText("Gaussian")).toBeVisible()
 
-        // Each scheme is now its own collapsible box (owner: "expandable
-        // boxes for AEC and BAC") -- opened here via its own summary,
+        // Each scheme is its own collapsible box -- opened here via its own summary,
         // exactly as a reader would, before asserting the full table
         // underneath is intact and not summarised.
         await user.click(screen.getByText("Atom-energy correction").closest("summary") as HTMLElement)
         await user.click(screen.getByText("Petersson bond-additivity correction").closest("summary") as HTMLElement)
 
         const atomTable = screen.getByRole("table", { name: "Element correction parameters" })
-        expect(within(atomTable).getAllByRole("row")).toHaveLength(1 + 8) // header + 8 elements, per the task brief's own acceptance criterion
+        expect(within(atomTable).getAllByRole("row")).toHaveLength(1 + 8) // header + 8 elements
         expect(within(atomTable).getByText("Br")).toBeVisible()
 
         const bondTable = screen.getByRole("table", { name: "Bond correction parameters" })
@@ -146,8 +145,6 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * Owner ruling, verbatim: "should be more like also expandable boxes
-     * for AEC and BAC but their names are the software or something."
      * Each scheme is its own collapsible `<details>` box titled by its
      * kind PLUS its software -- never the depositor's own free-text
      * `energy_correction_scheme.name` (constructed here as something a
@@ -155,7 +152,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
      * `CorrectionSchemePage.test.tsx`'s own mutation-table test uses, so a
      * regression that reverts to `name` is unambiguous).
      *
-     * MUTATION TABLE (a): title a box from the depositor `name` --
+     * Mutation check: title a box from the depositor `name` --
      * `git stash` the fix, this test fails because "Bob's atom energy
      * hack" appears on the page (or the software-titled query below finds
      * nothing).
@@ -175,7 +172,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * MUTATION TABLE (b): drop the roll-up from the collapsed summary.
+     * Mutation check: drop the roll-up from the collapsed summary.
      * Each box's `<summary>` carries a true parameter-count roll-up
      * (`schemeParameterRollup`, computed from the same `evidence_summary`
      * counts the open table itself renders from) alongside its title, so
@@ -220,12 +217,11 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * MUTATION TABLE (b): absence wording. `docs/plans/methods-surface.md`
-     * §4.2 item 3 / §2.6's house-rule caution: "no scheme deposited" is a
+     * Mutation check: absence wording: "no scheme deposited" is a
      * fact about the archive, never rendered as "not applicable" (a claim
      * about chemistry this archive cannot make). Constructed fixture: a
      * LOT with `correction_schemes: []` and `has_correction_schemes:
-     * false` -- the wb97xd/CCSD(T)-F12 shape measured live.
+     * false` -- the wb97xd/CCSD(T)-F12 shape.
      */
     it("states a missing correction scheme as a plain archive-side absence, never 'not applicable'", async () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({
@@ -253,13 +249,11 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * MUTATION TABLE (c): frequency-scale-factor dedup. §4.2 item 4: 10
+     * Mutation check: frequency-scale-factor dedup. 10
      * distinct `frequency_scale_factor_ref`s that all evaluate to the same
      * `(fundamental, 0.999)` render as ONE visible value with a disclosure
      * listing the 10 refs -- never 10 visible value rows. This test counts
-     * the rendered value nodes directly (the exact mutation the task
-     * brief's own mutation table names: "remove the dedup step, watch a
-     * test counting rendered FSF value nodes fail").
+     * the rendered value nodes directly, so removing the dedup step fails it.
      */
     it("renders 10 near-duplicate frequency-scale-factor rows as ONE visible value with a provenance disclosure", async () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
@@ -292,12 +286,8 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * PR 4 of `docs/plans/correction-scheme-provenance.md` (§8): the owner's
-     * fresh objection to #440's shape once two schemes of one kind became
-     * buildable ("I dont know how i feel about the expanding tables when we
-     * may get multiple softwares for AEC. I would think you can change the
-     * software & version and it will change the AEC and BAC instead or
-     * something."). Two `atom_energy` schemes on different software
+     * With two schemes of one kind, changing the software & version changes
+     * the AEC and BAC shown, rather than stacking expanding tables. Two `atom_energy` schemes on different software
      * releases must render as ONE section with a control, not two boxes of
      * the same kind side by side -- and picking the second option must
      * swap which scheme's parameter table is shown. The lone `bac_petersson`
@@ -475,7 +465,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 })
 
-describe("LevelOfTheoryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("LevelOfTheoryPage -- no depositor-typed text", () => {
     it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
         const planted = plantSentinels(baseRecord(), ["name", "note", "target"])
         expectPlanted(planted)

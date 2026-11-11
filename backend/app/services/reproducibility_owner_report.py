@@ -1,6 +1,6 @@
 """Read-only report: what the owner-scoped reproducibility rubric does to a database's statmech records (#760).
 
-Before the owner-scoped rubric every transition-state-owned statmech was graded by the shared rubric and read
+Under the shared rubric every transition-state-owned statmech reads
 ``insufficient`` on ``scientific_context``, whatever its evidence. This report says, for the database it is pointed
 at, how many records of each owner kind there are, how the latest stored assessment of each reads now (``current`` or
 ``stale`` and why), how grades move, and whether any species-owned record moved (it must not).

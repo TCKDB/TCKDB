@@ -1,32 +1,27 @@
 """Does a deposited scan coordinate value match its own geometry?
 
-ADR 0020 (``docs/adr/0020-a-scan-coordinate-value-is-the-coordinate-itself.md``)
-fixes what ``calc_scan_point_coordinate_value.coordinate_value`` means: the
-internal coordinate itself, in its own unit, at the point's own sampled
+``calc_scan_point_coordinate_value.coordinate_value`` is the internal
+coordinate itself, in its own unit, at the point's own sampled
 geometry -- never a displacement, never relative to ``calc_scan_coordinate
-.start_value``. This module is the conformance check the ADR asks for: it
+.start_value``. This module is the conformance check for that: it
 recomputes the coordinate from the point's own stored Cartesian geometry and
-compares, **without ever reading ``start_value``/``end_value``**, which ADR
-0020 fixes as requested-grid metadata rather than an anchor to add back.
+compares, **without ever reading ``start_value``/``end_value``**, which are
+requested-grid metadata rather than an anchor to add back.
 
 **Nothing is refused.** A deposit whose scan values disagree with their own geometries is accepted as sent
 and earns :data:`W_SCAN_POINT_COORDINATE_DISAGREES_WITH_GEOMETRY` (one warning per disagreeing coordinate series,
-:func:`collect_scan_coordinate_warnings`), run once the request's calculations are flushed. Under ADR 0008 the
-tier is ``warn``: ADR 0020 is explicit that a mis-stated axis and a mis-attached geometry present identically to
+:func:`collect_scan_coordinate_warnings`), run once the request's calculations are flushed. The
+tier is ``warn``: a mis-stated axis and a mis-attached geometry present identically to
 this comparison, so a disagreement is evidence that *something* is wrong without saying which thing, and refusing
 a deposit over that ambiguity would discard correct energies. The verdict is not stored: there is no table for it,
 and the report script (``backend/scripts/validation/scan_coordinate_conformance_report.py``) recomputes it from
 stored rows.
 
-**Payloads in the superseded convention still fail this, correctly.** The 46 series
-deposited before ADR 0020 held ADR 0019's superseded relative-sweep convention;
-the corrective migration (``a4f7c2e9d651``) converted only the stored series
-whose own geometry proves the conversion, not every one. Output written in
-that convention and deposited now (the real payloads under
-``tests/fixtures/arc_runs`` are kept in it, and 34 of their 36 series are
-reported as ``consistent_with_legacy_relative_axis``, one as ``small_constant_offset`` because its start value is
-0.023 degrees short of a full turn (a wrap coincidence), and one has no geometry) is still accepted and,
-where it has geometry, earns the warning. That is the check doing its job, not a defect to quiet.
+**Payloads in a relative-sweep convention (values offset from ``start_value``) still fail this, correctly.**
+Output written in that convention is still accepted and, where it has
+geometry, earns the warning (classified as
+``consistent_with_legacy_relative_axis`` or ``small_constant_offset``).
+That is the check doing its job, not a defect to quiet.
 
 **Rounded values are not disagreement.** The tolerance is widened to half a
 step of the decimals the stored values were written at (see
@@ -40,18 +35,16 @@ Recomputable coordinate kinds
 ------------------------------
 ``bond`` (distance, Angstrom) and ``angle``/``dihedral`` (degrees, standard
 vector formulae) are recomputed directly from the point's own
-``geometry_atom`` rows. ``improper`` is deliberately **not** recomputed: ADR
-0020 records that TCKDB stores no field distinguishing an out-of-plane-angle
+``geometry_atom`` rows. ``improper`` is deliberately **not** recomputed: TCKDB stores no field distinguishing an out-of-plane-angle
 convention from a proper-style torsion, and different codes use different
-conventions for the same four atoms. Guessing one would be exactly the
-inference ADR 0011 refuses to make for atom maps, applied to a coordinate
-convention instead -- so an ``improper`` point is reported ``not_applicable``,
+conventions for the same four atoms. Guessing one would be an inference
+about the coordinate convention -- so an ``improper`` point is reported ``not_applicable``,
 never compared.
 
 A dihedral quartet with a near-collinear flanking angle is reported
-``not_checkable`` rather than compared: ADR 0020 names
-``min(sin(theta_123), sin(theta_234)) < 0.05`` as the point past which "the
-dihedral is not a usable coordinate at all", mirroring what the producing
+``not_checkable`` rather than compared: past
+``min(sin(theta_123), sin(theta_234)) < 0.05`` the
+dihedral is not a usable coordinate at all, mirroring what the producing
 tools themselves do.
 
 Tolerance is derived, never fixed by hand
@@ -66,16 +59,15 @@ standard ``1/(r * sin(theta))`` ill-conditioning of an internal coordinate as
 its defining vectors approach collinearity. ``tol = max(floor, 10 *
 sigma_pred)`` (degrees for angle/dihedral, Angstrom for bond) is what
 :func:`evaluate_point_coordinate_conformance` compares residuals against.
-The degree floor, ``1e-3``, is fixed by the same reasoning ADR 0020 gives for
-the check overall: never let it collapse below what a 6-decimal-place
+The degree floor, ``1e-3``, follows from one rule for the
+check overall: never let it collapse below what a 6-decimal-place
 deposit can distinguish, and explicitly **not** the 0.5-1.0 degree floor
 that was rejected as roughly four orders of magnitude too loose --
-correctly stored data reproduces to about 1.5e-4 degrees (ADR 0020), and
+correctly stored data reproduces to about 1.5e-4 degrees, and
 ``1e-3`` still catches an injected 0.01 degree error with two orders of
 magnitude to spare. The Angstrom floor, ``1e-4``, is this module's own
-choice by the same logic -- ADR 0020 only fixes the degree number, so the
-length analogue is documented here as an assumption for the follow-up
-migration to revisit, not inherited from the ADR.
+choice by the same logic -- only the degree number is derived, so the
+length analogue is documented here as an assumption.
 
 Classification: what a residual pattern implies
 -------------------------------------------------
@@ -133,9 +125,7 @@ from app.services.deposit_warnings import note_warning_subject
 # ---------------------------------------------------------------------------
 
 #: Fallback deposit precision (decimal places on a Cartesian coordinate, in
-#: Angstrom) when it cannot be inferred from the sample itself. Measured as
-#: the precision of the current (pre-ADR-0020) corpus; see ADR 0020's
-#: "Two limits belong on the record" paragraph.
+#: Angstrom) when it cannot be inferred from the sample itself.
 FALLBACK_PRECISION_DECIMALS = 6
 
 #: Below this sample *size* -- the count of Cartesian components fed to
@@ -159,8 +149,8 @@ FALLBACK_PRECISION_DECIMALS = 6
 #: genuinely coarse sample is trusted rather than overridden.
 _MIN_SAMPLE_SIZE_TO_TRUST = 3
 
-#: ADR 0020: "where a quartet is near-collinear the dihedral is not a usable
-#: coordinate at all". Below this, on either flanking bond angle, the point
+#: Where a quartet is near-collinear the dihedral is not a usable
+#: coordinate at all. Below this, on either flanking bond angle, the point
 #: is reported ``not_checkable``.
 DIHEDRAL_NOT_CHECKABLE_MIN_SIN_THETA = 0.05
 
@@ -169,8 +159,8 @@ DIHEDRAL_NOT_CHECKABLE_MIN_SIN_THETA = 0.05
 #: docstring for the rejected 0.5/1.0 degree alternative.
 TOLERANCE_FLOOR_DEGREES = 1e-3
 
-#: This module's own choice, not fixed by ADR 0020 (which only derives the
-#: degree floor). Documented here as an assumption for a future revision.
+#: This module's own choice, documented here as an assumption; only the
+#: degree floor is derived.
 TOLERANCE_FLOOR_ANGSTROM = 1e-4
 
 #: Above this, a point is not "conforming with a generous window" -- it is
@@ -218,7 +208,7 @@ TOLERANCE_CEILING_ANGSTROM = 0.1
 #: rather than divided by a near-zero number.
 _MIN_BOND_LENGTH_ANGSTROM = 1e-6
 
-#: Kinds ADR 0020 gives a recomputable convention for, and the unit that
+#: Kinds with a recomputable convention, and the unit that
 #: convention is expressed in. ``improper`` is deliberately absent -- see
 #: the module docstring.
 _RECOMPUTABLE_UNIT_FOR_KIND: dict[ScanCoordinateKind, CoordinateUnit] = {
@@ -241,7 +231,7 @@ MIN_CHECKABLE_POINTS_FOR_PATTERN = 3
 def _wrap_deg(value: float) -> float:
     """Wrap an angle (or angle difference) into ``(-180, 180]`` degrees."""
     wrapped = (value + 180.0) % 360.0 - 180.0
-    # The formula above sends 180.0 to -180.0; ADR 0020's own half-open
+    # The formula above sends 180.0 to -180.0; the half-open
     # interval keeps +180 on the positive side.
     if wrapped <= -180.0:
         wrapped += 360.0
@@ -637,7 +627,7 @@ class SeriesClassification(str, Enum):
     conforms = "conforms"
     #: Every checkable point is off by the same constant. On the real
     #: corpus this constant is the negative of the series' own
-    #: ``start_value`` mod 360 -- ADR 0019's relative-sweep convention --
+    #: ``start_value`` mod 360 (the relative-sweep convention),
     #: though this classifier reaches the number empirically and never
     #: reads ``start_value`` to get there.
     consistent_with_legacy_relative_axis = "consistent_with_legacy_relative_axis"
@@ -671,7 +661,7 @@ class SeriesClassificationResult:
         can act on directly. For ``consistent_with_legacy_relative_axis``
         and ``uniform_one_step_offset`` this is the constant residual
         (``stored - expected``) shared by every checkable point -- to
-        recover the ADR-0020-conforming value, compute
+        recover the conforming value, compute
         ``expected = stored - implied_constant``. For ``linear_ramp`` it is
         the fitted slope, in the coordinate's unit per unit of point index.
         ``None`` for every other classification.
@@ -1267,7 +1257,7 @@ def collect_scan_coordinate_warnings(
 
     Runs once a request's calculations are flushed (the check reads the stored scan points and geometries), over every
     calculation id the request persisted; other types are filtered out by
-    :func:`build_scan_coordinate_conformance_report`. **Never refuses**: ADR 0020 and ADR 0008 (see
+    :func:`build_scan_coordinate_conformance_report`. **Never refuses** (see
     :data:`CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY`). A series is reported when at least one point is judged
     ``deviates``; points that are not applicable or not checkable are never reported.
 

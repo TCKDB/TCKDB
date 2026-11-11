@@ -76,15 +76,9 @@ import "../geometry-measure.css"
  * change is an instant snap by construction, not a media-query branch
  * that could be missed.
  *
- * ## Mouse/touch: re-enabled, with the scroll trap fixed at the source
+ * ## Mouse/touch: 3Dmol's own handling stays enabled, with the scroll trap fixed at the source
  *
- * An earlier revision passed `nomouse: true` to `createViewer`. That was
- * the right diagnosis (3Dmol's default handling was trapping page
- * scroll — see below) with too broad a remedy: it disabled *all* of
- * 3Dmol's own input handling, including drag-to-rotate, which was never
- * the problem.
- *
- * The actual, narrower problem: 3Dmol installs non-passive `wheel` and
+ * The problem: 3Dmol installs non-passive `wheel` and
  * `touchstart`/`touchmove` listeners directly on its own canvas
  * (`GLViewer.ts:291-298`), and `_handleMouseScroll` (the `wheel`
  * handler) calls `ev.preventDefault()` unconditionally, with no check
@@ -94,16 +88,13 @@ import "../geometry-measure.css"
  * on the canvas and 3Dmol treats it as drag-to-rotate instead of
  * forwarding it to the page; on desktop, resting the cursor over the
  * canvas while scrolling with a wheel zooms the model instead of
- * scrolling the page. Both are regressions the previous SVG projection
- * never had, since it was never large enough to sit under a reader's
- * thumb, and never captured input at all.
- *
- * The fix here re-enables 3Dmol's own mouse/touch handling in full
- * (`nomouse` is no longer passed at all — 3Dmol's own default is
+ * scrolling the page. Both are unwanted in a scrolling page.
+ * 3Dmol's own mouse/touch handling is left enabled in full
+ * (`nomouse` is not passed — 3Dmol's own default is
  * `false`), so mouse drag and multi-finger touch gestures reach 3Dmol
  * and work exactly as 3Dmol implements them — but "3Dmol implements
  * them" is not the same claim as "every gesture rotates the model".
- * Measured live via `getView()` before/after each gesture: two-finger
+ * Per `getView()` before/after each gesture: two-finger
  * touch is zoom-only (the rotation quaternion is unchanged, only camera
  * distance moves) and three-finger touch translates the model; neither
  * rotates it. One-finger touch is the gesture that *would* rotate, and
@@ -128,8 +119,8 @@ import "../geometry-measure.css"
  *     two or more touch points (pinch, two-finger drag) is deliberately
  *     left alone and reaches 3Dmol normally;
  *   - a `touchstart` event under the same one-finger/multi-finger rule.
- *     This one is easy to think unnecessary (the reviewer's original
- *     proposal named only wheel/touchmove) — it is not. Measured live:
+ *     This one is easy to think unnecessary (it might seem enough to intercept only
+ *     wheel/touchmove) — it is not:
  *     3Dmol's `touchstart` handler (`_handleMouseDown`) also calls
  *     `preventDefault()` unconditionally, and Chromium suppresses
  *     scrolling for the *entire* touch sequence once its `touchstart`
@@ -224,11 +215,7 @@ import "../geometry-measure.css"
  * touchstart/touchmove listeners from the "Mouse/touch" section above:
  * those are registered on the *container* itself, a node
  * `replaceChildren()` clears the CONTENTS of but does not itself
- * remove. (An earlier draft of this comment claimed
- * `replaceChildren()` removed those too — it does not; a docstring
- * claiming a property the code doesn't have is worse than no comment,
- * since a reader has no way to tell it's wrong without independently
- * re-deriving the DOM semantics.) They are removed explicitly, by name,
+ * remove. They are removed explicitly, by name,
  * in this same effect's cleanup function below (`removeEventListener`
  * calls) — that explicit removal, not `replaceChildren()`, is what
  * stops React `<StrictMode>`'s double-invoke from stacking a second set
@@ -237,7 +224,7 @@ import "../geometry-measure.css"
  * ## Atom-picking measurements
  *
  * Click 2/3/4 atoms to measure a distance/angle/dihedral, matching
- * GaussView/ChemCraft — the owner's own comparison. Uses 3Dmol's native
+ * GaussView/ChemCraft. Uses 3Dmol's native
  * `viewer.setClickable(sel, true, callback)` (`GLViewer.ts:3964`), not a
  * hand-rolled raycast: `setClickable` marks every atom in `sel` (here
  * `{}` — every atom) with `.clickable = true` and stores `callback`,
@@ -336,8 +323,7 @@ import "../geometry-measure.css"
  * reader did not choose, on the same page as a table they DID choose a
  * unit for, is exactly the "bare 1.09 next to a page showing bohr"
  * hazard this feature must not introduce. So this component accepts a
- * `coordinateUnitMode` prop from `GeometryDetailPage` (lifted out of
- * `CoordinateTableSection`, which used to own that state alone — see
+ * `coordinateUnitMode` prop from `GeometryDetailPage` (see
  * `GeometryDetailPage.tsx`) and every distance readout is computed in
  * ångström (this archive's one wire unit — `coordinate_units` on
  * `GeometryRecord`) and then, if the toggle is on bohr, scaled by
@@ -437,16 +423,12 @@ const STYLE_SPECS: Record<StyleMode, Record<string, unknown>> = {
     // der Waals radius when scale is omitted, which is exactly a
     // spacefill/CPK representation, not an arbitrary shrunken sphere.
     spacefill: { sphere: {} },
-    // NOT `{ line: { linewidth: 2 } }` — that was the first version of
-    // this spec, and it rendered as an essentially empty box. WebGL
+    // NOT `{ line: { linewidth: 2 } }`: WebGL
     // clamps `gl.lineWidth()` to 1.0 in Chromium/ANGLE regardless of the
     // requested value (a longstanding, spec-permitted WebGL1 limitation,
-    // not a 3Dmol bug), so `linewidth: 2` was a silent no-op — 3Dmol drew
+    // not a 3Dmol bug), so `linewidth: 2` is a silent no-op and 3Dmol draws
     // 1px element-coloured lines (grey carbon, white hydrogen) on a white
-    // background. Measured on a real 704×704 render: no pixel darker
-    // than 200/255, and only 0.021% of pixels darker than 240/255 at
-    // all — effectively invisible, vs. ball & stick's minimum pixel
-    // value of 2 with 1.5% of the image below 200. A `stick` spec draws
+    // background, effectively invisible. A `stick` spec draws
     // actual cylinder geometry (rasterised, not a 1px GL line), so it
     // renders with real contrast regardless of the lineWidth clamp, at a
     // thin enough radius to still read as "wireframe" rather than
@@ -753,11 +735,9 @@ export function GeometryViewer({
         // scrolling for an *entire* touch sequence once its `touchstart`
         // has been prevented — even if every subsequent `touchmove` in
         // that same sequence is never prevented at all. Intercepting only
-        // `touchmove` (as first written, following the reviewer's
-        // proposal literally) left the swipe-traps-the-page-instead-of-
-        // scrolling regression fully in place; leaving `touchstart`
-        // itself un-intercepted was the gap. See this component's PR
-        // description for the measured before/after.
+        // `touchmove` would leave the swipe-traps-the-page-instead-of-
+        // scrolling behaviour fully in place; `touchstart` must be
+        // intercepted too.
         function handleWheelCapture(event: WheelEvent) {
             event.stopPropagation()
         }
@@ -960,23 +940,18 @@ export function GeometryViewer({
         })
     }, [status, handleAtomPick])
 
-    // Applies the selected representation style to the viewer — this is
-    // now the ONLY place that ever calls `setStyle`, for both the very
-    // first frame and every later style click, which is what removes the
-    // latent coupling `attemptInit` used to have: that function no
-    // longer hardcodes `STYLE_SPECS.ballstick` (or any style) at all, so
-    // there is only one source of truth for "what style is currently
-    // applied" instead of two that happen to agree only because the
-    // style/label controls are gated on `status === "ready"` (see
-    // below). `status` is a deliberate dependency, not an oversight: it
+    // Applies the selected representation style to the viewer. This is
+    // the ONLY place that calls `setStyle`, for both the very
+    // first frame and every later style click: `attemptInit` does not
+    // call `setStyle`/`render` at all (an unstyled model draws
+    // nothing), so there is only one source of truth for "what style is
+    // currently applied". `status` is a deliberate dependency, not an
+    // oversight: it
     // is what makes this effect actually fire the moment
     // `viewerRef.current` becomes non-null (a ref by itself is not
     // trackable as a dependency; `status` flipping to "ready" is this
-    // component's proxy signal that it did). This does NOT double up
-    // with a render `attemptInit` used to do itself — `attemptInit` no
-    // longer calls `setStyle`/`render` at all (an unstyled model draws
-    // nothing, so there was never a meaningful frame to render before
-    // this effect's own render call), so exactly one `setStyle`+`render`
+    // component's proxy signal that it did). The style/label controls are gated on
+    // `status === "ready"` (see below). Exactly one `setStyle`+`render`
     // pair happens per style change, including the very first one.
     useEffect(() => {
         const viewer = viewerRef.current
@@ -1161,14 +1136,10 @@ export function GeometryViewer({
     return (
         <div className="geometry-viewer">
             {/* This caption is a sibling of `.viewer-stage` below, not a
-                descendant of it or of `.viewer-canvas` — it used to share
-                `.viewer-canvas`'s own 22rem cap (via a single shared
-                `.geometry-viewer` max-width), which is why three sentences
-                of prose read as "too long for too short a column": the
-                text was squeezed to the same width as a square picture for
-                no reason. It now gets its own, wider measure (see
-                `.viewer-caption` in geometry-viewer.css) and the sentences
-                themselves are shorter besides. */}
+                descendant of it or of `.viewer-canvas`, so it has its
+                own, wider measure (see
+                `.viewer-caption` in geometry-viewer.css) rather than
+                `.viewer-canvas`'s 22rem cap. */}
             <p className="section-note viewer-caption">
                 {`An interactive 3D view of the deposited coordinates, rendered client-side with WebGL. ${bondsSentence} The table and raw XYZ below are the authoritative record either way.`}
             </p>

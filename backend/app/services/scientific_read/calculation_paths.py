@@ -65,7 +65,7 @@ from app.services.scientific_read.keyset import Paging
 # Path-data endpoints share an include policy: only ``internal_ids``
 # (and the ``all`` shorthand) is legal. ``include_geometries`` is its
 # own boolean knob; the include set is reserved for visibility opt-ins
-# like the Phase D internal-ID policy.
+# like the internal-ID policy.
 _PATH_LEGAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "all"}
 _PATH_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 

@@ -1,11 +1,11 @@
 """Read-time projection of a calculation's imaginary modes.
 
-ADR 0012 asks for two determinations on every imaginary mode -- how much
+Two determinations are made on every imaginary mode -- how much
 of it is rigid-body motion, and how much is a rotation about a rotatable
-bond -- "because a determination beats a threshold wherever one is
-available". ADR 0013 deferred them on the stated grounds that TCKDB holds
-no displacement vectors to project. It holds ``calc_hessian``, and
-:mod:`app.chemistry.normal_modes` recovers the vectors from it exactly.
+bond -- because a determination beats a threshold wherever one is
+available. TCKDB holds ``calc_hessian``, and
+:mod:`app.chemistry.normal_modes` recovers the displacement vectors from it
+exactly.
 
 This module is the database glue: it loads the Hessian, the geometry it is
 bound to and the stored frequency list, hands them to the numerics, and
@@ -14,16 +14,16 @@ pairs each determination with the ``imaginary_disposition`` the depositor
 
 Three properties are deliberate.
 
-**Nothing is written.** No table, no column, no cache. ADR 0013 observes
-that "it is the projection that is the inference, not the vector"; running
-the projection at read time and persisting neither of them is what lets a
-determination exist without TCKDB storing an inference.
+**Nothing is written.** No table, no column, no cache. It is the projection
+that is the inference, not the vector; running the projection at read time
+and persisting neither of them is what lets a determination exist without
+TCKDB storing an inference.
 
 **A determination never replaces a declaration.** Both are returned, side
 by side, together with the overlaps and the thresholds that produced the
 determination, and a disagreement is reported as a disagreement. TCKDB has
 no basis for silently preferring either: the depositor saw the output file
-and this module saw a matrix. Under ADR 0008 a projection is an
+and this module saw a matrix. A projection is an
 expectation, not a definition -- it may inform a reader, and it may not
 block a record.
 
@@ -38,16 +38,16 @@ rigid-body curvature says the geometry is not the frame the matrix was
 computed in reads ``rigid_body_curvature_too_large``. None of them reads
 as a clean bill of health.
 
-**And none of them is the end of what TCKDB knows.** ADR 0012 already
-judged every one of those records by magnitude, against a tau resolved
-from the protocol that produced them, and persisted the tau, the row of
-the protocol table it came from and the resulting structural flag on
-``calc_freq_result``. Where a projection cannot be taken, that judgement
+**And none of them is the end of what TCKDB knows.** A record judged at
+upload by magnitude, against a tau resolved from the protocol that produced
+it, has the tau, the row of the protocol table it came from and the
+resulting structural flag persisted on ``calc_freq_result``. Where a
+projection cannot be taken, that judgement, if it was made,
 is returned beside the refusal -- see :class:`TauContext` -- so that a
 reader gets "cannot be determined from stored data, and here is what the
 magnitude judgement said" rather than an unqualified shrug. It is not
-returned where a projection *was* taken, because ADR 0012's own rule is
-that a determination beats a threshold wherever one is available, and
+returned where a projection *was* taken, because a determination beats a
+threshold wherever one is available, and
 stacking the weaker answer next to the stronger one would only invite a
 reader to average them.
 """
@@ -114,8 +114,8 @@ __all__ = [
 #: reader is most likely to draw from a ranked magnitude list is the one
 #: the data cannot support.
 #:
-#: ADR 0012 §"The definition does not survive the translation to a
-#: database row": a transition state can sit at a maximum of a torsional
+#: The definition of a transition state does not survive the translation to
+#: a database row: a transition state can sit at a maximum of a torsional
 #: profile while being a perfectly correct reactive bottleneck, so the
 #: extra negative eigenvalue is not an artefact but exactly right. A
 #: torsion at -300 cm-1 and a genuine second reaction coordinate at
@@ -258,8 +258,8 @@ class TauRankedMode:
 
     :param mode_index: ``calc_freq_mode.mode_index``, 1-based.
     :param frequency_cm1: The stored (negative) frequency.
-    :param magnitude_cm1: Its absolute value -- the quantity ADR 0012
-        judges, and the quantity this list is ordered by.
+    :param magnitude_cm1: Its absolute value -- the quantity the tau
+        judgement uses, and the quantity this list is ordered by.
     :param is_designated_reaction_coordinate: Whether the depositor
         designated *this* mode the reaction coordinate. False on every
         mode when nothing was designated.
@@ -281,15 +281,13 @@ class TauRankedMode:
 
 @dataclass(frozen=True)
 class TauContext:
-    """What ADR 0012's magnitude judgement said, for a record no
+    """What the stored magnitude judgement said, for a record no
     projection could be taken on.
 
-    Every field here is **read back**, not recomputed. ADR 0012 §"What
-    implementation changed" is explicit that tau had to be stored rather
-    than re-resolved, "because a later parser improvement would silently
-    re-decide every historical record"; re-resolving it at read time to
-    fill this block would be the exact defect that requirement exists to
-    prevent. So ``tau_cm1``, ``tau_basis``, ``structural_flag`` and
+    Every field here is **read back**, not recomputed. Tau is stored rather
+    than re-resolved, because a later parser improvement would silently
+    re-decide every historical record; re-resolving it at read time to
+    fill this block would be exactly that defect. So ``tau_cm1``, ``tau_basis``, ``structural_flag`` and
     ``reaction_coordinate_mode_index`` come off ``calc_freq_result`` as
     the upload wrote them.
 
@@ -301,16 +299,16 @@ class TauContext:
     it in either direction.
 
     :param tau_cm1: The tolerance applied to this record, in cm-1.
-        ``None`` on a record deposited before ADR 0012 shipped.
-    :param tau_basis: Which row of ADR 0012's protocol table was
+        ``None`` on a record that was never judged.
+    :param tau_basis: Which row of the protocol table was
         matched, as stored. Free text on the wire because the column is
         free text: a value this deployment has not been taught about is
         shown rather than rejected.
-    :param structural_flag: ADR 0012's persisted flag -- ``True`` when an
+    :param structural_flag: The persisted flag -- ``True`` when an
         extra imaginary mode at or above tau excluded this record from
         default transition-state consumption, ``False`` when the record
         was judged and not flagged, ``None`` when it was never judged
-        under ADR 0012 (a minimum, a pre-ADR deposit, or a saddle with a
+        (a minimum, an older deposit, or a saddle with a
         single imaginary mode and so nothing to disambiguate).
     :param reaction_coordinate_mode_index: The designated reaction
         coordinate, or ``None`` when none was designated.
@@ -346,11 +344,11 @@ class ImaginaryModeProjectionResult:
     :param rigid_body_overlap_threshold: Threshold applied, echoed so a
         reader can re-decide from the overlaps without re-running anything.
     :param torsion_overlap_threshold: Likewise.
-    :param tau_context: ADR 0012's stored magnitude judgement, present
+    :param tau_context: The stored magnitude judgement, present
         only when ``status`` is one of the not-determinable values *and*
         the record has imaginary modes to judge. ``None`` on a
         ``determined`` block on purpose: the determination is the
-        stronger answer and ADR 0012 says so.
+        stronger answer.
     """
 
     status: ProjectionStatus
@@ -410,7 +408,7 @@ def _tau_context(
     calculation_id: int,
     imaginary: list[CalculationFreqMode],
 ) -> TauContext:
-    """Read back ADR 0012's magnitude judgement for one calculation.
+    """Read back the stored magnitude judgement for one calculation.
 
     Called only where a projection could not be taken. Nothing here is
     derived from provenance: the tau, its basis and the flag are the
@@ -446,8 +444,7 @@ def _tau_context(
             continue
         recorded[key] = value
         kinds[key] = kind.value if kind is not None else None
-    # A value an output log REPORTS the program used decides tau ahead of any request (ADR 0012, amendment
-    # 2026-11-05). It is listed first only when that is true of this record: the stored basis is a recorded one (an
+    # A value an output log REPORTS the program used decides tau ahead of any request. It is listed first only when that is true of this record: the stored basis is a recorded one (an
     # ``assumed_*`` basis rests on no parameter), the method it rests on is the reported method, and the logs do not
     # report different methods. A log attached after the deposit that reports another method, or two inline logs
     # that disagree, did not decide the stored basis, so no report is listed.
@@ -508,7 +505,7 @@ def build_imaginary_mode_projection(session: Session, calculation_id: int) -> Im
         return ImaginaryModeProjectionResult(status=ProjectionStatus.no_imaginary_modes)
 
     # From here on every exit is a refusal to determine, and each one
-    # carries ADR 0012's stored magnitude judgement so that the refusal
+    # carries the stored magnitude judgement so that the refusal
     # is qualified rather than bare. Built once and reused: it is two
     # reads and no arithmetic worth repeating.
     tau_context = _tau_context(session, calculation_id, imaginary)

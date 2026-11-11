@@ -20,9 +20,8 @@ function stripComments(source: string): string {
 }
 
 /**
- * PR D review finding (design/foundations "record pages" consolidation,
- * PR B): `transition-state-entry.css` used to carry `.tse-siblings-list
- * .value-pill { font-size: .68rem }` -- a descendant selector that reaches
+ * `transition-state-entry.css` must not carry `.tse-siblings-list
+ * .value-pill { font-size: .68rem }`
  * into the shared `.value-pill` primitive (`index.css`) directly, restyling
  * it wherever this page's own markup happens to nest a pill, rather than
  * composing a new modifier class the way `.value-pill--muted` does. Vite
@@ -44,13 +43,11 @@ function stripComments(source: string): string {
  * `.value-pill--muted` are DEFINED there -- that is the primitive itself,
  * not a page restyling it.
  */
-// SHOULD-FIX-6 (PR B review): the original version of this pattern only
-// matched a selector ending directly in `{` (`\.value-pill\s*\{`) -- it
-// missed a `:hover`/`:focus-visible` pseudo-class, a compound selector
+// A selector ending directly in `{` is not the only way to restyle the
+// primitive: a `:hover`/`:focus-visible` pseudo-class, a compound selector
 // (`.foo.value-pill`), an attribute selector, a combinator
-// (`.value-pill > span`), or a comma-separated selector list
-// (`.value-pill, .other-thing`), any of which restyles the primitive just
-// as much as a bare `{` does. The lookahead below requires only that
+// (`.value-pill > span`) or a comma-separated selector list
+// (`.value-pill, .other-thing`) restyle it just as much. The lookahead below requires only that
 // `.value-pill`/`.value-pill--muted` be followed by a character that can
 // legally follow a class name in a selector (whitespace, `,`, `.`, `:`,
 // `{`, `[`, or a combinator) -- i.e. it matches the class name ANYWHERE
@@ -68,7 +65,7 @@ describe("no page stylesheet restyles the shared .value-pill primitive directly"
         expect(offenders).toEqual([])
     })
 
-    it("transition-state-entry.css no longer overrides .value-pill's font-size via a descendant selector", () => {
+    it("transition-state-entry.css does not override .value-pill's font-size via a descendant selector", () => {
         const css = stripComments(ALL_STYLESHEETS["transition-state-entry.css"] ?? "")
         expect(css).not.toMatch(/\.value-pill/)
     })

@@ -8,7 +8,7 @@ matching code of the matching browse or search endpoint:
   classification of what kind of method it is, not a measure of accuracy, and it is a filter fact only;
 * software, workflow tool and their versions match through the calculation's release rows;
 * a level of theory is a public ref, resolved to its canonical row (a merged row to the row it was merged into);
-* a calculation the evidence rule withholds (rejected or deprecated under the curated profile, ADR 0023) contributes
+* a calculation the evidence rule withholds (rejected or deprecated under the curated profile) contributes
   nothing to a match; a not-reviewed or under-review one matches, with its badge.
 
 A filter excludes on a fact. It never ranks, and a candidate it keeps is not thereby better than one it removed.

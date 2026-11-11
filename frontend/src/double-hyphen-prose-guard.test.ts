@@ -3,12 +3,7 @@ import ts from "typescript"
 
 /**
  * Anti-regression guard for the "a literal `--` must never render in
- * user-facing text" rule: the owner asked for it after finding one live on
- * `/methods` ("also stop using `--`"). Seven occurrences were swept out in
- * #419. Within hours a new one shipped in #429 (`MethodsIndexPage.tsx`'s
- * `intro`) -- because #419 was a sweep with no guard, so nothing stopped the
- * next PR from reintroducing the same defect in a file nobody thought to
- * check. This file is that guard, built the same way
+ * user-facing text" rule. This file is that guard, built the same way
  * `text-transform-scientific-guard.test.ts` is: it DISCOVERS every source
  * file rather than trusting a hand-maintained list, so a brand-new component
  * or page is covered the moment it is created, not the moment someone
@@ -283,8 +278,7 @@ describe("the extraction mechanism itself: true positives and true negatives", (
 /**
  * Every (file, exact text) pair confirmed to legitimately need a literal
  * `--` -- e.g. because it names this very rule or quotes another PR's title
- * verbatim. Empty today: the 2026-09 sweep found and fixed every real
- * occurrence, and nothing legitimately needs one. An entry belongs here
+ * verbatim. Empty: nothing legitimately needs one. An entry belongs here
  * ONLY with a comment naming why that exact text is not the defect this
  * guard exists to catch -- the same discipline
  * `ALLOWLISTED_UPPERCASE_SELECTORS` in `text-transform-scientific-guard.test.ts`

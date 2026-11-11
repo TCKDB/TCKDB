@@ -43,9 +43,9 @@ export default function SpeciesEntryPage() {
     useDocumentTitle("Molecule", titleName)
 
     // Canonicalize a known legacy section alias (e.g. a stale
-    // `/calculations` link from the earlier chapter-nav design --
+    // `/calculations` link --
     // `LEGACY_ENTRY_SECTION_ALIASES`, the same set `App.tsx`'s
-    // `SpeciesEntrySectionRoute` already used to let this alias reach this
+    // `SpeciesEntrySectionRoute` uses to let this alias reach this
     // page instead of the not-found one) to the default tab's own path.
     // `isEntrySection` below already falls back to `DEFAULT_SECTION` for
     // what RENDERS; the address bar must say the same thing that's on
@@ -153,7 +153,7 @@ function RateLimitedEntry({ retryAfterSeconds }: { retryAfterSeconds: number }) 
 // ---------------------------------------------------------------------------
 // Conformer-first: pick a basin, then read its geometry, single-point
 // energy, statistical mechanics and thermochemistry in tab blocks beneath
-// it -- the shape the owner asked for directly. The selected conformer is
+// it -- The selected conformer is
 // carried in the `?conformer=` query param (not just component state) so a
 // reload lands back on the same basin, the same way `:section` already
 // carries the active tab; an unset or stale param self-heals to the first
@@ -173,11 +173,9 @@ function hasAnyEvidence(entry: SpeciesEntryProjection): boolean {
     return availability.has_conformers || availability.has_thermo || availability.has_statmech || availability.has_transport
 }
 
-// The ONE empty state for an entry with nothing recorded at all -- replaces
-// what used to be three: the conformer picker's own "no conformer basins"
-// message, the evidence panel (which never even mounted, since there was
-// no selected conformer), and the active tab panel's own "no conformer
-// basins" fallback. Reuses the picker's own container shape (`.conformer-
+// The ONE empty state for an entry with nothing recorded at all (in place
+// of separate empty states in the conformer picker, the evidence panel and
+// the active tab panel). Reuses the picker's own container shape (`.conformer-
 // picker`, the `conformer-picker-title` heading id) for visual continuity
 // -- `ConformerSelector` itself never renders in this branch, so there is
 // no id collision.
@@ -285,15 +283,10 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
             ]} />
             <EntryIdentity entry={entry} />
         </>}>
-        {/* Item 5 / BLOCKING-1 (species-entry/browse/chrome residuals
-            re-review): "Transition states for reactions of this species"
-            now renders INSIDE `EntryIdentity` (`SpeciesEntrySummary.tsx`),
-            with the identity/provenance block it always belonged next to,
-            styled as a `.note` line -- see that component's own comment.
-            It used to sit here instead, as a bare unstyled `<p><Link>`
-            (species-entry.css was out of scope for the PR that added it);
-            this page's stylesheet is in scope now, so the fix moved with
-            the markup rather than patching a stray sibling `<p>` in place. */}
+        {/* "Transition states for reactions of this species"
+            renders INSIDE `EntryIdentity` (`SpeciesEntrySummary.tsx`),
+            with the identity/provenance block, styled as a `.note` line --
+            see that component's own comment. */}
         <EntryNumbers entryRef={entryRef} entryPath={entryPath} conformerQuery={conformerQuery} conformers={conformers} speciesRef={entry.speciesRef} />
         <OtherVersions entry={entry} />
         {hasAnyEvidence(entry) ? (

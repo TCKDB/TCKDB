@@ -1,10 +1,7 @@
 /*
  * `NetworkDiagram.tsx` -- the network entry page's potential-energy
  * surface (PES) and its always-rendered accessible table equivalents.
- * Replaces the earlier force-directed web (states as nodes, channels as
- * edges, no energy axis) -- see `domain/networkPesLayout.ts`'s own header
- * comment for the full reasoning behind the switch and this component's
- * own header comment for the scope decision on what carried over.
+ * See `domain/networkPesLayout.ts`'s own header comment for the layout.
  * Every colour is `var(--token)` (`theme.css.test.ts` enforces this
  * against every stylesheet in `src/`, this one included).
  *
@@ -115,8 +112,7 @@
 }
 
 /* ---- Saddle points: colour = channel.kind, dash = has_kinetics (two
-   independent encodings carried over from the old edge encoding,
-   documented in `NetworkDiagram.tsx`'s own scope-decision comment) ---- */
+   independent encodings, documented in `NetworkDiagram.tsx`) ---- */
 .net-pes-connector {
     /* Overridden by every `.net-pes-connector-*` kind class below (same
        specificity, later in the cascade) -- this default only shows on

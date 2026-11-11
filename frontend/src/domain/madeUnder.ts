@@ -13,7 +13,7 @@ import { z } from "zod"
  *   from inputs that have changed since). It says what it was made under and that it has not been re-assessed.
  * - `unassessed`: nobody has assessed this record, so there is no rubric to name. Not a kind of stale.
  *
- * Version 0 means "stamped before the 2026-10 versioning reset". No registry holds 0, so it is never current; it is
+ * Version 0 means "stamped before versioning". No registry holds 0, so it is never current; it is
  * worded as what it is and never shown as "v0".
  *
  * A stored machine review (the curator queue) is worded as a review: "Reviewed under ...", never "assessed".

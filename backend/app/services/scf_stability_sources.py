@@ -48,15 +48,15 @@ from app.services.deposit_warnings import note_warning_subject
 from app.services.local_key_resolution import resolve_calculation_key
 
 #: The measuring job ran at a different level of theory than the calculation
-#: carrying the verdict. A warning, not a refusal (ADR 0008: definitions block,
+#: carrying the verdict. A warning, not a refusal (definitions block,
 #: expectations warn). The verdict is then about another wavefunction, which is
 #: worth telling the depositor, but a producer may legitimately run the check
 #: at a cheaper level and say so, so the record is kept.
 W_SCF_STABILITY_SOURCE_LEVEL_MISMATCH = "scf_stability_source_level_mismatch"
 
 #: Neither the calculation carrying the verdict nor the job named as having measured it is tied to
-#: any conformer, so the same-conformer rule cannot be checked. An absence, so a warning (ADR 0008:
-#: an incomplete record is still a true record); the link is stored as stated. Exactly one side
+#: any conformer, so the same-conformer rule cannot be checked. An absence, so a warning (an
+#: incomplete record is still a true record); the link is stored as stated. Exactly one side
 #: unanchored is a refusal, ``scf_stability_source_conformer_unanchored``. A transition state has no
 #: conformers and is never flagged.
 W_SCF_STABILITY_SOURCE_CONFORMER_UNVERIFIED = "scf_stability_source_conformer_unverified"

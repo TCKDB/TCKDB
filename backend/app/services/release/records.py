@@ -169,8 +169,7 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
         # it is the difference between a record a reader can check and a bare
         # assertion that this TS connects those endpoints. Shipping the entry
         # without it would make a mapped reaction read in a citable release
-        # exactly like an unmapped one — the indistinguishability ADR 0011
-        # exists to remove. ``source`` rides along, so an inferred map never
+        # exactly like an unmapped one. ``source`` rides along, so an inferred map never
         # ships looking like a declared one.
         ChildTable(
             "reaction_atom_map",
@@ -447,9 +446,7 @@ class RefResolver:
         otherwise the target's declared natural key. A target with neither is
         omitted, and its FK is dropped as before — that is correct for
         ``created_by`` (a user primary key must never reach a public artifact).
-        ``calculation_artifact`` used to fall into this dropped bucket too
-        (see the public-ref backfill in ``backend/docs/deployment/migrations.md``);
-        now that it carries a ``public_ref``, FKs to it (e.g.
+        ``calculation_artifact`` carries a ``public_ref``, so FKs to it (e.g.
         ``kinetics_tunneling_application.result_artifact_id``) resolve like
         any other ref-bearing target instead of being dropped.
         """

@@ -116,7 +116,7 @@ function page(ref = ENTRY_REF) {
 
 // Trimmed from a live `GET /api/v1/scientific/transition-state-entries/
 // tse_aq5ktxlu27nvul3hmdwpuyuz4e?include=calculations,geometries,review,trust`
-// response (curled 2026-09-03) -- field names, nesting and the `has_irc:
+// response -- field names, nesting and the `has_irc:
 // true` / `validation.irc: "absent"` combination (an IRC calculation
 // exists, but no *passed evidence record* was deposited for it -- see
 // `TransitionStateValidationDescriptor`'s own docstring) are the real
@@ -206,8 +206,7 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
 
 describe("TransitionStateEntryPage", () => {
     // The breadcrumb's "Browse" crumb points at the transition-state
-    // browse kind's own canonical path now (per-kind browse paths change),
-    // not the legacy `/species?kind=transition_state` it used to.
+    // browse kind's own canonical path, not `/species?kind=transition_state`.
     it("the breadcrumb starts at the Reactions list", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: mockRecord() })))
         page()
@@ -228,8 +227,8 @@ describe("TransitionStateEntryPage", () => {
         expect(await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })).toBeVisible()
 
         // The depositor's own label is not rendered anywhere on the page,
-        // not as a pill and not as an identity fact -- house rule widened
-        // 2026-09: no depositor-typed labels on public pages. `mockRecord()`
+        // not as a pill and not as an identity fact -- house rule:
+        // no depositor-typed labels on public pages. `mockRecord()`
         // still deposits `label: "TS0"` on the wire; it must never surface.
         expect(screen.queryByText("Label", { selector: "dt" })).not.toBeInTheDocument()
         expect(screen.queryByText("TS0")).not.toBeInTheDocument()
@@ -266,12 +265,12 @@ describe("TransitionStateEntryPage", () => {
         expect(within(header).queryByText("Transition state review")).not.toBeInTheDocument()
     })
 
-    // Item 5/7, design/foundations PR B: mutation check for disclosure
-    // adoption (`.disclosure`, never the retired `.geometry-role-
+    // Mutation check for disclosure
+    // adoption (`.disclosure`, never `.geometry-role-
     // disclosure`) and the table primitive (`.data-table`, never
     // `.stage-table`) -- see the identical checks on the other four
     // record pages' own test files.
-    it("renders per-role geometry groups as .disclosure and every table as .data-table, never the retired classes", async () => {
+    it("renders per-role geometry groups as .disclosure and every table as .data-table, never the legacy classes", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({ record: mockRecord() })
         )))
@@ -357,7 +356,7 @@ describe("TransitionStateEntryPage", () => {
         },
     )
 
-    it("saddle-point: flags a structural (higher-order) saddle without citing an internal ADR number in user-facing text", async () => {
+    it("saddle-point: flags a structural (higher-order) saddle without citing an internal record number in user-facing text", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({
                 record: mockRecord({
@@ -422,7 +421,7 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.getByText("No frequency calculation deposited for this entry.")).toBeVisible()
     })
 
-    // BLOCKING #2 (PR #357 review): a freq-type calculation CAN be
+    // A freq-type calculation CAN be
     // attached (has_freq true, a lit `freq` evidence pill, a `freq` row
     // in the calculation table) while `saddle_point` is still null -- the
     // backend's join finds no `calc_freq_result` row for it. The old,
@@ -441,7 +440,7 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.queryByText("No frequency calculation deposited for this entry.")).not.toBeInTheDocument()
     })
 
-    // Rewritten per BLOCKING #2: the omitted-field and explicit-null cases
+    // The omitted-field and explicit-null cases
     // are NOT the same claim and must not render the same text. `undefined`
     // means this deployment doesn't serve `saddle_point` at all (a request-
     // side absence); `null` means the backend answered and has nothing to
@@ -972,8 +971,8 @@ describe("TransitionStateEntryPage", () => {
         page()
         await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
 
-        // "TS0" appears zero times on the page -- house rule widened
-        // 2026-09: no depositor-typed labels on public pages at all.
+        // "TS0" appears zero times on the page -- house rule:
+        // no depositor-typed labels on public pages at all.
         // `mockRecord()` still deposits `label: "TS0"` on the wire; it must
         // never surface, not in the h1, not as a "Label" identity fact.
         expect(document.body.textContent?.match(/TS0/g)).toBeNull()
@@ -1098,11 +1097,11 @@ describe("TransitionStateEntryPage", () => {
                         },
                         {
                             // Same label AND same level-of-theory/software as
-                            // the row above -- MEASURED report: three
+                            // the row above -- three
                             // indistinguishable "TS4 · ... · NOT REVIEWED"
                             // rows on the hydrazine reaction's own page. The
-                            // label is not rendered at all any more (house
-                            // rule widened 2026-09); distinguishable by ref
+                            // label is not rendered at all (house
+                            // rule); distinguishable by ref
                             // and date instead.
                             transition_state_entry: { transition_state_entry_ref: "tse_sibling_2", created_at: "2026-07-15T00:00:00", review: { status: "not_reviewed" } },
                             transition_state: { label: "TS1" },
@@ -1125,7 +1124,7 @@ describe("TransitionStateEntryPage", () => {
 
         // Excludes itself -- only the other two entries show. Neither
         // depositor label ("TS0"/"TS1") renders anywhere in the section --
-        // house rule widened 2026-09: no depositor-typed labels on public
+        // house rule: no depositor-typed labels on public
         // pages.
         const siblingsSection = await screen.findByText("Other saddle points deposited for this reaction")
         const section = siblingsSection.closest("section") as HTMLElement
@@ -1200,7 +1199,7 @@ describe("TransitionStateEntryPage", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Orders and picks on this page that used to be silent: the calculation-table
+// Orders and picks on this page: the calculation-table
 // row order, which calculation a sibling's one-line summary is read from, and
 // siblings beyond the first page.
 // ---------------------------------------------------------------------------
@@ -1393,12 +1392,12 @@ describe("transition-state entry page: siblings when this entry is the only reco
     })
 })
 
-describe("TransitionStateEntryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+describe("TransitionStateEntryPage -- no depositor-typed text", () => {
     it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
         const planted = plantSentinels(mockRecord(), ["label", "note", "unmapped_smiles"])
         expectPlanted(planted)
         const { value } = planted
-        // A string that is not SMILES but is shaped like it, in the one field the page used to print.
+        // A string that is not SMILES but is shaped like it, in the one field the page does not print.
         ;(value.transition_state_entry as { unmapped_smiles: string }).unmapped_smiles = ADVERSARIAL.unmappedSmiles
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: value })))
         page()

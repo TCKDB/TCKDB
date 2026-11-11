@@ -12,7 +12,7 @@ import { z } from "zod"
  * that changes what a reader is told to trust. It is not the machine's
  * advisory screen (`machine_review_status`), and it is not the curator
  * task queue, which tracks whether somebody handled a machine *finding*
- * and endorses nothing (ADR 0016).
+ * and endorses nothing.
  *
  * One row exists per record, written by the review-policy write that
  * every upload ends with, starting at `not_reviewed`. Nothing has to run
@@ -187,7 +187,7 @@ export const ReviewQueueSubjectChemistrySchema = z.object({
     electronic_state_label: z.string().nullable().default(null),
     term_symbol: z.string().nullable().default(null),
     stereo_label: z.string().nullable().default(null),
-    // DR-0038: `stereo_label` is NULL while an entry is unresolved; read these, not the NULL.
+    // `stereo_label` is NULL while an entry is unresolved; read these, not the NULL.
     stereo_descriptor: z.string().nullable().default(null),
     stereo_resolution: z.enum(["resolved", "partial", "unresolved"]).nullable().default(null),
     isotope_key: z.string().nullable().default(null),

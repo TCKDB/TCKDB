@@ -184,7 +184,7 @@ class MLFilters:
     def canonical_elements(self) -> frozenset[str] | None:
         """The allow-list as it is actually applied.
 
-        A filter is a *comparison*, which is where ADR 0008's rule about
+        A filter is a *comparison*, which is where the rule about
         element symbols bites: a blocking or dropping decision may not turn on
         an unenforced spelling convention. ``geometry_atom.element`` is
         canonicalised at ingestion and the stored corpus is canonical, but no
@@ -279,7 +279,7 @@ def _lot_block(
             "spin_treatment": (
                 lot.spin_treatment.value if lot.spin_treatment is not None else None
             ),
-            # ``None`` means the producer did not say, never "frozen core by default" (ADR 0021).
+            # ``None`` means the producer did not say, never "frozen core by default".
             "core_treatment": (
                 lot.core_treatment.value if lot.core_treatment is not None else None
             ),
@@ -650,7 +650,7 @@ def _conformer_refs(
 ) -> tuple[list[str], list[str]]:
     """Resolve conformer observation ids to (group_refs, observation_refs).
 
-    A conformer observation is linked evidence of the calculation that ran it (ADR 0023), so under ``curated`` it is
+    A conformer observation is linked evidence of the calculation that ran it, so under ``curated`` it is
     resolved unless it is rejected or deprecated; not-reviewed observations are named. A group is named only THROUGH a
     resolved observation: a visible group reached by a withheld observation would otherwise be named beside an empty
     observation list, which says the withheld observation exists. (A withheld group reached by a resolved observation
@@ -700,7 +700,7 @@ def _build_species_records(
 
     # A calculation the profile hides is not part of this species' world: its energies, frequencies, Hessian,
     # geometry and conformer links are left out, not blanked (the ML export's energy rows keep their calculations
-    # approved-only, ADR 0023 Q7).
+    # approved-only).
     calcs = session.scalars(
         where_visible(
             select(Calculation).where(Calculation.species_entry_id == species_entry_id),
@@ -1271,7 +1271,7 @@ def _delta_h298(
     if reactant_blocks is None or product_blocks is None:
         return None, None
 
-    # The shared-basis rule lives in the wire package so the Phase D Hess
+    # The shared-basis rule lives in the wire package so the Hess
     # check applies the identical rule; both terms lists are non-empty here.
     _, reference_reason = shared_enthalpy_reference(
         block.get("enthalpy_reference_kind")

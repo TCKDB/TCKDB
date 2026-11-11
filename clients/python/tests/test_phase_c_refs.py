@@ -1,4 +1,4 @@
-"""Phase C client tests: refs accepted as handles and filters.
+"""Client tests: refs accepted as handles and filters.
 
 These verify request shape only; the backend behavior is covered by
 backend tests. Each test installs a stub transport, calls a client

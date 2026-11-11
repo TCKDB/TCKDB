@@ -43,7 +43,7 @@ export interface KineticsLevelsFallbackResult {
      * Set only when `levels.energy` was substituted from
      * `provenance.primary_level_of_theory` because the record's own cited
      * single-point calculation is not among this page's known
-     * calculations (the plan §7 "resolver disagreement" case) -- names
+     * calculations (the "resolver disagreement" case) -- names
      * which fact was substituted, for an honest caveat at the call site.
      * `null` whenever `energy` was resolved directly (or is itself
      * `null`) -- never set "just in case".
@@ -54,13 +54,10 @@ export interface KineticsLevelsFallbackResult {
 /**
  * Client-side mirror of the backend's `_build_kinetics_levels`
  * (`backend/app/services/scientific_read/kinetics.py`) -- used only when
- * a kinetics record's own served `levels` is absent (an API generation
- * older than PR 1's `feat/reaction-full-additions`, #398, deployed
- * 2026-09-07; every live record now serves `levels` directly, so this
- * path is a defensive fallback, not the common case, as of this PR).
+ * a kinetics record's own served `levels` is absent (an older API
+ * generation; a defensive fallback, not the common case).
  *
- * The backend's own finding (PR 398's post-review commit) is the reason
- * this is NOT a simple "look up `ts_opt_calculation_ref`" lookup:
+ * This is NOT a simple "look up `ts_opt_calculation_ref`" lookup:
  * `_KINETICS_ROLE_COMPATIBILITY` (`app/services/kinetics_resolution.py`)
  * permits no kinetics role that accepts an opt-typed calculation at all,
  * so `provenance.ts_opt_calculation_ref` is structurally `null` on every
@@ -89,8 +86,8 @@ export interface KineticsLevelsFallbackResult {
  * `energy` prefers the cited `ts_sp_calculation_ref`'s own level; when
  * that calculation is not among `calculationsByRef` (the live "resolver
  * disagreement" case: a kinetics record's own sp citation naming a
- * calculation this reaction's TS graph does not otherwise carry --
- * verified live, plan §7), this falls back to
+ * calculation this reaction's TS graph does not otherwise carry),
+ * this falls back to
  * `provenance.primary_level_of_theory` as a best-effort substitute and
  * says so via `energyFallbackNote` -- the caller must render that note
  * alongside the value; presenting the substituted level as though it
