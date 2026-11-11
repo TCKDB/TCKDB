@@ -2,6 +2,7 @@
 export const ROUTE_TITLE_KINDS = {
     "/species/:ref": "Molecule",
     "/species/:ref/compare": "Compare",
+    "/reactions/:ref/compare": "Compare",
     "/species-entries/:ref": "Molecule",
     "/conformer-groups/:ref": "Conformer",
     "/conformer-observations/:ref": "Conformer observation",

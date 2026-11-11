@@ -4,10 +4,18 @@ import { statmechRow, thermoRow, type NumberRow, type NumberValue } from "./entr
 import { formatQuantity } from "./quantityFormat"
 
 /** A cell is a recorded value, or the words saying why there is none. Nothing is ever filled in from another record. */
-export type CompareCell = { kind: "value"; value: NumberValue } | { kind: "absent"; words: string }
+export type CompareCell = { kind: "value"; value: NumberValue; /** A line under the value, for what it does not include. */ note?: string } | { kind: "absent"; words: string }
 
 /** An `exact` row is a setting that is either the same or not; a `continuous` row is a measured or computed number, never marked. */
-export type CompareRow = { key: string; label: string; unit: string | null; compare: "exact" | "continuous"; cells: CompareCell[] }
+export type CompareRow = {
+    key: string
+    label: string
+    unit: string | null
+    compare: "exact" | "continuous"
+    cells: CompareCell[]
+    /** Per group, the difference its own two records give for this row; used only where a group closes with a difference column. */
+    deltas?: (CompareCell | null)[]
+}
 
 /** One record of the molecule as a column: its own row of values, and the record behind it for heat capacity. */
 export type CompareColumn = {

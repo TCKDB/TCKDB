@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { arrheniusTermK, computeKineticsTable, convertKineticsTableRows, formatArrheniusValue, log10Text, scientificText, TABLE_POINT_COUNT } from "./kineticsTable"
+import { arrheniusTermK, computeKineticsTable, kineticsAt, convertKineticsTableRows, formatArrheniusValue, log10Text, scientificText, TABLE_POINT_COUNT } from "./kineticsTable"
 
 // A=3025.44 cm³ mol⁻¹ s⁻¹, n=3.11242, Ea=39.9711 kJ/mol, 300–3000 K --
 // `kin_spkzatwjlvmmnja3i5im4fl7hq`'s own live values, independently
@@ -186,5 +186,26 @@ describe("formatArrheniusValue", () => {
         expect(formatArrheniusValue(10000)).toBe(scientificText(10000)) // >= 1e4 -- scientific
         expect(formatArrheniusValue(0.01)).toBe("0.01") // exactly 1e-2 -- plain (not < 1e-2)
         expect(formatArrheniusValue(0.0099)).toBe(scientificText(0.0099)) // < 1e-2 -- scientific
+    })
+})
+
+describe("kineticsAt", () => {
+    const base = { model_kind: "modified_arrhenius", plog_entries: null, chebyshev: null, falloff: null, is_third_body: false, multi_arrhenius: null }
+
+    it("computes k from the record's own A, n, Ea and T0", () => {
+        const record = { ...base, parameters: { A: 1e10, n: 2, Ea_kj_mol: 10, T0_k: 298 } }
+        expect(kineticsAt(record, 600)).toBeCloseTo(arrheniusTermK(1e10, 2, 10, 600, 298), 6)
+        expect(kineticsAt(record, 600)).not.toBeCloseTo(arrheniusTermK(1e10, 2, 10, 600, 1), 0)
+    })
+
+    it("sums the terms of a multi-Arrhenius record", () => {
+        const record = { ...base, model_kind: "multi_arrhenius", parameters: {}, multi_arrhenius: [{ entry_index: 0, A: 1e9, n: 0, Ea_kj_mol: 5 }, { entry_index: 1, A: 2e9, n: 1, Ea_kj_mol: 8 }] }
+        expect(kineticsAt(record, 500)).toBeCloseTo(arrheniusTermK(1e9, 0, 5, 500, 1) + arrheniusTermK(2e9, 1, 8, 500, 1), 6)
+    })
+
+    it("gives no k for a falloff kind even when its falloff block is missing, nor for a third-body record", () => {
+        expect(kineticsAt({ ...base, model_kind: "troe", parameters: { A: 1e10, n: 0, Ea_kj_mol: 1 } }, 500)).toBeNull()
+        expect(kineticsAt({ ...base, is_third_body: true, parameters: { A: 1e10, n: 0, Ea_kj_mol: 1 } }, 500)).toBeNull()
+        expect(kineticsAt({ ...base, model_kind: "plog", parameters: { A: 1e10, n: 0, Ea_kj_mol: 1 } }, 500)).toBeNull()
     })
 })

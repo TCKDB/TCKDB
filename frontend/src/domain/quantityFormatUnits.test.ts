@@ -40,6 +40,7 @@ const ALLOWED_UNITS: ReadonlySet<string> = new Set([
 const UNITLESS_SPECS: ReadonlySet<string> = new Set([
     "statmech_frequency_scale_factor", // dimensionless
     "kinetics_n", // dimensionless temperature exponent
+    "kinetics_k", // a computed k(T); its unit is the record's A_units, supplied by the caller
     "kinetics_a", // unit is per record (A_units), supplied by the caller
     "transport_rotational_relaxation", // dimensionless collision number
 ])

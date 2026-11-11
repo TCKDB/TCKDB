@@ -158,7 +158,7 @@ const kineticsProvenanceSchema = z.object({
     network_kinetics_ref: z.string().nullable().optional(),
 }).passthrough()
 
-const kineticsRecordSchema = z.object({
+export const kineticsRecordSchema = z.object({
     kinetics_ref: z.string(),
     scientific_origin: z.string(),
     model_kind: z.string(),
@@ -167,6 +167,14 @@ const kineticsRecordSchema = z.object({
     parameters: arrheniusParametersSchema,
     multi_arrhenius: z.array(multiArrheniusTermSchema).nullable().optional(),
     tunneling_model: z.string().nullable().optional(),
+    pressure_context: z.string().nullable().optional(),
+    pressure_bar: z.number().nullable().optional(),
+    reaction_path_degeneracy: z.object({
+        value: z.number(),
+        convention: z.string(),
+        reported_rate_coefficient_includes_degeneracy: z.boolean().nullable().optional(),
+        apply_to_rate_coefficient: z.boolean().nullable().optional(),
+    }).passthrough().nullable().optional(),
     is_third_body: z.boolean().optional().default(false),
     plog_entries: z.array(z.unknown()).nullable().optional(),
     chebyshev: z.unknown().nullable().optional(),

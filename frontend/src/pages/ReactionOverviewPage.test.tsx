@@ -99,7 +99,7 @@ describe("ReactionOverviewPage -- formulas, with structure only where formulas a
 })
 
 describe("ReactionOverviewPage -- the header of the page that lists every version", () => {
-    it("says it lists all deposited versions, shows breadcrumbs and a lede, and has no compare link", async () => {
+    it("says it lists all deposited versions, shows breadcrumbs and a lede, and offers the compare link", async () => {
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
         page(REACTION_REF)
         await screen.findByRole("heading", { level: 1, name: /H4N2/ })
@@ -107,8 +107,30 @@ describe("ReactionOverviewPage -- the header of the page that lists every versio
         const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" })
         expect(crumbs.querySelector('a[href="/reactions"]')).toHaveTextContent("Reactions")
         expect(document.querySelector(".record-lede")).toHaveTextContent("This reaction has 2 deposited versions. Each is a separate record with its own numbers, and none is chosen for you.")
-        expect(screen.queryByRole("link", { name: /compare/i })).not.toBeInTheDocument()
+        expect(screen.getByRole("link", { name: "Compare these values" })).toHaveAttribute("href", `/reactions/${REACTION_REF}/compare`)
         expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
+    })
+})
+
+describe("ReactionOverviewPage -- the compare link threshold", () => {
+    const counts = (first: number, second: number) => {
+        const response = searchResponse()
+        response.records[0].availability.kinetics_count = first
+        response.records[1].availability.kinetics_count = second
+        return response
+    }
+
+    it.each([[0, 0], [0, 1], [1, 0]])("offers no compare link for %i + %i rate records", async (first, second) => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(counts(first, second))))
+        page(REACTION_REF)
+        await screen.findByRole("heading", { level: 1, name: /H4N2/ })
+        expect(screen.queryByRole("link", { name: "Compare these values" })).not.toBeInTheDocument()
+    })
+
+    it.each([[1, 1], [0, 2], [2, 0]])("offers the compare link for %i + %i rate records", async (first, second) => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(counts(first, second))))
+        page(REACTION_REF)
+        expect(await screen.findByRole("link", { name: "Compare these values" })).toBeInTheDocument()
     })
 })
 

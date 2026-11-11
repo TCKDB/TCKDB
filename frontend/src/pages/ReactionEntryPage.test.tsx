@@ -1385,3 +1385,19 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
         expect(stages.querySelectorAll("li")).toHaveLength(0)
     })
 })
+
+describe("ReactionEntryPage -- the compare link", () => {
+    it("offers the reaction's compare page from two rate records", async () => {
+        const one = (mockFull().kinetics as Array<Record<string, unknown>>)[0]
+        handleFull(mockFull({ kinetics: [one, { ...one, kinetics_ref: "kin_test2" }] }))
+        page()
+        expect(await screen.findByRole("link", { name: "Compare these values" })).toHaveAttribute("href", "/reactions/rxn_test1/compare")
+    })
+
+    it("offers no compare link from one rate record", async () => {
+        handleFull(mockFull())
+        page()
+        await screen.findByRole("heading", { name: "Numbers for this entry" })
+        expect(screen.queryByRole("link", { name: "Compare these values" })).not.toBeInTheDocument()
+    })
+})
