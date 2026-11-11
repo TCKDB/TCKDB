@@ -299,7 +299,7 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
             (species-entry.css was out of scope for the PR that added it);
             this page's stylesheet is in scope now, so the fix moved with
             the markup rather than patching a stray sibling `<p>` in place. */}
-        <EntryNumbers entryRef={entryRef} entryPath={entryPath} conformerQuery={conformerQuery} conformers={conformers} />
+        <EntryNumbers entryRef={entryRef} entryPath={entryPath} conformerQuery={conformerQuery} conformers={conformers} compareTo={`/species/${entry.speciesRef}/compare`} />
         <OtherVersions entry={entry} />
         {hasAnyEvidence(entry) ? (
             <>

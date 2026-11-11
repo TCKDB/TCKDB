@@ -209,6 +209,7 @@ export const QUANTITY_SPECS = {
     thermo_h298_uncertainty_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
     thermo_s298_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
     thermo_s298_uncertainty_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
+    thermo_cp_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
     statmech_frequency_scale_factor: { kind: "fixed", digits: 4, unit: null },
     transport_sigma_angstrom: { kind: "fixed", digits: 3, unit: "Å" },
     transport_epsilon_over_k_k: { kind: "fixed", digits: 1, unit: "K" },

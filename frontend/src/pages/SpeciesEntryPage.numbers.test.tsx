@@ -220,6 +220,18 @@ describe("molecule page: numbers for this entry", () => {
         expect(within(region).getByText("−12.34")).toBeVisible()
     })
 
+    it("offers the molecule's compare page only when the entry holds two or more records", async () => {
+        const region = await open()
+        await waitFor(() => expect(rowRefs(region).length).toBeGreaterThan(1))
+        expect(within(region).getByRole("link", { name: "Compare these values" })).toHaveAttribute("href", `/species/${speciesRef}/compare`)
+    })
+
+    it("leaves the compare link out when the entry holds a single record", async () => {
+        const single = await open({ thermoRecords: [records()[0]], statmechRecords: [] })
+        await waitFor(() => expect(rowRefs(single)).toEqual(["thermo-thm_a1"]))
+        expect(within(single).queryByRole("link", { name: "Compare these values" })).not.toBeInTheDocument()
+    })
+
     it("states the order the archive served once, naming only lists that have rows, and says so when it stated none", async () => {
         await open()
         const note = document.querySelector(".entry-numbers .order-note") as HTMLElement

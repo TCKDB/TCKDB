@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Compare a molecule's values (Unreleased)
+
+- **Behaviour:** `/species/:speciesRef/compare` puts every thermochemistry and statistical mechanics record of a molecule side by side, one column per record headed by its version, levels of theory, programs, review status and a link. Rows give enthalpy of formation, entropy, heat capacity at temperatures where two or more records have a deposited point (inside each record's own range; otherwise "Not recorded" or "Outside its range") and the statistical mechanics scalars, with uncertainties and a unit column. A cell no other recorded cell in its row matches is marked "differs"; the legend says this is not a verdict. Columns follow the archive's order and nothing is sorted by value. The same records are also listed one per row in tables the reader can sort; the note then says the table is sorted by them and is not a recommendation. The molecule page and a version's numbers section link to it when two or more records are listed.
+- **Schema and migration:** none. No new environment variable.
+
 ## Site polish: map labels, shapes note, search order, linked records (Unreleased)
 
 - **Behaviour:** every line of a relationship map label wraps inside its box; a version's reference is drawn shortened (at least 13 characters, unique among the drawn nodes, ending in an ellipsis) and is whole in the link name, the node title and the "Connected records" list. The molecule page's "Its 3D shapes" section states its order once (the archive's order across pages and the card order within a page) and says "shape" where it said "conformer basin". The site search comes after the theme control and Sign in, both in Tab order and as drawn. A link to a thermochemistry, statistical mechanics or transport record on a later page opens that tab on the page holding the record, or says the record is not in the list. The theme control is one Tab stop and moves with the arrow keys.

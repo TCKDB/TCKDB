@@ -1,5 +1,6 @@
 import { useMemo } from "react"
 import { Link } from "react-router-dom"
+import "../data-table.css"
 import "../entry-numbers.css"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel } from "../domain/conformerEvidence"
@@ -12,12 +13,14 @@ import { OrderNote } from "./OrderNote"
 import { ListNotes, NumbersTable, WalkStatus } from "./NumbersTable"
 
 /** Every thermo, statmech and transport record of this entry with its values, levels, programs and review status. */
-export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers, compact = false }: {
+export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers, compareTo, compact = false }: {
     entryRef: string
     entryPath: string
     /** `?conformer=...` of the shape on screen, kept on same-page links so a link does not change the selection. */
     conformerQuery: string
     conformers: ConformerProjection[]
+    /** The molecule's compare page; offered when this entry holds two or more thermochemistry or statistical mechanics records. */
+    compareTo?: string
     /** The short form for another page: a smaller heading, no grouping control, the first records only. */
     compact?: boolean
 }) {
@@ -54,6 +57,9 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers, 
                         .filter((kind) => data[kind].records.length > 0)
                         .map((kind) => ({ kind, sort: data[kind].sort })))}
                     />
+                    {!compact && compareTo && data.thermo.records.length + data.statmech.records.length >= 2 && (
+                        <p><Link className="compare-link" to={compareTo}>Compare these values</Link></p>
+                    )}
                     {!compact && <ListNotes
                         lists={[["thermochemistry", data.thermo], ["statistical mechanics", data.statmech], ["transport", data.transport]]}
                         rest={(label) => `The ${label.charAt(0).toUpperCase()}${label.slice(1)} tab below pages through all of them.`}
