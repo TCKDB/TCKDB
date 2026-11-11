@@ -13,8 +13,7 @@
  *
  * Two full, independent layouts -- `computeWideLayout` (parents/children
  * spread horizontally either side of the centre) and `computeNarrowLayout`
- * (everything in one vertical column, edges routed through a side lane
- * gutter). `CalculationDependencyGraph.tsx` picks between them at RENDER
+ * (everything in one vertical column, edges hung off a spine on its left). `CalculationDependencyGraph.tsx` picks between them at RENDER
  * TIME, from a real measured container width (`ResizeObserver`) compared
  * against `computeWideLayout(...).width` -- never a fixed breakpoint and
  * never two SVGs left in the DOM for CSS to choose between. A fixed
@@ -165,10 +164,8 @@ const CENTRE_REF_LINE_H = 24
 const CENTRE_PAD_BOTTOM = 12
 // Exported so `CalculationDependencyGraph.tsx` can vertically CENTRE the
 // pill+ref content block inside a centre node taller than this base
-// height (the narrow layout grows the centre node past `CENTRE_H` to fit
-// staggered lane entries -- see `centreHeightFor` -- but the content
-// itself never grows, so it has to be re-centred in the extra room
-// rather than staying pinned to the top).
+// height; the content itself never grows, so it is re-centred in the
+// extra room rather than pinned to the top.
 export const CENTRE_H = CENTRE_PAD_TOP + PILL_H + CENTRE_PILL_GAP + CENTRE_REF_LINE_H + CENTRE_PAD_BOTTOM
 
 // The centre node's optional SUBJECT row -- "an optimisation OF WHAT"
@@ -260,10 +257,8 @@ export interface LayoutEdge {
     labelHeight: number
     /** Which end of the label box the text hugs; the end nearest its own line. Default: centred. */
     labelAnchor?: "start" | "end"
-    /** Narrow layout only: the lane `x` this edge's stub and label both
-     * anchor to (`labelX - labelWidth / 2 === laneX`, checked directly by
-     * `dependencyGraphLayout.test.ts`). Undefined for a wide-layout edge,
-     * which has no lane. */
+    /** Narrow layout only: the `x` of the spine this edge hangs off; its label starts to the right of it.
+     * Undefined for a wide-layout edge. */
     laneX?: number
 }
 
@@ -290,6 +285,8 @@ const WIDE_GAP_X_MIN = 24
 const WIDE_MARGIN = 24
 const WIDE_BAND_STEP = 26
 // Extra drop length per edge, so each label gets its own slot beside a drop.
+// Widening stops here; past it a label that still cannot fit keeps its first candidate.
+const WIDE_MAX_EXTRA_MARGIN = 4000
 const WIDE_LABEL_SLOT = LABEL_H + 10
 
 function layoutWideRow(
@@ -455,12 +452,8 @@ export function computeWideLayout(model: DependencyGraphModel, extraMargin = 0):
 
     const parentEdges = edges.filter((e) => e.tier === "parent")
     const childEdges = edges.filter((e) => e.tier === "child")
-    // The gap between sibling boxes must be wide enough that a label
-    // CENTRED ON ITS OWN BOX (see below) cannot reach a neighbour's box
-    // OR a neighbour's label -- sized off the widest label in the tier,
-    // not a flat constant, since a long label
-    // ("continued by the IRC follow-up", 240px) is wider than this
-    // app's own minimum node box (140px).
+    // Sibling gap: sized off the widest label in the tier, since a long label
+    // ("continued by the IRC follow-up", 240px) is wider than the minimum node box (140px).
     const maxParentLabelW = Math.max(0, ...parentEdges.map((e) => smallTextBoxWidth(e.label)))
     const maxChildLabelW = Math.max(0, ...childEdges.map((e) => smallTextBoxWidth(e.label)))
     const parentGapX = Math.max(WIDE_GAP_X_MIN, maxParentLabelW / 2 + 16)
@@ -554,9 +547,7 @@ export function computeWideLayout(model: DependencyGraphModel, extraMargin = 0):
             const width = smallTextBoxWidth(edge.label)
             edgesOut.push({
                 role: edge.role, label: edge.label, fromRef: edge.otherRef, toRef: ownRef, path,
-                // Label anchored at the SIBLING end of the band (its own
-                // box's x), not the midpoint toward centreX -- see the
-                // module docstring's "Band ordering" section for why.
+                // Placeholder; `placeWideLabels` sets the real position.
                 labelX: box.x, labelY: bandY, labelWidth: width, labelHeight: LABEL_H,
             })
         } else if (edge.tier === "child" && childRow) {
@@ -573,8 +564,8 @@ export function computeWideLayout(model: DependencyGraphModel, extraMargin = 0):
     }
 
     // A lone sibling under the centre leaves no room beside its drop; widen only as far as needed.
-    if (!placeWideLabels(edgesOut, nodes, ownRef, svgWidth) && extraMargin < 400) {
-        return computeWideLayout(model, extraMargin + 12)
+    if (!placeWideLabels(edgesOut, nodes, ownRef, svgWidth) && extraMargin < WIDE_MAX_EXTRA_MARGIN) {
+        return computeWideLayout(model, extraMargin + 24)
     }
     return { width: svgWidth, height: svgHeight, nodes, edges: edgesOut }
 }
@@ -619,7 +610,7 @@ export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
     })
     y += centreH + NARROW_GAP_Y
     childRefs.forEach((ref) => addSat(ref, "child"))
-    const svgHeight = (childRefs.length > 0 ? y - NARROW_GAP_Y : y - NARROW_GAP_Y) + NARROW_MARGIN
+    const svgHeight = (y - NARROW_GAP_Y) + NARROW_MARGIN
     const centreBottom = centreTop + centreH
 
     const edgesOut: LayoutEdge[] = []

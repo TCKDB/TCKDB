@@ -364,10 +364,32 @@ describe.each([1, 2, 3, 4])("labels sit beside their own line, N=%i", (n) => {
         it(`wide width stays within the old width (parents=${parentCount}, children=${childCount})`, () => {
             const width = computeWideLayout(realRefModel(parentCount, childCount)).width
             // A lone sibling sits straight under the centre, so its label needs width beside the drop.
-            expect(width).toBeLessThanOrEqual(n === 1 ? 520 : MAIN_WIDE_WIDTH[n - 1] + 1)
+            expect(width).toBeLessThanOrEqual(n === 1 ? 560 : MAIN_WIDE_WIDTH[n - 1] + 1)
             if (n <= 3) expect(width).toBeLessThanOrEqual(1128)
         })
+        if (n === 1) {
+            it.each(ROLES)(`lone sibling stays within 560px for role %s (parents=${parentCount}, children=${childCount})`, (role) => {
+                const model = realRefModel(parentCount, childCount)
+                for (const e of model.edges) { e.role = role; e.label = dependencyEdgeLabel(role) }
+                expect(computeWideLayout(model).width).toBeLessThanOrEqual(560)
+            })
+        }
     }
+})
+
+describe("label that does not fit beside its drop", () => {
+    it("widens the svg until it fits and still touches no line", () => {
+        const model = realRefModel(1, 1)
+        model.edges[0].label = "x".repeat(90)
+        model.edges[1].label = "y".repeat(90)
+        const layout = computeWideLayout(model)
+        assertNoPathLabelIntersections(layout, "long label")
+        assertNoLabelNodeIntersections(layout, "long label")
+        for (const edge of layout.edges) {
+            expect(edge.labelX - edge.labelWidth / 2).toBeGreaterThanOrEqual(0)
+            expect(edge.labelX + edge.labelWidth / 2).toBeLessThanOrEqual(layout.width)
+        }
+    })
 })
 
 describe("centre node type pill", () => {

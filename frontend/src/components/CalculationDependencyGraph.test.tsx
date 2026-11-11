@@ -548,3 +548,22 @@ describe("CalculationDependencyGraph — responsive layout via ResizeObserver", 
         ).toBeLessThanOrEqual(1)
     })
 })
+
+describe("CalculationDependencyGraph — label anchor", () => {
+    it("hugs the end of the label box nearest its own line (text-anchor and x)", () => {
+        const deps: CalculationDependency[] = ["freq_on", "irc_start", "single_point_on"].map((role, i) => ({
+            role, direction: "parent", parent_calculation_ref: "calc_own_ref", child_calculation_ref: `calc_child_${i}`,
+        }))
+        renderGraph(deps)
+        const layout = computeWideLayout(buildDependencyGraphModel("calc_own_ref", "opt", deps))
+        const anchors = new Set(layout.edges.map((e) => e.labelAnchor))
+        expect(anchors).toContain("end")
+        expect(anchors).toContain("start")
+        for (const edge of layout.edges) {
+            const text = screen.getByTestId(`dep-edge-label-${edge.fromRef}-${edge.toRef}-${edge.role}`).querySelector("text")!
+            const expectedX = edge.labelAnchor === "end" ? edge.labelX + edge.labelWidth / 2 : edge.labelX - edge.labelWidth / 2
+            expect(text.getAttribute("text-anchor")).toBe(edge.labelAnchor)
+            expect(Number(text.getAttribute("x"))).toBeCloseTo(expectedX)
+        }
+    })
+})
