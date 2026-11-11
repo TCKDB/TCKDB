@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 44 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 371 | `backend/app/api/code_catalogue.py` |
-| **total** | **712** | |
+| Refusal codes a caller can receive | 372 | `backend/app/api/code_catalogue.py` |
+| **total** | **713** | |
 
 ## How a record is named
 
@@ -813,13 +813,14 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `network_export_body_too_large` | a relationship — read `context` |
 | `request_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (301 codes)
+### HTTP 422 (302 codes)
 
 | Code | Names |
 | --- | --- |
 | `ambiguous_conformer_selection_locator` | a relationship — read `context` |
 | `applied_energy_correction_source_calculation_owner_mismatch` | a relationship — read `context` |
 | `applied_energy_correction_source_key_undeclared` | a thing |
+| `applied_energy_correction_value_conflict` | a relationship — read `context` |
 | `arrhenius_a_units_molecularity_mismatch` | a relationship — read `context` |
 | `artifact_empty` | a thing |
 | `artifact_encoded_payload_too_large` | a relationship — read `context` |
