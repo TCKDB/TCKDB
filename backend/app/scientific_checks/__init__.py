@@ -1,40 +1,15 @@
-"""Self-declaration for TCKDB's *scientific* checks.
+"""Self-declaration for TCKDB's scientific checks.
 
-TCKDB runs roughly 326 Pydantic validators and 225 database check
-constraints. Almost all of them enforce plumbing — string lengths, enum
-membership, foreign-key existence, ``multiplicity >= 1``. A small
-minority enforce **theoretical chemistry**: elemental balance, charge
-conservation, the imaginary-mode count that defines a saddle point, the
-bijectivity of an atom map. Those are the ones a referee could disagree
-with, and they are the ones this package makes enumerable.
-
-Why a registry has to exist at all
-----------------------------------
-Nothing in the code distinguishes the two populations. A generator
-cannot tell :func:`validate_reaction_charge_conservation` from
-``max_length=64`` by inspection, and the machine-readable codes the
-scientific checks emit — ``reaction_mass_balance_failed`` and the rest —
-travel as attributes of the exception that carries the refusal, rather
-than inside f-string message bodies, so they are discoverable and
-reportable to a consumer. A hand-written audit of the Pydantic tier alone
-would omit every conservation law in the database.
-
-The inclusion test
-------------------
-**Could this check be wrong in an interesting way?** Elemental balance
-is a position a referee could argue with; ``max_length=64`` is not, and
-``multiplicity >= 1`` is arithmetic rather than chemistry. Membership in
-the register *is* the claim that a check encodes a scientific decision,
-so there is no "paper-worthy" flag — adding an entry that fails the test
-dilutes every other entry.
+A scientific check enforces chemistry (elemental balance, charge conservation,
+the imaginary-mode count of a saddle point, the bijectivity of an atom map)
+rather than plumbing such as string lengths or enum membership. Each one is
+declared as a :class:`ScientificCheck` and collected into the register
+rendered at ``docs/guides/scientific_check_register.md``.
 
 How to add one
 --------------
-Construct a :class:`ScientificCheck` at module level, immediately below
-the check it describes::
-
-    def validate_reaction_elemental_balance(...) -> None:
-        ...
+Construct a :class:`ScientificCheck` at module level, immediately below the
+check it describes::
 
     CHECK_REACTION_ELEMENTAL_BALANCE = ScientificCheck(
         code="reaction_mass_balance_failed",
@@ -42,70 +17,39 @@ the check it describes::
                 "the same number of atoms of every element.",
         tier=CheckTier.block,
         channel=CodeChannel.error_envelope,
-        tier_rationale="...",
-        adr="0008",
         enforced_by=(PythonCheck(validate_reaction_elemental_balance),),
-        escape_hatch="...",
+        escape_hatch="Declare a participant with ``molecule_kind: pseudo``.",
     )
 
-A check that declares a code must raise it, not spell it — the code goes
-to :class:`~tckdb_schemas.coded_error.CodedValidationError` as its first
-argument, and ``message_prefix=False`` where an existing message must not
-move. A code written only into the sentence reaches no client.
+A check that declares a code must raise it: the code goes to
+:class:`~tckdb_schemas.coded_error.CodedValidationError` as its first
+argument. Then add the module to ``DECLARING_MODULES`` in :mod:`.declarations`
+and regenerate the register with
+``backend/scripts/generate_scientific_check_register.py``.
 
-then add the module to ``_DECLARING_MODULES`` in :mod:`.declarations`
-(a guard test fails if you forget). Regenerate the register document
-with ``backend/scripts/generate_scientific_check_register.py``.
-
-Why a plain dataclass rather than a decorator
----------------------------------------------
-A decorator sits in the call path of a check whose behaviour must not
-change. A frozen dataclass constructed beside the function is inert: it
-is data, it wraps nothing, and it cannot alter a signature, a traceback
-or a hot loop. It also works for the two populations a decorator cannot
-reach — a PostgreSQL constraint has no Python object to decorate, and
-``tckdb_schemas`` is forbidden by
-``schemas/python/tckdb-schemas/tests/test_import_boundaries.py`` from
-importing anything under ``app``, so a wire-schema check cannot
-reference a backend decorator. Those two are declared in
-:mod:`.declarations` instead, and say so.
-
-There is deliberately no import-time side effect. Collection walks the
-declaring modules' namespaces (see :func:`collect_registered_checks`),
-so importing a service module registers nothing, mutates no global, and
-cannot fail in a way that takes a check down with it.
+A declaration is a frozen dataclass: it wraps nothing and registers nothing at
+import time. :func:`collect_registered_checks` walks the declaring modules'
+namespaces. PostgreSQL constraints and wire-schema checks, which have no
+backend object to sit beside, are declared in :mod:`.declarations`.
 
 What the drift guard enforces
 -----------------------------
-``backend/tests/db/test_scientific_check_register.py``:
+``backend/tests/db/test_scientific_check_register.py`` checks that:
 
-* every :class:`PythonCheck` resolves to a real callable (a rename or a
-  deletion breaks the import, so CI goes red before review does);
-* every :class:`DatabaseConstraint` exists in the live PostgreSQL
-  schema, queried from ``pg_constraint`` / ``pg_trigger`` rather than
-  trusted as a string;
-* every code declared as ``emitted=True`` appears verbatim in the
-  source of the function said to emit it;
-* every entry declares a :class:`CodeChannel`, and a code and a channel
-  imply each other — a blocking check enforced from Python must reach
-  the error envelope, because a refusal a client cannot identify is a
-  refusal it has to string-match English to understand;
-* every ``error_envelope`` code is passed as the *first argument* of a
-  ``CodedValidationError`` in a module that defines an enforcing
-  function, which is what separates a code the module reports from a
-  code it merely mentions inside a sentence;
-* every ``error_envelope`` code is named by an end-to-end test that
-  asserts it against a real HTTP response body, because none of the
-  above proves it survives Pydantic, the exception handler and the JSON
-  encoder — and that path is exactly where the codes were being lost;
-* every file in the repository containing ``ScientificCheck(`` is
-  listed in ``_DECLARING_MODULES``;
-* every :class:`ProvenanceThreshold` resolves to a real callable, and
-  every canonical parameter key it reads exists in
-  ``calculation_parameter_vocab`` in the live schema — without which the
-  threshold would resolve to its fallback forever while the register
-  went on claiming it keys on that provenance;
-* codes are unique across the register.
+* every :class:`PythonCheck` resolves to a real callable;
+* every :class:`DatabaseConstraint` exists in the live PostgreSQL schema;
+* every code declared as ``emitted=True`` appears in the source of the module
+  that defines the enforcing function;
+* every entry declares a :class:`CodeChannel`, and a code and a channel imply
+  each other;
+* every ``error_envelope`` code is the first argument of a
+  ``CodedValidationError`` and is asserted by an end-to-end test;
+* every file containing ``ScientificCheck(`` is listed in
+  ``DECLARING_MODULES``;
+* every :class:`ProvenanceThreshold` resolves to a real callable and reads
+  parameter keys that exist in ``calculation_parameter_vocab``;
+* codes are unique across the register, and the printed entry numbers do not
+  change.
 """
 
 from __future__ import annotations
@@ -122,98 +66,59 @@ class CheckTier(str, Enum):
     """Consequence of a check firing.
 
     ``block`` and ``warn`` carry the same string values as
-    :class:`tckdb_schemas.stationary_point.ValidationTier`, which is the
-    runtime tier type for that module's findings; they are kept as
-    separate enums because this one is documentation and that one is
-    control flow, and the register must be able to name tiers that no
-    ``StationaryPointFinding`` can have.
+    :class:`tckdb_schemas.stationary_point.ValidationTier`; this enum is
+    documentation, that one is control flow.
     """
 
-    #: Refuse the payload. Reserved for definitions and
-    #: contracts: a check may block only if no correct calculation could
-    #: produce the record it refuses.
+    #: Refuse the payload. A check may block only if no correct calculation
+    #: could produce the record it refuses.
     block = "block"
 
     #: Accept the payload and record a machine-readable
-    #: :class:`~tckdb_schemas.upload_warning.UploadWarning`. The tier for
-    #: expectations and for absences.
+    #: :class:`~tckdb_schemas.upload_warning.UploadWarning`.
     warn = "warn"
 
-    #: Labels a stored record at read time without refusing anything —
-    #: a :class:`~app.services.trust.models.HardFailReason` in the trust
-    #: evaluator. A position enforced solely at read
-    #: time needs an honest tier to declare. It is not ``structural``: the
-    #: record can be represented, it is simply labelled once TCKDB knows
-    #: something about it. Reserved for facts TCKDB observes about a
-    #: record *after* it was accepted, where refusing at upload was never
-    #: possible because the fact did not exist yet.
+    #: Label a stored record at read time without refusing anything, as a
+    #: :class:`~app.services.trust.models.HardFailReason` in the trust
+    #: evaluator.
     label = "label"
 
-    #: Referred to ``machine_review`` under a versioned rubric. Every
-    #: cross-check against external reference data is here.
+    #: Refer the record to ``machine_review``. Every cross-check against
+    #: external reference data is here.
     review = "review"
 
-    #: Not a consequence tier. The position is enforced by the
-    #: *shape* of the schema — a NOT NULL discriminator, a check
-    #: constraint, a trigger — so there is no runtime check to place in a
-    #: tier, and a record violating it cannot be represented at all.
+    #: Enforced by the shape of the schema (a NOT NULL discriminator, a check
+    #: constraint, a trigger), so a violating record cannot be represented.
     structural = "structural"
 
 
 class CodeChannel(str, Enum):
-    """Where a check's code actually surfaces to a client.
+    """Where a check's code surfaces to a client."""
 
-    ``code`` alone was never enough. An entry could name a code that
-    nothing carried anywhere a consumer could read it, and for eleven of
-    the register's entries — and, more quietly, for *every* blocking
-    chemistry check — that is exactly what had happened: the code was
-    spelled inside an English sentence, ``"Reaction is not
-    element-balanced (reaction_mass_balance_failed)."``, and the response
-    body's own ``code`` field said ``validation_error``. Reading the
-    register you would have concluded a client could branch on mass
-    balance. It could not.
-
-    Naming the channel is what makes that checkable. The guards in
-    ``backend/tests/db/test_scientific_check_register.py`` hold each
-    channel to its own obligation, so "declared but unreachable" fails CI
-    instead of being found by reading.
-    """
-
-    #: The ``code`` field of the 422 error envelope, carried there by a
-    #: :class:`~tckdb_schemas.coded_error.CodedValidationError`. Guarded
-    #: twice: the enforcing module must construct the coded error with
-    #: this code, and an end-to-end test must assert the code arrives in
-    #: an HTTP response body.
+    #: The ``code`` field of the 422 error envelope, carried by a
+    #: :class:`~tckdb_schemas.coded_error.CodedValidationError`. The enforcing
+    #: module must construct the coded error with this code, and an
+    #: end-to-end test must assert the code arrives in an HTTP response body.
     error_envelope = "error_envelope"
 
     #: The ``code`` field of an
-    #: :class:`~tckdb_schemas.upload_warning.UploadWarning` returned
-    #: alongside a *successful* upload. The warn tier's surface; it has
-    #: been machine-readable since the class was written. The deposit also
-    #: stores each warning beside the record it concerns (``deposit_warning``),
-    #: so the same code reaches a later reader, in TCKDB's own wording, in
-    #: ``record_warnings`` (or ``deposit_warnings``) on that record's detail reads and
-    #: on the per-parent kinetics and thermo reads.
+    #: :class:`~tckdb_schemas.upload_warning.UploadWarning` returned alongside a
+    #: successful upload. The deposit also stores each warning beside the
+    #: record it concerns (``deposit_warning``), so the same code reaches a
+    #: later reader in ``record_warnings`` (or ``deposit_warnings``) on that
+    #: record's detail reads and on the per-parent kinetics and thermo reads.
     upload_warning = "upload_warning"
 
-    #: A read-time label — a ``HardFailReason`` from the trust evaluator.
-    #: Reaches a consumer through the trust payload of a record, not
-    #: through any request that could have been refused.
+    #: A read-time label, a ``HardFailReason`` from the trust evaluator,
+    #: carried in the trust payload of a record.
     trust_label = "trust_label"
 
     #: Enforced only by PostgreSQL, so the refusal arrives through the
-    #: integrity handler as a 409 rather than a 422. A constraint is a
-    #: guarantee *stronger* than a Python check, since no write path can
-    #: bypass it. A constraint that declares
-    #: :attr:`DatabaseConstraint.rejection_code` is named: the handler
-    #: keys on ``diag.constraint_name`` and reports the scientific code.
-    #: The channel still exists to say *which status* carries it, because
-    #: 409-with-a-code and 422-with-a-code are different retry advice.
+    #: integrity handler as a 409 rather than a 422. A constraint that declares
+    #: :attr:`DatabaseConstraint.rejection_code` is reported under that code.
     database_constraint = "database_constraint"
 
-    #: No machine-readable code reaches anybody. Recorded rather than
-    #: papered over: an entry declaring no code must also declare that
-    #: nothing carries one.
+    #: No machine-readable code reaches anybody.
     none = "none"
 
 
@@ -226,45 +131,20 @@ class CodeChannel(str, Enum):
 class PythonCheck:
     """A check enforced by Python code, identified by the function object.
 
-    Holding the callable rather than a dotted string is the whole point:
-    renaming or deleting the function breaks the import of the declaring
-    module, so drift is caught at collection time instead of surviving
-    as a stale string in a document.
+    Holding the callable rather than a dotted string means renaming or
+    deleting the function breaks the import of the declaring module.
 
     :param func: The function that performs the check.
-    :param note: Optional scope qualifier — which upload paths reach it,
-        what it deliberately does not cover.
     """
 
     func: Callable[..., object]
-    note: str | None = None
 
     @property
     def location(self) -> str:
         """``path/to/module.py::qualified_name``, resolved from the live object.
 
-        A qualified name rather than a line number, and that is the whole
-        point of this property.
-
-        The register is a generated artifact that CI compares against the
-        committed copy, so whatever this returns becomes an input to that
-        comparison. A line number makes the document a build artifact of
-        *every line above every declared check*: adding a comment to
-        ``app/services/geometry_validation.py`` shifted one check from 120 to
-        121 and turned the gate red on main, and the entire drift was that one
-        digit.
-
-        The cost is not the regeneration. It is that a gate which fires on
-        cosmetic movement teaches everyone to regenerate reflexively without
-        reading the diff, which is exactly how a real drift eventually gets
-        committed unnoticed. The guard exists to catch a renamed check, a
-        removed code, a vocab key that no longer resolves -- and a qualified
-        name still moves for every one of those, because it is derived from
-        the same live object.
-
-        What is given up is the click-to-line convenience. ``file::qualname``
-        is greppable and unique, which is enough to find a function, and it
-        does not change when someone edits the docstring above it.
+        A qualified name rather than a line number, so editing code above a
+        check does not change the generated register.
         """
         source_file = inspect.getsourcefile(self.func)
         if source_file is None:  # pragma: no cover - builtins only
@@ -276,11 +156,9 @@ class PythonCheck:
         return f"``{self.func.__qualname__}``"
 
 
-#: Constraint kinds for which PostgreSQL populates ``diag.constraint_name``
-#: on the error it raises, which is the only thing the integrity handler
-#: can key on. Measured rather than assumed: a NOT NULL violation
-#: (SQLSTATE 23502) arrives with ``constraint_name = None``, so a claim
-#: held only by a NOT NULL column cannot be named to a client this way.
+#: Constraint kinds for which PostgreSQL populates ``diag.constraint_name`` on
+#: the error it raises, which is what the integrity handler keys on. A NOT NULL
+#: violation (SQLSTATE 23502) arrives with ``constraint_name = None``.
 _NAMED_BY_POSTGRES = frozenset({"check", "unique", "foreign_key", "exclusion"})
 
 
@@ -288,30 +166,20 @@ _NAMED_BY_POSTGRES = frozenset({"check", "unique", "foreign_key", "exclusion"})
 class DatabaseConstraint:
     """A check enforced by PostgreSQL, identified by its schema object name.
 
-    A constraint cannot self-declare in Python, so the register names it
-    and the drift guard verifies the name against live schema metadata.
-    The name must be the **expanded** one that exists in the database
-    (``ck_reaction_atom_map_pair_element_matches``), not the short form
-    written in ``__table_args__`` (``element_matches``) that
-    ``NAMING_CONVENTION`` expands.
+    The name must be the expanded one that exists in the database
+    (``ck_reaction_atom_map_pair_element_matches``), not the short form written
+    in ``__table_args__``. The drift guard verifies it against live schema
+    metadata.
 
     :param table: Table the object is attached to.
     :param name: Expanded object name as PostgreSQL holds it.
     :param kind: ``check``, ``unique``, ``foreign_key`` or ``trigger``.
     :param definition: The SQL predicate, for the register document.
-    :param rejection_code: The code the 409 body carries when *this*
-        object is the one that fired. Declaring it here rather than on
-        the entry is what lets one claim own several constraints that a
-        client must be able to tell apart, and lets a claim enforced both
-        in Python and in PostgreSQL report the *same* code from both
-        sites. ``None`` means the refusal still arrives as the
-        SQLSTATE-derived category, which is honest but tells a client
-        only that *some* consistency rule fired.
-    :param rejection_detail: The sanitized public sentence that goes out
-        with ``rejection_code``. Written here, in the register, beside the
-        scientific claim it explains — not in the exception handler,
-        which has no idea what the constraint means. ASCII only: it is a
-        runtime string.
+    :param rejection_code: The code the 409 body carries when this object is
+        the one that fired. ``None`` means the refusal arrives as the
+        SQLSTATE-derived category.
+    :param rejection_detail: The sanitized public sentence sent with
+        ``rejection_code``. ASCII only: it is a runtime string.
     """
 
     table: str
@@ -326,20 +194,14 @@ class DatabaseConstraint:
             raise ValueError(
                 f"DatabaseConstraint({self.name!r}) declares "
                 f"rejection_code={self.rejection_code!r} and "
-                f"rejection_detail={self.rejection_detail!r}. A code with no "
-                "sentence would reach a client as a bare token, and a sentence "
-                "with no code is the generic 409 this field exists to replace; "
-                "declare both or neither."
+                f"rejection_detail={self.rejection_detail!r}; declare both or neither."
             )
         if self.rejection_code and self.kind not in _NAMED_BY_POSTGRES:
             raise ValueError(
                 f"DatabaseConstraint({self.name!r}) is a {self.kind!r} and "
                 f"declares rejection_code={self.rejection_code!r}, but the "
                 "handler keys on ``diag.constraint_name`` and PostgreSQL "
-                f"populates it only for {sorted(_NAMED_BY_POSTGRES)}. A "
-                "NOT NULL violation reports no name at all, and a trigger that "
-                "RAISEs reports whatever the function chose. Mapping one of "
-                "those would declare a code that can never arrive."
+                f"populates it only for {sorted(_NAMED_BY_POSTGRES)}."
             )
 
     @property
@@ -355,13 +217,8 @@ class DatabaseConstraint:
 class DesignPosition:
     """A scientific position enforced by schema shape rather than a check.
 
-    Used where the register should record what TCKDB guarantees but
-    there is no single callable or constraint to point at — the
-    reproducibility rubric, for instance, or a discriminator whose
-    meaning is the guarantee.
-
-    :param where: Human-readable description of what carries the
-        position, with paths where they help.
+    :param where: Description of what carries the position, with paths where
+        they help.
     """
 
     where: str
@@ -381,20 +238,6 @@ Enforcement = PythonCheck | DatabaseConstraint | DesignPosition
 # ---------------------------------------------------------------------------
 # Where a check's threshold comes from
 # ---------------------------------------------------------------------------
-#
-# A numeric line that is a literal in Python can be named in
-# ``tier_rationale`` honestly. The imaginary-mode tau
-# is not one: it is *read from the execution provenance the record carries*,
-# and two deposits of the same structure legitimately get different
-# values. A register that rendered it as "roughly 50 cm-1" would state a
-# constant the code does not have, which is precisely the drift this
-# package exists to prevent — and would also hide the failure mode that
-# matters, which is what happens when the provenance is missing.
-#
-# So a check may declare its thresholds, and the two kinds are different
-# types rather than a flag, because they carry different obligations: a
-# constant needs a value, a provenance-derived one needs the keys it
-# reads and what it does when they are absent.
 
 
 @dataclass(frozen=True)
@@ -403,8 +246,8 @@ class ConstantThreshold:
 
     :param name: Identifier a reader can grep for.
     :param value: The number.
-    :param unit: Its unit, spelled the way a chemist writes it.
-    :param rationale: Why this number, and what tuning it would change.
+    :param unit: Its unit.
+    :param rationale: One plain sentence on what the number means physically.
     """
 
     name: str
@@ -421,25 +264,15 @@ class ConstantThreshold:
 class ProvenanceThreshold:
     """A numeric line resolved from what the record records about its own execution.
 
-    The resolver is held as a callable for the same reason
-    :class:`PythonCheck` is: renaming or deleting it breaks the import of
-    the declaring module, so the register cannot keep describing a
-    resolution that no longer exists.
-
     :param name: Identifier a reader can grep for.
     :param unit: Unit of the resolved value.
     :param resolver: The function that performs the resolution.
     :param parameter_keys: Canonical ``calculation_parameter`` keys the
-        resolver reads. Verified against ``calculation_parameter_vocab``
-        in the live schema by the drift guard, so a key that is renamed
-        or never seeded fails CI rather than silently resolving to the
-        fallback forever.
+        resolver reads, verified against ``calculation_parameter_vocab``.
     :param values: The resolved value per recorded protocol, as
-        ``(protocol, value)`` pairs, for the register table.
-    :param fallback: What is used when the provenance is absent, and why
-        that is the safe direction. Load-bearing: a threshold that
-        degrades silently is worse than a constant.
-    :param rationale: Why the threshold cannot be a constant.
+        ``(protocol, value)`` pairs.
+    :param fallback: What is used when the provenance is absent.
+    :param rationale: One plain sentence on why the threshold is not a constant.
     """
 
     name: str
@@ -452,13 +285,7 @@ class ProvenanceThreshold:
 
     @property
     def location(self) -> str:
-        """``path/to/module.py::qualified_name``, resolved from the live object.
-
-        Same rule, and for the same reason, as
-        :attr:`PythonCheck.location` -- see the argument there. Both feed the
-        generated register, so a line number in either one is enough to make
-        the drift gate fire on a comment.
-        """
+        """``path/to/module.py::qualified_name`` of the resolver."""
         source_file = inspect.getsourcefile(self.resolver)
         if source_file is None:  # pragma: no cover - builtins only
             return f"{self.resolver.__module__}.{self.resolver.__qualname__}"
@@ -481,62 +308,35 @@ Threshold = ConstantThreshold | ProvenanceThreshold
 class ScientificCheck:
     """One scientific guarantee TCKDB makes about chemistry.
 
-    An entry is a *claim*, not a code location: the same claim may be
-    enforced in more than one place, and which matters. The atom
-    map's "an element does not change across a reaction" is stated once
-    at the wire boundary and once as a check constraint, and listing
-    both in one entry is what lets a reader see that a second write path
-    cannot get around it.
+    The same claim may be enforced in more than one place, for example once at
+    the wire boundary and once as a check constraint.
 
-    :param code: Machine-readable code, or a tuple of them where one
-        claim is reported under more than one code. ``None`` means the
-        check raises with prose only — recorded honestly rather than
-        invented, because a code that appears in no message is a code no
-        client can match on.
-    :param asserts: What the check asserts, in one sentence a chemist
-        would recognise. Not a description of the implementation.
+    :param code: Machine-readable code, or a tuple of them where one claim is
+        reported under more than one code. ``None`` means the check raises
+        with prose only.
+    :param asserts: One plain sentence saying what the check requires.
     :param tier: Consequence tier.
-    :param tier_rationale: Why that tier — for
-        ``block``, why no correct calculation could produce the record;
-        for ``warn``, what correct novel result it could otherwise fire
-        on.
-    :param adr: Governing ADR number(s), e.g. ``"0008"`` or
-        ``"0008, 0011"``.
     :param enforced_by: One or more enforcement sites.
-    :param escape_hatch: How legitimate chemistry that the check would
-        otherwise refuse is deposited instead. ``None`` where none
-        exists. This column is load-bearing: charge conservation is only
-        defensible as a blocking check because an electron can be
-        declared as a participant.
+    :param escape_hatch: One plain sentence on how legitimate chemistry the
+        check would otherwise refuse is deposited instead. ``None`` where none
+        exists.
     :param emitted: Whether the code reaches a producer. The drift guard
-        asserts, for each code, that the literal string appears in the
-        source of the module **defining the enforcing function** — not
-        the module declaring the entry, which would be tautological. So
-        renaming ``reaction_mass_balance_failed`` in
-        ``reaction_resolution.py`` fails the guard even though the
-        declaration sits in the same file, and renaming a
-        ``tckdb_schemas`` code fails it from across the package
-        boundary.
-    :param channel: Where the code surfaces to a client — see
-        :class:`CodeChannel`. Must be :attr:`CodeChannel.none` exactly
-        when the entry declares no code, so "this check has a code" and
-        "a client can act on it" can never drift apart again.
-    :param divergence: A recorded disagreement between the check's
-        documentation and its behaviour. Reported, never silently fixed.
-    :param thresholds: The numeric lines the check fires on, each
-        declared as a :class:`ConstantThreshold` or a
-        :class:`ProvenanceThreshold`. Empty where the check is purely
-        structural. Declaring the *kind* is the point: a register that
-        printed the imaginary-mode τ as a number would be claiming the code
-        holds a constant it does not have, and would hide what happens
-        when the provenance τ is read from is missing.
+        asserts that the code appears in the source of the module defining the
+        enforcing function.
+    :param channel: Where the code surfaces to a client; see
+        :class:`CodeChannel`. Must be :attr:`CodeChannel.none` exactly when
+        the entry declares no code.
+    :param divergence: One plain sentence on a limit of the check, where its
+        guarantee is narrower than its name suggests.
+    :param thresholds: The numeric lines the check fires on. Empty where the
+        check is purely structural.
+    :param group: Register group the entry is printed under.
+    :param sort_key: Position within the group.
     """
 
     code: str | tuple[str, ...] | None
     asserts: str
     tier: CheckTier
-    tier_rationale: str
-    adr: str
     enforced_by: tuple[Enforcement, ...]
     escape_hatch: str | None = None
     emitted: bool = True
@@ -557,18 +357,12 @@ class ScientificCheck:
 
     def __post_init__(self) -> None:
         if not self.enforced_by:
-            raise ValueError(
-                f"ScientificCheck({self.code!r}) declares no enforcement site; "
-                "an entry that names no code, constraint or position cannot be "
-                "drift-guarded and is a comment, not a register entry."
-            )
+            raise ValueError(f"ScientificCheck({self.code!r}) declares no enforcement site.")
         if bool(self.codes) != (self.channel is not CodeChannel.none):
             raise ValueError(
                 f"ScientificCheck({self.code!r}) declares "
-                f"{len(self.codes)} code(s) and channel={self.channel.value}. "
-                "A code with no channel is a code nothing carries, and a "
-                "channel with no code is a channel carrying nothing; the "
-                "register must not be able to say either."
+                f"{len(self.codes)} code(s) and channel={self.channel.value}; "
+                "a code needs a channel and a channel needs a code."
             )
 
 
@@ -610,13 +404,7 @@ def collect_constraint_rejections(
 ) -> dict[str, tuple[str, str]]:
     """Map PostgreSQL constraint name to the ``(code, detail)`` a 409 carries.
 
-    The integrity handler builds its lookup from this rather than holding
-    a table of its own. A second table would be a second thing to keep in
-    step with the schema, and the register is already the one place that
-    is drift-guarded against live ``pg_constraint`` metadata -- so a
-    constraint that is renamed in a migration fails the *existing* guard
-    instead of quietly reverting its refusal to a generic
-    ``state_conflict`` that nobody would notice.
+    The integrity handler builds its lookup from this.
 
     :param checks: The register, as :func:`collect_registered_checks`
         returns it.

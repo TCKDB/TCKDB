@@ -197,54 +197,15 @@ CHECK_ARRHENIUS_A_UNITS_MATCH_MOLECULARITY = ScientificCheck(
     sort_key=1,
     code=(W_ARRHENIUS_A_UNITS_MISMATCH, W_UNSUPPORTED_MOLECULARITY),
     asserts=(
-        "An Arrhenius pre-exponential factor carries units of the "
-        "dimensionality its reaction order requires — per-second for "
-        "unimolecular, concentration^-1 time^-1 for bimolecular, "
-        "concentration^-2 time^-1 for termolecular — and a coefficient "
-        "of any other order has no units to check and is refused."
+        "An Arrhenius pre-exponential factor carries the units its reaction order requires: "
+        "per second, concentration^-1 time^-1 or concentration^-2 time^-1 for order one, two "
+        "or three, and a coefficient of any other order is refused as "
+        "``unsupported_reaction_molecularity``."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional. The dimensionality of A follows from the rate law, so "
-        "an A in cm3/mol/s on a unimolecular reaction is not an unusual result "
-        "but a number that cannot mean what it says. A mis-declared unit is "
-        "also silently catastrophic downstream, since nothing later in the "
-        "stack can recover the intended order from the value alone."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            validate_a_units_for_molecularity,
-            note=(
-                "Called from the kinetics upload schema, so it refuses at the "
-                "wire boundary. The order is not simply ``len(reactants)``: it "
-                "counts the side the coefficient is a rate of (reactants for a "
-                "forward record, products for a reverse one; a ``net`` record "
-                "is not checked). A record that states no direction is checked "
-                "against both sides and refused only when the units match "
-                "neither (``validate_a_units_for_unstated_direction``), so "
-                "no direction is assumed. A simple ``+M`` third-body reaction "
-                "carries a ``[M]`` term on the main line and validates one "
-                "order higher, while a falloff reaction's main line is the "
-                "high-pressure limit k-infinity, whose order is the side's "
-                "count, its low-pressure limit k0 being validated separately "
-                "one order up."
-            ),
-        ),
+        PythonCheck(validate_a_units_for_molecularity),
     ),
-    escape_hatch=(
-        "None, and the refinements are the reason it can block without firing "
-        "on correct science: PLOG and Chebyshev are refused the "
-        "``is_third_body`` flag outright, because both already encode the full "
-        "pressure dependence and the flag would otherwise inflate the expected "
-        "order by one — rejecting a PLOG entry carrying the *correct* units "
-        "and accepting one carrying the units of the next order up. A record "
-        "whose sides differ in size and which states no direction is accepted "
-        "with units of either side's order; stating ``direction`` makes the "
-        "check exact. A coefficient whose order is not 1, 2 or 3 (a "
-        "four-body reaction) is refused with its own code, "
-        "``unsupported_reaction_molecularity``, because no units of that "
-        "dimensionality are accepted."
-    ),
+    escape_hatch="None; a coefficient of any order other than one, two or three has no accepted units.",
 )

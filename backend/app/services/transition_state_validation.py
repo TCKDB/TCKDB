@@ -895,34 +895,10 @@ CHECK_TS_IRC_EVIDENCE = ScientificCheck(
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "Absence, not contradiction. Refusing a transition state without an "
-        "IRC would lose the saddle point entirely, and a saddle point with no "
-        "IRC is an incomplete record rather than a false one. The evidence is "
-        "recommended, not required."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            persist_transition_state_validation_evidence,
-            note=(
-                "Every path that can carry a transition state routes through "
-                "this seam — the PDep bundle, the computed-reaction bundle and "
-                "the standalone transition-state upload — so all three write "
-                "identical rows and report an identical gap. Before the seam "
-                "existed only the PDep bundle could deposit the evidence, so a "
-                "TS uploaded any other way always read back as ``irc: "
-                "absent`` even when the depositor had run one."
-            ),
-        ),
+        PythonCheck(persist_transition_state_validation_evidence),
     ),
-    escape_hatch=(
-        "None needed — the warning is the accommodation. Note the warning "
-        "fires on absence of a *passing* ``irc`` record, so an IRC that was "
-        "run and failed is stored and still warns, and so does a deposit "
-        "whose only evidence is an energy ordering or an imaginary mode: "
-        "neither shows the saddle point connects the declared endpoints."
-    ),
+    escape_hatch="None; the check only warns.",
 )
 
 
@@ -936,27 +912,10 @@ CHECK_TS_ENERGY_ORDERING_LEVELS = ScientificCheck(
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "An expectation, not a definition. An ordering across levels is "
-        "usually a mistake, but a deliberate one (a literature well against a "
-        "computed saddle point) is a legitimate record, so refusing it would "
-        "lose correct science; the warning names the gap instead (ADR 0008)."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            persist_transition_state_validation_evidence,
-            note=(
-                "Runs in the shared evidence seam, where each energy's source "
-                "calculation has already been resolved, so all three deposit "
-                "paths report it alike."
-            ),
-        ),
+        PythonCheck(persist_transition_state_validation_evidence),
     ),
-    escape_hatch=(
-        "None needed: the warning is the accommodation. Take every energy of "
-        "a kind at one level, or accept the warning."
-    ),
+    escape_hatch="Take every energy of a kind at one level of theory.",
 )
 
 
@@ -965,60 +924,19 @@ CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
     sort_key=11,
     code=(E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH, E_NETWORK_STATE_ENERGY_SUM_MISMATCH),
     asserts=(
-        "A stated energy should be the energy TCKDB stores for the "
-        "calculation(s) it cites. An energy-ordering energy is the single "
-        "point's (or optimisation's) energy, or for an E0 the paired "
-        "electronic energy plus the cited frequency's ZPE, scaled by the "
-        "stated ``zpe_scale_factor``; an E0 with no stated factor is never "
-        "refused. A network state energy that cites one calculation per "
-        "participant is the stoichiometric sum of their stored energies (on "
-        "a zero shared by the solve's states, the difference between states)."
+        "A stated energy agrees, within its printed precision, with the energy TCKDB stores "
+        "for the calculation(s) it cites, and an E0 built from a frequency calculation's ZPE "
+        "that states no ``zpe_scale_factor`` is not refused."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional. The record names a calculation and a number; a number "
-        "that is not that calculation's stored one is a factual inconsistency "
-        "between two things the same deposit asserts, not an expectation. "
-        "Without it the ordering was checked against the depositor's own "
-        "numbers only, and a mistyped or copied value could make a record pass "
-        "that the stored energies fail. The tolerance is the shared "
-        "printed-precision one, so printed rounding is never refused; a "
-        "network state energy stated in kJ/mol is further allowed half a "
-        "rounding unit (stated, else 1 kcal/mol) plus the spread of "
-        "hartree-to-kJ/mol constants, and a value inside that allowance but "
-        "beyond printed precision is stored as not compared, never refused. "
-        "A comparison that cannot be made is not a contradiction and does not "
-        "block (``CHECK_TS_ENERGY_ORDERING_NOT_COMPARED``)."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            persist_transition_state_validation_evidence,
-            note=(
-                "Runs in the shared evidence seam, so the PDep bundle, the "
-                "computed-reaction bundle and the standalone upload enforce it "
-                "alike, and it holds for a payload that bypassed the wire "
-                "schemas. Wire-level checks cannot do it: the stored energies "
-                "are in the database."
-            ),
-        ),
-        PythonCheck(
-            compare_state_energy_sums,
-            note=(
-                "The network route: reads the stored energies off the persisted "
-                "calculations, so it holds for a payload that bypassed the wire "
-                "schema. Run once per solve, after every state energy is "
-                "resolved, because the shared-zero conventions compare states "
-                "with each other and blame the outlier by majority."
-            ),
-        ),
+        PythonCheck(persist_transition_state_validation_evidence),
+        PythonCheck(compare_state_energy_sums),
     ),
     escape_hatch=(
-        "State the stored energy, or cite the calculation the number came "
-        "from. An E0 built with a scaled ZPE states ``zpe_scale_factor``. A "
-        "network state energy states unrounded kJ/mol derived from hartree "
-        "(x 2625.499639), or ``energy_precision_kj_mol``; sources are optional."
+        "State the stored energy, or cite the calculation the number came from; an E0 built "
+        "with a scaled ZPE states ``zpe_scale_factor``."
     ),
 )
 
@@ -1039,59 +957,12 @@ CHECK_TS_ENERGY_ORDERING_NOT_COMPARED = ScientificCheck(
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "Absence, not contradiction. A stored energy or zero-point energy that "
-        "is not stated, an E0 with no electronic energy to pair, or a pairing "
-        "TCKDB cannot establish leaves nothing to contradict; refusing would "
-        "lose a record that may be right. The energy is stored as not compared "
-        "with its reason, and the warning names it (ADR 0008)."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            persist_transition_state_validation_evidence,
-            note=(
-                "The outcome of every comparison is stored on the compared "
-                "energy (``stored_energy_comparison`` / ``not_compared_reason``), "
-                "so a reader can tell an energy that agrees with the stored one "
-                "from one that was never held against it."
-            ),
-        ),
-        PythonCheck(
-            collect_state_energy_source_warnings,
-            note=(
-                "The network route: the outcome is stored on the state energy "
-                "(``source_sum_comparison`` / ``source_sum_not_compared_reason``). "
-                "Reasons include a convention with no stored per-source terms, a "
-                "zero no other state shares, a source with no stored energy of "
-                "the needed kind, a state alone on its zero and "
-                "``stated_precision_unknown`` (beyond printed precision, inside "
-                "honest rounding of the stated kJ/mol). Sources on only some "
-                "participants warn with ``network_state_energy_sources_partial``: "
-                "the cited sources are one summand of several, so the stated "
-                "energy cannot be held against the sum of every participant's "
-                "stored energy, which is the same absence by another route."
-            ),
-        ),
-        PythonCheck(
-            collect_zpe_source_absent_warnings,
-            note=(
-                "A state or barrier energy on a composed convention "
-                "(``electronic_plus_zpe``, ``atom_and_bond_corrected``, "
-                "``thermal_enthalpy_298k``) that cites only an ``sp`` or "
-                "``opt`` when the upload carries no ``freq`` for that species "
-                "or transition state: ``network_energy_zpe_source_absent`` (#669). "
-                "An absence, so a warning; a ``composite`` and a single atom "
-                "are not flagged."
-            ),
-        ),
+        PythonCheck(persist_transition_state_validation_evidence),
+        PythonCheck(collect_state_energy_source_warnings),
+        PythonCheck(collect_zpe_source_absent_warnings),
     ),
-    escape_hatch=(
-        "None needed: the warning is the accommodation. Deposit the cited "
-        "energy (and the ZPE, at the electronic energy's geometry) to compare; "
-        "for a network state energy, cite every participant with an sp, opt or "
-        "composite calculation and state ``energy_precision_kj_mol``."
-    ),
+    escape_hatch="Deposit the cited energy, and the ZPE where one is needed, so the comparison can run.",
 )
 
 

@@ -445,7 +445,7 @@ def run_and_persist_geometry_validation(
 
 CHECK_OPT_GEOMETRY_MATCHES_DECLARED_SPECIES = ScientificCheck(
     group="A structure against its own label",
-    sort_key=6,  # Shifted from 5 by #143; see CHECK_SMILES_CHARGE_MATCHES_DECLARED.
+    sort_key=6,
     code=None,
     asserts=(
         "An optimisation's output geometry still describes the species it was "
@@ -453,83 +453,14 @@ CHECK_OPT_GEOMETRY_MATCHES_DECLARED_SPECIES = ScientificCheck(
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.none,
-    tier_rationale=(
-        "An expectation, and correctly non-blocking. An optimisation that "
-        "rearranged, dissociated or transferred a proton is science to record, "
-        "not a payload to refuse, and connectivity perception from XYZ is "
-        "unreliable for exactly the weak complexes, radicals, ions and "
-        "stretched geometries where a genuine rearrangement would matter. The "
-        "result is written as an evidence row that grades the record at read "
-        "time; it never refuses an upload. Since #143 the tier is also the "
-        "only one left to it: the *composition* half of what this row reports "
-        "is owned by ``calculation_geometry_composition_mismatch``, which "
-        "blocks, so what this row can still say on its own is the RMSD "
-        "suspicion — a correct-formula structure that moved further than "
-        "expected, which is an expectation by construction. "
-        "**Evidence-only by decision, with no deposit warning.** Its read "
-        "path is the trust rubric's geometry-validation check "
-        "(``_check_geometry_validation_passed_or_warning`` in "
-        "``app/services/trust/rubrics.py``): a ``fail`` or ``warning`` row "
-        "grades the record as a zero-weight warning, visible at read time. "
-        "No upload warning is emitted because the only live verdict is the "
-        "RMSD above 1.0 A, and that would fire routinely on flexible "
-        "molecules optimised from rough starting structures, where a large "
-        "move is the optimisation doing its job; a warning that fires on "
-        "correct deposits teaches depositors to ignore warnings."
-    ),
-    adr="0008, 0002",
     emitted=False,
     enforced_by=(
-        PythonCheck(
-            validate_calculation_geometry,
-            note=(
-                "Species-owned ``opt`` calculations only. Transition states "
-                "are deliberately excluded, having no canonical SMILES to "
-                "compare against. Best-effort by policy: a missing SMILES, a "
-                "missing output geometry, unparseable coordinates or a raising "
-                "chemistry layer all write nothing and let the upload "
-                "continue. A Kabsch RMSD above 1.0 A against the input "
-                "geometry is recorded as a separate suspicion signal. Its "
-                "``fail`` outcome is no longer reachable through an upload "
-                "path: ``is_isomorphic=False`` fires only on an element-count "
-                "mismatch, no calculation can change an element count, and "
-                "``assert_calculation_geometry_composition`` refuses such a "
-                "deposit before this runs. The pure seam keeps the verdict "
-                "and is pinned directly by "
-                "``tests/workflows/test_geometry_validation_wiring.py``."
-            ),
-        ),
+        PythonCheck(validate_calculation_geometry),
     ),
-    escape_hatch=(
-        "The whole check is advisory, so there is nothing to escape. What a "
-        "consumer must not do is read a ``fail`` row as 'this calculation is "
-        "scientifically invalid'; it means only that the automated identity "
-        "validator found a mismatch."
-    ),
+    escape_hatch="None; the check only warns.",
     divergence=(
-        "The stored column is named ``is_isomorphic`` and the surrounding "
-        "policy is worded as graph isomorphism, but the code tests the "
-        "**molecular formula** only. Atom mapping falls back to a "
-        "SMILES-graph matcher whenever bond perception from XYZ fails, which "
-        "is the common case for the radicals, ions and stretched geometries "
-        "this service mostly sees, and that fallback rejects a candidate on "
-        "one condition: the per-element atom counts disagree. Verified by "
-        "direct call in the module docstring — ethanol declared with dimethyl "
-        "ether deposited passes, and methane with one hydrogen pulled to 5 A "
-        "passes. So the rearrangement, bond-breaking, dissociation and "
-        "proton-transfer cases the module was written to catch are not "
-        "caught. Already self-documented in the module docstring rather than "
-        "discovered here; recorded because the field name is what a consumer "
-        "sees and it still overstates the guarantee. **Partly closed:** the "
-        "read surfaces now publish the same boolean under its true name, "
-        "``formula_matches``, and the stored ``validation_reason`` no longer "
-        "says 'not graph-isomorphic'. ``is_isomorphic`` is kept beside it "
-        "because it is the stored column and a published field — renaming it "
-        "is a migration against a deployed table and a breaking API change, "
-        "and buys nothing that publishing the true name alongside does not. "
-        "What stays open is the check itself: connectivity is still not "
-        "tested, and cannot be until there is bond perception trustworthy on "
-        "the strained and radical structures where a rearrangement would "
-        "matter."
+        "The stored ``is_isomorphic`` is computed from the molecular formula alone, so a "
+        "rearranged or dissociated structure with the same formula passes; the read surfaces "
+        "also publish it as ``formula_matches``."
     ),
 )

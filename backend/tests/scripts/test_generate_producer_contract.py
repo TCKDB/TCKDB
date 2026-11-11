@@ -584,6 +584,8 @@ def repeated_bodies(builder, markdown: str) -> list[str]:
     shared = markdown[start : markdown.index("\n## ", start + 1)]
     surfaces = markdown[markdown.index("\n## Surface `") : markdown.index("\n## Model reference\n")]
     found: list[str] = []
+    # A code table bullet quotes the check's sentence; that is not the body printed again.
+    surfaces = "\n".join(line for line in surfaces.splitlines() if not line.startswith("- [`"))
     for key, (func_checks, _titles) in builder.shared_checks().items():
         for check in func_checks:
             text = generator._one_line(check.asserts)

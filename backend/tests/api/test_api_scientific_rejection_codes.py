@@ -1325,7 +1325,7 @@ class TestARecordedHessianMethodAgainstItsInputDeck:
 
 
 # ---------------------------------------------------------------------------
-# Codes declared in gap_declarations.py
+# Codes declared in declarations.py
 # ---------------------------------------------------------------------------
 
 

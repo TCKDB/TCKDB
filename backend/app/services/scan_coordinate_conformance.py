@@ -1309,91 +1309,18 @@ CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
     sort_key=1,
     code=W_SCAN_POINT_COORDINATE_DISAGREES_WITH_GEOMETRY,
     asserts=(
-        "A scan point's stored coordinate_value is the internal coordinate "
-        "at that point's own sampled geometry, in that coordinate's own "
-        "unit (ADR 0020) -- never a displacement, and never compared "
-        "against start_value as an anchor."
+        "A scan point's stored coordinate_value is the internal coordinate at that point's "
+        "own sampled geometry, in that coordinate's own unit."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "ADR 0020 is explicit that a disagreement here cannot say which of "
-        "two things is wrong: a mis-stated axis and a mis-attached geometry "
-        "present identically to a comparison that only sees the stored "
-        "number and the recomputed one. Refusing the deposit would discard "
-        "correct energies over an ambiguity this check cannot resolve on "
-        "its own, which is the ADR 0008 argument for warn rather than "
-        "block. It also cannot be a blocking definition for a second "
-        "reason: ADR 0008 reserves block for a record no correct "
-        "calculation could produce, and the producers that deposited the "
-        "superseded relative-sweep convention (ADR 0019) did so in good "
-        "faith. It was held back as a standalone report until the "
-        "corrective migration (``a4f7c2e9d651``, #302) had converted the "
-        "stored series whose own geometry proves the conversion; with that "
-        "done, a new deposit written in the superseded convention is exactly "
-        "what the warning targets, so it is wired into the "
-        "write path of every route that persists a scan, once per "
-        "disagreeing coordinate series, and placed on the scan "
-        "calculation's own record."
-    ),
-    adr="0020, 0008",
     enforced_by=(
-        PythonCheck(
-            collect_scan_coordinate_warnings,
-            note=(
-                "The write path: run once a request's calculations are "
-                "flushed, over every calculation the request persisted, by "
-                "every workflow whose calculations can carry a scan result (conformer, "
-                "transition state, computed species, computed reaction, "
-                "thermo, statmech, transport). One warning per "
-                "coordinate series with at least one point judged `deviates`; "
-                "its context carries the scan's number in the request, the series' "
-                "pattern (`classify_series`), the number of points that "
-                "disagree, the largest residual and the tolerance. The "
-                "tolerance is widened to half a step of the decimals the "
-                "stored values were written at, so rounded measurements are "
-                "not a disagreement, unless the stored values are an evenly "
-                "spaced grid (gaps allowed): grid values are labels, not "
-                "rounded measurements, and are judged at the tight "
-                "tolerance. Declare step_size for a grid whose step is finer "
-                "than 5 units of its last decimal; otherwise it is judged as "
-                "rounded values. The warning targets output written in the "
-                "superseded convention."
-            ),
-        ),
-        PythonCheck(
-            evaluate_point_coordinate_conformance,
-            note=(
-                "Recomputes the coordinate from the point's own stored "
-                "geometry only -- bond distance, bond angle, or the "
-                "standard four-atom dihedral formula -- and never reads "
-                "calc_scan_coordinate.start_value/end_value, which ADR "
-                "0020 fixes as grid metadata, not an anchor. improper is "
-                "reported not_applicable rather than guessed at: ADR 0020 "
-                "records that TCKDB has no field distinguishing an "
-                "out-of-plane-angle convention from a proper-style "
-                "torsion, so assuming either would be exactly the "
-                "inference ADR 0011 refuses to make for atom maps, applied "
-                "one level up. A near-collinear dihedral quartet "
-                "(min(sin(theta_123), sin(theta_234)) < 0.05) is reported "
-                "not_checkable rather than compared, mirroring what the "
-                "producing tools themselves do. classify_series in the "
-                "same module turns a series of per-point disagreements "
-                "into the specific pattern the follow-up corrective "
-                "migration needs: a constant residual across every point, "
-                "a linear ramp against point index, a residual equal to "
-                "one grid step, or a lone outlier."
-            ),
-        ),
+        PythonCheck(collect_scan_coordinate_warnings),
+        PythonCheck(evaluate_point_coordinate_conformance),
     ),
     escape_hatch=(
-        "None needed -- the check never refuses, at any tier. Send each "
-        "point's coordinate_value as the internal coordinate measured on "
-        "that point's own geometry (not as an offset from the scan's start), "
-        "or attach the geometry the value was measured on. An `improper` "
-        "coordinate is never compared, and a near-collinear dihedral quartet "
-        "or a deposit too coarse to judge is reported as not checkable "
-        "rather than as a disagreement."
+        "None; the check only warns, so send each point's coordinate value as measured on its "
+        "own geometry."
     ),
     thresholds=(
         ConstantThreshold(
@@ -1401,63 +1328,23 @@ CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
             value=DIHEDRAL_NOT_CHECKABLE_MIN_SIN_THETA,
             unit="dimensionless (sin of a flanking bond angle)",
             rationale=(
-                "ADR 0020: 'where a quartet is near-collinear the dihedral "
-                "is not a usable coordinate at all'. Below this, "
-                "1/(r * sin(theta)) conditioning makes the recomputed "
-                "dihedral's uncertainty diverge, so comparing it would "
-                "manufacture a false disagreement rather than find a real "
-                "one."
+                "Below this the dihedral of a near-collinear quartet is too ill-conditioned to "
+                "compare."
             ),
         ),
         ConstantThreshold(
             name="tolerance_floor_degrees",
             value=TOLERANCE_FLOOR_DEGREES,
             unit="degree",
-            rationale=(
-                "Never let ten times the precision-derived sigma collapse "
-                "below what a 6-decimal-place deposit can distinguish. "
-                "Explicitly not the 0.5 or 1.0 degree floor rejected as "
-                "roughly four orders of magnitude too loose -- correctly "
-                "stored data reproduces to about 1.5e-4 degrees (ADR "
-                "0020), and this floor still catches an injected 0.01 "
-                "degree error with two orders of magnitude to spare. This "
-                "is the tolerance every point in the current corpus is "
-                "actually compared against: at the corpus's real 6 "
-                "decimal-place precision the precision-derived term is "
-                "far below this floor, so the floor -- not the derived "
-                "term -- is what binds on real data today. The derived "
-                "term only starts to matter at coarser precision than the "
-                "corpus has ever used; see ``tolerance_ceiling_degrees`` "
-                "for what happens if it grows too large to trust."
-            ),
+            rationale="The tightest tolerance a 6-decimal deposit can distinguish.",
         ),
         ConstantThreshold(
             name="tolerance_ceiling_degrees",
             value=TOLERANCE_CEILING_DEGREES,
             unit="degree",
             rationale=(
-                "Without an upper bound, the precision-derived tolerance "
-                "grows without limit as deposit precision degrades -- "
-                "measured to reach 184.9 degrees at 0 decimal places, "
-                "silently passing an injected 150 degree error, because "
-                "the tolerance then exceeds the entire physically "
-                "meaningful range of a wrapped residual. Above this "
-                "ceiling the point is reported not_checkable instead of a "
-                "pass under a window too wide to mean anything -- the "
-                "detector failing loudly rather than reporting a false "
-                "clean bill of health. Fixed at a flat number rather than "
-                "derived from the coordinate's own step_size because "
-                "step_size is optional metadata (nullable) and a "
-                "fraction-of-step ceiling would need the same flat "
-                "fallback for every coordinate that never declared one. "
-                "Chosen to land between 3 decimal places (~0.213 degrees, "
-                "comfortably checkable) and 2 decimal places (derives "
-                "above this ceiling, correctly not_checkable) on the "
-                "measured precision ladder -- not the floor's rejected "
-                "0.5/1.0 degree number reused: the floor asks how tight "
-                "well-behaved data can be trusted to be, this asks how "
-                "loose a window can get before it stops meaning anything, "
-                "and those are different questions."
+                "Above this a derived tolerance is too wide to mean anything, so the point is "
+                "reported as not checkable."
             ),
         ),
         ConstantThreshold(
@@ -1465,11 +1352,8 @@ CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
             value=TOLERANCE_CEILING_ANGSTROM,
             unit="Angstrom",
             rationale=(
-                "Same role as tolerance_ceiling_degrees, for bond. 0.1 "
-                "Angstrom is roughly 5-10 percent of a typical single bond "
-                "length (about 1-1.5 Angstrom); a derived tolerance that "
-                "wide could not tell a genuine bond-length error from "
-                "deposit noise."
+                "About 5 to 10 percent of a typical bond length, beyond which a tolerance cannot tell "
+                "a bond-length error from deposit noise."
             ),
         ),
     ),

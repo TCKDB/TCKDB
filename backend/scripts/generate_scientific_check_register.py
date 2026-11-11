@@ -1,25 +1,16 @@
 #!/usr/bin/env python
 """Generate ``docs/guides/scientific_check_register.md`` from the declarations.
 
-The register is generated so it cannot drift. Every ``file::name``
-below is resolved from the live function object at generation time, so
-the document has no pinned commit and nothing hand-maintained — the
-failure mode that left ``docs/reviews/validation_check_audit.md`` stale
-by many codes within weeks of being written.
-
-Anchors carry a qualified name, deliberately not a line number. CI
-compares this document against the committed copy, so a line number
-would make it a build artifact of every line above every declared check,
-and a comment added anywhere in a declaring module would fail the gate.
-See ``PythonCheck.location`` for the full argument.
+Every ``file::name`` in the document is resolved from the live function object at generation
+time. Anchors carry a qualified name rather than a line number, so a comment added to a declaring
+module does not change the document.
 
 Usage::
 
     conda run -n tckdb_env python backend/scripts/generate_scientific_check_register.py
     conda run -n tckdb_env python backend/scripts/generate_scientific_check_register.py --check
 
-``--check`` regenerates in memory and exits non-zero if the committed
-document differs, which is what CI runs.
+``--check`` regenerates in memory and exits non-zero if the committed document differs.
 """
 
 from __future__ import annotations
@@ -47,28 +38,14 @@ from app.scientific_checks.numbering import number_checks  # noqa: E402
 OUTPUT = REPO_ROOT / "docs" / "guides" / "scientific_check_register.md"
 
 _TIER_BLURB = {
-    CheckTier.block: (
-        "Refuses the payload. ADR 0008 permits this only for a definition or "
-        "a contract — a record no correct calculation could produce."
-    ),
-    CheckTier.warn: (
-        "Accepts the payload and records a machine-readable warning. The tier "
-        "for expectations (which could fire on a correct novel result) and for "
-        "absences (an incomplete record is still a true one)."
-    ),
+    CheckTier.block: ("Refuses the payload. Reserved for a definition or a contract no correct calculation could violate."),
+    CheckTier.warn: "Accepts the payload and records a machine-readable warning.",
     CheckTier.label: (
-        "Labels a stored record at read time without refusing anything — a "
-        "`HardFailReason` in the trust evaluator. For facts TCKDB observes "
-        "about a record after it was accepted, which no upload-time check "
-        "could have refused because they did not exist yet."
+        "Labels a stored record at read time without refusing anything, as a `HardFailReason` in the trust evaluator."
     ),
-    CheckTier.review: (
-        "Referred to `machine_review` under a versioned rubric. ADR 0008 puts "
-        "every cross-check against external reference data here."
-    ),
+    CheckTier.review: "Referred to `machine_review`. Every cross-check against external reference data is here.",
     CheckTier.structural: (
-        "Not an ADR 0008 consequence tier. The position is enforced by the "
-        "shape of the schema, so a record violating it cannot be represented."
+        "Enforced by the shape of the schema, so a record violating it cannot be represented."
     ),
 }
 
@@ -97,82 +74,34 @@ _PREAMBLE = """# The scientific check register
 
 **Generated. Do not edit by hand.** Regenerate with
 `conda run -n tckdb_env python backend/scripts/generate_scientific_check_register.py`.
-Every `file::name` here is resolved from the live function object at
-generation time, so it cannot go stale the way a hand-written table does.
-Anchors name the function rather than a line, so editing the code around a
-check does not change this document.
 
 ## What this is
 
-An enumeration of what TCKDB *guarantees about chemistry*, as opposed to what
-it merely stores. TCKDB runs roughly 326 Pydantic validators and 225 database
-check constraints; almost all of them enforce plumbing — string lengths, enum
-membership, foreign-key existence, `multiplicity >= 1`. This register contains
-only the checks that encode a **scientific decision a referee could disagree
-with**.
-
-The inclusion test is *could this check be wrong in an interesting way?*
-Elemental balance is a position. `max_length=64` is not, and `multiplicity >= 1`
-is arithmetic rather than chemistry. There is deliberately no "paper-worthy"
-column: **membership in this register is the claim.** An entry that fails the
-test dilutes every other entry.
-
-## Relationship to `docs/reviews/validation_check_audit.md`
-
-The two sit beside each other and answer different questions. That audit asks
-*is each Pydantic validator in the right ADR 0008 tier* — it is a placement
-review of one tier, pinned to a commit, and it is now stale by several codes.
-This register asks *what does TCKDB guarantee about chemistry* — it spans the
-service layer, the wire schemas and the database, it is generated rather than
-transcribed, and it is guarded in CI. Neither supersedes the other. Where they
-disagree, this one is right by construction.
+The checks that encode chemistry rather than plumbing: elemental balance, charge
+conservation, the imaginary-mode count of a saddle point, the bijectivity of an
+atom map. String lengths, enum membership and `multiplicity >= 1` are not listed.
+Every `file::name` here is resolved from the live function object at generation
+time, and anchors name the function rather than a line.
 
 ## How to read a row
 
-- **Asserts** — what the check claims, in one sentence a chemist would
-  recognise. Not a description of the implementation.
-- **Tier** — the ADR 0008 consequence, with the justification for *that* tier
-  in the ADR's own terms.
-- **Code**, and **where it reaches a client** — these are two different facts
-  and the register used to state only the first. A code is not a contract until
-  something carries it somewhere a consumer can read it, and for a long time
-  nothing did: six checks spelled their code inside an English sentence
-  (`"... (reaction_mass_balance_failed)."`) that no parser matched, and the 422
-  body's own `code` field said `validation_error` for every chemistry refusal
-  in the system. Naming the channel is what makes the claim checkable —
-  `backend/tests/db/test_scientific_check_register.py` holds each channel to
-  its obligation, and an `error_envelope` code must both be raised through the
-  typed path and be proved to arrive by an end-to-end HTTP test.
-- **Enforced at** — `file::qualified_name` for Python, or the
-  constraint/trigger name for PostgreSQL. Database names are verified against live schema metadata by
-  `backend/tests/db/test_scientific_check_register.py`, not trusted as strings.
-  Where a constraint names the 409 code it returns, that code is printed with
-  it. A database-held position is the *strongest* guarantee here — no write
-  path can bypass a check constraint — and it used to be the one a client was
-  told least about, because every violation collapsed into its SQLSTATE bucket
-  and arrived as `state_conflict`. The mapping is keyed on the constraint name
-  PostgreSQL reports, never on the driver's message text, and each one is
-  proved by `backend/tests/api/test_api_database_constraint_codes.py`, which
-  provokes the real violation and reads the code out of the response body.
-- **Thresholds** — the numeric lines the check fires on, and *where each number
-  comes from*. A constant is fixed in code and printed. A provenance-derived
-  threshold is not a number at all: it is resolved per record from the
-  execution provenance that record carries, so it is printed as the resolver,
-  the parameter keys it reads, the per-protocol table, and what it falls back
-  to when those keys are absent. ADR 0012's `tau` is the first of these, and
-  the distinction is load-bearing — a register that printed it as "roughly
-  50 cm-1" would be claiming the code holds a constant it does not have, and
-  would hide the case a referee cares about most, which is the record whose
-  protocol was never recorded.
+- **Asserts** — what the check requires, in one sentence.
+- **Tier** — what happens when the check fires.
+- **Code**, and **where it reaches a client** — the machine-readable code and
+  the channel that carries it. An `error_envelope` code is raised through
+  `CodedValidationError` and asserted by an end-to-end test.
+- **Enforced at** — `file::qualified_name` for Python, or the constraint or
+  trigger name for PostgreSQL, verified against live schema metadata. Where a
+  constraint names the 409 code it returns, that code is printed with it.
+- **Thresholds** — the numeric lines the check fires on. A constant is printed.
+  A provenance-derived threshold is resolved per record from the execution
+  provenance it carries, so it is printed as the resolver, the parameter keys
+  it reads, the per-protocol table, and what it falls back to when those keys
+  are absent.
 - **Escape hatch** — how legitimate chemistry the check would otherwise refuse
-  gets deposited instead. This column carries most of the weight. Charge
-  conservation is only defensible as a blocking check *because* an electron can
-  be declared as a participant; without that door the rule would be asserting
-  "every participant was declared", which is an expectation about the depositor
-  and ADR 0008 disqualifies an expectation from blocking.
-- **Recorded divergence** — where a check's documentation and its behaviour
-  disagree, or where a guarantee is narrower than its name suggests. Reported,
-  never silently fixed.
+  is deposited instead.
+- **Recorded divergence** — where a check's guarantee is narrower than its name
+  suggests.
 
 """
 
@@ -205,15 +134,7 @@ def _tier_table(checks: list[ScientificCheck]) -> str:
 
 
 def _channel_table(checks: list[ScientificCheck]) -> str:
-    """How many entries carry a code a client can actually act on.
-
-    This table is the answer to a question the register could not answer
-    before: "how much of what TCKDB refuses can a program understand?" It
-    is printed rather than left to be counted, because the last time
-    somebody counted — eleven entries with no code, and every blocking
-    chemistry check reporting ``validation_error`` — it took reading the
-    whole document to find out.
-    """
+    """How many entries carry a code a client can act on, by channel."""
     counts: dict[CodeChannel, int] = {}
     for check in checks:
         counts[check.channel] = counts.get(check.channel, 0) + 1
@@ -251,8 +172,6 @@ def _render_enforcement(check: ScientificCheck) -> str:
             body = site.label
         else:  # pragma: no cover - exhaustive over Enforcement
             raise TypeError(f"unknown enforcement site: {site!r}")
-        if getattr(site, "note", None):
-            body += f"\n  *{site.note}*"
         parts.append(_md(f"- {body}"))
     return "\n".join(parts)
 
@@ -261,10 +180,8 @@ def _render_thresholds(check: ScientificCheck) -> list[str]:
     """Render a check's numeric lines, distinguishing the two kinds.
 
     A constant gets its number. A provenance-derived threshold gets its
-    resolver, the keys it reads, its per-protocol table and — the part a
-    referee will go looking for — what happens when the provenance is
-    absent. Printing a provenance threshold as a single number would
-    state a constant the code does not have.
+    resolver, the keys it reads, its per-protocol table and what happens
+    when the provenance is absent.
     """
     if not check.thresholds:
         return []
@@ -312,9 +229,6 @@ def _render_check(check: ScientificCheck, index: int) -> str:
         f"| **Tier** | `{check.tier.value}` |",
         f"| **Code** | {codes} |",
         f"| **Code reaches a client via** | {_CHANNEL_BLURB[check.channel]} |",
-        f"| **Governing ADR** | {check.adr} |",
-        "",
-        f"**Why this tier.** {_md(check.tier_rationale)}",
         "",
         "**Enforced at.**",
         "",
@@ -330,19 +244,12 @@ def _render_check(check: ScientificCheck, index: int) -> str:
         lines += [f"**Recorded divergence.** {_md(check.divergence)}", ""]
     if check.codes and not check.emitted:
         lines += [
-            "*(The code above is a register label; this check raises prose "
-            "with no machine-readable code, so no client can match on it.)*",
+            "*(The code above is a register label; this check raises prose with no machine-readable code.)*",
             "",
         ]
     if not check.codes:
         lines += [
-            "*(No machine-readable code reaches anybody for this one. Recorded "
-            "as a gap rather than invented, because a code nothing carries is a "
-            "code no client can match on. See the enforcement sites above for "
-            "why: a position held by schema shape, or by a stored evidence row, "
-            "never surfaces as a refusal at all. A position held by a database "
-            "constraint no longer belongs here — such a constraint can declare "
-            "a rejection code and be named in its 409.)*",
+            "*(No machine-readable code reaches a client for this entry.)*",
             "",
         ]
     return "\n".join(lines)
@@ -359,10 +266,7 @@ def _divergence_index(checks: list[ScientificCheck], numbering: dict[int, int]) 
     lines = [
         "## Recorded divergences",
         "",
-        "Where a check's documentation and its behaviour disagree, or where a "
-        "guarantee is narrower than its name suggests. Every one of these is "
-        "reported, never silently fixed — the register changes no check "
-        "behaviour.",
+        "Checks whose guarantee is narrower than their name suggests.",
         "",
     ]
     for index, check in rows:
@@ -391,9 +295,8 @@ def render() -> str:
         "---\n\n"
         "Declarations live beside the checks they describe; see "
         "`backend/app/scientific_checks/__init__.py` for how to add one, and "
-        "`backend/app/scientific_checks/declarations.py` for the two "
-        "populations that cannot self-declare (PostgreSQL objects, and wire "
-        "schemas that are forbidden from importing the backend).\n"
+        "`backend/app/scientific_checks/declarations.py` for the PostgreSQL "
+        "objects and wire-schema checks that cannot sit beside a Python check.\n"
     )
     return "\n".join(out)
 

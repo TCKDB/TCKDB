@@ -246,27 +246,12 @@ CHECK_REACTION_ELEMENTAL_BALANCE = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional. Mass balance is what makes a set of species a reaction "
-        "rather than a list, so no correct calculation can produce an "
-        "unbalanced one; the check cannot fire on a correct novel result."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            validate_reaction_elemental_balance,
-            note=(
-                "Called from ``resolve_chem_reaction``, so it fires on every "
-                "path that resolves a reaction, including the PDep bundle."
-            ),
-        ),
+        PythonCheck(validate_reaction_elemental_balance),
     ),
     escape_hatch=(
-        "Declare a participant with ``molecule_kind: pseudo``. A lumped or "
-        "phenomenological construct has no atom-resolved composition, so one "
-        "such participant suspends the law for the whole reaction. A declared "
-        "electron does **not** exempt it — an electron contributes zero atoms "
-        "and the reaction still has to balance."
+        "Declare a participant with ``molecule_kind: pseudo``, which suspends the law for the "
+        "whole reaction."
     ),
 )
 
@@ -387,35 +372,12 @@ CHECK_REACTION_CHARGE_CONSERVATION = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional, and only because the escape hatch exists. Electrons are "
-        "neither created nor destroyed by rearranging bonds. Without a way to "
-        "name a free electron the rule would in fact assert 'every participant "
-        "was declared', which is an expectation about the depositor rather "
-        "than a definition of a reaction, and ADR 0008 disqualifies an "
-        "expectation from blocking."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            validate_reaction_charge_conservation,
-            note=(
-                "Sums ``Species.charge``, which "
-                "``canonical_species_identity`` has already reconciled against "
-                "the formal charge of each species' own SMILES."
-            ),
-        ),
+        PythonCheck(validate_reaction_charge_conservation),
     ),
     escape_hatch=(
-        "Declare the free electron as a participant — ``{\"molecule_kind\": "
-        "\"electron\", \"smiles\": \"[e-]\", \"charge\": -1, \"multiplicity\": "
-        "2}`` — which is how associative and dissociative attachment, "
-        "photoionization and photodetachment are deposited. It contributes -1 "
-        "to the side it sits on and zero atoms, so elemental balance still has "
-        "to be satisfied separately. A ``pseudo`` participant suspends the law "
-        "entirely, as it does for elemental balance. Conservation is not "
-        "neutrality: any net charge is accepted as long as both sides carry "
-        "the same one, so ion-molecule reactions are unaffected."
+        "Declare the free electron as a participant (``molecule_kind: electron``, charge -1), "
+        "or declare a ``pseudo`` participant to suspend the law."
     ),
 )
 
@@ -487,29 +449,12 @@ CHECK_REACTION_ENTRY_NULL_REACTION = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional. A reaction that leaves every participant exactly as it was, with no saddle "
-        "point and no rate, is not a reaction, so no correct calculation produces one. Two entries "
-        "of one species (E and Z 2-butene) are different participants, and a degenerate exchange "
-        "(H + H2) deposited with its transition state or rate is real chemistry; neither is refused."
-    ),
-    adr="0038, 0008",
     enforced_by=(
-        PythonCheck(
-            refuse_null_reaction_entry,
-            note=(
-                "Called before ``resolve_chem_reaction`` on every path that creates a reaction entry "
-                "(the reaction upload, which kinetics, networks and transition states reuse, and "
-                "the computed-reaction bundle's canonical and kinetics reactions), told whether the "
-                "deposit carries a transition state or kinetics."
-            ),
-        ),
+        PythonCheck(refuse_null_reaction_entry),
     ),
     escape_hatch=(
-        "Deposit the evidence with the reaction: a transition state (transition-state upload, or "
-        "``transition_state`` in a computed-reaction bundle) or a kinetics record (kinetics upload, "
-        "or ``kinetics`` in a bundle). For a stereo isomerisation, deposit the two isomers as "
-        "different entries (stereo marks in the SMILES, a stereo label, or a geometry per side)."
+        "Deposit a transition state or a kinetics record with the reaction, or deposit "
+        "stereoisomers as different species entries."
     ),
 )
 
@@ -640,24 +585,6 @@ def validate_transition_state_composition(
             )
 
 
-#: Why this check's pseudo exemption is deliberately narrower than the balance
-#: checks', rather than drifted from them. Recorded on both legs of the
-#: function, because both are scoped to the reactant side.
-_TS_COMPOSITION_PSEUDO_SCOPE = (
-    "The pseudo-species exemption here is narrower than "
-    "``_load_participant_species``'s, and deliberately so. That helper exempts "
-    "elemental balance and charge conservation on a pseudo participant on "
-    "**either** side, because both compare one side against the other and a "
-    "lumped construct makes the side it sits on unknowable. This check compares "
-    "the saddle point against the **reactant side only**, so only a *reactant* "
-    "being pseudo can make it meaningless; a pseudo *product* leaves the "
-    "reactant side fully atom-resolved and is not exempted. Aligning the two "
-    "would discard a guarantee that is still well-defined, and would discard it "
-    "exactly where it is worth most: a reaction with a pseudo product has "
-    "already lost elemental balance and charge conservation, so this is the "
-    "only atom-level statement left about its saddle point."
-)
-
 CHECK_TRANSITION_STATE_COMPOSITION = ScientificCheck(
     group="Conservation across a reaction",
     sort_key=3,
@@ -668,32 +595,12 @@ CHECK_TRANSITION_STATE_COMPOSITION = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional. A transition state is a stationary point on the "
-        "potential energy surface *of those atoms*, so a saddle point with a "
-        "different molecular formula cannot be that reaction's saddle point, "
-        "whatever else is true of it."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            validate_transition_state_composition,
-            note=(
-                "Composition is read from the saddle-point geometry when there "
-                "is one and from ``unmapped_smiles`` otherwise. The PDep path "
-                "passes no SMILES, so it compares geometry only."
-            ),
-        ),
+        PythonCheck(validate_transition_state_composition),
     ),
     escape_hatch=(
-        "Declare the extra species as participants of the reaction. A "
-        "``pseudo`` *reactant* exempts the reaction; a pseudo product does not, "
-        "and that is not an oversight — see below. Absence does not block: no "
-        "geometry and no parseable SMILES means nothing is compared, and an "
-        "unparseable transition-state SMILES is treated as silence rather "
-        "than as a contradiction, because a TS SMILES is a lossy label for a "
-        "structure that is by construction not a stable molecule. "
-        + _TS_COMPOSITION_PSEUDO_SCOPE
+        "Declare the extra species as participants, or declare a ``pseudo`` reactant to "
+        "exempt the reaction."
     ),
 )
 
@@ -707,29 +614,12 @@ CHECK_TRANSITION_STATE_CHARGE = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional. Charge is conserved along a reaction coordinate, so a "
-        "saddle point at a different charge is on a different potential energy "
-        "surface — not a worse calculation of the same one."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            validate_transition_state_composition,
-            note=(
-                "Second, independent leg of the same function. Skipped "
-                "entirely when the caller passes no "
-                "``transition_state_charge``."
-            ),
-        ),
+        PythonCheck(validate_transition_state_composition),
     ),
     escape_hatch=(
-        "Omit the transition state's charge, which skips the comparison. "
-        "Multiplicity is deliberately **not** checked here at all: spin is not "
-        "conserved the way charge and atoms are — two doublets may react over "
-        "a singlet or a triplet surface, and spin-forbidden reactions are real "
-        "chemistry — so a multiplicity rule would fire on correct novel "
-        "results. " + _TS_COMPOSITION_PSEUDO_SCOPE
+        "Omit the transition state's charge to skip the comparison, or declare a ``pseudo`` "
+        "reactant, which also exempts it."
     ),
 )
 
@@ -954,62 +844,12 @@ CHECK_TS_IRC_MAPPING_ELEMENTS = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional. 'These saddle-point atoms become C2H4' while those atoms "
-        "are C2O2H2 is a contradiction no correct calculation can produce — the "
-        "same class of claim ``CHECK_TRANSITION_STATE_COMPOSITION`` already "
-        "blocks, one level finer, per participant rather than per side. It is "
-        "also what the register's own consistency requires: the identical "
-        "assertion expressed as a ``reaction_atom_map`` is refused by "
-        "``CHECK_ATOM_MAP_ELEMENT_CONSERVED``, at the wire boundary and again "
-        "by a composite foreign key into ``geometry_atom``. Two surfaces "
-        "enforcing different standards on the same claim is not a defensible "
-        "position for either — and the divergence was not theoretical: a "
-        "well-formed partition handing ethene two oxygens and HO2 three "
-        "hydrogens was accepted, under a fixture comment that correctly said "
-        "'C2H4 (six atoms)'."
-    ),
-    adr="0008, 0011",
     enforced_by=(
-        PythonCheck(
-            validate_ts_evidence_participant_composition,
-            note=(
-                "Called from "
-                "``persist_transition_state_validation_evidence``, the single "
-                "seam every deposit path that can carry a transition state "
-                "already routes through, so the PDep bundle, the "
-                "computed-reaction bundle and the standalone transition-state "
-                "upload cannot enforce different standards. It is a service-"
-                "layer check rather than a wire-boundary one because a "
-                "participant's composition comes from its SMILES, and "
-                "``tckdb_schemas`` is chemistry-free — RDKit is not available "
-                "where ``validate_ts_evidence_set`` runs. That function keeps "
-                "the *shape* half of the rule: keys name every declared "
-                "participant, indices partition the TS atoms exactly once, and "
-                "a participant's list is empty exactly when the payload "
-                "declares that participant to have no atoms. The last of those "
-                "is the shape half of the same claim this check makes about "
-                "composition: an empty list is refused for a molecule at the "
-                "wire boundary from the declared ``molecule_kind``, and refused "
-                "again here against the resolved species, whose SMILES is what "
-                "actually settles how many atoms it has."
-            ),
-        ),
+        PythonCheck(validate_ts_evidence_participant_composition),
     ),
     escape_hatch=(
-        "Omit the participant mappings. They are optional on every path — "
-        "evidence without them still deposits and still reads back as "
-        "``irc: present`` — so a depositor who cannot resolve the partition per "
-        "atom is never forced to guess at one. Declaring a participant "
-        "``molecule_kind: pseudo`` skips that participant alone rather than the "
-        "whole record, because the others' compositions are still well-defined. "
-        "Isotopologues are safe by construction: both sides are compared "
-        "through ``resolve_element_symbol``, so a geometry written ``D`` counts "
-        "as the hydrogen its SMILES spells ``[2H]``. A free electron needs no "
-        "hatch either: it is written as an empty atom list, which this check "
-        "compares against the empty composition ``MoleculeKind.electron`` "
-        "actually has, so a reaction that releases one is held to the same "
-        "standard as every other rather than having to omit its mappings."
+        "Omit the participant mappings, which are optional, or declare a ``pseudo`` "
+        "participant to skip that participant."
     ),
 )
 

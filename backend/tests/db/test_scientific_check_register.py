@@ -19,6 +19,7 @@ code. These tests are what makes that true:
 from __future__ import annotations
 
 import ast
+import dataclasses
 import inspect
 import re
 import subprocess
@@ -43,6 +44,7 @@ from app.scientific_checks.declarations import (
     constraint_rejections,
     register,
 )
+from app.scientific_checks.numbering import numbered_register
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BACKEND_ROOT = REPO_ROOT / "backend"
@@ -77,68 +79,7 @@ def test_register_is_non_empty_and_proportionate() -> None:
     constraints. If this count approaches that order the inclusion test
     has stopped being applied and every entry's claim is diluted.
     """
-    # Ceiling raised 40 -> 45 (2026-09-27) for the Phase D advisory checks
-    # D4-D6, each a separate review-tier claim the Phase D plan requires to be
-    # declared; D4 filled slot 40, D6 is 41, D5 will be 42. The ceiling is
-    # still a filter: anything past 45 needs the same explicit argument.
-    #
-    # Raised 45 -> 46 (2026-10-03) for #672 (ADR 0022): the review-tier
-    # ``isotope-identity`` advisory check, for rows stored before the decision
-    # that D/T means 2H/3H. They cannot be rewritten (trg_as_geometry_atom), so
-    # they need a finding rather than a refusal, and it is a different tier
-    # from every blocking entry. ``geometry_isotope_symbol_conflict`` is
-    # deliberately NOT an entry: it refuses an input-format contradiction
-    # ("D is 2H" is a definition) and lives in the code catalogue.
-    #
-    # Raised 46 -> 47 (2026-10-11) for #669: one entry for the table of calculation
-    # types that may be the source of a stated energy, shared by the
-    # transition-state and network rules. A referee could dispute which types
-    # carry which energy kind, and the table had been two private ones that
-    # disagreed. The new ``network_energy_zpe_source_absent`` warning is NOT a
-    # second entry: it joins the existing "energy not comparable" entry.
-    #
-    # Raised 47 -> 48 (2026-10-27) for #812: the review-tier ``wide-basin`` advisory check. A conformer basin is the
-    # connected component of its optimised structures, so a chain can be wider than the matching tolerance; TCKDB
-    # reports that and never splits it (any automatic cut would put back an arbitrary threshold or an order
-    # dependence), and a curator needs a finding to read. One entry, different tier from every blocking entry.
-    #
-    # Raised 48 -> 49 (2026-10-27) for DR-0038: ``reaction_entry_null_reaction``. With the species key the constitution,
-    # a stereo isomerisation has one species on both sides, so "the sides differ" can no longer be read off the
-    # species; the entry-level rule is the definitional one (a reaction that changes no participant is not a
-    # reaction) and the only blocking claim about a reaction's entries. One entry, joining its conservation group.
-    #
-    # Raised 49 -> 50 (2026-10-31): 50, for the Hessian-method/deck contradiction refusal (#839). It is a
-    # contract between two statements in one deposit (a recorded ``freq.hessian_method`` and the input deck
-    # that ran), definitional rather than an expectation about a result, and no existing entry's claim covers
-    # it: the tolerance entries judge a mode against a tau, this one decides which method tau is read from.
-    #
-    # Raised 50 -> 51 (2026-11-01) for #835: species_stereo_contradiction (#822, DR-0038). With the species key the
-    # constitution, the entry is where a configuration is stated, read from three sources -- every linked geometry,
-    # the SMILES marks, a supplied label -- and a disagreement about one element is refused. Reading R/S, E/Z and an
-    # allene's axis from coordinates (torsion windows, alignment over automorphisms, an enumeration cap) is a
-    # position a referee could dispute, which an input-format conflict is not (#672). Entries 8 and 9 compare a
-    # geometry with its SMILES by element and isotope, never by configuration. Reviewed with the whole #835 sweep: of
-    # 58 unregistered warning codes and 13 recent refusals this is the only new entry; four warnings widened 12, 22
-    # and 25, and the stereo-label, channel-kind and bath-gas refusals stay in the code catalogue.
-    #
-    # Raised 51 -> 52 (2026-11-04) for the wavefunction reliability checks: one entry, three warning codes. They are the
-    # first checks that read a stored wavefunction or spin diagnostic. (1) A closed-shell coupled-cluster T1 above 0.02
-    # (Lee and Taylor 1989): a referee could dispute reporting a rule of thumb that the same literature shows is
-    # mostly a false alarm, and could dispute leaving open-shell T1 and D1 unreported (their definitions differ between
-    # programs and no primary threshold exists). (2) An <S^2> more than 0.1 from S(S+1): 0.1 is a convention of the
-    # field with no primary paper recommending it, so the claim, the absolute-versus-relative form and the use of the
-    # entry's declared multiplicity rather than a printed value are all positions a referee could dispute. (3) A
-    # printed ideal <S^2> that is not S(S+1) of the declared multiplicity: a declaration contradicting what the program
-    # ran, like entry 12's multiplicity_mismatch (and, like it, warn-tier here although ADR 0008 would put it at block).
-    # It is in this entry, not entry 12, because the entry is organised by the data it reads (the stored spin and
-    # wavefunction diagnostics). No existing entry covers any of them:
-    # entry 12 compares a declared state with an output log, these judge a stored diagnostic against a criterion or
-    # against the entry. Different tier from every blocking entry.
-    #
-    # 82 -> 83: one entry, one warning code: a one-electron participant's Hartree-Fock energy accepted under a correlated
-    # declared kinetics level. A referee could dispute that the substitution is exact, and the CABS singles term is not.
-    #
-    # 52 -> 82: the codes that had no entry are declared in gap_declarations.py (the rest are in NOT_SCIENTIFIC).
+    # The ceiling is a filter: a new entry has to pass the inclusion test.
     assert 10 <= len(REGISTER) <= 83, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
         "the system; above ~83 the inclusion test ('could this check be wrong "
@@ -516,10 +457,9 @@ def test_declaring_modules_covers_every_file_that_declares_a_check() -> None:
 def test_entries_are_uniquely_addressable() -> None:
     """No two entries share a (group, sort_key) slot, and codes stay local.
 
-    A code may legitimately appear in more than one entry — ADR 0008 has
-    ``n_imag_contradicts_minimum`` naming the *finding* while the declared
-    stationary-point kind decides the tier — but a code scattered across
-    unrelated groups would mean two different claims share one label.
+    A code may legitimately appear in more than one entry (``n_imag_contradicts_minimum``
+    names the finding while the declared stationary-point kind decides the tier), but a
+    code scattered across unrelated groups would mean two claims share one label.
     """
     slots = [(check.group, check.sort_key) for check in REGISTER]
     assert len(slots) == len(set(slots)), "duplicate (group, sort_key) slot"
@@ -532,22 +472,80 @@ def test_entries_are_uniquely_addressable() -> None:
     assert not scattered, f"codes shared across unrelated groups: {scattered}"
 
 
-def test_every_entry_states_its_tier_rationale_and_enforcement() -> None:
-    """Membership is the claim, so no entry may be a stub."""
+def test_every_entry_states_its_rule_and_enforcement() -> None:
+    """No entry may be a stub, and a blocking entry records its escape hatch."""
     for check in REGISTER:
         assert check.enforced_by, f"{check.asserts!r} names no enforcement site"
         assert len(check.asserts) > 30, f"{check.asserts!r} is not a sentence"
-        assert len(check.tier_rationale) > 60, (
-            f"{check.asserts!r} has no real ADR 0008 tier justification"
-        )
-        assert check.adr, f"{check.asserts!r} cites no ADR"
         if check.tier is CheckTier.block:
             assert check.escape_hatch is not None, (
-                f"{check.asserts!r} blocks but records no escape hatch. If "
-                "there genuinely is none, say so explicitly — a blocking "
-                "check with no documented door is exactly what a referee will "
-                "probe."
+                f"{check.asserts!r} blocks but records no escape hatch; write "
+                "'None.' if there is none."
             )
+
+
+def test_declarations_carry_no_removed_fields() -> None:
+    """The register holds rule, tier, enforcement and repair, not justification."""
+    fields = {field.name for field in dataclasses.fields(ScientificCheck)}
+    assert not fields & {"adr", "tier_rationale"}
+    assert "note" not in {field.name for field in dataclasses.fields(PythonCheck)}
+    assert "note" not in {field.name for field in dataclasses.fields(DatabaseConstraint)}
+
+
+_DECISION_REFERENCE = re.compile(r"ADR \d|DR-\d|docs/adr")
+_SECOND_SENTENCE = re.compile(r"[.!?]\s+[A-Z`]")
+
+
+def _declaration_texts() -> list[tuple[str, str]]:
+    """Every prose field a declaration carries, with where it came from."""
+    texts: list[tuple[str, str]] = []
+    for check in REGISTER:
+        where = check.codes[0] if check.codes else check.asserts[:40]
+        texts.append((f"{where}: asserts", check.asserts))
+        for label, value in (("escape_hatch", check.escape_hatch), ("divergence", check.divergence)):
+            if value:
+                texts.append((f"{where}: {label}", value))
+        for threshold in check.thresholds:
+            texts.append((f"{where}: {threshold.name} rationale", threshold.rationale))
+            if isinstance(threshold, ProvenanceThreshold):
+                texts.append((f"{where}: {threshold.name} fallback", threshold.fallback))
+        for site in check.enforced_by:
+            if isinstance(site, DesignPosition):
+                texts.append((f"{where}: design position", site.where))
+            if isinstance(site, DatabaseConstraint) and site.rejection_detail:
+                texts.append((f"{where}: rejection detail", site.rejection_detail))
+    return texts
+
+
+def test_no_declaration_cites_a_decision_record() -> None:
+    """A declaration says what the check requires, never which ADR or DR it came from."""
+    assert _declaration_texts(), "no declaration text collected, so the scan would pass vacuously"
+    offenders = [(where, m.group(0)) for where, text_ in _declaration_texts() if (m := _DECISION_REFERENCE.search(text_))]
+    assert not offenders, offenders
+
+
+def test_scientific_check_sources_cite_no_decision_record() -> None:
+    """The scientific_checks package and the generator carry no ADR or DR pointer either."""
+    scanned = set((BACKEND_ROOT / "app" / "scientific_checks").glob("*.py")) | {GENERATOR}
+    assert len(scanned) >= 5
+    offenders = [
+        (path.name, m.group(0))
+        for path in sorted(scanned)
+        for line in path.read_text().splitlines()
+        if (m := _DECISION_REFERENCE.search(line))
+    ]
+    assert not offenders, offenders
+
+
+def test_register_document_cites_no_decision_record() -> None:
+    assert not _DECISION_REFERENCE.search(REGISTER_DOC.read_text())
+
+
+def test_prose_fields_are_one_sentence() -> None:
+    """``asserts``, ``escape_hatch``, ``divergence`` and threshold rationales are one sentence each."""
+    for where, value in _declaration_texts():
+        if where.endswith(("asserts", "escape_hatch", "divergence", "rationale")):
+            assert not _SECOND_SENTENCE.search(value), f"{where} is more than one sentence: {value!r}"
 
 
 def test_anchors_name_the_function_rather_than_a_line() -> None:
@@ -693,9 +691,8 @@ def _provenance_thresholds() -> list[tuple[ScientificCheck, ProvenanceThreshold]
 def test_there_are_provenance_thresholds_to_verify() -> None:
     """Guard the guard: an empty list makes the vocab check below vacuous."""
     assert _provenance_thresholds(), (
-        "No ProvenanceThreshold entries. Either ADR 0012's tau lost its "
-        "declaration or collection broke; either way the parameter-key "
-        "existence check would pass vacuously."
+        "No ProvenanceThreshold entries: the tau declaration was lost or "
+        "collection broke, so the parameter-key check would pass vacuously."
     )
 
 
@@ -752,23 +749,18 @@ def test_provenance_thresholds_resolve_and_state_their_fallback() -> None:
         )
         assert len(threshold.fallback) > 60, (
             f"{check.asserts!r}: a provenance-derived threshold must say what "
-            "happens when the provenance is missing. That is the case a "
-            "referee will probe, and silence there is worse than a constant."
+            "happens when the provenance is missing."
         )
 
 
-def test_constant_thresholds_justify_their_number() -> None:
-    """A constant in the register must say why it is that number."""
+def test_constant_thresholds_have_a_unit_and_a_rationale() -> None:
+    """A constant in the register states its unit and what the number means."""
     for check in REGISTER:
         for threshold in check.thresholds:
             if not isinstance(threshold, ConstantThreshold):
                 continue
             assert threshold.unit, f"{check.asserts!r}: {threshold.name} has no unit"
-            assert len(threshold.rationale) > 40, (
-                f"{check.asserts!r}: {threshold.name} states a number with no "
-                "justification, which is the shape that invites a referee to "
-                "ask where it came from."
-            )
+            assert threshold.rationale, f"{check.asserts!r}: {threshold.name} has no rationale"
 
 
 def test_design_positions_are_prose_not_placeholders() -> None:
@@ -810,91 +802,91 @@ _PINNED_NUMBERS: dict[str, int] = {
 }
 
 
-#: The first words of every register entry, by number.
-_OPENINGS: dict[int, str] = {
-    1: "The reactant and product sides of a reaction conta",
-    2: "The summed formal charge of a reaction's reactants",
-    3: "A saddle point is made of exactly the atoms of the",
-    4: "A saddle point carries the same total charge as th",
-    5: "The saddle-point atoms an IRC mapping assigns to a",
-    6: "A reaction entry whose reactants and products are",
-    7: "A deposit's `molecule_kind` agrees with the kind a",
-    8: "A conformer geometry deposited under a species ent",
-    9: "The multiset of isotopic substitutions declared in",
-    10: "Every geometry linked to a calculation is made of",
-    11: "A species entry's declared charge equals the summe",
-    12: "The charge and spin multiplicity a depositor decla",
-    13: "An optimisation's output geometry still describes",
-    14: "A transition state has at least one imaginary vibr",
-    15: "A species entry declared a minimum has no imaginar",
-    16: "A van der Waals complex is formally a minimum, so",
-    17: "A transition state's imaginary modes other than th",
-    18: "A transition state's reaction coordinate should ex",
-    19: "A deposited saddle point should carry passing intr",
-    20: "A frequency result that deposits both a scalar ima",
-    21: "A frequency list carries no more modes than the ge",
-    22: "A frequency list's mode count should match the sha",
-    23: "The energies an energy-ordering record compares sh",
-    24: "A stated energy should be the energy TCKDB stores",
-    25: "Every energy an energy-ordering record or a networ",
-    26: "A calculation cited as the source of a stated ener",
-    27: "An atom does not change element on the way across",
-    28: "One saddle-point atom is claimed by exactly one at",
-    29: "Every atom index in a map is counted against a nam",
-    30: "When a map covers every declared participant of an",
-    31: "Where a deposit carries both an atom map and an IR",
-    32: "A reaction that has a transition state should say",
-    33: "A supplied atom map should cover every declared pa",
-    34: "An atom map records whether a human asserted it or",
-    35: "An Arrhenius pre-exponential factor carries units",
-    36: "A partition function belongs to exactly one subjec",
-    37: "A set of phenomenological k(T,P) declares whether",
-    38: "A collisional energy-transfer model records whethe",
-    39: "The bytes TCKDB serves for a stored artifact are t",
-    40: "Whether a record's preserved evidence is sufficien",
-    41: "Compare every supplied NASA Cp/entropy fit with ex",
-    42: "Compare explicitly supplied opposite elementary ra",
-    43: "Compare every stored Gibbs value of one thermo rec",
-    44: "Compare a thermo record's supplied enthalpies (h29",
-    45: "Compare a kinetics record's stated reaction energy",
-    46: "Find, on a protium species entry, calculation geom",
-    47: "Report a conformer group whose converged optimised",
-    48: "A computed thermo record's heat capacity, evaluate",
-    49: "A scan point's stored coordinate_value is the inte",
-    50: "A calculation that records how its frequency job b",
-    51: "A species entry states one stereo configuration: w",
-    52: "A wavefunction reliability diagnostic that a calcu",
-    53: 'A bath gas a rate or a network solve states is a c',
-    54: 'The kind of a network channel (isomerization, asso',
-    55: 'A network state is the multiset of its participant',
-    56: 'One record has one energy level and the declared l',
-    57: 'Energy calculations and optimisations pair one-to-',
-    58: 'A calculation is evidence for one conformer and ra',
-    59: 'The numbers a composite energy states agree with e',
-    60: 'Each input of an assembled composite ran at the le',
-    61: "The parts of a single point's electronic energy do",
-    62: 'A frequency calculation linked beside a composite ',
-    63: 'A named composite method (CBS-QB3, G4, W1U) is one',
-    64: "An assembled composite's inputs each declare the g",
-    65: 'What a record cites as evidence belongs to the rec',
-    66: 'A kinetics applicability or protocol declaration d',
-    67: 'A determination, statistical-model, structure, pro',
-    68: 'A curator attaches an observation of unresolved id',
-    69: 'A Petersson bond-additivity correction applied as ',
-    70: 'The frequency scale factor a statmech record appli',
-    71: 'A thermo record that carries an enthalpy states wh',
-    72: 'The graph of which calculation depends on which is',
-    73: 'SCF stability verdicts do not cite one another as ',
-    74: 'A lowest-energy selection compares energies of one',
-    75: 'An optimisation recorded as converged has an energ',
-    76: "What a depositor typed about a calculation's setti",
-    77: 'The electronic energy a tool states for a single p',
-    78: 'The Hessian method a deck or log attached after th',
-    79: 'What a neutral ground-state atom declares agrees w',
-    80: 'The job named as having measured an SCF stability ',
-    81: 'A thermo declaration the file format defines descr',
-    82: 'A recorded finite difference of gradients on an OR',
-    83: "A kinetics record's declared correlated energy lev",
+#: The declaration behind every register entry, by published number.
+_ENTRY_DECLARATIONS: dict[int, str] = {
+    1: "CHECK_REACTION_ELEMENTAL_BALANCE",
+    2: "CHECK_REACTION_CHARGE_CONSERVATION",
+    3: "CHECK_TRANSITION_STATE_COMPOSITION",
+    4: "CHECK_TRANSITION_STATE_CHARGE",
+    5: "CHECK_TS_IRC_MAPPING_ELEMENTS",
+    6: "CHECK_REACTION_ENTRY_NULL_REACTION",
+    7: "CHECK_SPECIES_KIND_MATCHES_STORED_IDENTITY",
+    8: "CHECK_GEOMETRY_COMPOSITION_MATCHES_IDENTITY",
+    9: "CHECK_GEOMETRY_ISOTOPES_MATCH_IDENTITY",
+    10: "CHECK_CALCULATION_GEOMETRY_COMPOSITION",
+    11: "CHECK_SMILES_CHARGE_MATCHES_DECLARED",
+    12: "CHECK_CHARGE_MULTIPLICITY_VS_LOG",
+    13: "CHECK_OPT_GEOMETRY_MATCHES_DECLARED_SPECIES",
+    14: "CHECK_TRANSITION_STATE_REACTION_COORDINATE",
+    15: "CHECK_MINIMUM_ZERO_IMAGINARY_MODES",
+    16: "CHECK_VDW_COMPLEX_IMAGINARY_MODE",
+    17: "CHECK_TRANSITION_STATE_EXTRA_IMAGINARY_MODES",
+    18: "CHECK_TRANSITION_STATE_SOFT_REACTION_COORDINATE",
+    19: "CHECK_TS_IRC_EVIDENCE",
+    20: "CHECK_FREQ_N_IMAG_AGREES_WITH_ITS_MODES",
+    21: "CHECK_FREQ_LIST_WITHIN_GEOMETRY_DEGREES_OF_FREEDOM",
+    22: "CHECK_FREQ_LIST_MODE_COUNT_MATCHES_GEOMETRY_SHAPE",
+    23: "CHECK_TS_ENERGY_ORDERING_LEVELS",
+    24: "CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH",
+    25: "CHECK_TS_ENERGY_ORDERING_NOT_COMPARED",
+    26: "CHECK_ENERGY_SOURCE_TYPE",
+    27: "CHECK_ATOM_MAP_ELEMENT_CONSERVED",
+    28: "CHECK_ATOM_MAP_IS_A_BIJECTION",
+    29: "CHECK_ATOM_MAP_INDICES_ARE_GEOMETRY_RELATIVE",
+    30: "CHECK_ATOM_MAP_ACCOUNTS_FOR_EVERY_ATOM",
+    31: "CHECK_ATOM_MAP_AGREES_WITH_IRC_MAPPING",
+    32: "CHECK_ATOM_MAP_ABSENT",
+    33: "CHECK_ATOM_MAP_INCOMPLETE",
+    34: "CHECK_ATOM_MAP_PROVENANCE_IS_DECLARED",
+    35: "CHECK_ARRHENIUS_A_UNITS_MATCH_MOLECULARITY",
+    36: "CHECK_STATMECH_HAS_EXACTLY_ONE_SUBJECT",
+    37: "CHECK_NETWORK_SOLVE_KIND_EVIDENCE",
+    38: "CHECK_ENERGY_TRANSFER_SCOPE",
+    39: "CHECK_STORED_ARTIFACT_BYTES_MATCH_THEIR_DIGEST",
+    40: "CHECK_REPRODUCIBILITY_IS_ITS_OWN_JUDGEMENT",
+    41: "CHECK_THERMO_CONSISTENCY",
+    42: "CHECK_THERMO_KINETICS_CONSISTENCY",
+    43: "CHECK_GIBBS_SELF_CONSISTENCY",
+    44: "CHECK_KIRCHHOFF_CONSISTENCY",
+    45: "CHECK_HESS_CONSISTENCY",
+    46: "CHECK_ISOTOPE_IDENTITY_CONSISTENCY",
+    47: "CHECK_WIDE_BASIN_CONSISTENCY",
+    48: "CHECK_EXTERNAL_CP_COMPARISON",
+    49: "CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY",
+    50: "CHECK_RECORDED_HESSIAN_METHOD_AGREES_WITH_THE_INPUT_DECK",
+    51: "CHECK_SPECIES_ENTRY_STEREO_AGREES",
+    52: "CHECK_WAVEFUNCTION_RELIABILITY_DIAGNOSTICS",
+    53: "CHECK_KINETICS_BATH_GAS_IS_A_COMPOSITION",
+    54: "CHECK_NETWORK_CHANNEL_KIND_FOLLOWS_ITS_STATES",
+    55: "CHECK_NETWORK_STATES_ARE_DISTINCT_COMPOSITIONS",
+    56: "CHECK_DECLARED_ENERGY_LEVEL_IS_HONEST",
+    57: "CHECK_ENERGIES_AND_OPTIMISATIONS_PAIR_ONE_TO_ONE_BY_GEOMETRY",
+    58: "CHECK_CALCULATION_GEOMETRY_STATEMENTS_AGREE",
+    59: "CHECK_COMPOSITE_STATED_NUMBERS_AGREE",
+    60: "CHECK_COMPOSITE_INPUTS_ARE_AT_THE_SLOT_LEVEL_AND_ONE_GEOMETRY",
+    61: "CHECK_SP_ENERGY_COMPONENTS_ADD_UP",
+    62: "CHECK_COMPOSITE_FREQUENCY_IS_AT_THE_RECIPE_LEVEL",
+    63: "CHECK_NAMED_COMPOSITE_IS_A_COMPOSITE_CALCULATION",
+    64: "CHECK_COMPOSITE_INPUTS_AND_TOTAL_CAN_BE_CHECKED",
+    65: "CHECK_A_CITED_THING_IS_OF_THE_RECORDS_OWN_SUBJECT",
+    66: "CHECK_KINETICS_DECLARATION_DOES_NOT_CONTRADICT_THE_RECORD",
+    67: "CHECK_DECLARATION_IS_ABOUT_THE_RECORD_THAT_CARRIES_IT",
+    68: "CHECK_OBSERVATION_IS_ATTACHED_TO_ITS_OWN_GROUND_STATE",
+    69: "CHECK_A_BOND_ADDITIVITY_TOTAL_HAS_ITS_COMPONENTS",
+    70: "CHECK_A_FREQUENCY_SCALE_FACTOR_IS_OF_THE_PROGRAM_THAT_RAN",
+    71: "CHECK_ENTHALPY_STATES_ITS_REFERENCE",
+    72: "CHECK_CALCULATION_DEPENDENCIES_ARE_ACYCLIC",
+    73: "CHECK_STABILITY_VERDICTS_DO_NOT_CITE_EACH_OTHER_IN_A_RING",
+    74: "CHECK_ENERGIES_AT_DIFFERENT_LEVELS_ARE_NOT_COMPARED",
+    75: "CHECK_A_CONVERGED_OPTIMISATION_HAS_AN_ENERGY_BEHIND_IT",
+    76: "CHECK_TYPED_SETTINGS_AGREE_WITH_THE_ARTIFACTS",
+    77: "CHECK_STATED_ENERGY_AGREES_WITH_THE_LOG",
+    78: "CHECK_HESSIAN_METHOD_OF_A_LATE_ARTIFACT_AGREES_WITH_THE_STORED_BASIS",
+    79: "CHECK_ATOMIC_ELECTRONIC_LEVELS_AGREE_WITH_THE_GROUND_TERM",
+    80: "CHECK_SCF_STABILITY_SOURCE_IS_COMPARABLE",
+    81: "CHECK_A_FORMAT_DEFINED_THERMO_DECLARATION_DESCRIBES_WHAT_THE_FORMAT_DEFINES",
+    82: "CHECK_A_RECORDED_HESSIAN_METHOD_IS_REFINED_WHEN_IT_CANNOT_HOLD",
+    83: "CHECK_A_ONE_ELECTRON_HARTREE_FOCK_ENERGY_STANDS_FOR_THE_CORRELATED_LEVEL",
 }
 
 
@@ -921,15 +913,18 @@ def test_existing_entries_keep_their_numbers() -> None:
     assert number_of["hessian_method_contradicts_input_deck"] == 50
     # The entry added in #835 takes the next free number, in a group listed after every earlier one.
     assert number_of["species_stereo_contradiction"] == 51
-    # Every entry by its opening words: a new check added to an earlier group shifts every later number (the
+    # Every entry by its declaration: a new check added to an earlier group shifts every later number (the
     # generator only protects against new *groups*), and this is the test that notices.
-    headings = {
-        int(m.group(1)): m.group(2)
-        for m in re.finditer(r"^### (\d+)\. (.*)$", doc, flags=re.MULTILINE)
+    declared_name = {
+        id(value): name
+        for module in DECLARING_MODULES
+        for name, value in vars(module).items()
+        if isinstance(value, ScientificCheck)
     }
-    assert set(headings) == set(_OPENINGS) == set(range(1, len(_OPENINGS) + 1))
-    for number, opening in _OPENINGS.items():
-        assert headings[number].startswith(opening), number
+    published = {number: declared_name[id(check)] for number, check in numbered_register()}
+    assert published == _ENTRY_DECLARATIONS
+    headings = {int(m.group(1)) for m in re.finditer(r"^### (\d+)\. ", doc, flags=re.MULTILINE)}
+    assert headings == set(_ENTRY_DECLARATIONS) == set(range(1, len(_ENTRY_DECLARATIONS) + 1))
     # Every code stored with a register number still points at the entry that declares it.
     for code, stored in REGISTER_ENTRY.items():
         assert number_of[code] == stored, code

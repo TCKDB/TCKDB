@@ -755,56 +755,10 @@ CHECK_ATOM_MAP_AGREES_WITH_IRC_MAPPING = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional, because the two surfaces are one claim at two "
-        "resolutions rather than two claims. An IRC participant mapping "
-        "partitions the saddle-point atoms among the declared participants; an "
-        "atom map is, in this schema's own words, 'the refinement of that "
-        "partition into a bijection'. A refinement that contradicts what it "
-        "refines is not extra detail, it is a record asserting that one saddle "
-        "point is two incompatible things at once, and no correct calculation "
-        "produces both halves of it — the depositor followed one intrinsic "
-        "reaction coordinate, not two. This is the same class of claim as "
-        "``CHECK_TS_IRC_MAPPING_ELEMENTS`` and "
-        "``CHECK_ATOM_MAP_ELEMENT_CONSERVED``, which already block, and leaving "
-        "it advisory would let the pair assert together what neither is allowed "
-        "to assert alone."
-    ),
-    adr="0011, 0008",
     enforced_by=(
-        PythonCheck(
-            validate_atom_map_agrees_with_irc_evidence,
-            note=(
-                "Called from *both* seams — ``persist_reaction_atom_map`` and "
-                "``persist_transition_state_validation_evidence`` — and reads "
-                "both surfaces from the database rather than from either "
-                "caller's payload, so whichever a deposit writes second "
-                "delivers the same verdict. Today the second is always the "
-                "atom map: the computed-reaction bundle is the only payload "
-                "with an ``atom_map`` field and writes it after the evidence, "
-                "and no path can attach a map to a saddle point deposited "
-                "earlier because every transition-state entry is created fresh "
-                "by the deposit that writes it. Both are incidental orderings, "
-                "so neither is relied on."
-            ),
-        ),
+        PythonCheck(validate_atom_map_agrees_with_irc_evidence),
     ),
-    escape_hatch=(
-        "Omit one surface, or correct whichever is wrong — the mappings are "
-        "optional on every path and a partial atom map is always accepted. "
-        "Three absences are deliberately *not* disagreements: an atom map that "
-        "omits a participant or leaves atoms unmapped is compared only over "
-        "what it does claim, a transition state with no passing IRC mapping is "
-        "not compared at all, and a barrierless channel has neither surface. "
-        "Two participants on one side that are the same species entry are "
-        "interchangeable, so a disagreement a permutation within that group "
-        "would resolve is treated as arbitrary labelling rather than "
-        "contradiction. A participant with no atoms is not an absence: both "
-        "surfaces can say it has none -- an empty atom list -- so a reaction "
-        "releasing a free electron carries a complete partition on both and is "
-        "compared like any other, with the electron contributing no atoms to "
-        "either side of the comparison."
-    ),
+    escape_hatch="Omit one surface, or correct whichever is wrong.",
 )
 
 CHECK_ATOM_MAP_ABSENT = ScientificCheck(
@@ -817,35 +771,10 @@ CHECK_ATOM_MAP_ABSENT = ScientificCheck(
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "Absence, not contradiction. An unmapped reaction is an incomplete "
-        "record rather than a false one — the rate constant is still the rate "
-        "constant and what is missing is the mechanistic detail. Blocking "
-        "would reject correct science over evidence the depositor may not "
-        "have, and would make every reaction already in the database "
-        "undepositable."
-    ),
-    adr="0011, 0008",
     enforced_by=(
-        PythonCheck(
-            _warn_absent,
-            note=(
-                "A reaction with no transition state is not warned about: both "
-                "legs of a map run toward the saddle point, so a barrierless "
-                "channel has nothing to map onto and a warning it could never "
-                "satisfy would train depositors to ignore the one that "
-                "matters. The PDep bundle has no ``atom_map`` field yet, so on "
-                "that path the warning carries a different remedy sentence "
-                "rather than naming a field that does not exist."
-            ),
-        ),
+        PythonCheck(_warn_absent),
     ),
-    escape_hatch=(
-        "None is needed — the warning *is* the accommodation. TCKDB "
-        "deliberately will not infer a map: several chemically distinct maps "
-        "are usually consistent with the same reactants and products, so "
-        "choosing one by algorithm would manufacture provenance."
-    ),
+    escape_hatch="None; the check only warns.",
 )
 
 CHECK_ATOM_MAP_INCOMPLETE = ScientificCheck(
@@ -859,25 +788,8 @@ CHECK_ATOM_MAP_INCOMPLETE = ScientificCheck(
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "Absence again, at finer grain. A partial map is a true-but-partial "
-        "record; only a map that contradicts *itself* is refused, and that is "
-        "handled at the blocking tier by ``validate_reaction_atom_map`` and by "
-        "the constraints on ``reaction_atom_map_pair``."
-    ),
-    adr="0011, 0008",
     enforced_by=(
-        PythonCheck(
-            _warn_incomplete,
-            note=(
-                "Two codes from one seam: "
-                "``reaction_atom_map_participants_incomplete`` when a declared "
-                "molecule is missing from the map entirely, "
-                "``reaction_atom_map_atoms_incomplete`` when a mapped "
-                "participant leaves its own atoms unmapped or a leg leaves "
-                "saddle-point atoms claimed by nobody."
-            ),
-        ),
+        PythonCheck(_warn_incomplete),
     ),
     escape_hatch=None,
 )

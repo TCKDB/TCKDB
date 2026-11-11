@@ -233,47 +233,15 @@ CHECK_SPECIES_KIND_MATCHES_STORED_IDENTITY = ScientificCheck(
     sort_key=0,
     code=W_SPECIES_KIND_CONFLICT,
     asserts=(
-        "A deposit's ``molecule_kind`` agrees with the kind already stored for "
-        "the species identity it resolves to — one identity is one kind of "
-        "thing."
+        "A deposit's ``molecule_kind`` agrees with the kind already stored for the species "
+        "identity it resolves to."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional, and load-bearing for two other blocking checks. Species "
-        "identity is ``(smiles, charge, multiplicity)`` and does not include "
-        "``kind``, so two deposits that disagree about kind address one row and "
-        "at most one of them can be right — that is a contradiction, not "
-        "incompleteness. It has to block rather than warn because "
-        "``validate_reaction_elemental_balance`` and "
-        "``validate_reaction_charge_conservation`` read ``species.kind`` from "
-        "the stored row: silently inheriting ``pseudo`` would switch mass "
-        "balance and charge conservation off for an ordinary molecule, on "
-        "every future reaction containing it, with nothing on any surface "
-        "recording that it had happened."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            assert_declared_kind_matches_stored,
-            note=(
-                "Runs on every path through ``resolve_species``, which is the "
-                "sole creator of ``species`` rows on every upload route. A row "
-                "written directly to the database — the only way a ``pseudo`` "
-                "species exists today, since ``canonical_species_identity`` "
-                "refuses that kind — bypasses this, as it bypasses every "
-                "Python check; what the check guarantees is that no *upload* "
-                "silently adopts a kind it did not declare."
-            ),
-        ),
+        PythonCheck(assert_declared_kind_matches_stored),
     ),
-    escape_hatch=(
-        "None, and deliberately so: the escape hatch would be exactly the "
-        "silent inheritance the check exists to remove. A depositor who "
-        "genuinely means the stored kind declares it; one who means the other "
-        "kind needs a different identity, because the two claims are about the "
-        "same row."
-    ),
+    escape_hatch="None.",
 )
 
 
@@ -360,39 +328,13 @@ CHECK_GEOMETRY_ISOTOPES_MATCH_IDENTITY = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional. The identity's isotope label and the geometry's "
-        "per-atom masses describe the same nuclei; when they disagree one of "
-        "them is wrong and there is no defensible way to pick a winner, so a "
-        "CD3OH identity on an all-protium geometry would yield frequencies for "
-        "a molecule nobody deposited."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            assert_geometry_isotopes_match_identity,
-            note=(
-                "Runs from ``resolve_species_entry`` only when a geometry is "
-                "supplied. The refusal was prose-only until the code above was "
-                "attached; a client could not tell it from any other 422, "
-                "which is why the entry used to record the gap here."
-            ),
-        ),
+        PythonCheck(assert_geometry_isotopes_match_identity),
     ),
-    escape_hatch=(
-        "Deposit no geometry. An explicitly declared *standard* isotope is "
-        "dropped before comparison, so ``{1: 1}`` on a hydrogen cannot fork an "
-        "identity away from an unlabelled deposit of the same molecule."
-    ),
+    escape_hatch="Deposit no geometry.",
     divergence=(
-        "Not a divergence but a documented false *acceptance*, restated here "
-        "because a referee will ask: only the multiset is compared, so "
-        "isotopomers are not distinguished. An identity of ``[2H]OC`` (CH3-OD) "
-        "accepts a geometry labelling a methyl hydrogen instead (CH2D-OH) — "
-        "different molecules with different zero-point energies. Closing it "
-        "needs an atom-level SMILES-to-XYZ correspondence the repository does "
-        "not have. Where the two disagree invisibly, the geometry is "
-        "authoritative for masses and the SMILES only for identity."
+        "Only the multiset of isotopes is compared, so isotopomers such as CH3-OD and CH2D-OH "
+        "are not distinguished."
     ),
 )
 
@@ -561,40 +503,10 @@ CHECK_GEOMETRY_COMPOSITION_MATCHES_IDENTITY = ScientificCheck(
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional. No correct calculation produces a geometry that is not "
-        "made of its own molecule's atoms, so a formula disagreement between a "
-        "structure and its own identifier is a contradiction rather than an "
-        "expectation — every energy, frequency and partition function "
-        "downstream would describe a different molecule under the deposited "
-        "label."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            assert_geometry_composition_matches_identity,
-            note=(
-                "Conformer geometries only, via ``resolve_species_entry``: the "
-                "computed-species bundle, ``/uploads/conformers``, the "
-                "computed-reaction bundle and the PDep bundle. **Calculation** "
-                "input and output geometries are reached by no composition "
-                "check on any path — benzene coordinates can still be attached "
-                "as a calculation geometry under a ``smiles: \"C\"`` entry. "
-                "Closing that for *output* geometries would be wrong (an "
-                "optimisation that dissociated is science to record); for "
-                "*input* geometries it is an open gap."
-            ),
-        ),
+        PythonCheck(assert_geometry_composition_matches_identity),
     ),
-    escape_hatch=(
-        "Declare ``molecule_kind: pseudo``, which has no atom-resolved "
-        "composition to agree with. A free electron is deliberately **not** "
-        "exempt — its composition is not unknown but empty, so any geometry "
-        "deposited under one is refused, which stops ``electron`` becoming a "
-        "quieter way to smuggle a structure past the check. Absence does not "
-        "block: no geometry, or a SMILES RDKit will not parse, is "
-        "incompleteness."
-    ),
+    escape_hatch="Declare ``molecule_kind: pseudo``, or deposit no geometry.",
 )
 
 

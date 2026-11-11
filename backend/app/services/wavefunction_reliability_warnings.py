@@ -82,7 +82,6 @@ from app.scientific_checks import (
     CheckTier,
     CodeChannel,
     ConstantThreshold,
-    DesignPosition,
     PythonCheck,
     ScientificCheck,
 )
@@ -328,109 +327,27 @@ CHECK_WAVEFUNCTION_RELIABILITY_DIAGNOSTICS = ScientificCheck(
         W_SPIN_EXPECTED_CONTRADICTS_MULTIPLICITY,
     ),
     asserts=(
-        "A wavefunction reliability diagnostic that a calculation carries is reported when it is past its "
-        "conventional threshold, with that threshold's source named and without judging what it means: the T1 "
-        "diagnostic of a closed-shell coupled-cluster calculation above 0.02 (Lee and Taylor, 1989), and a stored "
-        "<S^2> further than 0.1 from S(S+1) of the entry's declared multiplicity (a convention of the field, not a "
-        "finding). A program's printed ideal <S^2> that is not S(S+1) of the declared multiplicity is reported "
-        "separately. The result is stored as deposited; nothing about the value, the record's review status or any "
-        "selection changes."
+        "A wavefunction reliability diagnostic is reported when it is past its conventional "
+        "threshold: closed-shell coupled-cluster T1 above 0.02, a stored <S^2> (not the "
+        "annihilated one) more than 0.1 from S(S+1), or a printed ideal <S^2> more than 1e-3 "
+        "from S(S+1), with S in both taken from the entry's declared multiplicity and never "
+        "from ``s_squared_expected``."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
-    tier_rationale=(
-        "A closed-shell CCSD(T) energy whose reference is a poor starting point could be wrong in a scientifically "
-        "interesting way, and a closed-shell transition state with bond breaking can cross 0.02. But the diagnostic "
-        "is a contested rule of thumb: in a 50-molecule atomization-energy test at least 75% of the molecules T1 or D1 "
-        "flagged had no large error (Sprague and Irikura 2014), and T1 is argued to measure orbital relaxation "
-        "rather than multireference character. So it can only be an expectation (ADR 0008): a notable property of a "
-        "correct result, reported once and worded as 'above the rule of thumb', never as 'the system is "
-        "multireference'. This reverses the earlier position that T1 and D1 are 'deliberately not enforced or "
-        "labelled' (scientific_calculation_reads.md); the reasons it is now acceptable are that the scope is closed "
-        "shell only, the threshold has a primary source, and the sentence does not judge. The scope is the "
-        "calculation: a thermo or kinetics record citing it earns no warning of its own. The spin-contamination "
-        "criterion is weaker still: no primary paper recommends |<S^2> - S(S+1)| > 0.1. It is a convention that the "
-        "literature states in passing ('Typically, a UHF wavefunction with Delta<S^2> over 0.1 [Williams et al., "
-        "Chem. Phys. Lett. 2011, 504, 88, doi:10.1016/j.cplett.2011.01.020] or Delta<S^2>% over 10 % [Rettig et al., "
-        "J. Chem. Theory Comput. 2020, 16, 7473, doi:10.1021/acs.jctc.0c00986] is considered severely "
-        "spin-contaminated', arXiv:2307.10734). Rettig et al. use the relative form operationally, to split a "
-        "benchmark: 'An energy is classified as NSC if all of the participating species have HF <S^2> values that "
-        "deviate by no more than 10% from the exact, spin-pure <S^2> value.' So the sentence names it as the "
-        "conventional criterion, not a finding about the system, and the absolute form is used because it does not "
-        "grow with S. The comparison between the program's printed ideal <S^2> and the entry's multiplicity needs "
-        "no threshold source: it compares two declared quantities, to a tolerance of 1e-3 that is far above print "
-        "noise and far below the gap between spin states. That one is a declaration contradicting what the program "
-        "ran, which ADR 0008 would put at the block tier; it is warn-tier here for the same recorded reason as "
-        "entry 12's multiplicity_mismatch: such checks have not yet been run on real data, so their false-positive "
-        "rate is unknown and promoting them first would be unsafe. It is grouped in this entry, not entry 12, "
-        "because the entry is organised by the data it reads (the stored spin diagnostic and wavefunction "
-        "diagnostic), not by the kind of claim."
-    ),
-    adr="0008",
     enforced_by=(
-        PythonCheck(
-            collect_wavefunction_reliability_warnings,
-            note=(
-                "The write path: run once a request's calculations are flushed, over every calculation the request "
-                "persisted, by every workflow that does (conformer, transition state, computed species, computed "
-                "reaction, thermo, statmech, transport, network). The diagnostics enter only through the producer "
-                "payload and nothing writes one later, so there is no late path. Three independent checks, each on a "
-                "stored row. T1: fires when the entry's multiplicity (read from the entry, never inferred) is 1, a "
-                "T1 is stored, the calculation's method is a restricted coupled-cluster method with singles (CCSD, "
-                "CCSD(T), F12, DLPNO and PNO variants, CCSDT, QCISD) and T1 is strictly above 0.02. Spin "
-                "contamination: fires when |s_squared - S(S+1)| is strictly above 0.1, S from the entry's "
-                "multiplicity. Printed ideal value: fires when s_squared_expected differs from the entry's S(S+1) by "
-                "more than 1e-3. Absent is absent. Open-shell T1 and D1 are stored and shown, never warned on."
-            ),
-        ),
-        PythonCheck(
-            is_coupled_cluster_method,
-            note=(
-                "Scopes the T1 rule to methods whose T1 is Lee and Taylor's: a restricted coupled-cluster method "
-                "with singles. An unrestricted method, a method the table does not recognise, a composite recipe "
-                "that contains a CCSD(T) step, EOM-CCSD, BCCD(T), CCD, CC2 and CC3 are not in it."
-            ),
-        ),
-        DesignPosition(
-            where=(
-                "Open-shell T1 and D1 are deliberately not thresholded. Add an open-shell T1 warning only when all "
-                "three hold: (1) the producer reads the last 'T1 diagnostic' line of a Molpro open-shell log, not "
-                "the first (the first is the RMP2-stage value, roughly thirty times too small); (2) TCKDB records the "
-                "reference type (RHF, UHF or ROHF) next to the diagnostic, because the programs define open-shell T1 "
-                "differently; (3) an open-shell threshold with a primary source is in hand (the 0.044 figure reached "
-                "us only through secondary sources). D1 additionally needs a threshold verified in Janssen and "
-                "Nielsen (1998) or a successor, and a producer that deposits it."
-            ),
-        ),
-        DesignPosition(
-            where=(
-                "Spin contamination is judged with the absolute criterion |s_squared - S(S+1)| > 0.1 (strict), S "
-                "from the entry's declared multiplicity and never from s_squared or s_squared_expected, using "
-                "s_squared and not s_squared_annihilated. The expectation is the entry's declared multiplicity so "
-                "that a wrong ideal value printed by the program cannot hide a contaminated or mis-declared "
-                "calculation; that disagreement is its own warning, spin_expected_contradicts_multiplicity, never "
-                "merged with contamination. Both can apply to one calculation and then produce two warnings. "
-                "Neither is judged for a calculation with no spin_diagnostic row."
-            ),
-        ),
+        PythonCheck(collect_wavefunction_reliability_warnings),
+        PythonCheck(is_coupled_cluster_method),
     ),
-    escape_hatch=(
-        "None needed -- no check here refuses. A calculation whose T1 is above 0.02, or whose <S^2> is more than 0.1 "
-        "from S(S+1), for a reason the depositor understands is stored as sent; the warning only reports the value "
-        "against the conventional criterion. A printed ideal <S^2> that contradicts the declared multiplicity is "
-        "cleared by correcting whichever of the two is wrong."
-    ),
+    escape_hatch="None; the check only warns.",
     thresholds=(
         ConstantThreshold(
             name="t1_closed_shell_threshold",
             value=T1_CLOSED_SHELL_THRESHOLD,
             unit="dimensionless (singles norm over the square root of the number of correlated electrons)",
             rationale=(
-                "Lee and Taylor, Int. J. Quantum Chem. 1989, 36 (S23), 199 (doi:10.1002/qua.560360824): 'a large T1 "
-                "(i.e., >0.02) probably indicates the need for a multireference electron correlation procedure'. A "
-                "rule of thumb with a hedge in its own abstract, used only for closed-shell coupled-cluster "
-                "calculations, where every program computes the same quantity. Strictly greater than, so 0.0200 is "
-                "on the line and does not warn."
+                "A conventional rule of thumb for closed-shell coupled-cluster calculations, applied "
+                "strictly greater than."
             ),
         ),
         ConstantThreshold(
@@ -438,10 +355,8 @@ CHECK_WAVEFUNCTION_RELIABILITY_DIAGNOSTICS = ScientificCheck(
             value=S_SQUARED_THRESHOLD,
             unit="dimensionless (absolute deviation of <S^2> from S(S+1))",
             rationale=(
-                "A convention of the field, not a recommendation of any paper: Williams et al., Chem. Phys. Lett. "
-                "2011, 504, 88 (doi:10.1016/j.cplett.2011.01.020) is cited for the absolute 0.1 and Rettig et al., "
-                "J. Chem. Theory Comput. 2020, 16, 7473 (doi:10.1021/acs.jctc.0c00986) for a relative 10%. The "
-                "absolute form is used. Strictly greater than, so a deviation of exactly 0.1 does not warn."
+                "A conventional absolute deviation of <S^2> from S(S+1), applied strictly greater "
+                "than."
             ),
         ),
         ConstantThreshold(
@@ -449,9 +364,8 @@ CHECK_WAVEFUNCTION_RELIABILITY_DIAGNOSTICS = ScientificCheck(
             value=S_SQUARED_EXPECTED_TOLERANCE,
             unit="dimensionless (absolute difference between two <S^2> values)",
             rationale=(
-                "Compares the ideal <S^2> a program printed with S(S+1) of the declared multiplicity. Programs print "
-                "it to four to six decimals, so 1e-3 is well above print noise, and the nearest distinct spin states "
-                "differ by at least 0.75, so it cannot hide a different multiplicity."
+                "Programs print the ideal <S^2> to four to six decimals, so 1e-3 is above print noise "
+                "and far below the gap between spin states."
             ),
         ),
     ),

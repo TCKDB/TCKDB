@@ -1,15 +1,14 @@
 """Codes that are deliberately not in the scientific check register, each with the reason.
 
-The register (:mod:`app.scientific_checks.declarations`) claims positions about chemistry that a
-referee could dispute. ``app.api.code_catalogue`` lists every code the API can put in an error body,
+The register (:mod:`app.scientific_checks.declarations`) lists the checks that encode chemistry.
+``app.api.code_catalogue`` lists every code the API can put in an error body,
 and :data:`tckdb_schemas.deposit_warning_messages.RENDERED` every warning a deposit can carry. A code
 in either that is not a register code is not silently "probably not scientific": it is in
 :data:`NOT_SCIENTIFIC` with a reason, and ``tests/db/test_scientific_check_register.py`` fails when a
 code is in neither, in both, or is named here after it was removed from the catalogue.
 
 A code that a register entry reports (in ``code`` or as a ``DatabaseConstraint.rejection_code``) must
-not appear here. Moving a code across the line is an edit to this file or to a declaration, reviewed
-as one: that is the point of keeping it a plain mapping.
+not appear here.
 """
 
 from __future__ import annotations
@@ -147,7 +146,7 @@ NOT_SCIENTIFIC: dict[str, str] = {
     'handle_type_mismatch': _R02,
     'hessian_not_found': 'Read-side: no stored Hessian.',
     'hessian_not_stored_failed': _R15,
-    'hessian_not_stored_geometry_mismatch': 'Best-effort Hessian extraction outcome; the geometry rule itself is registered (entry 10).',
+    'hessian_not_stored_geometry_mismatch': 'Best-effort Hessian extraction outcome; the geometry rule itself is registered (the geometry composition entry).',
     'hessian_not_stored_no_unique_input_geometry': _R15,
     'hessian_not_stored_not_frequency_calculation': _R15,
     'hessian_not_stored_unparseable': _R15,
@@ -297,8 +296,8 @@ NOT_SCIENTIFIC: dict[str, str] = {
     'sp_energy_components_require_energy': 'Payload shape of the single-point components (the energy must be stated so the parts can be checked); the arithmetic is registered.',
     'sp_energy_filled_from_log': 'Informational: a missing energy was filled from the log; tooling outcome.',
     'species_entry_handle_conflict': _R02,
-    'species_entry_stereo_not_represented': 'A stereo element the stereo vocabulary cannot state yet; a vocabulary limit, not a contradiction (entry 51 judges contradictions).',
-    'species_entry_stereo_unresolved': 'A stereo element still unknown after the deposit; an absence, not a contradiction (entry 51 judges contradictions).',
+    'species_entry_stereo_not_represented': 'A stereo element the stereo vocabulary cannot state yet; a vocabulary limit, not a contradiction (the stereo agreement entry judges contradictions).',
+    'species_entry_stereo_unresolved': 'A stereo element still unknown after the deposit; an absence, not a contradiction (the stereo agreement entry judges contradictions).',
     'species_handle_conflict': _R02,
     'species_key_undeclared': _R11,
     'species_stereo_label_invalid': _R18,
