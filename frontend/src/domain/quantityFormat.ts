@@ -237,6 +237,7 @@ export const QUANTITY_SPECS = {
     transport_polarizability_angstrom3: { kind: "deposited", unit: "Å³" },
     transport_rotational_relaxation: { kind: "deposited", unit: null },
     calculation_electronic_energy_hartree: { kind: "fixed", digits: 6, unit: "hartree" },
+    ts_imaginary_frequency_cm1: { kind: "deposited", unit: "cm⁻¹" },
     kinetics_ea_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
     kinetics_a: { kind: "scientific", digits: 3, unit: null },
     kinetics_n: { kind: "scientific", digits: 4, unit: null },
@@ -257,6 +258,7 @@ export const DEPOSITED_SPEC_KEYS = [
     "thermo_point_g_kj_mol",
     "transport_polarizability_angstrom3",
     "transport_rotational_relaxation",
+    "ts_imaginary_frequency_cm1",
 ] as const
 
 export type QuantitySpecKey = keyof typeof QUANTITY_SPECS

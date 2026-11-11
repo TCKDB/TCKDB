@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Transition state page with its energy hill (Unreleased)
+
+- **Behaviour:** the transition state entry page is titled "Transition state of <equation>" with breadcrumbs, a review word and a lede, and shows the energy hill narrowed to this entry with its peak marked (or why there is none), the 3D picture, the imaginary frequency (magnitude with an i, stored sign on hover) with a glossary term and a link to its calculation, a checks table (one imaginary frequency, IRC, energy ordering, each recorded or not recorded with its outcome and linked to the calculations its own record names), and trust and IRC side by side with what each asks. The depositor's note appears only as a depositor note. The tab title is "<equation> · Transition state · TCKDB".
+- **Schema and migration:** none. No new environment variable.
+
 ## Conformer and geometry pages (Unreleased)
 
 - **Behaviour:** the conformer group, conformer observation and geometry pages lead with the picture (a ball-and-stick drawing with "Show in 3D") and one sentence about the shape worked out from the stored coordinates (two atoms and their distance, or atoms per element and the bonds drawn). Titles are human labels ("Conformer Group 1 of C2H6O", "Geometry of CH3 (final, from an optimisation)"), breadcrumbs run Molecules, the molecule, its version, the conformer. The word "basin" is gone from page text. The group page lists each observation in deposit order with every energy computed on its geometry, each giving its calculation, level of theory, program and review status; a spread is stated only between energies of one kind at one level and one program. A "Used by" section lists the thermochemistry and rate coefficients that name the conformer, and where it was merged. A depositor's label and note appear only in a labelled note from the depositor. Coordinates show 6 decimal places in ångström and bohr, with the stored ångström number as the hover value. Tables scroll inside their own labelled box.
