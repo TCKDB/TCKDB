@@ -112,7 +112,7 @@ describe("ReactionTransitionStatesSection — IRC-conditional honest note", () =
     it("renders the honest note, naming the IRC, when this TS entry has an ts_irc slot", () => {
         renderSection()
         const note = screen.getByTestId("dep-graph-context-note")
-        expect(note).toHaveTextContent(/does not show which species the IRC connects/)
+        expect(note).toHaveTextContent(/what the IRC connects is on the transition-state entry/)
         // The narrower claim from review: this VIEW lacks it, not "the
         // archive" -- the evidence can exist elsewhere (the TS entry).
         expect(note.textContent).not.toMatch(/archive does not record/)

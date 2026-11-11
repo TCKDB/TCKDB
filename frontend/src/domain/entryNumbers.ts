@@ -294,7 +294,7 @@ export function numbersOrderSentence(lists: { kind: NumberKind; sort: OrderEcho 
     const together = named.map((list) => list.name)
     const sequence = together.length === 1
         ? together[0]
-        : `${together[0]} first, then ${together.slice(1).map((name) => name.toLowerCase()).join(", then ")}`
-    if (first && named.every((list) => list.words === first)) return `${sequence}; inside each, ${first}.`
+        : `${together[0]}, then ${together.slice(1).map((name) => name.toLowerCase()).join(", then ")}`
+    if (first && named.every((list) => list.words === first)) return `${sequence}; ${first}.`
     return `${sequence}. ${named.map((list) => `${list.name}: ${list.words ?? "the archive did not state an order"}.`).join(" ")}`
 }

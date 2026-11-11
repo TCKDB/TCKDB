@@ -11,12 +11,7 @@ export function SpeciesVersions({ species }: { species: SpeciesOverview }) {
     const hidden = hiddenVersionsNote(species.entriesHiddenByDefault)
     return (
         <section className="entry-versions" aria-labelledby="species-versions">
-            <SectionHeading
-                id="species-versions"
-                intro="Versions differ in electronic state, stereochemistry or isotopes. Each version holds its own records, and each record carries its own levels of theory."
-            >
-                Versions of this molecule
-            </SectionHeading>
+            <SectionHeading id="species-versions">Versions of this molecule</SectionHeading>
             {hidden && <p className="note" role="note">{hidden}</p>}
             {species.entries.length === 0 ? (
                 <p className="empty-projection">No versions are currently listed for this molecule.</p>

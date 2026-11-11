@@ -32,7 +32,7 @@ import { SectionHeading } from "./PageSections"
 import { ReviewChip } from "./ReviewChip"
 import { ValueLink } from "./ValueLink"
 
-const INTRO = "kJ/mol relative to the reactants. One level and program per profile; none is chosen for you."
+const INTRO = "kJ/mol relative to the reactants. One level and program each; none is chosen for you."
 
 const HILL_NOTE = "TCKDB's comparison at one level and program; the depositor's check may use other energies."
 

@@ -12,7 +12,7 @@ import type { CoordinateUnitMode } from "../domain/geometryXyz"
 type StageMode = "poster" | "live" | "failed"
 
 const BONDS_NOTE =
-    "Bonds are drawn where two atoms are close enough to be bonded. The record itself stores only atoms and their positions."
+    "Bonds inferred from atom distances; the record stores atoms and positions only."
 const NO_BONDS_NOTE = "Bonds are not drawn for molecules this large."
 const FAILED_NOTE =
     "The interactive 3D view could not start in this browser; the picture shows the same stored coordinates."

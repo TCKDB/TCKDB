@@ -114,7 +114,7 @@ describe("ListPager: what the server said about the list", () => {
             noun="record"
             onPage={() => {}}
         />)
-        expect(screen.getByText("Display order: approved first, then newest deposited first. An order for browsing, not a ranking or a recommendation.")).toBeVisible()
+        expect(screen.getByText("Order: approved first, then newest deposited first; not a ranking or a recommendation.")).toBeVisible()
         expect(screen.queryByText(/tie-breaker/)).not.toBeInTheDocument()
         expect(screen.queryByText(/\bid\b/)).not.toBeInTheDocument()
     })
@@ -147,6 +147,6 @@ describe("ListPager: what the server said about the list", () => {
 
     it("makes no order statement when the server made none", () => {
         render(<ListPager meta={meta({ offset: 0, limit: 50, returned: 3, total: 3 })} noun="record" onPage={() => {}} />)
-        expect(screen.queryByText(/Display order/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/^Order:/)).not.toBeInTheDocument()
     })
 })

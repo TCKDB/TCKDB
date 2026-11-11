@@ -29,12 +29,12 @@ describe("NumbersTable rounding", () => {
         expect(shown).toHaveAttribute("title", "1.0132500001")
         expect(shown.tagName).toBe("DATA")
         expect(shown).toHaveAttribute("value", "1.0132500001")
-        expect(screen.getAllByText("Shown to 6 significant figures; hover a number for the stored value.")).toHaveLength(1)
+        expect(screen.getAllByText("6 significant figures; hover for the stored value.")).toHaveLength(1)
     })
 
     it("has neither title nor note for a pressure that needs no rounding", () => {
         setup(1.01325)
         expect(screen.getByText("1.01325")).not.toHaveAttribute("title")
-        expect(screen.queryByText(/Shown to 6 significant figures/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/6 significant figures/)).not.toBeInTheDocument()
     })
 })

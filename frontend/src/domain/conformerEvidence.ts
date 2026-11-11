@@ -269,20 +269,9 @@ function describeStaging(staging: OptimizationStaging, sightings: number): strin
     // silently short count here reads as a complete accounting when it
     // is not.
     const withoutOpt = sightings - staging.perObservation.size
-    let sentence = withoutOpt > 0
+    return withoutOpt > 0
         ? `${clauses.join(", ")}, and ${numberWord(withoutOpt)} had no optimisation on file.`
         : `${clauses.join(", ")}.`
-    // The sequential gloss asserts a specific two-step relationship (coarse
-    // pass, then a refinement of it) that the wire only actually
-    // distinguishes from a parallel-attempts shape at exactly two rows --
-    // see the stageDesc comment above. Suppress it the instant any bucket
-    // has three or more rows, so it is never attached to a sentence that
-    // also, in its own next clause, admits it cannot tell a sequence from
-    // parallel attempts.
-    if (staging.stagedRowCount > 0 && sortedCounts[0] <= 2) {
-        sentence += " A staged optimisation runs a coarse pass first, then refines it."
-    }
-    return sentence
 }
 
 function coverageSentence(count: number, total: number, thing: string): string {

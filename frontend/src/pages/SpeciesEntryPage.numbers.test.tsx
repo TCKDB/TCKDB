@@ -206,7 +206,7 @@ describe("molecule page: header", () => {
         expect(screen.getByText("Conformers · Thermochemistry · Statistical mechanics")).toBeVisible()
         expect(screen.queryByText("Entry kind / state")).toBeNull()
         expect(document.querySelector(".record-lede")).toHaveTextContent(
-            "One version of this molecule: charge 0, doublet, ground state, an energy minimum. A molecule can have several versions.",
+            "One version of this molecule: charge 0, doublet, ground state, an energy minimum.",
         )
         expect(document.title).toBe("CH3 · Molecule · TCKDB")
     })
@@ -243,7 +243,7 @@ describe("molecule page: numbers for this entry", () => {
     it("states the order the archive served once, naming only lists that have rows, and says so when it stated none", async () => {
         await open()
         const note = document.querySelector(".entry-numbers .order-note") as HTMLElement
-        expect(note).toHaveTextContent("Thermochemistry first, then statistical mechanics; inside each, approved first, then newest deposited first.")
+        expect(note).toHaveTextContent("Thermochemistry, then statistical mechanics; approved first, then newest deposited first.")
         expect(note).not.toHaveTextContent("Transport")
         cleanup()
         server.resetHandlers()
@@ -265,7 +265,7 @@ describe("molecule page: numbers for this entry", () => {
         const user = userEvent.setup()
         const region = await open()
         await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
-        expect(screen.getByText("These values were computed at 2 levels of theory.")).toBeVisible()
+        expect(screen.getByText("2 levels of theory.")).toBeVisible()
         await user.click(screen.getByRole("button", { name: "Group by level of theory" }))
         expect(screen.getByRole("button", { name: "Group by level of theory" })).toHaveAttribute("aria-pressed", "true")
         const groups = Array.from(region.querySelectorAll("tbody")).map((body) => ({
@@ -364,7 +364,7 @@ describe("molecule page: numbers for this entry", () => {
         await waitFor(() => expect(rowRefs(region)).toHaveLength(5))
         const source = region.querySelector("#thermo-thm_b1 .value-source") as HTMLElement
         expect(source).toHaveTextContent("Source thm_b1")
-        expect(source).toHaveTextContent("geometry ccsdt/ccpvtz")
+        expect(source).toHaveTextContent("geometry, frequency, energy at ccsdt/ccpvtz")
         expect(source).toHaveTextContent("Arkane 1.1.0")
         expect(source).not.toHaveTextContent("Review of this record")
         expect(within(source).getByRole("link")).toHaveAttribute("href", `/species-entries/${entryRef}/thermo?conformer=cg_1#thermo-heading-thm_b1`)
@@ -396,7 +396,7 @@ describe("molecule page: numbers for this entry", () => {
     it("stops at the cap, asking for 200 at a time after the shared first page", async () => {
         const counts = { thermo: 0, statmech: 0, transport: 0, thermoLimits: [] as string[] }
         await open({ endless: true, counts })
-        expect(await screen.findByText(/Showing the first 1,000 of 5,000 thermochemistry records\. The Thermochemistry tab below pages through all of them\./)).toBeVisible()
+        expect(await screen.findByText(/Showing the first 1,000 of 5,000 thermochemistry records\. All in the Thermochemistry tab\./)).toBeVisible()
         expect(counts.thermoLimits).toEqual(["50", "200", "200", "200", "200", "150"])
     })
 

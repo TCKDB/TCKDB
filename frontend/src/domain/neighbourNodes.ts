@@ -43,7 +43,7 @@ const FAILED_NODES: Record<ProbeName, Pick<NeighbourNode, "kind" | "label" | "re
     conformers: { kind: "conformer-group", label: "Conformer groups", relation: "Shapes of this entry" },
     calculations: { kind: "calculation", label: "Calculations", relation: "Run on this entry" },
     networks: { kind: "network", label: "Networks", relation: "Pressure-dependent networks with this entry" },
-    reactions: { kind: "reaction", label: "Reactions with this molecule", relation: "Either side of the equation" },
+    reactions: { kind: "reaction", label: "Reactions with this molecule", relation: "Either side" },
 }
 
 /**

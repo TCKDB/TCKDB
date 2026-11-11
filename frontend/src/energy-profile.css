@@ -161,3 +161,13 @@
 .energy-profile-unavailable li {
     margin-bottom: var(--s-2);
 }
+
+/* Long refs wrap so the cited-energies table fits the page at desktop width; the scroll box stays as the phone fallback. */
+.energy-profile-cited .data-table th,
+.energy-profile-cited .data-table td {
+    padding-inline: var(--s-2);
+}
+
+.energy-profile-cited .data-table code {
+    overflow-wrap: anywhere;
+}

@@ -1,5 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen } from "@testing-library/react"
+import ts from "typescript"
+import { INTRO_WORD_LIMIT, introWordCount } from "../domain/introWords"
 import { PageSectionsProvider, SectionHeading } from "./PageSections"
 
 afterEach(cleanup)
@@ -107,5 +109,48 @@ describe("SectionHeading suppresses a kicker that is a prefix of its own title",
             </PageSectionsProvider>,
         )
         expect(container.querySelector(".section-kicker")).toBeNull()
+    })
+})
+
+describe("a section intro is at most one short sentence", () => {
+    const render15 = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
+
+    it("counts the words of text, links and fragments", () => {
+        expect(introWordCount(undefined)).toBe(0)
+        expect(introWordCount(render15)).toBe(INTRO_WORD_LIMIT)
+        expect(introWordCount(<>Open the <a href="/x">molecule page</a> now</>)).toBe(5)
+    })
+
+    it("renders an intro of exactly the limit as a note", () => {
+        render(<PageSectionsProvider><SectionHeading id="s" intro={render15}>Title</SectionHeading></PageSectionsProvider>)
+        expect(screen.getByText(render15)).toHaveClass("note")
+    })
+
+    it("refuses an intro over the limit, so a teaching paragraph cannot come back unnoticed", () => {
+        const quiet = vi.spyOn(console, "error").mockImplementation(() => {})
+        expect(() => render(<PageSectionsProvider><SectionHeading id="s" intro={`${render15} sixteen`}>Title</SectionHeading></PageSectionsProvider>)).toThrow(/over 15 words/)
+        quiet.mockRestore()
+    })
+
+    it("holds for every literal intro in the source", () => {
+        const sources = import.meta.glob("../**/*.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>
+        const over: string[] = []
+        for (const [path, text] of Object.entries(sources)) {
+            if (/\.test\.tsx$/.test(path)) continue
+            const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+            const visit = (node: ts.Node) => {
+                if (ts.isJsxAttribute(node) && node.name.getText() === "intro" && node.initializer) {
+                    let init: ts.Node = node.initializer
+                    if (ts.isJsxExpression(init) && init.expression) init = init.expression
+                    let literal: string | null = null
+                    if (ts.isStringLiteral(init) || ts.isNoSubstitutionTemplateLiteral(init)) literal = init.text
+                    else if (ts.isTemplateExpression(init)) literal = [init.head.text, ...init.templateSpans.map((span) => `x${span.literal.text}`)].join("")
+                    if (literal !== null && introWordCount(literal) > INTRO_WORD_LIMIT) over.push(`${path}: ${literal}`)
+                }
+                ts.forEachChild(node, visit)
+            }
+            visit(file)
+        }
+        expect(over).toEqual([])
     })
 })

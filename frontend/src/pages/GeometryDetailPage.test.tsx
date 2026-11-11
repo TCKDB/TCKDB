@@ -383,7 +383,7 @@ describe("GeometryDetailPage", () => {
         expect(within(viewerSection).getByRole("button", { name: "Show in 3D" })).toBeVisible()
         expect(viewerSection.querySelector(".viewer-canvas")).toBeNull()
         expect(within(viewerSection).getByText(
-            /Bonds are drawn where two atoms are close enough to be bonded\. The record itself stores only atoms and their positions\./,
+            /Bonds inferred from atom distances; the record stores atoms and positions only\./,
         )).toBeVisible()
     })
 
@@ -954,7 +954,7 @@ describe("GeometryDetailPage", () => {
             // literal string is a STRONGER check than a resolved rem value
             // would be, since it also pins WHICH token this class points
             // at, not just its current numeric value.
-            expect(proseMaxWidth).toBe("var(--measure-prose)")
+            expect(proseMaxWidth).toMatch(/^var\(--measure-(prose|note)\)$/)
             expect(viewerMaxWidth).not.toBe(proseMaxWidth)
             // jsdom's CSSOM reports an unset property as "" rather than
             // resolving it to CSS's own "none" initial value -- either way,

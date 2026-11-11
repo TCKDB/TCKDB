@@ -25,7 +25,6 @@ export function TransitionStateStage({ transitionStateEntryRef, geometryRef: kno
     const loading = near && (known === undefined && (entry.status === "loading" || entry.status === "idle") || (geometryRef !== null && (geometry.status === "loading" || geometry.status === "idle")))
     return (
         <div className="ts-stage" ref={ref}>
-            {!near && <p className="note">The picture of this transition state loads when you scroll to it.</p>}
             {loading && <p className="note" role="status" aria-busy="true">Loading the geometry of this transition state.</p>}
             {near && !loading && atoms.length > 0 && geometryRef && (
                 <>

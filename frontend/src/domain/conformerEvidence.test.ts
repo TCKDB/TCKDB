@@ -517,8 +517,7 @@ describe("describeConformerEvidence", () => {
         // had no optimisation on file. A staged...".
         expect(story).toBe(
             "This conformer was sighted four times. One was optimised in two stages, one in a single pass, "
-            + "and two had no optimisation on file. A staged optimisation runs a coarse pass first, then "
-            + "refines it. None of the sightings got a frequency calculation. None of the sightings got a "
+            + "and two had no optimisation on file. None of the sightings got a frequency calculation. None of the sightings got a "
             + "single-point energy.",
         )
     })

@@ -166,12 +166,7 @@ export function ConformerGallery({
                 <p className="empty-projection">No conformers are recorded for this entry.</p>
             ) : (
                 <>
-                    <p className="conformer-picker-note">
-                        {total === 1
-                            ? "This entry has one deposited shape. Its evidence is shown below."
-                            : `This entry has ${total} deposited shapes. Each card is one shape of the molecule; choose one to see its picture, `
-                                + "the calculations behind it and its evidence."}
-                    </p>
+                    {total !== 1 && <p className="conformer-picker-note">{total} shapes. Choose one.</p>}
                     <ListPager meta={meta} noun="shape" onPage={onPage} busy={pagingBusy} label="Shapes paging" hideOrder />
                     {pagingFailed && (
                         <p className="empty-projection" role="alert">That page of conformers could not be loaded; the previous page is still shown.</p>
@@ -181,13 +176,12 @@ export function ConformerGallery({
                     )}
                     {selectionIsDefault && selectedLabel && total > 1 && (
                         <p className="conformer-picker-note conformer-default-note">
-                            {selectedLabel} is selected only because it is listed first. That is not a preference or a
-                            recommendation; choose a shape to see its evidence instead.
+                            {selectedLabel} is selected only because it is listed first.
                         </p>
                     )}
-                    <OrderNote order={shapeOrderSentence(meta.sort)} />
+                    {total > 1 && <OrderNote order={shapeOrderSentence(meta.sort)} />}
 
-                    <fieldset className="shape-energy-controls">
+                    {total > 1 && <fieldset className="shape-energy-controls">
                         <legend>Energy relative to a reference shape</legend>
                         {!energiesSettled ? (
                             <p className="note" role="status" aria-busy="true">Reading the energies on this entry.</p>
@@ -196,9 +190,7 @@ export function ConformerGallery({
                         ) : (
                             <>
                                 <p className="note">
-                                    Electronic energy at one level of theory, in kJ/mol. A shape is compared only when a stored frequency calculation shows it
-                                    is a minimum, at this level or another. A shape without that check is listed without a number. Levels are never mixed, and
-                                    a difference is shown only when both energies came from the same program.
+                                    kJ/mol at one level and one program. Only shapes confirmed as minima get a number.
                                 </p>
                                 <div className="shape-energy-fields">
                                     <label>
@@ -221,11 +213,11 @@ export function ConformerGallery({
                                 </div>
                                 {referenceRef !== null && referenceIsDefault && (
                                     <p className="note shape-energy-default">
-                                        {labelOf(referenceRef)} is the reference only because it is the first card listed. It is not chosen by energy; pick another to measure from it.
+                                        {labelOf(referenceRef)} is the reference only because it is listed first.
                                     </p>
                                 )}
                                 {onlyLevel !== null && chosenLevel === null && (
-                                    <p className="note">{levels[0].label} is the only level with energies here, so it is filled in.</p>
+                                    <p className="note">Only level with energies.</p>
                                 )}
                                 {level && level.programs.length > 1 && (
                                     <p className="note">Calculations at this level used {joinPrograms(level.programs)}.</p>
@@ -238,7 +230,7 @@ export function ConformerGallery({
                                 </p>
                             </>
                         )}
-                    </fieldset>
+                    </fieldset>}
 
                     {usageData && usageData.ensembleThermoRefs.length > 0 && (
                         <p className="shape-ensemble">

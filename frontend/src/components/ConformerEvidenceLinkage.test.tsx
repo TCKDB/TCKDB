@@ -311,8 +311,7 @@ describe("ConformerEvidenceLinkage", () => {
         render(<ConformerEvidenceLinkage conformer={ch3Conformer()} />)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toHaveTextContent(
-            "Three were optimised in two stages, one in a single pass. "
-            + "A staged optimisation runs a coarse pass first, then refines it.",
+            "Three were optimised in two stages, one in a single pass.",
         )
         expect(story).not.toHaveTextContent(/sighted/)
         expect(story).not.toHaveTextContent(/frequency calculation/)
@@ -445,7 +444,7 @@ describe("ConformerEvidenceLinkage", () => {
     // opens up at three rows and above. This guards that the finding-3 fix
     // didn't overcorrect and start suppressing the sequential gloss here
     // too.
-    it("still names two stages and the sequential gloss for a genuine two-row chain", () => {
+    it("still names two stages for a genuine two-row chain", () => {
         function observation(ref: string, optCount: number) {
             return {
                 conformer_observation: { conformer_observation_ref: ref },
@@ -469,9 +468,7 @@ describe("ConformerEvidenceLinkage", () => {
         })
         render(<ConformerEvidenceLinkage conformer={twoRowsOneChain} />)
         const story = document.querySelector(".evidence-linkage-story")
-        expect(story).toHaveTextContent(
-            "One was optimised in two stages. A staged optimisation runs a coarse pass first, then refines it.",
-        )
+        expect(story).toHaveTextContent("One was optimised in two stages.")
         expect(story).not.toHaveTextContent(/sighted/)
     })
 

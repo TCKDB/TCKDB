@@ -46,16 +46,11 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers, 
     const totalRecords = data ? data.thermo.total + data.statmech.total + data.transport.total : 0
     const groupLabels = useMemo(() => new Map(conformers.map((conformer) => [conformer.conformer_group.conformer_group_ref, conformerLabel(conformer)])), [conformers])
     const tabPath = (kind: NumberKind) => `${entryPath.replace(/\/(geometry|sp|statmech|thermo|transport)$/, "")}/${kind}`
-    const tabLink = (kind: "thermo" | "statmech") => `${tabPath(kind)}${conformerQuery}`
     return (
         <section className="entry-numbers" aria-labelledby="entry-numbers">
             <SectionHeading
                 id="entry-numbers"
                 subsection={compact}
-                intro={compact ? undefined : <>
-                    Every single value deposited for this one entry, each with the levels of theory and programs behind it. Values are never copied in from another entry.
-                    Heat-capacity points, polynomial coefficients and frequencies are in the <Link to={tabLink("thermo")}>Thermochemistry</Link> and <Link to={tabLink("statmech")}>Statistical mechanics</Link> tabs below.
-                </>}
             >
                 Numbers for this entry
             </SectionHeading>
@@ -74,7 +69,7 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers, 
                     )}
                     {!compact && <ListNotes
                         lists={[["thermochemistry", data.thermo], ["statistical mechanics", data.statmech], ["transport", data.transport]]}
-                        rest={(label) => `The ${label.charAt(0).toUpperCase()}${label.slice(1)} tab below pages through all of them.`}
+                        rest={(label) => `All in the ${label.charAt(0).toUpperCase()}${label.slice(1)} tab.`}
                     />}
                     {compact && totalRecords > shownRows.length && (
                         <p className="note">Showing the first {shownRows.length} of {totalRecords.toLocaleString("en-US")} records. <Link to={entryPath}>All records on the molecule page</Link></p>
