@@ -136,8 +136,9 @@ describe("RelationshipMap", () => {
         expect(screen.getByText("Loading connected records.")).toBeInTheDocument()
     })
 
-    it("hides the drawing and keeps the list below 560px, and keeps its labels at least 12px", () => {
-        expect(mapCss).toMatch(/@media \(max-width: 560px\) \{\s*\.rel-map-figure \{\s*display: none;/)
+    it("hides the drawing and shows the list below 62rem, hides the list visually beside the drawing, and keeps its labels at least 12px", () => {
+        expect(mapCss).toMatch(/@media \(max-width: 62rem\) \{\s*\.rel-map-figure \{\s*display: none;/)
+        expect(mapCss).toMatch(/\.rel-map-figure \+ \.rel-map-list:not\(:focus-within\) \{[^}]*clip-path:\s*inset\(50%\)/)
         const sizes = [...mapCss.matchAll(/font(?:-size)?:\s*(?:\d+\s+)?(\d+)px/g)].map((m) => Number(m[1]))
         expect(sizes.length).toBeGreaterThan(1)
         expect(Math.min(...sizes)).toBeGreaterThanOrEqual(12)

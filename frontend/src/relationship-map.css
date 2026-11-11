@@ -1,5 +1,6 @@
-/* Relationship map: a drawing made of links, with a text list that says the same. Below 560px only the list shows. */
+/* Relationship map in the 14rem side column: a drawing made of links, with a text list that says the same. The list is visually hidden beside the drawing (and shown while focused); below the narrow breakpoint only the list shows. */
 .rel-map {
+    position: relative;
     min-width: 0;
 }
 
@@ -13,7 +14,6 @@
 .rel-map-figure {
     display: block;
     width: 100%;
-    max-width: 24rem;
     height: auto;
     overflow: visible;
 }
@@ -69,16 +69,19 @@ a.rel-map-node:focus-visible {
     list-style: none;
 }
 
+.rel-map-figure + .rel-map-list:not(:focus-within) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
 .rel-map-item {
     padding: .35rem 0;
     border-top: 1px solid var(--line-2);
-}
-
-.rel-map-note {
-    margin: 0 0 .5rem;
-    color: var(--muted);
-    font: var(--type-ui-font);
-    font-weight: 400;
 }
 
 .rel-map-item-note {
@@ -93,12 +96,19 @@ a.rel-map-node:focus-visible {
     color: var(--muted);
 }
 
-@media (max-width: 560px) {
+@media (max-width: 62rem) {
     .rel-map-figure {
         display: none;
     }
 
+    .rel-map-figure + .rel-map-list:not(:focus-within),
     .rel-map-list {
-        margin-top: 0;
+        position: static;
+        width: auto;
+        height: auto;
+        margin: 0;
+        overflow: visible;
+        clip-path: none;
+        white-space: normal;
     }
 }

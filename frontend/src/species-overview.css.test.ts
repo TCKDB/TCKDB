@@ -11,11 +11,10 @@ function extractRule(source: string, selector: string): string {
     return match[1]
 }
 
-describe("species-overview.css: the page container only", () => {
-    it("caps the page at the record-page width with the shared gutter", () => {
-        const rule = extractRule(css, ".species-overview")
-        expect(rule).toMatch(/max-width:\s*126rem/)
-        expect(rule).toMatch(/padding:/)
+describe("species-overview.css: no page container of its own", () => {
+    it("leaves the page width and gutter to the page shell", () => {
+        expect(css).not.toMatch(/\.species-overview\s*\{/)
+        expect(css).not.toMatch(/max-width:\s*126rem/)
     })
 
     it("no longer carries the header, entry-card or state-group rules the shared record blocks replaced", () => {

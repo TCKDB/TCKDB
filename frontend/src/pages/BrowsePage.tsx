@@ -25,6 +25,7 @@ import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import type { BrowseState } from "../hooks/useBrowse"
 import { useBrowse } from "../hooks/useBrowse"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
+import { NARROW_QUERY, useMediaQuery } from "../hooks/useMediaQuery"
 
 const PAGE_SIZE = 20
 
@@ -113,6 +114,8 @@ export default function BrowsePage() {
     const content = BROWSE_KIND_CONTENT[kind]
     const related = RELATED_BROWSE_KIND[kind]
     useDocumentTitle(content.breadcrumbLabel)
+    const narrow = useMediaQuery(NARROW_QUERY)
+    const filterForm = <BrowseFilterForm filters={filters} kind={kind} onChange={updateFilters} />
 
     return (
         <section className="browse-page">
@@ -120,12 +123,7 @@ export default function BrowsePage() {
                 four paths -- a breadcrumb is supposed to say where you ARE,
                 and "Browse" said the same thing regardless of which of the
                 four archives `location.pathname` actually named. */}
-            <nav aria-label="Breadcrumb" className="record-breadcrumbs">
-                <Link to="/">TCKDB</Link>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">{content.breadcrumbLabel}</span>
-            </nav>
-            <PageShell contents="none">
+            <PageShell contents="none" crumbs={[{ label: content.breadcrumbLabel }]} side={narrow ? undefined : filterForm}>
             {/* Each kind's own identity now (`BROWSE_KIND_CONTENT`,
                 `api/browseApi.ts`) -- was the SAME "Browse the archive" /
                 "Archive index" / "Choose what to browse, then narrow it
@@ -146,7 +144,7 @@ export default function BrowsePage() {
                 </p>
             </header>
 
-            <BrowseFilterForm filters={filters} kind={kind} onChange={updateFilters} />
+            {narrow && <details className="browse-filters-disclosure"><summary>Filters</summary>{filterForm}</details>}
 
             <BrowseResults filters={filters} kind={kind} offset={offset} setOffset={setOffset} state={state} />
             </PageShell>

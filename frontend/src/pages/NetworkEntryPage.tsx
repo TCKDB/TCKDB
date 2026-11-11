@@ -92,12 +92,8 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
 
     return (
         <section className="conformer-page tse-page">
-            <nav className="record-breadcrumbs" aria-label="Breadcrumb">
-                <Link to="/">TCKDB</Link>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">Pressure-dependent network</span>
-            </nav>
             <PageShell
+                crumbs={[{ label: "Pressure-dependent network" }]}
                 identity={(
                     <header className="basin-header">
                         <div className="record-identity-header">

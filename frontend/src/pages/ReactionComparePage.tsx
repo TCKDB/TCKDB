@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { RecordPlaceholder } from "../components/RecordPlaceholder"
 import { Link, useParams } from "react-router-dom"
 import "../data-table.css"
 import "../species-overview.css"
@@ -60,11 +61,11 @@ export default function ReactionComparePage() {
 
 function State({ title, busy, alert, message }: { title: string; busy?: boolean; alert?: boolean; message?: string }) {
     return (
-        <section className="record-placeholder" aria-busy={busy} role={alert ? "alert" : undefined}>
+        <RecordPlaceholder busy={busy} alert={alert}>
             <p className="eyebrow">Archive record</p>
             <h1>{title}</h1>
             <p>{message ?? "Retrieving the reaction and its rate records."}</p>
-        </section>
+        </RecordPlaceholder>
     )
 }
 

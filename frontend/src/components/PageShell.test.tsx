@@ -77,10 +77,10 @@ describe("PageShell: the identity slot renders inside the content column", () =>
         // what the ToC rail lines up against at the top.
         expect(content.firstElementChild).toBe(container.querySelector(".page-shell-identity"))
         expect(content.firstElementChild?.contains(identity)).toBe(true)
-        // Negative half of the same claim: nothing sits between
-        // `.page-shell-layout`'s open tag and the identity's ancestor --
-        // i.e. identity is NOT a sibling rendered above the flex row.
-        expect(container.firstElementChild).toBe(layout)
+        // Negative half of the same claim: the layout is the shell's only child,
+        // so identity is NOT a sibling rendered above the grid.
+        expect(container.firstElementChild).toBe(container.querySelector(".page-shell"))
+        expect(container.querySelector(".page-shell")?.firstElementChild).toBe(layout)
         expect(layout.contains(identity)).toBe(true)
     })
 })
@@ -124,13 +124,13 @@ describe("PageShell: the contents column", () => {
     })
 })
 
-describe("PageShell: rail slot", () => {
+describe("PageShell: side column", () => {
     afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia })
 
-    function renderWithRail() {
+    function renderWithSide() {
         const { container } = render(
             <MemoryRouter>
-                <PageShell rail={<p data-testid="rail-marker">Map</p>}>
+                <PageShell side={<p data-testid="side-marker">Map</p>}>
                     <p>Page content</p>
                     <SectionHeading id="one">One</SectionHeading>
                     <SectionHeading id="two">Two</SectionHeading>
@@ -140,28 +140,52 @@ describe("PageShell: rail slot", () => {
         const layout = container.querySelector(".page-shell-layout") as HTMLElement
         return {
             content: layout.querySelector(".page-shell-content") as HTMLElement,
-            rail: layout.querySelector(".page-shell-rail") as HTMLElement,
+            side: layout.querySelector(".page-shell-side") as HTMLElement,
             toc: layout.querySelector(".page-toc") as HTMLElement,
         }
     }
 
-    it("renders no rail element when none is given", () => {
-        const { container } = render(<MemoryRouter><PageShell><p>Content</p></PageShell></MemoryRouter>)
-        expect(container.querySelector(".page-shell-rail")).toBeNull()
+    it("always has the side column on a wide screen, even with nothing in it", () => {
+        const { container } = render(<MemoryRouter><PageShell contents="none"><p>Content</p></PageShell></MemoryRouter>)
+        expect(container.querySelector(".page-shell-side")).not.toBeNull()
+        expect(container.querySelector(".page-toc")).toBeNull()
     })
 
-    it("places the rail after the content and keeps the contents list", () => {
-        const { content, rail, toc } = renderWithRail()
-        expect(rail).toContainElement(screen.getByTestId("rail-marker"))
-        expect(content.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-        expect(toc).not.toBeNull()
+    it("places the side column after the content, with the contents list above the side block", () => {
+        const { content, side, toc } = renderWithSide()
+        expect(side).toContainElement(screen.getByTestId("side-marker"))
+        expect(side).toContainElement(toc)
+        expect(content.compareDocumentPosition(side) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        expect(toc.compareDocumentPosition(screen.getByTestId("side-marker")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
-    it("also follows the content on a narrow screen", () => {
+    it("also follows the content on a narrow screen, and is left out there when it has no block", () => {
         window.matchMedia = vi.fn().mockImplementation((query: string) => ({
             matches: query.includes("62rem"), media: query, addEventListener: () => {}, removeEventListener: () => {},
         })) as unknown as typeof window.matchMedia
-        const { content, rail } = renderWithRail()
-        expect(content.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        const { content, side } = renderWithSide()
+        expect(content.compareDocumentPosition(side) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        cleanup()
+        const { container } = render(<MemoryRouter><PageShell><p>Content</p></PageShell></MemoryRouter>)
+        expect(container.querySelector(".page-shell-side")).toBeNull()
+    })
+
+    it("renders a breadcrumb trail before the identity block", () => {
+        const { container } = render(
+            <MemoryRouter>
+                <PageShell crumbs={[{ label: "Methods", to: "/methods" }, { label: "Here" }]} identity={<p data-testid="id">Identity</p>}>
+                    <p>Content</p>
+                </PageShell>
+            </MemoryRouter>,
+        )
+        const head = container.querySelector(".page-shell-identity") as HTMLElement
+        expect(head.firstElementChild).toBe(head.querySelector("nav.breadcrumbs"))
+        expect(head).toContainElement(screen.getByTestId("id"))
+    })
+
+    it("owns the page width: one grid with a fixed side column and gap, no right rail", () => {
+        expect(pageShellCss).toMatch(/\.page-shell \{[^}]*max-width:\s*var\(--page-max\)/)
+        expect(pageShellCss).toMatch(/\.page-shell-layout \{[^}]*grid-template-columns:\s*14rem minmax\(0, 1fr\)[^}]*gap:\s*3rem/)
+        expect(pageShellCss).not.toMatch(/page-shell-rail/)
     })
 })

@@ -3,7 +3,6 @@
  * comes from `conformer-group.css` and `design-system.css`; the viewer's own rules are in `geometry-viewer.css`.
  */
 
-.geometry-page { max-width: 100rem; }
 
 .xyz-block {
     max-width: 100%;

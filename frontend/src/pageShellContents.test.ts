@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest"
 import { MIN_SECTIONS_FOR_LIST } from "./components/TableOfContents"
 
 /**
- * Every page that renders `PageShell` declares whether it has a contents column. A page whose section count is
- * fixed below MIN_SECTIONS_FOR_LIST says "none"; every other page keeps the column. A new PageShell page fails
- * here until it is added with a decision.
+ * Every page that renders `PageShell` declares whether it has a contents list. A page whose section count is
+ * fixed below MIN_SECTIONS_FOR_LIST says "none" (the side column stays, without a list); every other page lists
+ * its sections. A new PageShell page fails here until it is added with a decision.
  */
 const DECLARED: Record<string, "list" | "none"> = {
     "./pages/BrowsePage.tsx": "none",
     "./pages/FrequencyScaleFactorPage.tsx": "none",
+    "./components/LoadingPage.tsx": "none",
+    "./components/RecordPlaceholder.tsx": "none",
+    "./pages/GuidePage.tsx": "list",
     "./pages/CalculationDetailPage.tsx": "list",
     "./pages/CompositeSchemePage.tsx": "list",
     "./pages/ConformerGroupPage.tsx": "list",

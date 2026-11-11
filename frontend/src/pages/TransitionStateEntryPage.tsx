@@ -262,7 +262,6 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                 review={entry.review.status}
                                 lede={transitionStateEntryLede(entry, record.evidence_summary.calculation_count)}
                                 title={<>Transition state of {equation ?? "this reaction"}</>}
-                                titleVariant="display-2"
                                 identity={identity}
                                 explainTransitionStateIdentity={false}
                                 ownRef={{ label: "Transition state entry ref", value: entry.transition_state_entry_ref }}

@@ -274,6 +274,7 @@ export function ConformerGallery({
                                     <p className="shape-card-energy"><span className="shape-card-key">Relative energy</span> <EnergyText energy={energyFor(state, ref)} /></p>
                                     <ConformerUsedBy usage={usage} group={usageData?.groups.get(ref)} entryRef={entryRef} groupRef={ref} labelOf={labelOf} />
                                     <DepositorNote>{typed}</DepositorNote>
+                                    <p className="shape-card-3d"><Link to={`/conformer-groups/${ref}`}>Open in 3D</Link></p>
                                     <RefsDisclosure inset refs={[{ label: "Conformer group", value: ref, to: `/conformer-groups/${ref}` }]} />
                                 </li>
                             )

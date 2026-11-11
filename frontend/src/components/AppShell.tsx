@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent } from "react"
+import { Suspense, useEffect, useId, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent } from "react"
 import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { ThemeToggle } from "./ThemeToggle"
 import { AuthStatus } from "./AuthStatus"
 import { Announcer } from "./Announcer"
+import { LoadingPage } from "./LoadingPage"
 import { RouteFocus } from "./RouteFocus"
 import { RecordGlyph, type RecordKind } from "./RecordGlyph"
 import { MAX_SEARCH_LENGTH } from "../domain/searchLimits"
@@ -115,7 +116,7 @@ export function AppShell() {
         </header>
         <RouteFocus />
         <Announcer />
-        <main id="main-content" tabIndex={-1}><Outlet /></main>
+        <main id="main-content" tabIndex={-1}><Suspense fallback={<LoadingPage />}><Outlet /></Suspense></main>
         <footer className="archive-footer"><span>TCKDB · Theoretical Chemical Kinetics Database</span><span>Public scientific records</span></footer>
         {phone && <nav className="tab-bar" aria-label="Primary navigation">
             {TAB_LINKS.map((item) => <NavItemLink key={item.to} className="tab-bar-item" item={item} />)}

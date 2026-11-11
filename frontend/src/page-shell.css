@@ -1,12 +1,6 @@
 /*
- * PageShell / TableOfContents — the layout every record page's content
- * now renders through (`components/PageShell.tsx`). Page-root width caps
- * (`.species-overview`, `.calc-page`, `.conformer-page`, `.geometry-page`,
- * `.browse-page`, all `max-width: 100rem`; `.entry-page` widened
- * separately to 126rem -- see `species-entry.css`'s own comment for why)
- * stay in each page's own stylesheet, unchanged in spirit from before
- * this file existed -- this one only lays out what sits INSIDE that
- * width: an optional sticky contents column left of the content.
+ * PageShell / TableOfContents -- the one place page width is set (`components/PageShell.tsx`): a fixed
+ * 14rem side column, a 3rem gap and the main column, inside `--page-max`.
  *
  * Smooth anchor scrolling is opted into globally here (`:root`) rather
  * than only for ToC links, since it is the right default for any
@@ -14,45 +8,46 @@
  * `@media (prefers-reduced-motion: reduce)` rule already forces
  * `scroll-behavior: auto !important` on every element, so a reader who
  * has asked for reduced motion gets instant jumps regardless of this
- * declaration -- nothing reduced-motion-specific needs to live here too.
+ * declaration.
  */
 
 :root {
     scroll-behavior: smooth;
 }
 
+.page-shell {
+    max-width: var(--page-max);
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
+}
+
 .page-shell-layout {
-    display: flex;
-    align-items: flex-start;
-    gap: clamp(1.5rem, 4vw, 3rem);
+    display: grid;
+    grid-template-columns: 14rem minmax(0, 1fr);
+    gap: 3rem;
+    align-items: start;
 }
 
 .page-shell-content {
+    grid-column: 2;
+    grid-row: 1;
     min-width: 0;
-    flex: 1 1 0;
 }
 
-/* Optional right-hand column (the relationship map); under the content on narrow screens. */
-.page-shell-rail {
-    flex: 0 0 20rem;
+/* The side column is always reserved on wide screens: contents list, then the page's own `side` block. */
+.page-shell-side {
+    grid-column: 1;
+    grid-row: 1;
     min-width: 0;
     position: sticky;
     top: 1.5rem;
-    align-self: flex-start;
-}
-
-/*
- * `.page-toc` is the reserved left column: `TableOfContents.tsx` always renders it and
- * only fills it once two or more sections are mounted, so a tab switch never shifts the content.
- * It follows the content in the markup and `order: -1` puts it on the left. Entries are numbered with CSS counters, so the link text stays the heading text.
- */
-.page-toc {
-    order: -1;
-    position: sticky;
-    top: 1.5rem;
-    flex: 0 0 14rem;
     max-height: calc(100vh - 3rem);
     overflow-y: auto;
+}
+
+/* Entries are numbered with CSS counters, so the link text stays the heading text. */
+.page-toc {
+    min-width: 0;
 }
 
 .page-toc nav::before {
@@ -117,6 +112,9 @@
 
 .page-toc-disclosure summary {
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    min-height: 2.75rem;
     padding: .6rem .8rem;
     font: var(--type-ui-font);
     color: var(--ink);
@@ -125,29 +123,24 @@
 /* Below this width the column becomes a "Contents" disclosure above the content. */
 @media (max-width: 62rem) {
     .page-shell-layout {
-        flex-direction: column;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1.5rem;
     }
 
-    /* A column flex container's cross axis is horizontal: stretch the content so a wide table scrolls inside its own wrapper instead of widening the page. */
-    .page-shell-content {
-        align-self: stretch;
-        width: 100%;
-        min-width: 0;
+    .page-shell-content,
+    .page-shell-side {
+        grid-column: 1;
+        grid-row: auto;
     }
 
-    .page-shell-rail {
+    .page-shell-side {
         position: static;
-        flex: none;
-        align-self: stretch;
-        width: 100%;
+        max-height: none;
+        overflow: visible;
     }
 
     .page-toc {
-        position: static;
-        flex: none;
         width: 100%;
-        max-height: none;
-        overflow: visible;
     }
 
     .page-toc:empty {

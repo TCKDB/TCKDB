@@ -91,7 +91,6 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
             lede={entryLede(entry)}
             glyph="species-entry"
             review={entry.review.status}
-            titleVariant="display-1"
             title={entry.formula ? <Formula value={entry.formula} /> : entry.canonicalSmiles}
             identity={identity}
             ownRef={{ label: "Entry ref", value: entry.species_entry_ref }}

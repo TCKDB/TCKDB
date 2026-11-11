@@ -9,27 +9,27 @@ import type { NeighbourNode } from "../domain/neighbourNodes"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
 import { versionFacts } from "../domain/entryVersions"
 
-const WIDTH = 320
-const PAD = 8
-const SELF_X = 50
-const NODE_X = 118
-const NODE_W = WIDTH - NODE_X - 8
+const WIDTH = 224
+const PAD = 4
+const SELF_H = 34
+const SPINE_X = 12
+const NODE_X = 20
+const NODE_W = WIDTH - NODE_X - 4
+const TEXT_X = NODE_X + 34
 
 const nodeAria = (node: NeighbourNode) =>
     [node.label, node.relation, node.ref, node.found].filter((part): part is string => !!part).join(", ")
 
 /**
- * Shows where the record sits: this entry on the left, what it connects to on the right. The drawing is a group of
- * links, never one image, and the "Connected records" list beside it says the same in text. Below 560px only the list
- * is shown.
+ * Shows where the record sits, sized for the 14rem side column: this entry on top, what it connects to stacked below.
+ * The drawing is a group of links, never one image, and the "Connected records" list says the same in text. On wide
+ * screens the list is visually hidden (it shows while focused); below the narrow breakpoint only the list is shown.
  */
-export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This entry", note }: {
+export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This entry" }: {
     selfKind: RecordKind
     state: NeighboursState
     innerRef?: Ref<HTMLElement>
     selfLabel?: string
-    /** A line under the heading saying what the nodes stand for. */
-    note?: string
 }) {
     const headingId = useId()
     const { pathname } = useLocation()
@@ -41,27 +41,26 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
         return { lines, noteLines, height: 22 + 16 * (lines.length + noteLines.length) }
     })
     const tops: number[] = []
-    let total = PAD
+    let total = PAD + SELF_H + 8
     for (const row of rows) {
         tops.push(total)
         total += row.height
     }
-    const height = Math.max(96, total + PAD)
-    const cy = height / 2
+    const height = total + PAD
 
     return (
         <section className="rel-map" aria-labelledby={headingId} ref={innerRef}>
             <h2 id={headingId} className="rel-map-heading">Where this record sits</h2>
-            {note && <p className="rel-map-note">{note}</p>}
             {nodes.length > 0 && (
                 <svg className="rel-map-figure" viewBox={`0 0 ${WIDTH} ${height}`} role="group" aria-labelledby={headingId}>
+                    <line className="rel-map-edge" x1={SPINE_X} y1={PAD + SELF_H} x2={SPINE_X} y2={tops[tops.length - 1] + rows[rows.length - 1].height / 2} />
                     {nodes.map((node, index) => (
-                        <line key={node.id} className="rel-map-edge" x1={SELF_X + 38} y1={cy} x2={NODE_X} y2={tops[index] + rows[index].height / 2} />
+                        <line key={node.id} className="rel-map-edge" x1={SPINE_X} y1={tops[index] + rows[index].height / 2} x2={NODE_X} y2={tops[index] + rows[index].height / 2} />
                     ))}
                     <Link to={pathname} aria-current="page" aria-label={`${selfLabel} (you are here)`} className="rel-map-node rel-map-node--self">
-                        <rect className="rel-map-box" x={4} y={cy - 30} width={92} height={60} rx={4} />
-                        <g transform={`translate(${SELF_X - 10} ${cy - 22})`}><RecordGlyph kind={selfKind} size={20} /></g>
-                        <text x={SELF_X} y={cy + 20} textAnchor="middle" className="rel-map-label">{selfLabel}</text>
+                        <rect className="rel-map-box" x={4} y={PAD} width={WIDTH - 8} height={SELF_H} rx={4} />
+                        <g transform={`translate(${NODE_X - 8} ${PAD + SELF_H / 2 - 10})`}><RecordGlyph kind={selfKind} size={20} /></g>
+                        <text x={TEXT_X - 8} y={PAD + SELF_H / 2 + 4.5} className="rel-map-label">{selfLabel}</text>
                     </Link>
                     {nodes.map((node, index) => {
                         const { lines, noteLines, height: rowHeight } = rows[index]
@@ -71,15 +70,15 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
                             <>
                                 <title>{nodeAria(node)}</title>
                                 <rect className="rel-map-box" x={NODE_X} y={boxTop} width={NODE_W} height={rowHeight - 8} rx={4} />
-                                <g transform={`translate(${NODE_X + 8} ${mid - 10})`}><RecordGlyph kind={node.kind} size={20} /></g>
-                                <text x={NODE_X + 36} y={boxTop + 18} className="rel-map-label">
+                                <g transform={`translate(${NODE_X + 6} ${mid - 10})`}><RecordGlyph kind={node.kind} size={20} /></g>
+                                <text x={TEXT_X} y={boxTop + 18} className="rel-map-label">
                                     {lines.map((line, lineIndex) => (
-                                        <tspan key={lineIndex} x={NODE_X + 36} dy={lineIndex === 0 ? 0 : 16}>{line}</tspan>
+                                        <tspan key={lineIndex} x={TEXT_X} dy={lineIndex === 0 ? 0 : 16}>{line}</tspan>
                                     ))}
                                 </text>
-                                <text x={NODE_X + 36} y={boxTop + 18 + 16 * lines.length} className={node.ref ? "rel-map-note rel-map-ref" : "rel-map-note"}>
+                                <text x={TEXT_X} y={boxTop + 18 + 16 * lines.length} className={node.ref ? "rel-map-note rel-map-ref" : "rel-map-note"}>
                                     {noteLines.map((line, lineIndex) => (
-                                        <tspan key={lineIndex} x={NODE_X + 36} dy={lineIndex === 0 ? 0 : 16}>{line}</tspan>
+                                        <tspan key={lineIndex} x={TEXT_X} dy={lineIndex === 0 ? 0 : 16}>{line}</tspan>
                                     ))}
                                 </text>
                             </>
@@ -130,9 +129,5 @@ export function SpeciesRelationshipMap({ species }: { species: SpeciesOverview }
         to: `/species-entries/${version.species_entry_ref}`,
         found: null,
     }))
-    const more = species.entries.length - shown.length
-    const note = more > 0
-        ? `This map shows the first ${shown.length} of ${species.entries.length} listed under Versions of this molecule. Reactions and networks are on each version's page.`
-        : "This map shows the versions of this molecule. Reactions and networks are on each version's page."
-    return <RelationshipMap selfKind="species" selfLabel="This molecule" note={note} state={{ status: "ready", nodes }} />
+    return <RelationshipMap selfKind="species" selfLabel="This molecule" state={{ status: "ready", nodes }} />
 }

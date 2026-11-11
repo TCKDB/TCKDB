@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react"
+import { RecordPlaceholder } from "../components/RecordPlaceholder"
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import "../molecule-page.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
@@ -8,7 +9,6 @@ import { conformerLabel, sortConformersForDisplay } from "../domain/conformerEvi
 import { ConformerGeometryTab } from "../components/ConformerGeometryTab"
 import { ConformerGallery } from "../components/ConformerGallery"
 import { ShapeCalculations } from "../components/ShapeCalculations"
-import { ShapeStage } from "../components/ShapeStage"
 import { SpeciesEntryRelationshipMap } from "../components/RelationshipMap"
 import { ConformerSinglePointTab } from "../components/ConformerSinglePointTab"
 import { EntryStatmechSection } from "../components/EntryStatmechSection"
@@ -87,30 +87,30 @@ export default function SpeciesEntryPage() {
 }
 
 function LoadingEntry() {
-    return <section className="record-placeholder" aria-busy="true">
+    return <RecordPlaceholder busy>
         <p className="eyebrow">Archive record</p><h1>Loading species entry</h1>
-    </section>
+    </RecordPlaceholder>
 }
 
 function MissingEntry({ entryRef }: { entryRef: string }) {
-    return <section className="record-placeholder">
+    return <RecordPlaceholder>
         <p className="eyebrow">Archive record</p><h1>Entry not found</h1><code>{entryRef}</code>
         <p>No species entry with this stable reference is available in this archive projection.</p>
-    </section>
+    </RecordPlaceholder>
 }
 
 function MalformedEntry() {
-    return <section className="record-placeholder" role="alert">
+    return <RecordPlaceholder alert>
         <p className="eyebrow">Archive record</p><h1>Entry data could not be read</h1>
         <p>The archive responded, but this page could not validate the scientific entry projection.</p>
-    </section>
+    </RecordPlaceholder>
 }
 
 function UnavailableEntry() {
-    return <section className="record-placeholder" role="alert">
+    return <RecordPlaceholder alert>
         <p className="eyebrow">Archive record</p><h1>Entry unavailable</h1>
         <p>The archive service could not load this entry projection. Try again later.</p>
-    </section>
+    </RecordPlaceholder>
 }
 
 // A 429 was seen and `requestScientificJson` is in the middle of its own
@@ -122,13 +122,13 @@ function UnavailableEntry() {
 // archive is busy" with a live countdown, not an indefinite spinner a
 // reader has no way to distinguish from a stuck page.
 function RetryingEntry({ retryAfterSeconds }: { retryAfterSeconds: number }) {
-    return <section className="record-placeholder" aria-busy="true">
+    return <RecordPlaceholder busy>
         <p className="eyebrow">Archive record</p><h1>Loading species entry…</h1>
         <p>
             The archive is receiving too many requests right now. Retrying automatically in{" "}
             <RetryCountdown retryAfterSeconds={retryAfterSeconds} />…
         </p>
-    </section>
+    </RecordPlaceholder>
 }
 
 // Distinct from `UnavailableEntry`: this only renders once `useSpeciesEntry`
@@ -141,13 +141,13 @@ function RetryingEntry({ retryAfterSeconds }: { retryAfterSeconds: number }) {
 // language, not operator vocabulary: "Wait about 30 seconds", never "Wait
 // about 30s" -- see `formatWaitSeconds`.
 function RateLimitedEntry({ retryAfterSeconds }: { retryAfterSeconds: number }) {
-    return <section className="record-placeholder" role="alert">
+    return <RecordPlaceholder alert>
         <p className="eyebrow">Archive record</p><h1>Archive is busy</h1>
         <p>
             The archive is receiving too many requests right now.
             {" "}Wait {formatWaitSeconds(retryAfterSeconds)} and reload the page.
         </p>
-    </section>
+    </RecordPlaceholder>
 }
 
 // ---------------------------------------------------------------------------
@@ -282,7 +282,7 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
             superseded by the ToC-top-alignment change, which puts every
             record page's header through the same slot so the ToC rail
             starts level with the header, not below it). */}
-        <PageShell rail={<SpeciesEntryRelationshipMap entryRef={entryRef} smiles={entry.canonicalSmiles} />} identity={<>
+        <PageShell side={<SpeciesEntryRelationshipMap entryRef={entryRef} smiles={entry.canonicalSmiles} />} identity={<>
             <Breadcrumbs crumbs={[
                 { label: "Molecules", to: BROWSE_KIND_PATHS.species },
                 { label: entry.formula ? <Formula value={entry.formula} /> : entry.canonicalSmiles, to: `/species/${entry.speciesRef}` },
@@ -320,9 +320,6 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
                     optimisations={optEnergies}
                     onSelect={selectConformer}
                 />
-                {selectedConformer && (
-                    <ShapeStage conformer={selectedConformer} formula={entry.formula ?? entry.canonicalSmiles} />
-                )}
                 {selectedConformer && <ShapeCalculations conformer={selectedConformer} singlePoints={spEnergies} optimisations={optEnergies} />}
                 {selectedConformer && <ConformerEvidenceLinkage conformer={selectedConformer} />}
 

@@ -434,35 +434,18 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
 
     return (
         <section className="calc-page">
-            <nav className="record-breadcrumbs" aria-label="Breadcrumb">
-                <Link to="/">TCKDB</Link>
-                {ownerSpecies && (
-                    <>
-                        <span aria-hidden="true">/</span>
-                        <Link to={`/species/${ownerSpecies.species_ref}`}>Species</Link>
-                        <span aria-hidden="true">/</span>
-                        <Link to={`/species-entries/${ownerSpecies.species_entry_ref}`}>Species entry</Link>
-                    </>
-                )}
-                {/* Mirrors `TransitionStateEntryPage.tsx`'s own breadcrumb --
-                    that route exists now (`App.tsx:52`), so a TS-owned
-                    calculation's ancestor entry gets a real link, not the
-                    unlinked plain text this page used to fall back to. */}
-                {ownerTS && (
-                    <>
-                        <span aria-hidden="true">/</span>
-                        <Link to={BROWSE_KIND_PATHS.transition_state}>Browse</Link>
-                        <span aria-hidden="true">/</span>
-                        <Link to={`/transition-state-entries/${ownerTS.transition_state_entry_ref}`}>
-                            Transition state entry
-                        </Link>
-                    </>
-                )}
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">Calculation</span>
-            </nav>
-
             <PageShell
+                crumbs={[
+                    ...(ownerSpecies ? [
+                        { label: "Species", to: `/species/${ownerSpecies.species_ref}` },
+                        { label: "Species entry", to: `/species-entries/${ownerSpecies.species_entry_ref}` },
+                    ] : []),
+                    ...(ownerTS ? [
+                        { label: "Browse", to: BROWSE_KIND_PATHS.transition_state },
+                        { label: "Transition state entry", to: `/transition-state-entries/${ownerTS.transition_state_entry_ref}` },
+                    ] : []),
+                    { label: "Calculation" },
+                ]}
                 identity={(
                     <header className="record-header">
                         {/* Kicker + h1 + identity now all live in
