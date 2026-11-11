@@ -7,7 +7,7 @@ Composition:
    public surface never accidentally serves a full-table scan.
 3. Resolve owner/LoT refs to integer ids (422 on malformed/wrong-prefix
    refs; empty-result short-circuit when an unknown ref is supplied
-   on a filter, matching Phase C semantics elsewhere).
+   on a filter, as elsewhere in the scientific reads).
 4. Build a SQL query joining ``calculation`` to its provenance tables
    for the supplied scalar filters; emit only the columns the ranking
    needs so the filter pass stays cheap.
@@ -21,10 +21,10 @@ Composition:
    so search and detail produce identical record shapes for the same
    include set.
 
-Why steps 5 is SQL and not Python
----------------------------------
-It used to load every candidate id and filter/sort them in Python. That
-is not merely slower at catalog scale, it is a hard failure: the badge
+Why step 5 is SQL and not Python
+--------------------------------
+Loading every candidate id and filtering/sorting in Python is not merely
+slower at catalog scale, it is a hard failure: the badge
 bulk-load renders one bind parameter per candidate and PostgreSQL's wire
 protocol caps a statement at 65,535 parameters, so
 ``calculation_type=sp`` over a large corpus returned ``503
@@ -497,7 +497,7 @@ def _resolve_filter_ref(
     - ``(None, False)`` when *ref* is not supplied → no filter applied.
     - ``(id, False)`` when the ref resolves to a row.
     - ``(None, True)`` when the ref is well-formed but unknown
-      (the empty-result short-circuit per Phase C semantics).
+      (the empty-result short-circuit).
 
     Raises:
 
@@ -781,7 +781,7 @@ def _apply_dependency_filters(
         # is parameterless w.r.t. Calculation.id; pair it with
         # ``Calculation.id IN (parent, child)`` to scope the result to
         # the two endpoints.
-        # Evidence rule (ADR 0023): an edge with an end the rule withholds (rejected / deprecated under curated) is not
+        # Evidence rule: an edge with an end the rule withholds (rejected / deprecated under curated) is not
         # an edge, whichever end the caller named.
         exact_edge_exists = exists().where(
             _and(

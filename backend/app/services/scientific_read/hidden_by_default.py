@@ -6,7 +6,7 @@ such record" from "hidden by default". This module computes that count and carri
 * :func:`hidden_by_default_block` is the count. It is **one aggregate statement** per list: the matched ids joined to
   their review rows, grouped by status. It makes no statement at all when nothing is excluded by default, and it
   returns ``None`` under the ``curated`` profile without querying: the record floor is the profile itself, not a default
-  exclusion a request can lift, so there is no switch to point to and nothing a request could change (ADR 0023: a
+  exclusion a request can lift, so there is no switch to point to and nothing a request could change (a
   curated list returns approved records only).
 * :func:`record_hidden_by_default` hands the block to the response boundary through a holder the profile dependency
   installs, the same way the resolved profile reaches it, so a scientific service does not thread it through its
@@ -40,7 +40,7 @@ class HiddenByDefaultHolder:
     #: scope (a second page) replaces its earlier block, so nothing is counted twice.
     blocks: dict[object, HiddenByDefault]
     #: Refs this request named that belong to a merged-away species, entry or reaction, mapped to the ref of the row
-    #: each stands for (DR-0038). Reported in the ``request`` echo as ``merged_refs``.
+    #: each stands for. Reported in the ``request`` echo as ``merged_refs``.
     forwarded: dict[str, str]
 
     def __init__(self) -> None:

@@ -1,7 +1,6 @@
 """Idempotency-key service for retry-safe write endpoints.
 
-See ``docs/specs/upload-idempotency-key-spec.md`` for the contract and
-``docs/decisions/0024-upload-idempotency-keys.md`` for the design choices.
+See ``docs/specs/upload-idempotency-key-spec.md`` for the contract.
 
 This service stores the canonical SHA-256 hash of the request body and
 the successful response for the tuple
@@ -224,7 +223,7 @@ def record_response(
        :func:`write_receipt_isolated`, which confines the INSERT to a
        ``SAVEPOINT`` so a failing receipt cannot roll back the payload.
        Calling this directly puts the receipt in the payload's transaction
-       with no isolation — the 2026-08-05 data-loss shape.
+       with no isolation, so a failing receipt can roll back the payload.
     """
     now = now or _utcnow()
     record = IdempotencyRecord(
@@ -306,14 +305,10 @@ def write_receipt_isolated(
 ) -> IdempotencyRecord:
     """Write the receipt inside a ``SAVEPOINT`` so it cannot destroy the payload.
 
-    **Why this exists.** On 2026-08-05 an upload completed, ``201 Created``
-    was determined and sent, and then the idempotency row failed to
-    serialise at commit time. Receipt and payload shared one transaction,
-    so the rollback took the species, reaction and calculations with it.
-    The client had already been told ``uploaded: 1``. Nothing was stored.
-    The trigger was an encoding mismatch, but the shape is
-    encoding-independent: *any* commit-time failure confined to the receipt
-    destroys the science it receipts for.
+    **Why this exists.** If the receipt and the payload shared one
+    transaction, a commit-time failure confined to the receipt (an encoding
+    mismatch, say) would roll back the species, reaction and calculations
+    with it, after the client had been told ``uploaded: 1``.
 
     The isolation has two parts, and both matter:
 
@@ -407,9 +402,8 @@ def _log_receipt_failure(
 ) -> None:
     """Log a receipt failure loudly enough to diagnose without reading source.
 
-    The 2026-08-05 incident left a bare access-log line; working out what
-    had happened meant reading this module. Everything needed to identify
-    the affected write and the reason it failed goes in one ERROR record.
+    Everything needed to identify the affected write and the reason it
+    failed goes in one ERROR record.
     """
     logger.error(
         "Idempotency receipt write FAILED (reason=%s) for %s %s key=%s user_id=%s. "

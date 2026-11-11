@@ -17,7 +17,7 @@ half that needs a database:
   belong to a participant of the record's reaction (or to its transition state), and what is
   stored is the calculation's public ref, never the key and never an id.
 
-Three layers, none of which may be removed because the others exist (ADR 0017): the request
+Three layers, none of which may be removed because the others exist: the request
 schema refuses a self-contradicting declaration first; the workflow calls
 :func:`resolve_kinetics_declarations`, which re-derives every check from the declaration itself
 rather than trusting that validation ran (a payload built with ``model_construct`` skips every

@@ -1,4 +1,4 @@
-"""Persisting an assembled composite's inputs, and the checks around them (ADR 0021, P5).
+"""Persisting an assembled composite's inputs, and the checks around them.
 
 An ``assembled`` composite is arithmetic over other deposited calculations. Its
 ``composite_result.inputs`` name those calculations, one per slot of the scheme
@@ -6,7 +6,7 @@ its level of theory carries; this module resolves each name to a calculation,
 checks the recipe against what was named, writes ``calc_composite_input`` and the
 mirroring ``composite_input`` dependency edge, and finally recomputes the total
 from the inputs' stored energies **to check the deposited one**. TCKDB never
-stores a total it computed itself (owner decision 5): the recomputed number is
+stores a total it computed itself: the recomputed number is
 formed, compared, and discarded.
 
 Why the write is deferred
@@ -23,8 +23,8 @@ that reports named-composite deposits without finalising inputs, and a
 session that still holds an assembled composite with no inputs written: the one way for this to go silently wrong is a
 workflow that forgets, and neither a green suite nor a quiet log would show it.
 
-The checks (ADR 0008 tiers)
----------------------------
+The checks
+----------
 Block (a definition is violated; no correct deposit can satisfy it):
 
 * ``composite_input_missing`` / ``_slot_unknown`` / ``_duplicate`` -- the wire

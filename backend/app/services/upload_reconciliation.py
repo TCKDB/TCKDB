@@ -62,7 +62,7 @@ from app.services.monatomic import single_atom_element
 # Layer 1: freq-based.
 #
 # The physics, the tier assignment, and the code strings are all owned by
-# :mod:`tckdb_schemas.stationary_point` (ADR 0008). They are re-exported
+# :mod:`tckdb_schemas.stationary_point`. They are re-exported
 # here so the warning tier and the blocking tier speak one vocabulary
 # rather than two drifting copies.
 #
@@ -85,9 +85,9 @@ from app.services.monatomic import single_atom_element
 #   module.
 # * The transition-state codes are re-exported only; transition states
 #   are not species entries and never pass through
-#   ``reconcile_species_entry``. Since ADR 0012 they include the extra
-#   imaginary-mode findings, which are the warn-tier half of the rule
-#   that replaced ``transition_state_n_imag_not_one``.
+#   ``reconcile_species_entry``. They include the extra
+#   imaginary-mode findings, which are the warn-tier half of the
+#   imaginary-mode rule.
 #
 # See ``__all__`` at the foot of this module for the re-exported set.
 
@@ -278,10 +278,7 @@ def _get_payload_value(
 # Layer 1: direct n_imag checks (structural warnings)
 # ---------------------------------------------------------------------------
 #
-# The local ``_MINIMUM_KINDS`` frozenset that used to live here is gone.
-# It held both ``minimum`` and ``vdw_complex``, which made the
-# ``if kind in _MINIMUM_KINDS`` guard vestigial — those were the only two
-# members of the enum, so it was always true. The two kinds now differ in
+# The two kinds ``minimum`` and ``vdw_complex`` differ in
 # tier, and that split is expressed by dispatching on the kind in
 # :mod:`tckdb_schemas.stationary_point` rather than by a set that cannot
 # tell them apart.
@@ -325,8 +322,8 @@ def stationary_point_warnings(
     """Convert stationary-point findings into upload warnings.
 
     Only the warning tier survives the conversion. Blocking findings are
-    dropped rather than reported twice: ADR 0008 gives the blocking tier
-    sole ownership of a fact it refuses, and the upload schemas already
+    dropped rather than reported twice: the blocking tier
+    solely owns a fact it refuses, and the upload schemas already
     turned those into a 422 before any route body ran. A blocking finding
     reaching here would mean a payload got past its own validator, which
     is a bug in the seam wiring, not something to annotate.
@@ -433,7 +430,7 @@ def _reconcile_deduction(
 def term_symbol_warnings(payload: SpeciesEntryIdentityPayload) -> list[UploadWarning]:
     """Check a declared ``term_symbol`` against the multiplicity beside it.
 
-    Tier (ADR 0008): warning. The leading digit of a term symbol *is* 2S+1,
+    Tier: warning. The leading digit of a term symbol *is* 2S+1,
     so ``3P`` beside ``multiplicity=2`` is a contradiction no correct deposit
     can contain, which the ADR would put at the blocking tier. It is a warning
     here because the ADR's own audit ("promote the contradiction warnings")

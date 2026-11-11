@@ -348,7 +348,7 @@ def _preview_species_entry_identity(
             None,
         )
 
-    # The same lookup and the same stereo resolution submit performs (DR-0038): a preview that named a different row
+    # The same lookup and the same stereo resolution submit performs: a preview that named a different row
     # than the real import would not be a preview. These upload routes deposit no geometry of their own, so the stereo
     # comes from the marks and a supplied label.
     species = find_species(session, payload)

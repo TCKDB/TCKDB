@@ -6,7 +6,7 @@ sat two levels down, one calculation at a time, behind ``include=calculations``.
 
 Why a map of lists rather than one field
 ----------------------------------------
-Measured on the deployed corpus (2026-08-24), 12 of 34 transition-state
+Measured on the deployed corpus, 12 of 34 transition-state
 entries carry **two** distinct levels of theory. They are not inconsistent
 records — they are the standard composite workflow: optimise and take
 frequencies at a cheap functional, then one high-level single point at that
@@ -197,7 +197,7 @@ def _build(
         .where(owner_column.in_(ids))
         .distinct()
     )
-    # Evidence rule (ADR 0023): a calculation the profile withholds (rejected or deprecated under ``curated``) contributes
+    # Evidence rule: a calculation the profile withholds (rejected or deprecated under ``curated``) contributes
     # neither its type nor its level; an unreviewed one does. The keys of this map are calculation types, so a withheld IRC
     # would otherwise print ``"irc": []`` beside ``has_irc: false``.
     stmt = where_visible(stmt, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))

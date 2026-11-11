@@ -218,7 +218,7 @@ def live_findings(findings: tuple[FindingFacts, ...]) -> list[FindingFacts]:
     adjudication has no kind or role of its own, so a head that continues a ``role_invalidation`` or a
     ``contradictory_characterization`` is returned with that kind and role: those two claims are narrower than the whole
     subject, and a head without them would read as an identity failure and bar every role. A head that continues any other
-    kind is returned as it is, as it always was.
+    kind is returned as it is.
     """
     by_ref = {f.finding_ref: f for f in findings}
     corrects: dict[str, str] = {}  # correcting finding -> the finding it corrects, for the valid corrections only
@@ -440,13 +440,13 @@ def _owner_modes(cv: CurvatureFacts) -> list[ImaginaryMode]:
 
 
 def _minimum_support(cv: CurvatureFacts, subject: StructureSubject, n: int) -> tuple[str, str | None, list[str]]:
-    """A minimum claim, judged by the *magnitude* of the stored imaginary modes against the stored tau (ADR 0012).
+    """A minimum claim, judged by the *magnitude* of the stored imaginary modes against the stored tau.
 
-    ADR 0012 says imaginary modes are judged by magnitude, not counted, and the owner's warning tier only means "accept
+    Imaginary modes are judged by magnitude, not counted, and the warning tier only means "accept
     the deposit and flag it". Above tau the sign of the curvature is decided, so a stiff imaginary mode is real negative
     curvature; below it the sign is not determined. For any entry kind:
 
-    * **supported** with no imaginary mode, or when every imaginary mode is below tau, however many there are (the owner's
+    * **supported** with no imaginary mode, or when every imaginary mode is below tau, however many there are (the
       count-based findings are surfaced as advisories and never contradict by themselves);
     * **contradicted** only when at least one stored mode is at or above tau;
     * **unresolved** when there are imaginary modes and no magnitude was stored to judge them by (or fewer were stored
@@ -537,7 +537,7 @@ def _witness_support(
     """``(verdict, treatment, advisory)`` of one curvature witness already known to sit on the evaluated geometry.
 
     ``verdict`` is ``supports``, ``contradicts``, ``unsupported`` or ``unresolved``. Curvature is judged by the shared
-    stationary-point owner (``tckdb_schemas.stationary_point``, ADR 0012) over the persisted facts: nothing here counts
+    stationary-point owner (``tckdb_schemas.stationary_point``) over the persisted facts: nothing here counts
     imaginary modes against a constant, and nothing is re-derived from a Hessian. A van der Waals complex's soft mode
     and a transition state's extra modes below tau are the owner's warnings and therefore do not contradict a claim.
     """

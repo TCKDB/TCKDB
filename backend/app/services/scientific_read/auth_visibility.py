@@ -6,7 +6,7 @@ meaningful to a caller who can act on the record they identify.
 ``submission_ref`` is the first: it names the moderation unit a curator
 would open to review this record, and it is the answer to "which upload
 did this come from?" An anonymous reader gets no benefit from that
-answer and, per the owner's decision, should not receive it at all.
+answer and should not receive it at all.
 
 This module is the companion to :mod:`internal_ids`, deliberately kept
 separate rather than folded in: internal-id visibility is gated by an

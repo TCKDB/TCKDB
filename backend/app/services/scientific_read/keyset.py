@@ -21,7 +21,7 @@ sort order. Rows inserted above the reader's position no longer shift it.
 **Watermark** — a cursor also carries a snapshot bound: the highest record id
 that existed when traversal began. Every page re-applies ``id <= watermark``,
 so a traversal sees the corpus as it was at page 1 no matter how much is
-uploaded while it runs. When traversal is scoped to a Stage 3 dataset release,
+uploaded while it runs. When traversal is scoped to a dataset release,
 the watermark is pinned to that release instead, which is what makes
 "re-run the query that produced my dataset" answerable.
 
@@ -36,7 +36,7 @@ this path.
 
 Callers that need a genuinely immutable, citable set should not use this at
 all — they should read a published release's frozen ``selected_records``
-artifact, which Stage 3 already guarantees is byte-stable
+artifact, which is already guaranteed byte-stable
 (``backend/docs/specs/dataset_release_and_profiles.md``). This module makes
 *live* traversal far more reproducible than offset paging; it does not make it
 immutable, and it must not be described as if it did.

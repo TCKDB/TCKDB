@@ -1,6 +1,6 @@
 """Service helpers for conformer group resolution.
 
-Implements DR-0005: torsional basin matching for conformer grouping.
+Torsional basin matching for conformer grouping.
 When no torsion fingerprint can be made (a single atom, a failed computation) the structure joins the entry's
 existing no-fingerprint group, or starts a new ``conformer_N`` group. The depositor's conformer label is never read.
 
@@ -357,7 +357,7 @@ def resolve_conformer_group(
 ) -> tuple[ConformerGroup, TorsionFingerprint | None, ConformerAssignmentScheme | None]:
     """Resolve or create a conformer group for an uploaded observation.
 
-    Uses torsional basin matching (DR-0005) when geometry data is available.
+    Uses torsional basin matching when geometry data is available.
     A structure with no fingerprint (single atom, failed computation) joins the entry's existing no-fingerprint
     group, or starts a new ``conformer_N`` group; the depositor's label plays no part.
     This function resolves only the basin-level ``ConformerGroup``; callers

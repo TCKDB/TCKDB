@@ -1,4 +1,4 @@
-"""The data step of the species-key / entry-descriptor migration (DR-0038).
+"""The data step of the species-key / entry-descriptor migration.
 
 A species is now its constitution -- stereo-blind canonical SMILES, charge and multiplicity -- and stereochemistry is
 resolved on the species entry as a canonical descriptor. Rows written under the old rule are wrong in two ways, and this

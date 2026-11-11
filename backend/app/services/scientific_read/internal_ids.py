@@ -1,9 +1,9 @@
-"""Phase D internal-ID visibility helpers.
+"""Internal-ID visibility helpers.
 
 The scientific read API surfaces both public refs (``*_ref``) and the
 historical integer primary keys (``*_id``, plus a small handful of
-non-suffix keys like ``LiteratureSummary.id``). Phase D hides those
-integer keys from public responses by default; callers may opt in via
+non-suffix keys like ``LiteratureSummary.id``). Those
+integer keys are hidden from public responses by default; callers may opt in via
 ``include=internal_ids``, but the opt-in is only effective when the
 deployment allows it (``settings.allow_public_internal_ids``).
 
@@ -177,7 +177,7 @@ def apply_internal_ids_visibility(
     *,
     settings_obj: Any = None,
 ) -> BaseModel | JSONResponse:
-    """Apply the Phase D internal-ID visibility policy to a response.
+    """Apply the internal-ID visibility policy to a response.
 
     Decision rule:
 

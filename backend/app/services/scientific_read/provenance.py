@@ -201,7 +201,7 @@ def get_reaction_full(
             )
         )
 
-    # A served detail shows what it embeds badged, unless withheld (ADR 0023 step 7, Q9).
+    # A served detail shows what it embeds badged, unless withheld.
     visible = detail_visible_statuses(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
@@ -396,7 +396,7 @@ def _fetch_atom_map_headers(
     could be rejected on its own; it is the correspondence the depositor
     asserted between structures that carry their own review state, and
     dropping it under a filter would make a mapped reaction read as unmapped —
-    which is precisely the indistinguishability ADR 0011 exists to remove.
+    which is precisely the indistinguishability to avoid.
 
     An empty list therefore means the record genuinely carries no map.
     """
@@ -1557,8 +1557,8 @@ def _enforce_full_expansion_caps(
     What the refusal publishes, and what it withholds
     -------------------------------------------------
     ``query_too_expensive`` is a
-    :attr:`~app.api.code_catalogue.Shape.relationship` code as of
-    2026-08-18 — it says a sub-array and a cap are the wrong way round
+    :attr:`~app.api.code_catalogue.Shape.relationship` code
+    — it says a sub-array and a cap are the wrong way round
     and names neither — so it owes a client ``context``. It carries the
     offending ``section`` and that section's ``cap``, which is the whole
     repair: narrow ``include=``, or request the section directly with

@@ -3,8 +3,8 @@
 A stored machine review names the prompt and the rubric it was made under (``prompt_name``/``prompt_version``,
 ``rubric_name``/``rubric_version``). This reads those stamps for a page of tasks in one grouped query and says whether
 they are still the ones in force, **using the currency rule** (:func:`app.services.machine_review.currency.stamp_mismatches`),
-not a second comparison: a different name or version of the prompt or the rubric, or a stored version 0 (stamped before
-the 2026-10 versioning reset), makes the review ``stale``.
+not a second comparison: a different name or version of the prompt or the rubric, or a stored version 0 (stamped under an
+earlier numbering), makes the review ``stale``.
 
 A task reads the review that produced it: the row whose ``source_audit_event_id`` is the task's. A task without a source
 event reads the record's latest reviewer-family review. A task whose source review is not stored has no entry.

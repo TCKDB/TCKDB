@@ -141,7 +141,7 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 #: (``{"ids": [...]}``). ``is_internal_id_key()`` in
 #: ``app/services/scientific_read/internal_ids.py`` only matches keys
 #: ending in ``_id``/``_ids`` or on its literal deny-list, so a field
-#: named plain ``ids`` sails through the Phase D strip untouched -- on
+#: named plain ``ids`` sails through the strip untouched -- on
 #: ``/species/search`` that is a pre-existing, unfixed gap (out of scope
 #: here; a caller must already have an identifier to reach it), but on an
 #: identifier-free, unauthenticated, whole-corpus listing the same gap
@@ -153,7 +153,7 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 #: upload schedule") and ``internal_ids_visibility_policy.md`` (bare
 #: integer-id arrays are meant to be hidden by default).
 #:
-#: Dropping the tokens rather than adding ``"ids"`` to the Phase D
+#: Dropping the tokens rather than adding ``"ids"`` to the
 #: deny-list: the deny-list is global, so widening it is a separate,
 #: wider-blast-radius change this endpoint should not force. Availability
 #: already tells a browse caller whether a section exists
@@ -606,7 +606,7 @@ def search_species(
         endpoint="/scientific/species/search",
     )
 
-    # Phase C: ref-by-handle filters are valid identifier sources. Resolve
+    # Ref-by-handle filters are valid identifier sources. Resolve
     # them first so we know whether the caller supplied a real identifier
     # and, if so, what id(s) to scope by.
     species_pair = reconcile_species_pair(
@@ -771,14 +771,14 @@ def browse_species(
     catalogue listing under any circumstance, so both ``pagination.total``
     (:func:`_browse_visible_species_total`) and the page itself
     (:func:`_rank_and_slice_species` with ``require_visible_entries=True``)
-    drop it unconditionally. This used to be conditional on whether the
-    caller had typed one of five specific request fields
+    drop it unconditionally. Making it conditional on whether the
+    caller typed one of five specific request fields
     (min_review_status / include_rejected / include_deprecated /
     electronic_state_kind / species_entry_kind) — a check that missed the
     read-profile floor :func:`app.services.scientific_read.common.visible_statuses`
     also applies (``profile=curated`` narrows visibility to ``approved``
-    with no request field set at all, so ``?profile=curated`` reproduced
-    the exact bug verbatim), and that inverted itself for
+    with no request field set at all, so ``?profile=curated`` would reproduce
+    the bug), and that would invert itself for
     ``include_rejected``/``include_deprecated``: those only ever *widen*
     visibility, so treating them as a trigger could drop an entry-less
     species that a plainer request kept. Applying the rule unconditionally
@@ -994,7 +994,7 @@ def _browse_candidate_species_stmt(
     columns: list[Any] = [Species.id, Species.created_at]
     if include_heavy_atom_count:
         columns.append(_heavy_atom_count_expr().label("heavy_atom_count"))
-    # A merged-away species is kept for its ref but is never a live record (DR-0038).
+    # A merged-away species is kept for its ref but is never a live record.
     stmt = select(*columns).where(Species.merged_into_species_id.is_(None))
     if request.charge is not None:
         stmt = stmt.where(Species.charge == request.charge)
@@ -1080,7 +1080,7 @@ def _apply_provenance_filters(stmt, request: SpeciesBrowseRequest):
     return apply_calculation_provenance_filter(
         stmt,
         request,
-        # Evidence rule (ADR 0023 step 4): a rejected or deprecated calculation cannot match under curated; a
+        # Evidence rule: a rejected or deprecated calculation cannot match under curated; a
         # not-reviewed one can.
         where_visible(
             select(Calculation.id)
@@ -1098,7 +1098,7 @@ def _entry_filter_predicates(
     """The per-entry ``where`` terms, in one place for all three uses.
 
     Live entries only: an entry merged into another keeps its row and forwards to the survivor, which holds the
-    results (DR-0038), so a listing never shows the kept row beside the entry that stands for it.
+    results, so a listing never shows the kept row beside the entry that stands for it.
     """
     predicates = [SpeciesEntry.merged_into_species_entry_id.is_(None)]
     if request.electronic_state_kind is not None:
@@ -1142,7 +1142,7 @@ def _join_entries_and_reviews(
     survives a table that has tens of thousands of rows and no ``ANALYZE``.
     What the flat chain buys unconditionally is that the identity predicate
     is evaluated once per statement instead of twice, which is what the
-    RDKit-backed ``formula=`` filter cares about: on the Stage 4 benchmark
+    RDKit-backed ``formula=`` filter cares about: on the benchmark
     corpus the broad formula search is 21.7 ms flat against 28.3 ms wrapped.
 
     :param outer: ``True`` keeps species with no matching entry (the ranking
@@ -1567,7 +1567,7 @@ def _build_page_records(
 def _within_review_floor(stmt: Any, model: Any, record_type: Any) -> Any:
     """Restrict a ``select`` over ``model`` to the rows the active read profile's review floor leaves visible.
 
-    Owner decision D5: the availability flags, ``calculation_count`` and the ``*_summary.ids`` lists on a species
+    The availability flags, ``calculation_count`` and the ``*_summary.ids`` lists on a species
     entry answer "what would the list endpoint return", so under ``?profile=curated`` they count only what the
     floor shows. Without a floor (the default profile) the statement is returned untouched: exploratory output
     is byte-identical. A missing review row reads as ``not_reviewed``, as everywhere else.

@@ -457,7 +457,7 @@ def _load_network_solves(
             # short identification for a computed solve, and folding an
             # enum into a free-text slot would leave a consumer unable to
             # tell the token "reported" from an ME method that happens to
-            # be spelled that way. ADR 0010 wants one predicate, not a
+            # be spelled that way. One predicate is wanted, not a
             # string match.
             label=r.me_method,
             network_ref=r.network_ref,
@@ -534,7 +534,7 @@ def _endpoint_for(record_type: str, record_ref: str) -> str:
     """Build a ref-based detail URL for *record_type*.
 
     Always uses the public ref — never an integer ID — so the URL
-    survives the Phase D internal-ID stripping policy.
+    survives the internal-ID stripping policy.
     """
     base = "/api/v1/scientific"
     if record_type == "calculation":

@@ -169,8 +169,7 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
         # it is the difference between a record a reader can check and a bare
         # assertion that this TS connects those endpoints. Shipping the entry
         # without it would make a mapped reaction read in a citable release
-        # exactly like an unmapped one — the indistinguishability ADR 0011
-        # exists to remove. ``source`` rides along, so an inferred map never
+        # exactly like an unmapped one. ``source`` rides along, so an inferred map never
         # ships looking like a declared one.
         ChildTable(
             "reaction_atom_map",

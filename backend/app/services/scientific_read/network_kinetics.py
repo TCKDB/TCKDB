@@ -113,7 +113,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
 }
 # ``points`` is excluded from ``include=all`` expansion: tabulated kinetics
 # can grow large and should require explicit opt-in. ``internal_ids``
-# follows the standard Phase D policy.
+# follows the standard policy.
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "points"}
 
 
@@ -477,7 +477,7 @@ def build_network_kinetics_record(
         # record's ``kind`` — whether these rates were derived here or read
         # out of a paper — is unknowable in that state, and rendering it as
         # ``computed`` would publish a provenance claim nothing supports
-        # (ADR 0010). Failing is the honest response, and the alarm.
+        # Failing is the honest response, and the alarm.
         # ``DataIntegrityError`` rather than a bare exception: it is the
         # repo's registered member for "persisted data violates a scientific
         # invariant assumed by the API", so it renders a structured envelope
@@ -628,7 +628,7 @@ def _build_network_kinetics_record(
     )
 
     # ---- parent contexts ---------------------------------------------------
-    # Owner decision D1: always built here; under ``profile=curated`` the ref guard blanks it when the network is hidden
+    # Always built here; under ``profile=curated`` the ref guard blanks it when the network is hidden
     # (``NetworkKineticsNetworkContext`` is a registered pointer and the field is nullable).
     network_ctx = NetworkKineticsNetworkContext(
         network_id=network.id if network is not None else None,
@@ -640,7 +640,7 @@ def _build_network_kinetics_record(
         network_solve_id=solve.id,
         network_solve_ref=solve.public_ref,
         # Says whether *these* rates were derived here or transcribed from a
-        # paper, without a second request to the solve surface (ADR 0010).
+        # paper, without a second request to the solve surface.
         kind=solve.kind,
         me_method=solve.me_method,
     )

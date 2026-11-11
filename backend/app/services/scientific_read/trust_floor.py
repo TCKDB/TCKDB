@@ -1,11 +1,11 @@
-"""Trust verdicts that rest only on the evidence the active read profile does not withhold (owner decision D5, ADR 0023).
+"""Trust verdicts that rest only on the evidence the active read profile does not withhold.
 
 A trust fragment is a checklist over the evidence graph of one record ("is there a transition-state optimisation, an
 IRC, a geometry validation?"). The evaluators are pure over the ORM graph they are handed, and that graph includes
 calculations the evidence rule withholds. Handed as it is, a curated fragment would say ``ts_optimization_present: passed``
 for an entry whose only optimisation is withheld: the same existence oracle the ``has_opt`` flag was.
 
-The calculations a record's checklist reads are its linked evidence, so since step 5 of ADR 0023 only a ``rejected`` or
+The calculations a record's checklist reads are its linked evidence, so only a ``rejected`` or
 ``deprecated`` one is taken out; an unreviewed one is read, as the box and the evidence counts beside the badge already read it.
 (The record floor still decides which entries and kinetics records a list returns; it does not decide what a returned one
 rests on.)

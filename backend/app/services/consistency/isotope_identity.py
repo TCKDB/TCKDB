@@ -1,8 +1,8 @@
 """D7: a protium species entry's calculation geometries against their own isotope declarations.
 
-Since #672 (``docs/adr/0022``) a ``D``/``T`` element token is an isotope
+A ``D``/``T`` element token is an isotope
 declaration, and an upload that files such a geometry under a protium species
-entry is refused. Rows deposited **before** that decision are not: they hold
+entry is refused. Rows deposited **earlier** are not: they hold
 ``D``/``T`` in ``geometry_atom.element`` with a NULL ``isotope_mass_number``,
 sit under whatever entry they were deposited with, and cannot be rewritten
 (``trg_as_geometry_atom``). Where such a row is attached to a protium entry the
@@ -10,10 +10,9 @@ record says two contradictory things about one nucleus, and every mass-weighted
 number computed from the geometry describes an isotopologue under a protium
 label.
 
-This check finds them. It is advisory in ADR 0008's sense -- one append-only
+This check finds them. It is advisory -- one append-only
 ``record_machine_review`` row a curator may read, no status, selection, trust
-or approval effect, and no rewriting of anything. The Pi measured zero such rows
-on 2026-10-03; self-hosted instances are unknown, which is why the check exists.
+or approval effect, and no rewriting of anything.
 
 What is read: every geometry linked as an input or output of a calculation owned
 by the entry. For each atom the declared nuclide is its stored mass number or,

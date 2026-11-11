@@ -1,4 +1,4 @@
-"""Read-only compatibility inventory for the Phase A creation/export profile."""
+"""Read-only compatibility inventory for the creation/export profile."""
 
 from collections.abc import Iterator
 

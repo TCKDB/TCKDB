@@ -53,7 +53,7 @@ _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
     ("scf", "maxcycle"): ("scf.max_cycles", None),
     # freq section
     #
-    # ADR 0012's tau keys on how the *frequency job* built its second
+    # The imaginary-mode tau keys on how the *frequency job* built its second
     # derivatives. Gaussian only says so when the default is overridden,
     # so only the overrides are recorded: an unqualified ``Freq`` leaves
     # the key absent, which resolves to the conservative tau rather than
@@ -593,7 +593,7 @@ def _parse_route_tokens(route: str) -> list[dict]:
         #
         # Handled separately because the generic key=value branch below
         # files everything under the ``general`` section, which would put
-        # the frequency job's Hessian method somewhere ADR 0012's tau
+        # the frequency job's Hessian method somewhere the tau
         # resolution cannot see it. Only route it here when the option is
         # one the vocabulary knows; anything else keeps the old shape.
         elif token.lower().startswith("freq=") and _lookup_canonical(

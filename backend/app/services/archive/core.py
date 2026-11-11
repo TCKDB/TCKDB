@@ -351,7 +351,7 @@ def _load_blob_spools(session: Session) -> list[_BlobSpool]:
                 # An archive export already re-reads and re-verifies every
                 # stored object — it has been a full verification pass all
                 # along, and it threw the answer away. Record the break
-                # before failing the export (ADR 0014); refusing to
+                # before failing the export; refusing to
                 # archive corrupt evidence is right, but so is knowing
                 # afterwards which object it was.
                 record_from_error(
@@ -951,7 +951,6 @@ def restore_archive(
             # would bless bytes we cannot vouch for — but the abort alone
             # threw away the one moment TCKDB discovered corruption in
             # that store. Record it, then fail as loudly as before
-            # (ADR 0014).
             record_from_error(
                 exc,
                 detected_during=ArtifactIntegrityDetectionContext.archive,

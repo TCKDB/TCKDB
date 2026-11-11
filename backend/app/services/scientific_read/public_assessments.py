@@ -379,7 +379,7 @@ def _reproducibility_summary(
     # A stored stamp was computed from the full set of inputs, with no read profile, so whether it is current is a property
     # of the record and its stamp, not of the reader: the recomputation below reads nothing from the request's profile
     # (``evaluate_reproducibility`` never consults it) and the answer is the same under ``curated`` and ``exploratory``
-    # (ADR 0023, step 6). The answer is a state and a reason, never a ref.
+    # The answer is a state and a reason, never a ref.
     current = evaluate_reproducibility(session, record_type=record_type, record_id=record_id)
     rubric_is_current = (assessment.rubric_name, assessment.rubric_version) == (
         current.rubric_name,

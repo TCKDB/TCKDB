@@ -128,7 +128,7 @@ class PopulationScan:
     removed_by_filters: int = 0
     removed_by_floor: int = 0
     terminal_excluded: dict[str, int] = field(default_factory=dict)
-    #: The evidence rule (ADR 0023). ``evidence_shown``: the statuses at which linked evidence is not withheld under the profile
+    #: The evidence rule. ``evidence_shown``: the statuses at which linked evidence is not withheld under the profile
     #: (a source calculation, a lineage parent, an anchoring observation, a validation-evidence calculation).
     #: ``evidence_usable``: the statuses a pinned source may have to be USED (the caller's own floor over the non-terminal
     #: ones). Neither carries the profile's record floor, which decides the units only. Under exploratory they equal
@@ -452,7 +452,7 @@ def _scan_determinations(
         """The statuses a determination is judged by: its observation's and that observation's group's."""
         return [s for s in (observation_status(observation_id), group_status(observation_id)) if s is not None]
 
-    # ADR 0023 (Q2, Q4): the basin is the record and its conformer GROUP is the record that gates it; the conformer
+    # The basin is the record and its conformer GROUP is the record that gates it; the conformer
     # OBSERVATION inside the group is evidence, so under ``curated`` it is used and badged unless it is rejected or deprecated.
     # A determination whose group the profile floor hides, or whose observation is withheld as evidence, is not part of this
     # request's world.

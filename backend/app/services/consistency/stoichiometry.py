@@ -157,8 +157,7 @@ def species_scope_reason(species_entry):
        ``isotope_key`` (or, for a legacy row, its species SMILES carries a
        label).
 
-    Ions and isotopologues are out of scope pending the decisions the
-    Phase D plan names (electron and nuclide reference conventions); they
+    Ions and isotopologues are out of scope; they
     are reported, never silently treated as the neutral or natural species.
     """
     species = species_entry.species

@@ -84,10 +84,9 @@ def resolve_actor_kind(user: AppUser) -> SubmissionActorKind:
     produced through the dedicated precheck/system helpers below and never
     derive from an ``AppUser``.
 
-    Public (Phase C-E5 review round 3, R8): other modules (``app.services.
+    Public: other modules (``app.services.
     rights``, ``app.services.observation_identity_attach``) need this same
-    mapping and previously imported the underscore-prefixed name directly --
-    a private-name import across module boundaries. Exported here instead.
+    mapping.
     """
     if user.role is AppUserRole.admin:
         return SubmissionActorKind.admin
@@ -729,7 +728,7 @@ def supersede_submission(
     if not (
         can_act_on_submission(old, actor) and can_act_on_submission(new, actor)
     ):
-        # Row ids go to the log, never to the caller (DR-0028 Requirement 2).
+        # Row ids go to the log, never to the caller.
         logger.info(
             "supersede refused: actor=%s old=%s new=%s",
             actor.id,

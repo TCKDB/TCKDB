@@ -3,7 +3,7 @@
 Two separate definitions live here. The ML barrier lookups (:func:`species_entry_energy_at_lot`,
 :func:`ts_calculation_energies`, :func:`ts_entries`, :func:`ml_energy_row_floor`) pick the lowest energy at a level across
 every program, under the ML export's approved-only calculation floor, and are unchanged. The profile read
-(:func:`build_energy_profiles`) picks per level AND program, treats calculations as evidence (ADR 0023: rejected and
+(:func:`build_energy_profiles`) picks per level AND program, treats calculations as evidence (rejected and
 deprecated never used, the rest badged), skips optimisations recorded as not converged, and lists a transition-state entry
 with no complete profile under ``unavailable`` with a code. The two share only the ranking idea (single points before
 optimisation energies, lowest wins, ties by calculation ref).
@@ -58,7 +58,7 @@ from app.services.scientific_read.transport import _bulk_lot_summaries
 
 
 def ml_energy_row_floor(profile: ResolvedReadProfile) -> Any:
-    """The review floor on the ML export's ENERGY ROWS: a named exception to the evidence rule (owner decision Q7, ADR 0023).
+    """The review floor on the ML export's ENERGY ROWS: a named exception to the evidence rule.
 
     The ML export's rows are calculations (a geometry with the energies, frequencies and Hessian computed at it), so a
     calculation is a RECORD of the dataset, not linked evidence of another record, and it keeps the ``approved`` floor under
@@ -225,7 +225,7 @@ def _owner_points(
 ) -> tuple[dict[int, list[_Point]], dict[int, list[_Point]]]:
     """Every usable electronic energy with a level, for all owners at once (one statement per energy table).
 
-    The calculations are evidence of the profile (ADR 0023): rejected and deprecated ones are never used, and
+    The calculations are evidence of the profile: rejected and deprecated ones are never used, and
     ``min_review_status`` narrows further; each point carries its calculation's badge. An optimisation recorded as not
     converged is left out; one with no convergence record is used and marked.
     """

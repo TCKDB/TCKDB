@@ -5,7 +5,7 @@ tool, method family, DFT rung) keep a candidate when ONE source calculation it l
 matches every supplied field at once. A candidate never matches through two different calculations, and never through
 a calculation it does not link to. Under ``curated`` a calculation the profile withholds as evidence (a rejected or
 deprecated one) contributes nothing;
-a not-reviewed one matches (ADR 0023 step 4, in the shared helper).
+a not-reviewed one matches (in the shared helper).
 
 ``method_family`` and the DFT rung classify the calculation's method (:mod:`app.chemistry.method_families`). They are
 a classification, not a measure of accuracy, and a filter fact only: they never order or select anything.

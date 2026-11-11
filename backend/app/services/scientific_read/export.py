@@ -674,7 +674,7 @@ def resolve_seed(
             .where(ChemReaction.merged_into_chem_reaction_id.is_(None))
         ).all()
         if len(all_ids) > all_cap:
-            # A relationship code as of 2026-08-18, published cap-only.
+            # A relationship code, published cap-only.
             #
             # ``len(all_ids)`` is an unfiltered ``SELECT`` over
             # ``reaction_entry``: it is the total number of reaction
@@ -981,7 +981,7 @@ def _transport_linearity_witness(
 
     **Withheld records are not witnesses.** The answer names its source, and the
     source can be a calculation or statmech record the evidence rule withholds
-    (ADR 0023: rejected or deprecated under ``curated``). Such a record is left
+    (rejected or deprecated under ``curated``). Such a record is left
     out before anything is derived from it, so neither its ref nor the linearity
     it states reaches the export. A source that is merely unreviewed is linked
     evidence of the transport and is a witness. ``profile`` is the read profile

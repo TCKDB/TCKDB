@@ -62,7 +62,7 @@ S3_SECRET_KEY = _env("S3_SECRET_KEY", "tckdb_secret")
 S3_BUCKET = _env("S3_BUCKET", "tckdb-artifacts")
 S3_REGION = _env("S3_REGION", "us-east-1")
 #: Empty means "not a SeaweedFS TCKDB should ask about capacity": no request
-#: is made and ``InternalError`` stays unclassified, as before #545.
+#: is made and ``InternalError`` stays unclassified.
 S3_SEAWEEDFS_MASTER_URL = _env("S3_SEAWEEDFS_MASTER_URL", "")
 
 #: Maximum size for a single artifact (bytes).  50 MB.
@@ -180,7 +180,7 @@ _MISSING_OBJECT_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
 #: (:data:`_SECOND_OPINION_CODES`, :func:`_store_reports_no_room`) and is
 #: classified full only if the store reports less room than the write
 #: needed. With the variable unset, or the store not answering, it stays
-#: unavailable (503, retry later), as before #545.
+#: unavailable (503, retry later).
 #:
 #: ``EntityTooLarge`` is deliberately **not** here, against the first
 #: reading of this problem. It means "this object exceeds the store's
@@ -868,10 +868,8 @@ def store_artifact(
             ContentType="application/octet-stream",
         )
     except ClientError as exc:
-        # The one arm a full store reaches. Every code that was not a
-        # missing object used to collapse into an undiscriminated 503, so
-        # "the store has no room" and "the store is down" left here with
-        # the same retry advice, of which only one was true.
+        # The one arm a full store reaches. "The store has no room" and
+        # "the store is down" must not carry the same retry advice.
         _raise_write_refusal(
             exc,
             what="Artifact storage write failed",
@@ -1187,8 +1185,8 @@ def purge_held_object(
     Refusing to delete is where that caller's obligation begins, not
     where it ends: a referenced held digest is a legitimate record
     reading as corrupt, so the sweep restores it and records the restore
-    (``_restore_referenced_holds``, ADR 0014). This function stays the
-    unconditional deleter it was; the judgement lives in the caller.
+    (``_restore_referenced_holds``). This function is the
+    unconditional deleter; the judgement lives in the caller.
     """
     if client is None:
         client = _get_s3_client()

@@ -62,7 +62,7 @@ class WithheldBatcher:
         # The guard returns a withheld copy and leaves ``batch`` alone: the copy is what is released.
         report = ref_guard.withhold_in_document(self._session, batch, profile=self._profile, mode="null")
         assert report.facts is not None
-        # Linked evidence is shown WITH its badge (ADR 0023): every gated ref the finished line still names, and its review
+        # Linked evidence is shown WITH its badge: every gated ref the finished line still names, and its review
         # status. Built from the withheld copy, so a withheld ref is never in the map. Curated only (the batcher is inactive
         # otherwise), from the statuses the one lookup above already fetched.
         return [

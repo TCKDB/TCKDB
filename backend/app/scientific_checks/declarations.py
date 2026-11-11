@@ -113,7 +113,7 @@ from app.services.trust.evaluator import (
 # Stationary points — the imaginary-mode spectrum is the definition
 # ---------------------------------------------------------------------------
 
-#: ADR 0012's protocol table, declared once and rendered into both the
+#: The imaginary-mode tau protocol table, declared once and rendered into both the
 #: register document and the τ entry below.
 _TAU_VALUES: tuple[tuple[str, str], ...] = (
     (
@@ -820,7 +820,7 @@ CHECK_RECORDED_HESSIAN_METHOD_AGREES_WITH_THE_INPUT_DECK = ScientificCheck(
 )
 
 # ---------------------------------------------------------------------------
-# Atom mapping across a reaction (ADR 0011)
+# Atom mapping across a reaction
 # ---------------------------------------------------------------------------
 
 _ATOM_MAP_DUAL_ENFORCEMENT = (

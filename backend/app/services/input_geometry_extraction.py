@@ -52,7 +52,7 @@ upload order, which the single-artifact upload hook cannot always do (see
 the hook's docstring for the documented ordering caveat).
 
 **Basin assignment and coverage are untouched by this module.** Conformer
-basin matching (DR-0005) runs once, at initial conformer/species/reaction
+basin matching runs once, at initial conformer/species/reaction
 upload time, from the *producer-declared* conformer geometry -- all four
 call sites (``app.workflows.conformer``, ``computed_species``,
 ``computed_reaction``, and ``network_pdep``) call ``resolve_conformer_group``
@@ -191,7 +191,7 @@ _LABELLED_ELEMENT_TOKEN = re.compile(r"^([A-Za-z]{1,2})\d+$")
 #: RDKit's periodic table recognises, so validating them the same way as
 #: everything else would refuse correct isotope-labelled decks. They are
 #: passed on as written; :func:`app.chemistry.geometry.parse_xyz` then reads
-#: them as H with mass number 2 or 3 (``docs/adr/0022``). Every other one-or-two-letter token -- Gaussian's
+#: them as H with mass number 2 or 3. Every other one-or-two-letter token -- Gaussian's
 #: ``X`` (dummy atom), ``Bq`` (ghost/counterpoise atom), or nonsense like
 #: ``Xx`` -- has exactly this shape too and names no real element, so shape
 #: alone must not be the acceptance test.
@@ -278,8 +278,7 @@ _GAUSSIAN_CART_ROW_INT = re.compile(r"^-?\d+$")
 #: ``units=(rad,bohr)`` and ``units=(bohr,rad)`` are the same declaration
 #: -- so ``bohr``/``au`` is matched *anywhere* inside the list
 #: (``[^)\n]*?`` up to the closing paren or line end), not only as the
-#: first option. A first-token-only anchor here previously let
-#: ``units=(rad,bohr)`` and its permutations through unrejected.
+#: first option.
 _GAUSSIAN_NON_ANGSTROM_UNITS = re.compile(
     r"\bunits\s*[=(]\s*\(?[^)\n]*?\b(?:bohrs?|au)\b", re.IGNORECASE
 )
@@ -612,9 +611,8 @@ def extract_input_geometry(
     a program/kind pair with no wired parser returns ``not_determinable``
     rather than falling through to another program's parser. Molpro and
     Psi4 are recognised by :mod:`app.services.ess_software_detection` but
-    have no input-geometry parser wired here -- out of scope for this PR
-    (Gaussian and ORCA cover the motivating case: coarse ``opt`` passes
-    from ARC).
+    have no input-geometry parser wired here (Gaussian and ORCA cover coarse
+    ``opt`` passes from ARC).
     """
     if artifact_kind == ArtifactKind.input:
         if software == "gaussian":
@@ -860,9 +858,8 @@ def _mint_and_link_extracted_geometry(
     ``Geometry``/``GeometryAtom`` row and then rejecting the link (a
     composition mismatch, a concurrent-duplicate ``IntegrityError``, the
     accepted-science-immutability trigger firing on a race with an
-    approval) used to leave that row orphaned -- nothing pointed at it,
-    because the mint happened *before* any savepoint that could roll it
-    back. Wrapping the mint in the same savepoint as the composition check
+    approval) must not leave that row orphaned with nothing pointing at it.
+    Wrapping the mint in the same savepoint as the composition check
     and the link write means a rejection undoes the mint too. Savepoints
     nest freely in Postgres: ``resolve_geometry_payload`` opens its own
     inner savepoint only for a genuinely new row, and rolling back this
@@ -1107,7 +1104,7 @@ def extract_and_link_input_geometry_from_stored_artifacts(
     backfill/download path, never the upload hook, which works from
     already-decoded bytes to avoid the round-trip), ``input``-kind
     artifacts first, so "prefer the input file over the log" holds
-    regardless of the order artifacts were originally uploaded in.
+    regardless of the order artifacts were uploaded in.
 
     A storage-read failure or integrity break on one candidate artifact is
     logged (and, for an integrity break, recorded via

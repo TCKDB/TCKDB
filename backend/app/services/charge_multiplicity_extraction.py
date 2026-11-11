@@ -88,8 +88,8 @@ def _reconcile(
     # A calculation is owned by exactly one of the two entry kinds (enforced
     # by a table check constraint). Where the declared charge/multiplicity
     # lives differs between them: for a species they are identity columns on
-    # ``species`` (``uq_species_identity`` is SMILES + charge + multiplicity,
-    # DR-0031) reached through the entry, whereas a transition-state entry
+    # ``species`` (``uq_species_identity`` is SMILES + charge + multiplicity)
+    # reached through the entry, whereas a transition-state entry
     # carries them directly. Both are non-null.
     if calculation.species_entry is not None:
         owner = calculation.species_entry.species

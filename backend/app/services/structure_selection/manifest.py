@@ -72,7 +72,7 @@ from app.versioning import same_value
 #: ``apply_rules``, an objective or a reference model. Version 3: the request records its filters and its eligibility
 #: settings, the manifest records which review statuses a unit itself may have and each unit's verdict under those
 #: settings (with the status it was judged by), and the population records the funnel. Version 4: ``read_profile`` records the review statuses whose linked evidence
-#: the profile withheld (ADR 0023); under ``curated`` a not-reviewed or under-review record is shown as evidence and
+#: the profile withheld; under ``curated`` a not-reviewed or under-review record is shown as evidence and
 #: only a rejected or deprecated one is a token. Version 5: a determination records its conformer observation's status
 #: and that observation's group's status apart (``observation_review_status``, ``group_review_status``) beside the combined
 #: ``review_status``, so a replay judges the group (a record) by the record floor and the observation (evidence) by the
@@ -293,7 +293,7 @@ def _check_consistency(
     # unit is judged against what a unit may have; a source calculation, by the effective statuses. A determination's
     # verdict also records the status a request can lift (its observation's).
     #
-    # ADR 0023: under a profile with a floor the floor decides the units (a record), not what a unit rests on. A source
+    # Under a profile with a floor the floor decides the units (a record), not what a unit rests on. A source
     # calculation, a lineage parent and a basin's conformer observation are evidence, so they may be any status the evidence
     # rule uses (everything but rejected and deprecated, over the caller's own floor), and a basin's own status, the weakest
     # of its group's and its observation's, may be one of those too. A rejected or deprecated input is still refused.

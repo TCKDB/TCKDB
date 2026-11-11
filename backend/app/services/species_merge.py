@@ -1,4 +1,4 @@
-"""Merged-away species, species entries and reactions: who is live, and where a merged row forwards (DR-0038).
+"""Merged-away species, species entries and reactions: who is live, and where a merged row forwards.
 
 When two rows turn out to be one thing (``C/C=C/C`` and ``CC=CC`` are one species; two entries that name one
 configuration are one entry) the row that loses is **kept**: its public ref still resolves, and the reviews, machine

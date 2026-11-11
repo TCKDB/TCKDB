@@ -7,10 +7,10 @@ SubmissionAuditEvent` on the submission the observation is linked to via
 ``submission_record_link`` -- an observation with no such link has nowhere
 honest to record the fact and the attach is refused
 (``observation_identity_attach_requires_submission``). The ThermoML importer
-(``app.services.thermoml_cp_import``) has always linked every row it writes.
-The CCCBDB importer (``app.services.cccbdb_molecular_property_import``) only
-started doing so at Phase C-E5 review round 3 -- rows it wrote *before* that
-change carry no link and cannot be curated. This module is the remediation:
+(``app.services.thermoml_cp_import``) links every row it writes.
+The CCCBDB importer (``app.services.cccbdb_molecular_property_import``) also
+links every row it writes; rows written without a link carry none and cannot
+be curated. This module is the remediation:
 given a database, find every unlinked observation row, group it by the
 external source that produced it, open one ``Submission`` per source
 attributed to a named operator, and link the rows to it.

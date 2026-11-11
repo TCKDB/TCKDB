@@ -287,7 +287,7 @@ def _apply_method_basis_software_filters(
     source-calculation graph carries at least one row matching the
     supplied method / basis / software / workflow. A source calculation the read profile hides
     contributes nothing to a match when the evidence rule withholds it (rejected or deprecated under
-    curated, ADR 0023); a not-reviewed one matches."""
+    curated); a not-reviewed one matches."""
     return apply_calculation_provenance_filter(stmt, request, _shown_source_calculations())
 
 

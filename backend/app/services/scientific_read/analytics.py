@@ -375,7 +375,7 @@ _KINETICS_FILTER_FIELDS: tuple[str, ...] = (
 #: table restricted to assignments that name a transition-state entry.
 #:
 #: Both flags rest on linked evidence, so under ``profile=curated`` they are true only when the statmech (or the
-#: transition-state entry) the assignment names is not withheld by the evidence rule (ADR 0023: rejected or deprecated):
+#: transition-state entry) the assignment names is not withheld by the evidence rule (rejected or deprecated):
 #: an unreviewed one is shown with its badge and counts. The default profile adds no condition.
 def _kinetics_has_statmech():
     return where_visible(

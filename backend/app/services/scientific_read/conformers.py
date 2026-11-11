@@ -116,11 +116,10 @@ from app.services.scientific_read.species_identity import (
 # ---------------------------------------------------------------------------
 
 
-# Same legal set on both detail surfaces, and every token on it now
-# produces a field on both. ``observations`` used to be a documented no-op
-# on the observation surface, on the reading that the record already *is*
-# an observation; it populates the sibling observations in the same
-# conformer group there, which is the one thing an observation-grained
+# Same legal set on both detail surfaces, and every token on it
+# produces a field on both. ``observations`` populates the sibling
+# observations in the same conformer group on the observation surface,
+# which is the one thing an observation-grained
 # record cannot say about itself. ``selections`` belong to the parent
 # group and are exposed from it on both surfaces.
 #
@@ -502,8 +501,7 @@ def _build_observation_record(
     conformer group, as the lean ``ConformerObservationSiblingSummary``
     projection (issue #269/PR #535) — never the richer group-surface shape,
     regardless of who called this builder or what else is in *includes*.
-    It used to be documented as a no-op here on the reading that the
-    record already *is* an observation; what it can say is which other
+    What it says is which other
     observations share the basin, which an observation-grained record has
     no other way to report.
 
@@ -619,10 +617,10 @@ def _build_sibling_observation_records(
     """Every observation in *observation*'s group, this one included.
 
     Projected as :class:`ConformerObservationSiblingSummary` — ref +
-    review badge, nothing else. This used to build each sibling as a
+    review badge, nothing else. Building each sibling as a
     full :func:`_build_observation_record` (every include token minus
     ``observations``, plus a duplicated copy of the parent group's core
-    block and species context), which scaled an observation detail
+    block and species context) would scale an observation detail
     response linearly with basin size for a UI slice that renders three
     ``<li>`` elements. See :class:`ConformerObservationSiblingSummary`
     for the measured numbers (issue #269). A sibling's full record —
@@ -895,7 +893,7 @@ def _build_observations_summary(
 #: row with ``dependency_role = 'optimized_from'`` names it as the parent of
 #: another calculation anchored to the **same** conformer observation. That
 #: is an earlier stage of a staged geometry optimisation -- a coarse
-#: pre-optimisation, or (as on every deployed pair, measured 2026-08-24) a
+#: pre-optimisation, or (as on every deployed pair, measured) a
 #: restart at the same level of theory. It belongs to the basin, but the
 #: refinement it fed is what the basin actually got, so counting both
 #: reports one optimisation as two pieces of evidence.
@@ -914,7 +912,7 @@ def _build_observations_summary(
 #: a frequency job on an optimised geometry is genuinely different evidence
 #: from the optimisation that produced the geometry -- folding those
 #: together would be a scientific error, not a tidier number. Same for
-#: ``scan_parent``. On the deployed database (measured 2026-08-24) there
+#: ``scan_parent``. On the deployed database (measured) there
 #: are 63 both-anchored ``freq_on`` pairs, 65 ``single_point_on`` and 46
 #: ``scan_parent``; every one of them must keep counting twice.
 #:
@@ -1005,10 +1003,9 @@ def _build_group_evidence_summary(
     Calculation.conformer_observation_id`` rather than
     ``Calculation.id``.
 
-    This block replaced a set of ``has_*`` booleans that OR-ed every
+    This block is scoped per observation rather than OR-ing every
     calculation under the group together; see
-    :class:`ConformerGroupEvidenceSummary` for why. ``count > 0``
-    reproduces the retired boolean exactly.
+    :class:`ConformerGroupEvidenceSummary` for why.
 
     ``levels_of_theory`` is the **union** over the observations: at basin
     grain the honest statement is "these are the levels used somewhere in
@@ -1266,14 +1263,12 @@ def _build_available_sections(
     has_observations: bool,
 ) -> AvailableConformerSections:
     """Assemble the boolean map. ``obs_ids`` scopes the calc/geometry
-    queries only -- it is *not* a source for ``has_observations`` (that
-    used to be ``len(obs_ids) > 0`` inline here, which was correct on the
-    group surface, where ``obs_ids`` is the group's real observation list,
-    and silently wrong on the observation surface, where the caller passed
-    ``[observation.id]`` for calc/geometry scoping and the same length-1
-    list produced an unconditional ``True`` regardless of any DB state).
-    Every caller now measures ``has_observations`` itself and hands in the
-    answer, so the two concerns can no longer be conflated by sharing one
+    queries only -- it is *not* a source for ``has_observations``: on the
+    observation surface the caller passes ``[observation.id]`` for
+    calc/geometry scoping, and a length-1 list would make
+    ``len(obs_ids) > 0`` an unconditional ``True`` regardless of any DB
+    state. Every caller measures ``has_observations`` itself and hands in
+    the answer, so the two concerns are not conflated by sharing one
     list.
     """
     has_calcs = False
@@ -1347,9 +1342,8 @@ def _exists_other_observations_in_group(
     ``ConformerObservation.conformer_group_id`` is NOT NULL, so any
     observation is trivially a member of its own group -- a plain
     "does this group have any observations" query would be an
-    unconditional ``True`` on this surface for exactly the same reason the
-    retired ``len([observation.id]) > 0`` was: it never touches anything
-    that could vary. Excluding *exclude_observation_id* is what makes the
+    unconditional ``True`` on this surface, because it never touches
+    anything that could vary. Excluding *exclude_observation_id* is what makes the
     result answer something the caller does not already know from the
     record's own core block -- and what makes it capable of being
     ``False`` (a group with exactly one observation).

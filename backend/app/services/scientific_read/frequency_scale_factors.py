@@ -121,7 +121,7 @@ def build_frequency_scale_factor_record(
     """Project one FrequencyScaleFactor row into the public record shape.
 
     ``detail`` is True for the factor's own detail read: its usage (statmech records and applications) is then linked
-    evidence, shown under ``curated`` unless withheld (ADR 0023 step 7). A search row keeps the record floor.
+    evidence, shown under ``curated`` unless withheld. A search row keeps the record floor.
     """
     statmech_count = _count_statmech_usage(session, fsf.id, detail=detail)
 

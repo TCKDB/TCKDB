@@ -1165,7 +1165,7 @@ def _species_entry_payload(species_entry: SpeciesEntry) -> dict[str, Any]:
     }
     if species_entry.unmapped_smiles is not None:
         payload["unmapped_smiles"] = species_entry.unmapped_smiles
-    # The entry's stereo key (DR-0038), never the display label: a re-import must land on the same entry, and the
+    # The entry's stereo key, never the display label: a re-import must land on the same entry, and the
     # descriptor is the one string every deposit accepts as a label. ``?`` per element exports as ``?``.
     if species_entry.stereo_descriptor is not None:
         payload["stereo_label"] = species_entry.stereo_descriptor
@@ -1178,8 +1178,8 @@ def _species_entry_payload(species_entry: SpeciesEntry) -> dict[str, Any]:
     # `isotopologue_label` is deliberately NOT exported: it is a deprecated,
     # non-identity legacy annotation and is no longer accepted by any upload
     # schema, so emitting it would produce a bundle that fails re-import.
-    # The isotope content it used to gesture at is carried exactly by the
-    # isotope labels now present in `smiles` above.
+    # The isotope content is carried exactly by the isotope labels in
+    # `smiles` above.
     return payload
 
 

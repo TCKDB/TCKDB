@@ -79,7 +79,7 @@ from app.versioning import same_value
 #: request no longer holds a comparison objective or a reference model. Version 3: the request records its filters and its
 #: eligibility settings, the manifest records which review statuses a candidate itself may have and each candidate's
 #: verdict under those settings, and the population records the funnel. Version 4: ``read_profile`` records the review statuses whose linked
-#: evidence the profile withheld (ADR 0023); under ``curated`` a not-reviewed or under-review record is shown as
+#: evidence the profile withheld; under ``curated`` a not-reviewed or under-review record is shown as
 #: evidence and only a rejected or deprecated one is a token.
 MANIFEST_FORMAT_VERSION = 4
 MANIFEST_FORMAT_NAME = "statmech_selection_manifest"
@@ -314,7 +314,7 @@ def _check_consistency(
         )
     # Every captured input, not only the candidates: a declaration's members and each source calculation carry their own
     # status, and a manifest relabelled curated (or one with an input quietly flipped) must not pass on its candidates alone.
-    # ADR 0023: a source calculation and a declared member are evidence, judged by the evidence rule (every status but
+    # A source calculation and a declared member are evidence, judged by the evidence rule (every status but
     # rejected and deprecated, over the caller's own floor), not by the profile's record floor. A replay computes this from the
     # recorded request alone, so a manifest cannot widen it.
     usable = evidence_usable_statuses(request.min_review_status)

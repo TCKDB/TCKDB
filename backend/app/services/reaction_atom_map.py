@@ -1,4 +1,4 @@
-"""Persistence seam for a reaction's atom map (ADR 0011).
+"""Persistence seam for a reaction's atom map.
 
 Every deposit path that can carry a transition state routes through here, so
 all of them report an identical gap. They do **not** all write maps: only
@@ -7,9 +7,8 @@ accepts one, because only its bundle schema has an ``atom_map`` field.
 
 ``persist_network_pdep_upload`` calls this seam with ``atom_map=None`` for
 every saddle point it deposits, which is not a formality — a pressure-dependent
-network is a set of micro reactions, and before that call every one of them was
-deposited unmapped *and silent*, which is exactly the invisible absence
-ADR 0011 exists to remove. Until the PDep bundle grows an ``atom_map`` field
+network is a set of micro reactions, and without that call every one of them would be
+deposited unmapped *and silent*, an invisible absence. Until the PDep bundle grows an ``atom_map`` field
 the warning is all that path can honestly offer, so it says so rather than
 telling a depositor to fill in a field that does not exist: see
 the ``pdep_bundle`` deposit path in :mod:`app.workflows.network_pdep`.
@@ -285,29 +284,12 @@ def persist_reaction_atom_map(
                     context={"ts_atom_index": ts_atom_index},
                     message_prefix=False,
                 )
-            # Compared as stored, since ``c5a1f8e3d074``.
-            #
-            # This used to normalise both sides through
-            # `normalize_element_symbol`, and that was right at the time. When
-            # `parse_xyz` began canonicalising at ingestion (``b4e7c1d20f83``)
-            # the normalisation here was deliberately *kept*, because
-            # canonicalisation was a convention held by application code and
-            # not an invariant the database enforced: no CHECK required
-            # `geometry_atom.element` to be canonical, so a restore from an
-            # older backup, a bulk import, or any write path that skipped
-            # `parse_xyz` could put `CL` back. This is a blocking check, so it
-            # has to be correct on rows this process never wrote, and a raw
-            # comparison would have refused a perfectly correct map over a
-            # capital letter on exactly those rows -- which ADR 0008
-            # disqualifies a blocking check from doing.
-            #
-            # `ck_geometry_atom_element_canonical` removes the premise rather
-            # than the concern. Both values come out of `geometry_atom`, whose
-            # element column is now canonical in every state the database can
-            # be in -- a CHECK is not a trigger, so unlike a foreign key it is
-            # not suspended by ``session_replication_role = replica``, and the
-            # bulk-load and restore paths this normalisation existed to survive
-            # are exactly the paths it now holds on. Two atoms of the same
+            # Compared as stored. Both values come out of `geometry_atom`,
+            # whose element column is canonical in every state the database
+            # can be in (`ck_geometry_atom_element_canonical`): a CHECK is not
+            # a trigger, so unlike a foreign key it is not suspended by
+            # ``session_replication_role = replica``, and it holds on the
+            # bulk-load and restore paths too. Two atoms of the same
             # element therefore carry byte-identical values, and a raw
             # comparison can only refuse a genuine element change.
             #
@@ -687,8 +669,8 @@ def _warn_incomplete(
     """Report a map that is partial. Partial is true-but-incomplete, so it warns.
 
     A depositor who maps three of a molecule's five atoms has given an
-    incomplete map, not a false one, and ADR 0008 disqualifies a check that
-    could fire on a correct novel result from blocking. What the warning buys
+    incomplete map, not a false one, and a check that could fire on a correct
+    novel result must not block. What the warning buys
     is that the gap is visible: a consumer reading the map back can tell the
     difference between "these atoms correspond" and "these atoms correspond and
     nothing else was said".

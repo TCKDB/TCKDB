@@ -220,7 +220,7 @@ def build_transport_record(
     species_context = _build_species_context(session, tr.species_entry_id)
     source_rows = _load_source_rows(session, tr.id)
     # The count and flag follow the list: a source calculation the evidence rule withholds is not listed (the ref guard
-    # removes it), so it is not counted either (ADR 0023).
+    # removes it), so it is not counted either.
     withheld_calc_ids = ids_withheld_as_evidence(
         session,
         record_type=SubmissionRecordType.calculation,

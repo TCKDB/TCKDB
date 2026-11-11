@@ -26,15 +26,10 @@ independent source.
 the wired parsers, the artifact is missing, the log is truncated, or the
 declarations inside a single log disagree with each other, the value is left
 *unknown* and no warning is emitted. Emitting a mismatch because parsing
-failed would fabricate a contradiction out of ignorance, which
-``docs/adr/0008-validation-tiers-definitions-block-expectations-warn.md``
-forbids. Only a value genuinely read from the log may contradict a
+failed would fabricate a contradiction out of ignorance. Only a value genuinely read from the log may contradict a
 declaration.
 
-Both findings stay at the :class:`UploadWarning` tier. ADR 0008 argues they
-are definitional and ultimately belong at the blocking tier, but explicitly
-defers that promotion: these checks have never fired on real data, so their
-false-positive rate is unknown and promoting them first would be unsafe.
+Both findings stay at the :class:`UploadWarning` tier; they do not block.
 
 Pure functions over text and ints; no database dependencies.
 """

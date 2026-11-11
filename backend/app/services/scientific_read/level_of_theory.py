@@ -16,14 +16,13 @@ frequency-scale-factor surfaces this module is deliberately shaped like.
 
 **The join discipline this module exists to get right.** Two distinct
 ``level_of_theory`` rows can share a ``method``/``basis`` pair and differ
-only in ``dispersion``, ``solvent`` or ``spin_treatment`` (DR-0034) --
+only in ``dispersion``, ``solvent`` or ``spin_treatment`` --
 ``LevelOfTheorySummary.display``'s own docstring says so. Every query in
 this module that attaches a correction scheme, a frequency scale factor,
 or a calculation to a level of theory joins on the row's integer id
 (``level_of_theory_id`` / ``lot_id``), never on method/basis text. A join
 on text would silently pool two chemically distinct levels of theory that
-happen to render the same string -- exactly the failure DR-0034 exists to
-prevent. See ``tests/api/scientific/test_api_level_of_theory.py`` for the
+happen to render the same string -- exactly the failure to avoid. See ``tests/api/scientific/test_api_level_of_theory.py`` for the
 fixture that pins this (two LOTs sharing method/basis, differing only in
 ``spin_treatment``, only one carrying a scheme).
 
@@ -77,7 +76,7 @@ from app.services.scientific_read.internal_ids import (
 
 # LOT is not reviewable (no SubmissionRecordType entry), so ``review`` is
 # intentionally not a legal token. ``software`` (the LOT-scoped
-# software/workflow-tool usage breakdown, methods-surface plan §5.3) asks
+# software/workflow-tool usage breakdown) asks
 # "which software (and workflow tool) ran calculations at this level of
 # theory, and how many" -- see ``_software_usage_rows`` /
 # ``_workflow_tool_usage_rows`` below. ``include=all`` expands to
@@ -156,8 +155,7 @@ def build_level_of_theory_record(
         alone (the detail route); a search passes it so a page costs one
         statement, not one per record.
     :param detail: True for the level's own detail read. Its usage (``used_by``, the usage count, the software rows) is then
-        the calculations it rests on as linked evidence: under ``curated`` all but the withheld set, badged (ADR 0023
-        step 7). A search row keeps the approved record floor, which is what its eligibility filter lists.
+        the calculations it rests on as linked evidence: under ``curated`` all but the withheld set, badged. A search row keeps the approved record floor, which is what its eligibility filter lists.
     """
     calc_usage_count = _count_calculation_usage(session, lot.id, detail=detail)
     has_schemes = _has_correction_schemes(session, lot.id)
@@ -166,8 +164,7 @@ def build_level_of_theory_record(
     # is the one query that also backs ``include=software``'s ``software``
     # list, so ``distinct_software_count`` and that list can never
     # disagree -- see ``LevelOfTheoryEvidenceSummary.distinct_software_count``'s
-    # docstring for why that used to be a real risk (two independent
-    # queries) and is not one now.
+    # docstring.
     software_rows = _software_usage_rows(session, lot.id, detail=detail)
     distinct_software = len({name for name, _version, _count in software_rows})
 
@@ -241,9 +238,9 @@ def build_level_of_theory_record(
 
 
 def _calculation_visible(*, detail: bool = False):
-    """The calculations the read profile shows, or ``None`` under the default profile (owner decision D5).
+    """The calculations the read profile shows, or ``None`` under the default profile.
 
-    A search row keeps the record floor (ADR 0023): its usage count and the usage-eligibility filter of the level-of-theory
+    A search row keeps the record floor: its usage count and the usage-eligibility filter of the level-of-theory
     search preview the CALCULATION record list (approved-only under ``curated``), and they share this predicate so the
     count and the search agree. The level's own detail (``detail=True``, step 7) shows its usage as linked evidence: all
     but the withheld set, badged.
@@ -301,7 +298,6 @@ def _has_frequency_scale_factors(session: Session, lot_id: int) -> bool:
 
 # ---------------------------------------------------------------------------
 # include=software -- LOT-scoped software/workflow-tool usage aggregation
-# (methods-surface plan §5.3)
 # ---------------------------------------------------------------------------
 #
 # Bulk, grouped queries -- one statement per level of theory for the
@@ -470,7 +466,7 @@ def _build_frequency_scale_factors(session: Session, lot_id: int):
     distinct rows can (and, on the live archive, do) evaluate to the same
     ``(scale_kind, value)`` pair; each stays visible inside its group as a
     separate ``frequency_scale_factor_ref`` with its own provenance rather
-    than collapsing to one row (methods-surface plan §4.2 item 4).
+    than collapsing to one row.
     """
     rows = session.scalars(
         select(FrequencyScaleFactor)

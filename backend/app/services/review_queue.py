@@ -1,8 +1,6 @@
 """Group ``record_review`` rows into the unit a curator actually judges.
 
-Task #269, following the owner's rejection of the flat record-review queue
-("terrible design and unusable... why am I seeing the same pub ref in two
-lines"). The flat list read direct from :func:`app.services.record_review.
+The flat list read direct from :func:`app.services.record_review.
 list_record_reviews` pages one *record* at a time: two rows for the same
 species (an atom-energy correction and a bond-additivity correction) render
 as two lines with nothing telling them apart, and paging by record can split
@@ -36,14 +34,10 @@ review rows and the disambiguation collapses into the root bucket --
 ``species``, ``transition_state`` or ``reaction`` -- exactly what each
 identity table exists to prevent. So none of the three is ever sent to its
 container: a review row FOR a ``species_entry``, a ``transition_state_entry``
-or a ``reaction_entry`` is its own subject, always. This was under-scoped
-in an earlier revision of this module, which grouped a ``reaction_entry``'s
-own row under ``reaction`` on the (false) claim that it "has no per-row
-disambiguating axis" -- review #492 caught the resulting defect: a deposited
-reaction produced two blocks, one of them a bare "Reaction rxn_..." with
-nothing else to say about it, and the SAME ``rxe_...`` ref printed in both
--- the owner's original complaint, reappearing at the reaction root exactly
-where the species root had already been fixed.
+or a ``reaction_entry`` is its own subject, always. Grouping a ``reaction_entry``'s
+own row under ``reaction`` would produce two blocks, one of them a bare
+"Reaction rxn_..." with nothing else to say about it, and the SAME ``rxe_...``
+ref printed in both.
 
 ``conformer_group``, ``transition_state`` and ``network`` are different:
 none of them has a per-row axis distinguishing one from a sibling under the
@@ -53,9 +47,8 @@ plain rule applies to their own review rows too -- a ``conformer_group``'s
 own row groups under its ``species_entry``, and so on.
 
 **What a subject looks like when it has no formula.** Two record types
-answer the brief's open question about "a record whose container is itself
-already independently addressable" (``calculation``, ``conformer_observation``
-both already have their own page):
+have a container that is itself already independently addressable
+(``calculation``, ``conformer_observation`` both already have their own page):
 
 * ``calculation``'s container resolves in ONE hop to ``species_entry`` or
   ``transition_state_entry`` -- exactly the subject type this module already
@@ -182,8 +175,7 @@ class SubjectKey:
     ``None`` case that "actually happens in production" (a review row
     outliving its record). ``review_row_id`` disambiguates that case so two
     unrelated orphaned rows of the same type never merge into one subject;
-    it is carried for grouping only and is never put on the wire (DR-0028
-    Req 2).
+    it is carried for grouping only and is never put on the wire.
     """
 
     subject_type: Optional[SubmissionRecordType]
@@ -202,7 +194,7 @@ class SubjectChemistry:
     electronic_state_label: Optional[str] = None
     term_symbol: Optional[str] = None
     stereo_label: Optional[str] = None
-    #: The entry's stereo key and how much of it is known (DR-0038). ``stereo_label`` is NULL while nothing is
+    #: The entry's stereo key and how much of it is known. ``stereo_label`` is NULL while nothing is
     #: resolved, so a reader must not take that NULL for "not stereochemically distinguished".
     stereo_descriptor: Optional[str] = None
     stereo_resolution: Optional[StereoResolution] = None
@@ -514,11 +506,9 @@ def list_review_queue(
         # stops needing to read the whole filtered set to find the
         # subject boundaries. Not built yet.
         #
-        # No literal double hyphen below -- review of #492 caught one
-        # here, in a Python string the prose guard cannot see (it scans
-        # only .ts/.tsx; tracked separately as #271). This route's own
-        # DR-0028-adjacent copy rule still applies even where no gate
-        # enforces it.
+        # No literal double hyphen below: this is a Python string, which the
+        # prose guard does not scan (it scans only .ts/.tsx), but the copy
+        # rule still applies.
         status_desc = f"status '{status.value}'" if status is not None else "every status"
         raise CodedValueError(
             "composed_search_candidate_limit_exceeded",

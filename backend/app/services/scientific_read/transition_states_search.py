@@ -134,11 +134,9 @@ from app.services.trust.ts_scoped import ListScope, declared_curvature_pins
 # page: a record's block is every entry of its transition state, and each
 # of those is a full record build. Measured on a 20-entry parent it is 162
 # statements — flat in ``limit``, because the block is resolved once per
-# distinct parent, but not flat in how many entries those parents have. It
-# was previously *discarded* on this surface, so ``include=all`` never paid
-# it; keeping it out of the expansion means ``include=all`` here returns
-# exactly what it returned before, and a caller who wants the sibling lists
-# asks for them. It stays public on the two detail surfaces, where the
+# distinct parent, but not flat in how many entries those parents have.
+# Keeping it out of the ``include=all`` expansion means ``include=all`` never
+# pays it, and a caller who wants the sibling lists asks for them. It stays public on the two detail surfaces, where the
 # block is bounded by one record's parent.
 _LEGAL_INCLUDE_TOKENS: set[str] = _CONCEPT_LEGAL_INCLUDE_TOKENS | {"trust"}
 _INTERNAL_INCLUDE_TOKENS: set[str] = _CONCEPT_INTERNAL_INCLUDE_TOKENS | {
@@ -199,11 +197,10 @@ def search_transition_states(
         internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
     includes = filter_internal_ids_from_resolved(includes)
-    # ``include=entries`` used to be discarded here, on the reading that a
-    # record already *is* an entry so the token had nothing to say. It had:
-    # the parent transition state's other entries, which an entry-grained
-    # search cannot otherwise report. Discarding it also dropped the token
-    # from ``request.include``, so the echo told the caller their request
+    # ``include=entries`` is not discarded: it populates the parent
+    # transition state's other entries, which an entry-grained search cannot
+    # otherwise report. Discarding it would also drop the token from
+    # ``request.include``, so the echo would tell the caller their request
     # had been understood as something they did not send.
 
     _enforce_at_least_one_filter(request)
@@ -553,7 +550,7 @@ def _apply_scalar_filters(
 def _apply_evidence_filters(
     stmt, request: TransitionStatesSearchRequest | TransitionStatesBrowseRequest
 ):
-    # Evidence rule (ADR 0023 step 4): a filter on evidence matches through the entry's calculations the profile does
+    # Evidence rule: a filter on evidence matches through the entry's calculations the profile does
     # not withhold, that is, any but a rejected or deprecated one under curated. A not-reviewed calculation matches.
     # ``None`` (no floor) leaves every statement as it was.
     calc_visible = linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation)
@@ -881,7 +878,7 @@ def _software_index_for_entries(
         .where(Calculation.transition_state_entry_id.in_(entry_ids))
         .distinct()
     )
-    # Evidence rule (ADR 0023): a calculation the profile withholds (rejected or deprecated under ``curated``) contributes
+    # Evidence rule: a calculation the profile withholds (rejected or deprecated under ``curated``) contributes
     # neither its type nor its software; an unreviewed one does.
     stmt = where_visible(stmt, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
 

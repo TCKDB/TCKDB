@@ -100,7 +100,7 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
 )
 
 # Declared but no backing path today -- reserved for the LOT-scoped
-# software aggregation (methods-surface plan §5.3), same "fail closed
+# software aggregation, same "fail closed
 # rather than silently no-op" posture as ECS's deferred software filters.
 _DEFERRED_FILTER_FIELDS: tuple[str, ...] = ()
 
@@ -213,8 +213,8 @@ def _run_lot_query(
         lot_id = canonical_level_of_theory_id(session, lot_id)
 
     # Usage-derived eligibility rests on the calculations the profile shows: a level used only by hidden calculations
-    # is not listed (owner decision D5). It stays addressable by its own ref, which is a vocabulary row with no gate.
-    # The record floor, on purpose (ADR 0023): eligibility previews the calculation record list, and agrees with
+    # is not listed. It stays addressable by its own ref, which is a vocabulary row with no gate.
+    # The record floor, on purpose: eligibility previews the calculation record list, and agrees with
     # ``calculation_usage_count`` and ``used_by`` on the read (``level_of_theory._calculation_visible``).
     stmt = select(
         LevelOfTheory.id,

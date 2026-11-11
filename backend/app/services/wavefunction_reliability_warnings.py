@@ -9,7 +9,7 @@ S(S+1) of the declared multiplicity.
 
 **Nothing is refused and nothing changes.** The result is stored as deposited. The checks never alter a value, a
 review status, an evidence label or a selection, and a thermochemistry or kinetics record that cites a flagged
-calculation earns no warning of its own: the warning is about the calculation. The tier is ``warn`` (ADR 0008): a
+calculation earns no warning of its own: the warning is about the calculation. The tier is ``warn``: a
 large single-excitation amplitude or a contaminated determinant is a notable property of a correct result, not a
 contradiction.
 

@@ -57,7 +57,7 @@ from app.services.structure_selection.models import (
 from app.versioning import same_value
 
 MANIFEST_FORMAT = "relative_conformer_energy_manifest"
-#: Version 4: ``read_profile`` records the review statuses whose linked evidence the profile withheld (ADR 0023); under
+#: Version 4: ``read_profile`` records the review statuses whose linked evidence the profile withheld; under
 #: ``curated`` a not-reviewed or under-review record is shown as evidence and only a rejected or deprecated one is a
 #: token. Version 5: a recorded basin determination carries its conformer observation's and that observation's group's
 #: status apart (``observation_review_status``, ``group_review_status``), so a replay judges the group (a compared record) by
@@ -181,7 +181,7 @@ def _check_consistency(
         )
     if name == "curated" and recorded != frozenset({RecordReviewStatus.approved}):
         raise ReplayError("inconsistent_manifest", "a curated profile admits approved records only")
-    # ADR 0023: the compared GROUPS are the records (the floor above); a determination rests on a conformer observation and on
+    # The compared GROUPS are the records (the floor above); a determination rests on a conformer observation and on
     # calculations, which are evidence, so they may be any status the evidence rule uses (everything but rejected and
     # deprecated, over the caller's own floor). Computed from the recorded request alone, so a manifest cannot widen it.
     usable = evidence_usable_statuses(request.min_review_status)

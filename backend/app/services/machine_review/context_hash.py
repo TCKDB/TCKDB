@@ -45,9 +45,9 @@ from pydantic import BaseModel, ConfigDict, Field
 #: whenever the hashed inputs or their canonical form change; every prior digest
 #: then differs and prior reviews become stale until re-reviewed (policy §3.4).
 #:
-#: This is 1 like every other TCKDB-owned version: no version is exempt from the 2026-10 reset. Reviews stored before
-#: the reset are stale for a *named* reason that does not depend on this number or on the hash -- the migration stored
-#: their prompt at version 0 and their rubric at 1 or 0 (see ``currency.py``), and no registry holds a 0.
+#: This is 1 like every other TCKDB-owned version. Reviews stamped under an earlier numbering are stale for a *named*
+#: reason that does not depend on this number or on the hash -- their prompt is stored at version 0 and their rubric
+#: at 1 or 0 (see ``currency.py``), and no registry holds a 0.
 MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION = 1
 
 

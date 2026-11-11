@@ -397,7 +397,7 @@ def _apply_identity_filters(
 
 
 def _visible_solves(stmt):
-    """Restrict a query that ranges over ``NetworkSolve`` to the solves the read profile shows (owner decision D5).
+    """Restrict a query that ranges over ``NetworkSolve`` to the solves the read profile shows.
 
     Every evidence and envelope filter below asks about the network's solves and their fits. A filter that matched on a
     hidden solve would be an existence oracle (``has_plog=true`` finding the one network whose only PLOG fit is hidden),

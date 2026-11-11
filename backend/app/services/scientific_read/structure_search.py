@@ -294,10 +294,9 @@ def _select_structure_query(
         # is the caller's, but repeating it adds nothing the field name
         # does not and grows the body without bound.
         #
-        # ``message_prefix=True``, so ``detail`` is byte-identical to the
-        # plain ``ValueError`` this replaced; the catalogue entry moves to
-        # ``Surface.coded_exception`` because ``code`` is now declared on
-        # the exception rather than promoted out of the sentence.
+        # ``message_prefix=True``, so ``detail`` is the sentence itself; the
+        # catalogue entry is on ``Surface.coded_exception`` because ``code``
+        # is declared on the exception rather than promoted out of the sentence.
         raise CodedValueError(
             "multiple_structure_queries",
             "exactly one structure query "
@@ -421,7 +420,7 @@ def _summary_from_counts(counts: dict[str, int]) -> ReviewStatusSummary:
 def _bound(paging: Paging, match_expr: str, params: dict[str, Any]) -> str:
     """Keep live rows only; under a cursor, add "existed when the traversal began" to the match (and its parameter).
 
-    A species or entry that was merged into another keeps its row (DR-0038) and forwards; the search returns
+    A species or entry that was merged into another keeps its row and forwards; the search returns
     the survivor, which holds the results, never the kept row beside it.
     """
     match_expr = (

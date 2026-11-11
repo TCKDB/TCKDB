@@ -7,8 +7,8 @@ record, an applied energy correction, a rate coefficient's interpretation
 — cites the records that produced or explain its numbers. Those records
 must belong to the *same subject* the citing record is about. A thermo
 record for propane citing a calculation of water is not a weaker link; it
-is a meaningless one, and no correct deposit can produce it, so ADR 0008
-puts the refusal in the ``block`` tier.
+is a meaningless one, and no correct deposit can produce it, so the
+refusal is in the ``block`` tier.
 
 Why it lives here
 -----------------
@@ -45,7 +45,7 @@ What never appears in the refusal
 ---------------------------------
 Row ids. ``context`` names the offending field the way the depositor wrote
 it, which is the identifier they can act on; the ids of the rows that
-disagreed go to the log, where the operator is (DR-0028 Requirement 2).
+disagreed go to the log, where the operator is.
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH = (
 )
 
 #: An assembled composite's input names a calculation owned by another subject
-#: (ADR 0021, P5). Its own code: an input is evidence for one slot of a recipe,
+#: Its own code: an input is evidence for one slot of a recipe,
 #: and "that single point is another molecule's" is repaired at the input, not
 #: at a thermo or statmech source link.
 W_COMPOSITE_INPUT_OWNER_MISMATCH = "composite_input_owner_mismatch"
@@ -108,12 +108,11 @@ W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH = (
 #: wire.
 #:
 #: ``/uploads/computed-reaction`` is the second route (#193). It does not
-#: use the shared seam — it persists torsions inline — and resolved the
-#: scan key against the bundle-global map with no owner check at all, so
-#: one species' rotor could be parameterised by another's scan and the
-#: deposit succeeded. That call site now routes through this function;
+#: use the shared seam — it persists torsions inline — and checks the
+#: scan key's owner through this function, so one species' rotor cannot be
+#: parameterised by another's scan;
 #: ``tests/api/test_api_bundle_torsion_scan_ownership.py`` provokes it.
-#: A transition state now carries a statmech block on that route (#621), and
+#: A transition state carries a statmech block on that route, and
 #: its torsion scan keys are narrowed to the saddle point's own calculations
 #: at the schema layer, so a TS torsion citing another subject's scan is
 #: refused earlier, with ``calculation_key_undeclared``, and does not reach
@@ -126,7 +125,7 @@ W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH = (
 #: stability (``W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH``) source
 #: links that cite a calculation owned by another subject. Both are defined in
 #: ``tckdb_schemas.bundle_source_rules`` and imported above, so the request
-#: schema and this module raise the same code (ADR 0017).
+#: schema and this module raise the same code.
 #:
 #: Reachable on ``/uploads/computed-reaction``, which resolves the keys in a
 #: namespace spanning every species and the transition state; the schema
@@ -141,9 +140,7 @@ W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH = (
 #: ``/uploads/computed-reaction`` resolves ``source_calculation_key`` in a
 #: namespace spanning every species in the bundle *and* the transition
 #: state, then attaches the correction to one species entry or to the TS
-#: entry. Both of those comparisons used to be spelled inline and raised a
-#: bare ``ValueError``, so a depositor who cited a sibling species' job
-#: received ``validation_error``; both now call this function.
+#: entry. Both of those comparisons call this function.
 #:
 #: The three older call sites — ``workflows/thermo.py`` once,
 #: ``workflows/computed_species.py`` twice — still cannot produce it, for

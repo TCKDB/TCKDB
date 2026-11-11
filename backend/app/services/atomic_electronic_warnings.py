@@ -8,7 +8,7 @@ at 298 K. The real ARC oxygen atom, deposited with spin multiplicity alone, has
 S(298 K) = 152.44 J/mol/K against the NIST-JANAF 161.06 (about 8.5 low, or about
 2.5 kJ/mol in G).
 
-Tier (ADR 0008)
+Tier
 ---------------
 Both absences are **warnings**. Each is an absence, and "an incomplete record
 is still a true record". Neither could be a refusal: a depositor may

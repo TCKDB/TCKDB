@@ -11,9 +11,8 @@ could plausibly have carried the answer, and the choice matters:
     the deposit would lose access to half of it.
 
 ``submission.created_by``
-    Where :doc:`ADR 0018 </adr/0018-an-update-names-what-a-submission-owns-and-proves-it-unchanged>`
-    puts it: "what a depositor owns is not the reaction, it is the entry
-    and the results they deposited", and every deposit is
+    What a depositor owns is not the reaction, it is the entry
+    and the results they deposited, and every deposit is
     submission-scoped. This is the rule when a submission exists, and it
     is the one that stays correct when a submission is made *on someone's
     behalf* -- an agent or a group account uploading for a lab. The
@@ -21,9 +20,9 @@ could plausibly have carried the answer, and the choice matters:
     ``created_by`` of whatever process wrote the bytes is not.
 
 ``calculation.created_by``
-    The pre-submission path. Measured on the hosted instance 2026-08-24:
-    78 of 572 calculations carry no ``submission_record_link`` at all, so
-    a submission-only rule would leave those deposits owned by nobody.
+    The pre-submission path. Some calculations carry no
+    ``submission_record_link`` at all, so a submission-only rule would leave
+    those deposits owned by nobody.
 
 So the rule is both, in that order, and it is deliberately the rule the
 **write** path already applies (``can_modify_calculation_artifacts`` in

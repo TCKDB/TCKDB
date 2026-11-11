@@ -5,7 +5,7 @@ on the record's enthalpy zero. Under the only declared basis,
 ``formation_298k``, that is ``dfH(298.15) + [H(T) - H(298.15)] - T*S_abs(T)``
 -- the convention Cantera's ``mu0``, RMG's free energy and ARC's
 ``g_kj_mol`` share. It is NOT the Gibbs energy of formation; that check is
-held (Phase D plan, D4). There is no separate G declaration: the record's
+not made here. There is no separate G declaration: the record's
 ``enthalpy_reference_kind`` governs ``g_kj_mol`` too, so an undeclared
 record is excluded, and a G that follows some other convention on a
 declared record is reported as its raw residual -- never relabelled and
@@ -49,7 +49,7 @@ NONFINITE_STORED_VALUE = "nonfinite_stored_value"
 _FLOAT_PRECISION_ULPS = 16
 _EPSILON = sys.float_info.epsilon
 
-#: D4's own pressure exemption (decided 2026-09-27). g, h and s of one
+#: D4's own pressure exemption. g, h and s of one
 #: record share one standard state by construction, so the recorded
 #: reference pressure -- whatever it is, even null or invalid -- cannot
 #: change r_G, and it never gates this check. G itself does depend on
@@ -57,7 +57,7 @@ _EPSILON = sys.float_info.epsilon
 #: ``engine.PRESSURE_INDEPENDENT_QUANTITIES``; the fit gate is asked with
 #: the enthalpy token, which selects exactly the phase-and-range gate. The
 #: entropy read from that same polynomial does not depend on the constructor
-#: pressure either (measured 2026-09-27 on Cantera 3.2.0: NASA7 and a NASA9
+#: pressure either (measured on Cantera 3.2.0: NASA7 and a NASA9
 #: region return the same ``s`` at 1e5, 101325, 2.5e5, 0, -1, NaN and inf Pa).
 _PRESSURE_FREE_GATE = "h"
 

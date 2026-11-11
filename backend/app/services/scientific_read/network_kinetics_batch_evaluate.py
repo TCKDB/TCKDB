@@ -179,7 +179,7 @@ def evaluate_network_kinetics_batch(
         )
 
     # A population of fits, not a detail of the network: the approved record floor decides which networks it can name, as
-    # for ``/kinetics/select`` and ``export-selected`` (ADR 0023 step 7).
+    # for ``/kinetics/select`` and ``export-selected``.
     network_id = resolve_selection_handle(session, Network, network_handle, kind_label="network")
     network = session.get(Network, network_id)
     if network is None:  # pragma: no cover — defended by resolver 404

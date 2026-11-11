@@ -1,7 +1,7 @@
-"""The server-generated label of a user-built composite scheme (ADR 0021, P5).
+"""The server-generated label of a user-built composite scheme.
 
 A user scheme's level of theory has no method name of its own: the producer
-sends a definition, not a name (owner decision 2). The server therefore writes
+sends a definition, not a name. The server therefore writes
 the ``level_of_theory.method`` text, and the scheme's ``name``, as a readable
 function of the definition. The label is cosmetic -- the identity is the
 ``definition_hash`` -- but it is what every table, plot and citation shows, so it

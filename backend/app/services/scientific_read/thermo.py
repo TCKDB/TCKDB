@@ -219,7 +219,7 @@ _DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 # ``software`` match any linked calculation). A calculation of *type* ``composite`` ranks above all of
 # these (``_primary_calc_id`` takes it first), which is R1's energy order
 # (``app.services.calculation_levels.derive_levels``: composite > sp > opt,
-# ADR 0021 decision 4); the ``composite`` entry here is only the legacy shape,
+# the ``composite`` entry here is only the legacy shape,
 # a calculation of another type linked under that role, which keeps the place it
 # always had. ``freq`` sits before ``opt`` as ever: R1's energy chain has no
 # ``freq`` in it and this picker also chooses the record's software.
@@ -279,7 +279,7 @@ def get_species_thermo(
         raise not_found("species_entry", row_id=species_entry_id)
     species_entry_ref = species_entry.public_ref
 
-    # Phase C: reconcile level_of_theory_id + level_of_theory_ref into a
+    # Reconcile level_of_theory_id + level_of_theory_ref into a
     # single integer id. Unknown ref returns NO_MATCH → empty response.
     lot_id_or_match = reconcile_level_of_theory_pair(
         session,
@@ -337,7 +337,7 @@ def get_species_thermo(
     # One source calculation has to match every supplied provenance field at once (level of theory, software, method,
     # basis, workflow tool, method family, DFT rung): a record never matches through two different calculations. Under
     # ``curated`` a source calculation that is rejected or deprecated contributes nothing to a match (the shared helper
-    # subtracts only the evidence the profile withholds), and a not-reviewed one does match (ADR 0023 step 4). The
+    # subtracts only the evidence the profile withholds), and a not-reviewed one does match. The
     # record's own link to a withheld calculation stays a fact of the record (the ref guard withholds the ref); what
     # the calculation ran at or in is a fact about the withheld calculation. There is no "primary" calculation for a
     # filter.
@@ -400,7 +400,7 @@ def get_species_thermo(
         for srcs in statmech_sources_by_id.values()
         for sc in srcs
     }
-    # Evidence rule (ADR 0023): a source calculation the profile WITHHOLDS (rejected or deprecated under ``curated``) is not
+    # Evidence rule: a source calculation the profile WITHHOLDS (rejected or deprecated under ``curated``) is not
     # counted, supplies no level and is not the primary; an unreviewed one is shown with its badge. One lookup for the
     # page, none without a floor. The LISTS that name calculations keep every link; the ref guard removes the withheld.
     withheld_calc_ids = ids_withheld_as_evidence(
@@ -433,7 +433,7 @@ def get_species_thermo(
         if meta["lot_id"] is not None
     }
     # What each composite-role calculation says about the geometry and
-    # frequency levels (ADR 0021, R1): bulk, same id set as calc_meta. The
+    # frequency levels: bulk, same id set as calc_meta. The
     # recipe levels are levels no calculation of this request need be at, so
     # their summaries are loaded here rather than found in calc_meta_by_lot_id.
     composite_calc_ids = {
@@ -447,7 +447,7 @@ def get_species_thermo(
     composite_facts = composite_role_facts(
         session, {cid: calc_meta[cid]["lot_id"] for cid in composite_calc_ids}
     )
-    # How far each linked composite energy has been checked (ADR 0021, P7a): derived
+    # How far each linked composite energy has been checked: derived
     # now from the stored inputs / recorded log checks, in bulk for the whole request.
     composite_verifications = verify_composite_calculations(session, composite_calc_ids)
     recipe_level_summaries = load_declared_energy_summaries(
@@ -664,8 +664,7 @@ def get_species_thermo(
             # ``model_kind`` is a single-valued *label* — which fit
             # classifies the record — and must not gate which *data* ships;
             # each block is served whenever its own child rows exist,
-            # independently of what model_kind was classified as. See
-            # ``docs/decisions`` on key-on-what-exists over a declared label.
+            # independently of what model_kind was classified as.
             nasa=_build_nasa_block(nasa_block) if nasa_block is not None else None,
             nasa9=(
                 _build_nasa9_blocks(nasa9_by_thermo[t.id])
@@ -720,12 +719,12 @@ def get_species_thermo(
     #     score at most 2/8. It stays a displayed field, not a ranking input.
     #   * temperature coverage: ``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` are
     #     not filters; they only fill each record's ``temperature_coverage``
-    #     field. Ranking by it was dropped on the owner's decision (review
-    #     status, then newest), and because a scalar record (e.g. an
-    #     experimental 298 K value) carries no range, it counted as "not
-    #     covering" and sank below every fitted record whatever its review
-    #     status. Coverage is still reported per record; callers who need a
-    #     record spanning a window should read it from the response.
+    #     field. Ranking is by review status, then newest: a scalar record
+    #     (e.g. an experimental 298 K value) carries no range, so ranking by
+    #     coverage would count it as "not covering" and sink it below every
+    #     fitted record whatever its review status. Coverage is reported per
+    #     record; callers who need a record spanning a window should read it
+    #     from the response.
     created_at = {t.id: t.created_at for t, _ in classified}
     review_status_by_id = {t.id: badges[t.id].status for t, _ in classified}
 
@@ -1148,8 +1147,7 @@ def _load_workflow_tool_release_summaries(
 ) -> dict[int, WorkflowToolReleaseSummary]:
     """Bulk-project ``workflow_tool_release`` rows for the thermo's OWN FK.
 
-    Feeds ``ThermoProvenance.workflow_tool_release`` (e.g. ARC 1.1.0) —
-    previously dropped entirely from the response.
+    Feeds ``ThermoProvenance.workflow_tool_release`` (e.g. ARC 1.1.0).
     """
     if not workflow_tool_release_ids:
         return {}
@@ -1251,7 +1249,7 @@ def _is_composite_link(sc: Any) -> bool:
 
 def _primary_calc_id(sources: list[ThermoSourceCalculation]) -> int | None:
     # A calculation of type ``composite`` is the record's energy and so comes first
-    # (R1, ADR 0021). A calculation of another type linked under the role
+    # (R1). A calculation of another type linked under the role
     # ``composite`` is the legacy shape and keeps its old place in the priority.
     for sc in sources:
         if _is_composite_link(sc):
@@ -1310,7 +1308,7 @@ def _build_provenance(
     primary / freq / sp must not depend on the profile, or a withheld pick would let the picker fall through
     to a different, shown calculation. A ref the profile withholds is removed afterwards, at the response
     boundary (``ref_guard``), which only ever empties a slot. The primary's own level and software are facts
-    about that calculation (ADR 0023): when it is withheld they are null with it, never read from another.
+    about that calculation: when it is withheld they are null with it, never read from another.
     """
     primary_calc_id_v = _primary_calc_id(sources)
     # Fall back to a statmech-derived primary when thermo declared none.
@@ -1488,7 +1486,7 @@ def _build_levels_thermo(
     """R1 for one thermo record: derive its geometry/frequency/energy levels.
 
     The derivation reads every link. A level whose supplying calculations are all in ``withheld_calc_ids`` (the evidence
-    rule, ADR 0023: rejected or deprecated under ``curated``) is then nulled with its source, never re-derived from what is
+    rule: rejected or deprecated under ``curated``) is then nulled with its source, never re-derived from what is
     left.
 
     Delegates the actual priority decision to
@@ -1638,7 +1636,7 @@ def _evidence_breakdown(
     link counts only its own sources and ``has_statmech_source`` is false
     (#645: never borrow). The predicate names and ``max`` are unchanged.
     """
-    # Evidence rule (ADR 0023): the role targets are chosen from EVERY link, then a withheld target is dropped; a role is
+    # Evidence rule: the role targets are chosen from EVERY link, then a withheld target is dropped; a role is
     # never filled from another link because the first was withheld. The role flags count the links that are shown.
     shown_sources = [sc for sc in sources if sc.calculation_id not in withheld_calc_ids]
     shown_statmech_sources = [sc for sc in statmech_sources if sc.calculation_id not in withheld_calc_ids]

@@ -178,7 +178,7 @@ def _determinations_the_profile_shows(session: Session, rows) -> set[int]:
     A determination the profile hides is no evidence about its source calculation: a live finding on it must not block a
     visible record that merely shares that calculation. A determination belongs to its conformer observation (a basin)
     or its transition-state entry (a saddle). The conformer group the observation sits in is the record that gates a basin (Q4)
-    and keeps the record floor. The observation is linked evidence (ADR 0023, Q2), so it hides the
+    and keeps the record floor. The observation is linked evidence, so it hides the
     determination only when it is withheld (rejected or deprecated); the transition-state entry is a record (Q3) and still
     gates its own evidence, so an entry below the profile's record floor hides it. Without a review floor every
     determination is shown (nothing is queried).

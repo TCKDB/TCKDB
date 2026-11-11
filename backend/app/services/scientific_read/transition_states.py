@@ -339,8 +339,7 @@ def get_transition_state(
     ).all()
     entry_ids = [e.id for e in entries]
     # Counts and flags answer what this page lists. The page lists every entry that is not withheld (the ref guard removes
-    # the rejected and deprecated ones), so a served detail counts by the evidence rule, not the record floor (ADR 0023
-    # step 7, Q9): an unreviewed entry that is listed is counted.
+    # the rejected and deprecated ones), so a served detail counts by the evidence rule, not the record floor: an unreviewed entry that is listed is counted.
     hidden_entry_ids = ids_withheld_as_evidence(
         session, record_type=SubmissionRecordType.transition_state_entry, record_ids=entry_ids
     )
@@ -1037,10 +1036,9 @@ def _build_concept_evidence_summary(
     ``Calculation.id``. Counting calculations here would let a coverage
     value exceed ``entry_count``, which is nonsense on its face.
 
-    This block replaced a set of ``has_*`` booleans that OR-ed every
+    This block is scoped per entry rather than OR-ing every
     calculation under the TS together; see
-    :class:`TransitionStateEvidenceSummary` for why. ``count > 0``
-    reproduces the retired boolean exactly.
+    :class:`TransitionStateEvidenceSummary` for why.
 
     ``levels_of_theory`` is the **union** over the entries, not a count:
     at concept grain the honest statement is "these are the levels used
@@ -1240,14 +1238,12 @@ def _build_available_sections(
 
     ``entry_ids`` scopes the calculation / geometry / validation-evidence
     existence queries only — it is *not* a source for ``has_entries`` or
-    ``has_review``. Both used to be derived from a list this function
-    received for scoping (``bool(entries)`` on the concept surface, and
-    ``bool([entry])`` — unconditionally ``True`` — on the entry surface;
-    ``has_review`` computed over ``transition_state_entry`` rows
-    regardless of which surface's ``include=review`` body it was meant to
-    describe). Every caller now decides ``has_entries`` and ``has_review``
+    ``has_review``. Deriving them from the list this function
+    receives for scoping would be wrong (``bool(entries)`` on the concept
+    surface, and ``bool([entry])`` — unconditionally ``True`` — on the
+    entry surface). Every caller decides ``has_entries`` and ``has_review``
     itself, in terms of what its own include body actually returns, and
-    hands the answer in — so the two concerns can no longer be conflated
+    hands the answer in — so the two concerns are not conflated
     by sharing one list or one query shape. See
     :func:`_exists_other_entries_in_ts` and :func:`_exists_review_for` for
     the two computations, and each call site for why it picked the one it
@@ -1314,7 +1310,7 @@ def _evidence_visible():
     """The evidence-rule condition on a validation evidence row, for the flags and the descriptor built from it.
 
     An evidence row rests on the calculation that reconstructed it (the IRC, the frequency job). Under ``curated`` that
-    calculation is evidence (ADR 0023): the row is counted unless the calculation is rejected or deprecated, so an
+    calculation is evidence: the row is counted unless the calculation is rejected or deprecated, so an
     unreviewed IRC still makes the flag "this entry has IRC evidence" true, as the list of evidence shows it. A row with
     no source calculation (``energy_ordering``) is a deposited claim and is always counted. The LISTS of evidence are
     left whole: the ref guard removes the rows and energies that name a withheld calculation.
@@ -1342,8 +1338,8 @@ def _exists_other_entries_in_ts(
     ``ScientificTransitionStateEntryRecord.entries``'s own docstring says
     as much ("this one included") — so a plain "does this TS have any
     entries" query would be an unconditional ``True`` for exactly the
-    reason the retired ``bool([entry])`` was: it never touches anything
-    that could vary. Excluding *exclude_entry_id* is what makes the
+    reason a scoping-list ``bool([entry])`` would be: it never touches
+    anything that could vary. Excluding *exclude_entry_id* is what makes the
     result answer something the caller does not already know from the
     record's own core block, and what makes it capable of being
     ``False`` (a TS with exactly one entry).
@@ -1653,7 +1649,7 @@ def _build_saddle_point_index(
     )
     # A frequency calculation the evidence rule withholds (rejected or deprecated under ``curated``) is not a candidate, so
     # it is neither described nor counted as a pin; the block then describes the newest shown result, with no trace of the
-    # withheld one. An unreviewed one is shown (ADR 0023).
+    # withheld one. An unreviewed one is shown.
     shown = evidence_visible_statuses()
     rows = session.execute(
         select(Calculation, CalculationFreqResult, pinned_by_declaration)
@@ -1978,7 +1974,7 @@ def _build_output_geometry_links(
             )
             .where(Calculation.transition_state_entry_id.in_(entry_ids)),
             # A link carries no calculation ref the guard could remove, so the geometry of a withheld calculation is left
-            # out here, as ``has_geometries`` leaves it out (ADR 0023).
+            # out here, as ``has_geometries`` leaves it out.
             linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
         )
         .order_by(

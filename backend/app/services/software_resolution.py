@@ -21,9 +21,7 @@ from app.schemas.fragments.refs import SoftwareReleaseRef
 #: dependent ingester (``scripts/pdep_ingestion/builder.py``) already records
 #: it as a ``workflow_tool_release``.
 #:
-#: ARC and RMG are workflow tools by the same argument (owner decision on
-#: #305, 2026-09-29, given as "I think so" and therefore reversible: delete
-#: the two entries to undo it). ARC orchestrates the electronic-structure
+#: ARC and RMG are workflow tools by the same argument. ARC orchestrates the electronic-structure
 #: jobs; RMG generates mechanisms and estimates. Neither runs the job whose
 #: output a calculation records. ``tckdb_schemas.software`` still
 #: canonicalises ``arc``/``rmg`` as software names on purpose: a product
@@ -34,7 +32,7 @@ from app.schemas.fragments.refs import SoftwareReleaseRef
 #: ``software_release`` (thermo/statmech/kinetics, fed by the bundle-level
 #: ``analysis_software_release``) is documented as the analysis code --
 #: "e.g. Arkane, MESS" -- and the ARC adapter fills it with Arkane on every
-#: reaction deposit. Moving that slot is an owner decision with a schema
+#: reaction deposit. Moving that slot has a schema
 #: dimension (the product's one ``workflow_tool_release`` slot already holds
 #: ARC), so it is not made here.
 #:

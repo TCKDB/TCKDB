@@ -41,7 +41,7 @@ A record is never its own neighbour (that would compare it with itself and
 report every jump twice); passing one raises ``ValueError``. A stored point
 or h298 that is not finite is ``nonfinite_stored_value``, never a residual.
 
-Decisions (2026-09-27): a record that does not declare its enthalpy
+Rules: a record that does not declare its enthalpy
 reference is excluded (``enthalpy_reference_unrecorded``) and two declared
 records on different bases are ``enthalpy_reference_mixed`` -- a basis is
 never inferred. Reference pressure never gates H; the recorded value, null

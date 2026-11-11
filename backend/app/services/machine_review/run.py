@@ -9,7 +9,7 @@ submissions and zero machine-review audit events, so the curator queue that
 reads those events was empty by construction rather than because nothing
 needed a curator. This module is the call that was missing.
 
-It keeps the two load-bearing properties of the precheck runner it replaced.
+Two properties are load-bearing.
 
 **Advisory, and only that.** A run writes exactly one row: one
 ``submission_audit_event``. It does not touch ``submission.status``, the
@@ -108,7 +108,7 @@ class MachineReviewRunOutcome:
     Naming it separately means a caller need not know that, and need not infer
     "this summary is an error" from the status.
 
-    No row id appears here (DR-0028 Requirement 2). Whether an event was
+    No row id appears here. Whether an event was
     written is a fact a caller can act on; which row it was is not.
     """
 
@@ -244,7 +244,7 @@ def _record(
         # 500s in teardown -- which is the failure this whole function exists
         # to avoid, arriving one layer later and less legibly.
         #
-        # MEASURED: without this, a write failure leaves the session in
+        # Without this, a write failure leaves the session in
         # ``InFailedSqlTransaction``; ``get_write_db`` then commits during
         # teardown, that commit raises, and the admin gets a 500 instead of
         # the 200 carrying ``audit_event_recorded=false``. The API tests

@@ -65,7 +65,7 @@ from app.services.software_resolution import resolve_software_release_ref
 #:
 #: Re-exported; *defined* in :mod:`tckdb_schemas.local_key_codes`, because
 #: four request schemas refuse the same mistake one layer earlier and may
-#: not import ``app`` (ADR 0017).
+#: not import ``app``.
 W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED = (
     _W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED
 )
@@ -87,7 +87,7 @@ def resolve_applied_correction_source_key(
 ) -> T | None:
     """Turn one applied-correction source key into the row it names.
 
-    Blocking, and ADR 0008 permits it because this asserts a *contract*
+    Blocking, because this asserts a *contract*
     rather than an expectation: a local key is a promise that the same
     upload declared something under that name, and if it did not, no
     correct payload can make the link mean what it says. The alternative
@@ -722,7 +722,7 @@ def assert_bac_total_has_required_components(
     ):
         return
 
-    # A component of *any* kind used to satisfy this check, which let a
+    # A component of *any* kind would satisfy this check, and let a
     # single placeholder -- ``{"component_kind": "other", "key":
     # "unspecified", ...}`` -- re-admit the exact false shape this
     # function exists to refuse: a total with nothing behind it, now

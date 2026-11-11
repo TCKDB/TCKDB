@@ -1,4 +1,4 @@
-"""Phase C handle resolution: integer PKs and public refs are interchangeable.
+"""Handle resolution: integer PKs and public refs are interchangeable.
 
 A *handle* is a string that names a row by either:
 
@@ -122,11 +122,9 @@ def handle_type_mismatch_error(
     is the caller's own input.
 
     ``message_prefix=True`` keeps ``str(exc)`` -- and so the response's
-    ``detail`` -- byte-identical to the ``ValueError(f"handle_type_mismatch:
-    ...")`` this replaced. Only the *route* into ``code`` changes: it is
-    now declared on the exception instead of promoted out of the sentence,
-    which is why the catalogue entry moved from
-    :attr:`~app.api.code_catalogue.Surface.message_prefix` to
+    ``detail`` -- identical to a ``ValueError(f"handle_type_mismatch:
+    ...")``. The ``code`` is declared on the exception rather than promoted
+    out of the sentence, so the catalogue entry is on
     :attr:`~app.api.code_catalogue.Surface.coded_exception`.
 
     :param noun: ``"handle"`` on a path lookup, ``"ref"`` on a filter --
@@ -156,7 +154,7 @@ def prefix_for(model_cls: type) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Merged rows forward one hop (DR-0038)
+# Merged rows forward one hop
 # ---------------------------------------------------------------------------
 
 
@@ -200,7 +198,7 @@ def forward_merged(session: Session, model_cls: type, row_id: int, *, into: obje
 
 
 # ---------------------------------------------------------------------------
-# Curated-profile withheld set on detail-by-ref reads (ADR 0023 step 7)
+# Curated-profile withheld set on detail-by-ref reads
 # ---------------------------------------------------------------------------
 
 
@@ -279,7 +277,7 @@ def status_hidden_under_profile(status: RecordReviewStatus, *, profile: Any = No
     The record floor: which RECORDS a list, search, browse or select returns, and which subject a list-gated response may
     name. With no floor (exploratory, or outside a scientific request) nothing is hidden.
 
-    Detail-by-ref is not decided here. Since step 7 of ADR 0023 a detail read serves any record that is not in the withheld
+    Detail-by-ref is not decided here. A detail read serves any record that is not in the withheld
     set (``common.evidence_withheld_under_profile``: ``rejected`` and ``deprecated``), badged; see
     :func:`_gated_status`.
 
@@ -301,7 +299,7 @@ def _gated_status(
     """The review status that keeps this record out of the answer under the active profile, or ``None`` if it is served.
 
     ``floor=False`` (a detail read): the withheld set, ``rejected`` and ``deprecated`` under a profile with a review floor
-    (ADR 0023 step 7); a ``not_reviewed`` or ``under_review`` record (or one with no review row) is served, badged.
+    A ``not_reviewed`` or ``under_review`` record (or one with no review row) is served, badged.
     ``floor=True`` (a select target, a candidate population): the approved record floor, as for a list. No floor, or an
     ungated type, answers ``None`` and issues no review query.
     """
@@ -336,7 +334,7 @@ def _enforce_handle_gate(
     detail-by-ref read passes through, so the rule cannot be forgotten by an endpoint. Records whose review state lives on
     a parent are judged by that parent, see :data:`_PARENT_DERIVED_HANDLE_TYPES`.
 
-    Since step 7 of ADR 0023 (amending ADR 0006's second seam) the detail of a record that is merely ``not_reviewed`` or
+    the detail of a record that is merely ``not_reviewed`` or
     ``under_review`` is served, and the response carries its review badge; only the withheld set answers 404. Lists,
     searches, browses and selects keep the approved floor: a select resolves the records it selects over (``floor=True``,
     :func:`resolve_selection_handle`) as a list does.
@@ -373,7 +371,7 @@ def resolve_path_handle(
     """Resolve a path-level handle (integer PK or public ref) to an integer id.
 
     Used by detail routes like ``/species-entries/{handle}/thermo``. Under ``curated`` a detail read answers 404 for the
-    withheld set only (ADR 0023 step 7); ``floor=True`` applies the approved record floor instead, for a select target
+    withheld set only; ``floor=True`` applies the approved record floor instead, for a select target
     (see :func:`resolve_selection_handle`).
 
     - Integer handle: SELECT by id. Missing → 404.
@@ -447,7 +445,7 @@ def resolve_selection_handle(session: Session, model_cls: type, handle: str, *, 
     """Resolve a ref a SELECT request names (its target, scope or candidate population) to an integer id.
 
     A select chooses among records, so the approved record floor decides which records it can name, exactly as for a list
-    (ADR 0023: lists, searches and selects keep the floor; only a detail read follows the withheld set). Errors and the 404
+    (lists, searches and selects keep the floor; only a detail read follows the withheld set). Errors and the 404
     for a record below the floor are those of :func:`resolve_path_handle`.
     """
     return resolve_path_handle(session, model_cls, handle, kind_label=kind_label, floor=True)
@@ -501,7 +499,7 @@ def resolve_filter_ref(
 
 # Sentinel return when an explicit ref filter resolved to a non-existent row.
 # Services should treat this as "match nothing" and short-circuit to an
-# empty result set per the Phase C unknown-filter rule.
+# empty result set per the unknown-filter rule.
 NO_MATCH: object = object()
 
 

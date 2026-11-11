@@ -1,4 +1,4 @@
-"""The composite annotations every ``ScientificLevelsSummary`` carries (ADR 0021, P7a).
+"""The composite annotations every ``ScientificLevelsSummary`` carries.
 
 Four builders (thermo, statmech, kinetics, and the shared summary they feed) derive a
 record's levels. Two of the fields of that summary are not a function of the levels

@@ -1,4 +1,4 @@
-"""How far a composite energy has been checked, derived at read time (ADR 0021, P7a).
+"""How far a composite energy has been checked, derived at read time.
 
 :func:`verify_composite_calculations` answers, for composite calculations, one of
 the states of :class:`~app.db.models.common.CompositeEnergyVerificationState`:

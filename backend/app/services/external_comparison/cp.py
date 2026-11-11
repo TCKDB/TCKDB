@@ -1,6 +1,6 @@
 """D2: computed Cp against stored external observations.
 
-The Phase C preference order (NASA7, NASA9, exact points) remains this
+The preference order (NASA7, NASA9, exact points) remains this
 check's contract. D1 separately compares every fit without choosing one.
 Cantera 3.2.0 preserves the recorded reference pressure; unsupported state
 and units remain unavailable. Real-gas observations retain unquantified

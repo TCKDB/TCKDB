@@ -502,7 +502,7 @@ def build_record(
             review_status=badge.status,
         )
 
-    # ADR 0021, P7a. Verification is recomputed here on every read (never stored); the
+    # Verification is recomputed here on every read (never stored); the
     # legacy annotation reads the level summary above and changes nothing about it.
     if calc.type != CalculationType.composite:
         composite_verification = None
@@ -631,8 +631,8 @@ def _owner_formula_expr(smiles_column):
     Thin wrapper over
     :func:`app.services.scientific_read.common.molecular_formula_expr` (see
     its docstring for the full rationale) — the shared expression that
-    replaced the locally-redefined copies this module, ``geometry.py`` and
-    ``conformers.py`` each used to carry. ``species`` has no stored
+    this module, ``geometry.py`` and
+    ``conformers.py`` all use. ``species`` has no stored
     formula column; ``mol_from_smiles()`` returns SQL NULL for an
     unparseable SMILES, so an unparseable owner yields a NULL formula
     rather than raising.
@@ -773,12 +773,12 @@ def load_conformer_summaries(
 ) -> dict[int, CalculationConformerSummary]:
     """Bulk-build conformer summaries for a page, keyed by observation id.
 
-    A search page used to call :func:`_build_conformer_summary` once per
-    record inside :func:`build_record`, which is one
+    Calling :func:`_build_conformer_summary` once per
+    record inside :func:`build_record` would cost one
     ``conformer_observation JOIN conformer_group`` round trip per
-    conformer-linked calculation — a per-record fan-out that moved the
-    page's statement slope from 3 to 4 (measured on
-    ``test_record_builder_statement_cost.py``). Bulk-loading with one
+    conformer-linked calculation — a per-record fan-out in the page's
+    statement slope (see ``test_record_builder_statement_cost.py``).
+    Bulk-loading with one
     ``IN`` here, the same shape as the badge bulk-load beside it in
     ``calculations_search.py``, keeps the slope flat regardless of how
     many of the page's records are conformer-linked.
@@ -987,8 +987,8 @@ _TYPES_WITH_GEOMETRY_CONSTRAINTS: frozenset[CalculationType] = frozenset(
 # Only ``freq`` calculations diagonalize a Hessian into a per-mode
 # ``calc_freq_mode`` breakdown — see ``CalculationFreqMode``'s own
 # docstring ("One vibrational mode parsed from a frequency calculation")
-# and the measured, exclusive per-type result-block diagonal (freq_result
-# present for 132/132 freq calcs, 0 of the other 440 measured 2026-08-22).
+# and the exclusive per-type result-block diagonal (``freq_result`` is
+# present only on ``freq`` calculations).
 _TYPES_WITH_FREQ_MODES: frozenset[CalculationType] = frozenset({CalculationType.freq})
 
 
@@ -1015,10 +1015,8 @@ def _build_provenance_and_sections(
     calculation id, so they are asked for as columns of one ``SELECT``
     rather than one statement each. That matters because
     :func:`build_record` runs once per record: the calculations search
-    slices its page in three statements and then spent fifteen round trips
-    per record filling it in, which is where ``docs/benchmarks/README.md``'s
-    thousand-statement page came from. The probes are unchanged — same
-    predicates, same results — they are merely issued together.
+    slices its page in three statements, so fifteen round trips per record
+    would multiply across the page.
     """
     primary_table = _PRIMARY_RESULT_TABLE.get(calc.type)
     probes = session.execute(
@@ -1327,7 +1325,7 @@ def _build_sp_summary(
 def _build_composite_summary(
     session: Session, calculation_id: int
 ) -> CalculationResultSummary | None:
-    """Project ``calc_composite_result`` and its terms (ADR 0021).
+    """Project ``calc_composite_result`` and its terms.
 
     Three statements per record: the result row, its terms (few, in position
     order) and, for an assembled composite, its inputs with the input
@@ -1402,10 +1400,9 @@ def _build_opt_summary(
 def _build_freq_summary(
     session: Session, calculation_id: int
 ) -> CalculationResultSummary | None:
-    """Project ``calc_freq_result``, ADR 0012 judgement included.
+    """Project ``calc_freq_result``, imaginary-mode judgement included.
 
-    One statement per record, which is what it cost before ADR 0012's
-    fields joined the projection: the two mode counts ride along as
+    One statement per record: the two mode counts ride along as
     correlated aggregates on the same SELECT rather than as a second
     round trip, because this builder runs once per record on a search
     page and a second round trip here would be multiplied by the page
@@ -1470,16 +1467,15 @@ def _count_at_or_above_tau(
     stored_imaginary_modes: int,
     at_or_above_tau: int,
 ) -> int | None:
-    """ADR 0012's "count above tau", or ``None`` where it cannot be taken.
+    """The "count above tau", or ``None`` where it cannot be taken.
 
     Two ways it cannot be taken, and both would otherwise be reported as
     a confident ``0``:
 
-    - **No tau is stored.** The record was never judged under ADR 0012
-      (every column it added is nullable and nothing was backfilled), so
-      there is no threshold to count against. Counting against a tau
-      resolved *now* is exactly what ADR 0012 forbids — it would let a
-      parser improvement silently re-decide a historical record.
+    - **No tau is stored.** The record was never judged (the tau columns
+      are nullable), so there is no threshold to count against. Counting
+      against a tau resolved *now* is not done — it would let a parser
+      improvement silently re-decide a historical record.
     - **No per-mode rows.** ``calc_freq_mode`` is optional: an upload may
       carry ``n_imag`` with no frequency list. SQL then counts zero modes
       at or above tau, which is true of the stored rows and false of the
@@ -1764,7 +1760,7 @@ def _dependency_edge_shown(calculation_id: int):
     """The dependency edges of *calculation_id* whose OTHER calculation the evidence rule leaves visible.
 
     The list (``include=dependencies``) loses an edge whose other end is withheld (the ref guard removes the pointer), so
-    the ``has_dependencies`` flag counts the same edges (ADR 0023). With no review floor the predicate is ``None`` and the
+    the ``has_dependencies`` flag counts the same edges. With no review floor the predicate is ``None`` and the
     condition is the plain "any edge touches this calculation".
     """
     from sqlalchemy import and_, or_

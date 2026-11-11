@@ -112,7 +112,7 @@ def resolve_group_ref(session: Session, ref: str) -> int:
         ConformerGroup,
         ref,
         kind_label="conformer_group",
-        # A select names the group it selects over: the approved record floor decides, as for a list (ADR 0023).
+        # A select names the group it selects over: the approved record floor decides, as for a list.
         resolver=lambda s, handle: resolve_selection_handle(s, ConformerGroup, handle, kind_label="conformer_group"),
     )
 

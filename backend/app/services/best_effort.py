@@ -20,8 +20,7 @@ to the database, and the reason is easy to miss:
 * **An unflushed mutation fails somewhere else entirely.** A hook that only
   assigns to a mapped attribute has issued no SQL when it returns. Its
   ``UPDATE`` is emitted by whatever flushes next — in practice the commit —
-  which is outside every guard the hook wrote. This is the exact shape of the
-  2026-08-05 incident.
+  which is outside every guard the hook wrote.
 
 :func:`isolated_best_effort` addresses both, and mirrors
 :func:`app.services.idempotency.write_receipt_isolated`:

@@ -1,12 +1,11 @@
 """Register the first ``review``-tier check: computed Cp against external data.
 
-ADR 0008 puts every cross-check against an external reference dataset in the
+Every cross-check against an external reference dataset is in the
 ``review`` tier: it runs only from an explicit admin/CLI trigger, never from
 the upload path, produces no error-envelope code, and has no approval effect
 -- its output is one ``record_machine_review`` row a curator may read. See
 ``app.services.external_comparison.cp`` for the runner (the Cantera-based
-Cp(T) evaluation and the finding it writes) and
-``docs/research/tckdb-phase-c-implementation-plan.md`` C4 for the design.
+Cp(T) evaluation and the finding it writes).
 """
 
 from __future__ import annotations
@@ -76,7 +75,7 @@ CHECK_EXTERNAL_CP_COMPARISON = ScientificCheck(
 
 __all__ = ["CHECK_EXTERNAL_CP_COMPARISON", "CHECK_THERMO_CONSISTENCY", "CHECK_THERMO_KINETICS_CONSISTENCY"]
 
-# Explicit Phase D triggers share the review-only registry, never the upload path.
+# Explicit triggers share the review-only registry, never the upload path.
 
 CHECK_THERMO_CONSISTENCY = ScientificCheck(
     group="Advisory consistency", sort_key=1, code=None,

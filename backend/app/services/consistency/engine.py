@@ -5,8 +5,7 @@ from app.db.models.common import PhaseKind
 
 ENGINE_VERSION = "3.2.0"
 
-#: Phases these advisory NASA/rate consistency checks support today (decided
-#: 2026-09-23). A record whose phase is outside this set is declared out of
+#: Phases these advisory NASA/rate consistency checks support. A record whose phase is outside this set is declared out of
 #: scope -- never refused as though the phase were incompatible, and never
 #: silently treated as gas. Widening support to another phase is a one-line
 #: addition here; :func:`gas_state_reason` reads this constant and nowhere
@@ -14,7 +13,7 @@ ENGINE_VERSION = "3.2.0"
 SUPPORTED_PHASES = frozenset({PhaseKind.gas})
 
 #: Quantities whose applicability does not depend on a recorded reference
-#: pressure (decided 2026-09-23 for Cp, 2026-09-27 for H). An ideal-gas heat
+#: pressure. An ideal-gas heat
 #: capacity or enthalpy carries no standard-state pressure; only entropy,
 #: and anything built from it, does. :func:`gas_state_reason` reads this
 #: constant and nowhere else special-cases a quantity name, so a later
@@ -44,13 +43,13 @@ def cantera():
 #: constructors only when the quantity is in
 #: :data:`PRESSURE_INDEPENDENT_QUANTITIES` and the record has none. Cp and H
 #: are pressure-independent for these polynomials -- Cantera returns the same
-#: ``cp`` (verified 2026-09-23) and the same ``h`` (verified 2026-09-27, for
+#: ``cp`` and the same ``h`` (verified for
 #: NASA7 and for a NASA9 region) at 1e5, 101325 and 2.5e5 Pa -- so the exact
 #: value is inert; it exists only to satisfy the constructor's signature.
 _NEUTRAL_REFERENCE_PRESSURE_BAR = 1.0
 
 #: Cantera's NASA thermo returns Cp and S in J/kmol/K and H in J/kmol
-#: (measured 2026-09-27 against the hand formula H/R = sum a_k T^k/k + a6).
+#: (measured against the hand formula H/R = sum a_k T^k/k + a6).
 #: The advisory checks report Cp and S in J/mol/K and H in kJ/mol.
 _ENGINE_DIVISOR = {"cp": 1000.0, "s": 1000.0, "h": 1e6}
 
@@ -79,7 +78,7 @@ def _check_quantity(quantity, *, allow_none):
 
 
 def gas_state_reason(thermo, *, quantity=None):
-    """Applicability gate, split per quantity (decided 2026-09-23).
+    """Applicability gate, split per quantity.
 
     ``reference_pressure_bar`` fixes the standard-state pressure baked into
     the entropy coefficient, so a missing/invalid value makes any entropy
@@ -90,7 +89,7 @@ def gas_state_reason(thermo, *, quantity=None):
     thermo used by the D3 kinetics/equilibrium comparison) keeps requiring a
     valid reference pressure via the default ``quantity=None``.
 
-    Phase scope is declared, not implied (decided 2026-09-23): a record
+    Phase scope is declared, not implied: a record
     whose phase was never recorded (``phase is None``, documented on
     ``Thermo.phase`` as unspecified, never as non-gas) is out of scope for a
     different reason than a record explicitly recorded as a phase this check
@@ -103,9 +102,9 @@ def gas_state_reason(thermo, *, quantity=None):
     For a pressure-independent quantity the stored pressure is not inspected
     at all, so a NaN, zero, negative or infinite value passes the gate and
     reaches the Cantera constructor. That is deliberate and harmless:
-    measured 2026-09-27 on Cantera 3.2.0, NASA7 and NASA9 construct without
+    measured on Cantera 3.2.0, NASA7 and NASA9 construct without
     error at each of those pressures and return Cp and H identical to the
-    1 bar values. (Cp behaves the same way on main since 2026-09-23.)
+    1 bar values.
     """
     _check_quantity(quantity, allow_none=True)
     if thermo.phase is None:
@@ -225,7 +224,7 @@ def nasa7_branch(thermo, branch, temperature, *, quantity=None):
 
     This exists because the combined fit returned by :func:`polynomial`
     answers "what does the record say at T" -- and exactly at ``t_mid``
-    Cantera answers with the LOW branch (measured 2026-09-27 with Cantera
+    Cantera answers with the LOW branch (measured with Cantera
     3.2.0: the combined ``h(t_mid)`` equals the low branch's to the last
     bit, and ``h(t_mid + 1e-9)`` already equals the high branch's). The
     high branch's own value at ``t_mid`` is therefore unreachable through

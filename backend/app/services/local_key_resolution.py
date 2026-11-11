@@ -2,7 +2,7 @@
 
 What a local key is
 -------------------
-An upload payload never carries a database id (DR-0029 Requirement 1).
+An upload payload never carries a database id.
 When a thermo record has to say which calculations produced its number,
 or a torsion has to name its rotor scan, or a solve has to cite the jobs
 behind it, the payload writes a *local key* — a string the same request
@@ -56,10 +56,8 @@ pass found:
   transition-state keys — are guarded only inside the
   ``kind == 'computed'`` branch of
   ``validate_mechanistic_channel_evidence``, so a ``reported`` solve
-  (ADR 0010: k(T,P) transcribed from a paper, holding none of the
-  master-equation inputs) walked straight past them into a ``KeyError``.
-  The comment above that branch says a reported solve "still has to point
-  it at a real path"; for three of those four fields it did not.
+  (k(T,P) transcribed from a paper, holding none of the
+  master-equation inputs) must still point those keys at a real path.
 * The fifth is the #218 asymmetry again, on a different field.
   ``NetworkSpeciesIn`` narrows a species calculation's ``geometry_key``
   to that species's own conformer geometries; ``TransitionStateIn`` has
@@ -82,13 +80,12 @@ What the refusal carries
 The offending field, the key as the depositor wrote it, and the keys that
 are declared — because naming the alternatives is what turns a refusal
 into a mechanical fix. Never a row id: the ids are the *values* of these
-maps and they stay there, out of anything a depositor reads (DR-0028
-Requirement 2).
+maps and they stay there, out of anything a depositor reads.
 
 Where the codes live now, and why not here
 ------------------------------------------
 The codes this module raises are *defined* in
-:mod:`tckdb_schemas.local_key_codes` and re-exported below. ADR 0017: a
+:mod:`tckdb_schemas.local_key_codes` and re-exported below. A
 refusal's code and context belong to the check, not to the layer that
 happens to run it. The request-schema validators that refuse these same
 mistakes one layer earlier may not import ``app`` (the wire package's
@@ -123,7 +120,7 @@ from app.api.error_contract import CodedValueError
 
 #: Re-exported so no backend import had to move when the codes did, and so
 #: this module still reads as the place the seam's codes come from. They are
-#: *defined* in :mod:`tckdb_schemas.local_key_codes` — see ADR 0017 and that
+#: *defined* in :mod:`tckdb_schemas.local_key_codes` — see that
 #: module's docstring — because a request-schema validator refuses the same
 #: mistake one layer earlier and may not import ``app``.
 __all__ = [
@@ -245,7 +242,7 @@ def resolve_declared_key(
         f"{available} {remedy}".rstrip(),
         # Built by the wire package's helper, not spelled out here, so the
         # request-schema validator that refuses this same mistake one layer
-        # earlier cannot report a different set of facts (ADR 0017).
+        # earlier cannot report a different set of facts.
         context=undeclared_key_context(field=field, key=key, declared=known),
         message_prefix=False,
     )
@@ -260,7 +257,7 @@ def resolve_calculation_key(
 ) -> T:
     """Resolve one upload-local *calculation* key, or refuse with a code.
 
-    The seam every raw calc-key subscript now goes through, in all five
+    The seam every raw calc-key subscript goes through, in all five
     workflows that resolve a calculation by local key —
     ``computed_species``, ``computed_reaction``, ``network_pdep``,
     ``thermo`` and ``transport``.

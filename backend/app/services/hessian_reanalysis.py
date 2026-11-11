@@ -40,9 +40,7 @@ The tolerance: what is derived, what is estimated
 -------------------------------------------------
 
 The comparison is judged against a bound declared before any record is
-read. (A figure of 0.045 cm^-1 was recorded for the 2026-08-11 corpus by
-the unprojected read-time matcher; it is a measurement, and it is not
-used.) Two roundings separate the stored list from the stored matrix, and
+read. Two roundings separate the stored list from the stored matrix, and
 the bound has one term for each.
 
 **Derived, term 1: the frequency list is printed to a fixed number of
@@ -71,7 +69,7 @@ with unit mass-weighted eigenvector ``v`` moves by at most
 :func:`~app.chemistry.normal_modes.wavenumber_from_eigenvalue`'s own
 constants turn that into an omega-squared allowance ``B`` in cm^-2,
 **per mode** (:func:`mode_omega2_allowance_cm2`). It is flat in omega
-squared, not in omega -- ADR 0012's observation -- so the same ``B`` is
+squared, not in omega, so the same ``B`` is
 a small cm^-1 allowance on a stretch and a larger one on a torsion.
 Measured on ``freq_g09.log`` the per-mode ``B`` runs from 4.6 to
 34.6 cm^-2 (the 3446 cm^-1 C-H stretch, whose eigenvector concentrates
@@ -133,7 +131,7 @@ carries a comparison; the others each name what stopped it:
     substituted.
 ``isotope_identity_conflict``
     The geometry declares a non-standard nuclide, of any element (a ``D``/``T``
-    spelling on a row deposited before #672, or a stored mass number), while the species entry
+    spelling, or a stored mass number), while the species entry
     it is filed under is the all-standard (protium) one. The masses this
     analysis would use are the deuterium or tritium masses, so the spectrum it
     recovered would describe an isotopologue under a protium label (any element
@@ -143,8 +141,7 @@ carries a comparison; the others each name what stopped it:
     failure. No frequencies are returned. Judged only for a calculation owned
     by a species entry, only in the "entry says standard, geometry says
     isotope" direction, and only after the masses resolve (so an isotope the
-    periodic table cannot weigh keeps ``masses_unresolved``). See
-    ``docs/adr/0022``.
+    periodic table cannot weigh keeps ``masses_unresolved``).
 ``rigid_body_curvature_too_large``
     The geometry on file is not the frame the matrix was computed in
     (:data:`~app.chemistry.normal_modes.FRAME_CONSISTENCY_TOLERANCE_CM1`).
@@ -607,12 +604,12 @@ def _declares_isotope_under_protium(calc: Calculation, atoms: Sequence[GeometryA
     """True when the geometry declares an isotope that the owning entry denies.
 
     The declaration is read from each atom's own row: its stored mass number,
-    or -- for a row deposited before ``docs/adr/0022``, which holds ``D``/``T``
-    with a NULL mass number and cannot be rewritten -- the mass number its own
+    or -- for a row that holds ``D``/``T``
+    with a NULL mass number -- the mass number its own
     symbol names. Nothing is borrowed from a sibling record. The entry denies
     it when it declares no isotopes: a NULL ``isotope_key`` (TCKDB's
-    all-standard key) and no label on its own species' SMILES, which a species
-    stored before #66 can still carry.
+    all-standard key) and no label on its own species' SMILES, which a legacy
+    species can still carry.
 
     A calculation with no species-entry owner (a transition state's) is not
     judged: its identity is the reaction's reactants taken together, which this

@@ -6,13 +6,13 @@ formula/name, which is often genuinely ambiguous (isomers). See that model's
 module docstring. Once a curator has done the disambiguation work a machine
 resolver could not, this is the one write path that fills the FK in.
 
-Correction is supersession, not update (ADR 0003): a row that already
+Correction is supersession, not update: a row that already
 carries an identity is never repointed here. If the identity was wrong, the
 row is the wrong data, and it is superseded by depositing a corrected
 observation, exactly like every other scientific record in this codebase --
 not edited in place.
 
-Target rule (revised Phase C-E5 review round 2): the target must be a
+Target rule: the target must be a
 ground-state, minimum-energy entry of its species (``kind=minimum`` and
 ``electronic_state_kind=ground``) -- but it no longer has to be the *unique*
 such entry. The original rule refused precisely the isomer-ambiguity case
@@ -39,12 +39,9 @@ the attach is refused rather than silently skipping the record.
 
 Every observation written by either importer (``app.services.
 cccbdb_molecular_property_import``, ``app.services.thermoml_cp_import``) is
-linked to the submission that deposited it *as of Phase C-E5 review round
-3* -- this was not always true. Before that round, the CCCBDB importer
-wrote rows with no submission link at all, so any such pre-existing row
+linked to the submission that deposited it. A row with no submission link
 refuses an attach with ``observation_identity_attach_requires_submission``
-until an operator backfills a submission for it; see the "Legacy CCCBDB
-rows" section of PR #513.
+until an operator backfills a submission for it.
 """
 
 from __future__ import annotations
@@ -176,7 +173,7 @@ def _assert_no_identity_hint_conflict(
     """Refuse an attach when the observation's own identity hint names a
     different molecular connectivity than the attach target's species.
 
-    Probe C (Phase C-E5 review round 3): without this check, an
+    Without this check, an
     observation carrying a usable ``identity_hint.inchikey`` could be
     silently attached to an entry of an unrelated species -- the curator
     UI has no way to know the hint disagrees with the chosen target unless

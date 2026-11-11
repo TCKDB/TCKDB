@@ -396,7 +396,7 @@ def canonical_subject_id(
 
     A species entry merged into another is kept (its selections are append-only history and stay as written), and
     everything it held, results included, moved to the survivor. A selection whose subject merged into S therefore
-    counts as a selection for S (DR-0038); the rows themselves are never rewritten.
+    counts as a selection for S; the rows themselves are never rewritten.
     """
     if subject_type is not SubmissionRecordType.species_entry:
         return subject_id
