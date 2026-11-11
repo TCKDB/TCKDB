@@ -37,7 +37,7 @@ describe("DataTable", () => {
         await user.tab()
         await user.tab()
         await user.tab()
-        expect(screen.getByRole("button", { name: "Sort by value" })).toHaveFocus()
+        expect(screen.getByRole("button", { name: /^Value sort/ })).toHaveFocus()
         await user.keyboard("{Enter}")
         expect(header()).toHaveAttribute("aria-sort", "ascending")
         expect(order()).toEqual(["thm_c", "thm_b", "thm_a"])
@@ -54,22 +54,31 @@ describe("DataTable", () => {
     it("puts rows with no value last in either direction and offers no sort on a plain column", async () => {
         const user = userEvent.setup()
         setup()
-        expect(screen.queryByRole("button", { name: "Sort by note" })).not.toBeInTheDocument()
-        await user.click(screen.getByRole("button", { name: "Sort by value" }))
+        expect(screen.queryByRole("button", { name: /^Note/ })).not.toBeInTheDocument()
+        await user.click(screen.getByRole("button", { name: /^Value sort/ }))
         expect(order().at(-1)).toBe("thm_a")
-        await user.click(screen.getByRole("button", { name: "Sort by value" }))
+        await user.click(screen.getByRole("button", { name: /^Value sort/ }))
         expect(order().at(-1)).toBe("thm_a")
     })
 
     it("restores the archive's order from the note's own button and binds no page-wide keys", async () => {
         const user = userEvent.setup()
         setup()
-        await user.click(screen.getByRole("button", { name: "Sort by record" }))
+        await user.click(screen.getByRole("button", { name: /^Record sort/ }))
         expect(order()).toEqual(["thm_a", "thm_b", "thm_c"])
         await user.keyboard("s")
         expect(order()).toEqual(["thm_a", "thm_b", "thm_c"])
         await user.click(screen.getByRole("button", { name: "Back to the archive's order" }))
         expect(order()).toEqual(["thm_b", "thm_a", "thm_c"])
+    })
+
+    it("returns focus to the column's sort button after restoring the archive's order, and names the button by its visible words", async () => {
+        const user = userEvent.setup()
+        setup()
+        const button = screen.getByRole("button", { name: "Value sort" })
+        await user.click(button)
+        await user.click(screen.getByRole("button", { name: "Back to the archive's order" }))
+        expect(button).toHaveFocus()
     })
 
     it("makes the scroll box a labelled, keyboard-focusable region", () => {

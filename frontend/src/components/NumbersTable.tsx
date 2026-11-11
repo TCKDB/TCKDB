@@ -18,7 +18,7 @@ const KIND_WORDS: Record<NumberKind, string> = {
     transport: "Transport",
 }
 
-function PointGroup({ value }: { value: string }) {
+export function PointGroup({ value }: { value: string }) {
     const { symbol, subscript } = pointGroupParts(value)
     return <span className="t-preserve-case">{symbol}{subscript && <sub>{subscript}</sub>}</span>
 }

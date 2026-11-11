@@ -185,6 +185,7 @@ export function fillValue(value: FillableValue): Filled {
  * | statmech rotational constants   | 4 sf, no trailing zeros | cm⁻¹ | (this archive's tables) |
  * | thermo reference pressure       | as deposited | bar | (this archive's tables) |
  * | thermo temperature range ends   | as deposited | K   | (this archive's tables) |
+ * | thermo heat capacity points     | as deposited | J/mol·K | (this archive's tables) |
  * | transport polarizability        | as deposited | Å³  | (this archive's tables) |
  * | transport rotational relaxation | as deposited | (none) | (this archive's tables) |
  * | kinetics activation energy Ea   | 2      | kJ/mol  | kineticsView headline |
@@ -209,7 +210,7 @@ export const QUANTITY_SPECS = {
     thermo_h298_uncertainty_kj_mol: { kind: "fixed", digits: 2, unit: "kJ/mol" },
     thermo_s298_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
     thermo_s298_uncertainty_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
-    thermo_cp_j_mol_k: { kind: "fixed", digits: 2, unit: "J/mol·K" },
+    thermo_cp_j_mol_k: { kind: "deposited", unit: "J/mol·K" },
     statmech_frequency_scale_factor: { kind: "fixed", digits: 4, unit: null },
     transport_sigma_angstrom: { kind: "fixed", digits: 3, unit: "Å" },
     transport_epsilon_over_k_k: { kind: "fixed", digits: 1, unit: "K" },
@@ -231,6 +232,7 @@ export type QuantitySpec =
 export const DEPOSITED_SPEC_KEYS = [
     "thermo_reference_pressure_bar",
     "thermo_temperature_k",
+    "thermo_cp_j_mol_k",
     "transport_polarizability_angstrom3",
     "transport_rotational_relaxation",
 ] as const

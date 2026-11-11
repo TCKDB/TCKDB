@@ -226,10 +226,18 @@ describe("molecule page: numbers for this entry", () => {
         expect(within(region).getByRole("link", { name: "Compare these values" })).toHaveAttribute("href", `/species/${speciesRef}/compare`)
     })
 
-    it("leaves the compare link out when the entry holds a single record", async () => {
+    it("offers the compare link for a single record only when another version has that kind of record", async () => {
+        const bare = { availability: { has_thermo: false, has_statmech: false, has_transport: false, has_conformers: false, calculation_count: 1 } }
+        const none = await open({ thermoRecords: [records()[0]], statmechRecords: [], entries: [entrySummary(entryRef, "ground", 10), { ...entrySummary(otherEntryRef, "excited", 4), ...bare }] })
+        await waitFor(() => expect(rowRefs(none)).toEqual(["thermo-thm_a1"]))
+        await screen.findByRole("heading", { name: "Other versions of this molecule" })
+        await waitFor(() => expect(screen.getByText(/This molecule has 2 versions listed/)).toBeVisible())
+        expect(within(none).queryByRole("link", { name: "Compare these values" })).not.toBeInTheDocument()
+    })
+
+    it("offers the compare link for a single record when another version has thermochemistry", async () => {
         const single = await open({ thermoRecords: [records()[0]], statmechRecords: [] })
-        await waitFor(() => expect(rowRefs(single)).toEqual(["thermo-thm_a1"]))
-        expect(within(single).queryByRole("link", { name: "Compare these values" })).not.toBeInTheDocument()
+        await waitFor(() => expect(within(single).getByRole("link", { name: "Compare these values" })).toHaveAttribute("href", `/species/${speciesRef}/compare`))
     })
 
     it("states the order the archive served once, naming only lists that have rows, and says so when it stated none", async () => {

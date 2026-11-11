@@ -48,7 +48,7 @@ export function SpeciesValues({ species }: { species: SpeciesOverview }) {
                         lists={[["thermochemistry", data.thermo], ["statistical mechanics", data.statmech]]}
                         rest={() => "Each version's page lists its own records."}
                     />
-                    {rows.length >= 2 && (
+                    {(data.thermo.records.length >= 2 || data.statmech.records.length >= 2) && (
                         <p><Link className="compare-link" to={`/species/${species.species_ref}/compare`}>Compare these values</Link></p>
                     )}
                     <NumbersTable<SpeciesValueRow>

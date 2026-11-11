@@ -1,11 +1,11 @@
-import { useMemo, useState, type ReactNode } from "react"
+import { useMemo, useRef, useState, type ReactNode } from "react"
 import "../data-table.css"
 import { OrderNote } from "./OrderNote"
 
 export type DataColumn<R> = {
     key: string
     header: ReactNode
-    /** The header's words for the order note; also the accessible name of the sort button. */
+    /** The header's words for the order note. */
     name: string
     cell: (row: R) => ReactNode
     /** Present when the reader may sort by this column; null sorts last in either direction. */
@@ -34,6 +34,7 @@ export function DataTable<R>({ caption, label, rows, rowKey, columns, order }: {
     order?: string
 }) {
     const [sort, setSort] = useState<Sort | null>(null)
+    const buttons = useRef(new Map<string, HTMLButtonElement>())
     const sortedBy = columns.find((column) => column.key === sort?.key)
     const shown = useMemo(() => {
         if (!sort || !sortedBy?.sortValue) return rows
@@ -55,12 +56,19 @@ export function DataTable<R>({ caption, label, rows, rowKey, columns, order }: {
         })
     }
 
+    /** Back to the archive's order, with focus returned to the column the reader had sorted. */
+    function reset() {
+        const key = sort?.key
+        setSort(null)
+        if (key) buttons.current.get(key)?.focus()
+    }
+
     return (
         <>
             <div role="status" className="data-table-order">
                 {sort && sortedBy
                     ? <p className="order-note">Sorted by you: {sortedBy.name}, {sort.direction}. This is not a recommendation.{" "}
-                        <button type="button" className="data-table-reset" onClick={() => setSort(null)}>Back to the archive's order</button></p>
+                        <button type="button" className="data-table-reset" onClick={reset}>Back to the archive's order</button></p>
                     : <OrderNote order={order} />}
             </div>
             <div className="table-scroll data-table-scroll" tabIndex={0} role="region" aria-label={label}>
@@ -75,8 +83,13 @@ export function DataTable<R>({ caption, label, rows, rowKey, columns, order }: {
                                     aria-sort={column.sortValue ? (sort?.key === column.key ? sort.direction : "none") : undefined}
                                 >
                                     {column.sortValue
-                                        ? <button type="button" className="data-table-sort" aria-label={`Sort by ${column.name}`} onClick={() => press(column.key)}>
-                                            {column.header}
+                                        ? <button
+                                            type="button"
+                                            className="data-table-sort"
+                                            ref={(node) => { if (node) buttons.current.set(column.key, node); else buttons.current.delete(column.key) }}
+                                            onClick={() => press(column.key)}
+                                        >
+                                            {column.header}{" "}<span className="data-table-sr">sort</span>
                                             <span className="data-table-arrow" aria-hidden="true">{sort?.key === column.key ? (sort.direction === "ascending" ? "↑" : "↓") : "↕"}</span>
                                         </button>
                                         : column.header}

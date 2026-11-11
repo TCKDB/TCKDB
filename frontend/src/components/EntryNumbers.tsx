@@ -7,20 +7,32 @@ import { conformerLabel } from "../domain/conformerEvidence"
 import { numbersOrderSentence, statmechRow, thermoRow, transportRow, type NumberKind } from "../domain/entryNumbers"
 import { PREVIEW_ROWS } from "../api/entryNumbersApi"
 import { useEntryNumbers } from "../hooks/useEntryNumbers"
+import { useSpeciesOverview } from "../hooks/useSpeciesOverview"
 import { useScrollToHash } from "../hooks/useScrollToHash"
 import { SectionHeading } from "./PageSections"
 import { OrderNote } from "./OrderNote"
 import { ListNotes, NumbersTable, WalkStatus } from "./NumbersTable"
 
+/** The link to the molecule's compare page: this entry holds two records of a kind, or one that another version also has. */
+function CompareLink({ speciesRef, entryRef, thermo, statmech }: { speciesRef: string; entryRef: string; thermo: number; statmech: number }) {
+    const state = useSpeciesOverview(speciesRef)
+    const others = state.status === "ready" && state.speciesRef === speciesRef ? state.species.entries.filter((entry) => entry.species_entry_ref !== entryRef) : []
+    const offered = thermo >= 2 || statmech >= 2
+        || (thermo >= 1 && others.some((entry) => entry.availability.has_thermo))
+        || (statmech >= 1 && others.some((entry) => entry.availability.has_statmech))
+    if (!offered) return null
+    return <p><Link className="compare-link" to={`/species/${speciesRef}/compare`}>Compare these values</Link></p>
+}
+
 /** Every thermo, statmech and transport record of this entry with its values, levels, programs and review status. */
-export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers, compareTo, compact = false }: {
+export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers, speciesRef, compact = false }: {
     entryRef: string
     entryPath: string
     /** `?conformer=...` of the shape on screen, kept on same-page links so a link does not change the selection. */
     conformerQuery: string
     conformers: ConformerProjection[]
-    /** The molecule's compare page; offered when this entry holds two or more thermochemistry or statistical mechanics records. */
-    compareTo?: string
+    /** The molecule, whose compare page is offered when this entry or another version has records to set beside each other. */
+    speciesRef?: string
     /** The short form for another page: a smaller heading, no grouping control, the first records only. */
     compact?: boolean
 }) {
@@ -57,8 +69,8 @@ export function EntryNumbers({ entryRef, entryPath, conformerQuery, conformers, 
                         .filter((kind) => data[kind].records.length > 0)
                         .map((kind) => ({ kind, sort: data[kind].sort })))}
                     />
-                    {!compact && compareTo && data.thermo.records.length + data.statmech.records.length >= 2 && (
-                        <p><Link className="compare-link" to={compareTo}>Compare these values</Link></p>
+                    {!compact && speciesRef && (
+                        <CompareLink speciesRef={speciesRef} entryRef={entryRef} thermo={data.thermo.records.length} statmech={data.statmech.records.length} />
                     )}
                     {!compact && <ListNotes
                         lists={[["thermochemistry", data.thermo], ["statistical mechanics", data.statmech], ["transport", data.transport]]}

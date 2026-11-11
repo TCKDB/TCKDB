@@ -11,6 +11,7 @@
 .data-table-sort:focus-visible,
 .data-table-reset:focus-visible,
 .compare-record a:focus-visible,
+.compare-group a:focus-visible,
 .compare-link:focus-visible {
     outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
@@ -73,9 +74,10 @@
 
 .data-table-sort {
     display: inline-flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--s-2);
     margin-left: calc(var(--s-2) * -1);
+    padding-top: var(--s-2);
     color: var(--ink);
     text-align: left;
 }
@@ -92,7 +94,20 @@
 }
 
 .data-table-arrow {
+    flex: none;
     color: var(--ink-2);
+}
+
+.data-table-head {
+    display: grid;
+    min-width: 8rem;
+    gap: var(--s-1);
+}
+
+.data-table-unit {
+    color: var(--ink-2);
+    font-weight: 400;
+    white-space: nowrap;
 }
 
 .compare-table {
@@ -106,8 +121,29 @@
     overflow-wrap: anywhere;
 }
 
+.compare-table th.compare-group {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    border-left: 3px solid var(--control-border);
+}
+
+.compare-table th.compare-corner {
+    color: var(--ink-2);
+}
+
+.compare-table .compare-group-start {
+    border-left: 3px solid var(--control-border);
+}
+
 .compare-table tbody th[scope="row"] {
     min-width: 11rem;
+    background: var(--surface);
+}
+
+.compare-row-unit {
+    display: none;
+    font-weight: 400;
+    color: var(--ink-2);
 }
 
 .compare-head {
@@ -116,8 +152,12 @@
 }
 
 .compare-head-key {
-    color: var(--ink-2);
+    color: var(--ink);
     font-weight: 600;
+}
+
+.compare-level {
+    display: block;
 }
 
 .compare-head a,
@@ -134,14 +174,11 @@
     white-space: nowrap;
 }
 
-.compare-cell--differs {
-    border-left: 3px solid var(--control-border);
-}
-
 .compare-differs {
-    margin-left: var(--s-2);
+    display: block;
+    margin-top: var(--s-1);
     color: var(--ink-2);
-    font-weight: 600;
+    font-weight: 400;
 }
 
 .compare-absent {
@@ -162,9 +199,35 @@
 }
 
 @media (max-width: 40rem) {
-    .compare-head a {
+    .data-table-grid a,
+    .data-table-order a {
         display: inline-flex;
         align-items: center;
         min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* The first column stays in view while the records scroll past it; its unit sits under the label. */
+    .compare-table tbody th[scope="row"] {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        min-width: 0;
+        width: 8rem;
+        max-width: 8rem;
+    }
+
+    .compare-table thead th:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+    }
+
+    .compare-row-unit {
+        display: block;
+    }
+
+    .compare-unit-col {
+        display: none;
     }
 }

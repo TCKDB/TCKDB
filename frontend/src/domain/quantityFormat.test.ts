@@ -171,6 +171,11 @@ describe("formatQuantity / QUANTITY_SPECS", () => {
         }
     })
 
+    it("prints a deposited heat capacity point as stored, with J/mol·K", () => {
+        expect(formatQuantity("thermo_cp_j_mol_k", 38.7)).toEqual({ value: "38.7", unit: "J/mol·K" })
+        expect(formatQuantity("thermo_cp_j_mol_k", null)).toBeNull()
+    })
+
     it("formats the 0 K enthalpy and its uncertainty to 2 decimals", () => {
         expect(formatQuantity("thermo_enthalpy_formation_0k_kj_mol", -12.345)).toEqual({ value: "-12.35", unit: "kJ/mol" })
         expect(formatQuantity("thermo_enthalpy_formation_0k_uncertainty_kj_mol", 1.2)).toEqual({ value: "1.20", unit: "kJ/mol" })
