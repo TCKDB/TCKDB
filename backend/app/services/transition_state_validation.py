@@ -925,8 +925,8 @@ CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
     code=(E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH, E_NETWORK_STATE_ENERGY_SUM_MISMATCH),
     asserts=(
         "A stated energy agrees, within its printed precision, with the energy TCKDB stores "
-        "for the calculation(s) it cites, and an E0 that states no ``zpe_scale_factor`` is "
-        "not refused."
+        "for the calculation(s) it cites, and an E0 built from a frequency calculation's ZPE "
+        "that states no ``zpe_scale_factor`` is not refused."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,

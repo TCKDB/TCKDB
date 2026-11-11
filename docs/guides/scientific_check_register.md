@@ -276,7 +276,7 @@ Checks whose guarantee is narrower than their name suggests.
 **Enforced at.**
 
 - `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::evaluate_transition_state_frequency`
-- `_check_ts_reaction_coordinate_designated` and `_detect_transition_state_entry_hard_fail` (`backend/app/services/trust/rubrics.py`, `backend/app/services/trust/evaluator.py`) check at read time that a record with more than one imaginary mode carries the designation, without re-judging the frequencies.
+- `_check_ts_reaction_coordinate_designated` (`backend/app/services/trust/rubrics.py`) reports at read time whether a record with more than one imaginary mode carries the designation, without re-judging the frequencies.
 
 **Escape hatch.** Deposit no frequency evidence, or designate the reaction coordinate and give each other imaginary mode a disposition.
 
@@ -465,7 +465,7 @@ Checks whose guarantee is narrower than their name suggests.
 
 **Escape hatch.** Take every energy of a kind at one level of theory.
 
-### 24. A stated energy agrees, within its printed precision, with the energy TCKDB stores for the calculation(s) it cites, and an E0 that states no `zpe_scale_factor` is not refused.
+### 24. A stated energy agrees, within its printed precision, with the energy TCKDB stores for the calculation(s) it cites, and an E0 built from a frequency calculation's ZPE that states no `zpe_scale_factor` is not refused.
 
 | Field | Value |
 | --- | --- |

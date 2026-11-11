@@ -254,11 +254,9 @@ CHECK_TRANSITION_STATE_REACTION_COORDINATE = ScientificCheck(
         PythonCheck(evaluate_transition_state_frequency),
         DesignPosition(
             where=(
-                "``_check_ts_reaction_coordinate_designated`` and "
-                "``_detect_transition_state_entry_hard_fail`` "
-                "(``backend/app/services/trust/rubrics.py``, "
-                "``backend/app/services/trust/evaluator.py``) check at read time "
-                "that a record with more than one imaginary mode carries the designation, "
+                "``_check_ts_reaction_coordinate_designated`` "
+                "(``backend/app/services/trust/rubrics.py``) reports at read time "
+                "whether a record with more than one imaginary mode carries the designation, "
                 "without re-judging the frequencies."
             )
         ),
