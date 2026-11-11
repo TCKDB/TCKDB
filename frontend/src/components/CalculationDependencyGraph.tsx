@@ -106,20 +106,9 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * rather than re-computed) to place the subject row between the pill and
  * the ref line without a second, drifting copy of that arithmetic.
  *
- * Paint order inside the `<svg>` is ALL edge paths, then ALL edge labels,
- * then ALL nodes -- never one edge's path/label/rect interleaved with
- * the next's. MEASURED (post-review): with each edge rendered as its own
- * self-contained group (path, then its label, in DOM/array order), a
- * LATER edge's path painted on top of an visually EARLIER edge's label
- * wherever the two geometrically crossed (the `<path>` has no fill, but
- * is still opaque along its stroked line) -- e.g. a 3-child graph's
- * middle child's own connecting line crossing dead through another
- * child's label text. `domain/dependencyGraphLayout.ts`'s band/lane
- * placement keeps every DIFFERENT edge's path geometrically clear of
- * every OTHER edge's label rect (see that module's own tests); this
- * paint order is what ALSO keeps an edge's path from ever visually
- * covering its OWN label where the two deliberately meet (the label's
- * opaque background "punches a hole" in its own line at the bend).
+ * Paint order inside the `<svg>`: all edge paths, then all edge labels,
+ * then all nodes. Labels are placed clear of every edge line, their own
+ * included (see `domain/dependencyGraphLayout.ts`).
  */
 /** See `CalculationDependencyGraph`'s own docstring for what this answers
  * and why it lives inside the node rather than a caption above it. */
@@ -234,7 +223,13 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType, cent
                             height={edge.labelHeight}
                             className="dep-graph-edge-label-bg"
                         />
-                        <text x={edge.labelX} y={edge.labelY} className="dep-graph-edge-label-text" textAnchor="middle" dominantBaseline="middle">
+                        <text
+                            x={edge.labelAnchor === "start" ? edge.labelX - edge.labelWidth / 2 : edge.labelAnchor === "end" ? edge.labelX + edge.labelWidth / 2 : edge.labelX}
+                            y={edge.labelY}
+                            className="dep-graph-edge-label-text"
+                            textAnchor={edge.labelAnchor ?? "middle"}
+                            dominantBaseline="middle"
+                        >
                             {edge.label}
                         </text>
                     </g>
@@ -266,15 +261,8 @@ function DependencyGraphNode({ node, centreLinked, centreSubject }: {
     if (node.tier === "centre" && node.pill) {
         const { pill } = node
         const hasSubject = Boolean(centreSubject)
-        // The pill(+subject)+ref content block is `centreContentHeight
-        // (hasSubject)` tall regardless of the node's OWN height -- the
-        // narrow layout grows a centre node past that to fit staggered
-        // lane entries (`centreHeightFor`), but the content itself never
-        // grows to match. MEASURED (post-review, pre-subject-row): pinning
-        // the block to the box's TOP (`top + 10`) left a 64.6px gap below
-        // the ref line and only 10px above it on a 3-child, 680px narrow
-        // graph. `contentTop` re-centres the whole block in the node's
-        // actual height, so the gap splits evenly top and bottom instead.
+        // The pill(+subject)+ref block is `centreContentHeight(hasSubject)` tall; `contentTop` centres it
+        // in the node's actual height.
         const contentTop = top + (node.height - centreContentHeight(hasSubject)) / 2
         // Matches `domain/dependencyGraphLayout.ts`'s own `CENTRE_PAD_TOP`
         // (10) / `CENTRE_PILL_GAP` (8) / `CENTRE_REF_LINE_H` (24) /

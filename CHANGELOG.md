@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Dependency graph edges are continuous lines (Unreleased)
+
+- **Behaviour:** in the calculation dependency graph, edge labels no longer cover any part of a line, so every edge reads as one line from parent to child with its arrowhead at the child, in both the wide and the narrow layout.
+- **Schema and migration:** none. No new environment variable.
+
 ## Species names from PubChem (Unreleased)
 
 - **Behaviour:** two operator scripts load common and systematic names. `backend/scripts/names/fetch_pubchem_names.py` reads a species list (a JSON file, or the public species browse with `--from-api`, GET only), asks PubChem PUG REST for each InChIKey (only the key is sent; 4 requests a second at most, 10 s timeout, a bounded retry on 503, responses over 1 MB refused) and writes a review file, rewritten every 25 InChIKeys: one row per species and name (PubChem Title as `common`, IUPACName as `systematic`) with kind, CID, PubChem URL and retrieval time, plus a `skipped` section. Only a PubChem compound with one covalent unit and the species' charge is a candidate. An InChIKey is skipped when PubChem has no match or several candidate CIDs, when several species share it, when the SMILES has several components, when the lookup fails, or when a name fails the name rules (length, characters, no letter or digit). `backend/scripts/names/import_species_names.py` loads a reviewed file inside the API container: it reports only unless `--commit` is given, requires the species ref to exist, not be merged, still have the row's InChIKey and share it with no other live species, and writes `offline_import` names pointing at one shared `external_source` row (`PubChem Compound` / `rolling`), with the CID in `external_record_key` and the fetch time in `retrieved_at`. A name the species already has (live or retired, curated or imported) is skipped, so a re-run writes nothing new. Name search never calls PubChem. The steps are in `docs/deployment/production_checklist.md`. The name-search response is unchanged; showing the CID or a PubChem link there is not done. The versioned-names scan ignores SVG path data in frontend string literals.
