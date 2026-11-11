@@ -1432,7 +1432,8 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
             kind: "energy_ordering", passed: false, rationale: "r",
             compared_energies: [
                 { participant: "ts", energy_kind: "electronic", energy_hartree: -1, source_calculation_ref: "calc_e_ts" },
-                { participant: "reactant:0", energy_kind: "electronic", energy_hartree: -2, source_calculation_ref: "calc_e_r0" },
+                { participant: "reactant:1", energy_kind: "electronic", energy_hartree: -2, source_calculation_ref: "calc_e_r0" },
+                { participant: "product:2", energy_kind: "electronic", energy_hartree: -3, source_calculation_ref: "calc_e_p2" },
             ],
         },
     ]
@@ -1548,7 +1549,35 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         expect(rows[2]).toHaveTextContent("Did not pass")
         expect(within(rows[2]).getByRole("link", { name: "Energy of transition state" })).toHaveAttribute("href", "/calculations/calc_e_ts")
         expect(within(rows[2]).getByRole("link", { name: "Energy of reactant 1" })).toHaveAttribute("href", "/calculations/calc_e_r0")
-        expect(within(rows[2]).getAllByRole("link")).toHaveLength(2)
+        expect(within(rows[2]).getByRole("link", { name: "Energy of product 2" })).toHaveAttribute("href", "/calculations/calc_e_p2")
+        expect(within(rows[2]).getAllByRole("link")).toHaveLength(3)
+    })
+
+    it("checks table: links of one kind carry their calculation ref so their names differ", async () => {
+        withRecord({
+            validation: { irc: "present", imaginary_mode: "absent", energy_ordering: "absent" },
+            validation_evidence: [
+                { kind: "irc", passed: true, rationale: "r", reconstruction_calculation_ref: "calc_irc_a" },
+                { kind: "irc", passed: true, rationale: "r", reconstruction_calculation_ref: "calc_irc_b" },
+            ],
+        })
+        page()
+        const region = await screen.findByRole("region", { name: "Checks on this transition state" })
+        const row = within(region).getAllByRole("row")[2]
+        expect(within(row).getByRole("link", { name: "IRC calculation calc_irc_a" })).toHaveAttribute("href", "/calculations/calc_irc_a")
+        expect(within(row).getByRole("link", { name: "IRC calculation calc_irc_b" })).toHaveAttribute("href", "/calculations/calc_irc_b")
+    })
+
+    it("checks table: a token the response leaves out says the deployment does not serve it", async () => {
+        const record = mockRecord()
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: { ...record, validation: { irc: "absent" } } })))
+        page()
+        const region = await screen.findByRole("region", { name: "Checks on this transition state" })
+        const rows = within(region).getAllByRole("row").slice(1)
+        expect(rows[0]).toHaveTextContent("Not served by this deployment")
+        expect(rows[2]).toHaveTextContent("Not served by this deployment")
+        expect(rows[1]).toHaveTextContent("No check of this kind was deposited")
+        expect(rows[0]).not.toHaveTextContent("No check of this kind was deposited")
     })
 
     it("checks table: a check recorded without a calculation to name shows no link", async () => {
@@ -1572,6 +1601,8 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         page()
         const region = await screen.findByRole("region", { name: "Checks on this transition state" })
         const rows = within(region).getAllByRole("row").slice(1)
+        expect(rows[0]).toHaveTextContent("Not known")
+        expect(rows[0]).not.toHaveTextContent("Not read")
         expect(rows[0].querySelector("code")).toHaveTextContent("other_token")
         expect(rows[0]).toHaveTextContent("outcome not known to this page")
         expect(rows[1].querySelector("code")).toHaveTextContent("mystery_irc")

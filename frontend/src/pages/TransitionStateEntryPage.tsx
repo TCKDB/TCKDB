@@ -148,7 +148,7 @@ export default function TransitionStateEntryPage() {
     )
 }
 
-const CHECK_STATUS = { recorded: "Recorded", not_recorded: "Not recorded", unknown: "Not read" } as const
+const CHECK_STATUS = { recorded: "Recorded", not_recorded: "Not recorded", unknown: "Not known" } as const
 
 function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     const {

@@ -167,12 +167,6 @@ describe("trust and IRC pair, and the scrolling boxes", () => {
         }
     })
 
-    it("the mutation check: the old bare selector would fail the nowrap scope check", () => {
-        const old = ".tse-page .data-table th:first-child { white-space: nowrap; }"
-        const rules = [...old.matchAll(/([^{}]+)\{([^}]*)\}/g)]
-        expect(rules[0][1].trim()).not.toMatch(/\.tse-calc-scroll/)
-    })
-
     it("stacks the checks table below 40rem with the labels shown from data-label", () => {
         expect(stripped).toMatch(/@media \(max-width: 40rem\)[\s\S]*\.tse-checks-table td\[data-label\]::before\s*\{[^}]*content:\s*attr\(data-label\)/)
     })

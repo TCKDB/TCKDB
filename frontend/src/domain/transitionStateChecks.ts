@@ -27,14 +27,15 @@ const OUTCOMES: Readonly<Record<string, { recorded: boolean; outcome: string }>>
 }
 
 export const UNKNOWN_OUTCOME = "outcome not known to this page"
+export const NOT_SERVED_OUTCOME = "Not served by this deployment"
 
 function outcomeOf(token: unknown): Pick<CheckRow, "status" | "outcome" | "token"> {
     if (typeof token === "string" && Object.hasOwn(OUTCOMES, token)) {
         const known = OUTCOMES[token]
         return { status: known.recorded ? "recorded" : "not_recorded", outcome: known.outcome }
     }
-    // A missing token is a deployment that does not serve it, which is not a deposited check either.
-    if (token === undefined || token === null) return { status: "not_recorded", outcome: OUTCOMES.absent.outcome }
+    // A missing token is a deployment that does not serve it, which says nothing about what was deposited.
+    if (token === undefined || token === null) return { status: "not_recorded", outcome: NOT_SERVED_OUTCOME }
     return { status: "unknown", outcome: UNKNOWN_OUTCOME, token: String(token) }
 }
 
@@ -43,12 +44,20 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
 function participantWords(participant: string): string {
     if (participant === "ts") return "transition state"
     const match = /^(reactant|product):(\d+)$/.exec(participant)
-    return match ? `${match[1]} ${Number(match[2]) + 1}` : "a compared point"
+    // The server numbers its participants from 1.
+    return match ? `${match[1]} ${Number(match[2])}` : "a compared point"
+}
+
+/** Links whose text repeats get their calculation ref added, so no two links share a name. */
+function distinctNames(links: CheckLink[]): CheckLink[] {
+    const counts = new Map<string, number>()
+    for (const link of links) counts.set(link.text, (counts.get(link.text) ?? 0) + 1)
+    return links.map((link) => ((counts.get(link.text) ?? 0) > 1 ? { ...link, text: `${link.text} ${link.to.split("/").pop()}` } : link))
 }
 
 function reconstructionLinks(records: ValidationEvidence[], text: string): CheckLink[] {
     const refs = [...new Set(records.flatMap((record) => (record.reconstruction_calculation_ref ? [record.reconstruction_calculation_ref] : [])))]
-    return refs.map((ref) => ({ to: `/calculations/${ref}`, text }))
+    return distinctNames(refs.map((ref) => ({ to: `/calculations/${ref}`, text })))
 }
 
 function comparedEnergyLinks(records: ValidationEvidence[]): CheckLink[] {
@@ -62,7 +71,7 @@ function comparedEnergyLinks(records: ValidationEvidence[]): CheckLink[] {
             links.push({ to: `/calculations/${ref}`, text: `Energy of ${participantWords(energy.participant)}` })
         }
     }
-    return links
+    return distinctNames(links)
 }
 
 /**
