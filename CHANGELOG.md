@@ -25,7 +25,7 @@ dataset must never require a code release.
 ## The scientific check register is slimmed (Unreleased)
 
 - **Behaviour:** the scientific check register lists each check's code, rule, tier, enforcement and repair; justification text was removed. The `adr` and `tier_rationale` fields and the enforcement `note` text are gone from the register and its generated document, and the producer contract quotes the shorter text. Checks and entry numbers are unchanged.
-- **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-schemas` 0.173.2.
+- **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-schemas` 0.174.1.
 
 ## Decision narrative removed from the API, workflows and chemistry modules (Unreleased)
 

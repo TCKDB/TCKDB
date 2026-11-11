@@ -16,7 +16,7 @@
       "1": "e358f9d314fc9932a3a041cc928e44dbee95e5b694872a6dbaefcfac0bbf3969"
     },
     "computed_transition_state": {
-      "2": "786ed0e8c129a1537b9da80e2c31fc9d828ce260b1ab3385396d2301238aa148"
+      "2": "412051f63c201522c5ada766c5fc97e4d6880b4a9161d1f3c52fc1589ec5c0f5"
     },
     "computed_transport": {
       "1": "13dab1e06c1df4ba078d326f530d3f51a6a790aca3612b319924cde9f2eab786"
@@ -467,6 +467,11 @@
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
       "reason": "snapshot_defaults.UNCHANGED_DEFAULTS gains thermo.thermodynamic_target_declared_by at its default; no existing row's snapshot or digest changes and no check or grading decides differently"
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "Method-family classifier and method-name key moved into tckdb_schemas; table and rules unchanged. MethodClassFilter.keys and .matches read CLASSIFICATION directly, the same single-version object the registry held."
     }
   ]
 }
