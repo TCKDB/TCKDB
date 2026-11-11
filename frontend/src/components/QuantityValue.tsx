@@ -1,4 +1,13 @@
+import type { ReactNode } from "react"
 import { fillValue, type FillableValue } from "../domain/quantityFormat"
+
+/** A rounded number with the stored value as machine-readable value and hover title; a number never rounded stays bare. */
+export function Stored({ full, children }: { full?: string; children: ReactNode }) {
+    return full === undefined ? <>{children}</> : <data value={full} title={full}>{children}</data>
+}
+
+/** The line under a table or section whose numbers are rounded. */
+export const ROUNDED_NOTE = "Shown to 6 significant figures; hover a number for the stored value."
 
 /**
  * Renders whatever `fillValue` (`../domain/quantityFormat.ts`) decided a
@@ -25,13 +34,15 @@ export function QuantityValue({ value }: { value: FillableValue }) {
     if (filled.kind === "quantity") {
         return (
             <>
-                {filled.value}
-                {filled.exponent && (
-                    <>
-                        {" × 10"}
-                        <sup>{filled.exponent}</sup>
-                    </>
-                )}
+                <Stored full={filled.full}>
+                    {filled.value}
+                    {filled.exponent && (
+                        <>
+                            {" × 10"}
+                            <sup>{filled.exponent}</sup>
+                        </>
+                    )}
+                </Stored>
                 {filled.unit && <span className="unit"> {filled.unit}</span>}
             </>
         )

@@ -61,13 +61,14 @@
 }
 
 .energy-profile-zero {
-    stroke: var(--divider);
+    stroke: var(--divider-strong);
+    stroke-width: 1.5;
 }
 
 .energy-profile-tick,
 .energy-profile-axis-title {
     fill: var(--muted);
-    font-size: 14px;
+    font-size: 17px;
 }
 
 .energy-profile-bar {

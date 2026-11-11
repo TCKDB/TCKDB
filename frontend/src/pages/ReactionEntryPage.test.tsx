@@ -649,6 +649,26 @@ describe("ReactionEntryPage -- individual facts are wired, not hard-coded (post-
     })
 })
 
+describe("ReactionEntryPage -- rounded temperature ranges", () => {
+    it("shows the network solve range and the kinetics record range to 6 significant figures", async () => {
+        const record = kineticsRecordFixture(undefined)
+        record.temperature_coverage = { record_min_k: 300.0000001, record_max_k: 3000.0000002 }
+        handleFull(mockFull({
+            kinetics: [record],
+            networks: [{
+                network_ref: "net_rounded1", name: "hydrazine", solve_temperature_min_k: 111.0000001, solve_temperature_max_k: 222,
+                solve_pressure_min_bar: 0.5, solve_pressure_max_bar: 333, channel_count: 1, review: { status: "not_reviewed" },
+            }],
+        }))
+        const { container } = page()
+        await screen.findByText("net_rounded1")
+        const row = Array.from(container.querySelectorAll("tr")).find((tr) => tr.textContent?.includes("net_rounded1"))!
+        expect(row.querySelector('td[data-label="Solve T range"]')?.textContent).toBe("111–222 K")
+        expect(container.textContent).toContain("300–3000 K")
+        expect(container.textContent).not.toContain("300.0000001")
+    })
+})
+
 describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table formatting", () => {
     // Round-2 review finding: A=9444750000 (the live `rxe_snamm...` route)
     // rendered as a bare 10-digit integer -- fixed via `formatArrheniusValue`.
@@ -1298,7 +1318,10 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
 
     it("draws the transition state's picture from a geometries-only read, naming the entry, and leaks no depositor text from that read", async () => {
         const requested: string[] = []
-        handleFull(mockFull())
+        const base = mockFull()
+        const planted = plantSentinels(mockFull({ transition_states: [{ ...base.transition_states[0], label: "x", note: "x" }] }), ["label", "note"])
+        expectPlanted(planted)
+        handleFull(planted.value)
         handleSideReads(profileRead)
         server.use(
             http.get("/api/v1/scientific/transition-state-entries/:ref", ({ request }) => {

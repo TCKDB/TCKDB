@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom"
 import type { ReactionFullCalculationEvidence, ReactionKineticsRecord, ReactionTransitionStateInFull } from "../api/reactionEntryApi"
+import { formatQuantity } from "../domain/quantityFormat"
 import { formatArrheniusValue } from "../domain/kineticsTable"
 import { ArrheniusChart } from "./ArrheniusChart"
 import { EvidenceChecklist } from "./EvidenceChecklist"
@@ -178,7 +179,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
     }))
 
     const tRange = record.temperature_coverage?.record_min_k != null && record.temperature_coverage?.record_max_k != null
-        ? `${record.temperature_coverage.record_min_k}–${record.temperature_coverage.record_max_k} K`
+        ? `${formatQuantity("thermo_temperature_k", record.temperature_coverage.record_min_k)?.value}–${formatQuantity("thermo_temperature_k", record.temperature_coverage.record_max_k)?.value} K`
         : null
 
     const unitLabel = aUnitLabel(record.parameters.A_units)

@@ -371,6 +371,65 @@ describe("EntryThermoSection", () => {
         }
     })
 
+    it("shows the evaluated Cp to 6 significant figures with the stored value as its title", async () => {
+        const records = mockRecords()
+        const withPoints = { ...records[0], model_kind: "points", points: [{ temperature_k: 300, cp_j_mol_k: 38.92638673392166, h_kj_mol: 0, s_j_mol_k: 240.1, g_kj_mol: -71.5 }] }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [withPoints, records[1], records[2]] }))))
+        page()
+        const alphaCard = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
+        fireEvent.click(within(alphaCard).getByText(/temperature point/))
+        const shown = within(alphaCard).getByText("38.9264")
+        expect(shown.getAttribute("title")).toBe("38.92638673392166")
+    })
+
+    it("shows every evaluated-point number through one rule, and a note only when one is rounded", async () => {
+        const records = mockRecords()
+        const withPoints = {
+            ...records[0], model_kind: "points",
+            points: [{ temperature_k: 298.1500000001, cp_j_mol_k: 33.6, h_kj_mol: 12.3456789, s_j_mol_k: 240.123456789, g_kj_mol: -71.123456789 }],
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [withPoints, records[1], records[2]] }))))
+        page()
+        const alphaCard = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
+        fireEvent.click(within(alphaCard).getByText(/temperature point/))
+        const table = within(alphaCard).getByRole("table", { name: /Evaluated thermo points/ })
+        const cell = (label: string) => table.querySelector(`td[data-label="${label}"] data`)
+        expect(cell("T (K)")).toHaveAttribute("title", "298.1500000001")
+        expect(cell("T (K)")).toHaveTextContent("298.15")
+        expect(cell("H (kJ/mol)")).toHaveAttribute("title", "12.3456789")
+        expect(cell("H (kJ/mol)")).toHaveTextContent("12.3457")
+        expect(cell("S (J/mol·K)")).toHaveAttribute("title", "240.123456789")
+        expect(cell("G (kJ/mol)")).toHaveAttribute("title", "-71.123456789")
+        expect(cell("Cp (J/mol·K)")).toBeNull()
+        expect(within(alphaCard).getAllByText("Shown to 6 significant figures; hover a number for the stored value.")).toHaveLength(1)
+    })
+
+    it("shows no note when no evaluated-point number is rounded", async () => {
+        const records = mockRecords()
+        const withPoints = { ...records[0], model_kind: "points", points: [{ temperature_k: 300, cp_j_mol_k: 33.6, h_kj_mol: 0, s_j_mol_k: 240.1, g_kj_mol: null }] }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [withPoints, records[1], records[2]] }))))
+        page()
+        const alphaCard = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
+        fireEvent.click(within(alphaCard).getByText(/temperature point/))
+        expect(within(alphaCard).queryByText(/Shown to 6 significant figures/)).not.toBeInTheDocument()
+    })
+
+    it("rounds a NASA end, a coverage bound and the extrapolation distance, keeping the stored value as title", async () => {
+        const records = mockRecords()
+        const rounded = {
+            ...records[0],
+            nasa: { ...records[0].nasa, t_low: 100.0000001 },
+            temperature_coverage: { record_min_k: 100.0000002, record_max_k: 3000, requested_min_k: 90, requested_max_k: 3100, covers_requested_range: false, extrapolation_distance_k: 10.0000003 },
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [rounded, records[1], records[2]] }))))
+        page()
+        const alphaCard = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
+        expect(within(alphaCard).getByText("T low (K)").nextElementSibling?.querySelector("data")).toHaveAttribute("title", "100.0000001")
+        expect(within(alphaCard).getByText("Record range (K)").nextElementSibling?.querySelector("data")).toHaveAttribute("title", "100.0000002")
+        expect(within(alphaCard).getByText("Extrapolation distance (K)").nextElementSibling?.querySelector("data")).toHaveAttribute("title", "10.0000003")
+        expect(within(alphaCard).getByText("Requested range (K)").nextElementSibling).toHaveTextContent("90–3100")
+    })
+
     it("binds NASA-7's T-low and T-high scalars to their own labelled row — never swapped", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()

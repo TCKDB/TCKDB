@@ -12,6 +12,7 @@ import type { NetworkChannel, NetworkFullRecord, ReactionEntryLite } from "../ap
 import { loadNetworkEntry } from "../api/networkEntryApi"
 import { Disclosure } from "../components/Disclosure"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
+import { QuantityValue } from "../components/QuantityValue"
 import { NetworkDiagram } from "../components/NetworkDiagram"
 import { NetworkKtpChart } from "../components/NetworkKtpChart"
 import { PageShell } from "../components/PageShell"
@@ -19,6 +20,7 @@ import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { ReviewNote } from "../components/ReviewNote"
+import { formatQuantity } from "../domain/quantityFormat"
 import { computeSpeciesEnergyCoverage, solveEnergySourceSentence, STATE_ENERGY_ORDER_NOTE } from "../domain/networkEnergyCoverage"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
@@ -121,7 +123,7 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                                         <dt>Solve temperature range</dt>
                                         <dd>
                                             {network.solve_temperature_min_k != null && network.solve_temperature_max_k != null
-                                                ? <code className="data">{`${network.solve_temperature_min_k}–${network.solve_temperature_max_k} K`}</code>
+                                                ? <code className="data"><QuantityValue value={formatQuantity("thermo_temperature_k", network.solve_temperature_min_k, null)} />–<QuantityValue value={formatQuantity("thermo_temperature_k", network.solve_temperature_max_k, null)} /> K</code>
                                                 : <span className="record-identity-absent-inline">not recorded</span>}
                                         </dd>
                                     </div>

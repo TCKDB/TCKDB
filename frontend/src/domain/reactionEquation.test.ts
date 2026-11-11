@@ -121,6 +121,12 @@ describe("equationNeedsStructure", () => {
     it("is true when two distinct entries share a formula", () => {
         expect(equationNeedsStructure([p("a", "C4H8", "C/C=C\\C")], [p("b", "C4H8", "C/C=C/C")])).toBe(true)
     })
+    it("is true when only the shared-formula rule fires: ethanol and OH give dimethyl ether and water", () => {
+        expect(equationNeedsStructure([p("a", "C2H6O", "CCO"), p("b", "HO", "[OH]", 1)], [p("c", "C2H6O", "COC"), p("d", "H2O", "O", 1)])).toBe(true)
+    })
+    it("is true when two isomers sit on the same side", () => {
+        expect(equationNeedsStructure([p("a", "C2H6O", "CCO"), p("b", "C2H6O", "COC", 1)], [p("c", "C2H4", "C=C"), p("d", "H2O", "O", 1)])).toBe(true)
+    })
     it("is true when both sides read the same, even for one entry", () => {
         expect(equationNeedsStructure([p("a", "H2O", "O")], [p("a", "H2O", "O")])).toBe(true)
     })

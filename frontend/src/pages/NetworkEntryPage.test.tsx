@@ -272,6 +272,15 @@ describe("NetworkEntryPage -- review note", () => {
         expect(screen.getByText(SOLVE_REVIEW_NOTE)).toBeVisible()
     })
 
+    it("shows the solve temperature range to 6 significant figures with the stored value as title", async () => {
+        handleEverything({ record: { network: { ...networkWithReview({ status: "not_reviewed" }), solve_temperature_min_k: 300.0000001 } } })
+        page()
+        await screen.findByRole("heading", { name: "Pressure-dependent network" })
+        const range = (await screen.findByText("Solve temperature range")).nextElementSibling as HTMLElement
+        expect(range).toHaveTextContent("300–2000 K")
+        expect(range.querySelector("data")).toHaveAttribute("title", "300.0000001")
+    })
+
     it("shows the network's own review note independently of the solve's", async () => {
         const user = userEvent.setup()
         handleEverything({ record: { network: networkWithReview({ status: "approved", note: NETWORK_REVIEW_NOTE } ) } })

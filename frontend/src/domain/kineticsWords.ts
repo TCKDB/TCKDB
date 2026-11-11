@@ -2,7 +2,7 @@
 const MODEL_KIND_WORDS: Readonly<Record<string, string>> = {
     arrhenius: "Arrhenius",
     modified_arrhenius: "Modified Arrhenius",
-    multi_arrhenius: "Sum of Arrhenius terms",
+    multi_arrhenius: "Sum of modified Arrhenius terms",
     lindemann: "Lindemann falloff",
     troe: "Troe falloff",
     sri: "SRI falloff",

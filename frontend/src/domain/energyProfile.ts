@@ -89,7 +89,7 @@ export function profileScale(values: readonly number[]): ProfileScale {
     const high = Math.max(...values)
     const span = Math.max(high - low, MIN_SPAN_KJ_MOL)
     const extra = (span - (high - low)) / 2
-    const step = niceStep((span * 1.1) / 3)
+    const step = niceStep(span / 4)
     const min = Math.floor((low - extra - span * 0.05) / step) * step
     const max = Math.ceil((high + extra + span * 0.05) / step) * step
     const ticks: number[] = []
