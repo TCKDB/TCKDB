@@ -158,4 +158,22 @@ describe("trust and IRC pair, and the scrolling boxes", () => {
     it("keeps the first-column nowrap off the checks table, whose first column is a sentence", () => {
         expect(stripped).not.toMatch(/\.tse-checks-table[^{]*:first-child/)
     })
+
+    it("every selector of the nowrap rule sits under .tse-calc-scroll", () => {
+        const rules = [...stripped.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(([, , body]) => /white-space:\s*nowrap/.test(body))
+        expect(rules.length, "no nowrap rule found").toBeGreaterThan(0)
+        for (const [, selectors] of rules) {
+            for (const selector of selectors.split(",")) expect(selector.trim(), selector).toMatch(/\.tse-calc-scroll/)
+        }
+    })
+
+    it("the mutation check: the old bare selector would fail the nowrap scope check", () => {
+        const old = ".tse-page .data-table th:first-child { white-space: nowrap; }"
+        const rules = [...old.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+        expect(rules[0][1].trim()).not.toMatch(/\.tse-calc-scroll/)
+    })
+
+    it("stacks the checks table below 40rem with the labels shown from data-label", () => {
+        expect(stripped).toMatch(/@media \(max-width: 40rem\)[\s\S]*\.tse-checks-table td\[data-label\]::before\s*\{[^}]*content:\s*attr\(data-label\)/)
+    })
 })

@@ -24,7 +24,7 @@ dataset must never require a code release.
 
 ## Transition state page with its energy hill (Unreleased)
 
-- **Behaviour:** the transition state entry page is titled "Transition state of <equation>" with breadcrumbs, a review word and a lede, and shows the energy hill narrowed to this entry with its peak marked (or why there is none), the 3D picture, the imaginary frequency with a glossary term and a link to its calculation, a checks table (one imaginary frequency, IRC, energy ordering, each recorded or not recorded with its outcome), and trust and IRC side by side with what each asks. The depositor's note appears only as a depositor note. The tab title is "<equation> · Transition state · TCKDB".
+- **Behaviour:** the transition state entry page is titled "Transition state of <equation>" with breadcrumbs, a review word and a lede, and shows the energy hill narrowed to this entry with its peak marked (or why there is none), the 3D picture, the imaginary frequency (magnitude with an i, stored sign on hover) with a glossary term and a link to its calculation, a checks table (one imaginary frequency, IRC, energy ordering, each recorded or not recorded with its outcome and linked to the calculations its own record names), and trust and IRC side by side with what each asks. The depositor's note appears only as a depositor note. The tab title is "<equation> · Transition state · TCKDB".
 - **Schema and migration:** none. No new environment variable.
 
 ## Reaction pages with the energy profile (Unreleased)

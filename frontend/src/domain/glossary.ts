@@ -73,7 +73,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     },
     "imaginary-frequency": {
         term: "Imaginary frequency",
-        definition: "The one motion that carries a transition state downhill, toward the reactants one way and the products the other. It is reported as a negative number.",
+        definition: "The one motion that carries a transition state downhill, toward the reactants one way and the products the other. Programs print it negative or with an i; TCKDB keeps the depositor's sign.",
     },
     "energy-units": {
         term: "Energy units",

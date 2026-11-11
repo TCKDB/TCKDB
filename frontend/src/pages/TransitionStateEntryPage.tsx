@@ -30,7 +30,8 @@ import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import type { TransitionStateIdentity } from "../domain/recordIdentity"
 import { equationNeedsStructure, equationText } from "../domain/reactionEquation"
 import { reviewPillClass } from "../domain/reviewPillFormat"
-import { transitionStateChecks } from "../domain/transitionStateChecks"
+import { transitionStateChecks, UNKNOWN_OUTCOME } from "../domain/transitionStateChecks"
+import { stageGeometryRef } from "../domain/transitionStateStage"
 import { transitionStateEntryLede } from "../domain/transitionStateLede"
 import { useLoaded } from "../hooks/useLoaded"
 import { useScientificRecord } from "../hooks/useScientificRecord"
@@ -147,6 +148,8 @@ export default function TransitionStateEntryPage() {
     )
 }
 
+const CHECK_STATUS = { recorded: "Recorded", not_recorded: "Not recorded", unknown: "Not read" } as const
+
 function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     const {
         transition_state_entry: entry,
@@ -183,7 +186,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     const calculationsAvailability = sectionAvailability(record.calculations)
     const calculations = sortCalculationsByStage(record.calculations ?? [])
     const ircCalc = calculations.find((calc) => calc.type === "irc") ?? null
-    const checks = transitionStateChecks(record, ircCalc)
+    const checks = transitionStateChecks(record)
 
     const geometriesAvailability = sectionAvailability(record.geometries)
     // One geometry can be linked from several calculations; rows are deduplicated by ref, first in output order winning.
@@ -285,7 +288,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
 
                 <section className="ledger-section" aria-labelledby="shape-heading">
                     <SectionHeading id="shape-heading" kicker="Its 3D structure">Shape</SectionHeading>
-                    <TransitionStateStage transitionStateEntryRef={entry.transition_state_entry_ref} />
+                    <TransitionStateStage transitionStateEntryRef={entry.transition_state_entry_ref} geometryRef={stageGeometryRef(record)} />
                 </section>
 
                 <section className="ledger-section" aria-labelledby="imaginary-heading">
@@ -314,13 +317,15 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                 {checks.map((check) => (
                                     <tr key={check.key}>
                                         <th scope="row">{check.label}</th>
-                                        <td data-label="Status">{check.recorded ? "Recorded" : "Not recorded"}</td>
-                                        <td data-label="Outcome">{check.outcome}{check.note && <span className="tse-check-note">{check.note}</span>}</td>
+                                        <td data-label="Status">{CHECK_STATUS[check.status]}</td>
+                                        <td data-label="Outcome">
+                                            {check.token !== undefined && <><code className="t-preserve-case">{check.token}</code>{": "}</>}
+                                            {check.outcome}
+                                            {check.note && <span className="tse-check-note">{check.note}</span>}
+                                        </td>
                                         <td data-label="Evidence">
-                                            {check.evidence
-                                                ? (check.evidence.to.startsWith("#")
-                                                    ? <a href={check.evidence.to}>{check.evidence.text}</a>
-                                                    : <Link to={check.evidence.to}>{check.evidence.text}</Link>)
+                                            {check.evidence.length > 0
+                                                ? <ul className="tse-evidence-links">{check.evidence.map((link) => <li key={link.to}><Link to={link.to}>{link.text}</Link></li>)}</ul>
                                                 : <span className="tse-absent">none to link</span>}
                                         </td>
                                     </tr>
@@ -335,7 +340,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                     <div className="tse-pair">
                         <section className="tse-pair-card" aria-labelledby="trust-card-heading">
                             <h3 className="t-heading-2" id="trust-card-heading">Trust</h3>
-                            <p className="note">Asks whether the deposited results pass TCKDB&apos;s fixed checks for a saddle point.</p>
+                            <p className="note">Asks how much of the evidence TCKDB expects for a saddle point was deposited, by a fixed list of checks.</p>
                             {trust ? (
                                 <>
                                     <p>
@@ -610,9 +615,11 @@ function SaddlePointStatement({ saddlePoint, evidence }: {
         return <p className="tse-saddle-point">No frequency calculation deposited for this entry.</p>
     }
     const lotText = saddlePoint.level_of_theory ? <LevelOfTheoryLink levelOfTheory={saddlePoint.level_of_theory} /> : "level of theory not recorded"
-    const quantity = formatQuantity("ts_imaginary_frequency_cm1", saddlePoint.imag_freq_cm1)
-    const freq = quantity
-        ? <ValueLink value={quantity.value} unit={quantity.unit ?? undefined} full={quantity.full} to={`/calculations/${saddlePoint.calculation_ref}`} />
+    // Programs print the mode negative or with an i; TCKDB keeps the depositor's sign, so the magnitude is shown with an i.
+    const stored = saddlePoint.imag_freq_cm1
+    const quantity = formatQuantity("ts_imaginary_frequency_cm1", stored == null ? null : Math.abs(stored))
+    const freq = quantity && stored != null
+        ? <ValueLink value={`${quantity.value}i`} unit={quantity.unit ?? undefined} full={`stored as ${String(stored).replace("-", "\u2212")}`} to={`/calculations/${saddlePoint.calculation_ref}`} />
         : null
 
     let verdict: ReactNode
@@ -758,6 +765,9 @@ function IrcStatus({ validation, evidence, ircCalc, forwardPointCount, reversePo
     }
     if (validation.irc === "failed") {
         return <p><strong>IRC validation failed</strong> — a structured evidence record was deposited for this entry, but it did not pass.</p>
+    }
+    if (validation.irc !== "absent") {
+        return <p>IRC validation record: <code className="t-preserve-case">{validation.irc}</code> — {UNKNOWN_OUTCOME}.</p>
     }
     if (!evidence.has_irc) {
         return <p className="empty-projection">No IRC calculation was deposited for this entry.</p>

@@ -370,8 +370,12 @@ export async function loadReactionEntry(
 }
 
 /** The entry and its participating species only (`include=species`), for naming a reaction from a page that is not its own. */
-export async function loadReactionEntryParticipants(ref: string, signal?: AbortSignal): Promise<Pick<ReactionFullRecord, "reaction_entry" | "species">> {
-    const payload = await fetchFull(ref, ["species"], signal)
+export async function loadReactionEntryParticipants(
+    ref: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<Pick<ReactionFullRecord, "reaction_entry" | "species">> {
+    const payload = await fetchFull(ref, ["species"], signal, onRateLimited)
     return parseScientificResponse(reactionFullResponseSchema.pick({ reaction_entry: true, species: true }), payload, "reaction entry")
 }
 

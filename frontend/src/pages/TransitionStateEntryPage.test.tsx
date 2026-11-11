@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, render, screen, within, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
-import TransitionStateEntryPage from "./TransitionStateEntryPage"
+import TransitionStateEntryPage, { CALCULATION_ROW_ORDER_NOTE } from "./TransitionStateEntryPage"
 import { bySummaryText } from "../test/disclosureQueries"
 import { ADVERSARIAL, expectDepositorTextOnlyInNotes, expectNoAdversarialText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 import { rankingWords, textOf } from "../test/rankingWords"
@@ -22,6 +22,7 @@ const defaultSiblingsHandler = http.get(
     () => HttpResponse.json({ records: [] }),
 )
 
+const DEFINITION_TEXT = "each molecule's lowest computed energy at this level, from this program"
 const REACTION_ENTRY_REF = "rxe_snamm2m4daoyiw6ljc3cvmfabm"
 
 function participant(ref: string, smiles: string, formula: string, index: number) {
@@ -63,7 +64,7 @@ function profileFor(tse: string, kj: number) {
         energy_types: ["single_point"],
         versions: ["16"],
         energy_kind: "electronic",
-        definition: "each molecule's lowest computed energy at this level, from this program",
+        definition: DEFINITION_TEXT,
         reactants: [{ species_entry_ref: "spe_ch4", count: 1, ...point("calc_ra", -40.1) }, { species_entry_ref: "spe_oh", count: 1, ...point("calc_rb", -75.2) }],
         transition_state: { transition_state_entry_ref: tse, ...point(`calc_ts_${tse}`, -115.2) },
         products: [{ species_entry_ref: "spe_ch3", count: 1, ...point("calc_pa", -39.5) }, { species_entry_ref: "spe_h2o", count: 1, ...point("calc_pb", -76.3) }],
@@ -219,7 +220,7 @@ describe("TransitionStateEntryPage", () => {
 
     it("leads with the reaction equation as the h1, and never shows a SMILES row", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, ({ request }) => {
-            expect(new URL(request.url).searchParams.getAll("include")).toEqual(["calculations", "geometries", "review", "trust"])
+            expect(new URL(request.url).searchParams.getAll("include")).toEqual(["calculations", "geometries", "review", "trust", "validation_evidence"])
             return HttpResponse.json({ record: mockRecord() })
         }))
 
@@ -314,7 +315,9 @@ describe("TransitionStateEntryPage", () => {
         const statement = document.querySelector(".tse-saddle-point") as HTMLElement
         expect(statement).not.toBeNull()
         expect(statement).toHaveTextContent("1 imaginary mode")
-        expect(statement).toHaveTextContent("-768.67")
+        expect(statement).toHaveTextContent("768.67i")
+        expect(statement).not.toHaveTextContent("-768.67")
+        expect(statement.querySelector("data")).toHaveAttribute("title", "stored as \u2212768.67")
         expect(statement).toHaveTextContent("b3lyp/def2tzvp")
         expect(within(statement).getByRole("link", { name: "calc_k4snenouw4m6zbmbzyvqrmn2om" }))
             .toHaveAttribute("href", "/calculations/calc_k4snenouw4m6zbmbzyvqrmn2om")
@@ -1411,10 +1414,28 @@ describe("TransitionStateEntryPage -- no depositor-typed text (owner decision 20
     })
 })
 
+const DEFINITION = "each molecule's lowest computed energy at this level, from this program"
+
+/** Page text with only the two exact served sentences that name a ranking word to deny it removed. */
+function withoutServedWording(text: string): string {
+    return text.replace(DEFINITION, "").replace(CALCULATION_ROW_ORDER_NOTE, "")
+}
+
 describe("TransitionStateEntryPage -- the redesigned page", () => {
     function withRecord(overrides: Record<string, unknown> = {}) {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: mockRecord(overrides) })))
     }
+    const EVIDENCE = [
+        { kind: "imaginary_mode", passed: true, rationale: "r", reconstruction_calculation_ref: "calc_freq_ev" },
+        { kind: "irc", passed: true, rationale: "r", reconstruction_calculation_ref: "calc_irc_ev" },
+        {
+            kind: "energy_ordering", passed: false, rationale: "r",
+            compared_energies: [
+                { participant: "ts", energy_kind: "electronic", energy_hartree: -1, source_calculation_ref: "calc_e_ts" },
+                { participant: "reactant:0", energy_kind: "electronic", energy_hartree: -2, source_calculation_ref: "calc_e_r0" },
+            ],
+        },
+    ]
     const SADDLE = {
         n_imag: 1,
         imag_freq_cm1: -768.67,
@@ -1477,9 +1498,12 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         }))))
         page()
         expect(await screen.findByText("No complete energy profile is available for this transition state.")).toBeVisible()
-        expect(screen.getByText(/Why there is no profile at some levels/)).toBeVisible()
-        const list = screen.getByText(/Why there is no profile at some levels/).parentElement!
-        expect(list).toHaveTextContent(ENTRY_REF)
+        expect(screen.queryByText(/at some levels/)).toBeNull()
+        const list = screen.getByRole("heading", { name: "Why there is no profile" }).parentElement!
+        expect(list).toHaveTextContent("wb97xd/def2tzvp")
+        expect(list).toHaveTextContent("Not every product has an energy")
+        expect(list).not.toHaveTextContent(ENTRY_REF)
+        expect(list).not.toHaveTextContent("not reviewed")
         expect(list).not.toHaveTextContent("tse_sibling")
         expect(screen.queryByRole("group", { name: /Energy relative to the reactants/ })).toBeNull()
     })
@@ -1507,6 +1531,7 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         withRecord({
             saddle_point: SADDLE,
             validation: { irc: "present", imaginary_mode: "present", energy_ordering: "failed" },
+            validation_evidence: EVIDENCE,
         })
         page()
         const region = await screen.findByRole("region", { name: "Checks on this transition state" })
@@ -1515,13 +1540,148 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         expect(rows[0]).toHaveTextContent("One imaginary frequency")
         expect(rows[0]).toHaveTextContent("Recorded")
         expect(rows[0]).toHaveTextContent("Passed")
-        expect(within(rows[0]).getByRole("link", { name: "Frequency calculation" })).toHaveAttribute("href", "/calculations/calc_freq1")
+        expect(within(rows[0]).getByRole("link", { name: "Frequency calculation" })).toHaveAttribute("href", "/calculations/calc_freq_ev")
         expect(rows[1]).toHaveTextContent("IRC connects reactants and products")
         expect(rows[1]).toHaveTextContent("Passed")
-        expect(within(rows[1]).getByRole("link", { name: "IRC calculation" })).toHaveAttribute("href", "/calculations/calc_heds3dt3dsqxmqkcchibvbtwi4")
+        expect(within(rows[1]).getByRole("link", { name: "IRC calculation" })).toHaveAttribute("href", "/calculations/calc_irc_ev")
         expect(rows[2]).toHaveTextContent("Energy ordering (transition state above both sides)")
         expect(rows[2]).toHaveTextContent("Did not pass")
-        expect(within(rows[2]).getByRole("link", { name: "Energy hill on this page" })).toHaveAttribute("href", "#energy-heading")
+        expect(within(rows[2]).getByRole("link", { name: "Energy of transition state" })).toHaveAttribute("href", "/calculations/calc_e_ts")
+        expect(within(rows[2]).getByRole("link", { name: "Energy of reactant 1" })).toHaveAttribute("href", "/calculations/calc_e_r0")
+        expect(within(rows[2]).getAllByRole("link")).toHaveLength(2)
+    })
+
+    it("checks table: a check recorded without a calculation to name shows no link", async () => {
+        withRecord({
+            validation: { irc: "present", imaginary_mode: "absent", energy_ordering: "absent" },
+            validation_evidence: [{ kind: "irc", passed: true, rationale: "r", reconstruction_calculation_ref: null }],
+        })
+        page()
+        const region = await screen.findByRole("region", { name: "Checks on this transition state" })
+        const rows = within(region).getAllByRole("row").slice(1)
+        expect(rows[1]).toHaveTextContent("Recorded")
+        expect(within(rows[1]).queryByRole("link")).toBeNull()
+        expect(rows[1]).toHaveTextContent("none to link")
+    })
+
+    it("checks table: a token this page was not taught shows as code with its own sentence, and links nothing", async () => {
+        withRecord({
+            validation: { irc: "mystery_irc", imaginary_mode: "other_token", energy_ordering: "absent" },
+            validation_evidence: EVIDENCE,
+        })
+        page()
+        const region = await screen.findByRole("region", { name: "Checks on this transition state" })
+        const rows = within(region).getAllByRole("row").slice(1)
+        expect(rows[0].querySelector("code")).toHaveTextContent("other_token")
+        expect(rows[0]).toHaveTextContent("outcome not known to this page")
+        expect(rows[1].querySelector("code")).toHaveTextContent("mystery_irc")
+        expect(rows[1]).toHaveTextContent("outcome not known to this page")
+        for (const row of rows.slice(0, 2)) {
+            expect(row).not.toHaveTextContent("Passed")
+            expect(row).not.toHaveTextContent("Not recorded")
+            expect(within(row).queryByRole("link")).toBeNull()
+        }
+        expect(rows[2]).toHaveTextContent("Not recorded")
+    })
+
+    it("IRC card: a token this page was not taught shows as code with its own sentence, not as a missing IRC", async () => {
+        withRecord({ validation: { irc: "mystery_irc" } })
+        page()
+        const irc = await screen.findByRole("region", { name: "IRC" })
+        expect(irc.querySelector("code")).toHaveTextContent("mystery_irc")
+        expect(irc).toHaveTextContent("outcome not known to this page")
+        expect(irc).not.toHaveTextContent("IRC ran")
+        expect(irc).not.toHaveTextContent("No IRC calculation")
+    })
+
+    it.each([[-1234.5678], [1234.5678]])("imaginary frequency: stored %s shows the magnitude with an i and keeps the stored value on hover", async (stored) => {
+        withRecord({ saddle_point: { ...SADDLE, imag_freq_cm1: stored } })
+        page()
+        const value = await screen.findByRole("link", { name: /1234\.57i/ })
+        expect(value).toHaveTextContent("1234.57i cm⁻¹")
+        const sign = stored < 0 ? "\u2212" : ""
+        expect(value.querySelector("data")).toHaveAttribute("title", `stored as ${sign}1234.5678`)
+    })
+
+    it("trust card: asks how much of the expected evidence was deposited", async () => {
+        withRecord({ trust: { trust_status: "well_supported", evidence: { passed_count: 5, possible_count: 6, checks: {} } } })
+        page()
+        const trust = await screen.findByRole("region", { name: "Trust" })
+        expect(trust).toHaveTextContent("Asks how much of the evidence TCKDB expects for a saddle point was deposited, by a fixed list of checks.")
+    })
+
+    it("hill: says its comparison is TCKDB's own, and does not name this entry's ref or review on the hill's facts", async () => {
+        withRecord()
+        page()
+        await screen.findByRole("group", { name: /Energy relative to the reactants/ })
+        expect(screen.getByText("The hill is TCKDB's own comparison at one level and one program; the depositor's ordering check may use other energies.")).toBeVisible()
+        expect(screen.queryByText("Transition-state entry", { selector: "dt" })).toBeNull()
+    })
+
+    it("hill: with two profiles for this entry, offers a picker with an order note that fits one entry", async () => {
+        withRecord()
+        const second = { ...profileFor(ENTRY_REF, 40), level_of_theory: { ...LEVEL, level_of_theory_ref: "lot_b", method: "b3lyp", display: "b3lyp/def2tzvp" }, program: "Orca" }
+        server.use(http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/energy-profile`, () => HttpResponse.json(energyRead({ profiles: [profileFor(ENTRY_REF, 84.3), second, profileFor("tse_sibling", 12.5)] }))))
+        const user = userEvent.setup()
+        page()
+        const picker = await screen.findByLabelText("Profile")
+        expect(within(picker).getAllByRole("option")).toHaveLength(2)
+        expect(screen.getByText(/Listed by level of theory, then program, in alphabetical order\./)).toBeVisible()
+        expect(screen.queryByText(/approved first/)).toBeNull()
+        await user.selectOptions(picker, "1")
+        expect(screen.getByRole("group", { name: /Energy relative to the reactants/ })).toHaveTextContent("+40.0 kJ/mol")
+    })
+
+    it("hill: says what the default view left out is for the reaction entry", async () => {
+        withRecord()
+        server.use(http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/energy-profile`, () => HttpResponse.json(energyRead({
+            request: { hidden_by_default: null, hidden_by_default_by_scope: { transition_state_entries: { rejected: 2 } } },
+        }))))
+        page()
+        expect(await screen.findByText("For this reaction entry: Not listed by default: 2 rejected transition-state entries.")).toBeVisible()
+    })
+
+    function citedRead() {
+        const cited = (ref: string, tse: string) => ({ role: "ts_energy", calculation_ref: ref, review_status: "not_reviewed", transition_state_entry_ref: tse, electronic_energy_hartree: -115.2, energy_type: "single_point" })
+        return energyRead({
+            cited_by_kinetics: [
+                { kinetics_ref: "kin_mine", calculations: [cited("calc_cited_mine", ENTRY_REF), cited("calc_cited_other", "tse_sibling")] },
+                { kinetics_ref: "kin_other", calculations: [cited("calc_cited_other2", "tse_sibling")] },
+            ],
+        })
+    }
+
+    it("cited energies: keeps those that cite this entry and drops the rest, and the records with none left", async () => {
+        withRecord()
+        server.use(http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/energy-profile`, () => HttpResponse.json(citedRead())))
+        page()
+        const table = await screen.findByRole("table", { name: /Calculations cited by each rate record/ })
+        expect(within(table).getByRole("link", { name: /115\.2/ })).toHaveAttribute("href", "/calculations/calc_cited_mine")
+        expect(within(table).getAllByRole("row")).toHaveLength(2)
+        expect(table).toHaveTextContent("kin_mine")
+        expect(table).not.toHaveTextContent("kin_other")
+    })
+
+    it("cited energies: no table when none cites this entry", async () => {
+        withRecord()
+        const read = citedRead()
+        read.cited_by_kinetics = read.cited_by_kinetics.slice(1)
+        server.use(http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/energy-profile`, () => HttpResponse.json(read)))
+        page()
+        await screen.findByRole("group", { name: /Energy relative to the reactants/ })
+        expect(screen.queryByRole("table", { name: /Calculations cited by each rate record/ })).toBeNull()
+    })
+
+    it("draws the picture without reading the entry a second time", async () => {
+        const searches: string[] = []
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, ({ request }) => {
+            searches.push(new URL(request.url).search)
+            return HttpResponse.json({ record: mockRecord() })
+        }))
+        page()
+        await screen.findByRole("img", { name: /Ball-and-stick picture of transition state/ })
+        expect(searches).toHaveLength(1)
+        expect(searches[0]).not.toBe("?include=geometries")
     })
 
     it("checks table: a check with no deposited record is Not recorded, and a reported frequency count is not turned into a result", async () => {
@@ -1535,6 +1695,7 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         }
         expect(rows[0]).toHaveTextContent("reports 1 imaginary frequency. That is a result, not a recorded check.")
         expect(rows[2]).toHaveTextContent("none to link")
+        for (const row of rows) expect(within(row).queryByRole("link")).toBeNull()
         expect(screen.getByText(/Not recorded means nobody deposited it/)).toBeVisible()
     })
 
@@ -1546,7 +1707,7 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         const trust = await screen.findByRole("region", { name: "Trust" })
         const irc = screen.getByRole("region", { name: "IRC" })
         expect(trust.parentElement).toBe(irc.parentElement)
-        expect(trust).toHaveTextContent("Asks whether the deposited results pass")
+        expect(trust).toHaveTextContent("Asks how much of the evidence TCKDB expects")
         expect(trust).toHaveTextContent("well supported")
         expect(trust).toHaveTextContent("5 of 6 checks passed")
         expect(irc).toHaveTextContent("Asks whether a reaction-path calculation connects")
@@ -1562,7 +1723,7 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
 
     it("keyboard: Tab reaches the imaginary-frequency term, Esc closes it, then each check's evidence link", async () => {
         const user = userEvent.setup()
-        withRecord({ saddle_point: SADDLE, validation: { irc: "present", imaginary_mode: "present", energy_ordering: "present" } })
+        withRecord({ saddle_point: SADDLE, validation: { irc: "present", imaginary_mode: "present", energy_ordering: "present" }, validation_evidence: EVIDENCE })
         page()
         const term = await screen.findByRole("button", { name: "imaginary frequency" })
         const popover = document.getElementById(term.getAttribute("aria-describedby")!)!
@@ -1573,7 +1734,7 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         expect(popover).toHaveAttribute("data-open", "false")
         expect(document.activeElement).toBe(term)
         const region = screen.getByRole("region", { name: "Checks on this transition state" })
-        for (const name of ["Frequency calculation", "IRC calculation", "Energy hill on this page"]) {
+        for (const name of ["Frequency calculation", "IRC calculation", "Energy of transition state", "Energy of reactant 1"]) {
             const link = within(region).getByRole("link", { name })
             for (let step = 0; step < 80 && document.activeElement !== link; step++) await user.tab()
             expect(document.activeElement).toBe(link)
@@ -1585,11 +1746,18 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         page()
         await screen.findByRole("group", { name: /Energy relative to the reactants/ })
         await screen.findByRole("region", { name: "Checks on this transition state" })
-        // The profile's own definition and the order note say what is not done ("lowest computed energy", "no row is preferred"); they are the served wording.
-        const clone = document.body.cloneNode(true) as HTMLElement
-        clone.querySelectorAll(".energy-profile-definition, .calculation-order-note").forEach((node) => node.remove())
-        expect(rankingWords(textOf(clone))).toEqual([])
+        expect(rankingWords(withoutServedWording(textOf(document.body)))).toEqual([])
         expect(textOf(document.body)).not.toContain("--")
+    })
+
+    it("the ranking guard still fails when the served definition gains a ranking claim", async () => {
+        withRecord()
+        server.use(http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/energy-profile`, () => HttpResponse.json(energyRead({
+            profiles: [{ ...profileFor(ENTRY_REF, 84.3), definition: `${DEFINITION} This is the best profile.` }],
+        }))))
+        page()
+        await screen.findByRole("group", { name: /Energy relative to the reactants/ })
+        expect(rankingWords(withoutServedWording(textOf(document.body)))).toEqual(["best"])
     })
 
     it("never reads values from a sibling entry: siblings are links, and a sibling's saddle point is not shown as this one's", async () => {
