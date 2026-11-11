@@ -87,6 +87,7 @@ class RejectionCode(str, Enum):
     ANONYMOUS_BODY_TOO_LARGE = "anonymous_body_too_large"
     APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH = "applied_energy_correction_source_calculation_owner_mismatch"
     APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED = "applied_energy_correction_source_key_undeclared"
+    APPLIED_ENERGY_CORRECTION_VALUE_CONFLICT = "applied_energy_correction_value_conflict"
     ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH = "arrhenius_a_units_molecularity_mismatch"
     ARTIFACT_EMPTY = "artifact_empty"
     ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE = "artifact_encoded_payload_too_large"
@@ -462,6 +463,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.AMBIGUOUS_CONFORMER_SELECTION_LOCATOR,
         RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED,
+        RejectionCode.APPLIED_ENERGY_CORRECTION_VALUE_CONFLICT,
         RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH,
         RejectionCode.ARTIFACT_EMPTY,
         RejectionCode.ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE,
@@ -818,6 +820,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.ANONYMOUS_BODY_TOO_LARGE: frozenset({413}),
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED: frozenset({422}),
+    RejectionCode.APPLIED_ENERGY_CORRECTION_VALUE_CONFLICT: frozenset({422}),
     RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH: frozenset({422}),
     RejectionCode.ARTIFACT_EMPTY: frozenset({422}),
     RejectionCode.ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE: frozenset({422}),

@@ -814,6 +814,12 @@ def _add_components(
         session.flush()
 
 
+def _public_ref(session: Session, model: type, row_id: int) -> str | None:
+    """The public ref of one row, or ``None`` if it is gone."""
+    row = session.get(model, row_id)
+    return getattr(row, "public_ref", None)
+
+
 def _same_total(
     stored: AppliedEnergyCorrection, payload: AppliedEnergyCorrectionUploadPayload
 ) -> bool:
@@ -822,10 +828,10 @@ def _same_total(
     Same unit: exact equality. Different units: both converted to hartree and
     compared within ``_PARAM_VALUE_ABS_TOL``.
     """
-    if stored.value_unit == payload.value_unit:
+    if stored.value_unit.value == payload.value_unit.value:
         return stored.value == payload.value
     stored_h = convert_energy_to_hartree(stored.value, stored.value_unit)
-    supplied_h = convert_energy_to_hartree(payload.value, payload.value_unit)
+    supplied_h = convert_energy_to_hartree(payload.value, EnergyUnit(payload.value_unit.value))
     return (
         stored_h is not None
         and supplied_h is not None
@@ -873,13 +879,13 @@ def _assert_same_applied_value(
     ):
         target_id = getattr(stored, column)
         if target_id is not None:
-            context[label] = session.get(model, target_id).public_ref
+            context[label] = _public_ref(session, model, target_id)
     if stored.scheme_id is not None:
-        context["scheme_ref"] = session.get(EnergyCorrectionScheme, stored.scheme_id).public_ref
+        context["scheme_ref"] = _public_ref(session, EnergyCorrectionScheme, stored.scheme_id)
     if stored.frequency_scale_factor_id is not None:
-        context["frequency_scale_factor_ref"] = session.get(
-            FrequencyScaleFactor, stored.frequency_scale_factor_id
-        ).public_ref
+        context["frequency_scale_factor_ref"] = _public_ref(
+            session, FrequencyScaleFactor, stored.frequency_scale_factor_id
+        )
     context["differs"] = [
         name
         for name, differs in (
@@ -960,17 +966,17 @@ def create_applied_energy_correction(
         )
         fsf_id = fsf.id
 
-    key = dict(
-        target_species_entry_id=target_species_entry_id,
-        target_reaction_entry_id=target_reaction_entry_id,
-        target_transition_state_entry_id=target_transition_state_entry_id,
-        source_conformer_observation_id=source_conformer_observation_id,
-        source_calculation_id=source_calculation_id,
-        scheme_id=scheme_id,
-        frequency_scale_factor_id=fsf_id,
-        application_role=payload.application_role,
-        temperature_k=payload.temperature_k,
-    )
+    key: dict[str, object] = {
+        "target_species_entry_id": target_species_entry_id,
+        "target_reaction_entry_id": target_reaction_entry_id,
+        "target_transition_state_entry_id": target_transition_state_entry_id,
+        "source_conformer_observation_id": source_conformer_observation_id,
+        "source_calculation_id": source_calculation_id,
+        "scheme_id": scheme_id,
+        "frequency_scale_factor_id": fsf_id,
+        "application_role": payload.application_role,
+        "temperature_k": payload.temperature_k,
+    }
     applied = _find_applied_correction(session, key)
     if applied is None:
         try:

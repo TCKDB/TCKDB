@@ -26,7 +26,7 @@ _R09 = 'A declaration or record that fails its own schema, or names an unsupport
 _R10 = 'Read-side selection, comparison or evaluation request limit or applicability; not a check on a deposited result.'
 _R11 = 'A local key the payload names but does not declare; referential integrity of the payload.'
 _R12 = 'Query pagination or cursor handling.'
-_R13 = 'Identity-row bookkeeping: an energy-correction scheme or reference already set or conflicting; provenance hygiene, no claim about chemistry.'
+_R13 = 'Identity-row bookkeeping: an energy-correction scheme, reference or applied correction already set or conflicting; provenance hygiene, no claim about chemistry.'
 _R14 = 'Request idempotency or client-version negotiation.'
 _R15 = 'Best-effort Hessian extraction outcome; tooling.'
 _R16 = 'Software name or version normalisation; identity hygiene, no claim about chemistry.'
@@ -60,6 +60,7 @@ NOT_SCIENTIFIC: dict[str, str] = {
     'anonymous_body_too_large': _R03,
     'request_body_too_large': _R03,
     'applied_energy_correction_source_key_undeclared': _R11,
+    'applied_energy_correction_value_conflict': _R13,
     'archive_release_artifacts_differ': _R05,
     'archive_unreadable': _R05,
     'artifact_object_missing': _R05,
