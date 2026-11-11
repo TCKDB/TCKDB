@@ -102,3 +102,33 @@
 .kinetics-k-table th {
     text-transform: none;
 }
+
+/* The transition-state entry's status as an ordered list of stages, the current one marked. */
+.reaction-ts-stages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-3);
+    margin: var(--s-1) 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--muted);
+}
+
+.reaction-ts-stages li + li::before {
+    content: "→" / "";
+    margin-right: var(--s-3);
+    color: var(--muted);
+}
+
+.reaction-ts-stage--current {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.ts-stage {
+    margin-top: var(--s-4);
+}
+
+.kinetics-record-source {
+    margin: var(--s-3) 0 0;
+}
