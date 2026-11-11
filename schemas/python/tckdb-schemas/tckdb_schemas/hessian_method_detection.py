@@ -1,6 +1,6 @@
 """Read the Hessian method an input deck states, before a deposit is judged.
 
-ADR 0012's tau keys on how the frequency job built its second derivatives.
+The imaginary-mode tolerance (tau) keys on how the frequency job built its second derivatives.
 ARC (and any producer that ships raw decks) does not send that as a
 ``parameters`` entry: it attaches the input deck as an ``input`` artifact,
 and the backend parses ``freq.hessian_method`` out of the deck only after the

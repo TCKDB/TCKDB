@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.172.1 - 2026-11-11
+
+Comments and docstrings in the Hessian-method and stationary-point modules are reworded to state behaviour only. No refusal, warning, field or behaviour changes.
+
 ## 0.172.0 - 2026-11-11
 
 Three codes are added: the refusal `applied_energy_correction_value_conflict` (422) and the warnings `applied_energy_correction_note_not_stored` and `applied_energy_correction_reused_hidden` (context `review_status`: `rejected` or `deprecated`). The refusal is returned by every upload route that carries applied energy corrections when a correction with the same target, sources, scheme or scale factor, role and temperature is already stored with a different total or component breakdown. `context` carries `record_kind`, `application_role`, the target and scheme public refs, `field`, the stored and supplied totals with units, and `differs`. A matching correction is now reused rather than refused. No model or payload shape changed.

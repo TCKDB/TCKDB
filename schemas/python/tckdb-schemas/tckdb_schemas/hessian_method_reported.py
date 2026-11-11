@@ -2,7 +2,7 @@
 
 A deck or the input a log echoes says what was *requested* (``NumFreq``, ``AnFreq``); an unqualified ``Freq`` names
 nothing. The log itself prints which routine produced the Hessian, at default print level, and that is the better
-evidence for the tolerance (ADR 0012): it is what ran. This module is the single owner of that reading, so upload
+evidence for the tolerance: it is what ran. This module is the single owner of that reading, so upload
 validation (``tckdb_schemas.hessian_method_assumption``) and the backend's reported-settings parser
 (``app.services.reported_settings_parser``) cannot disagree.
 
