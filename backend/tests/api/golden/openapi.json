@@ -11295,6 +11295,103 @@
         "title": "ChemkinExportRequest",
         "type": "object"
       },
+      "CitedCalculation": {
+        "description": "A calculation a kinetics record cites for an energy, with the energy it carries.",
+        "properties": {
+          "calculation_ref": {
+            "title": "Calculation Ref",
+            "type": "string"
+          },
+          "electronic_energy_hartree": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic Energy Hartree"
+          },
+          "energy_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "single_point",
+                  "optimization"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Type"
+          },
+          "level_of_theory_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level Of Theory Ref"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "role": {
+            "enum": [
+              "reactant_energy",
+              "product_energy",
+              "ts_energy"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "software": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnergyProfileSoftware"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "species_entry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Ref"
+          },
+          "transition_state_entry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Entry Ref"
+          }
+        },
+        "required": [
+          "role",
+          "calculation_ref",
+          "review_status"
+        ],
+        "title": "CitedCalculation",
+        "type": "object"
+      },
       "ComparisonOutcome": {
         "enum": [
           "compared",
@@ -18819,6 +18916,305 @@
         "title": "EnergyKind",
         "type": "string"
       },
+      "EnergyProfileMolecule": {
+        "description": "One participant's energy point. ``count`` is how many times the entry lists it on its side.",
+        "properties": {
+          "calculation_ref": {
+            "title": "Calculation Ref",
+            "type": "string"
+          },
+          "convergence_unrecorded": {
+            "default": false,
+            "title": "Convergence Unrecorded",
+            "type": "boolean"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "electronic_energy_hartree": {
+            "title": "Electronic Energy Hartree",
+            "type": "number"
+          },
+          "energy_type": {
+            "enum": [
+              "single_point",
+              "optimization"
+            ],
+            "title": "Energy Type",
+            "type": "string"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "software": {
+            "$ref": "#/components/schemas/EnergyProfileSoftware"
+          },
+          "species_entry_ref": {
+            "title": "Species Entry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species_entry_ref",
+          "count",
+          "calculation_ref",
+          "energy_type",
+          "electronic_energy_hartree",
+          "software",
+          "review_status"
+        ],
+        "title": "EnergyProfileMolecule",
+        "type": "object"
+      },
+      "EnergyProfileRequestEcho": {
+        "properties": {
+          "hidden_by_default": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HiddenByDefault"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hidden_by_default_by_scope": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "title": "Hidden By Default By Scope",
+            "type": "object"
+          },
+          "include_deprecated": {
+            "default": false,
+            "title": "Include Deprecated",
+            "type": "boolean"
+          },
+          "include_rejected": {
+            "default": false,
+            "title": "Include Rejected",
+            "type": "boolean"
+          },
+          "merged_refs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Merged Refs",
+            "type": "object"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "reaction_entry_ref": {
+            "title": "Reaction Entry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reaction_entry_ref"
+        ],
+        "title": "EnergyProfileRequestEcho",
+        "type": "object"
+      },
+      "EnergyProfileSoftware": {
+        "properties": {
+          "build": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build"
+          },
+          "program": {
+            "title": "Program",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "program"
+        ],
+        "title": "EnergyProfileSoftware",
+        "type": "object"
+      },
+      "EnergyProfileTransitionState": {
+        "properties": {
+          "calculation_ref": {
+            "title": "Calculation Ref",
+            "type": "string"
+          },
+          "convergence_unrecorded": {
+            "default": false,
+            "title": "Convergence Unrecorded",
+            "type": "boolean"
+          },
+          "electronic_energy_hartree": {
+            "title": "Electronic Energy Hartree",
+            "type": "number"
+          },
+          "energy_type": {
+            "enum": [
+              "single_point",
+              "optimization"
+            ],
+            "title": "Energy Type",
+            "type": "string"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "software": {
+            "$ref": "#/components/schemas/EnergyProfileSoftware"
+          },
+          "transition_state_entry_ref": {
+            "title": "Transition State Entry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "transition_state_entry_ref",
+          "calculation_ref",
+          "energy_type",
+          "electronic_energy_hartree",
+          "software",
+          "review_status"
+        ],
+        "title": "EnergyProfileTransitionState",
+        "type": "object"
+      },
+      "EnergyProfileUnavailable": {
+        "description": "A transition-state entry (at a level and program when it has an energy there) with no complete profile.",
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/EnergyProfileUnavailableCode"
+          },
+          "level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "program": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Program"
+          },
+          "transition_state_entry_ref": {
+            "title": "Transition State Entry Ref",
+            "type": "string"
+          },
+          "transition_state_entry_review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          }
+        },
+        "required": [
+          "transition_state_entry_ref",
+          "transition_state_entry_review_status",
+          "code"
+        ],
+        "title": "EnergyProfileUnavailable",
+        "type": "object"
+      },
+      "EnergyProfileUnavailableCode": {
+        "description": "Why a transition-state entry has no complete profile at a level and program.",
+        "enum": [
+          "no_reactant_energy_at_level",
+          "no_product_energy_at_level",
+          "points_from_different_programs",
+          "no_ts_energy",
+          "no_program_recorded"
+        ],
+        "title": "EnergyProfileUnavailableCode",
+        "type": "string"
+      },
+      "EnergyProfileValues": {
+        "properties": {
+          "products": {
+            "title": "Products",
+            "type": "number"
+          },
+          "reactants": {
+            "title": "Reactants",
+            "type": "number"
+          },
+          "transition_state": {
+            "title": "Transition State",
+            "type": "number"
+          }
+        },
+        "required": [
+          "reactants",
+          "transition_state",
+          "products"
+        ],
+        "title": "EnergyProfileValues",
+        "type": "object"
+      },
       "EnergyReferenceBody": {
         "additionalProperties": false,
         "properties": {
@@ -24211,6 +24607,27 @@
         ],
         "title": "KineticsCalculationRole",
         "type": "string"
+      },
+      "KineticsCitedEnergies": {
+        "description": "The energy calculations one kinetics record cites. Never merged into the profiles.",
+        "properties": {
+          "calculations": {
+            "items": {
+              "$ref": "#/components/schemas/CitedCalculation"
+            },
+            "title": "Calculations",
+            "type": "array"
+          },
+          "kinetics_ref": {
+            "title": "Kinetics Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kinetics_ref"
+        ],
+        "title": "KineticsCitedEnergies",
+        "type": "object"
       },
       "KineticsClaimOrigin": {
         "description": "Whose claim a declaration is: the source's own statement, or the depositor's reading.",
@@ -42854,6 +43271,152 @@
         ],
         "title": "ReactionDirectionQuery",
         "type": "string"
+      },
+      "ReactionEnergyProfile": {
+        "description": "One complete profile: reactants, transition state and products at one level and one program.",
+        "properties": {
+          "definition": {
+            "default": "Each molecule's energy at this level from this program: its lowest single-point energy, or, only when it has no single point at that level and program, its lowest optimisation final energy (an optimisation recorded as not converged is not used). Electronic energy, no zero-point correction. Reactant and product energies are summed over the entry's participants, each counted once per occurrence.",
+            "title": "Definition",
+            "type": "string"
+          },
+          "energy_hartree": {
+            "$ref": "#/components/schemas/EnergyProfileValues"
+          },
+          "energy_kind": {
+            "const": "electronic",
+            "default": "electronic",
+            "title": "Energy Kind",
+            "type": "string"
+          },
+          "energy_types": {
+            "items": {
+              "enum": [
+                "single_point",
+                "optimization"
+              ],
+              "type": "string"
+            },
+            "title": "Energy Types",
+            "type": "array"
+          },
+          "level_of_theory": {
+            "$ref": "#/components/schemas/LevelOfTheorySummary"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/EnergyProfileMolecule"
+            },
+            "title": "Products",
+            "type": "array"
+          },
+          "program": {
+            "title": "Program",
+            "type": "string"
+          },
+          "reactants": {
+            "items": {
+              "$ref": "#/components/schemas/EnergyProfileMolecule"
+            },
+            "title": "Reactants",
+            "type": "array"
+          },
+          "relative_kj_mol": {
+            "$ref": "#/components/schemas/EnergyProfileValues"
+          },
+          "transition_state": {
+            "$ref": "#/components/schemas/EnergyProfileTransitionState"
+          },
+          "transition_state_entry_ref": {
+            "title": "Transition State Entry Ref",
+            "type": "string"
+          },
+          "transition_state_entry_review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "versions": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "transition_state_entry_ref",
+          "transition_state_entry_review_status",
+          "level_of_theory",
+          "program",
+          "energy_types",
+          "versions",
+          "reactants",
+          "transition_state",
+          "products",
+          "energy_hartree",
+          "relative_kj_mol"
+        ],
+        "title": "ReactionEnergyProfile",
+        "type": "object"
+      },
+      "ReactionEnergyProfileResponse": {
+        "description": "Profiles in display order of the transition-state entries, then level and program. Nothing is chosen.",
+        "properties": {
+          "cited_by_kinetics": {
+            "items": {
+              "$ref": "#/components/schemas/KineticsCitedEnergies"
+            },
+            "title": "Cited By Kinetics",
+            "type": "array"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/ReactionEnergyProfile"
+            },
+            "title": "Profiles",
+            "type": "array"
+          },
+          "reaction_entry_ref": {
+            "title": "Reaction Entry Ref",
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/EnergyProfileRequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
+          "unavailable": {
+            "items": {
+              "$ref": "#/components/schemas/EnergyProfileUnavailable"
+            },
+            "title": "Unavailable",
+            "type": "array"
+          }
+        },
+        "required": [
+          "request",
+          "reaction_entry_ref"
+        ],
+        "title": "ReactionEnergyProfileResponse",
+        "type": "object"
       },
       "ReactionEntryRead": {
         "properties": {
@@ -104641,6 +105204,116 @@
           }
         },
         "summary": "Reaction Kinetics",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/reaction-entries/{reaction_entry_ref}/energy-profile": {
+      "get": {
+        "description": "One profile per transition-state entry, level of theory and program: reactants, transition state, products.\n\nEvery point of a profile comes from this reaction entry's own participants and transition-state entries, at one level\nfrom one program; programs are never mixed. A transition-state entry with no complete profile is listed under\n``unavailable`` with a code. Nothing is ranked or chosen between profiles. ``cited_by_kinetics`` lists, per kinetics\nrecord, the energy calculations the record cites, apart from the profiles. Transition-state entries and kinetics records\nfollow the list rules (``include_rejected``, ``include_deprecated``, ``min_review_status``, the curated floor; hidden ones\nare counted in ``request.hidden_by_default``, split by kind in ``request.hidden_by_default_by_scope``).\n``min_review_status`` also narrows the calculations a point may come from. The calculations behind each point are evidence: rejected and deprecated\nones are never used, and each point carries its review badge.",
+        "operationId": "reaction_entry_energy_profile_api_v1_scientific_reaction_entries__reaction_entry_ref__energy_profile_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reaction_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Reaction Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a legacy single-record read carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a legacy single-record read carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReactionEnergyProfileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Electronic-energy profiles of a reaction entry, one level of theory and one program each",
         "tags": [
           "scientific"
         ]

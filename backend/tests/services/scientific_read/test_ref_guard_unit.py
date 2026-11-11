@@ -701,6 +701,10 @@ def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
         "ConformerUsageGroup",
         "ConformerUsageKinetics",
         "ConformerUsageThermo",
+        "ReactionEnergyProfile",
+        "EnergyProfileUnavailable",
+        "KineticsCitedEnergies",
+        "CitedCalculation",
         # Deposit-time warnings: the entry for a record the response names goes with that record when it is hidden.
         "RecordWarnings",
     }

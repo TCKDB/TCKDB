@@ -814,6 +814,13 @@ _RAW_ONLY: tuple[tuple[str, str, str], ...] = tuple(
     ),
     (
         "GET",
+        "/api/v1/scientific/reaction-entries/{reaction_entry_ref}/energy-profile",
+        "Electronic-energy profiles of a reaction entry, one level of theory "
+        "and one program each; a page-level read with no typed wrapper yet. "
+        "Reachable via get_json().",
+    ),
+    (
+        "GET",
         "/api/v1/scientific/species-entries/{species_entry_ref}/conformer-usage",
         "Which thermo and kinetics records use each conformer group of an "
         "entry; a page-level read with no typed wrapper yet. Reachable via "
