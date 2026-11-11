@@ -1,39 +1,40 @@
+import { useMemo } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../record-identity-header.css"
+import { loadConformerUsage } from "../api/conformerUsageApi"
 import type { ConformerGroup } from "../api/conformerGroupApi"
-import { Disclosure } from "../components/Disclosure"
+import { Breadcrumbs } from "../components/Breadcrumbs"
+import { CalcLinks } from "../components/CalcLinks"
+import { ConformerStage } from "../components/ConformerStage"
+import { ConformerUsedBy } from "../components/ConformerUsedBy"
+import { DepositorNote } from "../components/DepositorNote"
+import { entryCrumbs } from "../components/entryCrumbs"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
-import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
+import { Formula } from "../components/Formula"
+import { EnergyNotices, ObservationEvidence } from "../components/ObservationEvidence"
+import { OrderNote } from "../components/OrderNote"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
+import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
-import { CopyButton } from "../components/RefsDisclosure"
+import { ReviewChip } from "../components/ReviewChip"
 import { SpeciesEntryLink } from "../components/SpeciesEntryLink"
-import { reviewPillClass } from "../domain/reviewPillFormat"
+import { conformerGroupName } from "../domain/conformerEvidence"
+import { pictureGeometryFromLinks, shapeRows, spreadLines, type ShapeRow } from "../domain/conformerGallery"
+import { groupLede } from "../domain/conformerLede"
+import { words } from "../domain/provenanceFormat"
+import { hiddenByDefaultNote } from "../domain/paging"
 import { useConformerGroup } from "../hooks/useConformerGroup"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
+import { useLoaded } from "../hooks/useLoaded"
+import { useSpeciesOptimisations, useSpeciesSinglePoints, type SinglePointsState } from "../hooks/useSpeciesSinglePoints"
 
-const statusLabel = (status: string) => status.replaceAll("_", " ")
 type Observation = NonNullable<ConformerGroup["observations"]>[number]
 type GeometryLink = NonNullable<ConformerGroup["geometries"]>[number]
 
-/**
- * The TRUE collapsed-summary roll-up for the "Evidence on this conformer
- * group" checklist below -- its three rows are plain counts ("N of M
- * observations"), no `tone`, so `EvidenceChecklist` cannot compute a
- * present/absent roll-up on its own and needs this via its `summary`
- * prop (see that component's own docstring for why a bare row count is
- * not an acceptable stand-in: "3 rows" reads identically whether every
- * stage is fully covered or none is, on a card whose whole job is to
- * report evidence). A stage counts as COVERED only when every deposited
- * observation carries it (`count === total`); with zero observations
- * nothing is covered, never vacuously "all 3" from `0 === 0`.
- */
-function stageCoverageSummary(
-    coverage: { opt: number; freq: number; sp: number },
-    total: number,
-): string {
+/** Whether every stage is carried by every observation: with no observations nothing is covered. */
+function stageCoverageSummary(coverage: { opt: number; freq: number; sp: number }, total: number): string {
     const stages = [coverage.opt, coverage.freq, coverage.sp]
     const covered = total > 0 ? stages.filter((count) => count === total).length : 0
     return `${covered} of ${stages.length} stages covered`
@@ -48,372 +49,178 @@ export default function ConformerGroupPage() {
         <RecordStatus
             state={state}
             ref={groupRef}
-            kind="conformer basin"
-            loadingDetail="Retrieving the conformer basin and its deposited evidence."
+            kind="conformer"
+            loadingDetail="Retrieving the conformer and its deposited evidence."
         />
     )
 }
 
 function Ledger({ group }: { group: ConformerGroup }) {
-    useDocumentTitle("Conformer basin", group.species?.formula)
-    const {
-        conformer_group: basin,
-        species,
-        observations_summary: summary,
-        evidence_summary: evidence,
-    } = group
-    const observations = group.observations ?? []
+    useDocumentTitle("Conformer", group.species?.formula)
+    const { conformer_group: core, species, observations_summary: summary, evidence_summary: evidence } = group
+    const observations = useMemo(() => group.observations ?? [], [group.observations])
     const geometries = groupGeometries(group.geometries ?? [])
+    const name = conformerGroupName(core.label)
+    const formula = species.formula ?? ""
+    const entryRef = species.species_entry_ref
+
+    const singlePoints = useSpeciesSinglePoints(entryRef, true)
+    const optimisations = useSpeciesOptimisations(entryRef, true)
+    const usage = useLoaded(loadConformerUsage, entryRef)
+    const rows = useMemo(
+        () => shapeRows({ observations }, singlePoints.status === "ready" ? singlePoints.records : [], optimisations.status === "ready" ? optimisations.records : []),
+        [observations, singlePoints, optimisations],
+    )
+    const spreads = spreadLines(rows)
+    const usageData = usage.status === "ready" ? usage.data : null
+    const hidden = usageData ? hiddenByDefaultNote(usageData.hidden, "records") : null
+    const depositorLabel = core.label && name === null && core.label.trim() !== "" ? core.label : null
 
     return (
         <section className="conformer-page">
-            {/* Every other record page in this app carries this breadcrumb --
-                this was the only one missing it. Species/species-entry links
-                come from this endpoint's own `species` context, same source
-                the "Species entry" row in the identity block below already
-                reads from. */}
-            <nav className="record-breadcrumbs" aria-label="Breadcrumb">
-                <Link to="/">TCKDB</Link>
-                <span aria-hidden="true">/</span>
-                <Link to={`/species/${species.species_ref}`}>Species</Link>
-                <span aria-hidden="true">/</span>
-                <Link to={`/species-entries/${species.species_entry_ref}`}>Species entry</Link>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">Conformer basin</span>
-            </nav>
             <PageShell
                 identity={(
                     <header className="basin-header">
-                        {/* This page's data shape (`species` context: no charge/
-                            multiplicity/InChIKey -- `formula` is now served, see
-                            the "Species entry" fact below) does not fit
-                            `RecordIdentityHeader`'s `RecordIdentity` union, so it
-                            renders the SAME kicker-row + h1 + identity `.kv-list`
-                            markup that component renders for the other three
-                            record pages, by hand (design/foundations PR B, item
-                            1) -- `record-identity-header.css`'s
-                            `.record-identity-kicker-row`/`.t-display-1` classes,
-                            imported directly above rather than relying on load
-                            order. Was titled by `basin.label` -- e.g. "conformer_1"
-                            -- at this header's old 120px h1 size. That label is an
-                            ARC-assigned producer string (the value this
-                            component's own comment elsewhere calls out as "not
-                            TCKDB semantics"), not a description of what this
-                            record IS. The h1 now states what the record is; the
-                            producer's own label, when one was deposited, used to
-                            move into the identity list below as a plain "Producer
-                            label" secondary fact -- REMOVED entirely (house rule
-                            widened 2026-09: no depositor-typed labels on public
-                            pages at all, not even demoted to a secondary fact;
-                            see the "Group ref" fact's own comment below). This is
-                            `species_entry_label` is not printed either: it joins in
-                            depositor-typed parts. */}
-                        {/* SHOULD-FIX-7 (PR B review): wrapped in the SAME
-                            `.record-identity-header` div `RecordIdentityHeader`
-                            itself renders, not left as bare siblings -- an
-                            earlier version of this markup skipped that
-                            wrapper, so this header had no `gap` between its
-                            kicker row and h1 (`.record-identity-header`'s own
-                            `display: grid; gap: var(--s-3)` never applied),
-                            reading roughly 1px apart instead of the ~13px
-                            gap every other record page's header has. */}
-                        <div className="record-identity-header">
-                            <div className="record-identity-kicker-row">
-                                <span className="t-kicker record-identity-kicker">Conformer basin · evidence ledger</span>
-                                <span className={reviewPillClass(basin.review.status)}>{statusLabel(basin.review.status)}</span>
-                            </div>
-                            <h1 className="t-display-1 record-identity-title">Conformer basin</h1>
-                            <p className="t-body section-intro">
-                                One torsional basin, shown through its deposited observations. Calculation rows
-                                are evidence attached to those observations; they are not separate conformers.
-                            </p>
-                            <dl className="kv-list">
-                                {/* SHOULD-FIX-4 (PR B review): this ref is an
-                                    identifier and gets `<code className="data">`
-                                    like every other ref on these five pages --
-                                    the markup is not shaped around what the
-                                    test suite happens to find easiest to query;
-                                    the TEST queries the `code` element instead
-                                    (an earlier version of this file did the
-                                    reverse: kept the ref as plain `dd` text
-                                    specifically so `getByText(..., { selector:
-                                    "dd" })` kept matching, which is the test
-                                    shape driving the markup, backwards). */}
-                                {/* This record's OWN ref, first here -- now
-                                    carries the SAME copy affordance
-                                    (`CopyButton`, same
-                                    `.record-identity-fact-copyable` layout
-                                    class from `record-identity-header.css`,
-                                    already imported above) as every other
-                                    record page's own-ref fact via
-                                    `RecordIdentityHeader`'s `ownRef` prop
-                                    (owner decision: "yes show each record's
-                                    own ref inline" -- see
-                                    `RefsDisclosure.tsx`'s own docstring for
-                                    the rule this satisfies). */}
-                                <div>
-                                    <dt>Group ref</dt>
-                                    <dd className="record-identity-fact-copyable">
-                                        <code className="data">{basin.conformer_group_ref}</code>
-                                        <CopyButton value={basin.conformer_group_ref} label="Group ref" srLabel="value" />
-                                    </dd>
-                                </div>
-                                {/* The "Producer label" fact (`basin.label`, e.g.
-                                    "conformer_1") used to render here, ONLY when
-                                    deposited -- REMOVED (house rule widened
-                                    2026-09: no depositor-typed labels on public
-                                    pages at all, not even demoted to a secondary
-                                    fact). This page's h1 already states what the
-                                    record IS ("Conformer basin"), and the Group
-                                    ref above already names it; the primary way a
-                                    reader still picks a conformer BASIN by name
-                                    across this app -- the auto-numbering
-                                    convention `conformerEvidence.ts`'s
-                                    `conformerLabel` expands to "Conformer Group
-                                    N" -- is unaffected, since that heading lives
-                                    on the pages that LIST several basins side by
-                                    side, not on this single basin's own page. */}
-                                <div>
-                                    <dt>Species entry</dt>
-                                    <dd>
-                                        {/* SF-1 (post-review): this page hand-rolls its
-                                            own identity markup rather than composing
-                                            `RecordIdentityHeader` (see this header's own
-                                            comment above), so it grew its own copy of the
-                                            same bug that header's "Species entry" fact had
-                                            -- the raw `species_entry_label` shown as the
-                                            whole link text (a bare "R" on a real record,
-                                            with no explanation).
-                                            Now delegates to `SpeciesEntryLink`
-                                            (`../components/SpeciesEntryLink.tsx`) rather
-                                            than re-deriving the same formula-then-
-                                            `stereoChip`-label expression here -- the
-                                            reviewer of #375 flagged this exact
-                                            duplication across this page,
-                                            `ConformerObservationPage.tsx`, and
-                                            `RecordIdentityHeader.tsx`. The backend now
-                                            serves `formula` on this endpoint's `species`
-                                            context (RDKit-derived, same expression as the
-                                            calculation/geometry surfaces), so the base
-                                            link text is the formula when present, falling
-                                            back to the ref as `<code className="data">` --
-                                            matching `RecordIdentityHeader.tsx`'s own
-                                            fallback -- never the literal words "Species
-                                            entry" (the `<dt>` beside this `<dd>` already
-                                            says that). */}
-                                        <SpeciesEntryLink
-                                            speciesEntryRef={species.species_entry_ref}
-                                            smiles={species.canonical_smiles}
-                                            formula={species.formula}
-                                            facets={species}
-                                        />
-                                    </dd>
-                                </div>
-                                <div><dt>Structure</dt><dd>{species.canonical_smiles ? <code>{species.canonical_smiles}</code> : "not projected"}</dd></div>
-                            </dl>
-                        </div>
-                        {/* Identity-first header, matching the shared record-page
-                            order (identity -> facets -> provenance). No facets tier
-                            follows: this endpoint's `species` context carries
-                            neither `species_entry_kind` nor `electronic_state_kind`
-                            to build one from (unlike the species entry surface),
-                            and no `submission_ref` provenance tier either -- both
-                            omitted rather than fabricated. No `RefsDisclosure`
-                            either: every ref on this header is either this
-                            record's OWN stable identifier (the group ref, kept
-                            visible per that component's own docstring) or
-                            already a working link (the species entry) -- there
-                            is no secondary machine-ref bundle here worth
-                            collapsing behind one.
-
-                            No rigid/basin rotor statement follows either, even
-                            though the species-entry conformer picker
-                            (`ConformerSelector.tsx`'s `ConformerCard`) shows one
-                            for this same basin. That card's statement is built
-                            from `conformer_group.fingerprint`, fetched only via
-                            `conformers/search?include=fingerprints` -- a
-                            different endpoint than this page's own
-                            `loadConformerGroup` (`api/conformerGroupApi.ts`),
-                            which does not request or type that field today.
-                            Surfacing it here needs that fetch, which is outside
-                            this change's file scope; flagged rather than
-                            guessed at. */}
+                        <Breadcrumbs crumbs={[
+                            ...entryCrumbs({
+                                speciesRef: species.species_ref, speciesEntryRef: entryRef, formula: species.formula,
+                                smiles: species.canonical_smiles, facets: species,
+                            }),
+                            { label: name ?? "Conformer" },
+                        ]} />
+                        <RecordIdentityHeader
+                            kicker="Conformer"
+                            glyph="conformer-group"
+                            review={core.review.status}
+                            lede={groupLede(summary.total, evidence.calculation_count)}
+                            title={<>{name ?? "Conformer"}{formula ? <> of <Formula value={formula} /></> : null}</>}
+                            ownRef={{ label: "Group ref", value: core.conformer_group_ref }}
+                            ownFacts={(
+                                <>
+                                    <div>
+                                        <dt>Species entry</dt>
+                                        <dd>
+                                            <SpeciesEntryLink speciesEntryRef={entryRef} smiles={species.canonical_smiles} formula={species.formula} facets={species} />
+                                        </dd>
+                                    </div>
+                                    <div><dt>Structure</dt><dd>{species.canonical_smiles ? <code>{species.canonical_smiles}</code> : "not projected"}</dd></div>
+                                </>
+                            )}
+                        />
+                        <DepositorNote>{depositorLabel}</DepositorNote>
+                        <DepositorNote>{core.note}</DepositorNote>
                     </header>
                 )}
             >
-            <section className="ledger-summary" aria-label="Basin evidence summary">
-                <Metric label="Deposited observations" value={summary.total} />
-                <Metric
-                    label="Calculation rows"
-                    value={evidence.calculation_count}
-                    detail={`${evidence.optimization_chain_count} optimisation chains`}
+                <ConformerStage
+                    geometryRef={pictureGeometryFromLinks(group.geometries ?? [])}
+                    formula={formula}
+                    drawnFrom="Drawn from the first final geometry deposited for this conformer; other observations of it may differ slightly."
                 />
-                <Metric label="Distinct stored geometries" value={evidence.geometry_count} />
-            </section>
-            {/* Sits BELOW the tile row above, full row width -- see
-                `ConformerObservationPage.tsx`'s identical comment on its own
-                evidence checklist for the owner report this fixes.
-                `.card--derived` -- a COMPUTED coverage summary across every
-                deposited observation, the same `--derived` rule
-                `CalculationDetailPage`'s evidence checklist follows (item 8
-                in this PR's body: `--derived` marks an aggregate, plain
-                `.card` marks a single record). Counts, not status words --
-                no `tone` on any row (see `EvidenceChecklist`'s own docstring
-                for why a count stays plain text). */}
-            <section className="ledger-summary ledger-summary--single" aria-label="Basin evidence checklist">
-                <EvidenceChecklist
-                    heading="Evidence on this conformer group"
-                    summary={stageCoverageSummary(evidence.evidence_coverage, summary.total)}
-                    rows={[
-                        { label: "Optimisation", value: `${evidence.evidence_coverage.opt} of ${summary.total} observations` },
-                        { label: "Frequency", value: `${evidence.evidence_coverage.freq} of ${summary.total} observations` },
-                        { label: "Single point", value: `${evidence.evidence_coverage.sp} of ${summary.total} observations` },
-                    ]}
-                    note="Coverage says which observations have a stage, not whether methods are comparable."
-                />
-            </section>
-            <EvidenceDisclosure observations={observations} />
-            <section className="ledger-section" aria-labelledby="geometry-ledger">
-                <SectionHeading
-                    id="geometry-ledger"
-                    kicker="Stored coordinates"
-                    intro="These are stored geometry objects linked from calculation output. Their count is not a conformer count."
-                >
-                    Geometry records
-                </SectionHeading>
-                {geometries.length ? (
-                    <div className="geometry-links">
-                        {geometries.map(({ geometry, calculationRefs }) => (
-                            <div className="geometry-link" key={geometry.geometry_ref}>
-                                <Link to={`/geometries/${geometry.geometry_ref}`}>
-                                    {geometry.geometry_ref}
-                                </Link>
-                                <span>
-                                    produced by {calculationRefs.join(", ")}
-                                    {geometry.natoms != null ? ` · ${geometry.natoms} atoms` : ""}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <p className="empty-projection">
-                        No stored geometry links were returned for this conformer basin.
-                    </p>
-                )}
-            </section>
+
+                <section className="ledger-section" aria-labelledby="observation-ledger">
+                    <SectionHeading
+                        id="observation-ledger"
+                        intro={`One entry for each time this conformer was deposited: how its geometry was found and every energy computed on it. Methods stay on their own calculations, so different levels stay visible. ${evidence.optimization_chain_count} optimisation ${evidence.optimization_chain_count === 1 ? "chain" : "chains"} in all.`}
+                    >
+                        Observations
+                    </SectionHeading>
+                    {observations.length === 0 ? (
+                        <p className="empty-projection">No deposited observations were returned for this conformer.</p>
+                    ) : (
+                        <>
+                            <EnergyNotices singlePoints={singlePoints} optimisations={optimisations} />
+                            <OrderNote />
+                            {spreads.length > 0 && (
+                                <ul className="shape-spread">
+                                    {spreads.map((line) => (
+                                        <li key={`${line.kind}-${line.levelLabel}-${line.program}`}>
+                                            {line.kind === "sp" ? "Single-point energies" : "Final energies of the optimisations"} at <span className="t-preserve-case">{line.levelLabel}</span> with{" "}
+                                            <span className="t-preserve-case">{line.program}</span> differ by up to {line.kjMol.toFixed(2)} <span className="t-preserve-case">kJ/mol</span> across{" "}
+                                            {line.count} calculations.
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            <ol className="observation-items">
+                                {observations.map((observation, index) => (
+                                    <ObservationItem
+                                        key={observation.conformer_observation.conformer_observation_ref}
+                                        observation={observation}
+                                        position={index + 1}
+                                        row={rows[index]}
+                                        singlePoints={singlePoints}
+                                        optimisations={optimisations}
+                                    />
+                                ))}
+                            </ol>
+                        </>
+                    )}
+                </section>
+
+                <section className="ledger-section" aria-labelledby="used-by-heading">
+                    <SectionHeading
+                        id="used-by-heading"
+                        intro="The thermochemistry and rate coefficients that name this conformer. A record that names no conformer is not listed here."
+                    >
+                        Used by
+                    </SectionHeading>
+                    {usage.status === "loading" && <p className="note" role="status" aria-busy="true">Reading which records name this conformer.</p>}
+                    {(usage.status === "failed" || usage.status === "rate-limited") && <p className="note" role="alert">Which records name this conformer could not be read.</p>}
+                    <ConformerUsedBy
+                        usage={usage}
+                        group={usageData?.groups.get(core.conformer_group_ref)}
+                        entryRef={entryRef}
+                        groupRef={core.conformer_group_ref}
+                        labelOf={() => "another conformer"}
+                        showLabel={false}
+                    />
+                    {hidden && <p className="note">{hidden}</p>}
+                </section>
+
+                <section className="ledger-summary ledger-summary--single" aria-label="Conformer evidence checklist">
+                    <EvidenceChecklist
+                        heading="Evidence on this conformer"
+                        summary={stageCoverageSummary(evidence.evidence_coverage, summary.total)}
+                        rows={[
+                            { label: "Optimisation", value: `${evidence.evidence_coverage.opt} of ${summary.total} observations` },
+                            { label: "Frequency", value: `${evidence.evidence_coverage.freq} of ${summary.total} observations` },
+                            { label: "Single point", value: `${evidence.evidence_coverage.sp} of ${summary.total} observations` },
+                        ]}
+                        note="Coverage says which observations have a stage, not whether methods are comparable."
+                    />
+                </section>
+
+                <section className="ledger-section" aria-labelledby="geometry-ledger">
+                    <SectionHeading
+                        id="geometry-ledger"
+                        intro={`${evidence.geometry_count} stored ${evidence.geometry_count === 1 ? "geometry" : "geometries"} linked from calculation output. This is not a count of conformers.`}
+                    >
+                        Geometries
+                    </SectionHeading>
+                    {geometries.length ? (
+                        <div className="geometry-links">
+                            {geometries.map(({ geometry, calculationRefs }) => (
+                                <div className="geometry-link" key={geometry.geometry_ref}>
+                                    <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
+                                    <span>
+                                        produced by <CalcLinks refs={calculationRefs} />
+                                        {geometry.natoms != null ? ` · ${geometry.natoms} atoms` : ""}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="empty-projection">No stored geometry links were returned for this conformer.</p>
+                    )}
+                </section>
             </PageShell>
         </section>
     )
 }
 
-/**
- * The observation-scoped evidence ledger, with its own list of
- * observation cards made collapsible. Previously an always-open
- * `<section>` -- with one `ObservationCard` per deposited observation,
- * each carrying its own `CalculationTable`, this was the single largest
- * block on the page and the owner's own "big box" complaint.
- *
- * The `SectionHeading` (an h2) is a plain, always-rendered heading
- * OUTSIDE the `Disclosure` (BLOCKING-3 fix, PR B review) -- an earlier
- * version of this component put the whole heading inside `Disclosure`'s
- * `summary` prop, which put a 28px serif h2 with its own UA margins
- * inside a 13px summary row; the brief's "no heading inside a summary"
- * rule holds for every disclosure on this app, including this one.
- * `Disclosure` wraps only the observation-card LIST, with a plain-text
- * summary (the deposited-observation count) -- collapsing that list is a
- * reader's own choice to declutter the page, not a reason to hide the
- * section's own heading, which now stays visible (and registered in the
- * page's table of contents) regardless of open/closed state, the same as
- * every other section on this page.
- *
- * Default OPEN on this page (a later reviewer pass reversed the original
- * "default closed, matching every other disclosure" call below). This is
- * the SINGLE deposited-evidence section this whole record page has to
- * offer -- unlike `ConformerObservationPage`'s "Curation selections"
- * disclosure, which is one optional extra among several always-open
- * sections, collapsing the only substantive content on a conformer-basin
- * record left visitors looking at a metrics strip and nothing else until
- * they clicked. The metrics strip above still answers "a number"
- * (observation count, calculation-row count, coverage) at a glance; the
- * `<summary>` remains a real toggle a reader can still close.
- *
- * `Disclosure` is deliberately UNCONTROLLED (see its own docstring): once
- * mounted, native `<details>` toggling manages `open` on its own, and the
- * component never fights it with a re-render. `defaultOpen` sets the
- * INITIAL state only. Keyboard operability (Enter/Space toggles a
- * focused `<summary>`) and focus-visible styling both come for free from
- * `<summary>` being a real native interactive element.
- *
- * When there is nothing behind it (zero deposited observations), this
- * renders a plain, always-open `<section>` with no `Disclosure` at all --
- * the same "nothing to disclose" convention `CalculationDetailPage`'s
- * `LazySection` uses for an unavailable section. Offering a "click to
- * expand" control over an empty result would tell a reader there might
- * be something to find.
- */
-function EvidenceDisclosure({ observations }: { observations: Observation[] }) {
-    const count = observations.length
-
-    if (count === 0) {
-        return (
-            <section className="ledger-section" aria-labelledby="observation-ledger">
-                <SectionHeading
-                    id="observation-ledger"
-                    kicker="Deposited provenance"
-                    intro="Methods remain on their actual calculation rows so differing levels stay visible."
-                >
-                    Observation-scoped evidence
-                </SectionHeading>
-                <p className="empty-projection">
-                    No deposited observations were returned for this conformer basin.
-                </p>
-            </section>
-        )
-    }
-
-    const countLabel = `${count} deposited observation${count === 1 ? "" : "s"}`
-    return (
-        <section className="ledger-section" aria-labelledby="observation-ledger">
-            {/* BLOCKING-3 fix (PR B review): the section heading is a plain
-                `SectionHeading` OUTSIDE the disclosure now, never an h2
-                nested inside `Disclosure`'s `<summary>` -- a 28px serif
-                heading with its own UA margins never belonged inside a
-                13px summary row, and the brief's "no headings inside a
-                summary" rule holds for every disclosure on these five
-                pages, not just the ones that started as a page-local
-                `<details>`. `Disclosure`'s own `summary` prop below is
-                plain text (the count), not `SectionHeading` -- collapsing
-                is the READER'S choice to declutter the observation list,
-                not a reason to hide the section's own heading (it stays
-                registered in the ToC and visible either way). */}
-            <SectionHeading
-                id="observation-ledger"
-                kicker="Deposited provenance"
-                intro="Methods remain on their actual calculation rows so differing levels stay visible."
-                label={`Observation-scoped evidence (${countLabel})`}
-            >
-                Observation-scoped evidence
-            </SectionHeading>
-            <Disclosure id="observation-ledger-disclosure" defaultOpen summary={countLabel}>
-                <div className="observation-list">
-                    {observations.map((observation) => (
-                        <ObservationCard
-                            key={observation.conformer_observation.conformer_observation_ref}
-                            observation={observation}
-                        />
-                    ))}
-                </div>
-            </Disclosure>
-        </section>
-    )
-}
-
 function groupGeometries(links: GeometryLink[]) {
-    const byRef = new Map<string, {
-        geometry: GeometryLink["geometry"]
-        calculationRefs: string[]
-    }>()
-
+    const byRef = new Map<string, { geometry: GeometryLink["geometry"]; calculationRefs: string[] }>()
     for (const { calculation_ref: calculationRef, geometry } of links) {
         const current = byRef.get(geometry.geometry_ref)
         if (current) {
@@ -425,119 +232,39 @@ function groupGeometries(links: GeometryLink[]) {
     return [...byRef.values()]
 }
 
-// Post-review (2bd17511): number FIRST, label second, an optional detail
-// line LAST -- see the tile-alignment comment on `.ledger-summary`
-// (`conformer-group.css`) for why. The detail line (this page's only
-// caller that ever passes one, "N optimisation chains") sits AFTER the
-// label, at the bottom of the tile either way -- it never sits between
-// the number and its own label, so it cannot displace the number the
-// way a wrapping LABEL used to.
-function Metric({ label, value, detail }: { label: string; value: number; detail?: string }) {
-    return (
-        <div className="card metric">
-            <strong>{value}</strong>
-            <span>{label}</span>
-            {detail && <small>{detail}</small>}
-        </div>
-    )
-}
-
-function ObservationCard({ observation }: { observation: Observation }) {
+function ObservationItem({ observation, position, row, singlePoints, optimisations }: {
+    observation: Observation
+    position: number
+    row: ShapeRow | undefined
+    singlePoints: SinglePointsState
+    optimisations: SinglePointsState
+}) {
     const core = observation.conformer_observation
-    const calculations = observation.calculations ?? []
     const geometries = observation.geometries ?? []
-
     return (
-        <article className="card observation-card">
-            <header>
-                <div>
-                    {/* SHOULD-FIX-12 ("record-page residuals" re-review):
-                        was `.t-kicker` -- same mono/uppercase shape as
-                        every other field label on this page, but `.t-
-                        kicker` carries no colour rule of its own, so this
-                        one inherited plain `--ink` instead of the `--muted`
-                        every OTHER label uses (`.kv-list dt`, `.metric
-                        span`, ...), MEASURED as the one outlier. `.t-label`
-                        is the same face/size/tracking; the colour comes
-                        from the scoped rule below. */}
-                    <span className="t-label">Observation</span>
-                    <Link to={`/conformer-observations/${core.conformer_observation_ref}`}>
-                        {core.conformer_observation_ref}
-                    </Link>
-                </div>
-                <div>
-                    <span className={reviewPillClass(core.review.status)}>{statusLabel(core.review.status)}</span>
-                    <small>{core.scientific_origin ?? "origin not recorded"}</small>
-                </div>
-            </header>
-            {/* No `core.note`: depositor free text is never printed on a public page. */}
-            {calculations.length ? (
-                <CalculationTable
-                    calculations={calculations}
-                    observationRef={core.conformer_observation_ref}
-                />
+        <li className="observation-item">
+            <p className="observation-item-head">
+                <Link to={`/conformer-observations/${core.conformer_observation_ref}`}>Observation {position}</Link>{" "}
+                <code className="data t-preserve-case">{core.conformer_observation_ref}</code>{" "}
+                <ReviewChip status={core.review.status} explain={false} />{" "}
+                <span className="observation-origin">Origin: {words(core.scientific_origin) ?? "not recorded"}</span>
+            </p>
+            {row ? (
+                <ObservationEvidence row={row} singlePoints={singlePoints} optimisations={optimisations} />
             ) : (
-                <p className="empty-stage">No calculation rows were returned for this observation.</p>
+                <p className="empty-projection">No calculation rows were returned for this observation.</p>
             )}
             {geometries.length > 0 && (
                 <p className="observation-geometries">
                     Geometry output: {geometries.map(({ calculation_ref: calculationRef, geometry }) => (
                         <span key={`${calculationRef}:${geometry.geometry_ref}`}>
                             <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
-                            {` from ${calculationRef}`}
+                            {" from "}<Link to={`/calculations/${calculationRef}`}>{calculationRef}</Link>
                         </span>
                     ))}
                 </p>
             )}
-        </article>
-    )
-}
-
-function CalculationTable({ calculations, observationRef }: {
-    calculations: NonNullable<Observation["calculations"]>
-    observationRef: string
-}) {
-    return (
-        <div className="table-scroll observation-card-table-scroll">
-            <table className="data-table" aria-label={`Calculations for ${observationRef}`}>
-                <thead>
-                    <tr>
-                        <th scope="col">Stage</th>
-                        <th scope="col">Level of theory</th>
-                        <th scope="col">Software / workflow</th>
-                        <th scope="col">Review</th>
-                        <th scope="col">Record</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {calculations.map((calculation) => (
-                        <tr key={calculation.calculation_ref}>
-                            <td data-label="Stage">{calculation.type}</td>
-                            <td data-label="Level of theory">
-                                {calculation.level_of_theory
-                                    ? <LevelOfTheoryLink levelOfTheory={calculation.level_of_theory} />
-                                    : "not recorded"}
-                            </td>
-                            <td data-label="Software / workflow">
-                                {calculation.software_release?.software ?? "not recorded"}
-                                {calculation.workflow_tool_release?.workflow_tool
-                                    ? ` · ${calculation.workflow_tool_release.workflow_tool}`
-                                    : ""}
-                            </td>
-                            <td data-label="Review">
-                                {calculation.review
-                                    ? statusLabel(calculation.review.status)
-                                    : "not recorded"}
-                            </td>
-                            <td data-label="Record">
-                                <Link to={`/calculations/${calculation.calculation_ref}`}>
-                                    {calculation.calculation_ref}
-                                </Link>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+            <DepositorNote>{core.note}</DepositorNote>
+        </li>
     )
 }

@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Conformer and geometry pages (Unreleased)
+
+- **Behaviour:** the conformer group, conformer observation and geometry pages lead with the picture (a ball-and-stick drawing with "Show in 3D") and one sentence about the shape worked out from the stored coordinates (two atoms and their distance, or atoms per element and the bonds drawn). Titles are human labels ("Conformer Group 1 of C2H6O", "Geometry of CH3 (final, from an optimisation)"), breadcrumbs run Molecules, the molecule, its version, the conformer. The word "basin" is gone from page text. The group page lists each observation in deposit order with every energy computed on its geometry, each giving its calculation, level of theory, program and review status; a spread is stated only between energies of one kind at one level and one program. A "Used by" section lists the thermochemistry and rate coefficients that name the conformer, and where it was merged. A depositor's label and note appear only in a labelled note from the depositor. Coordinates show 6 decimal places in ångström and bohr, with the stored ångström number as the hover value. Tables scroll inside their own labelled box.
+- **Schema and migration:** none. No new environment variable.
+
 ## Reaction pages with the energy profile (Unreleased)
 
 - **Behaviour:** the reaction entry page has breadcrumbs, a review word, a lede, a scheme row and an "Energy profile" section: reactants, transition state and products as bars in kJ/mol relative to the reactants, a profile picker when there are several (the first in response order is shown), a table of the same points linked to their calculations, unavailable reasons in words, and the energies rate records cite in a separate table. "Numbers for this entry" states its order and gives each record a source line. Each transition state has a picture with an on-request 3D view. The reaction page says "Reaction · all deposited versions".

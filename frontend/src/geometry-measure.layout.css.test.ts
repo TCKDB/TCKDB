@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-// `?raw` = plain source text (see geometry-detail.css.test.ts for why).
+// `?raw` = plain source text (see geometry-viewer.css.test.ts for why).
 import css from "./geometry-measure.css?raw"
 
 /** Extracts the declaration block for a single, non-nested selector. */
@@ -15,7 +15,7 @@ function extractRule(source: string, selector: string): string {
  * measurements panel floated to the right of and below the 3D picture
  * instead of sitting directly under it. `margin: 0 auto` centred this
  * panel inside the FULL page column while `.viewer-stage` (the canvas's
- * own card, `geometry-detail.css`) sat left-aligned at a much narrower
+ * own card, `geometry-viewer.css`) sat left-aligned at a much narrower
  * width -- MEASURED (CDP, 1920px viewport): stage at x=180 w=576, panel
  * at x=536 w=576, a ~40px vertical gap but no shared left edge.
  *

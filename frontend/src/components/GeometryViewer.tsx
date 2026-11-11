@@ -4,6 +4,7 @@ import { isotopeLabel } from "../domain/isotopeLabel"
 import type { GeometryAtom } from "../api/geometryApi"
 import { angstromToBohr, buildXyzBlock, hydrogenSymbolsForViewer, type CoordinateUnitMode } from "../domain/geometryXyz"
 import { angle as angleBetween, dihedral as dihedralOf, distance as distanceBetween } from "../domain/geometryMeasure"
+import "../geometry-viewer.css"
 import "../geometry-measure.css"
 
 /**
@@ -1166,7 +1167,7 @@ export function GeometryViewer({
                 of prose read as "too long for too short a column": the
                 text was squeezed to the same width as a square picture for
                 no reason. It now gets its own, wider measure (see
-                `.viewer-caption` in geometry-detail.css) and the sentences
+                `.viewer-caption` in geometry-viewer.css) and the sentences
                 themselves are shorter besides. */}
             <p className="section-note viewer-caption">
                 {`An interactive 3D view of the deposited coordinates, rendered client-side with WebGL. ${bondsSentence} The table and raw XYZ below are the authoritative record either way.`}
