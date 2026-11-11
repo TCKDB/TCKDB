@@ -254,7 +254,7 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
         next.set("conformer", conformerGroupRef)
         if (byPage) next.set("selection", "default")
         else next.delete("selection")
-        navigate({ pathname: entryPath, search: `?${next}`, hash: location.hash }, { replace: true })
+        navigate({ pathname: entryPath, search: `?${next}`, hash: byPage ? location.hash : "" }, { replace: true })
     }
 
     // Self-heal the URL to name what's actually selected, and say when the page chose it: a missing `conformer` param,

@@ -876,6 +876,27 @@ describe("species-entry page: tabs are a real, keyboard-operable ARIA tablist", 
 })
 
 describe("species-entry page: selecting a conformer scopes geometry, single-point, thermo and statmech to it", () => {
+    it("keeps a link fragment when the page picks its default shape, and drops it when the reader picks another shape", async () => {
+        const user = userEvent.setup()
+        const scrollIntoView = vi.fn()
+        Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, writable: true, value: scrollIntoView })
+        server.use(...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}#shape-calculations`)
+        render(<App />)
+        await screen.findByRole("heading", { name: "Its 3D shapes" })
+        await waitFor(() => expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupOneRef))
+        expect(window.location.hash).toBe("#shape-calculations")
+        expect(document.getElementById("shape-calculations")).not.toBeNull()
+        scrollIntoView.mockClear()
+
+        await user.click(within(cardFor("Conformer Group 2")).getByRole("button", { name: /Conformer Group 2/ }))
+        await waitFor(() => expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupTwoRef))
+        expect(window.location.hash).toBe("")
+        expect(scrollIntoView).not.toHaveBeenCalled()
+        expect(document.activeElement?.id).not.toBe("shape-calculations")
+        delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+    })
+
     it("switches Geometry/SP tab content to the newly selected conformer's own evidence, and the choice survives via the URL", async () => {
         const user = userEvent.setup()
         server.use(...handlers())

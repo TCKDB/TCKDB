@@ -9,6 +9,7 @@ import {
     reactionOverviewNodes,
     transitionStateEntryNodes,
 } from "./recordMapNodes"
+import { speciesEntryNodes } from "./neighbourNodes"
 import calculationPage from "../pages/CalculationDetailPage.tsx?raw"
 import conformerGroupPage from "../pages/ConformerGroupPage.tsx?raw"
 import conformerObservationPage from "../pages/ConformerObservationPage.tsx?raw"
@@ -74,6 +75,15 @@ const all: Record<string, Case> = {
 }
 
 describe("every map node opens something", () => {
+    it("a single network links to that network", () => {
+        const nodes = speciesEntryNodes("spe_1", {
+            molecule: null, conformers: null, calculations: null, reactions: null,
+            networks: { total: 1, row: { network: { network_ref: "net_1" } } },
+        })
+        expect(nodes).toHaveLength(1)
+        expect(nodes[0]).toMatchObject({ id: "networks", to: "/networks/net_1" })
+    })
+
     it.each(Object.keys(all))("%s: no node is plain text", (name) => {
         expect(all[name].nodes.length).toBeGreaterThan(0)
         for (const node of all[name].nodes) expect(node.to, `${name}/${node.id}`).not.toBeNull()
@@ -90,16 +100,17 @@ describe("every map node opens something", () => {
     })
 
     it("every anchor a node opens exists on the page that owns the map", () => {
-        // The geometry page derives its section ids from the section titles.
-        const provenanceTitles: Record<string, string> = {
-            "provenance-produced-by": "Produced by", "provenance-used-as-input-by": "Used as input by",
-        }
+        const withoutComments = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
+        // The geometry page derives its section ids from the section titles; read the titles from the source.
+        const slug = (title: string) => `provenance-${title.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`
+        const provenanceIds = (source: string) => [...source.matchAll(/title="([^"]+)"/g)].map((match) => slug(match[1]))
         let checked = 0
         for (const [name, { nodes, source }] of Object.entries(all)) {
             for (const node of nodes) {
                 if (!node.to?.startsWith("#")) continue
                 const id = node.to.slice(1)
-                const present = source.includes(`id="${id}"`) || (id in provenanceTitles && source.includes(`title="${provenanceTitles[id]}"`))
+                const code = withoutComments(source)
+                const present = code.includes(`id="${id}"`) || (name === "geometry" && provenanceIds(code).includes(id))
                 expect(present, `${name}/${node.id} -> ${node.to}`).toBe(true)
                 checked++
             }

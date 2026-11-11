@@ -92,9 +92,11 @@ export function speciesEntryNodes(
     }
     if (failed.has("calculations")) unavailable("calculations")
     else if (probes.calculations && probes.calculations.total > 0) {
+        // The page lists calculations only under the selected shape, and it selects one whenever the entry has any.
+        const listed = !!probes.conformers && probes.conformers.total > 0 && !failed.has("conformers")
         nodes.push({
-            id: "calculations", ...FAILED_NODES.calculations, to: "#shape-calculations",
-            found: `${foundText(probes.calculations.total)}, listed by shape`,
+            id: "calculations", ...FAILED_NODES.calculations, to: listed ? "#shape-calculations" : null,
+            found: `${foundText(probes.calculations.total)}, ${listed ? "listed by shape" : "not listed yet"}`,
         })
     }
     if (failed.has("networks")) unavailable("networks")

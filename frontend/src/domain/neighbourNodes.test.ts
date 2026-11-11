@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest"
 import { speciesEntryNodes, reactionEntryNodes, type NeighbourNode, type SpeciesEntryProbes } from "./neighbourNodes"
-import shapeCalculationsSource from "../components/ShapeCalculations.tsx?raw"
 
 const probe = (total: number, row: Record<string, unknown> | null = null) => ({ total, row })
 const probes = (over: Partial<SpeciesEntryProbes>): SpeciesEntryProbes => ({
@@ -29,7 +28,12 @@ describe("speciesEntryNodes", () => {
     it("opens the shape calculations section for the calculations, and says they are listed by shape", () => {
         const node = byId(speciesEntryNodes("spe_1", several, new Set(), null), "calculations")!
         expect(node).toMatchObject({ to: "#shape-calculations", found: "4 found, listed by shape" })
-        expect(shapeCalculationsSource).toContain('id="shape-calculations"')
+        // The entry page renders that id under its selected shape (see "keeps a link fragment" in SpeciesEntryPage.test.tsx).
+    })
+
+    it("leaves calculations as text when the entry has no shape to list them under", () => {
+        const node = byId(speciesEntryNodes("spe_1", probes({ calculations: probe(4) }), new Set(), null), "calculations")!
+        expect(node).toMatchObject({ to: null, found: "4 found, not listed yet" })
     })
 
     it("opens the reactions listing filtered to this molecule when several reaction entries have it", () => {
