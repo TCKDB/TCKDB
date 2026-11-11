@@ -8,6 +8,7 @@
    "tests/api/test_admin_machine_review_run.py": 2,
    "tests/api/test_admin_machine_review_trigger.py": 1,
    "tests/api/test_api_additional_calculation_edges.py": 2,
+   "tests/api/test_api_applied_correction_reuse.py": 2,
    "tests/api/test_api_arc_run_fixtures.py": 2,
    "tests/api/test_api_artifact_charge_multiplicity_hook.py": 2,
    "tests/api/test_api_artifact_download_filename.py": 2,

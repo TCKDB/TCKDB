@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from typing import TypeVar
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from tckdb_schemas.enums import (
     AppliedCorrectionComponentKind,
@@ -23,7 +24,12 @@ from tckdb_schemas.local_key_codes import (
 from app.api.error_contract import CodedValueError
 from app.chemistry.species import species_smiles_has_any_bonds
 from app.chemistry.units import convert_energy_to_hartree
-from app.db.models.common import AtomParamApplication, EnergyUnit
+from app.db.models.common import (
+    AtomParamApplication,
+    EnergyUnit,
+    RecordReviewStatus,
+    SubmissionRecordType,
+)
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     AppliedEnergyCorrectionComponent,
@@ -33,7 +39,9 @@ from app.db.models.energy_correction import (
     EnergyCorrectionSchemeComponentParam,
     FrequencyScaleFactor,
 )
+from app.db.models.reaction import ReactionEntry
 from app.db.models.species import Species, SpeciesEntry
+from app.db.models.transition_state import TransitionStateEntry
 from app.schemas.fragments.refs import FreqScaleFactorRef
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.energy_correction_upload import (
@@ -50,6 +58,7 @@ from app.services.provenance_warnings import (
     collect_composite_delta_warnings,
     collect_energy_correction_scheme_provenance_warnings,
 )
+from app.services.record_review import get_record_review
 from app.services.software_resolution import resolve_software_release_ref
 
 #: An applied correction names a source the enclosing upload never declared.
@@ -770,6 +779,233 @@ def assert_bac_total_has_required_components(
 # Applied energy correction creation
 # ---------------------------------------------------------------------------
 
+#: An applied correction with this dedup key is already stored with a different total or breakdown.
+W_APPLIED_CORRECTION_VALUE_CONFLICT = "applied_energy_correction_value_conflict"
+
+#: A reused correction already carries a different note; the incoming note was not stored.
+W_APPLIED_CORRECTION_NOTE_NOT_STORED = "applied_energy_correction_note_not_stored"
+
+#: The correction a deposit was linked to is rejected or deprecated, so reads hide it by default.
+W_APPLIED_CORRECTION_REUSED_HIDDEN = "applied_energy_correction_reused_hidden"
+
+
+def _find_applied_correction(
+    session: Session, key: Mapping[str, object]
+) -> AppliedEnergyCorrection | None:
+    """The applied correction with exactly this dedup key, or ``None``."""
+    return session.scalar(
+        select(AppliedEnergyCorrection).where(
+            *(
+                getattr(AppliedEnergyCorrection, column) == value
+                if value is not None
+                else getattr(AppliedEnergyCorrection, column).is_(None)
+                for column, value in key.items()
+            )
+        )
+    )
+
+
+def _add_components(
+    session: Session,
+    applied: AppliedEnergyCorrection,
+    payload: AppliedEnergyCorrectionUploadPayload,
+) -> None:
+    """Write the payload's per-component rows under ``applied``."""
+    for comp in payload.components:
+        session.add(
+            AppliedEnergyCorrectionComponent(
+                applied_correction_id=applied.id,
+                component_kind=comp.component_kind,
+                key=comp.key,
+                multiplicity=comp.multiplicity,
+                parameter_value=comp.parameter_value,
+                contribution_value=comp.contribution_value,
+            )
+        )
+    if payload.components:
+        session.flush()
+
+
+def _public_ref(session: Session, model: type, row_id: int) -> str | None:
+    """The public ref of one row, or ``None`` if it is gone."""
+    row = session.get(model, row_id)
+    return getattr(row, "public_ref", None)
+
+
+def _hartree(value: float, unit) -> float | None:
+    return convert_energy_to_hartree(value, EnergyUnit(unit.value))
+
+
+def _close(a: float | None, b: float | None) -> bool:
+    return a is not None and b is not None and abs(a - b) <= _PARAM_VALUE_ABS_TOL
+
+
+def _same_total(
+    stored: AppliedEnergyCorrection, payload: AppliedEnergyCorrectionUploadPayload
+) -> bool:
+    """Whether both totals, in hartree, agree within ``_PARAM_VALUE_ABS_TOL``."""
+    return _close(
+        _hartree(stored.value, stored.value_unit), _hartree(payload.value, payload.value_unit)
+    )
+
+
+def _same_components(
+    session: Session,
+    stored: AppliedEnergyCorrection,
+    payload: AppliedEnergyCorrectionUploadPayload,
+) -> bool:
+    """Whether the component sets match.
+
+    Kind, key and multiplicity are exact. The parameter value is compared
+    within ``_PARAM_VALUE_ABS_TOL``, and the contribution in hartree within the
+    same tolerance.
+    """
+    rows = sorted(
+        session.scalars(
+            select(AppliedEnergyCorrectionComponent).where(
+                AppliedEnergyCorrectionComponent.applied_correction_id == stored.id
+            )
+        ),
+        key=lambda c: (c.component_kind.value, c.key, c.multiplicity, c.contribution_value),
+    )
+    supplied = sorted(
+        payload.components,
+        key=lambda c: (c.component_kind.value, c.key, c.multiplicity, c.contribution_value),
+    )
+    if len(rows) != len(supplied):
+        return False
+    return all(
+        (r.component_kind.value, r.key, r.multiplicity) == (c.component_kind.value, c.key, c.multiplicity)
+        and _close(r.parameter_value, c.parameter_value)
+        and _close(
+            _hartree(r.contribution_value, stored.value_unit),
+            _hartree(c.contribution_value, payload.value_unit),
+        )
+        for r, c in zip(rows, supplied, strict=True)
+    )
+
+
+def _conflict_parts(
+    stored: AppliedEnergyCorrection,
+    payload: AppliedEnergyCorrectionUploadPayload,
+    *,
+    same_total: bool,
+    standalone_transition_state: bool,
+) -> tuple[str, str]:
+    """What differs and the route's remedy, as the two clauses of the refusal sentence."""
+    if same_total:
+        differs = "its component breakdown differs from the one sent."
+    else:
+        differs = (
+            f"its total differs from the one sent (stored {stored.value!r} {stored.value_unit.value}, "
+            f"sent {payload.value!r} {payload.value_unit.value})."
+        )
+    if not standalone_transition_state:
+        remedy = (
+            "If the value depends on this deposit's geometry or calculation, name the source "
+            "calculation (source_calculation_key) so each deposit's correction is recorded separately."
+        )
+    else:
+        remedy = "The values for one scheme and role on one transition state must agree."
+    return differs, remedy
+
+
+def _reconcile_reused_correction(
+    session: Session,
+    stored: AppliedEnergyCorrection,
+    payload: AppliedEnergyCorrectionUploadPayload,
+    *,
+    field: str | None,
+    warnings_out: list[UploadWarning] | None,
+    standalone_transition_state: bool = False,
+) -> None:
+    """Refuse a payload whose total or components differ from the stored row.
+
+    A matching payload is reused; the warnings for a dropped note and for a
+    rejected or deprecated stored row are added to ``warnings_out``.
+    """
+    same_total = _same_total(stored, payload)
+    same_components = _same_components(session, stored, payload)
+    if same_total and same_components:
+        _warn_on_reuse(session, stored, payload, field=field, warnings_out=warnings_out)
+        return
+
+    context: dict[str, object] = {
+        "record_kind": "applied_energy_correction",
+        "application_role": payload.application_role.value,
+    }
+    if field is not None:
+        context["field"] = field
+    for column, model, label in (
+        ("target_species_entry_id", SpeciesEntry, "species_entry_ref"),
+        ("target_reaction_entry_id", ReactionEntry, "reaction_entry_ref"),
+        ("target_transition_state_entry_id", TransitionStateEntry, "transition_state_entry_ref"),
+    ):
+        target_id = getattr(stored, column)
+        if target_id is not None:
+            context[label] = _public_ref(session, model, target_id)
+    if stored.scheme_id is not None:
+        context["scheme_ref"] = _public_ref(session, EnergyCorrectionScheme, stored.scheme_id)
+    if stored.frequency_scale_factor_id is not None:
+        context["frequency_scale_factor_ref"] = _public_ref(
+            session, FrequencyScaleFactor, stored.frequency_scale_factor_id
+        )
+    context.update(
+        stored_value=stored.value,
+        stored_unit=stored.value_unit.value,
+        supplied_value=payload.value,
+        supplied_unit=payload.value_unit.value,
+        differs=[
+            name
+            for name, differs in (("value", not same_total), ("components", not same_components))
+            if differs
+        ],
+    )
+    differs, remedy = _conflict_parts(
+        stored, payload, same_total=same_total, standalone_transition_state=standalone_transition_state
+    )
+    raise CodedValueError(
+        W_APPLIED_CORRECTION_VALUE_CONFLICT,
+        "A correction for this entry, scheme and role is already recorded in the database or "
+        f"earlier in this upload, and {differs} {remedy}",
+        context=context,
+        message_prefix=False,
+    )
+
+
+def _warn_on_reuse(
+    session: Session,
+    stored: AppliedEnergyCorrection,
+    payload: AppliedEnergyCorrectionUploadPayload,
+    *,
+    field: str | None,
+    warnings_out: list[UploadWarning] | None,
+) -> None:
+    """Warn when a reused row dropped the incoming note or is rejected or deprecated."""
+    if warnings_out is None:
+        return
+    where = field or "applied_energy_correction"
+    if payload.note is not None and payload.note != stored.note:
+        warnings_out.append(
+            UploadWarning.from_code(field=where, code=W_APPLIED_CORRECTION_NOTE_NOT_STORED)
+        )
+    review = get_record_review(
+        session,
+        record_type=SubmissionRecordType.applied_energy_correction,
+        record_id=stored.id,
+    )
+    if review is not None and review.status in (
+        RecordReviewStatus.rejected,
+        RecordReviewStatus.deprecated,
+    ):
+        warnings_out.append(
+            UploadWarning.from_code(
+                field=where,
+                code=W_APPLIED_CORRECTION_REUSED_HIDDEN,
+                context={"review_status": review.status.value},
+            )
+        )
+
 
 def create_applied_energy_correction(
     session: Session,
@@ -783,8 +1019,15 @@ def create_applied_energy_correction(
     created_by: int | None = None,
     field: str | None = None,
     warnings_out: list[UploadWarning] | None = None,
+    standalone_transition_state: bool = False,
 ) -> AppliedEnergyCorrection:
-    """Resolve provenance refs and create an applied energy correction.
+    """Resolve provenance refs and create or reuse an applied energy correction.
+
+    A row with the same dedup key (target, sources, scheme or scale factor,
+    role, temperature) is reused when its total and components match the
+    payload, and refused with ``applied_energy_correction_value_conflict`` when they
+    differ. A concurrent insert of the same key is reselected and compared
+    the same way.
 
     The workflow orchestrator is responsible for resolving local string keys
     (``source_conformer_key``, ``source_calculation_key``) to integer IDs
@@ -805,7 +1048,9 @@ def create_applied_energy_correction(
     :param warnings_out: Optional sink for the scheme's non-blocking
         provenance warnings (see :func:`resolve_or_create_scheme`).
         ``None`` (the default) is a no-op, matching every existing caller.
-    :returns: Newly created ``AppliedEnergyCorrection`` row.
+    :param standalone_transition_state: Whether the call comes from the standalone transition-state route, which
+        cannot name a source calculation; it selects the remedy in the value-conflict refusal.
+    :returns: The new or reused ``AppliedEnergyCorrection`` row.
     """
     scheme_id = None
     fsf_id = None
@@ -825,23 +1070,52 @@ def create_applied_energy_correction(
         )
         fsf_id = fsf.id
 
-    applied = AppliedEnergyCorrection(
-        target_species_entry_id=target_species_entry_id,
-        target_reaction_entry_id=target_reaction_entry_id,
-        target_transition_state_entry_id=target_transition_state_entry_id,
-        source_conformer_observation_id=source_conformer_observation_id,
-        source_calculation_id=source_calculation_id,
-        scheme_id=scheme_id,
-        frequency_scale_factor_id=fsf_id,
-        application_role=payload.application_role,
-        value=payload.value,
-        value_unit=payload.value_unit,
-        temperature_k=payload.temperature_k,
-        note=payload.note,
-        created_by=created_by,
-    )
-    session.add(applied)
-    session.flush()
+    key: dict[str, object] = {
+        "target_species_entry_id": target_species_entry_id,
+        "target_reaction_entry_id": target_reaction_entry_id,
+        "target_transition_state_entry_id": target_transition_state_entry_id,
+        "source_conformer_observation_id": source_conformer_observation_id,
+        "source_calculation_id": source_calculation_id,
+        "scheme_id": scheme_id,
+        "frequency_scale_factor_id": fsf_id,
+        "application_role": payload.application_role,
+        "temperature_k": payload.temperature_k,
+    }
+    applied = _find_applied_correction(session, key)
+    if applied is None:
+        try:
+            with session.begin_nested():
+                applied = AppliedEnergyCorrection(
+                    **key,
+                    value=payload.value,
+                    value_unit=payload.value_unit,
+                    note=payload.note,
+                    created_by=created_by,
+                )
+                session.add(applied)
+                session.flush()
+                _add_components(session, applied, payload)
+        except IntegrityError:
+            applied = _find_applied_correction(session, key)
+            if applied is None:
+                raise
+            _reconcile_reused_correction(
+                session,
+                applied,
+                payload,
+                field=field,
+                warnings_out=warnings_out,
+                standalone_transition_state=standalone_transition_state,
+            )
+    else:
+        _reconcile_reused_correction(
+            session,
+            applied,
+            payload,
+            field=field,
+            warnings_out=warnings_out,
+            standalone_transition_state=standalone_transition_state,
+        )
 
     if warnings_out is not None:
         warnings_out.extend(
@@ -850,20 +1124,5 @@ def create_applied_energy_correction(
                 field=f"{field}.application_role" if field else "application_role",
             )
         )
-
-    for comp in payload.components:
-        session.add(
-            AppliedEnergyCorrectionComponent(
-                applied_correction_id=applied.id,
-                component_kind=comp.component_kind,
-                key=comp.key,
-                multiplicity=comp.multiplicity,
-                parameter_value=comp.parameter_value,
-                contribution_value=comp.contribution_value,
-            )
-        )
-
-    if payload.components:
-        session.flush()
 
     return applied

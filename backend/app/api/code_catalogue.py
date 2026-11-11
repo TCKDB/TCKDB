@@ -755,6 +755,25 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("applied_energy_correction_source_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
+    ApiCode("applied_energy_correction_value_conflict", 422, Surface.coded_exception,
+            "backend/app/services/energy_correction_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "An applied correction with the same target, source, scheme or "
+                "scale factor, role and temperature is already stored with a "
+                "different total or component breakdown. context carries the "
+                "record kind, the role, the target and scheme public refs, the "
+                "stored and sent totals with units, and which of value and "
+                "components differ. The sentence says either 'its component "
+                "breakdown differs from the one sent' (totals equal) or 'its "
+                "total differs from the one sent' with both totals, then a "
+                "remedy: 'If the value depends on this deposit's geometry or "
+                "calculation, name the source calculation (source_calculation_key) "
+                "so each deposit's correction is recorded separately.', or, on "
+                "the standalone transition-state route, which cannot name one, "
+                "'The values for one scheme and role on one transition state "
+                "must agree.'"
+            )),
     ApiCode("archive_release_artifacts_differ", 422, Surface.message_prefix,
             "backend/app/services/deposit/build.py",
             reach=Reach.guard,
