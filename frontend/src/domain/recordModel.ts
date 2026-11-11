@@ -127,6 +127,11 @@ function isPlausiblyBareSmiles(value: string): boolean {
     return true
 }
 
+/** Every prefix a public reference can start with (`spc`, `rxn`, ...). */
+export function publicRefPrefixes(): string[] {
+    return ["spc", "spe", ...Object.keys(routedPublicRefPrefixes), ...Object.keys(unroutedPublicRefLabels)]
+}
+
 export function classifyIdentifier(input: string): IdentifierClassification {
     const value = input.trim()
     if (!value) return { valid: false, message: "Enter a SMILES, formula, public reference, InChI, or InChIKey." }

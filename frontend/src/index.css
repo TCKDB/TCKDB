@@ -123,9 +123,9 @@ button:focus-visible, input:focus-visible, .search-results a:focus-visible { out
    muted helper/status line under a form control. */
 .search-help, .search-message { max-width: var(--measure-note); margin: .65rem 0 0; color: var(--muted-2); font: var(--type-note-font); }
 .search-message { color: var(--accent-700); font-weight: 600; }
-.name-suggest { margin-top: .4rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.name-suggest { scroll-margin-bottom: 3.5rem; margin-top: .4rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .name-suggest ul { margin: 0; padding: 0; list-style: none; max-height: min(18rem, 45vh); overflow-y: auto; }
-.name-suggest-option { display: flex; align-items: center; min-height: 2.75rem; padding: .4rem .85rem; cursor: pointer; font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); }
+.name-suggest-option { scroll-margin-bottom: 3.5rem; display: flex; align-items: center; min-height: 2.75rem; padding: .4rem .85rem; cursor: pointer; font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); }
 .name-suggest-option + .name-suggest-option { border-top: 1px solid var(--line-2); }
 .name-suggest-option[aria-selected="true"] { background: var(--surface-sunken); box-shadow: inset 3px 0 0 var(--accent); }
 .name-suggest-name { color: var(--ink); }

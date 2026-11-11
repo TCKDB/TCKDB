@@ -37,14 +37,51 @@ export function nameSearchBackoffSeconds(now = Date.now()): number {
     return blockedUntil > now ? Math.ceil((blockedUntil - now) / 1000) : 0
 }
 
+/**
+ * A cached result for the query. A prefix query also reads a cached shorter prefix that came back
+ * complete (not truncated) and filters it, so extending a query costs no request.
+ */
 export function cachedNameSearch(text: string, match: "prefix" | "exact"): NameSearchResult | undefined {
-    return cache.get(`${match}:${nameQueryKey(text)}`)
+    const key = nameQueryKey(text)
+    const direct = cache.get(`${match}:${key}`)
+    if (direct || match !== "prefix") return direct
+    for (const [cachedKey, cached] of cache) {
+        if (!cachedKey.startsWith("prefix:") || cached.truncated) continue
+        const shorter = cachedKey.slice("prefix:".length)
+        if (shorter.length >= key.length || !key.startsWith(shorter)) continue
+        return { truncated: false, matches: cached.matches.filter((item) => nameQueryKey(item.name).startsWith(key)) }
+    }
+    return undefined
 }
 
-/** Empties the session cache and the back-off (tests). */
+/** Suggestion requests: a client-side bucket well under the server's per-minute limit, so Enter always has room. */
+const SUGGESTION_BURST = 10
+const SUGGESTION_PER_MINUTE = 20
+let suggestionTokens = SUGGESTION_BURST
+let suggestionRefilledAt = Date.now()
+
+function refillSuggestionTokens(now: number) {
+    suggestionTokens = Math.min(SUGGESTION_BURST, suggestionTokens + ((now - suggestionRefilledAt) / 60000) * SUGGESTION_PER_MINUTE)
+    suggestionRefilledAt = now
+}
+
+/** Milliseconds until a suggestion request may be sent; 0 when one may be sent now. */
+export function suggestionWaitMs(now = Date.now()): number {
+    refillSuggestionTokens(now)
+    return suggestionTokens >= 1 ? 0 : Math.ceil(((1 - suggestionTokens) * 60000) / SUGGESTION_PER_MINUTE)
+}
+
+export function takeSuggestionToken(now = Date.now()) {
+    refillSuggestionTokens(now)
+    suggestionTokens = Math.max(0, suggestionTokens - 1)
+}
+
+/** Empties the session cache, the back-off and the suggestion bucket (tests). */
 export function resetNameSearchSession() {
     cache.clear()
     blockedUntil = 0
+    suggestionTokens = SUGGESTION_BURST
+    suggestionRefilledAt = Date.now()
 }
 
 function retrySeconds(response: Response): number {

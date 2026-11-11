@@ -104,7 +104,7 @@ describe("ArchiveHomePage: the search", () => {
     it("renders the exact-identifier search, defaulting to species mode, and no structure search", () => {
         server.use(...countHandlers())
         page()
-        expect(screen.getByLabelText("Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref")).toBeInTheDocument()
+        expect(screen.getByLabelText("Molecule: name, formula, SMILES, InChI, InChIKey or TCKDB ref")).toBeInTheDocument()
         expect(screen.getByRole("radio", { name: "Molecules" })).toHaveAttribute("aria-checked", "true")
         expect(screen.getByRole("radio", { name: "Reactions" })).toHaveAttribute("aria-checked", "false")
         expect(screen.queryByText("Structure search")).not.toBeInTheDocument()

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { ScientificRateLimitError } from "../api/scientificTransport"
-import { cachedNameSearch, nameSearchBackoffSeconds, searchSpeciesNames, type NameMatch } from "../api/nameSearchApi"
+import { cachedNameSearch, nameSearchBackoffSeconds, searchSpeciesNames, suggestionWaitMs, takeSuggestionToken, type NameMatch } from "../api/nameSearchApi"
 import { isValidNameQuery, nameQueryKey } from "../domain/nameQuery"
 
 export const SUGGESTION_DEBOUNCE_MS = 300
@@ -21,9 +21,9 @@ export function useNameSuggestions(text: string, active: boolean): NameSuggestio
     const key = nameQueryKey(text)
     const valid = active && isValidNameQuery(text)
     const [settled, setSettled] = useState<Settled | null>(null)
-    const [now, setNow] = useState(() => Date.now())
+    const [, setNow] = useState(0)
     const [tick, setTick] = useState(0)
-    const backoff = valid ? nameSearchBackoffSeconds(now) : 0
+    const backoff = valid ? nameSearchBackoffSeconds() : 0
     const paused = backoff > 0
 
     useEffect(() => {
@@ -34,16 +34,21 @@ export function useNameSuggestions(text: string, active: boolean): NameSuggestio
             return
         }
         const controller = new AbortController()
-        const timer = setTimeout(() => {
+        let timer: ReturnType<typeof setTimeout>
+        const send = () => {
+            const wait = suggestionWaitMs()
+            if (wait > 0) { timer = setTimeout(send, wait); return }
+            takeSuggestionToken()
             searchSpeciesNames(text, "prefix", SUGGESTION_LIMIT, controller.signal).then((result) => {
                 if (controller.signal.aborted) return
                 setSettled({ key, matches: result.matches, failed: false })
             }, (error: unknown) => {
                 if (controller.signal.aborted) return
-                if (error instanceof ScientificRateLimitError) { setNow(Date.now()); setTick((value) => value + 1); return }
+                if (error instanceof ScientificRateLimitError) { setNow((value) => value + 1); setTick((value) => value + 1); return }
                 setSettled({ key, matches: [], failed: true })
             })
-        }, SUGGESTION_DEBOUNCE_MS)
+        }
+        timer = setTimeout(send, SUGGESTION_DEBOUNCE_MS)
         return () => { clearTimeout(timer); controller.abort() }
         // `text` is covered by `key`.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -51,7 +56,7 @@ export function useNameSuggestions(text: string, active: boolean): NameSuggestio
 
     useEffect(() => {
         if (!valid || !paused) return
-        const timer = setInterval(() => setNow(Date.now()), 1000)
+        const timer = setInterval(() => setNow((value) => value + 1), 1000)
         return () => clearInterval(timer)
     }, [valid, paused])
 

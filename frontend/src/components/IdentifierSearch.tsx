@@ -39,12 +39,12 @@ const MODES: { value: SearchMode; label: string }[] = [
 ]
 
 const FIELD_LABEL: Record<SearchMode, string> = {
-    species: "Molecule: exact SMILES, formula, InChI, InChIKey or TCKDB ref",
+    species: "Molecule: name, formula, SMILES, InChI, InChIKey or TCKDB ref",
     reactions: "Reaction: exact equation, SMILES or TCKDB ref",
 }
 
 const PLACEHOLDER: Record<SearchMode, string> = {
-    species: "SMILES, formula, spc_/spe_ ref, InChI, or InChIKey",
+    species: "Name, formula, SMILES, InChI, InChIKey or spc_/spe_ ref",
     reactions: "e.g. NN,[H] <> N,[NH2], a structure, or rxn_/rxe_ ref",
 }
 
@@ -159,6 +159,7 @@ export function IdentifierSearch() {
     const [ambiguousInput, setAmbiguousInput] = useState<string | null>(null)
     const [matches, setMatches] = useState<SearchMatch[]>([])
     const [nameMatches, setNameMatches] = useState<NameMatch[]>([])
+    const [nameTruncated, setNameTruncated] = useState(false)
     const [suggestOpen, setSuggestOpen] = useState(false)
     const [activeIndex, setActiveIndex] = useState(-1)
     const listId = useId()
@@ -337,14 +338,14 @@ export function IdentifierSearch() {
         activeRequest.current = controller
         clearResults(); setIsSearching(true)
         try {
-            const { matches: found } = await searchSpeciesNames(text, "exact", 20, controller.signal)
+            const { matches: found, truncated } = await searchSpeciesNames(text, "exact", 20, controller.signal)
             if (activeRequest.current !== controller || controller.signal.aborted) return
             if (found.length === 1) {
                 navigate(speciesPath(found[0].speciesRef))
             } else if (found.length === 0) {
                 setMessage(NAME_EMPTY_MESSAGE)
             } else {
-                setNameMatches(found)
+                setNameMatches(found); setNameTruncated(truncated)
                 announce(matchCountAnnouncement(found.length))
             }
         } catch (error) {
@@ -368,11 +369,7 @@ export function IdentifierSearch() {
 
         if (looksLikeReferenceAttempt(trimmed)) { void runReferenceLookup(trimmed); return }
 
-        if (mode === "species" && looksLikeName(trimmed)) {
-            if (!isValidNameQuery(trimmed)) {
-                clearResults(); setMessage("A name needs 2 to 64 letters, digits, spaces or - , ' ( ) [ ] + . :")
-                return
-            }
+        if (mode === "species" && looksLikeName(trimmed) && isValidNameQuery(trimmed)) {
             void runNameSearch(trimmed)
             return
         }
@@ -395,6 +392,11 @@ export function IdentifierSearch() {
     function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
         const listed = suggestOpen && options.length > 0
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            if (event.key === "ArrowDown" && !suggestOpen && mode === "species" && query.trim()) {
+                event.preventDefault()
+                setSuggestOpen(true)
+                return
+            }
             if (!listed) return
             event.preventDefault()
             const last = options.length - 1
@@ -473,6 +475,7 @@ export function IdentifierSearch() {
                     <NameLabel match={match} />
                 </Link>
             </li>)}</ul>
+            {nameTruncated && <p className="search-help">More molecules have this name; showing the first 20.</p>}
             <p className="search-help">{NAME_ORDER_NOTE}</p>
         </section>}
         {mode === "species" && matches.length > 0 && <section className="search-results" aria-label="Exact search results">

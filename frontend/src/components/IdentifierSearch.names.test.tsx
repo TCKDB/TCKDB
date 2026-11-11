@@ -17,8 +17,8 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
     return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...headers } })
 }
 
-function nameBody(matches: unknown[]) {
-    return { request: {}, matches, truncated: false, order: {} }
+function nameBody(matches: unknown[], truncated = false) {
+    return { request: {}, matches, truncated, order: {} }
 }
 
 beforeEach(() => {
@@ -273,5 +273,128 @@ describe("submitting a name", () => {
         submit()
         await advance(10)
         expect(nameCalls()).toHaveLength(1)
+    })
+})
+
+describe("request budget", () => {
+    it("filters a complete shorter result in the browser instead of asking again", async () => {
+        handler = () => json(nameBody([water]))
+        page()
+        typeText("wat"); await advance(300)
+        typeText("wate"); await advance(300)
+        typeText("water"); await advance(300)
+        expect(nameCalls()).toHaveLength(1)
+        expect(screen.getAllByRole("option")).toHaveLength(1)
+        typeText("watex"); await advance(300)
+        expect(nameCalls()).toHaveLength(1)
+        expect(screen.getByText(/^No molecule with that name\./)).toBeVisible()
+    })
+
+    it("asks again when the shorter result was truncated", async () => {
+        handler = () => json(nameBody([water], true))
+        page()
+        typeText("wat"); await advance(300)
+        typeText("wate"); await advance(300)
+        expect(nameCalls()).toHaveLength(2)
+    })
+
+    it("keeps a slow typist under the suggestion budget and leaves room for Enter", async () => {
+        handler = () => json(nameBody([water], true))
+        page()
+        const text = "methyl hydroperoxide"
+        for (let length = 2; length <= text.length; length++) {
+            typeText(text.slice(0, length)); await advance(400)
+        }
+        const spent = nameCalls().length
+        expect(spent).toBeGreaterThan(5)
+        expect(spent).toBeLessThanOrEqual(14)
+        fireEvent.submit(box().closest("form") as HTMLFormElement)
+        await advance(10)
+        const exact = nameCalls().filter((call) => call.url.searchParams.get("match") === "exact")
+        expect(exact).toHaveLength(1)
+    })
+
+    it("still sends the suggestion for the final text once the bucket refills", async () => {
+        handler = () => json(nameBody([water], true))
+        page()
+        const text = "methyl hydroperoxide"
+        for (let length = 2; length <= text.length; length++) {
+            typeText(text.slice(0, length)); await advance(400)
+        }
+        await advance(10000)
+        expect(nameCalls().some((call) => call.url.searchParams.get("q") === text)).toBe(true)
+    })
+})
+
+describe("half-typed and unusual input", () => {
+    it("never sends a half-typed bracket SMILES", async () => {
+        page()
+        for (const text of ["[C", "[CH3", "[OH", "[CH3],[OH"]) { typeText(text); await advance(1000) }
+        expect(calls).toHaveLength(0)
+    })
+
+    it("never sends the start of a reference or an InChI", async () => {
+        page()
+        for (const text of ["rx", "sp", "rxe_", "spc_ab", "InCh", "InChI=1S"]) { typeText(text); await advance(1000) }
+        expect(nameCalls()).toHaveLength(0)
+    })
+
+    it("treats a curly apostrophe like a straight one and accepts combining marks", async () => {
+        page()
+        typeText("H\u00fcnig\u2019s base"); await advance(300)
+        typeText("Hu\u0308nig's base"); await advance(300)
+        expect(nameCalls()).toHaveLength(1)
+    })
+
+    it("submits an equation on the Molecules tab exactly as before", async () => {
+        page()
+        typeText("[CH3],[OH] <> CO")
+        fireEvent.submit(box().closest("form") as HTMLFormElement)
+        await advance(10)
+        expect(calls).toHaveLength(0)
+        expect(screen.getByText(/cannot contain spaces/)).toBeVisible()
+    })
+
+    it("submits text the name rules reject through the structure search, as before", async () => {
+        handler = () => json({ records: [] })
+        page()
+        typeText("*CC")
+        fireEvent.submit(box().closest("form") as HTMLFormElement)
+        await advance(10)
+        expect(nameCalls()).toHaveLength(0)
+        expect(calls[0].url.pathname).toMatch(/species\/structure-search$/)
+    })
+})
+
+describe("more behaviour", () => {
+    it("reopens the list with ArrowDown after Esc", async () => {
+        page()
+        typeText("wat"); await advance(300)
+        fireEvent.keyDown(box(), { key: "Escape" })
+        expect(screen.queryByRole("listbox")).not.toBeInTheDocument()
+        fireEvent.keyDown(box(), { key: "ArrowDown" })
+        expect(screen.getByRole("listbox")).toBeVisible()
+    })
+
+    it("opens a molecule from a real mousedown, blur and click sequence", async () => {
+        page()
+        await act(async () => { box().focus() })
+        typeText("wat"); await advance(300)
+        const option = screen.getAllByRole("option")[0]
+        // A browser moves focus off the input on mousedown unless the page prevents it.
+        const focusMoves = fireEvent.mouseDown(option)
+        if (focusMoves) await act(async () => { box().blur() })
+        fireEvent.mouseUp(option)
+        fireEvent.click(option)
+        expect(screen.getByText(/landed on species/)).toBeInTheDocument()
+    })
+
+    it("says when an exact name has more matches than the first 20", async () => {
+        handler = () => json(nameBody([water, waterVapour], true))
+        page()
+        typeText("Water")
+        fireEvent.submit(box().closest("form") as HTMLFormElement)
+        await advance(10)
+        expect(screen.getByText("More molecules have this name; showing the first 20.")).toBeVisible()
     })
 })
