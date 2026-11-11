@@ -180,22 +180,19 @@ class TauBasis(str, Enum):
     """Why :func:`resolve_tau` returned the value it did.
 
     Stored alongside the τ it explains, so that a reader can re-decide
-    a borderline mode later: "τ was 50" is not re-decidable without "…because nothing recorded says how the Hessian
-    was built".
+    a borderline mode later: "τ was 50" is not re-decidable without
+    "…because nothing recorded says how the Hessian was built".
 
-    **The ``assumed_*`` members** cover a frequency result with no
-    ``freq.hessian_method``, because Gaussian never names its analytic
-    default in the output and the parser records only explicit
-    statements — so ``protocol_not_recorded`` was, in practice, every
-    Gaussian record ever written. When the method is not recorded,
-    TCKDB now assumes the producing program's documented default for the
-    level-of-theory's method family (see
-    ``tckdb_schemas.hessian_method_assumption``), records
-    that it was *assumed*, and gives the assumed method the same τ as its
-    recorded counterpart. An assumption must never be confusable with a
-    recorded statement — hence the separate member rather than reusing
-    ``analytic_default`` et al. — and a later upload that states the
-    method wins over an assumption made here.
+    **The ``assumed_*`` members** are used only when the output log reports
+    no method, the echoed input requests none, no ``freq.hessian_method`` is
+    recorded and the input deck states none. The producing program's
+    documented default for the level-of-theory's method family is then
+    assumed (see ``tckdb_schemas.hessian_method_assumption``), the basis
+    records that it was *assumed*, and the assumed method gets the same τ as
+    its recorded counterpart. An assumption is never confusable with a
+    recorded statement, hence the separate members rather than reusing
+    ``analytic_default`` et al.; a later upload that states the method wins
+    over an assumption made here.
     """
 
     #: Analytic second derivatives, tight grid, tight optimisation.
@@ -292,9 +289,8 @@ def resolve_tau(
 ) -> TauResolution:
     """Resolve τ from recorded execution provenance.
 
-    The fallback is the conservative row:
-    this function never assumes a Hessian method: an absent one is
-    ``protocol_not_recorded``. The producing program's assumed default is
+    This function never assumes a Hessian method: an absent one is
+    ``protocol_not_recorded``, the conservative row. The producing program's assumed default is
     applied one level up, by
     :func:`tckdb_schemas.hessian_method_assumption.resolve_tau_with_assumption`,
     which every validation adapter calls.
@@ -457,7 +453,8 @@ W_N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
 #: Every imaginary mode on an entry declared a minimum is below tau, the
 #: protocol-resolved noise floor. Accepted with a warning and the deciding tau recorded;
 #: a mode at or above tau keeps the refusal under
-#: ``W_N_IMAG_CONTRADICTS_MINIMUM`` / ``W_N_IMAG_HIGHER_ORDER_SADDLE``.
+#: ``W_N_IMAG_CONTRADICTS_MINIMUM``; the message names a higher-order
+#: saddle point when there are two or more modes.
 W_MINIMUM_IMAGINARY_MODES_BELOW_TAU = "minimum_imaginary_modes_below_tau"
 
 #: Two or more imaginary modes. Folded into the blocking message for
@@ -467,15 +464,17 @@ W_N_IMAG_HIGHER_ORDER_SADDLE = "n_imag_higher_order_saddle"
 #: A van der Waals complex whose imaginary mode is *too stiff* to be
 #: intermolecular noise (at or above
 #: :data:`TS_IMAGINARY_FREQUENCY_MIN_CM1`) is not showing a grid
-#: artifact, and looks like a first-order saddle point. ``vdw_complex``
-#: is the only declared kind that reaches the warning tier with an
-#: imaginary mode; ``minimum`` blocks.
+#: artifact, and looks like a first-order saddle point. Fires only for
+#: ``vdw_complex`` (see ``_vdw_complex_findings``); a ``minimum`` with a
+#: mode at or above tau is refused under ``W_N_IMAG_CONTRADICTS_MINIMUM``.
 W_N_IMAG_SUGGESTS_TS = "n_imag_suggests_transition_state"
 
 #: A transition state whose frequency evidence reports no imaginary mode
 #: at all. There is no reaction coordinate, so the structure is not a
-#: transition state. Definitional, therefore blocking. Only
-#: a missing mode is refused; extra modes are judged against tau.
+#: transition state. Definitional, therefore blocking. Zero is the
+#: only imaginary-mode count refused for itself; with extra modes the
+#: reaction coordinate must be designated, and the extras are judged
+#: against tau.
 W_TS_NO_IMAGINARY_MODE = "transition_state_no_imaginary_mode"
 
 #: More than one imaginary mode, and the payload does not say which one
@@ -1322,18 +1321,14 @@ def raise_for_blocking_findings(findings: list[StationaryPointFinding]) -> None:
     contradiction becomes a 422 naming the contradiction, before the
     route body opens a submission.
 
-    Every finding already carries a ``code``; until the refusal did too,
-    that code reached a client only as a substring of an English sentence
-    and the response body said ``validation_error``. It is now the
-    exception's own attribute, so the 422 names the contradiction in a
-    field a client can switch on.
+    The refusal carries the finding's ``code`` as its own attribute, so the
+    422 names the contradiction in a field a client can switch on.
 
     A refusal reports one code only when the blocking findings agree on
     one. Two different contradictions in one payload are two things to fix,
     and naming either of them would tell the client the other is not there;
     the joined message still names both, and the envelope falls back to the
-    generic code. ``message_prefix=False`` keeps the message exactly what it
-    has always been.
+    generic code. ``message_prefix=False`` leaves the message unprefixed.
     """
     blocked = blocking_findings(findings)
     if not blocked:

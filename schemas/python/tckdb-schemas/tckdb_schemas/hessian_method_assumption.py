@@ -14,7 +14,7 @@ assumed method the same tau as its recorded counterpart. Gaussian never names
 its analytic default in the output, and
 ``app/services/gaussian_parameter_parser.py`` records only explicit
 statements (``Freq=Numer``), so without the assumption every Gaussian record
-would fall to the conservative row. The assumption does not touch tau's
+that relies on the analytic default falls to the conservative row. The assumption does not touch tau's
 magnitude, only which basis is credited and whether one is credited at all.
 
 **Pure function, table-driven.** Takes two plain strings (a software
@@ -36,7 +36,7 @@ the single owner of what a *recorded* ``freq.hessian_method`` means; this
 module only ever fires on its conservative fallback, and only when the
 caller has independently confirmed no method was recorded. A later
 upload that states the method explicitly is read by ``resolve_tau``
-exactly as before and always wins over anything this module would have
+and always wins over anything this module would have
 assumed.
 
 The table
