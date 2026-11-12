@@ -236,7 +236,7 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 ### 0.174.3 - 2026-11-12
 
-The contribution-bundle example in the contract shows `source_instance.schema_version` as the current Alembic revision. `schema_version` is a free-form non-empty string that no import reads; no refusal, warning, field or behaviour changes.
+The contribution-bundle example in the contract shows `source_instance.schema_version` as the current Alembic revision. `schema_version` is a free-form non-empty string that no import reads. No refusal, warning, field or behaviour changes.
 
 ### 0.174.2 - 2026-11-11
 

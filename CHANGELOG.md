@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The migration chain is one revision (Unreleased)
+
+- **Behaviour:** none. `alembic upgrade head` on an empty database builds the same schema and seed rows from a single revision, `d5b8e2f4a916`; `alembic downgrade base` removes them. Revision ids that no longer exist are removed from comments, docs and tests. The OpenAPI descriptions of the two ML export routes lose a sentence that cited a revision, and the contribution-bundle example carries `schema_version` `d5b8e2f4a916` (the field is a free-form string that nothing reads).
+- **Schema and migration:** none; the schema and seed data are identical, and a database already at `d5b8e2f4a916` needs no action. No new environment variable. **Versions:** `tckdb-schemas` 0.174.3 (no client change).
+
 ## The scientific check register is slimmed (Unreleased)
 
 - **Behaviour:** the scientific check register lists each check's code, rule, tier, enforcement and repair; justification text was removed. The `adr` and `tier_rationale` fields and the enforcement `note` text are gone from the register and its generated document, and the producer contract quotes the shorter text. Checks and entry numbers are unchanged.
