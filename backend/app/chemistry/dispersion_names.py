@@ -85,7 +85,7 @@ is unaffected: the key joins spellings, it does not assert the combination runs.
 
 The SQL twin used by the search filters is built from the rules here
 (``scientific_read/lot_identity_filters.py``). The Alembic revision that
-re-keys existing rows (``f3b8d5a1c702``) carries a frozen copy of these
+re-keys existing rows carries a frozen copy of these
 rules, and a test holds the two to each other.
 """
 

@@ -73,7 +73,7 @@ script never gets far enough to ping anything). Neither alone is enough.
   "degraded": [],
   "warnings": [],
   "components": {
-    "database": {"healthy": true, "alembic_revision": "f9b2e6c4a1d7", "reason": null},
+    "database": {"healthy": true, "alembic_revision": "d5b8e2f4a916", "reason": null},
     "worker": {
       "inline": true, "thread_alive": true,
       "queued": 0, "oldest_queued_age_seconds": null,

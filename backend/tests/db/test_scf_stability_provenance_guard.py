@@ -1,38 +1,25 @@
 """``calc_scf_stability`` is frozen by its own calculation, not by the one it cites.
 
-``c6f2a9d4e7b1`` states the rule its registry follows at the head of
-``_DIRECT_CHILDREN``: a child is guarded by the accepted root that owns its
+The accepted-science rule: a child is guarded by the accepted root that owns its
 *scientific meaning*, and cross-domain provenance foreign keys are not
-ownership. It then registered ``calc_scf_stability`` twice -- once on the
-``NOT NULL`` ``calculation_id`` that owns the row, and once on the nullable
+ownership. ``calc_scf_stability`` is guarded on the ``NOT NULL``
+``calculation_id`` that owns the row, and not on the nullable
 ``source_calculation_id``, which is the calculation the stability analysis was
-*read from*. The second registration is the one this file exists to keep out.
+*read from*. This file exists to keep the second guard out.
 
 ``tckdb_guard_accepted_child`` makes no distinction between the columns it is
 given: every non-NULL value in every argument column is looked up in
-``record_review`` and, if ever approved, the write is refused. So while both
-columns were registered, naming an approved calculation as the source of a
-stability analysis was itself the refusable act -- on a row belonging to a
-calculation nobody had reviewed. The database refused to record provenance
-pointing at accepted science, and the identical insert with the pointer left
-NULL succeeded. Citing nothing was the compliant move, which is backwards:
+``record_review`` and, if ever approved, the write is refused. Guarding both
+columns would make naming an approved calculation as the source of a
+stability analysis itself refusable, which is backwards:
 accepted science exists precisely to be pointed at.
 
-``a1f6c3e9b527`` had already drawn this line explicitly for the identically
-shaped ``network_solve_state_energy.source_calculation_id``, excluding it "for
-the same reason ``thermo_source_calculation.calculation_id`` is". The entry
-removed by ``d4e9b1c7a253`` was the one place the rule was stated and then not
-followed.
+The identically shaped ``network_solve_state_energy.source_calculation_id`` is
+excluded for the same reason ``thermo_source_calculation.calculation_id`` is.
 
-Why this file rather than the registry parity test
---------------------------------------------------
-``test_accepted_science_trigger_registry.py`` derives its expectation from the
-same revision registries it checks, so it cannot see a guard that should not
-exist: the expectation and the reality move together. It also compares trigger
-*names*, and this defect lived in a trigger *argument*, inside a trigger whose
-name was and remains correct. Only writing the row and demanding it land
-catches this, which is what ``test_provenance_pointer_at_accepted_science_is_allowed``
-does.
+A defect here would live in a trigger *argument*, not a trigger name. Only
+writing the row and demanding it land catches it, which is what
+``test_provenance_pointer_at_accepted_science_is_allowed`` does.
 
 The tests below pin both halves, because a guard removed too broadly is as
 wrong as one registered too broadly:

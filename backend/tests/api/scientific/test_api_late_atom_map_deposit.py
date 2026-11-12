@@ -9,7 +9,7 @@ is a deliberate rule working as designed:
   rather than upgrading the first;
 * replaying the original ``Idempotency-Key`` with the corrected payload is
   refused and writes nothing;
-* the supersession route -- which ``b6c1f4a8e703`` names as the correction
+* the supersession route -- the correction
   path for a *wrong* map -- **cannot join two separately deposited
   transition-state entries**, because each deposit mints its own
   ``transition_state`` and the subject identity for a
@@ -280,7 +280,7 @@ def test_supersession_cannot_join_two_separately_deposited_entries(
 ):
     """The gap, stated as an assertion.
 
-    ``b6c1f4a8e703`` prescribes "deposit a new transition-state entry
+    The correction path is to "deposit a new transition-state entry
     carrying the map, approve it, and record a ``transition_state_entry``
     supersession". Through the API that prescription cannot be followed: the
     new entry arrives under a *new* ``transition_state``, and

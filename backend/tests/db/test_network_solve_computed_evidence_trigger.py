@@ -1,31 +1,18 @@
 """Disposable-database contract for the ``computed`` evidence trigger.
 
-``f9b2e6c4a1d7`` turns ``computed ⇒ master-equation inputs`` from a convention
-of one Pydantic validator into a property of the record. The claim only becomes
-checkable at COMMIT — a ``network_solve`` is written before the children that
-evidence it — so every assertion here has to *commit*, which the ordinary
-per-test rollback fixture cannot do. Hence a throwaway database, as in
-``test_network_solve_kind_migration.py``.
+A ``computed`` solve must carry its master-equation inputs, but a ``network_solve`` is written before the children that
+evidence it, so the claim is only checkable at COMMIT. Every assertion here has to commit, which the ordinary per-test
+rollback fixture cannot do, hence a throwaway database.
 
-Five things are load-bearing and each has a test:
+* an unevidenced ``computed`` solve is refused at commit, not at insert, so the usual write order is untouched;
+* the usual write order (solve, flush, children, one transaction) still commits;
+* each rule is inapplicable exactly where the validator says the evidence should not exist: no energy-transfer entry for
+  a network with no well, no barrier for an all-barrierless one;
+* ``reported`` is exempt, since it holds none of these inputs;
+* tearing a whole network down in one transaction still works.
 
-* an unevidenced ``computed`` solve is refused, and refused *at commit* rather
-  than at insert, so the legitimate write order is untouched;
-* the legitimate write order — solve, flush, children, one transaction — still
-  commits, because a backstop that breaks the front door is not a backstop;
-* each rule is inapplicable exactly where the validator says the evidence
-  should not exist — no ⟨ΔE⟩down for a network with no well, no barrier for an
-  all-barrierless one — because a backstop stricter than the front door turns a
-  clean 422 into an opaque 500;
-* ``reported`` is exempt, since it holds none of these inputs by construction
-  (ADR 0010);
-* tearing a whole network down in one transaction still works, because the
-  trigger asks about a solve that, by then, is gone.
-
-What is *not* tested here, because it is not guaranteed: coverage. A computed
-solve with four state energies out of five commits. That rule lives in
-``validate_mechanistic_channel_evidence`` and is exercised in
-``tests/workflows/test_network_pdep_upload.py``.
+Coverage (four state energies out of five) is not guaranteed here; that rule lives in
+``validate_mechanistic_channel_evidence`` and is exercised in ``tests/workflows/test_network_pdep_upload.py``.
 """
 
 import subprocess
@@ -34,9 +21,6 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
-
-PREVIOUS_REVISION = "c4d8f1b2a9e6"
-TRIGGER_REVISION = "f9b2e6c4a1d7"
 
 REPO_BACKEND = Path(__file__).resolve().parents[2]
 
@@ -79,7 +63,7 @@ def _drop_database(admin, admin_conn, db_name: str) -> None:
 
 @pytest.fixture(scope="module")
 def trigger_engine():
-    """One database migrated to the trigger revision, shared by the module.
+    """One database migrated to head, shared by the module.
 
     Each test seeds its own network and commits into it; nothing here rolls
     back, because a deferred constraint trigger fires at COMMIT and a rolled
@@ -91,7 +75,7 @@ def trigger_engine():
     admin, admin_conn = _create_database(db_name)
     engine = None
     try:
-        _alembic("upgrade", TRIGGER_REVISION, _db_env(db_name), check=True)
+        _alembic("upgrade", "head", _db_env(db_name), check=True)
         engine = create_engine(_database_url(db_name), pool_pre_ping=True)
         yield engine
     finally:
@@ -625,134 +609,3 @@ def test_tearing_down_a_whole_network_still_commits(trigger_engine):
             text("SELECT count(*) FROM network_solve WHERE network_id = :id"),
             {"id": network_id},
         ) == 0
-
-
-def test_migration_round_trips_and_downgrade_removes_the_trigger():
-    """Up, down, up. Downgrade needs no guard and must leave nothing behind.
-
-    Dropping a constraint can invalidate no stored row — unlike
-    ``c4d8f1b2a9e6``'s downgrade, which had to refuse because the older schema
-    could not *say* what a reported solve is. Here the rule simply reverts to
-    living in ``validate_mechanistic_channel_evidence``, where it still is.
-    """
-    from conftest import _database_url, _db_env, scratch_database_name
-
-    db_name = scratch_database_name("computed_evidence_roundtrip")
-    admin, admin_conn = _create_database(db_name)
-    engine = None
-    try:
-        env = _db_env(db_name)
-        _alembic("upgrade", TRIGGER_REVISION, env, check=True)
-        engine = create_engine(_database_url(db_name), pool_pre_ping=True)
-        with engine.connect() as conn:
-            assert conn.scalar(
-                text(
-                    "SELECT count(*) FROM pg_trigger "
-                    "WHERE tgname LIKE 'ct_network_solve%computed_evidence'"
-                )
-            ) == 4
-        engine.dispose()
-        engine = None
-
-        _alembic("downgrade", PREVIOUS_REVISION, env, check=True)
-        engine = create_engine(_database_url(db_name), pool_pre_ping=True)
-        with engine.connect() as conn:
-            assert conn.scalar(
-                text(
-                    "SELECT count(*) FROM pg_trigger "
-                    "WHERE tgname LIKE 'ct_network_solve%computed_evidence'"
-                )
-            ) == 0
-            assert conn.scalar(
-                text(
-                    "SELECT count(*) FROM pg_proc "
-                    "WHERE proname = 'network_solve_computed_evidence'"
-                )
-            ) == 0
-            # The axis it backs is still there: this revision removed a
-            # backstop, not the claim.
-            assert conn.scalar(
-                text(
-                    "SELECT 1 FROM information_schema.columns "
-                    "WHERE table_name = 'network_solve' AND column_name = 'kind'"
-                )
-            )
-        engine.dispose()
-        engine = None
-
-        _alembic("upgrade", TRIGGER_REVISION, env, check=True)
-        engine = create_engine(_database_url(db_name), pool_pre_ping=True)
-        with engine.connect() as conn:
-            assert conn.scalar(
-                text(
-                    "SELECT count(*) FROM pg_trigger "
-                    "WHERE tgname LIKE 'ct_network_solve%computed_evidence'"
-                )
-            ) == 4
-    finally:
-        if engine is not None:
-            engine.dispose()
-        _drop_database(admin, admin_conn, db_name)
-
-
-def test_upgrade_refuses_computed_solves_it_could_not_have_enforced():
-    """The guard checks the database rather than inheriting a claim.
-
-    ``c4d8f1b2a9e6.upgrade()`` refuses while any solve lacks state energies,
-    which is a real guarantee about rows present *at that revision* — but it
-    says nothing about ``network_solve_energy_transfer``, and nothing about
-    rows written afterwards. Creating the trigger over data that already
-    violates it would produce a rule true only of the future, so the upgrade
-    asks, names the offenders and stops.
-    """
-    from conftest import _database_url, _db_env, scratch_database_name
-
-    db_name = scratch_database_name("computed_evidence_guard")
-    admin, admin_conn = _create_database(db_name)
-    engine = None
-    try:
-        env = _db_env(db_name)
-        _alembic("upgrade", PREVIOUS_REVISION, env, check=True)
-
-        engine = create_engine(_database_url(db_name), pool_pre_ping=True)
-        with engine.begin() as conn:
-            # Written after c4d8f1b2a9e6 applied, so its guard never saw it —
-            # exactly the window the ancestor's proof does not cover.
-            ids = _new_network(conn, "i9")
-            channel_id = _insert_channel(conn, ids, "i9_path")
-            _insert_path(conn, channel_id, barrierless=False)
-            _insert_solve(conn, ids["network_id"], "i9")
-            # And ones that satisfy the ancestor's guard but not this one:
-            # state energies present, the other two classes missing.
-            half = _insert_solve(conn, ids["network_id"], "j0")
-            _insert_state_energy(conn, half, ids["well_id"])
-            _insert_energy_transfer(conn, half, ids["well_id"], ids["collider_id"])
-        engine.dispose()
-        engine = None
-
-        completed = _alembic(
-            "upgrade", TRIGGER_REVISION, env, capture_output=True, text=True
-        )
-        assert completed.returncode != 0
-        combined = completed.stdout + completed.stderr
-        assert "2 network_solve row(s) with kind='computed'" in combined
-        # Named individually, and told which classes each one is short of.
-        assert (
-            "nsolve_evidi9 (missing state energies, energy transfer, "
-            "channel barriers)" in combined
-        )
-        assert "nsolve_evidj0 (missing channel barriers)" in combined
-
-        # The refusal left the schema alone rather than half-applying it.
-        engine = create_engine(_database_url(db_name), pool_pre_ping=True)
-        with engine.connect() as conn:
-            assert conn.scalar(
-                text(
-                    "SELECT count(*) FROM pg_trigger "
-                    "WHERE tgname LIKE 'ct_network_solve%computed_evidence'"
-                )
-            ) == 0
-    finally:
-        if engine is not None:
-            engine.dispose()
-        _drop_database(admin, admin_conn, db_name)

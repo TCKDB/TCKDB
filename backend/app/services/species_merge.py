@@ -11,7 +11,7 @@ Three things follow, and this module is where each lives:
 * every lookup that resolves an *identity* (an upload, a search for one species) considers **live rows only**
   (:func:`live`), because the unique keys apply to live rows only;
 * a handle that names a merged row resolves to its survivor (:func:`canonical_species`, ...), and a read says so;
-* nothing new is written onto a merged row (the database refuses it; see revision ``c7e2a9f4d138``).
+* nothing new is written onto a merged row (the database refuses it).
 """
 
 from __future__ import annotations

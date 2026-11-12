@@ -286,7 +286,7 @@ class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin, PublicR
         # ``ck_molecular_property_observation_`` glued on, so several of these
         # names would exceed Postgres's 63-char identifier limit and get
         # silently hash-truncated. ``conv()`` marks the name as already final,
-        # matching exactly what the migration (``0b4a3afabfd3``) creates via
+        # matching exactly what the migration creates via
         # ``op.f(...)`` -- the same approach ``execution_environment_manifest``
         # uses for its FK names.
         CheckConstraint(
@@ -320,7 +320,7 @@ class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin, PublicR
         # live data and would reject the current CCCBDB importer's writes.
         # Scoping to the new Cp contract keeps the invariant meaningful
         # exactly where it is new (see
-        # tests/db/test_observation_contract_migration.py::
+        # tests/db/test_observation_contract.py::
         # test_cccbdb_style_row_with_uncertainty_and_no_kind_survives).
         CheckConstraint(
             "property_kind <> 'heat_capacity_cp' "

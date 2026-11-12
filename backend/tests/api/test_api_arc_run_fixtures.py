@@ -21,8 +21,7 @@ original ARC run directories (kept outside the repo).
 Five payloads are a documented exception (task #264): they carry a
 ``transition_state``-side ``bac_total`` of value ``0.0`` with no
 components, which is exactly the false shape
-``backend/alembic/versions/a55cc983501a_repair_false_zero_ts_bac_totals.py``
-and ``assert_bac_total_has_required_components`` exist to refuse. The
+``assert_bac_total_has_required_components`` exists to refuse. The
 payloads are kept byte-for-byte as ARC produced them -- they are the only
 in-repo evidence of what a real producer actually emits, defect included --
 and this file asserts the refusal directly against them rather than

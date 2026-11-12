@@ -74,10 +74,8 @@ if TYPE_CHECKING:
 # `terminal_states()` returns a `frozenset`, whose iteration order is not
 # stable across interpreter runs (hash randomization). Iterate the enum class
 # itself instead (deterministic declaration order) and filter to the terminal
-# members — this also matches the literal order already baked into the
-# deployed migration's `_TERMINAL_STATE_VALUES` tuple
-# (alembic/versions/b8c9d0e1f2a3_add_machine_review_curator_task.py), so the
-# rendered CHECK constraint text doesn't drift from what's already deployed.
+# members — this also matches the literal order of the terminal states in the
+# migration, so the rendered CHECK constraint text doesn't drift from the database.
 _TERMINAL_STATES = MachineReviewCuratorTaskState.terminal_states()
 _TERMINAL_STATES_SQL = ", ".join(
     f"'{state.value}'" for state in MachineReviewCuratorTaskState if state in _TERMINAL_STATES

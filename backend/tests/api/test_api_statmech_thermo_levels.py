@@ -918,7 +918,7 @@ def _bundle_submit_envelope(thermo_upload: dict) -> dict:
         "source_instance": {
             "instance_kind": "local",
             "instance_name": "test-local",
-            "schema_version": "d861dfd60891",
+            "schema_version": "d5b8e2f4a916",
             "software_version": "0.0.0-test",
         },
         "exporter": {"local_user_label": "test-user"},

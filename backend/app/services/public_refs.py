@@ -420,22 +420,21 @@ def _canonical_energy_correction_scheme(obj: Any) -> str:
     The database uniqueness constraint (``uq_energy_correction_scheme_
     identity``) and ``resolve_or_create_scheme`` both dedup on
     ``(kind, name, level_of_theory_id, source_literature_id,
-    software_release_id, workflow_tool_release_id)`` as of
-    ``a7d4e2b9c351``. This function must list **exactly** those fields:
+    software_release_id, workflow_tool_release_id)``. This function must list **exactly** those fields:
     narrower than the index and two index-distinct rows collide on
     ``ix_energy_correction_scheme_public_ref`` at insert; wider and two
     rows the resolver considers identical would be handed different
     refs, which the resolver never asks for but which would make this
     function disagree with the key it exists to mirror.
 
-    **Two forms, selected by ``data_revision``** (``f2c8a5d1e9b7``): a row
+    **Two forms, selected by ``data_revision``**: a row
     with no data revision keeps the six-field string above; a row with one
     swaps ``workflow_tool_release_id`` for ``data_revision``, matching
     ``uq_energy_correction_scheme_identity_revised``. The two strings name
     different fields, so a revised and an unrevised scheme can never share
     a ref.
 
-    **The frequency level** (``c5e1a8d3f6b9``) joins both forms, after
+    **The frequency level** joins both forms, after
     ``level_of_theory_id`` and only when set: a NULL one contributes
     nothing, so every pre-existing row's string is unchanged.
 
@@ -455,9 +454,8 @@ def _canonical_energy_correction_scheme(obj: Any) -> str:
     )
     frequency_level_id = getattr(obj, "frequency_level_of_theory_id", None)
     if frequency_level_id is not None:
-        # Part of identity since ``c5e1a8d3f6b9``. A scheme with no frequency
-        # level adds nothing here, so its string is byte-for-byte what it
-        # was before the column existed and no existing ref changes.
+        # Part of identity. A scheme with no frequency
+        # level adds nothing here, so its string is the same as without the column.
         head += f"frequency_level_of_theory_id={frequency_level_id};"
     head += (
         f"source_literature_id={obj.source_literature_id};"

@@ -5,7 +5,7 @@ itself merged) and its neighbour says no calculation points at a merged row.
 Both used to be enforced only by ``merge_duplicate_levels_of_theory.py``, so a
 hand-written row, a later script or a restored dump could build a chain
 A -> B -> C (a search by A's ref then finds nothing) or put a calculation on
-a merged row. Revision ``e88231299733`` adds two triggers.
+a merged row. Two triggers guard this.
 
 Runs inside the pytest transaction. Every refusal is raised by the trigger, so
 each test also checks the message, and every refusal has a sibling that
@@ -20,8 +20,6 @@ from sqlalchemy.exc import DBAPIError
 
 from app.db.models.calculation import Calculation
 from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
-from tests.db._migration_chain import revision_under_test
-from tests.db.test_level_of_theory_basis_identity_migration import _Harness
 from tests.services.scientific_read._factories import (
     make_calculation,
     make_species,
@@ -29,8 +27,6 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
     unique_smiles,
 )
-
-_MIGRATION = revision_under_test("e88231299733")
 
 
 def _lot(session, name: str) -> LevelOfTheory:
@@ -210,78 +206,3 @@ def test_a_calculation_already_on_a_merged_row_can_still_be_edited(db_session):
             {"a": a.id, "c": calc2.id},
         ),
     )
-
-
-# ---------------------------------------------------------------------------
-# The revision itself
-# ---------------------------------------------------------------------------
-
-
-def _guards(engine) -> set[str]:
-    with engine.connect() as conn:
-        return set(
-            conn.scalars(
-                text(
-                    "SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgname IN "
-                    "('trg_lot_merge_guard', 'trg_calculation_lot_not_merged')"
-                )
-            ).all()
-        )
-
-
-@pytest.fixture
-def harness():
-    created = _Harness("lot_merge_guard")
-    yield created
-    created.close()
-
-
-def test_the_revision_installs_and_removes_both_triggers_and_reports_state(harness):
-    harness.run("upgrade", _MIGRATION.parent)
-    assert _guards(harness.engine) == set()
-    # A chain and a stranded calculation, built before the guards exist.
-    with harness.engine.begin() as conn:
-        ids = [
-            conn.scalar(
-                text(
-                    "INSERT INTO level_of_theory (method, lot_hash) VALUES (:m, :h) RETURNING id"
-                ),
-                {"m": f"m{n}", "h": f"{n:0<64}"[:64]},
-            )
-            for n in range(1, 4)
-        ]
-        species_id = conn.scalar(
-            text(
-                "INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind) "
-                "VALUES (CAST('molecule' AS molecule_kind), 'O', "
-                "'XLYOFNOQVPJJNP-UHFFFAOYSA-N', 0, 1, CAST('unspecified' AS stereo_kind)) "
-                "RETURNING id"
-            )
-        )
-        entry_id = conn.scalar(
-            text("INSERT INTO species_entry (species_id) VALUES (:s) RETURNING id"),
-            {"s": species_id},
-        )
-        conn.execute(
-            text("INSERT INTO calculation (type, species_entry_id, lot_id) "
-                 "VALUES (CAST('sp' AS calc_type), :e, :l)"),
-            {"e": entry_id, "l": ids[0]},
-        )
-        for merged, into in ((ids[0], ids[1]), (ids[1], ids[2])):
-            conn.execute(
-                text("INSERT INTO level_of_theory_merge (merged_lot_id, into_lot_id) VALUES (:a, :b)"),
-                {"a": merged, "b": into},
-            )
-
-    completed = harness.run("upgrade", _MIGRATION.revision)
-    assert _guards(harness.engine) == {"trg_lot_merge_guard", "trg_calculation_lot_not_merged"}
-    # Existing rows are reported, not rejected.
-    assert "1 existing merge chain link(s), 1 existing calculation(s) on a merged row" in completed.stdout
-    with harness.engine.connect() as conn:
-        assert conn.scalar(text("SELECT count(*) FROM level_of_theory_merge")) == 2
-
-    downgraded = harness.run("downgrade", _MIGRATION.parent)
-    assert _guards(harness.engine) == set()
-    assert "The table holds 2 merge(s)" in downgraded.stdout
-    harness.run("upgrade", _MIGRATION.revision)
-    assert len(_guards(harness.engine)) == 2

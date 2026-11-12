@@ -22,8 +22,7 @@ Three tables, children of ``statmech``:
     imported literature parameters, or a frequency scale factor. Imported parameters need no fabricated calculation.
 
 The owner rules (a basin of the same species entry, a determination of the same transition-state entry, a source
-calculation of the same subject, a member of the same species entry) are database facts, enforced by triggers in
-revision ``e6b3a9d1f742``.
+calculation of the same subject, a member of the same species entry) are database facts, enforced by triggers.
 """
 
 from __future__ import annotations

@@ -1,10 +1,8 @@
 """A declared atom map is frozen by its transition-state entry's acceptance.
 
-``c6f2a9d4e7b1`` made accepted scientific records immutable in the database.
-``d3a7f1c9b284`` added ``reaction_atom_map`` / ``reaction_atom_map_pair``
-afterwards and did not join that regime, so a depositor's mechanism claim was
-the one recently added scientific record that could still be rewritten in place
-under an accepted saddle point. ``b6c1f4a8e703`` closes that.
+Accepted scientific records are immutable in the database. ``reaction_atom_map`` /
+``reaction_atom_map_pair`` join that regime, so a depositor's mechanism claim cannot
+be rewritten in place under an accepted saddle point.
 
 These tests pin both halves of the rule, because a guard that is present but
 never fires is the failure mode:
@@ -19,8 +17,7 @@ depositing a new transition-state entry that carries the right one and
 recording a ``transition_state_entry`` supersession, end to end through the
 curator route. A freeze with no correction path would be worse than no freeze.
 
-Why the transition-state entry and not something else owns this is argued in
-``b6c1f4a8e703``'s module docstring; the short version is that it is the only
+The transition-state entry owns the freeze because it is the only
 accepted-science root the map names, it is ``NOT NULL`` on every map, and one
 TS entry determines exactly one reaction entry, so nothing unrelated can freeze
 a map by being approved.

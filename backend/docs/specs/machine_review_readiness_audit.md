@@ -7,7 +7,7 @@ stack and recommends the next phase.
 **Scope:** TCKDB backend. The machine-review stack remains **private/admin-only
 and advisory**; this audit confirms that boundary still holds.
 **Method:** code + docs inspection of `app/services/machine_review/*`,
-`app/db/models/record_machine_review.py`, the `c9d0e1f2a3b4` migration, the admin
+`app/db/models/record_machine_review.py`, the migration, the admin
 route, and the public scientific read surface; plus the targeted test run below.
 **Related:** `machine_review_lifecycle.md` (architecture), `record_machine_review_policy.md`
 (policy), `machine_review_handoff.md` (workstream checkpoint).
@@ -68,7 +68,7 @@ Supporting axes also present: `schemas.py`, `derivation.py`, `mapping.py`,
    (`source_submission_id`→`submission`, `source_audit_event_id`→`submission_audit_event`),
    indexes, and the two `CheckConstraint`s (`char_length(context_hash)=64`,
    `jsonb_typeof(findings_json)='array'`) match between the ORM model and the
-   `c9d0e1f2a3b4` migration. The pytest fixture rebuilds the DB from migrations
+   migration. The pytest fixture rebuilds the DB from migrations
    and the suite is green, so the runtime schema matches the model.
 8. **Active prompt/rubric ownership — single source, see risk R1.** The active
    recipe lives **only** in `recipe.py`
@@ -109,7 +109,7 @@ executor/orchestration/trigger never add, delete, merge, or bulk-update.
 
 ## Persistence / currency status
 
-- **Table:** `record_machine_review` (`c9d0e1f2a3b4`), append-only, no uniqueness
+- **Table:** `record_machine_review`, append-only, no uniqueness
   over `(record_type, record_id)` — multiple historical rows are expected and
   "which is live" is a read-time classification (policy §4).
 - **Currency key:** `context_hash` + `context_schema_version` + the prompt

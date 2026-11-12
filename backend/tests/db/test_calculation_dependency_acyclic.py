@@ -1,10 +1,10 @@
 """The calculation dependency graph is acyclic, and the database says so.
 
-``e2f2b3fb6725`` adds a row trigger on ``calculation_dependency`` that refuses an
+A row trigger on ``calculation_dependency`` refuses an
 edge whose parent is already reachable from its child. These tests cover the
 trigger itself (two- and three-edge cycles, diamonds, self-edges, UPDATE, bulk
-inserts, the accepted-science ordering), its mapping to the coded 409, the
-migration's refusal to run over stored cycles, and a real two-connection race.
+inserts, the accepted-science ordering), its mapping to the coded 409, and a real
+two-connection race.
 """
 
 from __future__ import annotations
@@ -12,23 +12,18 @@ from __future__ import annotations
 import itertools
 import threading
 import time
-from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 import pytest
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from starlette.requests import Request
 
 from app.api.errors import _integrity_error_handler
-from app.db.base import Base
 from app.db.models.calculation import CalculationDependency
 from app.db.models.common import CalculationDependencyRole as Role
 from app.db.models.common import CalculationType, SubmissionRecordType
-from tests.db._migration_chain import revision_under_test
 from tests.db.test_accepted_science_immutability import _actor, _approve
 from tests.services.scientific_read._factories import (
     make_calculation,
@@ -36,22 +31,12 @@ from tests.services.scientific_read._factories import (
     unique_smiles,
 )
 
-_REVISION = "e2f2b3fb6725"
 _BACKEND = Path(__file__).resolve().parents[2]
 _LOCK_TEXT = "calculation_dependency:acyclic"
 
 
-def _migration_module():
-    path = _BACKEND / "alembic/versions/e2f2b3fb6725_enforce_acyclic_calculation_dependencies.py"
-    spec = spec_from_file_location("acyclic_dependency_migration", path)
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def _calcs(session, n, label="ACYC"):
-    # The species and the entry are inserted by SQL, not through the ORM: the race fixture's database stands at the
-    # revision under test, and an ORM insert of ``Species`` or ``SpeciesEntry`` names columns a later revision added.
+    # The species and the entry are inserted by SQL, not through the ORM.
     species_id = session.scalar(
         text(
             "INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind) VALUES "
@@ -240,52 +225,6 @@ def test_integrity_handler_maps_the_trigger_to_the_coded_409(db_session):
     assert "calculation_dependency_acyclic" not in body["detail"]  # raw constraint names stay out of bodies
 
 
-# -- the migration ------------------------------------------------------------
-
-
-def test_upgrade_over_a_stored_cycle_fails_and_lists_public_refs(db_session, monkeypatch):
-    migration = _migration_module()
-    monkeypatch.setattr(
-        migration, "op", Operations(MigrationContext.configure(db_session.connection(), opts={"target_metadata": Base.metadata}))
-    )
-    a, b, c = _calcs(db_session, 3, "ACYCMIG")
-    migration.downgrade()  # trigger gone: the cyclic state can now be stored
-    assert db_session.scalar(text(
-        "SELECT count(*) FROM pg_trigger WHERE tgname = 'trg_calculation_dependency_acyclic'")) == 0
-    _edge(db_session, a, b)
-    _edge(db_session, b, c)
-    _edge(db_session, c, a)
-    with pytest.raises(RuntimeError) as caught:
-        migration.upgrade()
-    message = str(caught.value)
-    for calc in (a, b, c):
-        assert calc.public_ref in message
-    assert db_session.scalar(text(
-        "SELECT count(*) FROM pg_trigger WHERE tgname = 'trg_calculation_dependency_acyclic'")) == 0
-    # nothing was repaired: all three edges are still stored
-    assert db_session.scalar(text("SELECT count(*) FROM calculation_dependency WHERE parent_calculation_id = ANY(:ids)"),
-                             {"ids": [a.id, b.id, c.id]}) == 3
-
-
-def test_upgrade_over_a_clean_graph_succeeds_and_downgrade_removes_the_trigger(db_session, monkeypatch):
-    migration = _migration_module()
-    monkeypatch.setattr(
-        migration, "op", Operations(MigrationContext.configure(db_session.connection(), opts={"target_metadata": Base.metadata}))
-    )
-    a, b = _calcs(db_session, 2, "ACYCCLEAN")
-    migration.downgrade()
-    _edge(db_session, a, b)  # a diamond-free, acyclic graph
-    migration.upgrade()
-    sql = ("SELECT count(*) FROM pg_trigger WHERE tgname = 'trg_calculation_dependency_acyclic' "
-           "AND tgrelid = 'public.calculation_dependency'::regclass")
-    assert db_session.scalar(text(sql)) == 1
-    migration.downgrade()
-    assert db_session.scalar(text(sql)) == 0
-    assert db_session.scalar(text(
-        "SELECT count(*) FROM pg_proc WHERE proname = 'tckdb_calculation_dependency_acyclic'")) == 0
-    migration.upgrade()
-
-
 # -- a real race --------------------------------------------------------------
 
 
@@ -302,7 +241,7 @@ def race_engine():
     engine = None
     try:
         subprocess.run(
-            ["conda", "run", "-n", "tckdb_env", "alembic", "upgrade", revision_under_test(_REVISION).revision],
+            ["conda", "run", "-n", "tckdb_env", "alembic", "upgrade", "head"],
             cwd=_BACKEND, env=_db_env(db_name), check=True,
         )
         engine = create_engine(_database_url(db_name), pool_pre_ping=True)

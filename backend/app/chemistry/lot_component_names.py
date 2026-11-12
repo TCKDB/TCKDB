@@ -20,7 +20,7 @@ applies this case rule first and then a cited alias table.
 A level of theory carries no free-text ``keywords`` field: the settings a deck or log states are calculation
 parameters, and the method qualifiers that change the level are typed (``calculation_resolution``).
 
-The Alembic revision that re-keys existing rows (``d0a7c3b91e4f``) carries a
+The Alembic revision that re-keys existing rows carries a
 frozen copy of this rule, and a test holds the two in agreement.
 """
 

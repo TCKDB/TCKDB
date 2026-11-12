@@ -445,45 +445,7 @@ full suite is verified green at seeds **1, 2, 3, 4, 5, 7, 11, 90210 and
 since it puts all ~6,770 tests in one process against one database and so
 exercises every cross-file adjacency the sharded runs hide.
 
-**That audit is a measurement of a commit, not a property of the suite.** One
-real order dependence appeared four days after it was taken, and it is worth
-knowing its shape because the shape recurs:
-`tests/db/test_imaginary_mode_tau_basis_constraint.py` downgraded the shared
-database and restored it to the revision it was written against rather than to
-`head`. That revision stopped being `head` the day `b7e4d1a9c026` landed on top
-of it, so from then on the file left every later test in its process running
-against a schema one revision old — surfacing as three failures in
-`tests/db/test_statmech_torsion_index_uniqueness.py` asserting that a unique
-constraint had the wrong name. The eight-way gates stayed green throughout: with
-eight workers and eight databases, the offender and its victim only share a
-process about one run in eight, which is exactly the blind spot the paragraph
-above names. `tests/db/conftest.py::_must_leave_the_database_at_head` now fails
-the offender at its own teardown, so the class no longer depends on a serial run
-to be seen. Re-audit after adding a revision; do not treat the seed list as a
-standing guarantee.
-
-**The constant that caused it is gone, not annotated.** All three occurrences
-restored the database to a module constant named `_CURRENT_HEAD`, which never
-meant head — it meant *the revision under test*, and it read as head to each
-author in turn. The first two were fixed in place and left comments warning
-about it; the third happened anyway. So a migration test now names exactly one
-thing, its subject, and reads the rest of the chain from disk:
-
-```python
-from tests.db._migration_chain import revision_under_test
-
-_MIGRATION = revision_under_test("b7e4d1a9c026")
-
-command.downgrade(config, _MIGRATION.parent)     # its down_revision, not a copy
-command.upgrade(config, _MIGRATION.revision)     # the thing under test
-command.upgrade(config, "head")                  # putting the shared DB back
-```
-
-There is no way to spell "head" through that helper, and
-`tests/test_migration_revision_names.py` fails any test that binds a revision id
-to a name containing "head". `_PREVIOUS_HEAD` is gone for the same reason plus
-one more: a revision's parent is declared in the migration file, so copying it
-into a test creates a second place that can disagree with the first, silently.
+**That audit is a measurement of a commit, not a property of the suite.** A test that downgrades the shared database and does not put it back leaves every later test in its process running against a different schema. The eight-way gates hide it: with eight workers and eight databases, the offender and its victim only share a process about one run in eight. `tests/db/conftest.py::_must_leave_the_database_at_head` fails the offender at its own teardown, so the class does not depend on a serial run to be seen. A test that moves the schema restores it with the literal string `"head"`, and reads revision ids from the script directory (`tests/db/_migration_chain.py`) rather than writing them down. Re-audit after a change to the migration; do not treat the seed list as a standing guarantee.
 
 **Set `TCKDB_TEST_SEED=random` for an unpinned order.** The script draws a
 fresh seed per invocation and echoes it:
@@ -753,8 +715,7 @@ happened to run first.
 
 An append-only table cannot be cleaned up through the ordinary path.
 `record_review_event` and `scientific_record_supersession` carry a
-`BEFORE UPDATE OR DELETE` trigger (`tckdb_reject_mutation`, revision
-`c6f2a9d4e7b1`), and the scientific tables additionally refuse `TRUNCATE`.
+`BEFORE UPDATE OR DELETE` trigger (`tckdb_reject_mutation`), and the scientific tables additionally refuse `TRUNCATE`.
 
 The narrow escape hatch is `SET LOCAL session_replication_role = replica`,
 which suppresses user triggers **for one transaction only**. Three teardowns
@@ -771,15 +732,12 @@ at session start, `_drop_test_database` at session end, plus the startup sweep
 above — but it is no longer the *primary* answer, and "the database gets
 dropped eventually" is not an acceptable substitute for a teardown.
 
-The other thing that outlives a test is **the schema itself**. The migration
-round-trip tests in `tests/db/` run `alembic downgrade` against the per-run
-database the whole process shares, so they must upgrade back to `head` — not
-to the revision they were written about — in a `finally`. Stopping at a
-historical revision leaves every migration after it un-applied for the rest of
-the session, and the failure surfaces hundreds of tests later as
+The other thing that outlives a test is **the schema itself**. A test
+that runs `alembic downgrade` must run it on a scratch database
+(`tests/db/test_initial_revision.py`), or upgrade the shared per-run database
+back to `head` in a `finally`. Leaving it below head leaves the schema wrong for
+the rest of the session, and the failure surfaces hundreds of tests later as
 `column ... does not exist` in files that have nothing to do with migrations.
-That single omission was what made `make test-full` unusable; see
-`tests/db/test_dataset_release_migration.py::_restore_head`.
 
 Running Alembic in-process also reconfigures **logging**: `alembic/env.py`
 calls `logging.config.fileConfig`, which by default disables existing loggers

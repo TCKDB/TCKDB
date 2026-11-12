@@ -1,10 +1,9 @@
 """One spelling of an element symbol, as an invariant rather than a habit.
 
-``b4e7c1d20f83`` made ``geometry_atom.element`` canonical by canonicalising it
-in ``parse_xyz`` and backfilling the older rows, and said in its own docstring
-that this established no invariant: nothing in the schema required the column
+``geometry_atom.element`` is canonicalised in ``parse_xyz``, which on its own
+establishes no invariant: nothing in the schema required the column
 to be canonical, so a restore from an older backup or a bulk import could put
-``CL`` back at any time. ``c5a1f8e3d074`` adds the constraint.
+``CL`` back at any time. The constraint closes that.
 
 What has to be pinned here, and why each one is a way it could go wrong:
 
@@ -218,7 +217,7 @@ def test_the_saddle_point_end_cannot_hold_a_non_canonical_spelling(
     next time. ``test_the_constraint_exists_and_is_validated`` pins that it is
     really there.
 
-    Also the case that would have slipped through before ``c5a1f8e3d074``:
+    Also the case that would slip through without the constraint:
     ``('C', 'c')`` satisfied ``upper(element) = upper(ts_element)``.
     """
     savepoint = db_session.begin_nested()

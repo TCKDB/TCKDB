@@ -373,7 +373,7 @@ class ReactionAtomMapPair(Base):
         # "An element does not change across a reaction." Carbon becoming
         # nitrogen is a record that cannot be what it says it is.
         #
-        # Plain equality since ``c5a1f8e3d074``. It was
+        # Plain equality. It used to be
         # ``upper(element) = upper(ts_element)``, because the two ends quote
         # two geometries and nothing guaranteed the two spelled an element the
         # same way -- ``Cl`` becoming ``CL`` was one program shouting where

@@ -16,8 +16,8 @@ Substructure and similarity queries read from the stored
 ``species_entry.mol`` cartridge column. The write path
 (``app/services/species_resolution.py``) canonicalizes SMILES into
 ``mol`` on insert, and the
-``d4e5f6a7b8c9_add_species_entry_mol_gist_index`` migration creates a
-GiST index on the column and backfills any pre-existing NULL rows.
+migration creates a
+GiST index on the column.
 Rows whose ``mol`` is NULL (e.g. a SMILES the cartridge cannot parse)
 are excluded from results — a single seq-scan-per-row fallback would
 defeat the index. Exact mode keeps the indexed ``species.inchi_key``
@@ -328,8 +328,7 @@ def _resolve_similarity_threshold(
 # GiST index (``ix_species_entry_mol_gist``) drive substructure /
 # similarity queries instead of running ``mol_from_smiles(sp.smiles)``
 # per row at request time. The write path (``species_resolution.py``)
-# populates the column on insert; the d4e5f6a7b8c9 migration backfilled
-# any pre-existing NULL rows and created the index. NULL ``se.mol``
+# populates the column on insert; the migration created the index. NULL ``se.mol``
 # rows (e.g. unparseable SMILES) are excluded from matches in the
 # ``WHERE`` clause below — a row-level fallback would defeat the index.
 _STORED_MOL_EXPR = "se.mol"

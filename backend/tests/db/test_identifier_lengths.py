@@ -15,9 +15,8 @@ ORM and every migration truncate identically. It is fragile and opaque:
 Two migrations removed all reliance on that truncation by giving every
 over-long foreign key an explicit short ``name=``:
 
-* revision ``d9c4a1e7f2b6`` — ``transition_state_selection``'s FK
-  (``fk_ts_selection_transition_state``);
-* revision ``f4a7c2e9b1d3`` — the remaining 25 over-63 foreign keys.
+* ``transition_state_selection``'s FK (``fk_ts_selection_transition_state``);
+* the remaining over-63 foreign keys.
 
 With those in place there are **no** legitimately-truncated identifiers left,
 so this guard now enforces a hard rule with **no exceptions**: every raw name
@@ -46,7 +45,7 @@ _MAX_IDENTIFIER_LENGTH = 63
 # databases and relied on SQLAlchemy's deterministic truncation.
 #
 # This set is now INTENTIONALLY EMPTY: every such foreign key was given an
-# explicit short ``name=`` (migrations ``d9c4a1e7f2b6`` and ``f4a7c2e9b1d3``).
+# explicit short ``name=``.
 # Do NOT add entries to silence a failure — give the offending object an
 # explicit short ``name=`` (<= 63 chars, unique within its table) instead, e.g.
 # ``ForeignKey(..., name="fk_<short_table>_<columns>")``. Keeping this set empty
@@ -126,7 +125,7 @@ def test_known_truncated_allow_list_is_empty() -> None:
 
 
 def test_transition_state_selection_fk_has_explicit_short_name() -> None:
-    """Regression lock for the fix in migration ``d9c4a1e7f2b6``.
+    """Regression lock on the explicit short name.
 
     The ``transition_state_selection.transition_state_id`` FK must keep its
     explicit short name and must not slip back into the truncated form.

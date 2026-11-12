@@ -297,7 +297,7 @@ def test_a_saddle_point_whose_xyz_shouts_its_elements_is_accepted(
     correct chemistry over capitalisation, which ADR 0008 disqualifies a
     blocking check from doing.
 
-    Since ``b4e7c1d20f83`` the shouting is settled before the comparison rather
+    The shouting is settled before the comparison rather
     than inside it: ``parse_xyz`` canonicalises the case on the way into
     ``geometry_atom.element``. The deposit under test is unchanged, and so is
     what it must be allowed to do.

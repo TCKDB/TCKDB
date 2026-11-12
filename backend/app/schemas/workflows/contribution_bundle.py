@@ -207,7 +207,7 @@ class ContributionBundle(SchemaBase):
                     "source_instance": {
                         "instance_kind": "local",
                         "instance_name": "my-lab-tckdb",
-                        "schema_version": "d861dfd60891"
+                        "schema_version": "d5b8e2f4a916"
                     },
                     "exporter": {
                         "local_user_label": "depositor"

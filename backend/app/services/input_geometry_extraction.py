@@ -735,8 +735,7 @@ def _current_state(session: Session, calculation: Calculation) -> _CalculationGe
     Checked before either geometry query: once a calculation has been
     approved (``record_review.first_approved_at`` set), the deployed
     accepted-science-immutability trigger
-    (``tckdb_guard_accepted_child`` on ``calculation_input_geometry``,
-    see ``c6f2a9d4e7b1``/``a1f6c3e9b527``) refuses any insert or update
+    (``tckdb_guard_accepted_child`` on ``calculation_input_geometry``) refuses any insert or update
     against it -- "Artifacts are frozen after calculation approval;
     publish a corrected calculation instead of changing accepted
     evidence," the same rule the artifacts route enforces before this

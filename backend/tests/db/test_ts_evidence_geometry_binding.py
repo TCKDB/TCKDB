@@ -1,30 +1,16 @@
 """IRC evidence must name the geometry its atom indices count into.
 
-``c1d2e3f4a5b6`` gave ``transition_state_validation_evidence`` two JSONB
-participant mappings whose values are saddle-point atom indices, and recorded
-nothing about which geometry those indices count into. An atom index is a
-property of a geometry -- a transition-state entry can accumulate several as it
-is re-optimised, with no guarantee any two order their atoms alike -- so an
-index with no geometry beside it identifies a position in an ordering the
-reader has to infer, and an inference landing on the wrong geometry silently
-means a different atom. ``f3b7d2c8a419`` closes that the way ADR 0011 closed it
-for ``reaction_atom_map``: the record names the geometry rather than leaving
-one to be derived.
-
-Two things are tested here, because the column is only worth having if both
-hold: the rule is enforced by the database on every write, and the revision
-that introduced it resolved the rows it could while declining to guess at the
-rows it could not.
+``transition_state_validation_evidence`` carries two JSONB participant mappings whose values are saddle-point atom
+indices. An atom index is a property of a geometry -- a transition-state entry can accumulate several as it is
+re-optimised, with no guarantee any two order their atoms alike -- so an index with no geometry beside it identifies a
+position in an ordering the reader has to infer. The record names the geometry rather than leaving one to be derived,
+and the database enforces that on every write.
 """
 
 from __future__ import annotations
 
-import runpy
-import subprocess
-from pathlib import Path
-
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 
 from app.db.models.transition_state import TransitionStateValidationEvidence
@@ -42,29 +28,6 @@ from tests.services.scientific_read._factories import (
 
 _CONSTRAINT = "ck_transition_state_validation_evidence_mapping_names_geometry"
 
-_GEOMETRY_REVISION = "f3b7d2c8a419"
-
-
-def _base_revision() -> str:
-    """The revision immediately before the one under test.
-
-    Read off the migration rather than written down here. A revision's
-    ``down_revision`` moves whenever the branch is rebased onto a head that
-    another migration reached first, and a hardcoded copy would then upgrade
-    to some earlier point and write the fixture rows below in whatever shape
-    that point happened to have -- or, if the column already existed there,
-    silently stop testing the backfill at all.
-    """
-
-    namespace = runpy.run_path(
-        str(
-            Path(__file__).resolve().parents[2]
-            / "alembic"
-            / "versions"
-            / "f3b7d2c8a419_name_the_geometry_irc_indices_count_into.py"
-        )
-    )
-    return namespace["down_revision"]
 
 _MAPPING = {"reactant:1": [1], "reactant:2": [2, 3]}
 _PRODUCT_MAPPING = {"product:1": [3], "product:2": [1, 2]}
@@ -220,187 +183,3 @@ def test_the_constraint_is_validated_on_a_normally_migrated_database(db_session)
         {"name": _CONSTRAINT},
     ).scalar_one()
     assert validated is True
-
-
-def test_backfill_resolves_what_it_can_and_declines_to_guess() -> None:
-    """The revision's backfill contract, on a real disposable database.
-
-    Three rows written in the pre-column shape:
-
-    * one whose transition-state entry has exactly one output geometry, of the
-      right size -- derivable, and derived;
-    * one whose entry has two distinct output geometries -- ambiguous, and left
-      NULL rather than filled with whichever the query happened to see first,
-      because a wrong geometry here is precisely the silent atom substitution
-      the column exists to prevent;
-    * one with no mapping at all -- nothing to bind, nothing written.
-
-    Because a row is left unresolved the constraint stays ``NOT VALID``, and
-    the last assertion pins the property that makes that acceptable: it still
-    refuses new violations.
-    """
-
-    from conftest import _database_url, _db_env, scratch_database_name
-
-    db_name = scratch_database_name("ts_evidence_geometry")
-    admin = create_engine(_database_url("postgres"), isolation_level="AUTOCOMMIT", pool_pre_ping=True)
-    admin_conn = None
-    engine = None
-    root = Path(__file__).resolve().parents[2]
-
-    def run_revision(revision: str, current_engine):
-        if current_engine is not None:
-            current_engine.dispose()
-        subprocess.run(
-            ["conda", "run", "-n", "tckdb_env", "alembic", "upgrade", revision],
-            cwd=root,
-            env=env,
-            check=True,
-        )
-        return create_engine(_database_url(db_name), pool_pre_ping=True)
-
-    try:
-        admin_conn = admin.connect()
-        admin_conn.execute(text(f'CREATE DATABASE "{db_name}"'))
-
-        env = _db_env(db_name)
-        engine = run_revision(_base_revision(), engine)
-
-        with engine.begin() as conn:
-            assert (
-                conn.scalar(
-                    text(
-                        "SELECT count(*) FROM information_schema.columns "
-                        "WHERE table_name = 'transition_state_validation_evidence' "
-                        "AND column_name = 'transition_state_geometry_id'"
-                    )
-                )
-                == 0
-            ), "fixture rows must be written in the shape that predates the column"
-
-            reaction_id = conn.scalar(
-                text("INSERT INTO chem_reaction (reversible) VALUES (true) RETURNING id")
-            )
-            reaction_entry_id = conn.scalar(
-                text("INSERT INTO reaction_entry (reaction_id) VALUES (:r) RETURNING id"),
-                {"r": reaction_id},
-            )
-
-            evidence_ids: dict[str, int] = {}
-            geometry_ids: dict[str, int] = {}
-            for tag, geometry_count, natoms, mapped in (
-                ("derivable", 1, 3, True),
-                ("ambiguous", 2, 3, True),
-                ("unmapped", 1, 3, False),
-            ):
-                ts_id = conn.scalar(
-                    text("INSERT INTO transition_state (reaction_entry_id) VALUES (:r) RETURNING id"),
-                    {"r": reaction_entry_id},
-                )
-                ts_entry_id = conn.scalar(
-                    text(
-                        "INSERT INTO transition_state_entry "
-                        "(transition_state_id, charge, multiplicity) "
-                        "VALUES (:ts, 0, 2) RETURNING id"
-                    ),
-                    {"ts": ts_id},
-                )
-                calculation_id = conn.scalar(
-                    text(
-                        "INSERT INTO calculation (type, transition_state_entry_id) "
-                        "VALUES ('opt', :e) RETURNING id"
-                    ),
-                    {"e": ts_entry_id},
-                )
-                for order in range(1, geometry_count + 1):
-                    geometry_id = conn.scalar(
-                        text(
-                            "INSERT INTO geometry (natoms, geom_hash) "
-                            "VALUES (:n, :h) RETURNING id"
-                        ),
-                        {"n": natoms, "h": f"{tag}-geom-{order}"},
-                    )
-                    conn.execute(
-                        text(
-                            "INSERT INTO calculation_output_geometry "
-                            "(calculation_id, geometry_id, output_order) "
-                            "VALUES (:c, :g, :o)"
-                        ),
-                        {"c": calculation_id, "g": geometry_id, "o": order},
-                    )
-                    if order == 1:
-                        geometry_ids[tag] = geometry_id
-                evidence_ids[tag] = conn.scalar(
-                    text(
-                        "INSERT INTO transition_state_validation_evidence "
-                        "(transition_state_entry_id, kind, passed, rationale, "
-                        " reconstruction_calculation_id, reactant_participant_mapping, "
-                        " product_participant_mapping) "
-                        "VALUES (:e, 'irc', true, :why, :c, "
-                        "        CAST(:reactants AS jsonb), CAST(:products AS jsonb)) "
-                        "RETURNING id"
-                    ),
-                    {
-                        "e": ts_entry_id,
-                        "why": f"{tag} legacy evidence",
-                        "c": calculation_id,
-                        "reactants": (
-                            '{"reactant:1": [1], "reactant:2": [2, 3]}' if mapped else None
-                        ),
-                        "products": (
-                            '{"product:1": [3], "product:2": [1, 2]}' if mapped else None
-                        ),
-                    },
-                )
-
-        engine = run_revision(_GEOMETRY_REVISION, engine)
-
-        with engine.begin() as conn:
-            bound = dict(
-                conn.execute(
-                    text(
-                        "SELECT id, transition_state_geometry_id "
-                        "FROM transition_state_validation_evidence"
-                    )
-                ).all()
-            )
-            # Derived exactly, from the single output geometry of the entry's
-            # calculations -- not from whichever row sorted first.
-            assert bound[evidence_ids["derivable"]] == geometry_ids["derivable"]
-            # Two candidates, so the revision writes neither.
-            assert bound[evidence_ids["ambiguous"]] is None
-            # No indices, so nothing to bind.
-            assert bound[evidence_ids["unmapped"]] is None
-
-            assert (
-                conn.scalar(
-                    text("SELECT convalidated FROM pg_constraint WHERE conname = :name"),
-                    {"name": _CONSTRAINT},
-                )
-                is False
-            ), "an unresolved legacy row must leave the constraint NOT VALID"
-
-            # NOT VALID skips the existing rows; it does not stop governing
-            # new ones. Without this the fallback would be a silent opt-out.
-            with pytest.raises(DBAPIError):
-                conn.execute(
-                    text(
-                        "INSERT INTO transition_state_validation_evidence "
-                        "(transition_state_entry_id, kind, passed, rationale, "
-                        " reconstruction_calculation_id, reactant_participant_mapping, "
-                        " product_participant_mapping) "
-                        "SELECT transition_state_entry_id, 'irc', true, 'new row', "
-                        "       reconstruction_calculation_id, "
-                        "       CAST('{\"reactant:1\": [1]}' AS jsonb), "
-                        "       CAST('{\"product:1\": [1]}' AS jsonb) "
-                        "FROM transition_state_validation_evidence WHERE id = :id"
-                    ),
-                    {"id": evidence_ids["ambiguous"]},
-                )
-    finally:
-        if engine is not None:
-            engine.dispose()
-        if admin_conn is not None:
-            admin_conn.execute(text(f'DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE)'))
-            admin_conn.close()
-        admin.dispose()

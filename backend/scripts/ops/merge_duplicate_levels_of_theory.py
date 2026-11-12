@@ -9,14 +9,14 @@ whichever keys the running code has.
 
 Before #574, ``level_of_theory.lot_hash`` hashed basis names byte for byte,
 so ``b3lyp/def2-tzvp`` (Psi4) and ``b3lyp/def2tzvp`` (Gaussian, ARC) were
-two rows. Alembic revision ``38b06819f099`` re-keyed the existing rows: in
+two rows. The existing rows were re-keyed: in
 each group of rows that are now one level of theory, one row (the *holder*)
 got the identity-keyed hash and every new upload resolves to it. The other
 rows (the *duplicates*) kept their old hash and their calculations. This
 script moves those calculations onto the holder and turns each duplicate
 into a *merged row*.
 
-Run it after ``38b06819f099`` is applied, and again after any deploy that
+Run it after the re-key, and again after any deploy that
 migrated while the old API was still serving (an upload in that window
 hashes the old way and can recreate a duplicate). Groups are found by
 recomputing each row's hash with the application's own formula
@@ -90,7 +90,7 @@ is reported as blocked otherwise:
   duplicate blocks the group, because this script never rewrites accepted
   science. New uploads resolve to the holder, and reads follow a merge;
 * **A holder exists**: a row whose ``lot_hash`` already equals the group's
-  identity-keyed hash. If none does, ``38b06819f099`` has not run.
+  identity-keyed hash. If none does, the re-key has not run.
 
 **What changes on commit.** For each unblocked group, in its own savepoint:
 ``calculation.lot_id`` moves from each duplicate to the holder, any row
@@ -147,7 +147,7 @@ _REPOINTED = {
     ("level_of_theory_merge", "into_lot_id"),
     # A duplicate's composite-scheme binding is moved to the holder
     # (or dropped when the holder is bound already), so a merged level is never
-    # bound. Absent on a database older than ``d7a3f1b9c284``.
+    # bound. Absent on a database without the binding table.
     ("level_of_theory_composite", "level_of_theory_id"),
     # #658: a scheme input follows a merge, so no scheme input points at a merged
     # row and the scheme's hash (taken over its canonical input levels) is re-derived.
@@ -219,8 +219,8 @@ class Group:
     def blockers(self) -> list[str]:
         if self.holder is None:
             return [
-                "no unmerged row holds the identity-keyed hash: revisions "
-                "38b06819f099 / c8424fe82997 may not be applied, or the holder "
+                "no unmerged row holds the identity-keyed hash: the re-key "
+                "may not have run, or the holder "
                 "is a merged row or was left un-re-hashed (see the upgrade's "
                 "'NOT re-hashed' lines); resolve by hand"
             ]
@@ -506,7 +506,7 @@ def _identity_hash(mapping, declared_definition_hash: str | None = None) -> str:
 
     from app.services.calculation_resolution import _level_of_theory_hash
 
-    # A mapping read from a database older than ``e5b2d8a4c613`` has no
+    # A mapping read from a database without the column has no
     # ``core_treatment`` key: every level there is NULL, which is the field's default.
     ref = LevelOfTheoryRef(**{column: mapping[column] for column in _LOT_COLUMNS if column in mapping})
     return _level_of_theory_hash(ref)
@@ -523,10 +523,7 @@ def _label(mapping) -> str:
 def _lot_columns_present(session: Session) -> tuple[str, ...]:
     """The identity columns this database has.
 
-    The script runs after upgrades but is also run against a database that has
-    not reached ``e5b2d8a4c613`` yet (the migration tests stop at older
-    revisions); ``core_treatment`` is simply absent there and every level is
-    NULL for it.
+    A database without a ``core_treatment`` column is read as NULL for it on every level.
     """
     present = set(
         session.scalars(
@@ -545,8 +542,8 @@ def _declared_definition_hashes(session: Session, schema: Schema) -> dict[int, s
     The hash is **re-derived** from the scheme's stored terms and input levels,
     merges followed (#658), not read from ``composite_scheme.definition_hash``: a
     stored hash is exactly what goes stale when an input level is merged away, and
-    reading it back would vouch for itself. Empty on a database older than
-    ``d7a3f1b9c284`` (no binding table).
+    reading it back would vouch for itself. Empty on a database without
+    the binding table.
     """
     if ("level_of_theory_composite", "level_of_theory_id") not in schema.lot_references:
         return {}

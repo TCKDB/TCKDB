@@ -33,7 +33,7 @@ def normalize_element_symbol(symbol: str) -> str:
 
     Where this is applied — in two places, on purpose
     -------------------------------------------------
-    **At ingestion**, since Alembic revision ``b4e7c1d20f83``.
+    **At ingestion.**
     :func:`parse_xyz` runs every parsed symbol through this function before it
     becomes a ``geometry_atom.element`` row, and that revision brought the rows
     written before it into the same form. That is what makes the column one
@@ -195,8 +195,8 @@ def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
     ``character(2)`` value every element comparison in the service layer reads,
     and one spelling per element is what makes those reads say what they mean.
 
-    This is an *invariant* rather than a convention, and only since
-    ``c5a1f8e3d074``: ``ck_geometry_atom_element_canonical`` requires the
+    This is an *invariant* rather than a convention:
+    ``ck_geometry_atom_element_canonical`` requires the
     column to hold exactly what this function produces. Canonicalising here is
     what keeps the ingestion path inside that constraint; the constraint is
     what lets a reader compare the column without normalising first.

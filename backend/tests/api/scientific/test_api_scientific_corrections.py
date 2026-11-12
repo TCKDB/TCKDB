@@ -720,7 +720,7 @@ def test_ecs_search_by_name(client, db_session):
 
 
 def test_ecs_search_by_version_is_refused_not_ignored(client, db_session):
-    """``version`` is gone from the schema (a7d4e2b9c351), and a removed
+    """``version`` is not in the schema, and a removed
     filter must fail closed.
 
     Deleting the field outright was the first attempt and was worse than

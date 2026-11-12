@@ -77,11 +77,8 @@ from app.services.release.record_rights import linked_rights
 from app.services.scientific_read.composite_binding import composite_scheme_summaries
 from app.services.scientific_read.handles import canonical_level_of_theory_id
 
-# Schema version of the local DB at the time of writing. The local export
-# stamps this into the bundle so a future hosted importer can refuse
-# bundles that target a schema it does not yet know how to ingest. Bumped
-# alongside the next initial-migration revision.
-DEFAULT_SCHEMA_VERSION = "d861dfd60891"
+# Schema version stamped into a bundle: the Alembic revision of the schema it targets. Nothing reads it back.
+DEFAULT_SCHEMA_VERSION = "d5b8e2f4a916"
 
 DEFAULT_INSTANCE_NAME = "local-tckdb"
 
@@ -102,8 +99,7 @@ class ContributionBundleExportError(ValueError):
 # existed can carry an enthalpy (a 298 K scalar, a NASA/NASA-9 fit, a
 # Wilhoit h0, point enthalpies, or point Gibbs energies, which sit on the
 # same zero) with no ``enthalpy_reference_kind``
-# declared. The DB never backfills a declaration onto such a row (see
-# ``e7b1c9d4a632``'s docstring), and the upload workflow's own rule
+# declared. The DB never backfills a declaration onto such a row, and the upload workflow's own rule
 # (``tckdb_schemas.enthalpy_reference.enthalpy_reference_error``, the same
 # function ``app.workflows.thermo.assert_enthalpy_reference`` calls) refuses
 # to import that exact shape. Reusing it here -- rather than re-deriving

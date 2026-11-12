@@ -447,15 +447,8 @@ belong on `thermo` / `statmech` either.
 
 The model lives at
 [app/db/models/molecular_property_observation.py](../../db/models/molecular_property_observation.py).
-The Alembic migration is
-[alembic/versions/a1b2c3d4e5f6_add_molecular_property_observation.py](../../../alembic/versions/a1b2c3d4e5f6_add_molecular_property_observation.py)
-— an **additive** revision on top of `d861dfd60891`. This is a
-deliberate policy departure from the historical
-"single initial migration" rule: from Phase 4a onward, additive
-schema changes ship as discrete revisions rather than folding into
-the initial migration. The historical rule still applies to changes
-that would modify existing tables; only purely additive changes
-qualify for the new path.
+The tables are created by the initial Alembic revision in
+[alembic/versions/](../../../alembic/versions/).
 
 Key design choices:
 

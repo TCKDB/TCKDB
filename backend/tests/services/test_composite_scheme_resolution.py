@@ -14,9 +14,7 @@ What each group pins:
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
-from pathlib import Path
 
 import pytest
 from sqlalchemy import func, select, text
@@ -48,11 +46,6 @@ from app.services.composite_scheme_resolution import (
     named_method_definition_hash,
 )
 from app.services.public_refs import make_content_ref
-from tests._frozen_lot_hash import frozen_level_of_theory_hash
-
-_MIGRATION_FILE = next(
-    (Path(__file__).resolve().parents[2] / "alembic" / "versions").glob("d7a3f1b9c284_*.py")
-)
 
 
 def _count(session, model) -> int:
@@ -488,80 +481,6 @@ def test_database_refuses_a_second_scheme_with_one_definition_hash(db_session):
 # ---------------------------------------------------------------------------
 # The migration's frozen copy agrees with the application
 # ---------------------------------------------------------------------------
-
-
-def _migration():
-    spec = importlib.util.spec_from_file_location("_mig_d7a3_unit", _MIGRATION_FILE)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def test_migration_catalogue_copy_agrees_with_the_catalogue():
-    mig = _migration()
-    assert set(mig._NAMED_METHODS) == set(composite_methods.BY_KEY)
-    for key, (name, geometry, frequency, zpe, doi) in mig._NAMED_METHODS.items():
-        entry = composite_methods.BY_KEY[key]
-        assert name == entry.name, key
-        assert geometry == ((entry.geometry_level.method, entry.geometry_level.basis) if entry.geometry_level else None)
-        assert frequency == (
-            (entry.frequency_level.method, entry.frequency_level.basis) if entry.frequency_level else None
-        )
-        assert zpe == entry.recipe_zpe_scale_factor, key
-        assert doi == entry.paper_doi, key
-
-
-def test_migration_hash_and_ref_formulas_agree_with_the_application():
-    mig = _migration()
-    for entry in composite_methods.CATALOGUE:
-        assert mig._canonical_json(entry.key) == named_method_canonical_json(entry.key)
-        assert mig._definition_hash(entry.key) == named_method_definition_hash(entry.key)
-        h = named_method_definition_hash(entry.key)
-        assert mig._content_ref("csch", f"csch:definition_hash={h}") == make_content_ref(
-            "csch", f"csch:definition_hash={h}"
-        )
-        for level in (entry.geometry_level, entry.frequency_level):
-            if level is None:
-                continue
-            # The revision's frozen copy hashes the pre-Stage-2 payload.
-            assert mig._internal_level_hash(level.method, level.basis) == frozen_level_of_theory_hash(
-                method=level.method, basis=level.basis
-            )
-
-
-def test_migration_alias_copy_reaches_the_same_key_as_the_application():
-    mig = _migration()
-    for spelling in (
-        "cbsqb3", "CBS-QB3", "rocbsqb3", "cbs4m", "cbsapno", "g4(mp2)", "G3(MP2)", "g3(mp2)b3",
-        "W1U", "w1-bd", "cbs-qb3-paraskevas", "B3LYP",
-    ):
-        in_catalogue = composite_methods.composite_method_for(spelling)
-        assert (mig._method_key(spelling) in mig._NAMED_METHODS) == (in_catalogue is not None), spelling
-        if in_catalogue is not None:
-            assert mig._method_key(spelling) == in_catalogue.key
-
-
-def test_catalogue_keys_equal_the_latest_backfill_revisions_frozen_keys():
-    """A catalogue entry cannot land without a revision that binds the levels already stored.
-
-    Binding is lazy, so a level stored before its method joined the catalogue reads
-    as "not composite" until a backfill binds it (see ``composite_methods``).
-    """
-    from tests.db._migration_chain import script_directory
-
-    frozen: set[str] | None = None
-    for revision in script_directory().walk_revisions():  # head first
-        spec = importlib.util.spec_from_file_location(f"_mig_{revision.revision}", revision.path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        if hasattr(module, "_NAMED_METHODS"):
-            frozen = set(module._NAMED_METHODS)
-            break
-    assert frozen, "no revision freezes the named-method catalogue"
-    assert set(composite_methods.BY_KEY) == frozen, (
-        "the catalogue's keys differ from the latest backfill revision's: add a revision that "
-        "binds the levels of theory already stored, freezing the new key set"
-    )
 
 
 def test_internal_levels_are_never_composite():

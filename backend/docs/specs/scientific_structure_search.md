@@ -313,9 +313,9 @@ unchanged:
 Substructure and similarity queries read from the materialized
 `species_entry.mol` cartridge column. The write path
 (`app/services/species_resolution.py`) canonicalizes the parent
-species's SMILES into `mol` at insert time, and Alembic migration
-`d4e5f6a7b8c9_add_species_entry_mol_gist_index` adds a GiST index on
-the column and backfills any pre-existing NULL rows:
+species's SMILES into `mol` at insert time, and the Alembic migration
+creates a GiST index on
+the column:
 
 ```sql
 CREATE INDEX ix_species_entry_mol_gist

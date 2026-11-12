@@ -518,7 +518,7 @@ class TestEnergyCorrectionSchemeRefIdentity:
         assert generate_ref_for(a) != generate_ref_for(b)
 
     def test_refs_match_when_only_units_differ(self, db_session):
-        """Inverted by ``a7d4e2b9c351``, and the inversion is the point.
+        """``units`` is not an identity axis.
 
         This asserted refs must *differ* when units differ, because
         ``units`` was an identity column. It is not one any more: an

@@ -144,7 +144,7 @@ class ExternalSourceRecord(Base, TimestampMixin):
         # would be treated as input to ``NAMING_CONVENTION["ck"]`` and get
         # ``ck_external_source_record_`` glued on a second time (see the
         # longer explanation on ``MolecularPropertyObservation``). Matches
-        # what migration ``0b4a3afabfd3`` creates via ``op.f(...)``.
+        # the names the database carries.
         CheckConstraint(
             "content_sha256 ~ '^[0-9a-f]{64}$'",
             name=conv("ck_external_source_record_content_sha256_hex"),

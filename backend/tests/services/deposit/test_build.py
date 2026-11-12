@@ -278,7 +278,7 @@ def test_actor_columns_equal_an_independent_walk_of_every_fk_onto_app_user():
     actual = set(build.actor_columns())
     assert actual == expected
     assert len(build.actor_columns()) == len(actual), "no duplicates"
-    # Measured on this revision (Alembic head a55cc983501a): 52 foreign keys onto
+    # Measured: 52 foreign keys onto
     # app_user.id. A table can only add to this; a drop below it is a lost actor.
     assert len(actual) >= 52
     for pair in (("submission", "created_by"), ("release_selection", "selected_by"), ("record_review", "reviewed_by")):

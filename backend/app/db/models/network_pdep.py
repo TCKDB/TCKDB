@@ -337,7 +337,7 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
     * ``ck_network_solve_reported_requires_literature`` below is only half the
       contract. The other half is a deferred constraint trigger installed by
-      migration ``f9b2e6c4a1d7``, which refuses *at COMMIT* a ``computed``
+      the migration, which refuses *at COMMIT* a ``computed``
       solve carrying no state energy, no energy-transfer model where the
       network declares a well, or no channel barrier where it declares a
       saddle-point path. It has to be deferred: this row is written before the

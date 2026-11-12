@@ -59,8 +59,7 @@ target_metadata = Base.metadata
 #: type autogenerate cannot determine, and ``ix_species_formula_lookup`` is an
 #: expression index whose DDL-time inlining quirk makes declaring it via
 #: ``Index(..., text(...))`` risk autogenerate recreating it in a form that
-#: fails. Each migration that creates one says so and asks that it never be
-#: auto-dropped -- see ``d4e5f6a7b8c9`` and ``94daa2c345fb``.
+#: fails. The revision creates both, and autogenerate must never drop them.
 #:
 #: Excluding them is what lets ``alembic check`` return clean, which is what
 #: lets schema drift be wired to readiness (stage 5). The cost is real and

@@ -112,7 +112,7 @@ PROVOCATIONS: dict[str, tuple[str, dict[str, object], dict[str, object] | None]]
     #
     # ``element``/``ts_element`` are overridden on all four rows because
     # ``_dummy`` fills a ``character(2)`` with ``'x'``, which
-    # ``ck_reaction_atom_map_pair_element_canonical`` (``c5a1f8e3d074``) now
+    # ``ck_reaction_atom_map_pair_element_canonical`` now
     # refuses: an element symbol capitalises its first letter. Without the
     # override the canonicality CHECK would fire first and these provocations
     # would prove something about the wrong constraint.

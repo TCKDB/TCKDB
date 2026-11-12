@@ -14,10 +14,9 @@
 #
 #   make reset       - destructive. Wipes the DB + object-store volumes,
 #                      brings infra back up, re-applies migrations
-#                      from scratch. Use only when the mutable
-#                      initial migration (d861dfd60891) changed —
-#                      yours or pulled from main — or when you
-#                      intentionally want a clean DB. Does NOT
+#                      from scratch. Use when the migration changed
+#                      under you (yours or pulled from main) or when
+#                      you intentionally want a clean DB. Does NOT
 #                      reseed admin credentials or API keys.
 #
 #   make reset-login - `make reset` plus a fresh dev admin user,

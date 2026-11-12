@@ -592,8 +592,8 @@ def test_payload_does_not_leak_forbidden_keys(client, db_session):
 # Stored-mol-column / GiST index path (audit P1-3)
 #
 # Substructure and similarity SQL builders must read from the stored
-# ``species_entry.mol`` cartridge column so the GiST index created in
-# migration ``d4e5f6a7b8c9`` drives the scan. Inlining
+# ``species_entry.mol`` cartridge column so the GiST index
+# drives the scan. Inlining
 # ``mol_from_smiles(sp.smiles)`` per row would force a sequential scan
 # and silently defeat the index — this guard fails fast if a future
 # refactor reintroduces it.

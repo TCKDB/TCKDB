@@ -216,7 +216,7 @@ def test_the_live_gaussian_16_c02_banner_lands_on_the_clean_16_c02_release(
     ever emits the digit group, ``"16"``; see
     ``tests/parsers/test_software_version_banners.py``). Before #315 it was
     persisted verbatim as a second release beside the clean ``16``/``C.02``
-    one; migration ``6141f2d98e78`` merged the two. This pins that the same
+    one. This pins that the same
     string deposited today resolves to the *same* release row as a clean
     ``16``/``C.02`` deposit, so the split cannot reopen.
     """

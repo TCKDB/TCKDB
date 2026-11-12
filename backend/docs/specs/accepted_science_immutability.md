@@ -24,8 +24,7 @@ of `transition_state_entry`. A declared atom map is the content of the claim
 that a saddle point connects the reaction's declared reactants and products, so
 approving the entry freezes the map; correcting one means depositing a new
 transition-state entry that carries the corrected map, approving it, and
-recording a `transition_state_entry` supersession. They joined the regime in
-`b6c1f4a8e703`, after `d3a7f1c9b284` introduced them outside it.
+recording a `transition_state_entry` supersession. They are under the accepted-science regime.
 
 The migration conservatively backfills `first_approved_at` from the earliest
 event that touches `approved`. Current approved or deprecated rows without such
@@ -127,14 +126,14 @@ There is deliberately no bypass GUC and no maintenance escape hatch. A change
 to what a record *says* — any corrected number — must use a replacement record
 and a supersession edge. Schema migrations run as the separate owner role.
 
-## Repairing what a record does not say (`e2c9a4f7b163`)
+## Repairing what a record does not say
 
 Supersession is the right answer when the science changes, because forking
 identity is what keeps a citation resolving to what was cited. It is the wrong
 answer for a change that alters no scientific content — the letter case of an
 element symbol in the derived `geometry_atom.element` index column, with
-`geom_hash`, `xyz_text`, coordinates, isotopes and atom ordering untouched
-(`b4e7c1d20f83`). Forking identity there re-keys a citable public ref to fix a
+`geom_hash`, `xyz_text`, coordinates, isotopes and atom ordering untouched.
+Forking identity there re-keys a citable public ref to fix a
 shift key.
 
 Before this, the only mechanical route was `ALTER TABLE … DISABLE TRIGGER`,
@@ -149,7 +148,7 @@ database checks the declaration.
 ```sql
 INSERT INTO accepted_science_repair
     (target_table, declared_columns, alembic_revision, reason)
-VALUES ('geometry_atom', ARRAY['element'], 'b4e7c1d20f83',
+VALUES ('geometry_atom', ARRAY['element'], '<revision>',
         'canonicalise element symbol case; geom_hash, xyz_text and '
         'coordinates are not touched');
 ```

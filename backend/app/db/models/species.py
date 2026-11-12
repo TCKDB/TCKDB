@@ -71,8 +71,8 @@ class Species(Base, TimestampMixin, PublicRefMixin):
     #: the constitution are one species; the rows that lose are KEPT, with their
     #: public ref and their own curation history, and forward one hop to the survivor.
     #: Results (entries, reaction participants, third-body colliders) were moved to
-    #: the survivor. Never set by the application; written by migration
-    #: ``c7e2a9f4d138`` and refused to chain by ``trg_species_merge_marker``.
+    #: the survivor. Never set by the application; written by the
+    #: merge procedure and refused to chain by ``trg_species_merge_marker``.
     merged_into_species_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey("species.id", deferrable=True, initially="IMMEDIATE"),

@@ -223,7 +223,7 @@ def element_counts_from_smiles(smiles: str) -> Counter[str]:
       side of every comparison is an XYZ element column that depositors fill in
       their own spelling: they disagree about capitalisation (``CL``, ``cl``)
       and a hand-written file may write hydrogen's isotopes as elements
-      (``D``, ``T``). ``b4e7c1d20f83`` canonicalises the case on the way in,
+      (``D``, ``T``). Ingestion canonicalises the case on the way in,
       which makes the first of those rare rather than impossible.
       ``parse_xyz`` stores a ``D``/``T`` as
       ``H`` plus a mass number, so only older rows still hold

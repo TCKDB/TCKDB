@@ -2,9 +2,8 @@
 
 ``calc_freq_result.imaginary_mode_tau_basis`` says which row of ADR 0012's
 protocol table set the tolerance a record's imaginary modes were judged
-at. It is ``TEXT``, and until ``e2a7c9d4b615`` nothing but convention kept
-it to the rows that exist (five originally; ``ae3d607cc9f8`` widened the
-vocabulary to eight with the 2026-09-04 ``assumed_*`` amendment):
+at. It is ``TEXT``, and a CHECK constraint keeps it to the rows that exist
+(eight, including the ``assumed_*`` bases):
 ``app/services/calculation_resolution.py`` writes ``TauBasis(...).value``
 and always has, but a second write path, a bulk loader, or a restore from
 a hand-edited dump could put anything there.
@@ -40,17 +39,13 @@ What is pinned here:
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
-from alembic.config import Config
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from tckdb_schemas.stationary_point import TauBasis
 
-from alembic import command
 from app.db.models.common import IMAGINARY_MODE_TAU_BASIS_VALUES, CalculationType
-from tests.db._migration_chain import revision_under_test
 from tests.services.scientific_read._factories import (
     make_calculation,
     make_lot,
@@ -59,11 +54,6 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
 )
 
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-
-#: The subject of this file, and the revision below it -- read from the
-#: chain rather than written down twice. See ``_migration_chain``.
-_MIGRATION = revision_under_test("e2a7c9d4b615")
 _CONSTRAINT = "ck_calc_freq_result_imaginary_mode_tau_basis_known"
 
 #: Values that are not rows of ADR 0012's protocol table. The first three
@@ -227,9 +217,7 @@ def test_the_database_vocabulary_is_exactly_taubasis(db_session):
 def test_the_constraint_is_validated(db_session):
     """A ``NOT VALID`` CHECK says nothing about the rows already stored.
 
-    ``e2a7c9d4b615`` adds it validated in one statement, having first
-    refused to run at all if the column held anything it could not
-    classify. A future revision that swapped in ``NOT VALID`` to dodge a
+    The constraint is validated in one statement. A ``NOT VALID`` to dodge a
     table scan, and forgot the ``VALIDATE``, would look identical to
     every other test in this file.
     """
@@ -249,114 +237,6 @@ def test_the_constraint_is_validated(db_session):
 # ---------------------------------------------------------------------------
 
 
-def test_the_migration_refuses_rather_than_guesses(db_engine, monkeypatch):
-    """``e2a7c9d4b615`` stops, naming the values, and changes nothing.
-
-    The alternatives were all worse and all quiet. Coercing an
-    unrecognised basis to ``protocol_not_recorded`` asserts the record was
-    judged at the conservative tolerance, which is a claim about its
-    science that only whatever wrote it can make; deleting the value
-    throws away the only trace of that writer; adding the constraint
-    ``NOT VALID`` leaves a rule that binds new writes and says nothing
-    about the rows already there.
-
-    Measured against a planted row rather than argued, because the guard
-    is a branch that never runs on a clean database -- which is every
-    database this migration is expected to meet, and exactly why it would
-    otherwise never be exercised at all.
-    """
-    db_name = db_engine.url.database
-    url = db_engine.url.render_as_string(hide_password=False)
-    db_engine.dispose()
-    for key, value in (
-        ("DB_NAME", db_name),
-        ("DB_USER", "tckdb"),
-        ("DB_PASSWORD", "tckdb"),
-        ("DB_HOST", "127.0.0.1"),
-        ("DB_PORT", "5432"),
-    ):
-        monkeypatch.setenv(key, value)
-    config = Config(str(_BACKEND_ROOT / "alembic.ini"))
-    engine = create_engine(url)
-    planted = "DELETE FROM calc_freq_result WHERE calculation_id IN (-901, -902)"
-
-    try:
-        command.downgrade(config, _MIGRATION.parent)
-
-        # One unclassifiable value and one legitimate one. The foreign key
-        # onto ``calculation`` is suspended rather than satisfied: what is
-        # under test is the migration's reaction to the *column*, and a
-        # bulk-load session is precisely the writer that could have put an
-        # unrecognised value there.
-        with engine.begin() as connection:
-            connection.execute(text("SET LOCAL session_replication_role = replica"))
-            connection.execute(
-                text(
-                    "INSERT INTO calc_freq_result (calculation_id, n_imag,"
-                    " imaginary_mode_tau_basis) VALUES"
-                    " (-901, 1, 'nonsense-basis'), (-902, 1, 'analytic_tight')"
-                )
-            )
-
-        with pytest.raises(RuntimeError) as excinfo:
-            command.upgrade(config, _MIGRATION.revision)
-        message = str(excinfo.value)
-        assert "nonsense-basis" in message, (
-            "the migration must name what it refused to classify; it said: "
-            f"{message}"
-        )
-        assert "analytic_tight" not in message, (
-            f"a legitimate value was reported as unclassifiable: {message}"
-        )
-
-        # Nothing changed on the way out: the row is still there, still
-        # saying what it said, and no constraint was installed.
-        with engine.connect() as connection:
-            still_there = connection.scalar(
-                text(
-                    "SELECT imaginary_mode_tau_basis FROM calc_freq_result"
-                    " WHERE calculation_id = -901"
-                )
-            )
-            assert still_there == "nonsense-basis"
-            assert _constraint_count(connection) == 0
-
-        # Repaired the way an operator would -- by deciding what the row
-        # meant -- the same migration goes through.
-        _purge_planted_rows(engine, planted)
-        command.upgrade(config, _MIGRATION.revision)
-        with engine.connect() as connection:
-            assert _constraint_count(connection) == 1
-    finally:
-        # Leave the database at head whatever happened, so a failure here
-        # fails this test and not every test that follows it.
-        #
-        # ``head``, not ``_MIGRATION.revision``. This test downgrades the
-        # *per-run database every other test in the process is using*, and the
-        # revision under test stops being head the moment anything lands on
-        # top of it. It did, one day later:
-        # ``b7e4d1a9c026`` renames a unique index and six CHECK constraints, so
-        # stopping at ``e2a7c9d4b615`` handed every later test a
-        # ``statmech_torsion`` whose unique index was still called
-        # ``uq_statmech_torsion_statmech_id``. That surfaced as three failures
-        # in ``test_statmech_torsion_index_uniqueness.py`` -- a file with
-        # nothing to do with tau bases -- claiming the wrong constraint had
-        # refused a duplicate, when the only thing wrong was its name.
-        #
-        # This line said ``_CURRENT_HEAD`` when it did that, and the constant
-        # read as head to whoever wrote it. That name is gone from the tree
-        # for exactly that reason; see ``_migration_chain``.
-        _purge_planted_rows(engine, planted)
-        command.upgrade(config, "head")
-        engine.dispose()
-
-
-# ---------------------------------------------------------------------------
-# ae3d607cc9f8 -- widening the vocabulary for the 2026-09-04 amendment
-# ---------------------------------------------------------------------------
-
-_WIDENING_MIGRATION = revision_under_test("ae3d607cc9f8")
-
 _ASSUMED_BASES = (
     "assumed_analytic_default",
     "assumed_finite_difference_gradient",
@@ -364,105 +244,8 @@ _ASSUMED_BASES = (
 )
 
 
-def test_widening_migration_downgrade_refuses_rows_holding_an_assumed_basis(
-    db_engine, monkeypatch
-):
-    """``ae3d607cc9f8`` downgrade must not silently narrow under a row.
-
-    Mirrors ``test_the_migration_refuses_rather_than_guesses`` above, one
-    revision up the chain: a row recorded under an ``assumed_*`` basis is
-    a real judgement, and downgrading past the revision that widened the
-    constraint to allow it must refuse rather than either violate the
-    narrower CHECK or guess what the row should say instead.
-    """
-    db_name = db_engine.url.database
-    url = db_engine.url.render_as_string(hide_password=False)
-    db_engine.dispose()
-    for key, value in (
-        ("DB_NAME", db_name),
-        ("DB_USER", "tckdb"),
-        ("DB_PASSWORD", "tckdb"),
-        ("DB_HOST", "127.0.0.1"),
-        ("DB_PORT", "5432"),
-    ):
-        monkeypatch.setenv(key, value)
-    config = Config(str(_BACKEND_ROOT / "alembic.ini"))
-    engine = create_engine(url)
-    planted = "DELETE FROM calc_freq_result WHERE calculation_id = -903"
-
-    try:
-        # Standing at head, plant a row under an assumed basis -- exactly
-        # what the backfill script and the upload path both legitimately
-        # write once this revision is applied.
-        with engine.begin() as connection:
-            connection.execute(text("SET LOCAL session_replication_role = replica"))
-            connection.execute(
-                text(
-                    "INSERT INTO calc_freq_result (calculation_id, n_imag,"
-                    " imaginary_mode_tau_basis) VALUES"
-                    " (-903, 1, 'assumed_analytic_default')"
-                )
-            )
-
-        with pytest.raises(RuntimeError) as excinfo:
-            command.downgrade(config, _WIDENING_MIGRATION.parent)
-        message = str(excinfo.value)
-        assert "assumed_analytic_default" in message, (
-            f"the migration must name the assumed basis it refused to "
-            f"narrow past; it said: {message}"
-        )
-
-        # Nothing changed: still at the wide constraint, row untouched.
-        with engine.connect() as connection:
-            assert _constraint_count(connection) == 1
-            still_there = connection.scalar(
-                text(
-                    "SELECT imaginary_mode_tau_basis FROM calc_freq_result"
-                    " WHERE calculation_id = -903"
-                )
-            )
-            assert still_there == "assumed_analytic_default"
-
-        # Repaired -- the row removed, as an operator would after deciding
-        # it should not have been assumed -- the downgrade goes through.
-        _purge_planted_rows(engine, planted)
-        command.downgrade(config, _WIDENING_MIGRATION.parent)
-        with engine.connect() as connection:
-            definition = connection.scalar(
-                text(
-                    "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
-                    " WHERE conname = :name"
-                    " AND conrelid = 'calc_freq_result'::regclass"
-                ),
-                {"name": _CONSTRAINT},
-            )
-            assert definition is not None
-            quoted = _values_in(definition)
-            assert quoted == set(_ORIGINAL_TAU_BASIS_VALUES_FOR_TEST), (
-                f"downgrade left {sorted(quoted)}, expected the original "
-                f"five: {sorted(_ORIGINAL_TAU_BASIS_VALUES_FOR_TEST)}"
-            )
-    finally:
-        _purge_planted_rows(engine, planted)
-        command.upgrade(config, "head")
-        engine.dispose()
-
-
-#: The five values ``e2a7c9d4b615`` installed, restated here (not
-#: imported from the migration module -- Alembic revision modules are not
-#: meant to be imported as libraries) purely to assert what
-#: ``ae3d607cc9f8``'s downgrade restores.
-_ORIGINAL_TAU_BASIS_VALUES_FOR_TEST = (
-    "analytic_tight",
-    "analytic_default",
-    "finite_difference_gradient",
-    "finite_difference_energy",
-    "protocol_not_recorded",
-)
-
-
-def test_widening_migration_upgrade_accepts_all_three_assumed_bases(db_session):
-    """After ``ae3d607cc9f8``, every ``assumed_*`` token is a legal write.
+def test_every_assumed_basis_is_accepted(db_session):
+    """Every ``assumed_*`` token is a legal write.
 
     The parametrised acceptance test above already proves this against
     every live ``TauBasis`` member; this test pins the same fact against
@@ -485,29 +268,3 @@ def test_widening_migration_upgrade_accepts_all_three_assumed_bases(db_session):
             _insert_freq_result(db_session, calc.id, basis)
         finally:
             savepoint.rollback()
-
-
-def _purge_planted_rows(engine, statement: str) -> None:
-    """Remove the planted rows, triggers and all.
-
-    ``session_replication_role`` again, on the way out as well as in:
-    ``calc_freq_result`` is under the accepted-science immutability guard,
-    which refuses to *delete* a row whose parent calculation does not
-    exist just as firmly as it refused to insert one. The suite's
-    committed-row leak check fails this test if anything survives, which
-    is how a botched cleanup announces itself here rather than as an
-    order-dependent failure somewhere else.
-    """
-    with engine.begin() as connection:
-        connection.execute(text("SET LOCAL session_replication_role = replica"))
-        connection.execute(text(statement))
-
-
-def _constraint_count(connection) -> int:
-    return connection.scalar(
-        text(
-            "SELECT count(*) FROM pg_constraint WHERE conname = :name"
-            " AND conrelid = 'calc_freq_result'::regclass"
-        ),
-        {"name": _CONSTRAINT},
-    )

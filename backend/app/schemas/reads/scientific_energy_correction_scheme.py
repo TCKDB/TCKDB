@@ -59,7 +59,7 @@ class EnergyCorrectionSchemeCoreBlock(BaseModel):
     name: str
     scheme_kind: EnergyCorrectionSchemeKind
     #: The unit the parameter table is expressed in, as deposited. Not an
-    #: identity axis (a7d4e2b9c351); a consumer converts with it rather
+    #: identity axis; a consumer converts with it rather
     #: than treating two units as two libraries.
     units: EnergyUnit | None = None
     #: Revision of the data holding the parameter tables (for Arkane, the

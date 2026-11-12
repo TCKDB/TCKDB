@@ -13,10 +13,8 @@ What is held here:
   before the field existed (literals produced by the pre-change code, not by
   this module) and equals an independent restatement of the old formula;
 * frozen-core, all-electron and unstated are three different hashes;
-* every replica of the hash agrees: the application function, the identity
-  hash the merge script recomputes from stored columns, and the frozen
-  migration copy (which knows nothing of the field, and is only ever run over
-  rows that have none);
+* every replica of the hash agrees: the application function and the identity
+  hash the merge script recomputes from stored columns;
 * the merge script regroups by the recomputed hash, so it must not fold a
   frozen-core level into an all-electron one.
 """
@@ -28,7 +26,6 @@ import importlib.util
 import json
 import pathlib
 import sys
-from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select, text
@@ -42,10 +39,6 @@ from app.db.models.common import CoreTreatment
 from app.db.models.level_of_theory import LevelOfTheory
 from app.services.calculation_resolution import _level_of_theory_hash, resolve_level_of_theory_ref
 from app.services.scientific_read.lot_identity_filters import method_matches
-from tests._frozen_lot_hash import frozen_level_of_theory_hash
-
-_VERSIONS = pathlib.Path(__file__).parents[2] / "alembic" / "versions"
-_SCRIPT = pathlib.Path(__file__).parents[2] / "scripts" / "ops" / "merge_duplicate_levels_of_theory.py"
 
 #: Levels that state no method qualifier, pinned as the application computes them after the keywords decision
 #: (Stage 2: the free-text ``keywords`` key left the payload, so every hash differs from the pre-Stage-2 one by
@@ -142,6 +135,23 @@ def test_an_unknown_core_treatment_is_refused_on_the_wire():
 # ---------------------------------------------------------------------------
 
 
+def test_the_sql_name_filters_ignore_core_treatment(db_session):
+    """``method=`` / ``basis=`` filters key the stored names; both cores of one method match."""
+    frozen = resolve_level_of_theory_ref(
+        db_session, LevelOfTheoryRef(method="CCSD(T)", basis="cc-pCVTZ", core_treatment="frozen_core")
+    )
+    full = resolve_level_of_theory_ref(
+        db_session, LevelOfTheoryRef(method="CCSD(T)", basis="cc-pCVTZ", core_treatment="all_electron")
+    )
+    db_session.flush()
+    found = set(db_session.scalars(select(LevelOfTheory.id).where(method_matches("ccsd(t)"))))
+    assert {frozen.id, full.id} <= found
+    assert frozen.id != full.id
+
+
+_SCRIPT = pathlib.Path(__file__).parents[2] / "scripts" / "ops" / "merge_duplicate_levels_of_theory.py"
+
+
 def _load(name: str, path: pathlib.Path):
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
@@ -204,46 +214,6 @@ def test_the_merge_script_lists_every_method_qualifier_among_the_columns_it_regr
 
 def test_the_merge_script_lists_core_treatment_among_the_columns_it_regroups_by(merge):
     assert "core_treatment" in merge._LOT_COLUMNS
-
-
-def test_the_frozen_migration_copy_agrees_for_a_null_core_treatment_and_is_blind_to_the_field():
-    mig = _load("_mig_b9e4_for_p4", _VERSIONS / "b9e4c2a7d153_key_level_of_theory_composite_method_aliases.py")
-    fields = {
-        "method": "CCSD(T)",
-        "basis": "cc-pCVTZ",
-        "aux_basis": None,
-        "cabs_basis": None,
-        "dispersion": None,
-        "solvent": None,
-        "solvent_model": None,
-        "keywords": None,
-        "spin_treatment": None,
-    }
-    row = SimpleNamespace(_mapping=fields)
-    # The frozen revision copy hashes the pre-Stage-2 payload, so it agrees with the frozen helper, not the live hash.
-    assert mig._lot_hash(row, aliased=True) == frozen_level_of_theory_hash(method="CCSD(T)", basis="cc-pCVTZ")
-    # The frozen copy runs below the revision that adds the column, where every
-    # row is NULL. It has no notion of the field, and that is safe only because
-    # downgrade refuses while any level states one.
-    stated = LevelOfTheoryRef(method="CCSD(T)", basis="cc-pCVTZ", core_treatment="frozen_core")
-    assert mig._lot_hash(row, aliased=True) != frozen_level_of_theory_hash(
-        method="CCSD(T)", basis="cc-pCVTZ", core_treatment="frozen_core"
-    )
-    assert stated.core_treatment is not None
-
-
-def test_the_sql_name_filters_ignore_core_treatment(db_session):
-    """``method=`` / ``basis=`` filters key the stored names; both cores of one method match."""
-    frozen = resolve_level_of_theory_ref(
-        db_session, LevelOfTheoryRef(method="CCSD(T)", basis="cc-pCVTZ", core_treatment="frozen_core")
-    )
-    full = resolve_level_of_theory_ref(
-        db_session, LevelOfTheoryRef(method="CCSD(T)", basis="cc-pCVTZ", core_treatment="all_electron")
-    )
-    db_session.flush()
-    found = set(db_session.scalars(select(LevelOfTheory.id).where(method_matches("ccsd(t)"))))
-    assert {frozen.id, full.id} <= found
-    assert frozen.id != full.id
 
 
 def _stored(db_session, ref: LevelOfTheoryRef, *, spelling_basis: str, stale_hash: str | None = None):

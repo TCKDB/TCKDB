@@ -78,8 +78,7 @@ _DEFERRED_FILTER_FIELDS: tuple[str, ...] = ("used_by_thermo",)
 
 #: Must match the ``order_by`` below. It said ``scheme_kind,name,version,id``
 #: while the query ordered by ``(kind, name, id)`` -- the echo advertised a
-#: sort key the query never applied, which was wrong before
-#: ``a7d4e2b9c351`` removed the column and merely more obvious after.
+#: sort key the query never applied, which was wrong.
 _DEFAULT_SORT_ECHO = browse_order("scheme_kind", "name", ("id", "asc"))
 
 
@@ -102,7 +101,7 @@ def search_energy_correction_schemes(
         {
             "used_by_thermo": request.used_by_thermo,
             # Not deferred -- removed. ``energy_correction_scheme.version``
-            # no longer exists (a7d4e2b9c351).
+            # no longer exists.
             "version": request.version,
         },
         endpoint="/scientific/energy-correction-schemes/search",

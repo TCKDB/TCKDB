@@ -266,7 +266,7 @@ The earlier rationale, curator and timestamp stay exactly as written.
 Enforced three ways:
 
 1. No application code path issues `UPDATE`/`DELETE` on `release_selection`.
-2. A database trigger rejects `UPDATE` and `DELETE` (migration `e3f4a5b6c7d8`),
+2. A database trigger rejects `UPDATE` and `DELETE`,
    so this holds for direct SQL clients too — mirroring
    `record_reproducibility_assessment`.
 3. `supersedes_selection_id` is `UNIQUE`, so a selection can be replaced at most
@@ -707,8 +707,7 @@ onto `release_manifest.rights_summary_json` so the document stays rebuildable
 from the row. The renderer branches on the *stored* `(manifest_format_name,
 manifest_format_version)`, so a manifest keeps reproducing its recorded digest.
 The format tag sits inside the checksummed bytes, so changing how a format is
-named or versioned unpublishes the releases frozen under the old tag (see the
-`c7d4a9e2b6f1` section of `backend/docs/deployment/migrations.md`).
+named or versioned unpublishes the releases frozen under the old tag.
 
 **What is deliberately not built:** a license compatibility lattice, a
 refuse-at-upload switch (absence is refused at release, so existing clients

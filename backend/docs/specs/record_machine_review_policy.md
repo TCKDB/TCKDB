@@ -527,8 +527,7 @@ currency fields (`prompt_name`, `prompt_version`, `rubric_name`,
 states the ordering columns.
 
 **Implemented** as `RecordMachineReviewRow`
-(`app/db/models/record_machine_review.py`) + revision
-`c9d0e1f2a3b4_add_record_machine_review`. Notes on the realised shape: `status`
+(`app/db/models/record_machine_review.py`) and the initial Alembic revision. Notes on the realised shape: `status`
 reuses the existing DB-layer `machine_review_status` enum and `record_type` the
 `submission_record_type` enum (no enum churn); `curator_priority` is stored as
 text with application-level validation. CHECK constraints enforce
@@ -693,8 +692,7 @@ the prior and on the provisional spec's §13 non-interference tests.
 4. Add the record_machine_review table (§8) in a NEW Alembic revision only when
    public record-level review is actually being built; append-only, both
    upgrade()/downgrade(). Backfill is not required (history starts empty).
-   DONE (persistence only — NOT public exposure): new Alembic revision
-   `c9d0e1f2a3b4_add_record_machine_review` (append-only table, real
+   DONE (persistence only — NOT public exposure): the `record_machine_review` table (append-only, real
    upgrade()/downgrade(), reusing the `submission_record_type` /
    `machine_review_status` enums); ORM model
    `app/db/models/record_machine_review.py::RecordMachineReviewRow`; the

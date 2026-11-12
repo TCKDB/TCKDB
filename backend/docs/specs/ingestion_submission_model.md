@@ -23,7 +23,6 @@ stamped `under_review` at deposit, which asserted that a human had the record
 open when none had — all 1153 such rows on the hosted database carried a null
 `reviewed_by`, a null `reviewed_at` and a null `first_approved_at`.
 `under_review` now means what it says: a curator has picked the record up.
-Revision `c1d8f4a25b30` moved the existing rows.
 
 ## What every accepted upload does
 

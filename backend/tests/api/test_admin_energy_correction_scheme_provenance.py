@@ -111,7 +111,7 @@ def test_attach_software_to_uncited_software_less_scheme(
 
     # Follow the ref to a real record rather than asserting it is merely
     # non-empty. This field used to carry a ``software`` ref and now
-    # carries a ``software_release`` one (c24ce2d9c198); a non-emptiness
+    # carries a ``software_release`` one; a non-emptiness
     # check could not tell those apart, which is how the change went
     # unnoticed until review of #458.
     assert body["software_release_ref"] == scheme.software_release.public_ref

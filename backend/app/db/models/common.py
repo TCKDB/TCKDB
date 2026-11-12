@@ -21,8 +21,7 @@ class MoleculeKind(str, Enum):
     # live. Routing it through the ``pseudo`` exemption would have let any
     # depositor switch mass balance off by adding an electron, which is a worse
     # hole than the one the electron exists to close. See
-    # ``app.services.reaction_resolution._load_participant_species`` and
-    # revision ``b8f3d6a1c9e4``.
+    # ``app.services.reaction_resolution._load_participant_species``.
     #
     # Deliberately a comment rather than a docstring: this enum is mirrored as
     # ``tckdb_schemas.enums.MoleculeKind``, and the two JSON schemas merge into

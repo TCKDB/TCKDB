@@ -9,7 +9,7 @@ Frozen rows
 -----------
 ``conformer_observation`` and ``thermo`` are accepted-science roots (the statmech declaration and its members are
 frozen with their statmech record): once approved, the database refuses to UPDATE them. The only sanctioned
-in-place change is a *declared repair* (``accepted_science_repair``, revision ``e2c9a4f7b163``): declared in the
+in-place change is a *declared repair* (``accepted_science_repair``): declared in the
 same transaction, limited to named columns, every changed accepted row recorded old -> new. It needs a role that
 owns the table, which is why only the owner-role recompute ever declares one. A live upload runs as the API role,
 cannot declare, and so moves only rows that are not accepted (``Repairs(enabled=False)`` declares nothing, and the

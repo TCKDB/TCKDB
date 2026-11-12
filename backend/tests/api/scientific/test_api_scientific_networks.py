@@ -3995,7 +3995,7 @@ def test_solve_search_by_kind(client, db_session):
     """Selecting on origin is what makes the distinction actionable.
 
     A consumer that will only accept re-derivable rates filters on
-    ``computed``; an operator finding what blocks a c4d8f1b2a9e6 downgrade
+    ``computed``; an operator looking for reported-only solves
     filters on ``reported``.
     """
     reported = _make_reported_solve(db_session)
@@ -4016,8 +4016,7 @@ def test_solve_search_by_kind(client, db_session):
 def test_solve_search_kind_counts_as_a_filter(client, db_session):
     """``kind`` alone satisfies the at-least-one-filter rule.
 
-    Otherwise the operator query the c4d8f1b2a9e6 downgrade message points at
-    would 422 rather than answering.
+    Otherwise an operator query for one kind would 422 rather than answering.
     """
     _make_reported_solve(db_session)
     resp = client.get(_solve_search_url(kind="reported"))

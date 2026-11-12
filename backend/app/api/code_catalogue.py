@@ -1061,8 +1061,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/api/errors.py",
             shape=Shape.relationship,
             note=(
-                "Raised by the calculation_dependency acyclicity trigger "
-                "(revision e2f2b3fb6725), keyed on the constraint name the "
+                "Raised by the calculation_dependency acyclicity trigger, "
+                "keyed on the constraint name the "
                 "trigger reports. context names the refused edge's "
                 "parent_calculation and child_calculation by public_ref."
             )),

@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -1172,15 +1171,3 @@ def test_missing_record_fails_closed(db_session) -> None:
     # of one database. Asserted rather than assumed: this message used to
     # echo the id, and the id in it is what a regression would restore.
     assert "999999999" not in str(caught.value)
-
-
-def test_insufficient_grade_migration_layers_on_current_head() -> None:
-    migration = (
-        Path(__file__).resolve().parents[2]
-        / "alembic"
-        / "versions"
-        / "e9a3c5f7b1d2_add_insufficient_reproducibility_grade.py"
-    ).read_text()
-
-    assert 'down_revision: Union[str, Sequence[str], None] = "b8e3f1a9c2d4"' in migration
-    assert "ADD VALUE IF NOT EXISTS 'insufficient' BEFORE 'described'" in migration

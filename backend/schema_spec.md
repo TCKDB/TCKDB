@@ -71,7 +71,7 @@ Notes:
   detachment, dissociative attachment, photoionization and photodetachment can
   be deposited as balanced reactions. An electron exempts a reaction from
   **nothing** — it contributes zero atoms and charge −1, and both conservation
-  checks still have to pass. See revision `b8f3d6a1c9e4`.
+  checks still have to pass.
 
 ### 3.2 Species Entry
 
@@ -245,9 +245,9 @@ Notes:
 - workflow-tool release dedupe is enforced on `(workflow_tool_id, version, git_commit)`
 - `lot_hash` is unique
 - `lot_hash` hashes each basis name (`basis`, `aux_basis`, `cabs_basis`) by its identity key, not verbatim: lower case, with the family hyphen in `def2-` and `cc-p` restored (`app/chemistry/basis_set_names.py`, #574). `def2tzvp` and `def2-TZVP` are one level of theory; `6-31G*` and `6-31G**` stay two. The row stores the first spelling it was uploaded with.
-- `core_treatment` (ADR 0021) joins the `lot_hash` payload **only when it is set**. A NULL adds no key, so every level that did not state it keeps the hash it had before the column existed; no row was re-keyed. `frozen_core` and `all_electron` are two levels, and "not stated" is a third that is neither. A partial core treatment (an energy window, a Gaussian `Window=(m,n)`) is the value `window`; which window stays on the calculation's `core.frozen` parameter rows. The three method qualifiers (`relativistic_hamiltonian`, `pno_truncation`, `ri_approximation`) follow the same rule (docs/adr/0024), and `level_of_theory` has no free-text `keywords` column since revision `d5f2b8c1a704`. The column is in `snapshot_defaults.UNCHANGED_DEFAULTS` so a whole-row digest of a level does not go stale for a NULL. `scripts/ops/merge_duplicate_levels_of_theory.py` regroups by the recomputed hash and lists the column, so it never folds one treatment into the other.
-- A level of theory's `public_ref` is minted from `lot_hash` **once, at insert**, and never recomputed. Revision `38b06819f099` re-keyed every row whose basis spelling differs from its identity key and left `public_ref` alone, so for those rows `public_ref` is no longer what their content would mint on a fresh instance. A LOT ref identifies a row; it is not re-derivable from content after a re-key.
-- `lot_hash` values of re-keyed rows changed in `38b06819f099`. Anything holding an old value (a `lot_hash=` query, an ML export row, a stored consistency-check snapshot) no longer matches.
+- `core_treatment` (ADR 0021) joins the `lot_hash` payload **only when it is set**. A NULL adds no key, so every level that did not state it keeps the hash it had before the column existed; no row was re-keyed. `frozen_core` and `all_electron` are two levels, and "not stated" is a third that is neither. A partial core treatment (an energy window, a Gaussian `Window=(m,n)`) is the value `window`; which window stays on the calculation's `core.frozen` parameter rows. The three method qualifiers (`relativistic_hamiltonian`, `pno_truncation`, `ri_approximation`) follow the same rule (docs/adr/0024), and `level_of_theory` has no free-text `keywords` column since. The column is in `snapshot_defaults.UNCHANGED_DEFAULTS` so a whole-row digest of a level does not go stale for a NULL. `scripts/ops/merge_duplicate_levels_of_theory.py` regroups by the recomputed hash and lists the column, so it never folds one treatment into the other.
+- A level of theory's `public_ref` is minted from `lot_hash` **once, at insert**, and never recomputed. A LOT ref identifies a row; it is not re-derivable from content once the hash formula has changed, because re-keying a row in place leaves its `public_ref` alone.
+- A `lot_hash` that changes when the formula changes no longer matches a value held elsewhere (a `lot_hash=` query, an ML export row, a stored consistency-check snapshot).
 
 `level_of_theory_merge` fields:
 
@@ -261,7 +261,7 @@ Notes:
 - No calculation points at a merged row, and `into_lot_id` is never itself merged (one hop).
 - A table rather than a column on `level_of_theory`, so whole-row snapshots of a level of theory (consistency-check inputs, reproducibility context hashes) do not change for every row.
 
-Composite schemes ([ADR 0021](../docs/adr/0021-composite-levels-of-theory-are-a-recipe-bound-to-a-level-not-a-weighted-level.md), revision `d7a3f1b9c284`). A composite energy is a recipe; the recipe is identity, and a side table binds a level of theory to it.
+Composite schemes ([ADR 0021](../docs/adr/0021-composite-levels-of-theory-are-a-recipe-bound-to-a-level-not-a-weighted-level.md)). A composite energy is a recipe; the recipe is identity, and a side table binds a level of theory to it.
 
 `composite_scheme` fields (identity; deduplicated by `definition_hash`, never updated in place):
 
@@ -933,7 +933,7 @@ the numbers they relate are all present
 finite-checked at the database. The level of theory of a composite calculation
 must be bound to a composite scheme (`composite_level_not_scheme_bound`): a
 catalogued named method or a user-built scheme sent inline. All composite result tables carry the
-accepted-science immutability guard `calc_sp_result` has (revision `f3b7d2a9c514`).
+accepted-science immutability guard `calc_sp_result` has.
 
 `calc_composite_term` fields (the optional breakdown of the ZPE-free energy):
 
@@ -963,7 +963,7 @@ formulas and compared (`composite_total_mismatch`, tolerance `max(1e-6, 5e-7 * n
 warns when a needed energy or component is not stated). The recomputed value is never stored. A `correlation` term
 reads the whole correlation energy: `correlation` where it includes (T) (ORCA), `correlation + triples` where triples are
 separate (Molpro), whichever sum equals the stored energy. Guarded like `calc_composite_result` on `calculation_id`
-only: the cited calculation is a citation, not an owner (revision `b4d8e2f6a1c9`).
+only: the cited calculation is a citation, not an owner.
 
 `calc_composite_log_check` fields (ADR 0021, P7a; what comparing a program-run composite with one attached output log concluded):
 
@@ -977,7 +977,7 @@ A *conclusion*, never a number: nothing the log stated is stored and the deposit
 `(calculation, log digest, parser version)` by the upload hook that already compares the log
 (`composite_energy_log_mismatch` and its siblings), so a read can report `composite_energy_verification` without parsing a log;
 the same bytes uploaded twice under one parser version conclude the same thing about an immutable result and the second observation is dropped, while an upload after a parser fix records a fresh conclusion and a read prefers the newest version per log. A calculation
-whose log was uploaded before revision `a9c3e7b1d5f2` has no row and reads as `program_reported` until the log is deposited again.
+whose log was uploaded before the log check existed has no row and reads as `program_reported` until the log is deposited again.
 Guarded like `calc_composite_result` on `calculation_id` (accepted-science freeze, TRUNCATE refused).
 
 `composite_energy_verification` (read-time, never stored; `recomputed | recompute_mismatch | log_reconciled | program_reported |
@@ -2267,7 +2267,7 @@ opposite `reversible`), naming the twin by public ref.
 
 ## Actual protocols and structure determinations (2026-10-05)
 
-Revision `d3a8f6c1b952`. These are the claims a task-aware energy selection (lowest recorded energy, validated
+These are the claims a task-aware energy selection (lowest recorded energy, validated
 minimum or saddle, protocol preference) needs and the upload contract could not state. They are declarations only:
 this revision selects nothing and changes no ordering. Every one is an attributed claim, stored as made, never
 inferred and never backfilled; a record deposited without one reads "not stated".
@@ -2324,8 +2324,8 @@ write path sets; a tripwire against accidental or scripted edits, not access con
 is immutable and, with its sources, frozen under an accepted owner: the shared accepted-science guards
 (`tckdb_guard_accepted_child`, `tckdb_guard_accepted_via_child`) cover the transition state entry and the conformer
 observation, and TRUNCATE is refused on all three tables. These owner columns are nullable by design (one of two owners),
-so this revision registers them in its own tuples and `tests/db/test_structure_determination_migration.py` checks them
-against the model and `pg_trigger`; the shared registry's NOT NULL rule does not apply. `geometry_id` is the one geometry
+so they are the `_ALTERNATIVE_OWNERS` exemption in `tests/db/test_accepted_science_guard_coverage.py`, which checks the
+guard triggers against `pg_trigger`; the NOT NULL rule for guarded owner columns does not apply to them. `geometry_id` is the one geometry
 the role's result describes, recorded only where the calculation's type makes it unambiguous (an optimization's one
 output geometry, a single point's or frequency job's one input geometry) and NULL otherwise.
 
@@ -2357,8 +2357,7 @@ are in the archive registry. Not yet released as selectable types: standalone ca
 
 ## Declared statistical models (2026-10-11)
 
-A statmech row is an interpretation container. A declaration says which model the container supplies. Revision
-`e6b3a9d1f742` (additive; nothing backfilled). Wire contract: `tckdb_schemas.statmech_declarations` (version 1).
+A statmech row is an interpretation container. A declaration says which model the container supplies. Wire contract: `tckdb_schemas.statmech_declarations` (version 1).
 
 ### `statmech_model_declaration` (public ref prefix `smd`)
 
@@ -2399,7 +2398,7 @@ A statmech row is an interpretation container. A declaration says which model th
 
 A declared model is an immutable revision: "immutable" here means UPDATE. Its three tables refuse every UPDATE, approved or not
 (`tckdb_statmech_model_immutable`), with one exception: `conformer_group_id` on the declaration and on a member, under a declared
-repair (`accepted_science_repair`, revision `a5d9c3e7b1f2`), because which `conformer_group` row a basin is filed under is identity, not a
+repair (`accepted_science_repair`), because which `conformer_group` row a basin is filed under is identity, not a
 stated value; no other column, and no undeclared edit, is allowed. So the owner guards, which run on INSERT, cannot be bypassed by an edit, and `content_hash` is rewritten only
 with a basin move, recomputed in the same repair. The declaration, its members and its sources are scientific content of the declaring statmech record: the accepted-science
 triggers (`tckdb_guard_accepted_child` / `_via_child`) freeze them with it, and TRUNCATE is refused. Approving a record that is
