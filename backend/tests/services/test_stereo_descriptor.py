@@ -1,7 +1,7 @@
-"""The entry stereo descriptor (DR-0038): perception, sources, symmetry, vocabulary.
+"""The entry stereo descriptor: perception, sources, symmetry, vocabulary.
 
-No database. The resolution services and the migration are tested where a database
-is: ``test_api_species_stereo_identity.py`` and ``tests/db/test_species_key_stereo_migration.py``.
+No database. The resolution services and the descriptor CHECK are tested where a database
+is: ``test_api_species_stereo_identity.py`` and ``tests/db/test_stereo_descriptor_check.py``.
 """
 
 from __future__ import annotations

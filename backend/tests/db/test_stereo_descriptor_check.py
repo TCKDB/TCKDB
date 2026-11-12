@@ -1,4 +1,4 @@
-"""The entry stereo descriptor accepts allene ``Ra``/``Sa`` and odd-cumulene ``E``/``Z`` tokens, whole, and nothing else."""
+"""The entry stereo descriptor CHECK accepts allene ``Ra``/``Sa`` only as whole tokens."""
 
 from __future__ import annotations
 

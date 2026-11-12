@@ -320,7 +320,7 @@ class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin, PublicR
         # live data and would reject the current CCCBDB importer's writes.
         # Scoping to the new Cp contract keeps the invariant meaningful
         # exactly where it is new (see
-        # tests/db/test_observation_contract_migration.py::
+        # tests/db/test_observation_contract.py::
         # test_cccbdb_style_row_with_uncertainty_and_no_kind_survives).
         CheckConstraint(
             "property_kind <> 'heat_capacity_cp' "

@@ -53,7 +53,7 @@ from tests.services.scientific_read._factories import (
 # ---------------------------------------------------------------------------
 # Fixtures: legacy rows only reachable by disabling the guard trigger for
 # the insert -- mirrors ``_legacy_undeclared_thermo_id`` in
-# tests/db/test_enthalpy_reference_migration.py, which this module models a
+# tests/db/test_enthalpy_reference_guard.py, which this module models a
 # read-path consequence of.
 # ---------------------------------------------------------------------------
 

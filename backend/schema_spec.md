@@ -2324,8 +2324,8 @@ write path sets; a tripwire against accidental or scripted edits, not access con
 is immutable and, with its sources, frozen under an accepted owner: the shared accepted-science guards
 (`tckdb_guard_accepted_child`, `tckdb_guard_accepted_via_child`) cover the transition state entry and the conformer
 observation, and TRUNCATE is refused on all three tables. These owner columns are nullable by design (one of two owners),
-so this revision registers them in its own tuples and `tests/db/test_structure_determination_migration.py` checks them
-against the model and `pg_trigger`; the shared registry's NOT NULL rule does not apply. `geometry_id` is the one geometry
+so they are the `_ALTERNATIVE_OWNERS` exemption in `tests/db/test_accepted_science_guard_coverage.py`, which checks the
+guard triggers against `pg_trigger`; the NOT NULL rule for guarded owner columns does not apply to them. `geometry_id` is the one geometry
 the role's result describes, recorded only where the calculation's type makes it unambiguous (an optimization's one
 output geometry, a single point's or frequency job's one input geometry) and NULL otherwise.
 
