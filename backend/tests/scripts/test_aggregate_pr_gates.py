@@ -352,9 +352,25 @@ def test_a_rename_counts_both_of_its_paths():
     assert gates.workflow_is_expected(_real(BACKEND_CI), files)
 
 
-def test_a_very_large_pull_request_expects_everything():
-    """GitHub stops evaluating paths: filters past its own limit; so do we."""
+def test_a_listing_that_hit_the_api_cap_expects_everything():
+    """Past the API's own listing cap the filter can no longer be evaluated."""
     assert gates.workflow_is_expected(_real(CLIENT_CI), ["paper/x.tex"], files_truncated=True)
+
+
+def test_the_full_listing_is_fetched_past_three_hundred_files():
+    api = FakeApi([f"docs/f{i}.md" for i in range(375)], [])
+    files, truncated = gates.fetch_changed_files(api, "o/r", 1)
+    assert len(files) == 375
+    assert not truncated
+
+
+def test_the_listing_reports_truncation_only_at_the_api_cap():
+    names = [f"docs/f{i}.md" for i in range(gates.CHANGED_FILES_API_CAP + 100)]
+    files, truncated = gates.fetch_changed_files(FakeApi(names, []), "o/r", 1)
+    assert truncated
+    assert len(files) == gates.CHANGED_FILES_API_CAP
+    exact = FakeApi(names[: gates.CHANGED_FILES_API_CAP - 1], [])
+    assert not gates.fetch_changed_files(exact, "o/r", 1)[1]
 
 
 def test_glob_star_does_not_cross_a_separator():
@@ -401,7 +417,8 @@ class FakeApi:
 
     def __call__(self, path: str):
         if "/files" in path:
-            return [{"filename": name} for name in self.changed] if "page=1" in path else []
+            page = int(path.rsplit("page=", 1)[1])
+            return [{"filename": name} for name in self.changed[(page - 1) * 100 : page * 100]]
         index = min(self.run_calls, len(self.run_sequence) - 1)
         self.run_calls += 1
         return {"workflow_runs": self.run_sequence[index]}
@@ -436,6 +453,32 @@ def test_docs_only_pull_request_passes_without_waiting_for_anything():
     ok, states = drive(api)
     assert ok
     assert {state for state, _ in states.values()} == {gates.NOT_APPLICABLE}
+
+
+def test_a_large_pull_request_with_no_frontend_path_does_not_wait_for_frontend_ci():
+    changed = [f"backend/app/gen/f{i}.py" for i in range(375)]
+    runs = [own_run(), run(BACKEND_CI, run_id=2), run(CLIENT_CI, run_id=3)]
+    ok, states = drive(FakeApi(changed, [runs]))
+    assert ok
+    assert states[FRONTEND_CI][0] == gates.NOT_APPLICABLE
+
+
+def test_a_large_pull_request_with_a_matching_path_beyond_the_first_300_expects_that_workflow():
+    changed = [f"backend/app/gen/f{i}.py" for i in range(375)] + ["frontend/src/App.tsx"]
+    api = FakeApi(changed, [[own_run(), run(BACKEND_CI, run_id=2), run(CLIENT_CI, run_id=3)]])
+    ok, states = drive(api, deadline_seconds=100.0)
+    assert not ok
+    assert states[FRONTEND_CI][0] == gates.PENDING
+    done = [own_run(), run(BACKEND_CI, run_id=2), run(CLIENT_CI, run_id=3), run(FRONTEND_CI, run_id=4)]
+    ok, _ = drive(FakeApi(changed, [done]))
+    assert ok
+
+
+def test_a_listing_at_the_api_cap_expects_every_workflow():
+    changed = [f"paper/f{i}.tex" for i in range(gates.CHANGED_FILES_API_CAP + 1)]
+    ok, states = drive(FakeApi(changed, [[own_run()]]), deadline_seconds=100.0)
+    assert not ok
+    assert {state for state, _ in states.values()} == {gates.PENDING}
 
 
 def test_docs_only_pull_request_does_not_pass_before_the_listing_settles():

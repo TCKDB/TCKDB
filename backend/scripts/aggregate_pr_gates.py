@@ -130,11 +130,13 @@ AGGREGATED_WORKFLOWS = (
     ".github/workflows/python-client-ci.yml",
 )
 
-#: GitHub stops evaluating ``paths:`` filters on very large pull requests
-#: and runs the workflow instead. Past this many changed files this script
-#: stops trusting its own filter evaluation and expects every workflow to
-#: run, which is the safe direction: it waits rather than excuses.
-PATH_FILTER_FILE_LIMIT = 300
+#: The pulls/files API lists at most this many files. GitHub evaluates a
+#: ``paths:`` filter on a bounded prefix of the diff, so a workflow whose
+#: filter matches no changed file never runs, however large the pull
+#: request is. A listing that reaches this cap may be missing the file
+#: that would have matched, so the script then expects every workflow, which
+#: is the safe direction: it waits rather than excuses.
+CHANGED_FILES_API_CAP = 3000
 
 PENDING = "pending"
 PASSED = "passed"
@@ -467,16 +469,18 @@ def fetch_changed_files(
     repo: str,
     pr_number: int,
     *,
-    limit: int = PATH_FILTER_FILE_LIMIT,
+    limit: int = CHANGED_FILES_API_CAP,
 ) -> tuple[list[str], bool]:
-    """(paths changed by the pull request, whether the list hit ``limit``)."""
+    """(paths changed by the pull request, whether the listing hit ``limit`` files)."""
     files: list[str] = []
+    listed = 0
     page = 1
-    while len(files) < limit:
+    while listed < limit:
         payload = fetch(f"/repos/{repo}/pulls/{pr_number}/files?per_page=100&page={page}")
         if not isinstance(payload, list) or not payload:
             return files, False
         for entry in payload:
+            listed += 1
             filename = entry.get("filename")
             if filename:
                 files.append(filename)
@@ -546,8 +550,8 @@ def aggregate(
     log(f"pull request #{pr_number} changes {len(changed_files)} path(s) at head {head_sha}")
     if files_truncated:
         log(
-            f"more than {PATH_FILTER_FILE_LIMIT} changed paths; GitHub stops evaluating "
-            "paths: filters on pull requests this large, so every gate is expected to run"
+            f"the changed-file listing reached its {CHANGED_FILES_API_CAP}-file cap, so a "
+            "matching path may be missing from it; every gate is expected to run"
         )
     for path in sorted(set(changed_files))[:50]:
         log(f"  changed: {path}")
