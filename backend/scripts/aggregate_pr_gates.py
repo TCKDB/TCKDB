@@ -130,12 +130,10 @@ AGGREGATED_WORKFLOWS = (
     ".github/workflows/python-client-ci.yml",
 )
 
-#: The pulls/files API lists at most this many files. GitHub evaluates a
-#: ``paths:`` filter on a bounded prefix of the diff, so a workflow whose
-#: filter matches no changed file never runs, however large the pull
-#: request is. A listing that reaches this cap may be missing the file
-#: that would have matched, so the script then expects every workflow, which
-#: is the safe direction: it waits rather than excuses.
+#: GitHub matches ``paths:`` against the first 3,000 files of the pull
+#: request's diff, the same bound as the pulls/files listing. Below that,
+#: the full listing decides exactly as GitHub does. A listing at the cap may
+#: lack the matching file, so every workflow is expected (wait, never excuse).
 CHANGED_FILES_API_CAP = 3000
 
 PENDING = "pending"
@@ -471,14 +469,25 @@ def fetch_changed_files(
     *,
     limit: int = CHANGED_FILES_API_CAP,
 ) -> tuple[list[str], bool]:
-    """(paths changed by the pull request, whether the listing hit ``limit`` files)."""
+    """(paths changed by the pull request, whether the listing may be incomplete).
+
+    The listing is incomplete when it reached ``limit`` files, holds fewer
+    files than the pull request reports having changed, or had a page that
+    was not a list. An unreadable file count is treated the same way.
+    """
+    pull = fetch(f"/repos/{repo}/pulls/{pr_number}")
+    reported = pull.get("changed_files") if isinstance(pull, dict) else None
     files: list[str] = []
     listed = 0
+    malformed = False
     page = 1
     while listed < limit:
         payload = fetch(f"/repos/{repo}/pulls/{pr_number}/files?per_page=100&page={page}")
-        if not isinstance(payload, list) or not payload:
-            return files, False
+        if not isinstance(payload, list):
+            malformed = True
+            break
+        if not payload:
+            break
         for entry in payload:
             listed += 1
             filename = entry.get("filename")
@@ -489,9 +498,11 @@ def fetch_changed_files(
                 # A rename changes two paths as far as a filter is concerned.
                 files.append(previous)
         if len(payload) < 100:
-            return files, False
+            break
         page += 1
-    return files, True
+    if malformed or not isinstance(reported, int) or listed >= limit:
+        return files, True
+    return files, listed < min(reported, limit)
 
 
 def fetch_runs(fetch: Callable[[str], object], repo: str, head_sha: str) -> list[dict]:

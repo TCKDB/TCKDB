@@ -344,7 +344,7 @@ def test_a_rename_counts_both_of_its_paths():
             if "page=1" in path:
                 return [{"filename": "docs/moved.py", "previous_filename": "backend/app/moved.py"}]
             return []
-        return {"workflow_runs": []}
+        return {"changed_files": 1}
 
     files, truncated = gates.fetch_changed_files(fetch, "o/r", 1)
     assert not truncated
@@ -357,7 +357,46 @@ def test_a_listing_that_hit_the_api_cap_expects_everything():
     assert gates.workflow_is_expected(_real(CLIENT_CI), ["paper/x.tex"], files_truncated=True)
 
 
-def test_the_full_listing_is_fetched_past_three_hundred_files():
+def test_exactly_the_cap_is_truncated():
+    api = FakeApi([f"docs/f{i}.md" for i in range(gates.CHANGED_FILES_API_CAP)], [])
+    assert gates.fetch_changed_files(api, "o/r", 1)[1]
+
+
+def test_rename_entries_count_once_each_toward_the_cap():
+    entries = [{"filename": f"docs/n{i}.py", "previous_filename": f"docs/o{i}.py"} for i in range(1600)]
+    files, truncated = gates.fetch_changed_files(FakeApi(entries, []), "o/r", 1)
+    assert len(files) == 3200
+    assert not truncated
+
+
+def test_a_short_middle_page_is_truncated_and_expects_everything():
+    changed = [f"docs/f{i}.md" for i in range(400)] + ["frontend/src/App.tsx"]
+    cut = [{"filename": "docs/x.md"}] * 10
+    api = FakeApi(changed, [[own_run()]], files_hook=lambda page: cut if page == 2 else None)
+    assert gates.fetch_changed_files(api, "o/r", 1)[1]
+    ok, states = drive(api, deadline_seconds=100.0)
+    assert not ok
+    assert states[FRONTEND_CI][0] == gates.PENDING
+
+
+def test_a_non_list_page_is_truncated():
+    api = FakeApi(["docs/a.md"], [], files_hook=lambda page: {"message": "oops"})
+    assert gates.fetch_changed_files(api, "o/r", 1)[1]
+
+
+def test_a_listing_shorter_than_the_reported_count_is_truncated():
+    api = FakeApi([f"docs/f{i}.md" for i in range(150)], [], reported=151)
+    assert gates.fetch_changed_files(api, "o/r", 1)[1]
+
+
+def test_an_unreadable_changed_file_count_is_truncated():
+    def fetch(path: str):
+        return [] if "/files" in path else {}
+
+    assert gates.fetch_changed_files(fetch, "o/r", 1)[1]
+
+
+def test_the_full_listing_is_fetched_past_the_first_page():
     api = FakeApi([f"docs/f{i}.md" for i in range(375)], [])
     files, truncated = gates.fetch_changed_files(api, "o/r", 1)
     assert len(files) == 375
@@ -410,15 +449,32 @@ def test_paths_ignore_is_honoured():
 class FakeApi:
     """A GitHub whose run listing changes between polls."""
 
-    def __init__(self, changed: list[str], run_sequence: list[list[dict]]):
+    def __init__(
+        self,
+        changed: list[str | dict],
+        run_sequence: list[list[dict]],
+        *,
+        reported: int | None = None,
+        files_hook=None,
+    ):
         self.changed = changed
         self.run_sequence = run_sequence
+        self.reported = len(changed) if reported is None else reported
+        self.files_hook = files_hook
         self.run_calls = 0
 
     def __call__(self, path: str):
         if "/files" in path:
             page = int(path.rsplit("page=", 1)[1])
-            return [{"filename": name} for name in self.changed[(page - 1) * 100 : page * 100]]
+            if self.files_hook is not None:
+                override = self.files_hook(page)
+                if override is not None:
+                    return override
+            # The real API lists at most 3000 files.
+            listed = self.changed[: gates.CHANGED_FILES_API_CAP]
+            return [{"filename": e} if isinstance(e, str) else e for e in listed[(page - 1) * 100 : page * 100]]
+        if path.endswith("/pulls/1"):
+            return {"changed_files": self.reported}
         index = min(self.run_calls, len(self.run_sequence) - 1)
         self.run_calls += 1
         return {"workflow_runs": self.run_sequence[index]}
@@ -463,7 +519,7 @@ def test_a_large_pull_request_with_no_frontend_path_does_not_wait_for_frontend_c
     assert states[FRONTEND_CI][0] == gates.NOT_APPLICABLE
 
 
-def test_a_large_pull_request_with_a_matching_path_beyond_the_first_300_expects_that_workflow():
+def test_a_large_pull_request_with_a_matching_path_late_in_the_listing_expects_that_workflow():
     changed = [f"backend/app/gen/f{i}.py" for i in range(375)] + ["frontend/src/App.tsx"]
     api = FakeApi(changed, [[own_run(), run(BACKEND_CI, run_id=2), run(CLIENT_CI, run_id=3)]])
     ok, states = drive(api, deadline_seconds=100.0)
