@@ -1,7 +1,7 @@
 """The served ``stereo_label`` is derived from the descriptor, and serving the facets costs no per-participant query.
 
 Derivation: before the descriptor existed ``species_entry.stereo_label`` was free text (up to 64 characters), and a
-contradicted legacy row kept whatever text it was deposited with (``stereo_identity_merge.py``). A participant must
+contradicted legacy row kept whatever text it was deposited with (a one-off merge repair). A participant must
 never serve that text as a stereo mark, so the label is derived from the descriptor and resolution the way
 ``ResolvedStereo.label`` derives it.
 

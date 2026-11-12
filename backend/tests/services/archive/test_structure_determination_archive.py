@@ -20,7 +20,7 @@ from sqlalchemy.exc import DBAPIError
 from app.db.models.common import SubmissionRecordType
 from app.services.archive import restore_archive, write_archive
 from tests.db.test_accepted_science_immutability import _actor, _approve
-from tests.db.test_structure_determination_migration import (
+from tests.db.test_structure_determination import (
     _entry,
     _insert_determination,
     _insert_source,

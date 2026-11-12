@@ -12,7 +12,6 @@ conda run -n tckdb_env alembic current               # show current revision
 conda run -n tckdb_env alembic history --verbose     # full revision graph
 conda run -n tckdb_env alembic heads                 # current head(s)
 conda run -n tckdb_env alembic upgrade head          # apply pending revisions
-conda run -n tckdb_env alembic downgrade -1          # step back one revision
 ```
 
 For Docker-Compose-based deployments where Alembic is run via the API image rather than the host conda env, use the compose variant shown later in this document.
@@ -51,7 +50,7 @@ PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -tAc \
 
 # 2. Hosted only: provision the role split. This installs RDKit with the
 #    bootstrap administrator and transfers application ownership.
-conda run -n tckdb_env python scripts/configure_database_roles.py apply
+conda run -n tckdb_env python backend/scripts/configure_database_roles.py apply
 
 # 3. Apply all migrations.
 cd backend
@@ -61,7 +60,7 @@ conda run -n tckdb_env alembic upgrade head
 conda run -n tckdb_env alembic current
 ```
 
-`alembic upgrade head` is **always** the source of truth for an empty DB. The chain is a single revision: it creates the RDKit extension, every table, enum, trigger function, trigger, index and view, and the seed rows (`reaction_family`, `calculation_parameter_vocab`, `conformer_assignment_scheme`). `alembic downgrade base` removes everything it created and leaves the RDKit extension in place.
+`alembic upgrade head` is **always** the source of truth for an empty DB. The chain is a single revision: it creates the RDKit extension, every table, enum, trigger function, trigger and index, and the seed rows (`reaction_family`, `calculation_parameter_vocab`, `conformer_assignment_scheme`). `alembic downgrade base` removes everything it created and leaves the RDKit extension in place.
 
 After bootstrap, seed an admin user (`backend/scripts/bootstrap_admin.py`) and continue with the deployment-scenario doc you came from.
 
@@ -168,11 +167,7 @@ docker compose exec -T db pg_dump -U $DB_USER $DB_NAME \
 
 ## Rollback expectations
 
-Migrations have a `downgrade()` method, but it is not a substitute for backup-and-restore:
-
-- **Schema-only downgrades** (add/drop column, add/drop index, add/drop table) are generally safe to run on a database that has not yet seen writes through the new shape.
-- **Downgrades after live writes** through the new schema lose data. If a new column was populated by application traffic, `downgrade()` will drop it.
-- **Data migrations** (backfills, column copies) generally cannot be reversed cleanly. The downgrade may leave the column empty rather than restoring its previous state.
+The only downgrade, `alembic downgrade base`, drops the whole schema and every row in it. It is not a rollback of a deploy.
 
 The expected recovery path for a failed deploy is:
 
@@ -181,7 +176,7 @@ The expected recovery path for a failed deploy is:
 3. Re-deploy the previous application version.
 4. Investigate.
 
-Use `alembic downgrade` only for narrow, well-understood schema-only changes and only when you accept the data-loss surface.
+Do not run `alembic downgrade` on a database that holds data you want to keep.
 
 ---
 
@@ -197,6 +192,27 @@ Adding `PublicRefMixin` to an existing table requires more than the column. The 
 6. **Length sanity** — `PUBLIC_REF_LEN` (or equivalent constant) in `backend/app/services/public_refs.py` must remain aligned with the DB column width. Currently both are `40`. If you change one, change both, and update every existing migration's column declaration in the same revision.
 
 Public refs currently fit `String(40)`. The longest observed prefix (`nsolve`, 6 chars) plus underscore plus a 26-char base32 body is 33 chars, leaving 7 chars of headroom. Stay under that.
+
+---
+
+## Operator scripts
+
+Both scripts read the same `DB_*` environment variables as the API, dry-run by default, and refuse `--apply` on a database whose name is not `tckdb_test*` unless `--i-know-this-is-deployed` is also passed. Take a `pg_dump` first.
+
+**`backend/scripts/ops/backfill_assumed_tau.py`** judges `calc_freq_result` rows whose `imaginary_mode_tau_cm1` is NULL, the way the upload path does: from the calculation's recorded parameters, then from the assumed Hessian method for its software and level of theory. It writes only `imaginary_mode_tau_cm1` and `imaginary_mode_tau_basis`, is idempotent, and prints counts only.
+
+```bash
+python backend/scripts/ops/backfill_assumed_tau.py                 # plan: prints the tally, writes nothing
+python backend/scripts/ops/backfill_assumed_tau.py --apply         # write
+```
+
+**`backend/scripts/ops/reresolve_literature_titles.py`** re-fetches the DOI/ISBN registry title for `literature` rows whose `title_source` is NULL or `depositor_supplied`, and on a hit sets `title` and `title_source = resolved_metadata`. It changes nothing else, so every citing record keeps citing the same row. It prints public refs and title sources only.
+
+```bash
+python backend/scripts/ops/reresolve_literature_titles.py                 # dry run: looks up, reports, writes nothing
+python backend/scripts/ops/reresolve_literature_titles.py --apply         # write the upgrades
+python backend/scripts/ops/reresolve_literature_titles.py --limit 50 --since 2026-10-01
+```
 
 ---
 

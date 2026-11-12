@@ -68,7 +68,7 @@ Supporting axes also present: `schemas.py`, `derivation.py`, `mapping.py`,
    (`source_submission_id`→`submission`, `source_audit_event_id`→`submission_audit_event`),
    indexes, and the two `CheckConstraint`s (`char_length(context_hash)=64`,
    `jsonb_typeof(findings_json)='array'`) match between the ORM model and the
-   `c9d0e1f2a3b4` migration. The pytest fixture rebuilds the DB from migrations
+   migration. The pytest fixture rebuilds the DB from migrations
    and the suite is green, so the runtime schema matches the model.
 8. **Active prompt/rubric ownership — single source, see risk R1.** The active
    recipe lives **only** in `recipe.py`

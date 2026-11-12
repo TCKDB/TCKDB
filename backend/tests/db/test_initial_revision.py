@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, text
 
-from tests.db._migration_chain import base_revision, current_head
+from tests.db._migration_chain import base_revision, current_head, script_directory
 
 REPO_BACKEND = Path(__file__).resolve().parents[2]
 
@@ -73,8 +73,9 @@ def _seed_counts(engine) -> dict[str, int]:
         }
 
 
-def test_the_chain_is_one_revision():
-    assert base_revision() == current_head()
+def test_the_chain_has_exactly_one_base():
+    assert len(script_directory().get_bases()) == 1
+    assert base_revision()
 
 
 def test_upgrade_builds_the_schema_and_downgrade_removes_all_of_it(scratch_db):

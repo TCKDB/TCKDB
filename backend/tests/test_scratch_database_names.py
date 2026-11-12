@@ -50,19 +50,19 @@ def _test_modules_that_create_databases() -> list[Path]:
 def test_the_scan_finds_the_files_it_is_meant_to_guard() -> None:
     """A guard whose scan matches nothing would pass forever.
 
-    Pinned to a floor rather than an exact list so adding a migration test
+    Pinned to a floor rather than an exact list so adding a test
     does not fail this assertion for the wrong reason — the per-file check
     below is what actually judges a new one.
     """
     creators = _test_modules_that_create_databases()
 
-    assert len(creators) >= 8, (
-        "expected the migration tests that create scratch databases to be "
+    assert len(creators) >= 6, (
+        "expected the tests that create scratch databases to be "
         f"found by this scan; got {[str(p) for p in creators]}"
     )
     names = {p.name for p in creators}
-    assert "test_stage2_scientific_integrity_migration.py" in names
-    assert "test_energy_transfer_scope_migration.py" in names
+    assert "test_initial_revision.py" in names
+    assert "test_network_solve_computed_evidence_trigger.py" in names
 
 
 @pytest.mark.parametrize(

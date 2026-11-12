@@ -386,7 +386,7 @@ therefore carries all of it:
 All four persisted fields are `null` together on a record deposited before
 ADR 0012 shipped — "never judged", which is a different fact from "judged
 and not flagged" and is not collapsed into `false`/`0` here any more than
-it was backfilled by `c2f7a4e8d1b6`. `n_imag_at_or_above_tau` is also
+it was backfilled. `n_imag_at_or_above_tau` is also
 `null` where no τ is stored, and where the record reports imaginary modes
 but stores no `calc_freq_mode` rows to count (there, `0` would describe
 the stored rows and misdescribe the record).

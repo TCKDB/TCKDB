@@ -108,6 +108,54 @@ def test_valid_cp_row_is_accepted(db_session):
         savepoint.rollback()
 
 
+@pytest.mark.parametrize(
+    "overrides,constraint",
+    [
+        pytest.param({"pressure_bar": -1.0}, "ck_mpo_pressure_bar_gt_0", id="pressure_bar"),
+        pytest.param({"pressure_bar": 0.0}, "ck_mpo_pressure_bar_gt_0", id="pressure_bar_zero"),
+        pytest.param(
+            {"uncertainty_coverage_factor": 0.5},
+            "ck_mpo_uncertainty_coverage_factor_ge_1",
+            id="coverage_factor_below_one",
+        ),
+        pytest.param(
+            {"uncertainty_level_of_confidence_pct": 0.0},
+            "ck_mpo_uncertainty_confidence_pct_range",
+            id="confidence_pct_zero",
+        ),
+        pytest.param(
+            {"uncertainty_level_of_confidence_pct": 101.0},
+            "ck_mpo_uncertainty_confidence_pct_range",
+            id="confidence_pct_over_100",
+        ),
+        pytest.param(
+            {
+                "uncertainty_coverage_factor": 2.0,
+                "uncertainty_kind": "standard",
+            },
+            "ck_mpo_coverage_factor_only_expanded",
+            id="coverage_factor_with_standard_kind",
+        ),
+    ],
+)
+def test_a_cp_row_violating_one_check_is_refused(db_session, overrides, constraint):
+    """*Mutation*: remove the named CHECK from the model AND the migration
+    -- this insert then succeeds instead of raising.
+    """
+    savepoint = db_session.begin_nested()
+    try:
+        with pytest.raises(IntegrityError) as excinfo:
+            db_session.execute(
+                text(_valid_cp_row_sql()), _valid_cp_row_params(**overrides)
+            )
+            db_session.flush()
+        assert constraint in str(excinfo.value), (
+            f"refused by something other than {constraint}: {excinfo.value}"
+        )
+    finally:
+        savepoint.rollback()
+
+
 def test_cp_kind_requires_j_mol_k_unit(db_session):
     savepoint = db_session.begin_nested()
     try:
@@ -277,6 +325,50 @@ def test_valid_custody_record_is_accepted(db_session, external_source_id):
         savepoint.rollback()
 
 
+@pytest.mark.parametrize(
+    "overrides,constraint",
+    [
+        pytest.param(
+            {"content_sha256": "not-hex"},
+            "ck_external_source_record_content_sha256_hex",
+            id="sha256_not_hex",
+        ),
+        pytest.param(
+            {"content_sha256": "A" * 64},
+            "ck_external_source_record_content_sha256_hex",
+            id="sha256_uppercase",
+        ),
+        pytest.param(
+            {"content_length": -1},
+            "ck_external_source_record_content_length_ge_0",
+            id="content_length_negative",
+        ),
+        pytest.param(
+            {"http_status": 999},
+            "ck_external_source_record_http_status_range",
+            id="http_status_out_of_range",
+        ),
+    ],
+)
+def test_a_custody_record_violating_one_check_is_refused(
+    db_session, external_source_id, overrides, constraint
+):
+    """*Mutation*: remove the named CHECK from the model AND the migration
+    -- this insert then succeeds instead of raising.
+    """
+    savepoint = db_session.begin_nested()
+    try:
+        with pytest.raises(IntegrityError) as excinfo:
+            db_session.execute(
+                text(_valid_record_sql()),
+                _valid_record_params(external_source_id, **overrides),
+            )
+            db_session.flush()
+        assert constraint in str(excinfo.value)
+    finally:
+        savepoint.rollback()
+
+
 def test_custody_unique_constraint_rejects_an_exact_duplicate(
     db_session, external_source_id
 ):
@@ -289,6 +381,49 @@ def test_custody_unique_constraint_rejects_an_exact_duplicate(
             db_session.execute(text(_valid_record_sql()), dict(params))
             db_session.flush()
         assert "uq_external_source_record_identity" in str(excinfo.value)
+    finally:
+        savepoint.rollback()
+
+
+@pytest.mark.parametrize(
+    "column",
+    ["parser_name", "parser_version", "mapping_name", "mapping_version", "content_sha256", "source_record_key"],
+)
+def test_custody_unique_constraint_still_distinguishes_rows_by_each_column(
+    db_session, external_source_id, column
+):
+    """Every column named in ``uq_external_source_record_identity`` still
+    participates: two rows differing ONLY by ``column`` must both insert.
+
+    *Mutation*: drop ``column`` from the UniqueConstraint's column list (in
+    the model AND the migration) -- the two rows then collide as an exact
+    duplicate and the second insert raises instead of succeeding.
+    """
+    savepoint = db_session.begin_nested()
+    try:
+        base = _valid_record_params(external_source_id)
+        db_session.execute(text(_valid_record_sql()), base)
+        db_session.flush()
+
+        distinct = dict(base)
+        if column == "content_sha256":
+            distinct[column] = "b" * 64
+        elif column == "source_record_key":
+            distinct[column] = base[column] + "-2"
+        else:
+            distinct[column] = base[column] + "-2"
+
+        db_session.execute(text(_valid_record_sql()), distinct)
+        db_session.flush()
+
+        count = db_session.execute(
+            text(
+                "SELECT count(*) FROM external_source_record"
+                " WHERE external_source_id = :eid"
+            ),
+            {"eid": external_source_id},
+        ).scalar_one()
+        assert count == 2
     finally:
         savepoint.rollback()
 

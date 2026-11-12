@@ -72,13 +72,9 @@ empty, and the target must contain exactly
 the canonical identities seeded by migrations in `reaction_family`,
 `calculation_parameter_vocab`, and `conformer_assignment_scheme`. The one
 tolerated exception is `MIGRATION_WRITTEN_TABLES` (`accepted_science_repair`
-and `accepted_science_repair_change`): a data-repair revision declares its
-repair there unconditionally, so a database produced by nothing but
-`alembic upgrade head` already holds rows in them (two at head
-`a55cc983501a`, measured 2026-09-19). Both tables are excluded from the
-archive, so restore neither reads nor writes them; before this tolerance the
-CLI refused every freshly migrated target, which the in-process tests could
-not see because their "fresh target" helper deletes those rows too. Restore
+and `accepted_science_repair_change`): a data repair declares itself
+there unconditionally, so a live database can hold rows in them. Both tables are excluded from the
+archive, so restore neither reads nor writes them; a restore target that holds such rows is accepted. Restore
 locks all ORM-managed tables, rechecks this state, replaces those seeds with the
 archived rows, and then inserts the remaining rows. Its trigger-safe order
 places scientific roots and children before reviews, review events after their

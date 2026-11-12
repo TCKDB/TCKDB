@@ -157,11 +157,7 @@ states is negligible for any TCKDB-scale corpus.
 
 A LoT ref is derived from `lot_hash` **once, at insert**, and stored. It is
 never recomputed. When the hash formula changes, existing rows are re-keyed
-in place and keep the ref they were minted with: `e1a5c3f7b9d4` (spin
-treatment joined the identity) did this for every row, and `38b06819f099`
-(basis names hashed by identity key, #574) did it for every row whose basis
-spelling differs from its key, and `c8424fe82997` (method names, #585) for
-every row whose method has an upper-case letter. For those rows the stored ref is no longer
+in place and keep the ref they were minted with (a change to what enters the identity, such as spin treatment, basis-name or method-name keying). For those rows the stored ref is no longer
 what their content would mint on a fresh instance. So "same content → same
 ref" below holds for rows minted under the current formula, not for every
 row that exists. A LoT ref identifies a row; it is not re-derivable from its

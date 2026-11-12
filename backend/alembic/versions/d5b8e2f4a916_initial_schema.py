@@ -7390,6 +7390,7 @@ ALTER TABLE ONLY public.user_session
     ADD CONSTRAINT fk_user_session_user_id_app_user FOREIGN KEY (user_id) REFERENCES public.app_user(id) DEFERRABLE;
 ALTER TABLE ONLY public.workflow_tool_release
     ADD CONSTRAINT fk_workflow_tool_release_workflow_tool_id_workflow_tool FOREIGN KEY (workflow_tool_id) REFERENCES public.workflow_tool(id) DEFERRABLE;
+SET LOCAL check_function_bodies = true;
 '''
 
 # Objects owned by the rdkit extension are left alone on downgrade.

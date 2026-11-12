@@ -294,7 +294,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Any request can receive it.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
-- Note: Raised by the calculation_dependency acyclicity trigger , keyed on the constraint name the trigger reports. context names the refused edge's parent_calculation and child_calculation by public_ref.
+- Note: Raised by the calculation_dependency acyclicity trigger, keyed on the constraint name the trigger reports. context names the refused edge's parent_calculation and child_calculation by public_ref.
 - Scientific check (structural): The graph of which calculation depends on which is acyclic: no calculation depends on itself through a chain of others.
 - If your chemistry is legitimate: Drop or reverse the dependency that points back.
 

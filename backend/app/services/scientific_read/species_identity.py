@@ -185,7 +185,7 @@ def derived_stereo_label(descriptor: str | None, resolution) -> str | None:
     The descriptor, except that a fully unknown configuration (``unresolved``) displays as nothing. The raw
     ``species_entry.stereo_label`` column is not used: before the descriptor existed it was free text up to 64
     characters, and a contradicted legacy row kept whatever text it was deposited with
-    (``stereo_identity_merge.py``), so it can hold a string that is not a stereo mark at all.
+    (a one-off merge repair), so it can hold a string that is not a stereo mark at all.
     """
     value = getattr(resolution, "value", resolution)
     if descriptor is None or value is None or value == "unresolved":

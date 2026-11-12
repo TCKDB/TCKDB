@@ -31,10 +31,26 @@ from tests.services.scientific_read._factories import (
 )
 
 _TABLE = "calc_composite_log_check"
+_ENUM = "composite_log_outcome"
 _SHA = "ab" * 32
 
 
 # -- the accepted-science guard, as behaviour --------------------------------
+
+
+def _seed_composite(conn) -> int:
+    species_id = conn.scalar(
+        text(
+            "INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind) "
+            "VALUES (CAST('molecule' AS molecule_kind), 'O', 'XLYOFNOQVPJJNP-UHFFFAOYSA-N', 0, 1, "
+            "CAST('unspecified' AS stereo_kind)) RETURNING id"
+        )
+    )
+    entry_id = conn.scalar(text("INSERT INTO species_entry (species_id) VALUES (:s) RETURNING id"), {"s": species_id})
+    return conn.scalar(
+        text("INSERT INTO calculation (type, species_entry_id) VALUES (CAST('composite' AS calc_type), :e) RETURNING id"),
+        {"e": entry_id},
+    )
 
 
 def _composite_with_check(db_session):
@@ -84,3 +100,60 @@ def test_an_accepted_calculations_log_check_is_frozen(db_session):
         db_session.flush()
     with pytest.raises(DBAPIError), db_session.begin_nested():
         db_session.execute(text(f"TRUNCATE {_TABLE}"))
+
+
+@pytest.mark.parametrize(
+    "digest",
+    ["AB" * 32, "ab" * 31, "ab" * 33, "g" * 64, ""],
+    ids=["uppercase", "short", "long", "not_hex", "empty"],
+)
+def test_the_table_refuses_a_digest_that_is_not_lowercase_sha256_hex(db_session, digest):
+    conn = db_session
+    with db_session.begin_nested():
+        calc_id = _seed_composite(conn)
+    with pytest.raises(DBAPIError), db_session.begin_nested():
+        conn.execute(
+            text(
+                f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, parser_version, outcome) "
+                f"VALUES (:c, :s, 1, CAST('confirmed' AS {_ENUM}))"
+            ),
+            {"c": calc_id, "s": digest},
+        )
+
+
+def test_the_table_refuses_a_second_observation_of_the_same_log(db_session):
+    conn = db_session
+    with db_session.begin_nested():
+        calc_id = _seed_composite(conn)
+        conn.execute(
+            text(f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, parser_version, outcome) VALUES (:c, :s, 1, CAST('confirmed' AS {_ENUM}))"),
+            {"c": calc_id, "s": _SHA},
+        )
+    with pytest.raises(DBAPIError), db_session.begin_nested():
+        conn.execute(
+            text(f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, parser_version, outcome) VALUES (:c, :s, 1, CAST('mismatch' AS {_ENUM}))"),
+            {"c": calc_id, "s": _SHA},
+        )
+
+
+def test_the_same_log_under_another_parser_version_is_a_second_row_and_version_zero_is_refused(db_session):
+    conn = db_session
+    with db_session.begin_nested():
+        calc_id = _seed_composite(conn)
+        for version in (1, 2):
+            conn.execute(
+                text(
+                    f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, parser_version, outcome) "
+                    f"VALUES (:c, :s, :v, CAST('mismatch' AS {_ENUM}))"
+                ),
+                {"c": calc_id, "s": _SHA, "v": version},
+            )
+        assert conn.scalar(text(f"SELECT count(*) FROM {_TABLE}")) == 2
+    with pytest.raises(DBAPIError), db_session.begin_nested():
+        conn.execute(
+            text(
+                f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, parser_version, outcome) "
+                f"VALUES (:c, :s, 0, CAST('mismatch' AS {_ENUM}))"
+            ),
+            {"c": calc_id, "s": _SHA},
+        )

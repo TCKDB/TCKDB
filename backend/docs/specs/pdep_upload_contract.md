@@ -48,8 +48,7 @@ are rejected; the backend does not manufacture missing scientific evidence.
 - Energy-transfer rows on a computed solve declare a `scope`. `per_well` rows
   name a `(state_key, collider_species_key)` pair and must cover the full cross
   product of collisionally-stabilised well states and declared bath-gas
-  colliders; one well's ⟨ΔE⟩down does not describe a five-well network. Since
-  `b6e1d3a9c740` a run that specified a single `energyTransferModel` for the
+  colliders; one well's ⟨ΔE⟩down does not describe a five-well network. A run that specified a single `energyTransferModel` for the
   whole network — as Arkane and MESS inputs usually do — declares instead one
   `network_wide` entry naming no state and no collider, which is accepted and
   returns a `network_wide_energy_transfer_scope` warning. Mixing the two scopes
@@ -109,10 +108,8 @@ v2 therefore accepts them, on three conditions:
 collection, and is always present on the channel read surfaces. "This rate is a
 multi-step ME channel" is a scientific claim about the channel, not an absence
 of data, and a reader must be able to tell it apart from an incomplete deposit
-without consulting the contract version that wrote the row. The backfill is
-unambiguous: `c1d2e3f4a5b6` refuses to run unless `network_channel` is empty, so
-every row this revision can reach was written under v2, which required at least
-one path per channel.
+without consulting the contract version that wrote the row. Every stored channel
+was written under v2, which requires at least one path per channel.
 
 Deliberately **not** recorded: *which* wells a given well-skipping channel
 traverses. The master equation does not attribute its phenomenological flux to
@@ -134,21 +131,11 @@ document served by the deployment.
 `backend/scripts/pdep_ingestion` builds a conforming v2 payload from an Arkane
 pressure-dependence run and is the reference producer.
 
-## Existing production data
+## Pre-v2 payloads
 
-The deployed database **does** hold pre-v2 PDep rows (a hydrazine network with
-Chebyshev and PLOG kinetics, seeded 2026-07-15). Migration `c1d2e3f4a5b6`
-therefore refuses to run against it and raises a `RuntimeError` naming the
-offending tables before applying any DDL.
-
-Those rows cannot be transformed: an unscoped ⟨ΔE⟩down does not record which
-well it applied to, and a v1 channel has no producer-visible identity. The
-resolution is **export, delete, re-upload from the source calculations** — never
-a guessed backfill. The operator runbook is
-`backend/docs/deployment/migrations.md`, section "Stage 2 PDep re-upload".
-
-Pi deployment additionally requires the editable schema-package metadata refresh
-described in that runbook, followed by backend migration and API restart.
+A pressure-dependent network in the earlier shape cannot be transformed: an unscoped ⟨ΔE⟩down does not record which
+well it applied to, and a v1 channel has no producer-visible identity. The resolution is to regenerate the payload from
+the source calculations and re-upload it, never a guessed backfill.
 
 ## Known gaps
 

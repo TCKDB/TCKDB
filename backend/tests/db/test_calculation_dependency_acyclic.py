@@ -10,11 +10,14 @@ two-connection race.
 from __future__ import annotations
 
 import itertools
+import threading
 import time
+from pathlib import Path
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.orm import Session
 from starlette.requests import Request
 
 from app.api.errors import _integrity_error_handler
@@ -28,6 +31,7 @@ from tests.services.scientific_read._factories import (
     unique_smiles,
 )
 
+_BACKEND = Path(__file__).resolve().parents[2]
 _LOCK_TEXT = "calculation_dependency:acyclic"
 
 
@@ -224,6 +228,92 @@ def test_integrity_handler_maps_the_trigger_to_the_coded_409(db_session):
 # -- a real race --------------------------------------------------------------
 
 
+@pytest.fixture(scope="module")
+def race_engine():
+    import subprocess
+
+    from conftest import _database_url, _db_env, scratch_database_name
+
+    from tests.db.test_network_solve_computed_evidence_trigger import _create_database, _drop_database
+
+    db_name = scratch_database_name("dep_acyclic_race")
+    admin, admin_conn = _create_database(db_name)
+    engine = None
+    try:
+        subprocess.run(
+            ["conda", "run", "-n", "tckdb_env", "alembic", "upgrade", "head"],
+            cwd=_BACKEND, env=_db_env(db_name), check=True,
+        )
+        engine = create_engine(_database_url(db_name), pool_pre_ping=True)
+        yield engine
+    finally:
+        if engine is not None:
+            engine.dispose()
+        _drop_database(admin, admin_conn, db_name)
+
+
+def test_two_transactions_each_closing_one_edge_of_a_cycle_cannot_both_commit(race_engine):
+    """A -> B and C -> D are committed; B -> C and D -> A touch disjoint calculations, so the
+    accepted-science row locks do not serialise them. Only the trigger's advisory lock does."""
+    insert = text(
+        "INSERT INTO calculation_dependency (parent_calculation_id, child_calculation_id, dependency_role) "
+        "VALUES (:p, :c, 'arkane_source')"
+    )
+    with Session(race_engine) as seed:
+        a, b, c, d = _calcs(seed, 4, "ACYCRACE")
+        seed.commit()
+        ids = [a.id, b.id, c.id, d.id]
+        seed.execute(insert, {"p": ids[0], "c": ids[1]})
+        seed.execute(insert, {"p": ids[2], "c": ids[3]})
+        seed.commit()
+    a_id, b_id, c_id, d_id = ids
+    first = race_engine.connect()
+    second = race_engine.connect()
+    outcome: dict[str, object] = {}
+    try:
+        first_tx = first.begin()
+        first.execute(insert, {"p": b_id, "c": c_id})  # holds the lock, edge uncommitted
+
+        def second_writer():
+            try:
+                with second.begin():
+                    second.execute(insert, {"p": d_id, "c": a_id})
+                outcome["second"] = "committed"
+            except IntegrityError as exc:
+                outcome["second"] = exc.orig.diag.constraint_name
+            except Exception as exc:  # surface anything unexpected instead of a bare timeout
+                outcome["second"] = repr(exc)
+
+        thread = threading.Thread(target=second_writer)
+        thread.start()
+        deadline = time.time() + 10
+        waiting = 0
+        with race_engine.connect() as probe:
+            while time.time() < deadline and not outcome:
+                waiting = probe.scalar(text("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted "
+                    "AND database = (SELECT oid FROM pg_database WHERE datname = current_database())"))
+                if waiting:
+                    break
+                time.sleep(0.05)
+        assert waiting, f"the second writer never queued on the advisory lock: {outcome}"
+        first_tx.commit()
+        thread.join(timeout=10)
+        assert not thread.is_alive()
+        assert outcome["second"] == "calculation_dependency_acyclic"
+        with race_engine.connect() as check:
+            committed = check.scalar(
+                text(
+                    "SELECT count(*) FROM calculation_dependency WHERE "
+                    "(parent_calculation_id, child_calculation_id) IN ((:b, :c), (:d, :a))"
+                ),
+                {"a": a_id, "b": b_id, "c": c_id, "d": d_id},
+            )
+        assert committed == 1, "exactly one of the two edges that would close the ring may commit"
+    finally:
+        first.close()
+        second.close()
+
+
 # -- the walk terminates, and a legal reversal is not mistaken for a cycle ---
 
 
@@ -263,3 +353,57 @@ def test_reversing_a_single_edge_by_update_is_legal(db_session):
 
 
 # -- the deadlock schedule ----------------------------------------------------
+
+
+def test_the_advisory_lock_is_taken_before_any_row_lock_so_two_writers_cannot_deadlock(race_engine):
+    """T1 inserts A->B (holds A, B and the lock). T2 inserts C->D. T1 then inserts D->E.
+
+    If the lock were taken after the accepted-science row locks, T2 would hold C and D while waiting for the
+    lock T1 holds, and T1 would wait for D: a deadlock. Taken first, T2 waits holding nothing, so T1 finishes."""
+    insert = text(
+        "INSERT INTO calculation_dependency (parent_calculation_id, child_calculation_id, dependency_role) "
+        "VALUES (:p, :c, 'arkane_source')"
+    )
+    with Session(race_engine) as seed:
+        calcs = _calcs(seed, 5, "ACYCDEAD")
+        seed.commit()
+        a_id, b_id, c_id, d_id, e_id = (calc.id for calc in calcs)
+    first = race_engine.connect()
+    second = race_engine.connect()
+    outcome: dict[str, object] = {}
+    try:
+        first_tx = first.begin()
+        first.execute(insert, {"p": a_id, "c": b_id})
+
+        def second_writer():
+            try:
+                with second.begin():
+                    second.execute(insert, {"p": c_id, "c": d_id})
+                outcome["second"] = "committed"
+            except Exception as exc:
+                outcome["second"] = repr(exc)
+
+        thread = threading.Thread(target=second_writer)
+        thread.start()
+        deadline = time.time() + 10
+        waiting = 0
+        with race_engine.connect() as probe:
+            while time.time() < deadline and not outcome:
+                waiting = probe.scalar(
+                    text(
+                        "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted "
+                        "AND database = (SELECT oid FROM pg_database WHERE datname = current_database())"
+                    )
+                )
+                if waiting:
+                    break
+                time.sleep(0.05)
+        assert waiting, f"the second writer never queued on the advisory lock: {outcome}"
+        first.execute(insert, {"p": d_id, "c": e_id})  # needs D: must not wait on the queued writer
+        first_tx.commit()
+        thread.join(timeout=20)
+        assert not thread.is_alive()
+        assert outcome == {"second": "committed"}, outcome
+    finally:
+        first.close()
+        second.close()
