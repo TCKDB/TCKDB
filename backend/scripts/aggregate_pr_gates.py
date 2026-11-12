@@ -130,11 +130,11 @@ AGGREGATED_WORKFLOWS = (
     ".github/workflows/python-client-ci.yml",
 )
 
-#: GitHub stops evaluating ``paths:`` filters on very large pull requests
-#: and runs the workflow instead. Past this many changed files this script
-#: stops trusting its own filter evaluation and expects every workflow to
-#: run, which is the safe direction: it waits rather than excuses.
-PATH_FILTER_FILE_LIMIT = 300
+#: GitHub matches ``paths:`` against the first 3,000 files of the pull
+#: request's diff, the same bound as the pulls/files listing. Below that,
+#: the full listing decides exactly as GitHub does. A listing at the cap may
+#: lack the matching file, so every workflow is expected (wait, never excuse).
+CHANGED_FILES_API_CAP = 3000
 
 PENDING = "pending"
 PASSED = "passed"
@@ -467,16 +467,29 @@ def fetch_changed_files(
     repo: str,
     pr_number: int,
     *,
-    limit: int = PATH_FILTER_FILE_LIMIT,
+    limit: int = CHANGED_FILES_API_CAP,
 ) -> tuple[list[str], bool]:
-    """(paths changed by the pull request, whether the list hit ``limit``)."""
+    """(paths changed by the pull request, whether the listing may be incomplete).
+
+    The listing is incomplete when it reached ``limit`` files, holds fewer
+    files than the pull request reports having changed, or had a page that
+    was not a list. An unreadable file count is treated the same way.
+    """
+    pull = fetch(f"/repos/{repo}/pulls/{pr_number}")
+    reported = pull.get("changed_files") if isinstance(pull, dict) else None
     files: list[str] = []
+    listed = 0
+    malformed = False
     page = 1
-    while len(files) < limit:
+    while listed < limit:
         payload = fetch(f"/repos/{repo}/pulls/{pr_number}/files?per_page=100&page={page}")
-        if not isinstance(payload, list) or not payload:
-            return files, False
+        if not isinstance(payload, list):
+            malformed = True
+            break
+        if not payload:
+            break
         for entry in payload:
+            listed += 1
             filename = entry.get("filename")
             if filename:
                 files.append(filename)
@@ -485,9 +498,11 @@ def fetch_changed_files(
                 # A rename changes two paths as far as a filter is concerned.
                 files.append(previous)
         if len(payload) < 100:
-            return files, False
+            break
         page += 1
-    return files, True
+    if malformed or not isinstance(reported, int) or listed >= limit:
+        return files, True
+    return files, listed < min(reported, limit)
 
 
 def fetch_runs(fetch: Callable[[str], object], repo: str, head_sha: str) -> list[dict]:
@@ -546,8 +561,8 @@ def aggregate(
     log(f"pull request #{pr_number} changes {len(changed_files)} path(s) at head {head_sha}")
     if files_truncated:
         log(
-            f"more than {PATH_FILTER_FILE_LIMIT} changed paths; GitHub stops evaluating "
-            "paths: filters on pull requests this large, so every gate is expected to run"
+            f"the changed-file listing reached its {CHANGED_FILES_API_CAP}-file cap, so a "
+            "matching path may be missing from it; every gate is expected to run"
         )
     for path in sorted(set(changed_files))[:50]:
         log(f"  changed: {path}")
