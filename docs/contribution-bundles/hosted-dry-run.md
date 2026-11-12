@@ -246,7 +246,7 @@ rehearsal above:
   "source_instance": {
     "instance_kind": "local",
     "instance_name": "example-local",
-    "schema_version": "d861dfd60891"
+    "schema_version": "d5b8e2f4a916"
   },
   "exporter": {"local_user_label": "example-user"},
   "submission": {

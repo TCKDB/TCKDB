@@ -19,8 +19,9 @@ asserts anything about it, so a scan that stopped matching cannot pass empty.
 from __future__ import annotations
 
 import ast
-import runpy
 from pathlib import Path
+
+from sqlalchemy import text
 
 from app.db import models as _models  # noqa: F401
 from app.db.base import Base
@@ -28,31 +29,20 @@ from app.services.archive.registry import INCLUDED_TABLES
 
 _BACKEND = Path(__file__).resolve().parents[2]
 _APP = _BACKEND / "app"
-_VERSIONS = _BACKEND / "alembic" / "versions"
-
-#: The revisions that register accepted-science child guards, in the order they
-#: landed. ``d4e9b1c7a253`` takes one entry back out of ``c6f2a9d4e7b1``'s.
-_GUARD_REVISIONS = (
-    "b6c1f4a8e703_freeze_declared_atom_maps.py",
-    "a1f6c3e9b527_freeze_evidence_under_accepted_roots.py",
-    "a7d3f1c95e28_ts_evidence_kinds_and_unstated_irc_direction.py",
-    "e5b2d8a4c613_sp_energy_components_and_core_treatment.py",
-    "f3b7d2a9c514_composite_calculation_type_and_result.py",
-    "b4d8e2f6a1c9_composite_inputs_and_dependency_role.py",
-    "a9c3e7b1d5f2_composite_log_check.py",
-)
 
 
-def _guarded_tables() -> set[str]:
-    root = runpy.run_path(str(_VERSIONS / "c6f2a9d4e7b1_enforce_accepted_science_immutability.py"))
-    removed = set(runpy.run_path(str(_VERSIONS / "d4e9b1c7a253_scf_stability_provenance_is_not_ownership.py"))["_REMOVED_CHILDREN"])
-    guarded = {t for (t, r, c) in root["_DIRECT_CHILDREN"] if (t, r, c) not in removed}
-    guarded |= {item[0] for item in root["_VIA_CHILDREN"]}
-    for name in _GUARD_REVISIONS:
-        extension = runpy.run_path(str(_VERSIONS / name))
-        guarded |= {t for t, _, _ in extension["_DIRECT_CHILDREN"]}
-        guarded |= {item[0] for item in extension["_VIA_CHILDREN"]}
-    return guarded
+def _guarded_tables(db_session) -> set[str]:
+    """Tables carrying an accepted-science guard trigger, read from the database."""
+    return set(
+        db_session.scalars(
+            text(
+                "SELECT DISTINCT c.relname FROM pg_trigger t "
+                "JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_proc p ON p.oid = t.tgfoid "
+                "WHERE NOT t.tgisinternal "
+                "AND p.proname IN ('tckdb_guard_accepted_child', 'tckdb_guard_accepted_via_child')"
+            )
+        )
+    )
 
 
 def _calculation_child_tables() -> list[str]:
@@ -71,13 +61,13 @@ def _calculation_child_tables() -> list[str]:
     return sorted(found)
 
 
-def test_every_calculation_result_table_is_archived_and_frozen_once_accepted() -> None:
+def test_every_calculation_result_table_is_archived_and_frozen_once_accepted(db_session) -> None:
     tables = _calculation_child_tables()
     # The scan found the corpus: the result tables known before this phase, and this phase's.
     assert len(tables) >= 25, tables
     assert {"calc_sp_result", "calc_opt_result", "calc_composite_result", "calc_composite_term"} <= set(tables)
 
-    guarded = _guarded_tables()
+    guarded = _guarded_tables(db_session)
     not_archived = [t for t in tables if t not in INCLUDED_TABLES]
     not_frozen = [t for t in tables if t not in guarded]
     assert not not_archived, f"calculation child tables missing from the archive registry: {not_archived}"

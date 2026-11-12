@@ -6,10 +6,8 @@ neither added, changed nor removed, and TRUNCATE is refused. Under an
 unapproved calculation the rows stay editable, so the freeze is
 acceptance-triggered, not a blanket write ban.
 
-``test_accepted_science_trigger_registry.py`` derives its expectation from the
-revision's own registry, so a guard deleted from both the registry and the DDL
-would leave it green. Every refusal here is a write that has to fail, so
-removing the trigger turns these red.
+Every refusal here is a write that has to fail, so removing the trigger turns
+these red.
 """
 
 from __future__ import annotations

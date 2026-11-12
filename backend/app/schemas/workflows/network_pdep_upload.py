@@ -2263,7 +2263,7 @@ class NetworkPDepUploadRequest(SchemaBase):
         # outright instead of recording a weaker but honest record.
         #
         # These rules are the *full* contract and this is the only place that
-        # holds it. Migration ``f9b2e6c4a1d7`` adds a deferred constraint
+        # holds it. A deferred constraint
         # trigger that refuses a computed solve carrying *zero* rows of an
         # applicable evidence class, which is belt and braces for write paths
         # that never reach this validator — not a replacement for it. The

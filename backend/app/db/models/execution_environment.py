@@ -37,9 +37,8 @@ class ExecutionEnvironmentManifest(Base, TimestampMixin):
     # generated names are 70 and 80 characters -- over PostgreSQL's 63-char
     # identifier limit -- and SQLAlchemy would emit them truncated, so the
     # model would be asserting a constraint name the database does not have.
-    # The names below are the ones ``a8b9c0d1e2f3`` actually created, which is
-    # why this is a model-only correction with no migration behind it: it
-    # makes the model say what the table already contains.
+    # The names below are the ones the table actually carries: they make the
+    # model say what the database contains.
     software_release_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(

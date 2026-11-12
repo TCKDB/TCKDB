@@ -1,28 +1,20 @@
-"""Structure determinations, sources, findings and the actual-protocol column: additive, legacy rows untouched.
+"""Structure determinations, sources, findings and the actual-protocol column.
 
-Drives the revision's own ``upgrade``/``downgrade`` inside the test transaction (PostgreSQL DDL is
-transactional, so the fixture's rollback restores the schema). A calculation stored before the revision must read
-NULL, keep the digests stored reviews are keyed on and stay frozen if it was approved. A determination and its
-sources are immutable from creation, a finding is append-only, and the checks and composite keys are the
-database's own, not the writer's.
+A determination and its sources are immutable from creation, a finding is append-only, and the checks and composite
+keys are the database's own, not the writer's. Nothing can be added, changed or removed under an accepted owner.
 """
 
 from __future__ import annotations
 
 import hashlib
-from importlib.util import module_from_spec, spec_from_file_location
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
-from app.db.base import Base
 from app.db.models.calculation import Calculation
-from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import SubmissionRecordType
 from app.services.consistency.core import snapshot
 from app.services.reproducibility_rubric import _mapped_columns
 from tests.db.test_accepted_science_immutability import _actor, _approve
@@ -41,10 +33,6 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
 )
 
-_MIGRATION = (
-    Path(__file__).resolve().parents[2] / "alembic/versions/d3a8f6c1b952_declare_structure_determination.py"
-)
-_LATER = Path(__file__).resolve().parents[2] / "alembic/versions/e6b3a9d1f742_declare_statmech_models.py"
 TABLES = ("structure_determination", "structure_determination_source", "structure_evidence_finding")
 ENUMS = (
     "structure_determination_target_kind",
@@ -55,29 +43,6 @@ ENUMS = (
     "structure_finding_verdict",
     "structure_finding_authority",
 )
-
-
-@pytest.fixture
-def migration(db_session, monkeypatch):
-    spec = spec_from_file_location("structure_determination_migration", _MIGRATION)
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
-    operations = Operations(MigrationContext.configure(db_session.connection(), opts={"target_metadata": Base.metadata}))
-    monkeypatch.setattr(module, "op", operations)
-    # A later revision (declared statmech models) holds foreign keys into these tables, so this revision can only be
-    # taken down after it; the fixture's rollback puts it back.
-    later_spec = spec_from_file_location("statmech_model_migration_later", _LATER)
-    later = module_from_spec(later_spec)
-    later_spec.loader.exec_module(later)
-    monkeypatch.setattr(later, "op", operations)
-    later.downgrade()
-    return module
-
-
-def _tables(db_session) -> set[str]:
-    return set(
-        db_session.scalars(text("SELECT table_name FROM information_schema.tables WHERE table_name = ANY(:t)"), {"t": list(TABLES)})
-    )
 
 
 def _entry(db_session):
@@ -202,90 +167,12 @@ def _refuses(db_session, match: str, statement, *args, **kwargs):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("approved", [False, True], ids=["unapproved", "approved"])
-def test_existing_calculations_stay_null_and_keep_their_digests(db_session, migration, approved):
-    calc = make_calculation(db_session, species_entry_id=_entry(db_session).id)
-    if approved:
-        # Approval locks the row through the ORM, so it happens while the ORM's column exists. The downgrade
-        # then upgrade is the deployment: ADD COLUMN fires no UPDATE trigger, so the accepted-science guard must
-        # neither refuse it nor see a mutation.
-        _approve(db_session, SubmissionRecordType.calculation, calc.id, _actor(db_session))
-    calc_id = calc.id
-    migration.downgrade()
-    assert not _tables(db_session)
-    migration.upgrade()
-
-    assert db_session.scalar(
-        text("SELECT actual_protocol_declaration FROM calculation WHERE id = :id"), {"id": calc_id}
-    ) is None
-    row = db_session.get(Calculation, calc_id)
-    # Neither digest a stored review or assessment is keyed on moves: the column holds the value the row
-    # implicitly had, so it stays out of both snapshots.
-    assert "actual_protocol_declaration" not in snapshot(row)
-    assert "actual_protocol_declaration" not in _mapped_columns(row)
-    if approved:
-        assert (
-            db_session.scalar(
-                text("SELECT status FROM record_review WHERE record_type = 'calculation' AND record_id = :id"),
-                {"id": calc_id},
-            )
-            == RecordReviewStatus.approved.value
-        )
-
-
 def test_a_declared_protocol_does_enter_the_digests(db_session):
     calc = make_calculation(db_session, species_entry_id=_entry(db_session).id)
     calc.actual_protocol_declaration = {"version": 1, "source": {"origin": "producer_declared"}}
     db_session.flush()
     assert "actual_protocol_declaration" in snapshot(calc)
     assert "actual_protocol_declaration" in _mapped_columns(calc)
-
-
-def test_upgrade_downgrade_upgrade_round_trips_with_rows(db_session, migration, capsys):
-    entry = _entry(db_session)
-    calc = make_calculation(db_session, species_entry_id=entry.id)
-    calc.actual_protocol_declaration = {"version": 1, "source": {"origin": "producer_declared"}}
-    det = _insert_determination(db_session, species=entry.id)
-    _insert_source(db_session, det, calc)
-    _insert_finding(db_session)
-    calc_id = calc.id
-
-    migration.downgrade()
-    assert (
-        "forgets: 1 structure determination(s), 1 source row(s), 1 finding(s) and the actual-protocol "
-        "declaration on 1 calculation(s)" in capsys.readouterr().out
-    )
-    assert not _tables(db_session)
-    for typename in ENUMS:
-        assert db_session.scalar(text("SELECT count(*) FROM pg_type WHERE typname = :t"), {"t": typename}) == 0, typename
-    # The calculation survives; only its declaration is forgotten.
-    assert db_session.scalar(text("SELECT count(*) FROM calculation WHERE id = :id"), {"id": calc_id}) == 1
-
-    migration.upgrade()
-    assert _tables(db_session) == set(TABLES)
-    assert db_session.scalar(text("SELECT actual_protocol_declaration FROM calculation WHERE id = :id"), {"id": calc_id}) is None
-
-
-def test_downgrade_removes_exactly_what_upgrade_added(db_session, migration):
-    migration.downgrade()
-    for name in (
-        "uq_calculation_scope_species",
-        "uq_calculation_scope_ts",
-        "uq_calculation_scope_observation",
-        "ck_calculation_actual_protocol_declaration_versioned_object",
-    ):
-        assert db_session.scalar(text("SELECT count(*) FROM pg_constraint WHERE conname = :n"), {"n": name}) == 0, name
-    for function in (
-        "tckdb_structure_row_immutable",
-        "tckdb_structure_finding_append_only",
-        "tckdb_structure_determination_guard",
-        "tckdb_structure_source_insert_guard",
-        "tckdb_structure_source_delete_guard",
-    ):
-        assert db_session.scalar(text("SELECT count(*) FROM pg_proc WHERE proname = :n"), {"n": function}) == 0, function
-    # The pre-existing calculation constraints survive.
-    assert db_session.scalar(text("SELECT count(*) FROM pg_constraint WHERE conname = 'ck_calculation_one_owner'")) == 1
-    migration.upgrade()
 
 
 def test_the_declaration_column_is_a_versioned_object(db_session):
@@ -613,34 +500,3 @@ def test_a_finding_rationale_is_present_and_bounded_and_the_version_positive(db_
     _refuses(db_session, "rationale_bounded", _insert_finding, rationale="   ")
     _refuses(db_session, "rationale_bounded", _insert_finding, rationale="r" * 2001)
     _refuses(db_session, "semantic_version_positive", _insert_finding, version=0)
-
-
-def test_the_guard_registry_covers_every_ownership_column_to_an_accepted_root_and_exists_in_the_database(
-    db_session, migration
-):
-    """Every column of the new tables that points at an accepted-science root is guarded, and every guard exists.
-
-    The shared accepted-science registry (``c6f2a9d4e7b1``) requires each guarded column to be NOT NULL; a
-    determination is owned by one of two entries, so its owner columns are nullable by design and the guard
-    function skips a NULL one. They are therefore registered here, in this revision's own tuples, and checked
-    against the model and against ``pg_trigger`` by this test instead of the shared one.
-    """
-    roots = {"transition_state_entry", "conformer_observation"}
-    tables = Base.metadata.tables
-    declared = {
-        (migration._DETERMINATION, column, record_type) for _, record_type, column in migration._DETERMINATION_GUARDS
-    } | {(migration._SOURCE, column, record_type) for _, record_type, column in migration._SOURCE_GUARDS}
-    expected = set()
-    for table in (migration._DETERMINATION, migration._SOURCE):
-        for column in tables[table].c:
-            for fk in column.foreign_keys:
-                if fk.column.table.name in roots:
-                    expected.add((table, column.name, fk.column.table.name))
-    assert declared == expected and len(expected) == 4
-    for name, _, _ in (*migration._DETERMINATION_GUARDS, *migration._SOURCE_GUARDS):
-        assert db_session.scalar(text("SELECT count(*) FROM pg_trigger WHERE tgname = :n"), {"n": name}) == 1, name
-    for table in TABLES:
-        assert (
-            db_session.scalar(text("SELECT count(*) FROM pg_trigger WHERE tgname = :n"), {"n": f"trg_{table}_truncate"})
-            == 1
-        ), table

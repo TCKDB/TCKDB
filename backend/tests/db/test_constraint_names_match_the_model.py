@@ -6,9 +6,8 @@ right rule and still costs something real: ``alembic revision
 it reads the mismatch as drift and proposes dropping and recreating a
 constraint that is already correct. The next person to touch the table is
 handed that diff and has to establish from scratch that it is spurious.
-Six constraints were in that state before ``b7e4d1a9c026``, across three
-revisions and eighteen months, and no test noticed -- which is the actual
-finding here: the names were never measured against anything.
+Six constraints were once in that state and no test noticed: the names were
+never measured against anything.
 
 The mechanism, once, because it is not obvious and it will recur.
 ``NAMING_CONVENTION`` spells checks ``ck_%(table_name)s_%(constraint_name)s``.
@@ -90,12 +89,11 @@ def test_every_check_constraint_is_named_as_the_model_predicts(db_session):
         f"  present in the database, not declared in the ORM: {unexpected}\n"
         "If a migration passed an already-expanded 'ck_<table>_...' name to "
         "op.create_check_constraint, pass the short name instead -- "
-        "NAMING_CONVENTION adds the prefix. See b7e4d1a9c026. The exception "
+        "NAMING_CONVENTION adds the prefix. The exception "
         "is a name the prefix would push past PostgreSQL's 63-character "
         "limit (silently hash-truncated): then wrap the literal in conv() "
         "on the model and op.f() in the revision so both sides use it "
-        "verbatim, as molecular_property_observation's ck_mpo_* names do "
-        "since 0b4a3afabfd3."
+        "verbatim, as molecular_property_observation's ck_mpo_* names do."
     )
 
 
@@ -132,9 +130,8 @@ def test_every_index_the_model_declares_exists_by_name(db_session):
 
     Included because ``statmech_torsion``'s uniqueness rule is declared as
     an ``Index`` rather than a ``UniqueConstraint`` -- so the check
-    constraint sweep above says nothing about it -- and because renaming
-    it in ``b7e4d1a9c026`` is exactly the kind of change that goes into a
-    model and not into a migration.
+    constraint sweep above says nothing about it -- and because its name
+    is exactly the kind of thing that lives in a model and not in a migration.
     """
     expected = {
         (table.name, index.name)

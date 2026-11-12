@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import math
-import runpy
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -12,13 +10,6 @@ from sqlalchemy.exc import IntegrityError
 from app.db.models.common import ScientificOriginKind
 from app.db.models.kinetics import Kinetics
 from app.db.models.reaction import ChemReaction, ReactionEntry
-
-MIGRATION = (
-    Path(__file__).resolve().parents[2]
-    / "alembic"
-    / "versions"
-    / "f2a4c6e8b0d1_add_kinetics_degeneracy_convention.py"
-)
 
 CONSTRAINT_NAME = "ck_kinetics_degeneracy_finite_positive"
 
@@ -41,14 +32,6 @@ def _make_kinetics(db_session, *, degeneracy: float | None = None) -> Kinetics:
     db_session.add(kinetics)
     db_session.flush()
     return kinetics
-
-
-def test_degeneracy_convention_migration_follows_current_head() -> None:
-    source = MIGRATION.read_text()
-    assert 'revision: str = "f2a4c6e8b0d1"' in source
-    assert 'down_revision: Union[str, Sequence[str], None] = "e9a3c5f7b1d2"' in source
-    assert 'server_default="unknown"' in source
-    assert "nullable=False" in source
 
 
 def test_degeneracy_convention_database_contract(db_session) -> None:
@@ -128,26 +111,3 @@ def test_database_accepts_null_or_finite_positive_raw_degeneracy(
         {"id": kinetics.id},
     )
     assert stored == value
-
-
-def test_migration_preflight_rejects_invalid_legacy_row(db_session) -> None:
-    kinetics = _make_kinetics(db_session)
-    db_session.execute(
-        text(f"ALTER TABLE kinetics DROP CONSTRAINT {CONSTRAINT_NAME}")
-    )
-    db_session.execute(
-        text(
-            "UPDATE kinetics SET degeneracy = 'Infinity'::double precision "
-            "WHERE id = :id"
-        ),
-        {"id": kinetics.id},
-    )
-
-    migration = runpy.run_path(str(MIGRATION))
-    with pytest.raises(RuntimeError) as exc_info:
-        migration["_preflight_legacy_degeneracy"](db_session.connection())
-
-    message = str(exc_info.value)
-    assert f"Cannot add {CONSTRAINT_NAME}: found 1 kinetics row(s)" in message
-    assert "Set each invalid degeneracy to NULL or a finite positive value" in message
-    assert "alembic upgrade head" in message

@@ -1,57 +1,14 @@
-"""Migration coverage for ``species_name`` (``c3a9e5d17b24``): reversible, with the live-row unique key and the C-collated key."""
+"""Migration coverage for ``species_name``: reversible, with the live-row unique key and the C-collated key."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
-from alembic.config import Config
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
-from alembic import command
-from tests.db._migration_chain import revision_under_test
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
-_MIGRATION = revision_under_test("c3a9e5d17b24")
-
-
-def _configure(db_engine, monkeypatch) -> Config:
-    db_name = db_engine.url.database
-    db_engine.dispose()
-    monkeypatch.setenv("DB_NAME", db_name)
-    monkeypatch.setenv("DB_USER", "tckdb")
-    monkeypatch.setenv("DB_PASSWORD", "tckdb")
-    monkeypatch.setenv("DB_HOST", "127.0.0.1")
-    monkeypatch.setenv("DB_PORT", "5432")
-    return Config(str(REPO_ROOT / "alembic.ini"))
-
-
-def _tables(connection) -> set[str]:
-    return set(connection.scalars(text("SELECT tablename FROM pg_tables WHERE schemaname = current_schema()")))
-
-
-def _enums(connection) -> set[str]:
-    return set(connection.scalars(text("SELECT typname FROM pg_type WHERE typname LIKE 'species_name_%'")))
-
-
-def test_downgrade_then_upgrade_round_trips(db_engine, monkeypatch):
-    config = _configure(db_engine, monkeypatch)
-    engine = create_engine(db_engine.url.render_as_string(hide_password=False))
-    try:
-        with engine.connect() as connection:
-            assert "species_name" in _tables(connection)
-            assert _enums(connection) == {"species_name_kind", "species_name_source_kind"}
-        command.downgrade(config, _MIGRATION.parent)
-        with engine.connect() as connection:
-            assert "species_name" not in _tables(connection)
-            assert _enums(connection) == set()
-        command.upgrade(config, _MIGRATION.revision)
-        with engine.connect() as connection:
-            assert "species_name" in _tables(connection)
-    finally:
-        engine.dispose()
-        command.upgrade(config, "head")
 
 
 def test_the_name_key_index_is_c_collated_and_the_unique_key_covers_live_rows_only(db_session):

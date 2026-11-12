@@ -213,13 +213,7 @@ TEST_TREE_REASON = (
 UNSCANNED_BY_DESIGN: tuple[tuple[str, str], ...] = (
     (
         "backend/alembic",
-        "migration revisions. Four raise-site em dashes are sitting here "
-        "(b6e1d3a9c740:144, c4d8f1b2a9e6:183, d3a7f1c9b284:352, "
-        "e3f4a5b6c7d8:628), printed to an operator's terminal by a "
-        "downgrade guard. They are recorded rather than fixed because "
-        ".claude/rules/migration-rules.md forbids mutating a revision that "
-        "has been applied to a deployed database. Scanning this tree means "
-        "settling that question first",
+        "the migration revision: DDL and seed rows, not text printed to a user",
     ),
     (
         "backend/main.py",

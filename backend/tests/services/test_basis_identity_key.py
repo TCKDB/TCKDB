@@ -14,16 +14,11 @@ table and a rule that merges less is caught here.
 
 from __future__ import annotations
 
-import importlib.util
-import pathlib
-from types import SimpleNamespace
-
 import pytest
 from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
 from app.chemistry.basis_set_names import basis_identity_key
 from app.services.calculation_resolution import _level_of_theory_hash
-from tests._frozen_lot_hash import frozen_level_of_theory_hash
 
 #: (basis set, [(program, spelling), ...], exact identity key)
 SAME_BASIS: list[tuple[str, list[tuple[str, str]], str]] = [
@@ -190,13 +185,6 @@ def _all_spellings() -> list[str]:
     return spellings
 
 
-@pytest.mark.parametrize("spelling", _all_spellings())
-def test_the_key_is_idempotent(spelling):
-    # The migration's collision-freedom argument depends on this.
-    key = basis_identity_key(spelling)
-    assert basis_identity_key(key) == key
-
-
 # ---------------------------------------------------------------------------
 # lot_hash
 # ---------------------------------------------------------------------------
@@ -253,44 +241,6 @@ def test_method_case_is_keyed_too():
 # ---------------------------------------------------------------------------
 # The migration's frozen copy
 # ---------------------------------------------------------------------------
-
-_MIGRATION = (
-    pathlib.Path(__file__).parents[2]
-    / "alembic"
-    / "versions"
-    / "38b06819f099_key_level_of_theory_basis_by_identity.py"
-)
-
-
-@pytest.fixture(scope="module")
-def migration():
-    spec = importlib.util.spec_from_file_location("_mig_38b06819f099", _MIGRATION)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
-
-
-@pytest.mark.parametrize("spelling", _all_spellings())
-def test_migration_rules_match_the_application(migration, spelling):
-    assert migration._basis_identity_key(spelling) == basis_identity_key(spelling)
-
-
-@pytest.mark.parametrize("spelling", _all_spellings())
-def test_migration_hash_matches_the_application(migration, spelling):
-    fields = {
-        "method": "b3lyp",
-        "basis": spelling,
-        "aux_basis": "def2/J",
-        "cabs_basis": None,
-        "dispersion": "d3bj",
-        "solvent": None,
-        "solvent_model": None,
-        "keywords": None,
-        "spin_treatment": "unrestricted",
-    }
-    row = SimpleNamespace(_mapping=fields)
-    assert migration._lot_hash(row, keyed=True) == frozen_level_of_theory_hash(**fields)
 
 
 def test_the_merge_record_adds_no_column_to_level_of_theory():

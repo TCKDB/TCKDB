@@ -73,7 +73,7 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     #: parameters were fitted to energies at geometries and ZPEs from that
     #: frequency level. ``level_of_theory_id`` above is the energy half.
     #:
-    #: Part of identity (migration ``c5e1a8d3f6b9``), under ``NULLS NOT
+    #: Part of identity, under ``NULLS NOT
     #: DISTINCT`` like every other nullable member: NULL is "no frequency
     #: level stated".
     frequency_level_of_theory_id: Mapped[Optional[int]] = mapped_column(
@@ -126,8 +126,7 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     #: tool build (``workflow_tool_release_id``) does not say which tables
     #: it read, because they live in a separate repository.
     #:
-    #: Identity has two forms, selected by this column (migration
-    #: ``f2c8a5d1e9b7``): when NULL the original six-column identity applies
+    #: Identity has two forms, selected by this column: when NULL the original six-column identity applies
     #: and ``workflow_tool_release_id`` is part of it; when set, identity is
     #: ``(kind, name, level_of_theory_id, source_literature_id,
     #: software_release_id, data_revision)`` and the tool build is
@@ -148,7 +147,7 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     #: the table "exactly as deposited"), so a reader must convert using
     #: this, and ``app.chemistry.units.convert_energy_to_hartree`` is how.
     #:
-    #: Deliberately NOT part of the identity index (a7d4e2b9c351). An
+    #: Deliberately NOT part of the identity index. An
     #: energy correction is always an energy; hartree and kcal/mol are
     #: one physical fact in two presentations, and keying identity on the
     #: unit would make what a correction *is* depend on how a depositor

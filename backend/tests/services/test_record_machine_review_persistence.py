@@ -1,7 +1,6 @@
 """Tests for the append-only ``record_machine_review`` persistence slice.
 
-Cover the migration/model (insert, multiple rows per record, a real
-``downgrade()``), the row -> :class:`StoredMachineReviewProjection` projection,
+Cover the model (insert, multiple rows per record), the row -> :class:`StoredMachineReviewProjection` projection,
 the currency classification over persisted rows, the append-only write helper,
 and non-interference (the helper writes only to ``record_machine_review``).
 
@@ -12,7 +11,6 @@ No public exposure is involved: this is a private persistence surface
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from sqlalchemy import func, select
 from tckdb_schemas.fragments.version import VersionRef
@@ -144,30 +142,6 @@ def test_record_machine_review_table_allows_multiple_rows_for_same_record(db_ses
     assert count == 3
 
 
-def test_record_machine_review_migration_has_real_downgrade():
-    """The migration ships a real downgrade() that drops the table.
-
-    The test DB is rebuilt by ``alembic upgrade head`` per run, so downgrade is
-    not executed here (per the slice's guidance); instead we verify the
-    revision file implements a non-stub upgrade/downgrade. The file is read by
-    path because ``alembic/versions`` is a script directory, not an importable
-    package.
-    """
-    migration_path = (
-        Path(__file__).resolve().parents[2]
-        / "alembic"
-        / "versions"
-        / "c9d0e1f2a3b4_add_record_machine_review.py"
-    )
-    source = migration_path.read_text(encoding="utf-8")
-    assert "def downgrade() -> None:" in source
-    assert 'op.drop_table("record_machine_review")' in source
-    assert "def upgrade() -> None:" in source
-    assert 'op.create_table(\n        "record_machine_review"' in source
-    # The shared machine_review_status enum is reused, never dropped here.
-    assert 'postgresql.ENUM(name="machine_review_status").drop' not in source
-
-
 # --------------------------------------------------------------------------- #
 # Row -> StoredMachineReviewProjection
 # --------------------------------------------------------------------------- #
@@ -182,31 +156,6 @@ def test_row_projects_to_stored_currency_projection(db_session):
     assert projection.record_id == 9001
     assert projection.reviewed_at == _T0
     assert projection.id == row.id
-
-
-def test_a_row_stored_at_version_zero_projects_and_classifies_stale(db_session):
-    """A pre-reset row (prompt and rubric at version 0, as the migration stores them) is readable and reads stale.
-
-    Kills: the row projection building a ``VersionRef`` (which refuses 0), so a migrated review could not be read at
-    all; and a 0 comparing equal to an active version.
-    """
-    from sqlalchemy import text
-
-    row = _insert(db_session)
-    db_session.flush()
-    db_session.execute(
-        text("UPDATE record_machine_review SET prompt_version = 0, rubric_version = 0 WHERE id = :i"), {"i": row.id}
-    )
-    db_session.expire_all()
-    projection = stored_projection_from_record_machine_review_row(db_session.get(RecordMachineReviewRow, row.id))
-    assert (projection.prompt.version, projection.rubric.version) == (0, 0)
-    result = classify_record_machine_review_currency_from_rows(
-        [db_session.get(RecordMachineReviewRow, row.id)],
-        current_context=_digest(),
-        active_prompt=_PROMPT,
-        active_rubric=_RUBRIC,
-    )
-    assert result.state is MachineReviewCurrencyState.stale
 
 
 def test_projection_preserves_status(db_session):

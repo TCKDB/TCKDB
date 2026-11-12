@@ -68,7 +68,7 @@ All of the following exist in code with tests, and are private/admin-only.
 | Audit-event adapter | `app/services/machine_review/audit_adapter.py` | `submission_audit_event.details_json` -> `RecordMachineReview` tuples; **reads the payload through `PAYLOAD_FORMATS`, a registry keyed by the root `format` marker `(name, version)`**: a known format is validated directly; a missing or unknown format => parse warning, never read as the current one |
 | Private trust-envelope adapter | `app/services/machine_review/trust_adapter.py` | `InternalTrustEnvelopeWithMachineReview` — assembles a private envelope beside (never inside) the public `TrustFragment` |
 | Inspection service | `app/services/machine_review/inspection.py` | `build_submission_machine_review_inspection()` and the per-submission/per-record inspection dataclasses |
-| Curator task model + migration | `app/db/models/machine_review_curator_task.py`, `alembic/versions/b8c9d0e1f2a3_*.py` | `machine_review_curator_task` table; identity unique constraint, queue indexes, FKs, bidirectional resolution-consistency CHECK |
+| Curator task model + migration | `app/db/models/machine_review_curator_task.py`, `alembic/versions/` | `machine_review_curator_task` table; identity unique constraint, queue indexes, FKs, bidirectional resolution-consistency CHECK |
 | Curator task DB enums | `app/db/models/common.py` | `MachineReviewCuratorTaskState` (the triage axis) + DB-layer `MachineReviewStatus` / `MachineReviewSeverity` mirrors (separate classes from the service-layer ones; drift-guarded) |
 | Curator task creation service | `app/services/machine_review/curator_tasks.py` | `build_curator_tasks_for_submission()`, `compute_finding_fingerprint()`, `CuratorTaskBuildResult` — explicit upsert from the inspection projection |
 | Curator task lifecycle service | `app/services/machine_review/curator_task_lifecycle.py` | `assign_curator_task()`, `start_curator_task_review()`, `resolve_curator_task()`, `reopen_curator_task()` — flush-only, no commit, no authz |
@@ -434,7 +434,7 @@ providers/factory.py      build_machine_review_provider() (off->disabled; cloud/
 backend/app/db/models/machine_review_curator_task.py   MachineReviewCuratorTask ORM
 backend/app/db/models/common.py                        MachineReviewCuratorTaskState +
                                                        DB-layer MachineReviewStatus/Severity mirrors
-backend/alembic/versions/b8c9d0e1f2a3_*.py             create table + 3 enum types
+backend/alembic/versions/                              create table + 3 enum types
 ```
 
 **Tests**
@@ -572,8 +572,8 @@ Do NOT map submission-level summaries to every linked record (no fan-out).
 Do NOT use machine review to approve / reject / certify / hide records.
 Do NOT mutate deterministic trust / evidence from machine review.
 Do NOT overload submission.status or RecordReviewStatus for workflow state.
-Do NOT edit deployed initial migrations (d861dfd60891 etc.); the curator task
-  table shipped in its own revision (b8c9d0e1f2a3) and is now deployed-rules too.
+Do NOT edit deployed initial migrations; the curator task
+  table shipped in its own revision and is now deployed-rules too.
 Do NOT create a record_machine_review table before a product decision.
 Do NOT call real LLM providers from tests (or anywhere yet); cloud/local stay
   config-validated NotImplementedError until a deliberate real-provider slice.

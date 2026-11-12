@@ -68,8 +68,8 @@ def molecular_formula_expr(smiles_column):
     read surface (``provenance.py::_build_species_section``) is now a
     fifth, so the expression is lifted here once and the other four
     modules delegate to it instead of keeping their own copy in sync by
-    hand. Depending on the cartridge here costs nothing new: the base
-    Alembic revision ``60b67e360daf`` runs ``CREATE EXTENSION IF NOT
+    hand. Depending on the cartridge here costs nothing new: the
+    Alembic revision runs ``CREATE EXTENSION IF NOT
     EXISTS rdkit`` before any table exists, so a database this code can
     talk to has it.
     """

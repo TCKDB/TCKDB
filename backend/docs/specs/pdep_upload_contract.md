@@ -105,8 +105,7 @@ v2 therefore accepts them, on three conditions:
    channel. The backend still manufactures no evidence; it reads the network
    topology the producer already supplied and confirms it supports the claim.
 
-`mechanism` is stored on `network_channel` (revision `d5b1a7c3e9f4`,
-`server_default 'elementary'`) rather than derived from an empty child
+`mechanism` is stored on `network_channel` (`server_default 'elementary'`) rather than derived from an empty child
 collection, and is always present on the channel read surfaces. "This rate is a
 multi-step ME channel" is a scientific claim about the channel, not an absence
 of data, and a reader must be able to tell it apart from an incomplete deposit

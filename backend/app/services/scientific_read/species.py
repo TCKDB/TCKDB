@@ -207,8 +207,8 @@ def _formula_expr():
     functional index ``ix_species_formula_lookup`` is written over this
     expression too, which is what makes the filter cheap.
 
-    Depending on the cartridge here costs nothing new: the base Alembic
-    revision ``60b67e360daf`` runs ``CREATE EXTENSION IF NOT EXISTS rdkit``
+    Depending on the cartridge here costs nothing new: the Alembic
+    revision runs ``CREATE EXTENSION IF NOT EXISTS rdkit``
     before any table exists, so a database this code can talk to has it.
     Deriving the string in Python instead would reach for the ``rdkit``
     wheel, which ``pyproject.toml`` declares as an opt-in ``[rdkit]`` extra.

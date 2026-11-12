@@ -1,21 +1,16 @@
-"""Model + migration tests for ``machine_review_curator_task``.
+"""Model tests for ``machine_review_curator_task``.
 
-Covers the persisted curator task queue introduced by Alembic revision
-``b8c9d0e1f2a3`` and the ORM model in
+Covers the persisted curator task queue and the ORM model in
 ``app/db/models/machine_review_curator_task.py``. This is the *fourth* review
 axis (human triage state over machine findings); see
 ``backend/docs/specs/machine_review_curator_task_queue.md``.
 
-These tests assert the schema shape that the migration must build (table,
+These tests assert the schema shape (table,
 identity unique constraint, queue indexes, foreign-key targets) and the model
 invariants the DB enforces (workflow_state default, nullable
 assignment/resolution on creation, the resolution-consistency CHECK in both
 directions). The enum drift-guard pins the DB-layer mirror enums to the
 authoritative service-layer vocabulary.
-
-Downgrade is verified out-of-band via the Alembic CLI (``downgrade -1`` /
-``upgrade head``); the repo has no in-suite downgrade harness and running DDL
-downgrade against the shared session DB would break sibling tests.
 """
 
 from __future__ import annotations

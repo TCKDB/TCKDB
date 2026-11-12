@@ -56,8 +56,8 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     without content. Declared fit/point-only records need no h298 scalar.
     Null is absence of knowledge, not an unspecified enum member. There is
     no origin default and no backfill: a row without a declaration stays undeclared.
-    The rule is enforced by a trigger (``trg_guard_thermo_enthalpy_reference``,
-    migration ``e7b1c9d4a632``), not a CHECK constraint: it fires only when
+    The rule is enforced by a trigger (``trg_guard_thermo_enthalpy_reference``),
+    not a CHECK constraint: it fires only when
     an insert or update actually writes ``h298_kj_mol`` or
     ``enthalpy_reference_kind``, so legacy undeclared rows stay writable on
     every other column, including immutable approved science and the

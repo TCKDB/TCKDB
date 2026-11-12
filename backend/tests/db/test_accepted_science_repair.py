@@ -1,6 +1,6 @@
 """A repair to accepted science is declared, checked column by column, recorded.
 
-``e2c9a4f7b163`` opens the only route through ``c6f2a9d4e7b1``'s refusal, and
+A declared repair is the only route through the accepted-science refusal, and
 the whole value of it is that the database *checks* the claim rather than
 accepting a justification string. So the tests below pin all four halves of
 that, because any one of them missing turns the mechanism into a bypass with
@@ -21,7 +21,7 @@ that could already have run ``ALTER TABLE ... DISABLE TRIGGER``. Otherwise the
 row is a record of a permission nobody needed, which is worse than no row.
 
 ``geometry_atom.element`` is the target throughout because it is the case this
-mechanism was built for -- ``b4e7c1d20f83``, the letter case of an element
+mechanism was built for -- the letter case of an element
 symbol in a derived index column -- and because it reaches its accepted root
 (``calculation``) through ``tckdb_guard_calculation_geometry``, the guard with
 the most indirection between the changed row and the record that freezes it.
@@ -49,14 +49,14 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
 )
 
-_REVISION = "e2c9a4f7b163"
+_REVISION = "test_repair"
 
 
 @pytest.fixture(autouse=True)
 def _predating_the_canonicality_constraint(db_session):
-    """Reproduce a database whose stored rows predate ``c5a1f8e3d074``.
+    """Reproduce a database whose stored rows predate the canonical-element constraint.
 
-    That revision added ``ck_geometry_atom_element_canonical``, so ``CL`` can
+    ``ck_geometry_atom_element_canonical`` is in force, so ``CL`` can
     no longer be *written*. The rows this mechanism exists for are exactly the
     rows a later rule would refuse -- a repair is needed because the data
     predates the constraint, never because it was written under it -- so a test
@@ -65,7 +65,7 @@ def _predating_the_canonicality_constraint(db_session):
     reaches another test or the schema.
 
     Nothing below asserts anything about canonicality; the subject throughout
-    is ``c6f2a9d4e7b1``'s guard and the declaration that opens a route through
+    is the accepted-science guard and the declaration that opens a route through
     it, and both are indifferent to the constraint.
     """
     db_session.execute(

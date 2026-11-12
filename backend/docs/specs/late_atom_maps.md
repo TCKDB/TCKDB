@@ -45,8 +45,7 @@ one" for two separately deposited reactions.
 **This is where all 34 deployed transition states are.**
 
 At the database level nothing is frozen. The accepted-science guards
-installed by
-[`b6c1f4a8e703`](../../alembic/versions/b6c1f4a8e703_freeze_declared_atom_maps.py)
+installed on `reaction_atom_map` and `reaction_atom_map_pair`
 fire only once a `transition_state_entry`'s review has reached `approved`, so
 a map under an unapproved entry can be inserted, edited, and deleted freely.
 That is asserted by
@@ -70,7 +69,7 @@ as `UPDATE` and `DELETE`, so a map cannot be *added* to an accepted
 transition-state entry:
 `tests/db/test_atom_map_immutability.py::test_new_map_cannot_be_attached_to_an_approved_transition_state_entry`.
 
-This is deliberate and argued in `b6c1f4a8e703`'s module docstring:
+This is deliberate:
 attaching a mechanistic claim to a record reviewers already accepted changes
 what was accepted. The reviewers approved a saddle point *without* a stated
 mechanism; a map added afterwards would be carried by their approval without
@@ -86,8 +85,7 @@ This case has a working, tested route -- and it is the only one that does.
 
 `POST /api/v1/curation/scientific-record-supersessions` accepts
 `transition_state_entry` (one of ten admitted types; the CHECK constraint is
-`ck_scientific_record_supersession_supported_type` in
-[`c6f2a9d4e7b1`](../../alembic/versions/c6f2a9d4e7b1_enforce_accepted_science_immutability.py)).
+`ck_scientific_record_supersession_supported_type`).
 The wrong map is preserved verbatim, a new entry carries the corrected map,
 and an edge joins them. Proven end to end through the HTTP route by
 `tests/db/test_atom_map_immutability.py::test_a_wrong_map_is_corrected_by_superseding_its_transition_state_entry`.
@@ -115,7 +113,7 @@ gets `400 ... must describe the same subject`.
 That refusal is the correct failure -- the route declines rather than
 recording an edge between records that are not the same subject. But it means
 Case 2's prescription currently has no API-only route, and a reader of
-`b6c1f4a8e703` would not learn that from the migration alone.
+the migration would not learn that from the migration alone.
 
 ## Case 4: re-depositing with the map
 

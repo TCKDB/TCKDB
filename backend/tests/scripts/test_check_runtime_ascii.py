@@ -818,28 +818,6 @@ def test_test_trees_are_declared_rather_than_forgotten():
     assert checker.audit_reason("clients/python/src/tckdb_client/client.py") is None
 
 
-def test_the_declared_trees_name_the_alembic_violations_rather_than_hide_them():
-    """``backend/alembic`` is excluded, and the exclusion is not a shrug.
-
-    Four raise-site em dashes live there, printed by downgrade guards.
-    They are unfixed because applied revisions are immutable under
-    ``.claude/rules/migration-rules.md``, so the reason has to carry the
-    anchors -- an exclusion whose text is "not scanned" is how a known
-    defect becomes an unknown one.
-    """
-    reasons = dict(checker.UNSCANNED_BY_DESIGN)
-    alembic = reasons["backend/alembic"]
-    for revision in (
-        "b6e1d3a9c740",
-        "c4d8f1b2a9e6",
-        "d3a7f1c9b284",
-        "e3f4a5b6c7d8",
-    ):
-        assert revision in alembic, revision
-    still_there = checker.check_path(checker.REPO_ROOT / "backend" / "alembic")
-    assert len(still_there) == 4, [f.render(checker.BACKEND_ROOT) for f in still_there]
-
-
 def test_audit_rejects_paths():
     with pytest.raises(SystemExit):
         checker.main(["--audit", "app"])

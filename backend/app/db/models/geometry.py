@@ -74,7 +74,7 @@ class GeometryAtom(Base):
     #: ``CL`` stores ``Cl`` here while ``geometry.xyz_text`` keeps the ``CL`` it
     #: deposited; this column is the index the database joins and compares on.
     #:
-    #: ``ck_geometry_atom_element_canonical`` (``c5a1f8e3d074``) is what makes
+    #: ``ck_geometry_atom_element_canonical`` is what makes
     #: that a fact about the column rather than a habit of one code path.
     #: Without it, a restore from an old backup, a bulk import, or any write
     #: path that skipped ``parse_xyz`` could put ``CL`` back, and every reader

@@ -253,16 +253,12 @@ EXCLUDED_COLUMNS: Mapping[str, Mapping[str, str]] = {
 }
 
 
-# Tables a migration writes *about itself* on the way to head. A data-repair
-# revision declares its repair in ``accepted_science_repair`` before touching
-# an accepted record, and it does so unconditionally -- the declaration is the
-# revision's own audit trail, and a revision that skipped it on an empty
-# database would behave differently on every deployment. So a database
-# produced by nothing but ``alembic upgrade head`` is *not* empty in these
-# tables (two rows at head, declared by ``b8e3f1a7c250`` and
-# ``53b1e7dece9d``), and a restore that required them empty would refuse every
-# fresh restore target with ``Target contains rows in table
-# 'accepted_science_repair'``. The in-process tests cannot see it because their
+# Tables a data repair writes *about itself*. A repair declares itself in
+# ``accepted_science_repair`` before touching an accepted record, and it does so
+# unconditionally -- the declaration is the repair's own audit trail. So a live
+# database is *not* necessarily empty in these tables, and a restore that
+# required them empty would refuse a restore target with ``Target contains rows
+# in table 'accepted_science_repair'``. The in-process tests cannot see it because their
 # "fresh target" helper deletes these rows along with everything else.
 #
 # Both tables are already excluded from the archive (the rows are keyed on a

@@ -122,8 +122,7 @@ def test_frequency_scale_factor_deferred_filters_fail_closed(client):
     """``software_version`` is no longer deferred here.
 
     It was, because ``frequency_scale_factor`` keyed on a program and had
-    no version to filter on. It keys on a software release as of
-    ``e3a7c1f9b2d4``, so the filter is real and answering it is not a
+    no version to filter on. It keys on a software release, so the filter is real and answering it is not a
     deferral any more -- the same lift #459 made for correction schemes
     once they gained the release grain.
 

@@ -1,7 +1,7 @@
 """``merge_duplicate_levels_of_theory.py``: plan, dry run, commit, refusals.
 
 Runs inside the pytest transaction, so every change rolls back with the
-test. The seed is what ``38b06819f099`` leaves behind on a database that
+test. The seed is what the re-key leaves behind on a database that
 already held two spellings of one level: a *holder* row carrying the
 identity-keyed hash, and a *duplicate* row still carrying its pre-#574 hash
 and its own calculations.
@@ -236,7 +236,7 @@ def test_an_approval_after_the_plan_keeps_the_group(merge, db_session, seeded):
 
 
 def test_a_group_without_a_holder_is_blocked(merge, db_session):
-    # Neither row carries the keyed hash: 38b06819f099 has not run.
+    # Neither row carries the keyed hash: the re-key has not run.
     a = _lot(db_session, "m062x-lotm", "Def2TZVP", holder=False)
     b = _lot(db_session, "m062x-lotm", "def2tzvp", holder=False)
     plan = merge.build_plan(db_session)
@@ -244,7 +244,7 @@ def test_a_group_without_a_holder_is_blocked(merge, db_session):
         g for g in plan.groups if {d.row.row_id for d in g.duplicates} == {a.id, b.id}
     ]
     assert group.holder is None
-    assert "38b06819f099" in group.blockers()[0]
+    assert "re-key" in group.blockers()[0]
 
 
 def _run_main(merge, monkeypatch, db_session, argv, *, db_name="tckdb_test_lotmerge"):
@@ -293,7 +293,6 @@ def test_commit_refuses_a_deployed_database_name(merge, monkeypatch, db_session,
     )
     db_session.expire_all()
     assert _merged_into(db_session, seeded["gaussian"].id) is None
-
 
 
 # ---------------------------------------------------------------------------

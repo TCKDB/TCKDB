@@ -6,7 +6,7 @@
   "source_instance": {
     "instance_kind": "lab_server",
     "instance_name": "example-lab-server",
-    "schema_version": "d861dfd60891",
+    "schema_version": "d5b8e2f4a916",
     "software_version": "0.0.0-example",
     "created_by_local_user": null,
     "notes": "Illustrative bundle; not real data."

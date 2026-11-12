@@ -1,7 +1,7 @@
 """The energies an ``energy_ordering`` record compared are frozen with their record.
 
-``a1f6c3e9b527`` froze ``transition_state_validation_evidence`` under its
-transition-state entry once that entry is approved. ``a7d3f1c95e28`` adds
+``transition_state_validation_evidence`` is frozen under its
+transition-state entry once that entry is approved, and so is
 ``transition_state_validation_energy``, whose rows are the numbers that
 evidence row's verdict rests on. Left writable, an energy could be rewritten
 under an accepted record and the stored "the saddle point lies above both

@@ -1,6 +1,6 @@
 """A repair declaration dies with its transaction, and its record does not.
 
-This is the property that makes ``e2c9a4f7b163`` a repair path rather than a
+This is the property that makes a declared repair a repair path rather than a
 bypass: there is no close step to forget and no flag to reset, because the
 declaration is matched on ``pg_current_xact_id()`` and a committed transaction
 can never present that id again. Its symmetric half is that the *record* has
@@ -53,8 +53,8 @@ def committed_engine() -> Iterator:
         )
         assert completed.returncode == 0, completed.stderr
         engine = create_engine(_database_url(db_name), pool_pre_ping=True)
-        # Reproduce a database whose stored rows predate ``c5a1f8e3d074``.
-        # That revision added ``ck_geometry_atom_element_canonical``, so ``CL``
+        # Reproduce a database whose stored rows predate the canonical-element constraint.
+        # ``ck_geometry_atom_element_canonical`` is in force, so ``CL``
         # can no longer be written -- and the rows a repair exists for are
         # exactly the rows a later rule would refuse, because a repair is
         # needed when the data predates the constraint and never when it was
@@ -139,7 +139,7 @@ def _seed_accepted_atom(connection) -> dict[str, int]:
 _DECLARE = text(
     "INSERT INTO accepted_science_repair "
     "(target_table, declared_columns, alembic_revision, reason) "
-    "VALUES ('geometry_atom', ARRAY['element'], 'e2c9a4f7b163', "
+    "VALUES ('geometry_atom', ARRAY['element'], 'test_repair', "
     " 'canonicalise element symbol case; no coordinate change') RETURNING id"
 )
 
@@ -208,7 +208,7 @@ def test_the_record_of_a_repair_survives_the_commit(committed_engine) -> None:
         )
         assert declaration["target_table"] == "geometry_atom"
         assert declaration["declared_columns"] == ["element"]
-        assert declaration["alembic_revision"] == "e2c9a4f7b163"
+        assert declaration["alembic_revision"] == "test_repair"
         assert "canonicalise" in declaration["reason"]
         assert declaration["declared_by_role"]
 

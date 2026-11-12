@@ -477,8 +477,7 @@ enhancement, not a prerequisite.
 ```text
 No migration in this spec — design only.
 When implemented:
-  - add a NEW Alembic revision (per the phase-aware migration policy); do NOT
-    edit d861dfd60891 or any deployed revision.
+  - add a NEW Alembic revision (per the phase-aware migration policy).
   - implement BOTH upgrade() and downgrade().
   - create the MachineReviewCuratorTaskState enum in app/db/models/common.py and
     register the new model module in app/db/models/__init__.py so Alembic

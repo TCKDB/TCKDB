@@ -445,26 +445,6 @@ def test_doi_is_never_minted_and_cannot_be_repointed(db_session, draft_release):
 # ---------------------------------------------------------------------------
 
 
-def test_selectable_record_types_match_the_migration_check_constraint():
-    """The ORM CHECK and the migration's literal list must not diverge."""
-    import re
-    from pathlib import Path
-
-    from app.db.models.dataset_release import SELECTABLE_RECORD_TYPES
-
-    revision = (
-        Path(__file__).resolve().parents[3]
-        / "alembic"
-        / "versions"
-        / "e3f4a5b6c7d8_stage3_curated_release_semantics.py"
-    ).read_text()
-    block = re.search(
-        r"_SELECTABLE_RECORD_TYPES = \((.*?)\)", revision, re.S
-    ).group(1)
-    in_migration = set(re.findall(r'"([a-z_]+)"', block))
-    assert in_migration == {t.value for t in SELECTABLE_RECORD_TYPES}
-
-
 def test_selectable_ref_prefixes_match_the_public_ref_registry():
     """A wrong prefix here would silently make a record unselectable."""
     from app.db.models.dataset_release import SELECTABLE_RECORD_TYPES

@@ -611,7 +611,7 @@ def _element_index(
     geometry's foreign key exactly as that geometry holds it.
 
     No case normalisation, and none is needed by a caller either.
-    ``ck_geometry_atom_element_canonical`` (``c5a1f8e3d074``) holds the column
+    ``ck_geometry_atom_element_canonical`` holds the column
     canonical on every write path, so what is returned here is already the
     output of
     :func:`~app.chemistry.geometry.normalize_element_symbol`. Callers that

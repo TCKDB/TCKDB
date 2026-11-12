@@ -638,7 +638,7 @@ def collect_energy_correction_scheme_provenance_warnings(
                     else EnergyCorrectionScheme.level_of_theory_id.is_(None)
                 ),
                 # A different frequency level is a different scheme by
-                # identity (c5e1a8d3f6b9), so it is never the same
+                # identity, so it is never the same
                 # correction deposited twice.
                 (
                     EnergyCorrectionScheme.frequency_level_of_theory_id

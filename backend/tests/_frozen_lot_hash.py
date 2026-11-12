@@ -1,10 +1,8 @@
 """The level-of-theory hash as it was before the keywords decision (Stage 2), kept for history tests only.
 
 Stage 2 removed free-text ``keywords`` from a level of theory's identity: the live
-``calculation_resolution._level_of_theory_hash`` no longer puts a ``"keywords"`` key in its payload. Several
-revisions between ``38b06819f099`` and ``b9e4c2a7d153`` re-keyed rows with a hash that still had it, and their
-tests used to assert that each revision's hash equals the application's. That equality can no longer hold, by
-design, so those tests compare against this frozen copy instead.
+``calculation_resolution._level_of_theory_hash`` no longer puts a ``"keywords"`` key in its payload. Tests
+that need the hash a level had while keywords were part of its identity compare against this frozen copy.
 
 This is a copy of the old formula and must not be kept in step with the application: it is the formula the
 historical revisions implemented. It lives in the tests, never in application code, because nothing in the

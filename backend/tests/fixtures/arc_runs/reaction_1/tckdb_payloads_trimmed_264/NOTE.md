@@ -9,8 +9,7 @@ It is not itself captured producer output.
 with `value: 0.0` and no `components`. That shape is a false statement (a
 saddle point carries no bond assignment, so a componentless zero
 bond-additivity correction there can never be real; see
-`backend/alembic/versions/a55cc983501a_repair_false_zero_ts_bac_totals.py`
-and `backend/app/services/energy_correction_resolution.py`) and the upload
+`backend/app/services/energy_correction_resolution.py`) and the upload
 API now refuses it with `bac_total_requires_components`.
 
 **Why the original is kept beside it, unmodified:** the original is the only

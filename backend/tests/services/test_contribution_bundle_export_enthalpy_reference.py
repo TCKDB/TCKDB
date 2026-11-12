@@ -3,8 +3,7 @@ same server refuses to re-import.
 
 Before this module, ``contribution_bundle_export.py`` emitted
 ``enthalpy_reference_kind`` verbatim: a pre-existing thermo row with an
-enthalpy and no declaration (never backfilled -- see
-``e7b1c9d4a632``/``.claude/rules/migration-rules.md``) round-tripped into a
+enthalpy and no declaration (never backfilled) round-tripped into a
 bundle that ``persist_thermo_upload`` (``app.workflows.thermo``, via the
 shared ``tckdb_schemas.enthalpy_reference.enthalpy_reference_error`` rule)
 refuses on import. See ``docs/contribution-bundles/format.md`` for the
@@ -88,8 +87,8 @@ def _legacy_fit_thermo(session: Session, *, prefix: str) -> Thermo:
 
     No trigger juggling needed: the DB guard only fires on
     ``thermo.h298_kj_mol``/``thermo.enthalpy_reference_kind`` themselves
-    (see ``e7b1c9d4a632``'s docstring -- "child-only enthalpy ... is a
-    workflow rule, not this one"), so a NASA-only legacy row is a plain
+    (child-only enthalpy is a
+    workflow rule, not this one), so a NASA-only legacy row is a plain
     insert.
     """
     species = make_species(session, inchi_key=next_inchi_key(prefix))

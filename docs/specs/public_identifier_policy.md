@@ -268,7 +268,7 @@ TCKDB scale.
 
 **LoT exception.** The content-identity row holds for a LoT minted under
 the current hash formula. A LoT row re-keyed in place by a later formula
-change (`e1a5c3f7b9d4`, `38b06819f099`, `c8424fe82997`) keeps the ref it was minted with,
+change keeps the ref it was minted with,
 so on replay into a fresh instance the same content mints a *different*
 ref. See "LoT refs are minted once" above.
 
@@ -507,7 +507,7 @@ a documented period (suggest one minor version of `tckdb-client`).
    Backfill must populate every existing row before the NOT NULL
    constraint flips. Per the project's `migration-rules.md`,
    while the schema is not yet finalized this should be folded into the
-   single initial migration `d861dfd60891`, with all dev DBs rebuilt.
+   single initial migration, with all dev DBs rebuilt.
 2. **Backfill cost.** Content-derived refs require recomputing the
    canonical identity hash for every row of every identity-bearing
    table. For LoT this is cheap (the hash already exists); for species

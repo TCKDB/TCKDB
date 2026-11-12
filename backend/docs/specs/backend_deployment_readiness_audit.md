@@ -54,7 +54,7 @@ Legacy entity routes (`/api/v1/{thermo,kinetics,geometries,...}`) are guarded by
 | DB schema invariants & constraint coverage | B+ | Cascades sometimes app-only; a few should-be-NOT-NULL columns on `network` |
 | Indexing for read filters | C+ | **No indexes** on `calculation.lot_id`, `calculation.software_release_id`, `calculation.conformer_observation_id` |
 | Migration strategy for deployed DB | C | Single-migration policy already relaxed; no documented prod migration playbook |
-| Structure search performance | A- | Stored `species_entry.mol` cartridge column with GiST index (migration `d4e5f6a7b8c9`); service reads directly from `se.mol`. Fingerprint cache for similarity remains deferred. |
+| Structure search performance | A- | Stored `species_entry.mol` cartridge column with GiST index; service reads directly from `se.mol`. Fingerprint cache for similarity remains deferred. |
 | Health / readiness / liveness | C+ | `/health` exists and pings DB; no `/readyz`, no startup grace, no socket-hang guard |
 | Structured logging / request IDs | C | Plain-text logs; no correlation IDs; no JSON output |
 | External error/perf monitoring | D | No Sentry / OpenTelemetry / APM integration |
@@ -88,7 +88,7 @@ The following must be addressed before broad public exposure. None block a close
 | P1-4 | No request-ID / correlation ID in logs | [backend/app/api/errors.py](backend/app/api/errors.py) | Add middleware that emits `X-Request-ID` and injects it into logging context. |
 | P1-5 | No JSON / structured logs | (config) | Switch to a JSON log handler for the hosted profile. |
 | P1-6 | `Network.name` is nullable; no unique constraint on provenance tuple | [backend/app/db/models/network.py:28](backend/app/db/models/network.py#L28) | Make name NOT NULL or add `(literature_id, name)` unique constraint to prevent silent dupes. |
-| P1-7 | FK `ON DELETE` defaults to `RESTRICT` at DB level even where ORM cascades `delete-orphan`; deletion paths must orphan-delete carefully | [backend/alembic/versions/d861dfd60891_create_intial_schema.py](backend/alembic/versions/d861dfd60891_create_intial_schema.py) | Audit code paths that delete `Species` / `Calculation` / `ConformerObservation`; align DB-level ON DELETE rules with intended ORM semantics. |
+| P1-7 | FK `ON DELETE` defaults to `RESTRICT` at DB level even where ORM cascades `delete-orphan`; deletion paths must orphan-delete carefully | [backend/alembic/versions/](backend/alembic/versions/) | Audit code paths that delete `Species` / `Calculation` / `ConformerObservation`; align DB-level ON DELETE rules with intended ORM semantics. |
 | P1-8 ✅ addressed | OpenAPI has no frozen golden snapshot — only path-presence tests | [backend/tests/api/scientific/test_api_openapi.py](backend/tests/api/scientific/test_api_openapi.py) | **Done.** [backend/tests/api/test_openapi_snapshot.py](backend/tests/api/test_openapi_snapshot.py) freezes the full normalized `/openapi.json` in [backend/tests/api/golden/openapi.json](backend/tests/api/golden/openapi.json). Regenerate intentionally with `UPDATE_OPENAPI_GOLDEN=1 pytest tests/api/test_openapi_snapshot.py`. Review the diff. |
 | P1-9 ✅ addressed | Chebyshev / PLOG coefficient payload has no explicit truncation cap | [backend/app/services/scientific_read/network_kinetics.py](backend/app/services/scientific_read/network_kinetics.py) | **Done.** Chebyshev `include=coefficients` flattens in `(temperature_order, pressure_order)` order and is capped at `settings.public_max_limit`; payload exposes `coefficient_count_total` + `coefficients_truncated`. PLOG `include=plog` stays a bare `record.plog` list capped at the same limit, with sibling `record.plog_entry_count_total` + `record.plog_entries_truncated` carrying the truncation metadata. `include=all` still excludes `points`. |
 
@@ -170,15 +170,15 @@ The following must be addressed before broad public exposure. None block a close
 
 | Hot path | Risk | Classification |
 |---|---|---|
-| Structure search (`se.mol @> qmol`) | GiST-indexed substructure / Tanimoto similarity | ✅ P1-3 done — see migration `d4e5f6a7b8c9` |
+| Structure search (`se.mol @> qmol`) | GiST-indexed substructure / Tanimoto similarity | ✅ P1-3 done |
 | `calculation/search?include=all` | Heavy includes; no `selectinload()` of nested artifacts/geometries observed | P2 — benchmark first; add `selectinload` if N+1 measured |
 | `network/PDep` `include=points` | Capped at 200 rows; truncation flag exposed | Safe for v0 |
 | `network/PDep` Chebyshev / PLOG coefficient matrices | No size cap | P2 — add a sanity cap |
 | Reaction full / path expansion | Bounded by participant count | Safe for v0 |
 | Artifact search owner filters | Joins ok; capped pagination | Safe for v0 |
-| Artifact search metadata filters | Btree indexes on `calculation_artifact.calculation_id` / `kind` / `sha256` added in `f6a7b8c9d0e1_add_calculation_artifact_indexes`; `filename_contains` remains a `LIKE` scan pending a future generated/trigram design | Safe for v0 |
+| Artifact search metadata filters | Btree indexes on `calculation_artifact.calculation_id` / `kind` / `sha256` added; `filename_contains` remains a `LIKE` scan pending a future generated/trigram design | Safe for v0 |
 | Review badge bulk loading | Bulk-loaded in batches | Safe for v0 |
-| Literature inverse records | Bounded by literature.id filter; per-product-table `literature_id` btree indexes added in `e5f6a7b8c9d0_add_literature_and_workflow_fk_indexes` | Safe for v0 |
+| Literature inverse records | Bounded by literature.id filter; per-product-table `literature_id` btree indexes added | Safe for v0 |
 
 Classification scheme:
 
@@ -271,7 +271,7 @@ Ordered by impact-per-effort, drawing from the P0/P1 list:
 2. **Production env hygiene (P0-1, P0-5)** — quick. Add a deployment checklist (env vars: `AUTH_ALLOW_OPEN_REGISTRATION=false`, `EXPOSE_API_DOCS=false`, `LEGACY_READS_REQUIRE_AUTH=true`, `SESSION_COOKIE_SECURE=true`, `ALLOW_PUBLIC_INTERNAL_IDS=false`). Optionally add a startup assertion that refuses to boot in `hosted` profile when these are misconfigured.
 3. **Hot-path FK indexes on `calculation` (P1-2)** — half-day. Add `index=True` to `lot_id`, `software_release_id`, `conformer_observation_id`, `species_entry_id`, `transition_state_entry_id`, `literature_id`. Fold into the right migration (depends on outcome of #1).
 4. **Readiness + observability minimum (P0-4, P1-4, P1-5)** — one day. `/readyz`, request-ID middleware, JSON logs. These are the smallest single change that makes the deployment actually operable under traffic.
-5. ~~**Stored mol column + GiST index for structure search (P1-3)** — one to two days. Add a populated `mol` column on `species_entry`, GiST index, backfill, and migrate `structure_search.py` to use the indexed column.~~ ✅ Done — migration `d4e5f6a7b8c9`; service uses `se.mol` directly.
+5. ~~**Stored mol column + GiST index for structure search (P1-3)** — one to two days. Add a populated `mol` column on `species_entry`, GiST index, backfill, and migrate `structure_search.py` to use the indexed column.~~ ✅ Done —; service uses `se.mol` directly.
 6. ~~**OpenAPI golden snapshot (P1-8)** — quick. Prevents accidental client-breaking schema drift.~~ ✅ Done — see `tests/api/test_openapi_snapshot.py`.
 7. **Rate-limit Redis backend (P1-1)** — only when scaling past one worker. Until then, the in-process store is honest.
 8. **Sentry integration (P2)** — defer until first real user traffic; integrate before public launch.
@@ -289,7 +289,7 @@ The pre-merge security review of the public-read surface returned no critical/hi
 
 | Suggested task | Verdict |
 |---|---|
-| Materialized/indexed RDKit mol column for structure search | ✅ Done — P1-3, migration `d4e5f6a7b8c9`. |
+| Materialized/indexed RDKit mol column for structure search | ✅ Done — P1-3. |
 | Standalone bulk export endpoint | **Defer** — no real consumer demand yet; pagination + client looping suffices. Add only when a downstream pipeline asks. |
 | Artifact URI exposure policy | **Already correct** — documented design; URIs are storage keys, not signed URLs. Reaffirm in deploy docs; no code change. Private-bucket assumption now restated in [`production_checklist.md`](../../../docs/deployment/production_checklist.md#artifact-storage-buckets-must-be-private) and [`scientific_artifact_reads.md`](scientific_artifact_reads.md#operational-assumption-private-storage-bucket). |
 | Migration strategy cleanup for deployed DB | **Yes** — P0-2/P0-3, top priority. |
@@ -335,10 +335,7 @@ The pre-merge security review of the public-read surface returned no critical/hi
 - `docker-compose.yml`
 
 **DB & migrations**:
-- `backend/alembic/versions/60b67e360daf_enable_rdkit_extension.py`
-- `backend/alembic/versions/d861dfd60891_create_intial_schema.py`
-- `backend/alembic/versions/a1b2c3d4e5f6_add_molecular_property_observation.py`
-- `backend/alembic/versions/b2c3d4e5f6a7_mpo_timestamps_server_default.py`
+- `backend/alembic/versions/`
 - `backend/app/db/base.py`
 - `backend/app/db/types.py`
 - `backend/app/db/models/calculation.py`

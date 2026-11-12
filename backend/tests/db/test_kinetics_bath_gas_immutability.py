@@ -1,9 +1,8 @@
 """A kinetics record's bath gas is frozen by the approval of the record.
 
-``a4c8e1f7b392`` puts ``kinetics_bath_gas`` under the accepted-science regime beside
+``kinetics_bath_gas`` is under the accepted-science regime beside
 ``kinetics_plog``: once a kinetics record has been approved, the collider its pressure-dependent fit
-was obtained for can be neither added, edited nor removed. The registry parity test compares
-``pg_trigger`` with the revision's own registry, so a guard deleted from both would stay green; every
+was obtained for can be neither added, edited nor removed. Every
 refusal below needs the trigger itself. Removing it turns the refusals red, and the unapproved case
 shows the freeze is acceptance-triggered rather than a blanket write ban.
 """

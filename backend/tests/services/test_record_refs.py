@@ -139,7 +139,7 @@ def test_every_record_type_is_accounted_for():
 
 def test_molecular_property_observation_now_resolves_a_real_ref(db_session):
     """Phase C-E5 gave ``molecular_property_observation`` a ``public_ref``
-    (migration ``d2f4a7c1b8e6``) -- it is no longer the second exception
+ -- it is no longer the second exception
     alongside ``applied_energy_correction`` (see the module docstring's
     history note). Membership here is derived from the column, so this
     started passing the moment the mixin was added, with no edit to

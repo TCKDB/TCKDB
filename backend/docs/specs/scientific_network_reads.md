@@ -85,7 +85,7 @@ table in the initial migration):
    `PREFIXES["NetworkSolve"] = "nsolve"`. Both are opaque-ref tables
    (not content-derived); the `make_opaque_ref` dispatch covers them
    without per-class canonicalization.
-3. `alembic/versions/d861dfd60891_create_intial_schema.py` —
+3. `alembic/versions/` (the initial revision) —
    added two rows to `_PUBLIC_REF_TABLES`. The existing
    `_add_public_ref_columns_and_indexes()` loop covers column
    creation, the `gen_random_uuid()` server_default fallback, and

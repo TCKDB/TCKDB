@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.174.3 - 2026-11-12
+
+The contribution-bundle example in the contract shows `source_instance.schema_version` as the current Alembic revision. `schema_version` is a free-form non-empty string that no import reads; no refusal, warning, field or behaviour changes.
+
 ## 0.174.2 - 2026-11-11
 
 Docstrings, comments and field descriptions in the package are reworded to state behaviour only. No refusal, warning, field or behaviour changes.

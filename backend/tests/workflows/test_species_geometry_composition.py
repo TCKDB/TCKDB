@@ -442,8 +442,7 @@ def test_element_symbols_in_any_case_are_accepted(db_conn) -> None:
 
     Electronic-structure codes are not consistent about capitalisation, and
     refusing correct chemistry over a string is what ADR 0008 puts out of
-    bounds for a blocking check; this exact bug shipped once already. Since
-    ``b4e7c1d20f83`` the case is settled on the way into
+    bounds for a blocking check; this exact bug shipped once already. The case is settled on the way into
     ``geometry_atom.element`` rather than at each comparison, but the deposit
     under test is unchanged and so is what it must be allowed to do.
 

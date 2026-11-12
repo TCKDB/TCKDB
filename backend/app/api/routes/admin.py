@@ -1147,7 +1147,7 @@ class AdminEnergyCorrectionSchemeProvenanceResponse(BaseModel):
     source_literature_ref: str | None = None
     #: Renamed from ``software_ref`` when ``energy_correction_scheme``
     #: moved from ``software_id`` to ``software_release_id``
-    #: (c24ce2d9c198). The value this field carries changed referent at
+    #:. The value this field carries changed referent at
     #: the same moment -- it is now a ``software_release`` public ref
     #: (``srel_...``), not a ``software`` one (``soft_...``). Keeping the
     #: old name would have left an admin client silently resolving the

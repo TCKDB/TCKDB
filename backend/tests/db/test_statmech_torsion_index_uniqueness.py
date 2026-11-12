@@ -13,9 +13,8 @@ All three upload paths refuse duplicates at validation time
 it is the whole of the coverage that a reading of the *schema* would find
 if it went looking for a ``UniqueConstraint`` on the model, because there
 isn't one -- there is a unique ``Index``, which is the same enforcement
-wearing a different declaration. Its name until ``b7e4d1a9c026`` was
-``uq_statmech_torsion_statmech_id``, mentioning only the first of its two
-columns, which reads as a rule about ``statmech_id`` alone. That is how
+wearing a different declaration. A name that mentioned only the first of its two
+columns would read as a rule about ``statmech_id`` alone. That is how
 the invariant came to be reported as unenforced below the request layer.
 
 This file settles it by provocation rather than by reading either the

@@ -64,7 +64,7 @@ some are only a second notation for one, and are kept apart anyway:
   by the wire schema.
 
 This module is pure. The Alembic revision that re-keys existing rows
-(``38b06819f099``) carries a frozen copy of these rules, and a test holds
+ carries a frozen copy of these rules, and a test holds
 the two in agreement.
 """
 

@@ -37,7 +37,7 @@ from app.workflows.rehearsal import RehearsalContended
 logger = logging.getLogger(__name__)
 
 #: Constraint name the ``calculation_dependency`` acyclicity trigger reports
-#: (revision ``e2f2b3fb6725``). A trigger is not in the scientific check
+#:. A trigger is not in the scientific check
 #: register's constraint table, so it is keyed here, as the idempotency
 #: constraint is.
 CALCULATION_DEPENDENCY_CYCLE_CONSTRAINT = "calculation_dependency_acyclic"

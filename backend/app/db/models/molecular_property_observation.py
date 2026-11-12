@@ -286,7 +286,7 @@ class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin, PublicR
         # ``ck_molecular_property_observation_`` glued on, so several of these
         # names would exceed Postgres's 63-char identifier limit and get
         # silently hash-truncated. ``conv()`` marks the name as already final,
-        # matching exactly what the migration (``0b4a3afabfd3``) creates via
+        # matching exactly what the migration creates via
         # ``op.f(...)`` -- the same approach ``execution_environment_manifest``
         # uses for its FK names.
         CheckConstraint(

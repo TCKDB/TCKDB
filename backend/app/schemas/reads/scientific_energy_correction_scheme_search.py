@@ -68,7 +68,7 @@ class EnergyCorrectionSchemeSearchRequest(BaseModel):
 
     # --- declared but fail-closed until wired to a column ----------------
     software: str | None = Field(default=None, max_length=256)
-    #: Removed from the schema by ``a7d4e2b9c351``; kept declared here
+    #: Not a column of the schema; kept declared here
     #: **only** so it fails closed. Dropping the field outright made
     #: ``?version=x`` a silently ignored query parameter -- FastAPI does
     #: not reject an unknown one, so a client filtering by version got

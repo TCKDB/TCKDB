@@ -99,12 +99,10 @@ _REVIEW = Vocabulary(
                 "from `not_reviewed`."
             ),
             example=(
-                "Until 2026-08-24 every deposit was stamped `under_review` on "
-                "arrival, so 1,153 records on the hosted database claimed "
-                "somebody was looking at them when nobody was. Revision "
-                "`c1d8f4a25b30` moved them to `not_reviewed`. If you read the "
-                "hosted API before that date, `under_review` there meant "
-                "nothing at all."
+                "A freshly deposited record is `not_reviewed`. It becomes "
+                "`under_review` only when a curator opens it, so a list of "
+                "`under_review` records is a list of records someone is "
+                "working on."
             ),
         ),
         Term(

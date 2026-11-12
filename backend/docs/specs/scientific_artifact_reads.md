@@ -192,8 +192,7 @@ Pure pagination / include / review knobs are rejected with 422
 Indexing notes:
 
 - Artifact metadata search has btree indexes on
-  `calculation_artifact.calculation_id`, `kind`, and `sha256` (migration
-  `f6a7b8c9d0e1_add_calculation_artifact_indexes`). These cover the
+  `calculation_artifact.calculation_id`, `kind`, and `sha256`. These cover the
   owning-calc join, the `artifact_kind` filter, and exact-`sha256` /
   `has_sha256` lookups.
 - `filename_contains` remains a sequential `LIKE` over

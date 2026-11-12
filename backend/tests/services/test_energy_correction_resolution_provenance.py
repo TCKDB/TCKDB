@@ -210,8 +210,7 @@ def test_ambiguous_uncited_sibling_warning_names_the_other_ref(db_conn) -> None:
     """Two schemes, same kind/lot/software, both uncited: the archive
     cannot tell them apart, and says so by name (plan §2.4).
 
-    The two siblings differ by ``name``. They differed by ``version``
-    until ``a7d4e2b9c351`` dropped that column, and the replacement is
+    The two siblings differ by ``name``. A ``version`` column no longer exists, and this is
     the more realistic case anyway: two differently-named deposits of
     what may be the same library at one level of theory, with no
     citation to settle it, is exactly the ambiguity this warning exists
@@ -264,8 +263,7 @@ def test_differing_software_siblings_are_not_flagged_ambiguous(db_conn) -> None:
 
 
 def test_same_library_in_a_second_unit_is_one_row_not_two(db_conn) -> None:
-    """``units`` is NOT an identity axis (a7d4e2b9c351), reversing plan
-    v2 §3.3.
+    """``units`` is NOT an identity axis.
 
     An energy correction is always an energy. Hartree and kcal/mol are
     one library written two ways, so re-depositing it in the second unit

@@ -1,25 +1,18 @@
-"""Declared statmech models: additive migration, owner rules as database facts, and the accepted-science freeze.
+"""Declared statmech models: owner rules as database facts, and the accepted-science freeze.
 
-The migration round-trips inside the test transaction (PostgreSQL DDL is transactional). A statmech record stored before
-the revision keeps its row, its review and its digest, and reads as declaring no model. A declaration, its members and its
-sources are the declaring record's scientific content: frozen with it once it has been approved, and not frozen by the
-approval of a record that is merely cited as a member.
+A declaration, its members and its sources are the declaring record's scientific content: frozen with it once it has
+been approved, and not frozen by the approval of a record that is merely cited as a member.
 """
 
 from __future__ import annotations
 
 import hashlib
-from importlib.util import module_from_spec, spec_from_file_location
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
-from app.db.base import Base
 from app.db.models.common import (
     CalculationType,
     EnergyCorrectionConvention,
@@ -31,7 +24,6 @@ from app.db.models.common import (
 from app.db.models.statmech import Statmech
 from app.db.models.statmech_declaration import StatmechModelDeclaration, StatmechModelMember, StatmechModelSource
 from app.db.models.structure_determination import StructureDetermination
-from tests.db._migration_chain import revision_under_test
 from tests.db.test_accepted_science_immutability import _actor, _approve
 from tests.services.scientific_read._factories import (
     attach_input_geometry,
@@ -50,29 +42,8 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
 )
 
-_REVISION = revision_under_test("e6b3a9d1f742")
-_MIGRATION = Path(__file__).resolve().parents[2] / "alembic/versions/e6b3a9d1f742_declare_statmech_models.py"
 TABLES = ("statmech_model_declaration", "statmech_model_member", "statmech_model_source")
 ENUMS = ("statmech_model_scope_kind", "statmech_model_source_role")
-
-
-@pytest.fixture
-def migration(db_session, monkeypatch):
-    spec = spec_from_file_location("statmech_model_migration", _MIGRATION)
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
-    monkeypatch.setattr(
-        module,
-        "op",
-        Operations(MigrationContext.configure(db_session.connection(), opts={"target_metadata": Base.metadata})),
-    )
-    return module
-
-
-def _present(db_session, table: str) -> bool:
-    return bool(
-        db_session.scalar(text("SELECT count(*) FROM information_schema.tables WHERE table_name = :t"), {"t": table})
-    )
 
 
 FUNCTIONS = {
@@ -81,10 +52,6 @@ FUNCTIONS = {
     "tckdb_statmech_model_source_guard",
     "tckdb_statmech_model_immutable",
 }
-
-
-def _functions(db_session) -> set[str]:
-    return set(db_session.scalars(text("SELECT proname FROM pg_proc WHERE proname LIKE 'tckdb\\_statmech\\_%'")))
 
 
 def _entry(db_session):
@@ -142,36 +109,6 @@ def _determination(db_session, ts_entry, *, kind=StructureDeterminationTargetKin
 
 
 # --- migration -----------------------------------------------------------------------------------------------------
-
-
-def test_the_revision_chains_from_the_revision_before_it_in_the_chain():
-    assert _REVISION.parent == "e5b2c8a1d7f3"
-
-
-def test_the_migration_round_trips_and_leaves_an_existing_record_untouched(db_session, migration):
-    entry = _entry(db_session)
-    legacy = make_statmech(db_session, species_entry=entry)
-    before = db_session.scalar(text("SELECT count(*) FROM statmech WHERE id = :i"), {"i": legacy.id})
-    assert all(_present(db_session, t) for t in TABLES)
-
-    assert _functions(db_session) == FUNCTIONS
-    migration.downgrade()
-    assert not any(_present(db_session, t) for t in TABLES)
-    assert _functions(db_session) == set(), "a downgrade leaves no tckdb_statmech_* function behind"
-    for enum in ENUMS:
-        assert not db_session.scalar(text("SELECT count(*) FROM pg_type WHERE typname = :n"), {"n": enum})
-    assert db_session.scalar(text("SELECT count(*) FROM statmech WHERE id = :i"), {"i": legacy.id}) == before
-
-    migration.upgrade()
-    assert all(_present(db_session, t) for t in TABLES)
-    assert db_session.scalar(text("SELECT count(*) FROM statmech WHERE id = :i"), {"i": legacy.id}) == before
-    assert db_session.scalar(text("SELECT count(*) FROM statmech_model_declaration")) == 0  # nothing is backfilled
-
-
-def test_downgrade_forgets_declarations_and_says_how_many(db_session, migration, capsys):
-    _declaration(db_session, make_statmech(db_session, species_entry=_entry(db_session)))
-    migration.downgrade()
-    assert "forgets: 1 statmech model declaration(s)" in capsys.readouterr().out
 
 
 # --- declaration rules ---------------------------------------------------------------------------------------------
@@ -338,56 +275,6 @@ def test_a_member_energy_states_its_convention_and_a_convention_belongs_to_an_en
     ]
     db_session.expire_all()
     assert [r.relative_energy_convention for r in rows] == stated
-
-
-_CONVENTION_MIGRATION = Path(__file__).resolve().parents[2] / "alembic/versions/f3a8c5d1e947_state_member_energy_convention.py"
-
-
-@pytest.fixture
-def convention_migration(db_session, monkeypatch):
-    spec = spec_from_file_location("member_energy_convention_migration", _CONVENTION_MIGRATION)
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
-    monkeypatch.setattr(
-        module,
-        "op",
-        Operations(MigrationContext.configure(db_session.connection(), opts={"target_metadata": Base.metadata})),
-    )
-    return module
-
-
-def _has_convention_column(db_session) -> bool:
-    return bool(
-        db_session.scalar(
-            text(
-                "SELECT count(*) FROM information_schema.columns "
-                "WHERE table_name = 'statmech_model_member' AND column_name = 'relative_energy_convention'"
-            )
-        )
-    )
-
-
-def test_the_convention_migration_round_trips_and_refuses_to_guess_a_stored_energys_convention(
-    db_session, convention_migration, ensemble
-):
-    entry, _, declaration = ensemble
-    assert _has_convention_column(db_session)
-    convention_migration.downgrade()
-    assert not _has_convention_column(db_session)
-    convention_migration.upgrade()
-    assert _has_convention_column(db_session)
-
-    # A member stored with an energy before the revision has no convention to be given: nothing is backfilled.
-    convention_migration.downgrade()
-    db_session.execute(
-        text(
-            "INSERT INTO statmech_model_member (declaration_id, member_key, member_statmech_id, relative_energy_kj_mol) "
-            "VALUES (:d, 'old', :s, 1.0)"
-        ),
-        {"d": declaration.id, "s": make_statmech(db_session, species_entry=entry).id},
-    )
-    with pytest.raises(RuntimeError, match="no stated convention"):
-        convention_migration.upgrade()
 
 
 # --- sources -------------------------------------------------------------------------------------------------------

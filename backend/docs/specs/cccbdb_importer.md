@@ -355,9 +355,7 @@ importer should:
 
 The importer surfaces gaps in the current schema. Each is documented
 here as a **gap**, not as part of the pilot. Closing any of these
-requires a new Alembic migration revision (and remember the
-single-initial-migration rule still in force — fold into
-`d861dfd60891` until the schema is finalized).
+requires a change to the initial Alembic revision.
 
 ### Gap 1 — Molecular scalar/vector/tensor properties
 
@@ -453,7 +451,7 @@ after the pilot lands.
 
 **Status update (2026-09-20):** the custody tables this section proposed
 now exist -- `external_source` and `external_source_record`
-(`backend/app/db/models/external_source.py`, migration `0b4a3afabfd3`).
+(`backend/app/db/models/external_source.py`).
 The shape differs from the original sketch below in a few ways decided
 during implementation: `page_kind` became `record_kind`
 (`ExternalSourceRecordKind`, currently `thermoml_article` /

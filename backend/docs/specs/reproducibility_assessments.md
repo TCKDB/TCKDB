@@ -97,8 +97,7 @@ keep reading `current`.
 
 The two reason tokens carry no version suffix: `no_typed_result_contract` and
 `selected_collection_requires_scientific_provenance`. The reproducibility rubric
-version in the public assessment block is an integer. After the version-split
-migration (`c7d4a9e2b6f1`, see `backend/docs/deployment/migrations.md`) every
+version in the public assessment block is an integer. After a rubric identity change every
 stored reproducibility assessment reads `stale` until a curator re-assesses it:
 the snapshotted context changed with the rubric identity, which is the stale
 mechanism working as designed.

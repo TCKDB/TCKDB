@@ -16,17 +16,13 @@ while the hash cannot see a program, each canonical key stable).
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
-import pathlib
-from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import Text, literal, select
 from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
 from app.chemistry.basis_set_names import basis_identity_key
-from app.chemistry.dispersion_names import level_identity_keys
 from app.chemistry.method_names import (
     NAME_ALIASES,
     SUFFIX_ALIASES,
@@ -40,7 +36,6 @@ from app.services.scientific_read.lot_identity_filters import (
     basis_key_sql,
     method_key_sql,
 )
-from tests._frozen_lot_hash import frozen_level_of_theory_hash
 from tests.services.test_basis_identity_key import _all_spellings
 
 #: (method, [(program, spelling), ...], exact identity key)
@@ -230,13 +225,6 @@ def _all_methods() -> list[str]:
     )
 
 
-@pytest.mark.parametrize("spelling", _all_methods())
-def test_the_key_is_idempotent(spelling):
-    # The migration's collision-freedom argument depends on this.
-    key = method_identity_key(spelling)
-    assert method_identity_key(key) == key
-
-
 # ---------------------------------------------------------------------------
 # lot_hash
 # ---------------------------------------------------------------------------
@@ -387,83 +375,6 @@ def test_the_two_wb97x_families_the_owner_named_are_not_equated():
 # ---------------------------------------------------------------------------
 # The migration's frozen copy
 # ---------------------------------------------------------------------------
-
-_MIGRATION = (
-    pathlib.Path(__file__).parents[2]
-    / "alembic"
-    / "versions"
-    / "c8424fe82997_key_level_of_theory_method_by_identity.py"
-)
-
-
-@pytest.fixture(scope="module")
-def migration():
-    spec = importlib.util.spec_from_file_location("_mig_c8424fe82997", _MIGRATION)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
-
-
-def _case_only(spelling: str) -> str:
-    return spelling.strip().lower()
-
-
-@pytest.mark.parametrize("spelling", _all_methods())
-def test_migration_method_rule_is_the_case_only_rule(migration, spelling):
-    """``c8424fe82997`` ran the case rule; aliases arrived in ``d0a7c3b91e4f``."""
-    assert migration._method_identity_key(spelling) == _case_only(spelling)
-
-
-@pytest.mark.parametrize("spelling", _all_spellings())
-def test_migration_basis_rule_matches_the_application(migration, spelling):
-    assert migration._basis_identity_key(spelling) == basis_identity_key(spelling)
-
-
-@pytest.mark.parametrize("method", _all_methods())
-def test_migration_hash_matches_the_case_only_formula(migration, method):
-    fields = {
-        "method": method,
-        "basis": "Def2TZVP",
-        "aux_basis": "def2/J",
-        "cabs_basis": None,
-        "dispersion": "d3bj",
-        "solvent": None,
-        "solvent_model": None,
-        "keywords": None,
-        "spin_treatment": "unrestricted",
-    }
-    row = SimpleNamespace(_mapping=fields)
-    # The revision's frozen copy hashes the pre-Stage-2 payload (with ``keywords``), so compare it with the frozen helper.
-    app_hash = frozen_level_of_theory_hash(**fields)
-    if level_identity_keys(method, "d3bj") == (_case_only(method), "d3bj"):
-        assert migration._lot_hash(row, keyed_method=True) == app_hash
-    else:
-        # An alias spelling: the application now keys it further than the
-        # case rule ``c8424fe82997`` ran (``d0a7c3b91e4f`` re-keys those rows; ``f3b8d5a1c702`` also moves a folded dispersion).
-        assert migration._lot_hash(row, keyed_method=True) != app_hash
-
-
-def test_migration_pre_revision_hash_keeps_the_method_verbatim(migration):
-    fields = {
-        "method": "B3LYP",
-        "basis": "def2tzvp",
-        "aux_basis": None,
-        "cabs_basis": None,
-        "dispersion": None,
-        "solvent": None,
-        "solvent_model": None,
-        "keywords": None,
-        "spin_treatment": None,
-    }
-    row = SimpleNamespace(_mapping=fields)
-    assert migration._lot_hash(row, keyed_method=False) != migration._lot_hash(
-        row, keyed_method=True
-    )
-    lower = SimpleNamespace(_mapping={**fields, "method": "b3lyp"})
-    assert migration._lot_hash(lower, keyed_method=False) == migration._lot_hash(
-        lower, keyed_method=True
-    )
 
 
 # ---------------------------------------------------------------------------

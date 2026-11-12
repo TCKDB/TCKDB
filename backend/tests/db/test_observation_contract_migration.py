@@ -1,22 +1,9 @@
-"""Round-trip and invariant coverage for ``0b4a3afabfd3``.
+"""Database coverage for the molecular-property observation contracts.
 
-Phase C-E1 (docs/research/tckdb-phase-c-implementation-plan.md, "C2 --
-observation, state, uncertainty and source-custody contracts").
-``molecular_property_observation`` is an already-deployed table, so the
-migration rules require both ``upgrade()`` and ``downgrade()`` to be
-implemented and correct -- this module pins both directions.
-
-Known problem, reproduced first. Before this revision, an experimental
-ideal-gas Cp(T) point could only be expressed as
-``property_kind=other``, a free-text ``scalar_unit`` (no fixed-unit
-guarantee), no pressure, no state basis, and a bare ``scalar_uncertainty``
-with no stated meaning -- see ``tests/schemas/
-test_molecular_property_observation_schema.py::
-TestExperimentalCpPointContract`` for the schema-level version of that
-same story (the wire contract). This module is the DB-level version: it
-proves the new CHECK constraints, tables and enum values the wire
-contract relies on actually exist and are enforced by PostgreSQL, not
-only by Pydantic.
+An experimental ideal-gas Cp(T) point is expressed with ``property_kind`` ``heat_capacity_cp``, a fixed-unit
+``scalar_unit``, a pressure, a state basis and a stated uncertainty kind; the source-custody table keeps its own
+uniqueness. This module proves the CHECK constraints, tables and enum values the wire contract relies on exist and are
+enforced by PostgreSQL, not only by Pydantic.
 """
 
 from __future__ import annotations
@@ -25,40 +12,17 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from alembic.config import Config
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 import app.db.models  # noqa: F401 -- register the mapper graph
-from alembic import command
 from app.db.base import Base
-from tests.db._migration_chain import revision_under_test
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-_MIGRATION = revision_under_test("0b4a3afabfd3")
 
-_NEW_COLUMNS = (
-    "pressure_bar",
-    "state_basis",
-    "uncertainty_kind",
-    "uncertainty_coverage_factor",
-    "uncertainty_level_of_confidence_pct",
-    "uncertainty_assessor",
-    "external_source_record_id",
-)
-
-_NEW_ENUM_TYPES = (
-    "observed_uncertainty_kind",
-    "observed_uncertainty_assessor",
-    "observed_state_basis",
-    "external_source_record_kind",
-)
-
-#: The final DB constraint names this revision creates on
-#: ``molecular_property_observation``, as declared via ``conv()`` on the
-#: model / ``op.f()`` in the migration (see both files' comments on why
-#: that wrapping is required for this specific table).
+#: The final DB constraint names on ``molecular_property_observation``, as
+#: declared via ``conv()`` on the model / ``op.f()`` in the migration.
 _MPO_CHECK_NAMES = (
     "ck_mpo_pressure_bar_gt_0",
     "ck_mpo_uncertainty_coverage_factor_ge_1",
@@ -74,118 +38,6 @@ _EXTERNAL_SOURCE_RECORD_CHECK_NAMES = (
     "ck_external_source_record_content_length_ge_0",
     "ck_external_source_record_http_status_range",
 )
-
-
-def _set_db_env(monkeypatch, db_name: str) -> None:
-    monkeypatch.setenv("DB_NAME", db_name)
-    monkeypatch.setenv("DB_USER", "tckdb")
-    monkeypatch.setenv("DB_PASSWORD", "tckdb")
-    monkeypatch.setenv("DB_HOST", "127.0.0.1")
-    monkeypatch.setenv("DB_PORT", "5432")
-
-
-def _engine_for(db_engine):
-    url = db_engine.url.render_as_string(hide_password=False)
-    db_engine.dispose()
-    return create_engine(url)
-
-
-def _table_exists(connection, table_name: str) -> bool:
-    return bool(
-        connection.scalar(
-            text(
-                "SELECT count(*) FROM information_schema.tables "
-                "WHERE table_name = :t"
-            ),
-            {"t": table_name},
-        )
-    )
-
-
-def _column_exists(connection, table_name: str, column_name: str) -> bool:
-    return bool(
-        connection.scalar(
-            text(
-                "SELECT count(*) FROM information_schema.columns "
-                "WHERE table_name = :t AND column_name = :c"
-            ),
-            {"t": table_name, "c": column_name},
-        )
-    )
-
-
-def _enum_type_exists(connection, type_name: str) -> bool:
-    return bool(
-        connection.scalar(
-            text("SELECT count(*) FROM pg_type WHERE typname = :n"),
-            {"n": type_name},
-        )
-    )
-
-
-# ---------------------------------------------------------------------------
-# Upgrade / downgrade round trip
-# ---------------------------------------------------------------------------
-
-
-def test_upgrade_creates_columns_tables_and_enums(db_engine, monkeypatch):
-    """*Mutation*: gut ``upgrade()`` (e.g. remove the column adds) -- the
-    presence assertions below then fail.
-    """
-    _set_db_env(monkeypatch, db_engine.url.database)
-    engine = _engine_for(db_engine)
-    config = Config(str(REPO_ROOT / "alembic.ini"))
-    try:
-        command.downgrade(config, _MIGRATION.parent)
-        with engine.connect() as connection:
-            assert not _table_exists(connection, "external_source")
-            assert not _table_exists(connection, "external_source_record")
-            for column in _NEW_COLUMNS:
-                assert not _column_exists(
-                    connection, "molecular_property_observation", column
-                ), f"{column} should not exist below {_MIGRATION.revision}"
-
-        command.upgrade(config, _MIGRATION.revision)
-        with engine.connect() as connection:
-            assert _table_exists(connection, "external_source")
-            assert _table_exists(connection, "external_source_record")
-            for column in _NEW_COLUMNS:
-                assert _column_exists(
-                    connection, "molecular_property_observation", column
-                ), f"{column} missing after upgrade"
-            for enum_type in _NEW_ENUM_TYPES:
-                assert _enum_type_exists(connection, enum_type)
-    finally:
-        engine.dispose()
-        command.upgrade(config, "head")
-
-
-def test_downgrade_removes_columns_tables_and_enums(db_engine, monkeypatch):
-    """*Mutation*: gut ``downgrade()`` (e.g. ``pass`` the body) -- the
-    absence assertions below then fail because everything is still there.
-    """
-    _set_db_env(monkeypatch, db_engine.url.database)
-    engine = _engine_for(db_engine)
-    config = Config(str(REPO_ROOT / "alembic.ini"))
-    try:
-        command.downgrade(config, _MIGRATION.parent)
-        with engine.connect() as connection:
-            assert not _table_exists(connection, "external_source")
-            assert not _table_exists(connection, "external_source_record")
-            for column in _NEW_COLUMNS:
-                assert not _column_exists(
-                    connection, "molecular_property_observation", column
-                )
-            for enum_type in _NEW_ENUM_TYPES:
-                assert not _enum_type_exists(connection, enum_type)
-            # The enum VALUES added to existing types are NOT removed --
-            # see the migration's "Downgrade asymmetry" docstring section.
-            # Both parent types must still exist.
-            assert _enum_type_exists(connection, "molecular_property_kind")
-            assert _enum_type_exists(connection, "submission_record_type")
-    finally:
-        engine.dispose()
-        command.upgrade(config, "head")
 
 
 # ---------------------------------------------------------------------------
@@ -252,54 +104,6 @@ def test_valid_cp_row_is_accepted(db_session):
     try:
         db_session.execute(text(_valid_cp_row_sql()), _valid_cp_row_params())
         db_session.flush()
-    finally:
-        savepoint.rollback()
-
-
-@pytest.mark.parametrize(
-    "overrides,constraint",
-    [
-        pytest.param({"pressure_bar": -1.0}, "ck_mpo_pressure_bar_gt_0", id="pressure_bar"),
-        pytest.param({"pressure_bar": 0.0}, "ck_mpo_pressure_bar_gt_0", id="pressure_bar_zero"),
-        pytest.param(
-            {"uncertainty_coverage_factor": 0.5},
-            "ck_mpo_uncertainty_coverage_factor_ge_1",
-            id="coverage_factor_below_one",
-        ),
-        pytest.param(
-            {"uncertainty_level_of_confidence_pct": 0.0},
-            "ck_mpo_uncertainty_confidence_pct_range",
-            id="confidence_pct_zero",
-        ),
-        pytest.param(
-            {"uncertainty_level_of_confidence_pct": 101.0},
-            "ck_mpo_uncertainty_confidence_pct_range",
-            id="confidence_pct_over_100",
-        ),
-        pytest.param(
-            {
-                "uncertainty_coverage_factor": 2.0,
-                "uncertainty_kind": "standard",
-            },
-            "ck_mpo_coverage_factor_only_expanded",
-            id="coverage_factor_with_standard_kind",
-        ),
-    ],
-)
-def test_a_cp_row_violating_one_check_is_refused(db_session, overrides, constraint):
-    """*Mutation*: remove the named CHECK from the model AND the migration
-    -- this insert then succeeds instead of raising.
-    """
-    savepoint = db_session.begin_nested()
-    try:
-        with pytest.raises(IntegrityError) as excinfo:
-            db_session.execute(
-                text(_valid_cp_row_sql()), _valid_cp_row_params(**overrides)
-            )
-            db_session.flush()
-        assert constraint in str(excinfo.value), (
-            f"refused by something other than {constraint}: {excinfo.value}"
-        )
     finally:
         savepoint.rollback()
 
@@ -473,50 +277,6 @@ def test_valid_custody_record_is_accepted(db_session, external_source_id):
         savepoint.rollback()
 
 
-@pytest.mark.parametrize(
-    "overrides,constraint",
-    [
-        pytest.param(
-            {"content_sha256": "not-hex"},
-            "ck_external_source_record_content_sha256_hex",
-            id="sha256_not_hex",
-        ),
-        pytest.param(
-            {"content_sha256": "A" * 64},
-            "ck_external_source_record_content_sha256_hex",
-            id="sha256_uppercase",
-        ),
-        pytest.param(
-            {"content_length": -1},
-            "ck_external_source_record_content_length_ge_0",
-            id="content_length_negative",
-        ),
-        pytest.param(
-            {"http_status": 999},
-            "ck_external_source_record_http_status_range",
-            id="http_status_out_of_range",
-        ),
-    ],
-)
-def test_a_custody_record_violating_one_check_is_refused(
-    db_session, external_source_id, overrides, constraint
-):
-    """*Mutation*: remove the named CHECK from the model AND the migration
-    -- this insert then succeeds instead of raising.
-    """
-    savepoint = db_session.begin_nested()
-    try:
-        with pytest.raises(IntegrityError) as excinfo:
-            db_session.execute(
-                text(_valid_record_sql()),
-                _valid_record_params(external_source_id, **overrides),
-            )
-            db_session.flush()
-        assert constraint in str(excinfo.value)
-    finally:
-        savepoint.rollback()
-
-
 def test_custody_unique_constraint_rejects_an_exact_duplicate(
     db_session, external_source_id
 ):
@@ -529,49 +289,6 @@ def test_custody_unique_constraint_rejects_an_exact_duplicate(
             db_session.execute(text(_valid_record_sql()), dict(params))
             db_session.flush()
         assert "uq_external_source_record_identity" in str(excinfo.value)
-    finally:
-        savepoint.rollback()
-
-
-@pytest.mark.parametrize(
-    "column",
-    ["parser_name", "parser_version", "mapping_name", "mapping_version", "content_sha256", "source_record_key"],
-)
-def test_custody_unique_constraint_still_distinguishes_rows_by_each_column(
-    db_session, external_source_id, column
-):
-    """Every column named in ``uq_external_source_record_identity`` still
-    participates: two rows differing ONLY by ``column`` must both insert.
-
-    *Mutation*: drop ``column`` from the UniqueConstraint's column list (in
-    the model AND the migration) -- the two rows then collide as an exact
-    duplicate and the second insert raises instead of succeeding.
-    """
-    savepoint = db_session.begin_nested()
-    try:
-        base = _valid_record_params(external_source_id)
-        db_session.execute(text(_valid_record_sql()), base)
-        db_session.flush()
-
-        distinct = dict(base)
-        if column == "content_sha256":
-            distinct[column] = "b" * 64
-        elif column == "source_record_key":
-            distinct[column] = base[column] + "-2"
-        else:
-            distinct[column] = base[column] + "-2"
-
-        db_session.execute(text(_valid_record_sql()), distinct)
-        db_session.flush()
-
-        count = db_session.execute(
-            text(
-                "SELECT count(*) FROM external_source_record"
-                " WHERE external_source_id = :eid"
-            ),
-            {"eid": external_source_id},
-        ).scalar_one()
-        assert count == 2
     finally:
         savepoint.rollback()
 

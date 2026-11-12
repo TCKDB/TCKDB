@@ -1,20 +1,10 @@
 """Evidence tables are frozen by the acceptance of the root that owns them.
 
-``a1f6c3e9b527`` brings five tables under ``c6f2a9d4e7b1``'s accepted-science
-regime: the IRC evidence backing a saddle point's claim, the barriers and state
+Five tables are under the accepted-science regime: the IRC evidence backing a saddle point's claim, the barriers and state
 energies a network solve ran with, and the interpretation and tunneling rows a
-rate constant was computed under. Each carried an ownership foreign key to an
-accepted-science root and no ``trg_as_*`` guard, so each could be rewritten in
-place under an accepted record with no supersession edge and no review event.
-
-Why this file exists beside ``test_accepted_science_trigger_registry.py``
-------------------------------------------------------------------------
-That test derives its expected trigger set from the same revision registries it
-compares against ``pg_trigger``. It therefore catches a trigger present in the
-database but undeclared, and one declared but not created -- but a guard
-deleted from *both* the registry and the DDL leaves it green, because the
-expectation shrinks with the reality. Only a test that writes a row and demands
-a refusal can catch that, which is what every test below does.
+rate constant was computed under. Each has an ownership foreign key to an accepted-science root, so none can be rewritten in place under an accepted
+record with no supersession edge and no review event. Only a test that writes a row and demands a refusal catches a
+missing guard, which is what every test below does.
 
 The tests pin both halves of the rule for every table, because a guard that is
 present but never fires is the failure mode that matters:
@@ -26,7 +16,7 @@ present but never fires is the failure mode that matters:
 None of these five tables has children of its own, so unlike
 ``test_atom_map_immutability`` there is no cascade that could let a child's
 guard absorb a refusal the parent's guard was supposed to make. Each refusal
-below is attributable to the trigger the revision put on that table: removing
+below is attributable to the trigger on that table: removing
 that one trigger, and only that one, turns the corresponding test red.
 """
 
@@ -79,7 +69,7 @@ from tests.services.scientific_read._factories import (
 )
 
 #: Every table below is guarded against this record type via the column named
-#: beside it in ``a1f6c3e9b527._DIRECT_CHILDREN``.
+#: beside it in the accepted-science guard registry.
 _ROOTS = (
     SubmissionRecordType.transition_state_entry,
     SubmissionRecordType.network_solve,
@@ -158,8 +148,7 @@ def _ts_evidence(session, tag: str):
 def test_irc_evidence_of_approved_transition_state_entry_is_frozen(db_session) -> None:
     """The evidence backing the claim is now as immutable as the atom map.
 
-    ``b6c1f4a8e703`` froze ``reaction_atom_map`` under this same root while
-    leaving this table writable, so the agreement
+    ``reaction_atom_map`` is frozen under this same root, so the agreement
     ``validate_atom_map_agrees_with_irc_evidence`` establishes at deposit could
     afterwards be falsified by rewriting whichever half was still mutable.
     """
@@ -590,10 +579,8 @@ def test_truncate_cannot_bypass_the_evidence_guards(db_session, table: str) -> N
 def test_every_guarded_table_refuses_a_write_under_an_approved_root(db_session) -> None:
     """One assertion that names all five tables, so none can be dropped quietly.
 
-    The registry parity test compares ``pg_trigger`` against the revision's own
-    registry, so deleting a table from both leaves it green. This list is
-    written out by hand for exactly that reason: it is the copy of the intent
-    that does not shrink when the registry does.
+    This list is written out by hand so that a table cannot be dropped from
+    the guards unnoticed.
     """
 
     guarded = {

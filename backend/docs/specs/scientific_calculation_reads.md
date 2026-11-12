@@ -379,7 +379,7 @@ therefore carries all of it:
 | `n_imag`, `imag_freq_cm1` | What the ESS printed. `n_imag` alone is **not** a safe filter: two correct calculations of the same saddle point can report 1 and 3. |
 | `reaction_coordinate_mode_index` | The `mode_index` the depositor designated the reaction coordinate. ADR 0012 makes designating exactly one mode the contract that replaced the `n_imag == 1` gate. |
 | `imaginary_mode_tau_cm1` | The tolerance actually applied, in cm⁻¹. |
-| `imaginary_mode_tau_basis` | Which row of ADR 0012's protocol table chose it. Typed `str`, **not** an enum, so a value a newer writer produced is displayed rather than made to refuse the record; the vocabulary is closed at the database instead (`ck_calc_freq_result_imaginary_mode_tau_basis_known`, revision `e2a7c9d4b615`). |
+| `imaginary_mode_tau_basis` | Which row of ADR 0012's protocol table chose it. Typed `str`, **not** an enum, so a value a newer writer produced is displayed rather than made to refuse the record; the vocabulary is closed at the database instead (`ck_calc_freq_result_imaginary_mode_tau_basis_known`). |
 | `imaginary_mode_structural_flag` | ADR 0012's structural exclusion signal: an imaginary mode at or above τ beyond the designated reaction coordinate. **This is the field that makes an `n_imag == 1` filter safe**, which is why it is on the cheap projection rather than behind an include — a flag a consumer must know to ask for does not protect the consumer who did not know. |
 | `n_imag_at_or_above_tau` | How many stored imaginary modes have `\|ω\| >= τ`, counting the reaction coordinate. The same bare comparison `tau_context.modes[].at_or_above_tau` reports per mode. |
 

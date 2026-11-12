@@ -154,10 +154,9 @@ def resolve_or_create_scheme(
 ) -> EnergyCorrectionScheme:
     """Resolve or create an energy correction scheme.
 
-    Dedup key, in two forms selected by ``ref.data_revision`` (migration
-    ``f2c8a5d1e9b7``), each also carrying ``frequency_level_of_theory_id``
-    (migration ``c5e1a8d3f6b9``; NULL is a value, matched with ``IS NULL``, so
-    a deposit with no frequency level behaves exactly as before the column):
+    Dedup key, in two forms selected by ``ref.data_revision``, each also carrying ``frequency_level_of_theory_id``
+    (NULL is a value, matched with ``IS NULL``, so
+    a deposit with no frequency level matches only a row with none):
 
     * **No data revision**: ``(kind, name, level_of_theory_id,
       source_literature_id, software_release_id, workflow_tool_release_id)``
@@ -247,8 +246,7 @@ def resolve_or_create_scheme(
         return col == val if val is not None else col.is_(None)
 
     # Neither `version` (dropped) nor `units` is matched on: this chain must
-    # mirror the two identity indexes exactly (a7d4e2b9c351, f2c8a5d1e9b7,
-    # c5e1a8d3f6b9),
+    # mirror the two identity indexes exactly,
     # or the indexes and the resolver disagree about what a duplicate is. A
     # deposit in a second unit is meant to land on the existing row; the
     # parameter comparison converts before it compares.
@@ -363,8 +361,8 @@ def _assert_param_value_compatible(
     depositor re-sending the same library in kcal/mol was told its
     numbers conflicted (``existing=-0.42, supplied=-0.00067``) when they
     are the same physical value, and told to "use a distinct identity",
-    which was not something they could do. ``a7d4e2b9c351`` removed
-    ``units`` from the identity precisely so that deposit lands here, on
+    which was not something they could do. ``units`` is not part of
+    the identity precisely so that deposit lands here, on
     the existing row -- which makes converting here the thing that has to
     work.
 

@@ -95,8 +95,7 @@ def committed_scratch(db_engine):
     ``tests/conftest.py`` fails any test that leaves rows behind.
 
     ``record_review_event`` is append-only at the database level
-    (``trg_append_only_record_review_event`` calling ``tckdb_reject_mutation``;
-    see ``alembic/versions/c6f2a9d4e7b1_...``), so its rows cannot be deleted
+    (``trg_append_only_record_review_event`` calling ``tckdb_reject_mutation``), so its rows cannot be deleted
     through the normal path. ``session_replication_role = replica`` suppresses
     user triggers for this transaction only — the same narrowly scoped
     test-only escape hatch already used by

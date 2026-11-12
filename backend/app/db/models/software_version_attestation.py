@@ -20,7 +20,7 @@ attestation is a historical fact; a wrong one is answered by a new
 attestation and a new re-point, never by editing the old row. Inserts are
 validated by ``trg_sva_validate`` / ``trg_sva_calculation_validate`` against
 facts that never change afterwards, so an archive restore replays them
-cleanly (see revision ``86ffcd9d3c65``).
+cleanly.
 
 Written only by ``scripts/ops/fill_software_release_version.py``
 ``--attest-version`` (``app/services/software_release_version_fill.py``).

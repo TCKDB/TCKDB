@@ -905,7 +905,7 @@ def test_a_stored_symbol_that_is_not_canonical_cannot_exist(
 
     This test used to assert the opposite conclusion from the same setup, and
     it was right to. ``parse_xyz`` canonicalised the element on the way into
-    ``geometry_atom`` and ``b4e7c1d20f83`` brought the older rows into line,
+    ``geometry_atom``,
     but no CHECK required the column to be canonical, so a restore from an
     older backup, a bulk import, or any write path that skipped ``parse_xyz``
     could leave ``CL`` in the table. The service's element-conservation check
@@ -915,7 +915,7 @@ def test_a_stored_symbol_that_is_not_canonical_cannot_exist(
     letter, which ADR 0008 puts out of bounds. So the comparison normalised
     both sides, and this test proved it had to.
 
-    ``ck_geometry_atom_element_canonical`` (``c5a1f8e3d074``) removes the
+    ``ck_geometry_atom_element_canonical`` removes the
     premise rather than the concern. The row this test used to write can no
     longer exist on **any** path — a CHECK, unlike a foreign key or a trigger,
     is not suspended by ``session_replication_role = replica``, which is the
