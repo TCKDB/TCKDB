@@ -1,7 +1,7 @@
 """Mapping-rule behavior: uncertainty precedence, origin classification,
 unit token, record-key uniqueness, and the Gas/Ideal-gas pressure rule.
 
-Mutation checks (verified manually; see the PR body's mutation table):
+Mutation checks (verified manually):
 
 * ``test_uncertainty_precedence_prefers_combined_expanded`` /
   ``test_uncertainty_precedence_order_with_all_four_kinds_present``:
@@ -216,7 +216,7 @@ def test_every_payload_validates_against_the_wire_schema():
 
 
 # ---------------------------------------------------------------------------
-# Finding 1 (BLOCKING): RegNum/nOrgNum Component/Compound keying
+# RegNum/nOrgNum Component/Compound keying
 # ---------------------------------------------------------------------------
 
 
@@ -242,7 +242,7 @@ def test_ncompindex_keyed_fixture_still_resolves():
 
 
 # ---------------------------------------------------------------------------
-# Finding 2: phase resolution (PropPhaseID over block PhaseID; ambiguous
+# Phase resolution (PropPhaseID over block PhaseID; ambiguous
 # multi-phase blocks rejected, not guessed)
 # ---------------------------------------------------------------------------
 
@@ -259,7 +259,7 @@ def test_ambiguous_block_phase_with_no_prop_phase_is_unsupported():
 
 
 # ---------------------------------------------------------------------------
-# Finding 3: eStandardState present and not "Pure compound" is rejected
+# eStandardState present and not "Pure compound" is rejected
 # ---------------------------------------------------------------------------
 
 
@@ -273,7 +273,7 @@ def test_unsupported_standard_state_is_rejected():
 
 
 # ---------------------------------------------------------------------------
-# Finding 4: a per-value uncertainty entry with no value child rejects
+# A per-value uncertainty entry with no value child rejects
 # the row, never chooses kind=standard with scalar_uncertainty=None
 # ---------------------------------------------------------------------------
 
@@ -297,7 +297,7 @@ def test_empty_uncertainty_entry_rejects_the_row():
 
 
 # ---------------------------------------------------------------------------
-# Finding 5: observed-method-string allowlist (no keyword matching)
+# Observed-method-string allowlist (no keyword matching)
 # ---------------------------------------------------------------------------
 
 
@@ -388,7 +388,7 @@ def test_smethodname_near_miss_superstring_is_rejected_not_matched():
 
 
 # ---------------------------------------------------------------------------
-# Finding 6: mutation-survivor hardening
+# Mutation-survivor hardening
 # ---------------------------------------------------------------------------
 
 
@@ -497,7 +497,7 @@ def test_record_keys_are_unique_asserts_nonempty_first():
 
 
 # ---------------------------------------------------------------------------
-# Finding 7: exact kPa -> bar conversion
+# Exact kPa -> bar conversion
 # ---------------------------------------------------------------------------
 
 
@@ -558,7 +558,7 @@ def test_kpa_to_bar_is_exact_for_1020():
 
 
 # ---------------------------------------------------------------------------
-# Finding 8: per-row deterministic mapping rules
+# Per-row deterministic mapping rules
 # ---------------------------------------------------------------------------
 
 
@@ -647,7 +647,7 @@ def test_mapping_rules_reflect_only_that_rows_own_conditions():
 
 
 # ---------------------------------------------------------------------------
-# Finding 9: mapping report records the pressure source per property
+# Mapping report records the pressure source per property
 # ---------------------------------------------------------------------------
 
 
@@ -696,8 +696,8 @@ def test_identity_hint_uses_tckdb_key_names_and_keeps_thermoml_names():
 
 def test_report_identity_is_deduplicated_by_inchikey_across_tables():
     """Two Cp tables for one compound in one document yield ONE identity
-    entry. This is the line ``5f38ed46`` broke by missing a key rename; a
-    no-op on that line must turn this red."""
+    entry. A key rename missed on the dedup line breaks it; a no-op on that
+    line must turn this red."""
     fixture = (
         Path(__file__).resolve().parents[3]
         / "app" / "importers" / "thermoml" / "fixtures"

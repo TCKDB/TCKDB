@@ -1,6 +1,6 @@
-"""Counting atoms in an XYZ block raises no coded refusal, and the contract tracer can see that (#623).
+"""Counting atoms in an XYZ block raises no coded refusal, and the contract tracer can see that.
 
-``atom_count_of_xyz`` used to call ``parse_xyz_elements`` and swallow the
+``atom_count_of_xyz`` must not call ``parse_xyz_elements`` and swallow the
 ``atom_map_geometry_unparseable`` refusal it raises. The producer contract's
 tracer follows calls but cannot see a ``try``/``except``, so it listed that
 code against every surface whose rules merely count atoms, and a call from the

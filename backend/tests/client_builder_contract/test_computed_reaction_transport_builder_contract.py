@@ -1,4 +1,4 @@
-"""Contract test for the Phase-5 ``species_transport`` extension.
+"""Contract test for the ``species_transport`` extension.
 
 Same forward-compat contract as the computed-species side: the
 ``ComputedReactionUploadRequest`` schema has no transport field
@@ -14,7 +14,7 @@ import pytest
 
 from tests._ci_dependency import require_module
 
-# Skips locally without the client; fails on CI, which installs it (#575).
+# Skips locally without the client; fails on CI, which installs it.
 require_module("tckdb_client.builders", install="pip install -e clients/python")
 
 from tckdb_client.builders import (

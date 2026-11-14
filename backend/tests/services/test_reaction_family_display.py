@@ -137,7 +137,7 @@ HYPHEN_FAMILIES = {
 
 
 def test_the_six_hyphenated_families_are_the_whole_hyphen_surface():
-    """Measured over the real vocabulary, so the pinned six cannot go stale.
+    """Checked over the real vocabulary, so the pinned six cannot go stale.
 
     If a 126th family arrives with a hyphen in it, this fails and whoever
     added it has to say which reading its hyphen carries.
@@ -330,7 +330,7 @@ def test_unresolved_family_is_returned_verbatim(identifier):
 
 
 def test_exactly_these_canonical_families_are_shown_raw():
-    """Measured over the real vocabulary: six of 125, and no others."""
+    """Checked over the real vocabulary: six of 125, and no others."""
     raw = {
         name
         for name in CANONICAL_REACTION_FAMILIES

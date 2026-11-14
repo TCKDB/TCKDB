@@ -8,8 +8,8 @@ monkeypatch a setting (CORS origins, docs exposure, rate limiting, the body
 caps) *and then* build their own app. That per-test construction is a
 property worth keeping, and this module does not touch it.
 
-What it does touch is the price. Measured on the CI runner's own profile
-(``--junitxml`` of the three gates, 2026-10-24), an API test cost ~1.4 s on
+What it does touch is the price. On the CI runner's own profile
+(``--junitxml`` of the three gates), an API test cost ~1.4 s on
 average and ~1 s of that was ``create_app()``: ``include_router`` re-creates
 all ~280 ``APIRoute`` objects, and almost all of the time inside that is
 ``fastapi.dependencies.utils.get_dependant`` walking each endpoint's

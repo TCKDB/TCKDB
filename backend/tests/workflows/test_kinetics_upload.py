@@ -277,9 +277,9 @@ def test_computed_kinetics_round_trips_explicit_subject_assignments_and_wigner(
         invalid_payload = request.model_dump(mode="json")
         invalid_payload["interpretation_assignments"][1]["statmech_ref"] = reactant_sm.public_ref
         before = session.scalar(select(func.count(Kinetics.id)))
-        # #195: this was a bare ValueError matched on "must belong to its
-        # declared reaction participant", so it reached a client as
-        # validation_error. It now names the field it refused and carries
+        # A bare ValueError matched on "must belong to its
+        # declared reaction participant" would reach a client as
+        # validation_error. This names the field it refused and carries
         # a code, which is what a client can branch on.
         with pytest.raises(CodedValueError) as mismatched:
             persist_kinetics_upload(session, KineticsUploadRequest.model_validate(invalid_payload), created_by=77)
@@ -481,7 +481,7 @@ def test_persist_kinetics_upload_carries_multiplicative_uncertainty(
 
 
 # ---------------------------------------------------------------------------
-# DR-0032 Part A: tunneling enum + pressure context (k-infinity designation)
+# Tunneling enum + pressure context (k-infinity designation)
 # ---------------------------------------------------------------------------
 
 
@@ -532,7 +532,7 @@ def test_apparent_at_pressure_without_pressure_bar_rejected() -> None:
 
 
 # ---------------------------------------------------------------------------
-# DR-0032 Part B: falloff (Troe) + third-body efficiencies
+# Falloff (Troe) + third-body efficiencies
 # ---------------------------------------------------------------------------
 
 
@@ -591,7 +591,7 @@ def test_negative_third_body_efficiency_rejected() -> None:
 
 
 # ---------------------------------------------------------------------------
-# DR-0032 Part C: standalone PLOG / Chebyshev fits (no ME network)
+# Standalone PLOG / Chebyshev fits (no ME network)
 # ---------------------------------------------------------------------------
 
 
@@ -716,12 +716,12 @@ def test_persist_simple_third_body_flag(db_conn, monkeypatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# DR-0036: direction, sum-of-Arrhenius (multi_arrhenius), network bridge
+# Direction, sum-of-Arrhenius (multi_arrhenius), network bridge
 # ---------------------------------------------------------------------------
 
 
 def test_forward_and_reverse_kinetics_persist_distinctly(db_conn, monkeypatch):
-    """Forward and reverse fits persist with distinct direction (previously
+    """Forward and reverse fits persist with distinct direction (not
     indistinguishable). The single-reaction_entry coexistence case is covered
     at the read layer in test_get_reaction_kinetics."""
     from app.db.models.common import KineticsDirection
@@ -732,7 +732,7 @@ def test_forward_and_reverse_kinetics_persist_distinctly(db_conn, monkeypatch):
             session, _kinetics_request(direction="forward")
         )
         rev = persist_kinetics_upload(
-            # The fixture is 2H -> H2; its reverse rate is a rate of the single product, so first order (#695).
+            # The fixture is 2H -> H2; its reverse rate is a rate of the single product, so first order.
             session, _kinetics_request(direction="reverse", a_units="per_s")
         )
         assert fwd.id != rev.id
@@ -872,12 +872,11 @@ def test_network_bridge_resolves(db_conn, monkeypatch):
 def test_network_bridge_unknown_id_rejected(db_conn, monkeypatch):
     """A ref naming no row is a 404 with a code, not a bare ValueError.
 
-    Changed in #204: this used to match a substring of the message, which
-    is the assertion that survives any status and any code. It now asserts
+    A substring match on the message would be the assertion that
+    survives any status and any code. This asserts
     the ``code`` and the structured ``context`` a client actually branches
-    on. ``NotFoundError`` is not a ``ValueError``, so the old
-    ``pytest.raises(ValueError, ...)`` would have gone red rather than
-    silently passing -- which is how this one was found.
+    on. ``NotFoundError`` is not a ``ValueError``, so a
+    ``pytest.raises(ValueError, ...)`` goes red on it.
     """
     _patch_doi(monkeypatch)
     with Session(db_conn) as session, session.begin():
@@ -962,7 +961,7 @@ def test_plog_entry_wrong_order_units_rejected():
 # ``_validate_a_units_named`` prefixes the field path onto the check's own
 # sentence. ``CodedValidationError`` is a ``ValueError``, so re-raising a
 # plain ``ValueError`` to add that prefix destroyed the declared code at the
-# raise site -- upstream of every promotion rule #159/#161/#164 built. These
+# raise site -- upstream of every promotion rule. These
 # pin both halves of the repair: the code survives, and the sentence does not
 # move by a byte.
 
@@ -1105,13 +1104,13 @@ def test_the_second_code_the_wrapper_can_carry_also_survives():
 
 
 def test_the_field_path_is_not_itself_promotable_as_a_code():
-    """The #159 trap, checked rather than assumed.
+    """The promotion trap, checked rather than assumed.
 
     The repaired message still *starts* with a snake_case token followed by
     a colon -- ``a_units``, inside ``plog_entries[2].a_units`` -- which is
-    exactly the shape #159 narrowed promotion to. Promotion is gated on the
+    exactly the shape promotion is narrowed to. Promotion is gated on the
     catalogue, so a field path cannot be published as a code; if that gate
-    ever loosened, this fix would be the thing that fabricated one.
+    ever loosened, this rule would be the thing that fabricated one.
     """
     from app.api.error_contract import MESSAGE_PREFIX_CODES, validation_detail_code
 
@@ -1572,7 +1571,7 @@ def test_chebyshev_rejects_is_third_body() -> None:
 
 
 def test_plog_a_units_are_judged_at_the_true_molecularity() -> None:
-    """Both directions of the unit consequence the flag used to invert.
+    """Both directions of the unit consequence of the flag.
 
     ``is_third_body`` raised ``_main_line_molecularity`` by one, so for a
     bimolecular PLOG the CORRECT ``cm3_mol_s`` was rejected as if the rate
@@ -1582,8 +1581,8 @@ def test_plog_a_units_are_judged_at_the_true_molecularity() -> None:
     request = KineticsUploadRequest(**_plog_bimolecular())
     assert request.plog_entries[0].a_units.value == "cm3_mol_s"
 
-    # Third-order units on a bimolecular rate are rejected — previously they
-    # were accepted because the flag had inflated the expected order.
+    # Third-order units on a bimolecular rate are rejected — they would be
+    # accepted if the flag had inflated the expected order.
     with pytest.raises(ValidationError, match="incompatible with bimolecular"):
         KineticsUploadRequest(
             **_plog_bimolecular(

@@ -161,7 +161,7 @@ def unique_smiles(session: Session | None = None) -> str:
     with the same SMILES would be returned beside the species a test just made. Tests that search by the SMILES they
     generated pass their session.
 
-    Species identity is (smiles, charge, multiplicity) (DR-0031), so
+    Species identity is (smiles, charge, multiplicity), so
     fixtures that need several *distinct* species — or that run against the
     shared session-scoped DB where other tests committed common SMILES —
     must not reuse a literal like ``"CCO"``. Callers that assert on a
@@ -170,7 +170,7 @@ def unique_smiles(session: Session | None = None) -> str:
     global _SMILES_COUNTER
     while True:
         _SMILES_COUNTER += 1
-        # Canonical, as stored: a search flattens its query to the species key (DR-0038), so a spelling that is not
+        # Canonical, as stored: a search flattens its query to the species key, so a spelling that is not
         # already canonical (``C...C[Si]C...C`` with unequal arms) would never match the row made from it.
         from app.services.scientific_read.structure_query import constitution_smiles
 
@@ -269,7 +269,7 @@ def make_species_entry(
 
     from rdkit import Chem
 
-    # ``stereo_label`` is display text; the entry's key is ``stereo_descriptor`` (DR-0038), whose vocabulary is
+    # ``stereo_label`` is display text; the entry's key is ``stereo_descriptor``, whose vocabulary is
     # closed. A caller that passes a descriptor-shaped label means that configuration. A caller that passes free text
     # only wants two entries of one species to be different rows, so it is carried on ``term_symbol``, a key column
     # with no vocabulary, and kept as the label too.
@@ -394,7 +394,7 @@ def make_lot(
     The ``lot_hash`` column is uniquely constrained; repeated calls with
     the same (method, basis, spin_treatment) reuse the existing row so
     factory callers don't trip the constraint when they don't care which
-    LOT they get. ``spin_treatment`` is folded into the hash (DR-0034):
+    LOT they get. ``spin_treatment`` is folded into the hash:
     this is what lets a caller build the "two LOTs share method/basis,
     differ only in spin_treatment" fixture the join-on-FK-not-text
     invariant is tested against.
@@ -700,7 +700,7 @@ def attach_kinetics_plog_entry(
     n: float | None = None,
     ea_kj_mol: float | None = None,
 ):
-    """Attach one PLOG pressure entry to a kinetics row (DR-0038 Part C)."""
+    """Attach one PLOG pressure entry to a kinetics row."""
     from app.db.models.kinetics import KineticsPlog
 
     row = KineticsPlog(
@@ -729,7 +729,7 @@ def attach_kinetics_chebyshev(
     pmin_bar: float | None = None,
     pmax_bar: float | None = None,
 ):
-    """Attach a Chebyshev k(T,P) surface to a kinetics row (DR-0038 Part C)."""
+    """Attach a Chebyshev k(T,P) surface to a kinetics row."""
     from app.db.models.kinetics import KineticsChebyshev
 
     row = KineticsChebyshev(
@@ -826,7 +826,7 @@ def make_thermo_scalar(
 
     ``software_release_id`` / ``workflow_tool_release_id`` are the thermo's
     OWN provenance FKs (e.g. Arkane / ARC) — distinct from any software on
-    a source calculation. See ``ThermoProvenance`` (issue #284).
+    a source calculation. See ``ThermoProvenance``.
     """
     t = Thermo(
         enthalpy_reference_kind=EnthalpyReferenceKind.formation_298k,
@@ -1014,7 +1014,7 @@ def attach_thermo_points(
 
 
 # ---------------------------------------------------------------------------
-# Phase 7 helpers: calc results, conformer, artifacts, dependencies, geometry
+# Helpers: calc results, conformer, artifacts, dependencies, geometry
 # ---------------------------------------------------------------------------
 
 
@@ -1160,7 +1160,7 @@ def attach_freq_result(
     ``NULL``. A disposition on a non-imaginary mode is refused by a CHECK
     constraint, so only supply one where the frequency is negative.
 
-    ADR 0012's persisted judgement -- ``reaction_coordinate_mode_index``,
+    The persisted imaginary-mode judgement -- ``reaction_coordinate_mode_index``,
     ``imaginary_mode_tau_cm1``, ``imaginary_mode_tau_basis`` and
     ``imaginary_mode_structural_flag`` -- defaults to NULL, matching a
     record deposited before that decision shipped. Tests that exercise
@@ -1221,7 +1221,7 @@ def attach_hessian(
 
     The default lower triangle is all zeros, which is the right shape and
     no physics -- fine for tests that only assert the row's presence.
-    Anything that reads the *numbers* (the ADR 0012 imaginary-mode
+    Anything that reads the *numbers* (the imaginary-mode
     projections do) must pass a real matrix through ``lower_triangle``,
     because a zero Hessian has no normal modes to recover.
     """
@@ -1811,7 +1811,7 @@ def make_network_channel(
 
     ``kind`` is derived from the two states (``derive_channel_kind``), as the upload path does. A fixture
     may still name it, but it must agree with the states: a disagreeing kind is the one thing the
-    schema no longer lets anyone store, so the factory refuses it too.
+    schema does not let anyone store, so the factory refuses it too.
 
     ``channel_key`` is NOT NULL in the schema — it is the producer-visible
     identity that lets parallel mechanistic paths share endpoints — so a
@@ -2095,8 +2095,8 @@ def make_software_release(
     - ``SoftwareRelease`` is uniquely keyed by
       ``(software_id, version, revision, build)`` (``NULLS NOT DISTINCT``);
       repeated calls with the same tuple reuse the existing release. Two
-      default-named calls in one test used to raise ``IntegrityError`` on
-      the ``Software.name`` constraint before this was get-or-create.
+      default-named calls in one test do not raise ``IntegrityError`` on
+      the ``Software.name`` constraint, because this is get-or-create.
 
     Callers that want a fresh distinct release should pass a different
     ``name``, ``version``, ``revision``, or ``build``.
@@ -2199,8 +2199,8 @@ def make_frequency_scale_factor(
     factory bumps ``value`` per call by default so successive calls
     with identical other-keys still insert successfully.
 
-    ``software_release`` (not ``software``) since correction-scheme-
-    provenance plan v2 §6: the column is ``software_release_id``, keyed
+    ``software_release`` (not ``software``):
+    the column is ``software_release_id``, keyed
     on the release the same way ``EnergyCorrectionScheme`` is (and the
     same way ``make_energy_correction_scheme`` below takes
     ``software_release``, not ``software``). Build one with
@@ -2244,8 +2244,8 @@ def make_energy_correction_scheme(
 ) -> EnergyCorrectionScheme:
     """Create an EnergyCorrectionScheme row.
 
-    ``software_release`` (not ``software``) since correction-scheme-
-    provenance plan v2: the column is ``software_release_id``, keyed on
+    ``software_release`` (not ``software``):
+    the column is ``software_release_id``, keyed on
     the release the same way every other provenance-bearing table in
     this schema is (plan §2.2/§3). Build one with
     ``make_software_release`` (e.g. ``make_software_release(session,

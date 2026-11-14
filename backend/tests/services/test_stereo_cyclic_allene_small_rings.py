@@ -1,14 +1,14 @@
-"""Cyclic allenes in rings of 6, 7 and 8 read Ra/Sa from geometry like any other allene (#832, part 1).
+"""Cyclic allenes in rings of 6, 7 and 8 read Ra/Sa from geometry like any other allene.
 
-These rings used to be stated ``?`` whatever the geometry, because force-field embeddings of them are
-near-planar and no QM geometry was available to check the reader against. Fixtures are now GFN2-xTB optimised
+These rings are read from geometry, not stated ``?``: force-field embeddings of them are
+near-planar, so the fixtures are GFN2-xTB optimised
 minima (``tests/fixtures/cyclic_allene_xtb``; the header line of each file gives the method, the allene torsion,
 the expected label and how that label was derived). Each ring has both enantiomers: ``_a`` is optimised from an
 ETKDG/MMFF start and ``_b`` from the mirror image of that start, so ``_b`` is the mirror image of ``_a`` to 6e-5
 angstrom (xtb is deterministic; a test pins it). The reader is also run on the exact mirror image of each.
 
-Hand Newman rule used for every expected label (a script written without ``app.chemistry.stereo``, and again by
-the reviewer in numpy without RDKit): bonds from the SMILES connectivity; on each allene end the CIP-higher
+Hand Newman rule used for every expected label (a script written without ``app.chemistry.stereo``, and again
+in numpy without RDKit): bonds from the SMILES connectivity; on each allene end the CIP-higher
 substituent is the one of higher atomic number (decisive in every fixture: ring C over H, or O over ring C); look
 along the axis from the first end with that end in front; the allene is P (= ``Sa``) when the front substituent
 turns clockwise to the rear one by less than 180 degrees, otherwise M (= ``Ra``). Positive torsion is P.
@@ -210,7 +210,7 @@ def test_resolving_a_qm_geometry_gives_a_resolved_entry_descriptor(fixture, name
 
 
 # ---------------------------------------------------------------------------
-# Rings of five or fewer stay unrepresented; review round 2
+# Rings of five or fewer stay unrepresented
 # ---------------------------------------------------------------------------
 
 FORCE_FIELD = Path(__file__).resolve().parents[1] / "fixtures" / "cyclic_allene_force_field"

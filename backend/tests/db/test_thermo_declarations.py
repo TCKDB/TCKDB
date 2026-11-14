@@ -150,7 +150,7 @@ def test_an_unapproved_row_may_still_be_edited(db_session):
 
 
 def test_a_declared_row_changes_the_reproducibility_snapshot_but_not_the_consistency_context(db_session):
-    """Hash precedent (#619/#633): no consistency check reads a declaration, so it stays out of that
+    """Hash precedent: no consistency check reads a declaration, so it stays out of that
     context; the reproducibility snapshot is the digest a declaration is part of."""
     entry = _entry(db_session, "THMDECLHASH")
     thermo_id = _legacy_thermo(db_session, entry.id)

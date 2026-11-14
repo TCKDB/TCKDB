@@ -1,11 +1,11 @@
-"""``level_of_theory.core_treatment`` joins the identity hash only when stated (ADR 0021, P4).
+"""``level_of_theory.core_treatment`` joins the identity hash only when stated.
 
 Frozen-core and all-electron CCSD(T)/cc-pCVTZ are different levels of theory
-(their difference is the core-valence term of a focal-point scheme), and until
-this field existed they collapsed to one row. The field is hashed **only when it is set**, so a
+(their difference is the core-valence term of a focal-point scheme), and
+without this field they collapse to one row. The field is hashed **only when it is set**, so a
 level that does not state it keeps the hash it has without the field: the field itself
-adds no key and re-keys no row. (Stage 2, the keywords decision, did change every hash by removing the ``keywords``
-key; that is separate from this field.)
+adds no key and re-keys no row. (The free-text ``keywords`` key is not in the payload; that is
+separate from this field.)
 
 What is held here:
 
@@ -40,9 +40,8 @@ from app.db.models.level_of_theory import LevelOfTheory
 from app.services.calculation_resolution import _level_of_theory_hash, resolve_level_of_theory_ref
 from app.services.scientific_read.lot_identity_filters import method_matches
 
-#: Levels that state no method qualifier, pinned as the application computes them after the keywords decision
-#: (Stage 2: the free-text ``keywords`` key left the payload, so every hash differs from the pre-Stage-2 one by
-#: design; the instance is reseeded, not re-keyed). A change to any of these from here on is a re-key of every
+#: Levels that state no method qualifier, pinned as the application computes them
+#: (the free-text ``keywords`` key is not in the payload). A change to any of these is a re-key of every
 #: level of theory that spelled itself this way: a migration, not a test edit.
 _NO_QUALIFIER_HASHES: list[tuple[dict, str]] = [
     ({"method": "wb97xd", "basis": "def2tzvp"}, "1ba2d643d5757c406f5c28afe2e5f6314ca850a02833b6fbeda4f3347c7baa0d"),
@@ -107,7 +106,7 @@ def test_frozen_core_all_electron_and_unstated_are_three_levels():
     frozen = _level_of_theory_hash(LevelOfTheoryRef(**base, core_treatment="frozen_core"))
     full = _level_of_theory_hash(LevelOfTheoryRef(**base, core_treatment="all_electron"))
     assert len({unstated, frozen, full}) == 3
-    # "Not stated" is not "frozen core by default": the unstated level is the pre-P4 one.
+    # "Not stated" is not "frozen core by default": the unstated level is the one without core treatment.
     assert unstated == _old_formula(LevelOfTheoryRef(**base))
 
 

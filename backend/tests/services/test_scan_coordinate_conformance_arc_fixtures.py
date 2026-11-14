@@ -1,4 +1,4 @@
-"""ADR 0020 conformance, measured over the real ARC fixture corpus.
+"""Scan-coordinate conformance over the real ARC fixture corpus.
 
 Every other test in ``test_scan_coordinate_conformance.py`` builds its own
 geometry from a NeRF placement. This file is the check the sign-bug review
@@ -15,12 +15,12 @@ carries at least one ``scan_result`` and asks a different question of the
 rows that land: does ``coordinate_value`` match the geometry it was
 deposited beside.
 
-Task #264: three of the scan-carrying originals
+Three of the scan-carrying originals
 (``rotor_scan_2``/``rotor_scan_3``/``rotor_scan_6``) also carry a
 transition-state ``bac_total`` correction of value ``0.0`` with no
-components, which the upload contract now refuses (422,
+components, which the upload contract refuses (422,
 ``bac_total_requires_components``) for reasons that have nothing to do
-with scan-coordinate conformance -- ADR 0020's subject. Uploading the
+with scan-coordinate conformance -- the subject of the conformance rule. Uploading the
 *originals* here would fail on that refusal before a single scan series
 was ever persisted, so this file uploads the derived, trimmed copies
 under each scenario's sibling ``tckdb_payloads_trimmed_264/`` directory
@@ -48,7 +48,7 @@ from app.services.scan_coordinate_conformance import (
 
 ARC_RUNS_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "arc_runs"
 
-#: Task #264. Real ARC payloads that carry a componentless, zero-valued
+#: Real ARC payloads that carry a componentless, zero-valued
 #: transition-state ``bac_total``, refused for reasons unrelated to
 #: scan-coordinate conformance -- see the module docstring. Keyed on
 #: ``(scenario, filename)`` since this file's ``case_id`` (below) omits
@@ -158,12 +158,12 @@ def test_adr_0020_conformance_over_the_real_arc_corpus(client) -> None:
 
     Uploads all 36 real ARC scan series through the actual upload path
     (the same endpoints ``test_api_arc_run_fixtures.py`` posts to), then
-    runs the ADR 0020 conformance check over every resulting scan
+    runs the conformance check over every resulting scan
     calculation and asserts the classification tally.
 
     With the ``dihedral_deg`` sign bug in place, none of these 36 series
     classified ``consistent_with_legacy_relative_axis`` -- the check could
-    not recognise ADR 0019's relative-sweep shape in real data at all,
+    not recognise the relative-sweep shape in real data at all,
     because the recomputed "expected" dihedral was the negative of the
     true one, so ``stored - expected`` was never close to a constant
     anywhere. With the sign fixed, 33 of the 36 series classified
@@ -231,7 +231,7 @@ def test_adr_0020_conformance_over_the_real_arc_corpus(client) -> None:
 
     # 34 of the 35 series that carry geometry are classified as the relative sweep. The 35th has a start_value of
     # 359.977 degrees (0.023 short of a full turn, a wrap coincidence), so its constant offset is +0.0229 degrees: below
-    # the 1 degree ceiling under which a constant is not named as a relative sweep (#835), so it is
+    # the 1 degree ceiling under which a constant is not named as a relative sweep, so it is
     # ``small_constant_offset``, which names no cause. It is
     # still reported as disagreeing (all 46 points deviate), and still earns the deposit warning.
     assert tally["consistent_with_legacy_relative_axis"] == 34, (

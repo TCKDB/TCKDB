@@ -272,7 +272,7 @@ def test_a_hidden_ref_used_as_a_dict_key_fails_closed(monkeypatch):
     with pytest.raises(ref_guard.RefGuardUnplaceable) as caught:
         run(payload)
     assert "dict key" in caught.value.field_path
-    assert HIDDEN_CALC in payload.extra.blob  # nothing was changed on the way to failing
+    assert HIDDEN_CALC in payload.extra.blob  # nothing is changed on the way to failing
 
 
 def test_a_visible_dict_key_is_left_alone_and_a_hidden_one_inside_a_pointer_goes_with_it(monkeypatch):
@@ -320,7 +320,7 @@ def test_the_hook_does_not_exempt_by_a_shared_string_prefix(hook_env):
 
 
 def test_a_required_field_with_no_pointer_is_unplaceable_and_says_where(monkeypatch):
-    """Kills: writing None into a required field, or silently emitting the ref (fail closed, owner decision D4)."""
+    """Kills: writing None into a required field, or silently emitting the ref (fail closed)."""
     hide(monkeypatch, HIDDEN_TSE)
     payload = RequiredEnvelope(block=RequiredHolder(owner_ref=HIDDEN_TSE))
     with pytest.raises(ref_guard.RefGuardUnplaceable) as caught:
@@ -328,7 +328,7 @@ def test_a_required_field_with_no_pointer_is_unplaceable_and_says_where(monkeypa
     assert caught.value.model_name == "RequiredHolder"
     assert caught.value.field_path == "block.owner_ref"
     assert caught.value.ref_prefix == "tse"
-    assert payload.block.owner_ref == HIDDEN_TSE  # nothing was changed on the way to failing
+    assert payload.block.owner_ref == HIDDEN_TSE  # nothing is changed on the way to failing
 
 
 class SubjectRow(BaseModel):
@@ -353,7 +353,7 @@ def test_the_subject_of_a_response_is_never_deleted_as_a_pointer(monkeypatch):
 
     A row of ``records`` below the record floor means a service forgot its population filter, and the guard fails loud
     whether or not the evidence rule would withhold the ref. The ``record`` of a detail read is judged by the withheld set
-    instead (ADR 0023 step 7): a withheld one fails loud, one that is merely below the floor is the served answer.
+    instead: a withheld one fails loud, one that is merely below the floor is the served answer.
     """
     monkeypatch.setattr(ref_guard, "POINTER_MODELS", frozenset({SubjectRow}))
     monkeypatch.setattr(ref_guard, "SUBJECT_IDENTITY", {"SubjectRow": ("calculation_ref",)})
@@ -450,8 +450,8 @@ def test_a_subject_whose_identity_is_one_level_down_is_checked_there_and_only_th
 
 
 def test_a_nested_ref_below_the_floor_but_not_withheld_is_kept_with_its_subject(monkeypatch):
-    """Kills: the old rule, where a nested pointer to an unlisted (not-reviewed / under-review) record was blanked. It is
-    linked evidence now (ADR 0023) and only a rejected or deprecated record goes."""
+    """Kills: a rule that blanks a nested pointer to an unlisted (not-reviewed / under-review) record. It is
+    linked evidence and only a rejected or deprecated record goes."""
     monkeypatch.setattr(ref_guard, "POINTER_MODELS", frozenset({Ptr}))
     hide(monkeypatch, OTHER_HIDDEN_CALC)  # the evidence set: rejected / deprecated only
     below_floor(monkeypatch, HIDDEN_CALC, OTHER_HIDDEN_CALC)
@@ -603,7 +603,7 @@ def test_the_hook_stands_down(hook_env, profile, route_path):
 
 
 def test_an_unplaceable_ref_in_the_hook_propagates(hook_env, monkeypatch):
-    """Kills: swallowing RefGuardUnplaceable in the hook (it must fail the request, owner decision D4)."""
+    """Kills: swallowing RefGuardUnplaceable in the hook (it must fail the request)."""
     publish, _ = hook_env
 
     def boom(session, payload, *, profile, apply=True):
@@ -631,8 +631,8 @@ def test_apply_internal_ids_visibility_calls_the_hook(monkeypatch):
 
 
 def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
-    """Kills: dropping a pointer class from the registry (m7). The per-surface hides of #764/#765/#767 are the
-    behaviour the guard replaces in the last PR, so the classes they hide whole must be registered."""
+    """Kills: dropping a pointer class from the registry (m7). The per-surface hides are the
+    behaviour the guard replaces, so the classes they hide whole must be registered."""
     assert {m.__name__ for m in REAL_POINTER_MODELS} == {
         "StatmechSourceCalculationSummary",
         "StatmechCurvatureWitness",
@@ -641,7 +641,6 @@ def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
         "TransitionStateStatmechSourceCalculation",
         "CalculationEvidenceSummary",
         "RoleCalculationSettings",
-        # PR-2a
         "CalculationCompositeInputSummary",
         "CalculationConformerSummary",
         "CalculationDependencySummary",
@@ -660,7 +659,6 @@ def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
         "SupersessionNotice",
         "TransitionStateEntryOwnerSummary",
         "TransportSourceCalculationSummary",
-        # PR-2b
         "TransitionStateCoreBlock",
         "TransitionStateCalculationSummary",
         "TransitionStateEntryStatmech",
@@ -686,9 +684,7 @@ def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
         "ValidationSummary",
         "SCFStabilitySummary",
         "StoredKineticsProtocolCalculationRef",
-        # #723
         "TransitionStateScopedAssessmentUnit",
-        # PR-2c
         "NetworkContextSummary",
         "NetworkKineticsNetworkContext",
         "NetworkSolveSummary",

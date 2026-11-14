@@ -2,7 +2,7 @@
 
 These tests lock in the two backend conventions that govern how new model
 modules and upload-fragment schemas present themselves. They exist to stop
-convention drift (the kind that led to the 2026-04-22 audit's "orphan schema"
+convention drift (the kind that leads to an "orphan schema"
 and "empty ``app/db/__init__.py``" findings) from silently returning.
 """
 

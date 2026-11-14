@@ -3,7 +3,7 @@
 Runs against the pytest transaction (the ``_SessionProxy`` device from
 ``test_backfill_assumed_tau.py``), so every delete rolls back with the test.
 
-The seed mirrors the deployed playground on 2026-09-27 with one deliberate
+The seed mirrors a deployed database with one deliberate
 twist the brief did not know about: the Arkane release has zero
 calculations but *is* cited by a thermo row -- the analysis-software shape
 the ARC adapter deposits. A tool that only looked at

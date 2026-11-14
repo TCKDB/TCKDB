@@ -587,8 +587,8 @@ def test_ts_calc_with_spin_diagnostic_persists(db_conn) -> None:
 
     Proves the shared ``CalculationIn`` change (adding the diagnostic field
     plus adapter forwarding) reaches ``persist_calculation_result`` through
-    the computed_reaction route — the field is no longer dropped by
-    ``extra='forbid'`` and is no longer silently ignored by the adapter."""
+    the computed_reaction route — the field is not dropped by
+    ``extra='forbid'`` and is not silently ignored by the adapter."""
     with _isolated_session(db_conn) as session:
         session.add(AppUser(id=591, username="computed_rxn_ts_spin"))
         session.flush()
@@ -911,7 +911,7 @@ def test_artifact_persists_and_links_to_calculation(db_conn, monkeypatch) -> Non
 
 
 def test_inline_output_log_fills_a_version_less_release(db_conn, monkeypatch) -> None:
-    """Issue #305 decision (c) on the reaction bundle path: a calculation
+    """On the reaction bundle path: a calculation
     declared as "ORCA, no version" whose inline output log's banner states
     ORCA 5.0.4 is re-pointed at the ORCA 5.0.4 release."""
     from pathlib import Path
@@ -1102,7 +1102,7 @@ def test_statmech_optical_isomers_defaults_null_when_omitted(db_conn) -> None:
 
 def test_reaction_participant_thermo_links_to_own_statmech(db_conn) -> None:
     """Each participant's COMPUTED thermo must link to that same participant's
-    statmech (audit finding #3) — never a sibling's. Two participants (ch3,
+    statmech  — never a sibling's. Two participants (ch3,
     ch4) each carry thermo + statmech; the third (h) carries thermo only and
     must keep ``statmech_id`` NULL.
     """
@@ -1276,18 +1276,16 @@ def test_statmech_source_calculation_referencing_ts_calc_is_coded(
 ) -> None:
     """A species statmech referencing a TS-owned calc rejects 422.
 
-    Used to assert the substring "owned by a transition state", produced
-    by an inline comparison that raised a bare ``ValueError``. #195 routed
-    this site through the shared ownership guard, so the refusal now
-    carries ``statmech_source_calculation_owner_mismatch`` -- the same
-    code the other three statmech write paths already reported -- and the
-    sentence no longer names what the calculation *was* owned by, only
-    that it was not owned by this species entry.
+    Asserts the code, not a substring such as "owned by a transition state" that
+    an inline comparison raising a bare ``ValueError`` would produce. Routing
+    this site through the shared ownership guard makes the refusal
+    carry ``statmech_source_calculation_owner_mismatch`` -- the same
+    code the other three statmech write paths report -- and the
+    sentence does not name what the calculation *is* owned by, only
+    that it is not owned by this species entry.
 
-    That is a real narrowing of the prose, and it is why this test now
-    asserts the code and the ``context`` instead: those are what a client
-    branches on, and they identify the offending field exactly, which
-    the old substring did not.
+    The code and the ``context`` are what a client branches on, and they
+    identify the offending field exactly, which a substring does not.
     """
     payload = _minimal_payload()
     payload["species"][0]["statmech"] = {
@@ -1305,7 +1303,7 @@ def test_statmech_source_calculation_referencing_ts_calc_is_coded(
     assert raised.value.code == "statmech_source_calculation_owner_mismatch"
     assert raised.value.context["owner_kind"] == "species_entry"
     assert "ts-freq" in raised.value.context["field"]
-    # The row ids belong in the log, not the body (DR-0028 Requirement 2).
+    # The row ids belong in the log, not the body.
     assert "species_entry_id=" not in str(raised.value)
 
 
@@ -1315,8 +1313,8 @@ def test_statmech_source_calculation_referencing_sibling_species_is_coded(
     """A species statmech referencing a sibling-species-owned calc rejects 422.
 
     The sibling-species half of the test above. Kept separate because the
-    two used to produce *different sentences* from the same site, and a
-    single test would not have noticed one of them regressing; they now
+    two could produce *different sentences* from the same site, and a
+    single test would not notice one of them regressing; they
     produce the same code, and the ``field`` is what tells them apart.
     """
     payload = _minimal_payload()
@@ -2076,7 +2074,7 @@ def test_bundle_owner_semantics_preserved_after_convergence(db_conn) -> None:
 
 # ---------------------------------------------------------------------------
 # Producer-controlled kinetics source calculations + calculation provenance
-# (DR for compute-reaction generic enrichment).
+# (compute-reaction generic enrichment).
 # ---------------------------------------------------------------------------
 
 
@@ -2369,9 +2367,9 @@ def test_output_geometries_persist_with_declared_role_and_order(db_conn) -> None
     # Geometry rows, so we use two different xyz texts.
     #
     # Both ends carry all five atoms of the CH3 + H -> CH4 system. The
-    # reverse end used to be ``_XYZ_CH3`` — four atoms as an endpoint of a
+    # reverse end is not ``_XYZ_CH3`` — four atoms as an endpoint of a
     # five-atom reaction path, which no IRC can produce and which
-    # ``assert_calculation_geometry_composition`` now refuses.
+    # ``assert_calculation_geometry_composition`` refuses.
     payload["transition_state"]["calculations"][1]["output_geometries"] = [
         {"geometry": {"xyz_text": _XYZ_CH4}, "role": "irc_forward"},
         {"geometry": {"xyz_text": _XYZ_IRC_CH3_PLUS_H}, "role": "irc_reverse"},
@@ -2446,7 +2444,7 @@ def test_depends_on_optimized_from_with_freq_parent_raises(db_conn) -> None:
 
     Regression: the bundle path delivers ``role`` as a wire-mirror enum
     (``tckdb_schemas.enums.CalculationDependencyRole.optimized_from``);
-    the service-layer check previously used ``is`` against the backend
+    a service-layer check using ``is`` against the backend
     enum and silently skipped this validation for bundle workflows. With
     the ``==`` fix, the workflow's call to
     ``assert_dependency_role_type_compatible`` raises because
@@ -3391,12 +3389,10 @@ def test_species_correction_referencing_ts_calc_returns_422(db_conn) -> None:
     """Species-side correction whose ``source_calculation_key`` names a
     TS-owned calc rejects with 422.
 
-    Asserted on the code since #195: this site raised a bare
-    ``ValueError`` matched by the substring "not owned by this species
-    entry", so the refusal reached a client as ``validation_error``. It
-    now reports ``applied_energy_correction_source_calculation_owner_
-    mismatch``, which is also what made that catalogue entry stop being
-    ``Reach.guard``.
+    Asserted on the code, not a substring: a site raising a bare
+    ``ValueError`` would reach a client as ``validation_error``. The refusal
+    reports ``applied_energy_correction_source_calculation_owner_mismatch``,
+    which also keeps that catalogue entry from being ``Reach.guard``.
     """
     payload = _payload_with_aec_carriers()
     payload["species"][0]["applied_energy_corrections"] = [
@@ -3605,9 +3601,9 @@ def test_bundle_kinetics_rejects_unrepresentable_model_kinds(
 
 
 def test_computed_reaction_payload_accepts_degeneracy_regression() -> None:
-    """Regression: the previously-failing ARC payload now validates.
+    """Regression: the ARC payload validates.
 
-    Before this change, ``BundleKineticsIn``'s ``extra="forbid"`` rejected
+    Without the field, ``BundleKineticsIn``'s ``extra="forbid"`` rejects
     ``degeneracy`` with ``[type=extra_forbidden]``. The full
     ``ComputedReactionUploadRequest`` must accept it end-to-end so ARC
     computed-reaction uploads carrying reaction-path degeneracy succeed.
@@ -3786,7 +3782,7 @@ def test_bundle_ts_evidence_enforces_full_atom_coverage() -> None:
 
 
 # ---------------------------------------------------------------------------
-# A statmech role must match the type of the job it names (DR-0028 Req 1)
+# A statmech role must match the type of the job it names
 #
 # This is the fourth statmech write path and the one ARC deposits through.
 # ---------------------------------------------------------------------------
@@ -3819,17 +3815,16 @@ def test_statmech_source_role_must_match_calculation_type(db_conn) -> None:
 # ---------------------------------------------------------------------------
 #
 # ``calculation.conformer_observation_id`` is the load-bearing anchor -- a
-# calculation carrying a NULL one is evidence for no basin at all. It used to
+# calculation carrying a NULL one is evidence for no basin at all. It must not
 # be resolved from ``geometry_key`` alone, by a helper that returned silently
 # when a producer had not supplied one. That is exactly the case a coarse
 # pre-optimisation lands in: the wire schema excuses ``opt`` from supplying
 # ``geometry_key``, because a coarse stage's output geometry genuinely is not
-# a declared conformer geometry -- so the one type allowed to omit the key was
-# the one type whose anchor was then dropped, without a word to anybody. 43
-# rows on the deployed database were persisted that way.
+# a declared conformer geometry -- so the one type allowed to omit the key would be
+# the one type whose anchor was then dropped, without a word to anybody.
 #
 # ``conformer_key`` answers the anchoring question directly, and these tests
-# pin the three outcomes the seam can now produce -- anchored by conformer
+# pin the three outcomes the seam can produce -- anchored by conformer
 # key, decided by conformer key when both are present, and not anchored but
 # *reported* -- plus the refusal for a key that names nothing.
 
@@ -3839,7 +3834,7 @@ def _coarse_preopt_payload(
 ) -> dict:
     """A CH3 + H -> CH4 bundle whose extra CH3 calc is a coarse pre-optimisation.
 
-    Shaped like the deployed rows this change repairs: ``type='opt'``, a
+    Shaped like the deployed rows a repair covers: ``type='opt'``, a
     coarse ``optimization_stage`` in ``parameters_json``, and no geometry of
     its own among the declared conformer geometries -- which is precisely why
     it is entitled to omit ``geometry_key``.
@@ -3883,7 +3878,7 @@ def test_coarse_preopt_anchors_to_its_declared_conformer_key(db_conn) -> None:
 
     This is the payload the old write path could not anchor at all. It
     declares no ``geometry_key`` -- correctly, because its output geometry is
-    not the basin's -- and would previously have been persisted with a NULL
+    not the basin's -- and would otherwise be persisted with a NULL
     anchor and nothing said about it.
     """
     with _isolated_session(db_conn) as session:
@@ -3988,10 +3983,10 @@ def _two_conformer_payload_with_coarse(geometry_key: str) -> dict:
 def test_conformer_and_geometry_keys_that_disagree_are_refused() -> None:
     """Neither key decides: a geometry of conformer A beside a ``conformer_key`` of B is a 422.
 
-    This used to assert that ``conformer_key`` won. A deposit whose two keys
+    Neither key wins. A deposit whose two keys
     name different conformers is self-contradicting, so it is refused with
     ``calculation_geometry_conformer_mismatch`` and never reaches the anchor
-    seam (#635).
+    seam.
     """
     payload = _two_conformer_payload_with_coarse("ch3-geom")
     with pytest.raises(ValidationError) as excinfo:
@@ -4053,7 +4048,7 @@ def test_conformer_key_naming_no_conformer_is_refused_with_its_code() -> None:
     Refused at the request-schema layer, which is also where a client holding
     no connection to a server gets the answer. The code and the context are
     the wire package's, shared with the workflow seam, so which layer fired is
-    invisible to a caller (ADR 0017).
+    invisible to a caller.
     """
     payload = _coarse_preopt_payload(
         conformer_key="not-a-conformer", geometry_key=None
@@ -4074,7 +4069,7 @@ def test_conformer_key_naming_no_conformer_is_refused_with_its_code() -> None:
     assert context["key"] == "not-a-conformer"
     # The names that *would* have worked -- what makes the refusal fixable.
     assert "ch3-conf" in context["declared_keys"]
-    # Three facts, and never a row id (DR-0028 Requirement 2).
+    # Three facts, and never a row id.
     assert set(context) == {"field", "key", "declared_keys"}
 
 

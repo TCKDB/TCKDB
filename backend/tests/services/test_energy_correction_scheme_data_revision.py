@@ -1,4 +1,4 @@
-"""Correction-scheme ``data_revision`` and ``atom_params_applied_as`` (#619).
+"""Correction-scheme ``data_revision`` and ``atom_params_applied_as``.
 
 Atom-energy and BAC tables live in RMG-database, but a producer records only
 the RMG-Py commit (the workflow-tool release). The adapter audit found two
@@ -124,7 +124,7 @@ def test_a_build_with_and_a_build_without_a_tool_release_share_a_revision(
 
 
 def test_a_new_data_revision_is_a_new_scheme_and_not_a_conflict(db_conn) -> None:
-    """The database-only change that used to 422 now lands as its own scheme."""
+    """The database-only change lands as its own scheme."""
     with Session(db_conn) as session, session.begin():
         old = resolve_or_create_scheme(
             session,

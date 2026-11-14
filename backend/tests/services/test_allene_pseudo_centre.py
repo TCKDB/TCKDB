@@ -1,4 +1,4 @@
-"""The centre between two allene axes: ``-``, ``r`` or ``s`` (#832, part 3).
+"""The centre between two allene axes: ``-``, ``r`` or ``s``.
 
 ``CC=C=CC(C)C=C=CC`` has four stereoisomers. ``Ra,Ra`` and ``Sa,Sa`` are an enantiomeric pair whose middle carbon
 is not stereogenic; ``Ra,Sa`` gives two achiral (meso) forms in which it is pseudo-asymmetric, ``r`` or ``s``. The
@@ -176,7 +176,7 @@ LEFT_UNKNOWN = {
     "2+2": "CC=C=CC(C=C=CC)(C=C=CCC)C=C=CCC",
     "spiro": "C12(C=C=CCCCC=C=C1)C=C=CCCCC=C=C2",
     "a double bond": "CC=C=CC(C=C=CC)=C(C(C)O)C(C)O",
-    # a ligand that differs from the arms only by an isotope deep inside ties them at Rule 1 (review round 1)
+    # a ligand that differs from the arms only by an isotope deep inside ties them at Rule 1
     "a CD3-ended arm beside O": "CC=C=CC(O)(C=C=CC([2H])([2H])[2H])C=C=CC",
     "a CD3-ended arm beside H": "CC=C=CC(C=C=CC([2H])([2H])[2H])C=C=CC",
     "a 13C-ended arm beside O": "CC=C=CC(O)(C=C=C[13CH3])C=C=CC",
@@ -232,7 +232,7 @@ def test_a_ligand_tying_the_arms_without_isotopes_stays_unknown_though_centres_l
 
 
 # ---------------------------------------------------------------------------
-# The centre from the SMILES marks (the allene marks reader, #845, plus the centre's own mark)
+# The centre from the SMILES marks (the allene marks reader, plus the centre's own mark)
 # ---------------------------------------------------------------------------
 
 HANDLED_MARK_CASES = [c for c in FIXTURE["mark_cases"] if c["skeleton"] in HANDLED]
@@ -313,7 +313,7 @@ def test_a_mark_on_the_centre_that_contradicts_a_geometry_is_refused() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Sources that each pass alone but combine into a configuration no stereoisomer has (review round 3)
+# Sources that each pass alone but combine into a configuration no stereoisomer has
 # ---------------------------------------------------------------------------
 
 UNREALIZABLE_COMBINATIONS = {

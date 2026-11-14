@@ -179,7 +179,7 @@ def test_existing_calculation_id_inline_rejected_via_extra_forbid():
 
 def test_existing_calculation_id_inside_parameters_json_rejected():
     """Recursive walk: ``existing_calculation_id`` nested under an opaque
-    ``parameters_json`` is also caught (DR-0029 Open Question #5).
+    ``parameters_json`` is also caught.
     """
     bad = _calc(
         "opt0",

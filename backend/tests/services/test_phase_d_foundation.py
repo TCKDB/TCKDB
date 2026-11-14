@@ -1,4 +1,4 @@
-"""Phase D foundation (WP-F): enthalpy evaluation and shared helpers.
+"""Foundation: enthalpy evaluation and shared helpers.
 
 Expectations come from hand formulas and SI constants, never from the
 production evaluator. Every test that iterates asserts the exact number of
@@ -290,7 +290,7 @@ def test_entry_facts_take_isotopes_from_the_entry_key():
     ("[OH-]", -1, None, "charged_species_out_of_scope"),
     ("[NH4+]", 1, None, "charged_species_out_of_scope"),
     ("C", 0, "[13CH4]", "isotope_labelled_species_out_of_scope"),
-    # A row stored before #66 stripped labels from species.smiles: the label
+    # A row stored with a label in species.smiles: the label
     # on the SMILES still counts even though the entry has no key.
     ("[2H]C([2H])([2H])[2H]", 0, None, "isotope_labelled_species_out_of_scope"),
     ("C((", 0, None, "unusable_species_composition"),
@@ -304,7 +304,7 @@ def test_species_scope_reason(smiles, charge, isotope_key, expected):
     assert species_scope_reason(_entry(smiles, charge, isotope_key)) == expected
 
 
-# -- review round 1: gates on the single-branch helpers --
+# -- gates on the single-branch helpers --
 
 
 def _gated_cases():
@@ -360,7 +360,7 @@ def test_single_branch_helpers_pass_the_gate_for_h_without_a_pressure():
     assert poly9.h(800.0) / 1e6 == pytest.approx(R * 3.0 * 800.0 / 1000.0, rel=1e-12)
 
 
-# -- review round 1: no silent fallback for an unsupported quantity --
+# -- no silent fallback for an unsupported quantity --
 
 
 @pytest.mark.parametrize("representation", ["point", "s298", "h298", "nasa7"])
@@ -382,7 +382,7 @@ def test_every_entry_point_refuses_an_unsupported_quantity(call):
         call(_nasa7_thermo())
 
 
-# -- review round 1: D1 reads the same constant --
+# -- D1 reads the same constant --
 
 
 def test_d1_pressure_matching_reads_the_pressure_independent_constant(monkeypatch):

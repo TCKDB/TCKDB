@@ -1,4 +1,4 @@
-"""Every consumer that evaluates k(T) from a stored row honours ``t0_k`` (#620).
+"""Every consumer that evaluates k(T) from a stored row honours ``t0_k``.
 
 A row stores ``a``, ``n``, ``ea_kj_mol`` and ``t0_k`` meaning
 ``k = A * (T/T0)**n * exp(-Ea/RT)``. Cantera's ``ArrheniusRate`` and CHEMKIN's

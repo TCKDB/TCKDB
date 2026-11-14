@@ -4,7 +4,7 @@ reference values.
 The Chebyshev matrix and PLOG table below are the *real* stored fit for
 one channel of the hydrazine network (`net_o6bt63kjeyvhvxx26w6kdi433a`,
 channel N=N (E) + H2 -> 2 NH2, `nkin_x7zslyyxvslnagxwun3flcob3i` /
-`nkin_lsoxdf26irod3nqr6tgjp4tlt4`), pulled 2026-09-08 via
+`nkin_lsoxdf26irod3nqr6tgjp4tlt4`), pulled via
 ``GET /scientific/network-kinetics/search?network_ref=...&include=coefficients,plog``
 against the hosted instance. Both records describe the *same* physical
 channel — one as a Chebyshev fit, one as a PLOG table — which is why the
@@ -266,7 +266,7 @@ def test_plog_evaluate_agrees_with_chebyshev_for_the_same_real_channel() -> None
     20 K and P as a dense log grid in [0.01, 100] bar -- 91x41 points
     on this one channel): worst relative deviation is **15.20%**, at
     (T=580K, P=100bar): cheb=1.2794e-9, plog=1.1106e-9 cm3/mol/s. The
-    three corner/mid points originally pinned here individually agree
+    three corner/mid points pinned here individually agree
     much tighter (1.3%, 4.3%, 0.8%), which is why an earlier version of
     this test carried a much tighter rel=0.05 tolerance -- that
     tolerance was only ever exercised at those three easy points, not
@@ -371,10 +371,9 @@ def test_plog_in_range_considers_temperature_not_only_pressure() -> None:
     """Live-reachable regression: a PLOG record whose table is only
     ever fit to [300, 2000] K must not report in_range=True for a
     temperature outside that range merely because the *pressure*
-    happens to fall inside the table's pressure span. Before this was
-    fixed, ``evaluate_plog`` had no ``tmin_k``/``tmax_k`` parameter at
-    all and computed ``in_range`` from pressure alone -- so
-    nkin_lsoxdf26irod3nqr6tgjp4tlt4 (stored 300-2000K) returned
+    happens to fall inside the table's pressure span. ``evaluate_plog`` takes optional
+    ``tmin_k``/``tmax_k`` bounds; when both are given, ``in_range`` is not computed from
+    pressure alone -- otherwise a stored 300-2000K record would return
     ``in_range: true`` for 5000 K, 3000 K, 250 K and 100 K at 1 bar,
     while the Chebyshev fit of the SAME physical channel correctly
     flagged the same points as extrapolated -- two representations of
@@ -484,11 +483,10 @@ def test_plog_negative_duplicate_a_refuses_with_coded_error_not_a_crash() -> Non
 
 def test_chebyshev_and_plog_reject_infinite_temperature_identically() -> None:
     """Chebyshev and PLOG must behave the same way when asked to
-    evaluate at a non-finite temperature: both refuse. Before this was
-    fixed, ``not (t > 0)`` (True for ``+inf`` being > 0) let ``inf``
-    through Chebyshev's own bound check silently, while PLOG's
-    Arrhenius evaluator already rejected it via its own
-    ``math.isfinite`` guard -- an asymmetry between the two model
+    evaluate at a non-finite temperature: both refuse. A bare ``not (t > 0)``
+    check (False for ``+inf``) would let ``inf`` through Chebyshev's own
+    bound check silently, while PLOG's Arrhenius evaluator rejects it via its
+    own ``math.isfinite`` guard -- an asymmetry between the two model
     kinds for the identical malformed input."""
     with pytest.raises(KineticsEvaluationError):
         evaluate_chebyshev(

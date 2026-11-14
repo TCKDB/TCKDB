@@ -1,6 +1,6 @@
 """What the release gate actually sweeps, and what reclaiming an orphan risks.
 
-The sweep is the answer ADR 0014 gives to "an artifact nobody downloads
+The sweep is the answer to "an artifact nobody downloads
 is checked by nothing", and its designated trigger is cutting a citable
 release. That makes ``--release`` the load-bearing scope: if it walks the
 wrong set, the release runbook records a green gate over evidence nobody
@@ -9,7 +9,7 @@ looked at.
 The second half of this file is about the *other* way that gate goes
 green over nothing. A sweep can be wrong by reporting a clean result it
 did not earn, and it had three ways to do that after the ``--release``
-scope query was fixed: a scope that resolves to zero digests, a store
+scope query is correct: a scope that resolves to zero digests, a store
 that will not answer, and a digest recorded on the ``store_artifact``
 dedup path, which has no ``calculation_artifact`` row to be found
 through. Each exited 0. The invariant those tests hold is one sentence:
@@ -261,7 +261,7 @@ def test_release_scope_covers_the_artifacts_of_those_calculations(
 def test_a_withdrawn_selection_is_not_part_of_the_release(
     db_session, sweep, released_thermo, capsys
 ):
-    """Evidence a release no longer stands behind is not its evidence."""
+    """Evidence a release does not stand behind is not its evidence."""
     withdraw_selection(
         db_session,
         superseded=released_thermo["selection"],
@@ -777,7 +777,7 @@ def test_a_release_whose_calculations_kept_no_artifacts_is_not_a_pass(
 ):
     """The scope resolves, finds calculations, and they have no evidence.
 
-    ADR 0014 names this sweep as the gate standing between a citable
+    This sweep is the gate standing between a citable
     release and undetected corruption. Exiting 0 here would let the
     runbook record a verification of a release whose evidence does not
     exist -- a stronger claim than the one it made while the scope query
@@ -1066,7 +1066,7 @@ class _HoldBucket(_FakeBucket):
     ``_FakeBucket`` models keys and dates, which is all the reclaim needs.
     The restore path ends in a real ``load_artifact_bytes`` call, because
     a restore that recorded ``verified`` without hashing anything would be
-    the operator-asserts-a-repair move ADR 0014 forbids.
+    the operator-asserts-a-repair move the custody rule forbids.
     """
 
     def __init__(self, contents: dict[str, bytes], modified=None) -> None:
@@ -1141,7 +1141,7 @@ def test_a_held_object_a_row_references_is_put_back(db_session, sweep):
 
 
 def test_the_restore_is_recorded_as_a_custody_event(db_session, sweep):
-    """ADR 0014's discipline: custody changes are recorded, not logged.
+    """Custody changes are recorded, not logged.
 
     A repair that only prints is two of the three things the state needed
     -- repaired and visible-if-you-were-watching -- and not the third,

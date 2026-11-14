@@ -1,4 +1,4 @@
-"""CHEMKIN export prints an entry's stereo beside the stereo-blind species SMILES (DR-0038).
+"""CHEMKIN export prints an entry's stereo beside the stereo-blind species SMILES.
 
 The species SMILES is the constitution, so ``E`` and ``Z`` 2-butene both carry ``CC=CC``. Without
 the entry's stereo in the ``! SMILES=`` comment two different entries would read as one structure,

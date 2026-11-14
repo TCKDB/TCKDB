@@ -1,4 +1,4 @@
-"""Contract test for the Phase-5 ``ComputedSpeciesUpload.transport`` field.
+"""Contract test for the ``ComputedSpeciesUpload.transport`` field.
 
 Today's wire reality, locked in tests:
 
@@ -21,7 +21,7 @@ import pytest
 
 from tests._ci_dependency import require_module
 
-# Skips locally without the client; fails on CI, which installs it (#575).
+# Skips locally without the client; fails on CI, which installs it.
 require_module("tckdb_client.builders", install="pip install -e clients/python")
 
 from tckdb_client.builders import (

@@ -1,4 +1,4 @@
-"""``withhold_levels_from_calculations``: a level goes with the calculations that supplied it (ADR 0023, step 3).
+"""``withhold_levels_from_calculations``: a level goes with the calculations that supplied it.
 
 The function is pure. Each test names the mutation it kills.
 """

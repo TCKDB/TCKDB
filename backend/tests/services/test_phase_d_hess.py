@@ -4,7 +4,7 @@ Every eligible fixture is made the way a depositor would make it: a
 transition-state upload (whose primary opt is the tunneling source
 calculation), a kinetics upload carrying a ``tunneling_application`` block,
 and one thermo upload per participant with a declared enthalpy basis. The
-playground instance held no eligible record on 2026-09-27 (0 tunneling rows,
+a deployed instance held no eligible record (0 tunneling rows,
 0 declared thermo), so these fixtures are the only eligible records there are.
 
 Reasons no upload can produce -- the upload path refuses an unbalanced
@@ -12,7 +12,7 @@ reaction, a tunneling TS on another reaction entry, an unparseable SMILES --
 are exercised by an in-memory edit of an uploaded fixture that is never
 flushed; each such case says so.
 
-Hand arithmetic, kJ/mol (D6-1..D6-4 of the Phase D plan):
+Hand arithmetic, kJ/mol (D6-1..D6-4):
 
 * D6-1  CH4 + OH -> CH3 + H2O at 298.15 K. dfH: CH4 -74.6, OH 37.4, CH3 147.2,
   H2O -241.8, so dH = (147.2 - 241.8) - (-74.6 + 37.4) = -57.4. Claim
@@ -825,7 +825,7 @@ def test_cli_dry_runs_and_commits_once(db_conn, monkeypatch, capsys):
 
 
 # --------------------------------------------------------------------------- #
-# Review round 1 (#550): endpoints, headroom, Cp-only points
+# Endpoints, headroom, Cp-only points
 # --------------------------------------------------------------------------- #
 
 

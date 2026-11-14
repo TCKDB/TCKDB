@@ -8,7 +8,7 @@ refuses one column to the left: a transition state is a stationary point on the
 potential energy surface **of those atoms**, so a saddle point made of
 different atoms cannot be that reaction's saddle point.
 
-Definitional under ADR 0008, therefore blocking. The check runs on every
+Definitional, therefore blocking. The check runs on every
 transition-state deposit path, mapped or not — an atom map catches a formula
 mismatch implicitly, but only where a map was supplied, which would deliver the
 stronger guarantee exactly to the deposits that were already the most careful.
@@ -294,7 +294,7 @@ def test_a_saddle_point_whose_xyz_shouts_its_elements_is_accepted(
     the reactant side of the comparison comes from RDKit's title-case
     ``GetSymbol()``. Comparing the two raw made a correct saddle point read as
     ``CCLHHH`` against a reaction of ``CH3Cl`` and refused it — rejecting
-    correct chemistry over capitalisation, which ADR 0008 disqualifies a
+    correct chemistry over capitalisation, which the blocking-tier rule disqualifies a
     blocking check from doing.
 
     The shouting is settled before the comparison rather
@@ -331,7 +331,7 @@ def test_multiplicity_is_deliberately_not_checked(db_conn) -> None:
 
     Two doublets may react over a singlet or a triplet surface, and
     spin-forbidden reactions are real chemistry. A multiplicity rule would fire
-    on correct novel results, which ADR 0008 disqualifies from blocking.
+    on correct novel results, which the blocking-tier rule disqualifies from blocking.
     """
     payload = _bundle()
     payload["transition_state"]["multiplicity"] = 4

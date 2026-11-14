@@ -76,7 +76,7 @@ def seeded(db_session, world):
         bath=[(world.ar, 0.5), (world.he, 0.5)],
         kind=NetworkSolveKind.reported,
     )
-    # S4: stored declarations this server can no longer read.
+    # Stored declarations this server cannot read.
     s4 = add_solve(db_session, world, fits=[fit_spec("assoc", det=None)], review=None)
     s4.target_declaration = {"version": 1, "claim_origin": "nobody_we_know"}
     s4.protocol_declaration = {"version": 1, "reduction_method": "a_method_this_server_does_not_know"}

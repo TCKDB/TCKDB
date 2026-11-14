@@ -223,7 +223,7 @@ def _integrity_seam(db_session) -> dict:
     """Send the rubric's custody records into the test's own transaction.
 
     The recorder deliberately opens its own session so a break outlives
-    the request that found it (ADR 0014); that durability is tested
+    the request that found it; that durability is tested
     against a real engine in ``tests/services/test_artifact_integrity``.
     Here the subject is *which* rows appear, so they go in the rolled-back
     transaction with everything else.
@@ -503,7 +503,7 @@ def test_artifact_verification_failure_fails_closed(
 
 
 # ---------------------------------------------------------------------------
-# One owner for artifact integrity (ADR 0008 applied to ADR 0014)
+# One owner for artifact integrity
 # ---------------------------------------------------------------------------
 
 
@@ -543,7 +543,7 @@ def test_rubric_cites_a_break_recorded_by_another_path(db_session, _api_test_use
     """The verdict on bytes the rubric never reads is copied, not invented.
 
     The rubric only re-reads output logs of the graded calculation, so a
-    break the download route recorded against an *input* artifact used to
+    break the download route recorded against an *input* artifact would
     leave the snapshot reporting ``not_requested`` -- a clean bill of
     health for an object the trust layer was hard-failing the same
     calculation over.
@@ -640,7 +640,7 @@ def test_a_store_that_says_gone_is_not_a_store_that_says_nothing(
     Both of the last two arrive as ``ArtifactStorageUnavailable`` and were
     reported identically before this; ``exc.missing`` is what tells them
     apart. The custody counts are the other half: the disappearance is a
-    break in custody and is recorded (ADR 0014), while a store that would
+    break in custody and is recorded, while a store that would
     not answer has said nothing about the object and must leave no row
     behind. If both arms recorded, the causes were never split.
     """
@@ -705,7 +705,7 @@ def test_recording_the_disappearance_reaches_the_trust_layer(
     """The point of recording it: the fact now has a read-time consequence.
 
     Asserted here, and not left implicit, because it is the whole reason a
-    row is written rather than logged. ADR 0014 makes *any* recorded
+    row is written rather than logged. The custody rule makes *any* recorded
     custody break a ``HardFailReason.artifact_integrity_failed`` on the
     owning calculation, and that already happened when the download route
     discovered this same loss. What changes is that the sweep can now
@@ -754,7 +754,7 @@ def test_a_recorded_disappearance_is_cited_as_missing_evidence(
     to use the same vocabulary: reporting ``integrity_failed`` here while
     the sweep that read the same object reports ``evidence_missing`` would
     make the verdict depend on which path ran, which is the class of
-    disagreement ADR 0008 exists to prevent.
+    disagreement the one-owner-per-fact rule exists to prevent.
     """
     objects: dict[str, bytes] = {}
     calculation = _calculation(
@@ -1168,6 +1168,6 @@ def test_missing_record_fails_closed(db_session) -> None:
         )
     # The refusal names the record *type*, which is what the caller needs,
     # and not the row id it asked about, which is an implementation detail
-    # of one database. Asserted rather than assumed: this message used to
-    # echo the id, and the id in it is what a regression would restore.
+    # of one database. The message must not echo the id; echoing it is the
+    # regression this assertion guards.
     assert "999999999" not in str(caught.value)

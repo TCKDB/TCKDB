@@ -1,4 +1,4 @@
-"""Tests for the ThermoML Cp(T) persistence service + CLI (Phase C-E3,
+"""Tests for the ThermoML Cp(T) persistence service + CLI (
 C-E6).
 
 Uses the per-test transactional ``db_session`` fixture so every test rolls
@@ -663,7 +663,7 @@ class TestSubmissionAndRights:
     def test_ingestion_summary_says_article_on_the_archive_path(
         self, db_session, curator
     ):
-        """F6 (Phase C-E6 review round 2, LOW): the shared ``_run_pipeline``
+        """The shared ``_run_pipeline``
         core must not silently change C-E3's exact original audit-summary
         wording for the archive path.
 
@@ -820,7 +820,7 @@ class TestSMethodNameAllowlist:
 
 
 # ---------------------------------------------------------------------------
-# Upload path (Phase C-E6): anyone may ingest a ThermoML file, not only the
+# Upload path: anyone may ingest a ThermoML file, not only the
 # NIST archive. ``import_thermoml_cp_upload`` shares the validate -> parse
 # -> map -> persist core with ``import_thermoml_cp_article`` above but
 # differs in custody (depositor-upload channel, not NIST) and rights
@@ -1022,7 +1022,7 @@ class TestUploadPath:
     def test_ingestion_summary_says_document_on_the_upload_path(
         self, db_session, depositor
     ):
-        """F6 (Phase C-E6 review round 2, LOW): the upload path's audit
+        """The upload path's audit
         summary says "document", not "article" -- a depositor's file is
         not "an article" in the bibliographic sense the archive path's
         wording assumes.
@@ -1255,7 +1255,7 @@ class TestCli:
             assert rows == []
 
     def _titled_no_doi_fixture_path(self, tmp_path):
-        """F4 (Phase C-E6 review round 2): schema-valid, ``sTitle``
+        """Schema-valid, ``sTitle``
         present, ``sDOI`` absent entirely (both are ``minOccurs="0"`` in
         the XSD)."""
         xml = _BENZENE_XML.replace("    <sDOI>{doi}</sDOI>\n", "").format(

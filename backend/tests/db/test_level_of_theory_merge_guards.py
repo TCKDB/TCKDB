@@ -1,8 +1,8 @@
-"""The database refuses what the merge script never builds (#591 items 1 and 2).
+"""The database refuses what the merge script never builds.
 
 ``level_of_theory_merge`` states a one-hop rule (``into_lot_id`` is never
 itself merged) and its neighbour says no calculation points at a merged row.
-Both used to be enforced only by ``merge_duplicate_levels_of_theory.py``, so a
+Both would otherwise be enforced only by ``merge_duplicate_levels_of_theory.py``, so a
 hand-written row, a later script or a restored dump could build a chain
 A -> B -> C (a search by A's ref then finds nothing) or put a calculation on
 a merged row. Two triggers guard this.

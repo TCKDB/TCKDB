@@ -1,4 +1,4 @@
-"""Reads, release and currency of network declarations (chunk 1).
+"""Reads, release and currency of network declarations.
 
 Each test reads the stored or served row back and asserts the specific claim, so a projection that
 silently dropped the declaration -- or a digest that silently ignored it -- fails here.
@@ -193,7 +193,7 @@ def test_a_reference_to_a_hidden_solve_is_withheld_from_the_served_declaration(d
         finally:
             reset_current_read_profile(token)
         entry = served.validation.entries[0]
-        # ADR 0023 (step 3): the reference solve is evidence of the entry; merely unreviewed, it is served.
+        # The reference solve is evidence of the entry; merely unreviewed, it is served.
         assert entry.reference_solve_ref == cited.public_ref and entry.reference_withheld is False
 
         from app.db.models.app_user import AppUser

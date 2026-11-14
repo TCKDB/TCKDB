@@ -21,7 +21,7 @@ part of it is silent:
 - The resulting test failures are indistinguishable from a real defect. They
   point at the changed code and say the change is not there.
 
-All of that happened while building #458: two "regenerations" of a golden
+All of that happened once: two "regenerations" of a golden
 that changed nothing, three CI cycles, and six tests failing against a schema
 change that was correct.
 

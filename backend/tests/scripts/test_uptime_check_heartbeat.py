@@ -264,7 +264,7 @@ def _require_tools() -> None:
 
 
 def test_an_unconfigured_status_url_skips_cleanly(probe_script) -> None:
-    """No ``TCKDB_STATUS_URL`` repository variable (issue #521): the job must
+    """No ``TCKDB_STATUS_URL`` repository variable: the job must
     not probe a hardcoded host, and must not fail either -- a fork with no
     deployment of its own gets a clean skip, not a red run."""
     completed = subprocess.run(
@@ -370,7 +370,7 @@ def test_a_warning_keeps_the_heartbeat_green_and_the_run_green(probe_script) -> 
     ``/fail`` here would put the healthchecks.io page in "down" while every
     upload still worked -- and this job's own exit code would disagree with
     it, which is the two-monitors-contradicting-each-other failure the
-    heartbeat was added to end.
+    heartbeat exists to end.
     """
     hits, code = _run(probe_script, "warning")
     assert hits == ["/hb"]

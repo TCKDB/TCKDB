@@ -1,4 +1,4 @@
-"""The Hessian hook tells the depositor when it did not store a Hessian (#691).
+"""The Hessian hook tells the depositor when it did not store a Hessian.
 
 The hook is best-effort and must never refuse an upload; what it owes the
 depositor is a warn-tier ``hessian_not_stored_*`` warning naming the reason.
@@ -95,7 +95,7 @@ def test_an_unreadable_hess_file_warns_but_a_matrixless_log_does_not(db_conn) ->
 
 
 def test_a_log_with_a_force_constant_block_but_no_matrix_warns(db_conn) -> None:
-    """A truncated block (or one the parser declines) is not the same as a log with no block (#744)."""
+    """A truncated block (or one the parser declines) is not the same as a log with no block."""
     from app.services.hessian_parsing import GAUSSIAN_HESSIAN_MARKER
 
     truncated = (

@@ -1,4 +1,4 @@
-"""R1 with a composite energy (ADR 0021, decision 4), and the thermo provenance picker.
+"""R1 with a composite energy, and the thermo provenance picker.
 
 ``derive_levels`` is pure, so these tests say exactly which input produced which
 answer. The ids are arbitrary labels: 1 = an opt's level, 2 = an sp's, 3 and 4 =

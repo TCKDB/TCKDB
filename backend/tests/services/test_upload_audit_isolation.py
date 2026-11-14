@@ -5,7 +5,7 @@ rows rather than science:
 
 * :func:`mark_upload_ingested` appends the ``ingestion_succeeded`` event on
   the line immediately above ``idem.record`` — the write that destroyed an
-  upload on 2026-08-05. It carries the same two column types (``Text``
+  upload. It carries the same two column types (``Text``
   ``summary``, ``JSONB`` ``details_json``) and, before this, the same total
   absence of isolation. Its failure must cost one line of audit history and
   never a scientific record.
@@ -257,7 +257,7 @@ class TestCommitTimeFailureIsAudited:
 
     ``audit_sync_upload_failure`` wraps the route function, so a failure
     raised by the commit in dependency teardown lands outside its ``try``.
-    Before this, the failure class the 2026-08-05 incident belongs to left no
+    Without it, this failure class leaves no
     audit row at all.
     """
 

@@ -3,10 +3,10 @@
 The field defaults to ``None``, which reads as "an ordinary level". A builder that
 forgets it therefore does not fail: it silently reports a bound level (CBS-QB3,
 G4, ...) as ordinary. So the rule is structural and checked here, over every call
-in ``app/`` (ADR 0021): the keyword must be passed explicitly, even where the
+in ``app/``: the keyword must be passed explicitly, even where the
 value is ``None`` by design.
 
-``core_treatment`` (frozen-core / all-electron, P4) is the same shape of risk:
+``core_treatment`` (frozen-core / all-electron) is the same shape of risk:
 it defaults to ``None``, which reads as "the producer did not say", so a builder
 that forgets it silently reports a level that states ``frozen_core`` as one that
 does not. It joins the rule rather than getting a default that is only safe when
@@ -59,7 +59,7 @@ def test_the_core_treatment_walk_sees_the_same_sites_as_the_composite_scheme_wal
 
 #: The identity parts the notation of a record's levels writes (``app.chemistry.level_label``). Each defaults to
 #: ``None``, which reads as "not stated", so a builder that forgot one would silently drop it from every notation
-#: built from its summary. Passed explicitly at every site, even as ``None`` by design (P7a).
+#: built from its summary. Passed explicitly at every site, even as ``None`` by design.
 _NOTATION_PARTS = (
     "aux_basis",
     "cabs_basis",
@@ -80,9 +80,9 @@ def test_every_construction_site_passes_every_part_the_notation_writes():
 
 
 def test_no_construction_site_passes_label():
-    """``label`` is derived on read (the one renderer behind the notation and the ML label), never passed (P7b).
+    """``label`` is derived on read (the one renderer behind the notation and the ML label), never passed.
 
-    It used to be a stored field that every builder left ``None`` or filled with a slash-joined method and
+    It is not a stored field that a builder leaves ``None`` or filled with a slash-joined method and
     basis; as a computed field a passed ``label=`` is silently ignored, so a builder that kept one would look
     as if it set the label while setting nothing.
     """

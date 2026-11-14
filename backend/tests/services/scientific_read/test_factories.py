@@ -48,7 +48,7 @@ def test_many_chem_reactions_get_distinct_public_refs(db_session):
     hashes: set[str] = set()
     for i in range(20):
         # Unique species per iteration (identity is smiles+charge+mult,
-        # DR-0031) so each reaction is genuinely distinct.
+        # species identity) so each reaction is genuinely distinct.
         rs = make_species(db_session, inchi_key=next_inchi_key(f"DR{i}"))
         ps = make_species(db_session, inchi_key=next_inchi_key(f"DP{i}"))
         rxn = make_chem_reaction(db_session, reactants=[rs], products=[ps])
@@ -99,7 +99,7 @@ def test_make_species_entry_is_get_or_create(db_session):
     since a shared test database routinely already holds water or argon — so
     an entry factory that always inserted would violate
     ``uq_species_entry_species_id`` the moment that happened. That mismatch
-    used to surface as an unexplained ``IntegrityError`` in whichever suite
+    surfaces as an unexplained ``IntegrityError`` in whichever suite
     happened to run second.
     """
     species = make_species(db_session, smiles="O", inchi_key=next_inchi_key("SEA"))
@@ -139,7 +139,7 @@ def test_make_workflow_tool_release_default_is_duplicate_safe(db_session):
     """Two default-args calls in one transaction must not violate the
     ``WorkflowTool.name`` unique constraint.
 
-    Regression: the factory used to ``INSERT`` a fresh
+    Regression: the factory must not ``INSERT`` a fresh
     ``WorkflowTool(name="arc")`` on every call, which collided as soon as
     two test helpers (or two consecutive test setups in one transaction)
     both leaned on the default.
@@ -178,7 +178,7 @@ def test_make_workflow_tool_release_distinct_versions_create_distinct_releases(
 
 def test_make_literature_default_dois_are_unique_and_independent(db_session):
     """Default-DOI literature rows must be unique and must not share state
-    with :func:`_next_fsf_value` (which previously also generated DOIs).
+    with :func:`_next_fsf_value` (which does not generate DOIs).
     """
     from tests.services.scientific_read._factories import (
         _next_fsf_value,

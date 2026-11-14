@@ -18,7 +18,7 @@ Two lists keep the rule honest (both in ``tests/versioned_names_debt.py``):
 
 * ``ALLOWED`` is permanent and short, each entry with the reason it is not a
   TCKDB version (a botocore class name, NIST's archive name).
-* ``DEBT`` is what the guard still owes, and it is **empty**: the versioning programme finished with PR-4, so
+* ``DEBT`` is what the guard still owes, and it is **empty**: the versioning programme is finished, so
   every match is fixed or carries an ``ALLOWED`` entry. Its ceilings below are zero, so a deferred violation means
   raising a ceiling in the same change, in plain sight of the review.
 

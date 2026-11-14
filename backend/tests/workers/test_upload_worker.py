@@ -821,7 +821,7 @@ def test_abandoned_claim_recovers_real_thermo_workflow_exactly_once(worker_db, d
         before = worker_db.scalar(select(func.count()).select_from(Thermo)) or 0
         # High-water mark for the review bookkeeping this workflow will create.
         # The upload writes a `record_review` row per reviewable record — the
-        # thermo *and* its species_entry — and only the thermo one used to be
+        # thermo *and* its species_entry — and only the thermo one was
         # cleaned up, so this test committed one review row into the shared
         # database on every run. Primary-key sequences are non-transactional and
         # only ever advance, so "id greater than this" is exactly the set of

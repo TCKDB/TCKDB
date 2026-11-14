@@ -2,7 +2,7 @@
 
 The request schemas refuse an undeclared, self-referencing or cross-owner key
 before any workflow runs, and answer with the same code the workflow would
-(ADR 0017), so an HTTP test cannot tell the layers apart. The schema lives in
+, so an HTTP test cannot tell the layers apart. The schema lives in
 another package and has drifted from its workflows before, so this pins the
 service on its own: each refusal below is provoked with no schema in front.
 """

@@ -1,4 +1,4 @@
-"""A ``D``/``T`` element spelling means 2H/3H everywhere (#672, ADR 0022).
+"""A ``D``/``T`` element spelling means 2H/3H everywhere.
 
 Before this decision identity treated ``D``/``T`` as plain hydrogen ("isotope
 silent") while ``normal_modes.atomic_mass`` weighed them as deuterium and
@@ -150,7 +150,7 @@ def test_a_new_d_file_does_not_dedupe_onto_a_legacy_d_row(db_session) -> None:
 
 
 def test_validate_isotope_resolves_d_and_t_before_rdkit() -> None:
-    """``D`` plus a real mass number used to fail as "unknown element symbol 'D'"."""
+    """``D`` plus a real mass number must not fail as "unknown element symbol 'D'"."""
     validate_isotope("D", 2, context="x")
     validate_isotope("T", 3, context="x")
     validate_isotope("d", 2, context="x")
@@ -340,7 +340,7 @@ def test_a_legacy_d_atom_and_a_new_h2_atom_are_one_structure(db_session) -> None
 
 
 def test_a_rigidly_moved_polyatomic_geometry_is_the_same_structure_across_the_two_d_forms(db_session) -> None:
-    """The #667 rigid-motion merge reads a legacy ``D`` row and a new ``H`` + 2 row as one atom kind.
+    """The rigid-motion merge reads a legacy ``D`` row and a new ``H`` + 2 row as one atom kind.
 
     Same coordinates (so Kabsch RMSD is zero), so only the per-atom nuclide
     decides: legacy ``D``/NULL against new ``H``/2 must agree, and either must

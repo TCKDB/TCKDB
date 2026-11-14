@@ -23,7 +23,7 @@ Three record shapes, each exported then re-imported:
 * **declared** -- unaffected; exports and re-imports exactly as before.
 
 Point enthalpies and Gibbs energies are pruned like the scalar. A point left
-with no value is dropped on its own and its temperature reported (#556); the
+with no value is dropped on its own and its temperature reported; the
 record is omitted only when no point, fit or scalar survives.
 """
 
@@ -311,7 +311,7 @@ def test_legacy_point_gibbs_is_pruned_and_reimports(db_session) -> None:
 
 
 def test_legacy_gibbs_only_points_are_dropped_and_s298_survives(db_session) -> None:
-    """Points whose ONLY value is G are empty once G is pruned. Until #556
+    """Points whose ONLY value is G are empty once G is pruned. Without pruning
     that omitted the whole record, losing its s298 with a report that
     nothing meaningful remained. Now only the empty point is dropped, its
     temperature is reported, and the record exports with its s298."""
@@ -343,7 +343,7 @@ def test_legacy_gibbs_only_points_are_dropped_and_s298_survives(db_session) -> N
 
 
 # ---------------------------------------------------------------------------
-# #556 -- pruning that empties SOME points drops those points, not the record
+# pruning that empties SOME points drops those points, not the record
 #
 # A point emptied by the prune fails the point schema. Dropping just that
 # point loses nothing the record still holds; omitting the whole record threw
@@ -424,7 +424,7 @@ def test_legacy_mixed_points_keep_survivors_and_round_trip(db_session) -> None:
 
 def test_legacy_tabulated_record_losing_every_point_exports_its_scalar(db_session) -> None:
     """Every point emptied, but s298 survives: the record is not omitted.
-    Its stored ``model_kind='tabulated'`` no longer describes what is
+    Its stored ``model_kind='tabulated'`` does not describe what is
     exported (the upload schema refuses tabulated with no points), so it is
     left for the importer to infer, and the report says so."""
     thermo = _legacy_point_thermo(
@@ -503,7 +503,7 @@ def test_legacy_nasa_fit_with_h_only_points_is_omitted_whole(db_session) -> None
     """The existing NASA rule wins over point pruning: an undeclared NASA
     fit's enthalpy cannot be dropped without destroying the fit, so the whole
     record is omitted, even though its H-only points alone could have been
-    dropped. Confirmed and kept by #556."""
+    dropped. """
     thermo = _legacy_fit_thermo(db_session, prefix="ENTHEXPNASAPTS")
     for temperature, h in ((300.0, -74.5), (500.0, -66.0)):
         db_session.add(ThermoPoint(thermo_id=thermo.id, temperature_k=temperature, h_kj_mol=h))
@@ -561,7 +561,7 @@ def test_declared_thermo_round_trips_unchanged(db_session) -> None:
 
 
 # ---------------------------------------------------------------------------
-# The Phase A contract inventory must count an omitted legacy fit as a
+# The contract inventory must count an omitted legacy fit as a
 # genuine incompatibility, not silently pass it as creatable.
 # ---------------------------------------------------------------------------
 

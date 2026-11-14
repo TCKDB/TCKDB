@@ -1,4 +1,4 @@
-"""The allene SMILES-mark reader against an independent labeller (#832, part 2).
+"""The allene SMILES-mark reader against an independent labeller.
 
 ``tests/fixtures/allene_marks_centres.json`` holds 442 SMILES texts, each with the label the Centres CIP labeller
 (Hanson et al. 2018, SiMolecule/centres 1.2.1 on CDK 2.13) gives it: ``M`` is ``Ra`` and ``P`` is ``Sa``. Neither
@@ -98,7 +98,7 @@ def test_no_token_without_a_mark() -> None:
 
 
 def test_the_centre_between_two_allenes_is_read_from_the_marks() -> None:
-    """Part 3 of #832: with both axes marked the centre is ``-``, ``r`` or ``s`` (Centres: M,P with the centre mark
+    """With both axes marked the centre is ``-``, ``r`` or ``s`` (Centres: M,P with the centre mark
     ``@`` is ``r``; M,M is not stereogenic). Unmarked, nothing is stated and no reason is given: data could settle it.
     The fuller witness (every skeleton, every mark combination, respellings) is ``test_allene_pseudo_centre.py``."""
 

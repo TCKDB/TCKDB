@@ -1,8 +1,8 @@
-"""``tckdb_storage_hostfw.sh`` closes the object store's internal ports to the host (#548).
+"""``tckdb_storage_hostfw.sh`` closes the object store's internal ports to the host.
 
 SeaweedFS's filer, master and volume ports, and their gRPC ports, take no
 credentials. The compose ``storage`` network keeps other containers away from
-them (#545); the host's own network namespace can still route to the bridge.
+them; the host's own network namespace can still route to the bridge.
 The script inserts one rule at the top of the host's OUTPUT chain rejecting
 new TCP from the host to the storage subnet, except to the S3 port. What is
 pinned here:
@@ -355,7 +355,7 @@ def test_an_ipv6_subnet_gets_an_ip6tables_rule(host: Host) -> None:
 
 def test_no_ipv6_subnet_is_said_and_clears_an_old_ipv6_rule(host: Host) -> None:
     host.add_network(NET, V4)
-    host.set_chain([_rule(V6)], family="ip6tables")  # the network used to have IPv6
+    host.set_chain([_rule(V6)], family="ip6tables")  # a stale rule left from an earlier IPv6 subnet
     result = host.run("--network", NET)
     assert result.returncode == 0, result.stderr
     assert "no IPv6 subnet; no ip6tables rule" in result.stdout

@@ -12,7 +12,7 @@ spawns. So::
 hands ``python`` an empty stdin: it reads EOF, executes nothing, and exits 0.
 The step runs, prints nothing, and is reported green. ``Initialize artifact
 bucket`` in both backend workflows was written that way and had therefore
-never provisioned a bucket on any green run (#93, fixed in #125).
+never provisioned a bucket on any green run.
 
 The same shape does not need ``conda run`` to appear. A heredoc *is* the
 process's stdin, so any program read from a heredoc has already consumed the

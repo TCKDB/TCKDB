@@ -735,7 +735,7 @@ def test_fsf_in_statmech_does_not_create_applied_energy_correction(db_conn) -> N
 
 
 # ---------------------------------------------------------------------------
-# DR-0033: optical isomers + electronic energy levels
+# Optical isomers + electronic energy levels
 # ---------------------------------------------------------------------------
 
 
@@ -965,12 +965,12 @@ def test_statmech_upload_chained_id_that_does_not_exist_raises_not_found(
 ) -> None:
     """A missing row is a named 404, never a ``KeyError`` or a raw FK error.
 
-    Asserted on the ``code`` since #230, not on a substring of the
+    Asserted on the ``code``, not on a substring of the
     sentence. The prose was the only thing this could check while the
     refusal carried the generic ``resource_not_found``; now that it
     declares ``unknown_calculation_ref`` there is a real contract to hold,
     and the id the caller supplied must stay out of the message
-    (DR-0028 Requirement 2).
+.
     """
     request = StatmechUploadRequest(
         species_entry={"smiles": "CCOCCC", "charge": 0, "multiplicity": 1},
@@ -1036,7 +1036,7 @@ def test_statmech_upload_chained_id_from_another_species_entry_raises(
     detail = str(excinfo.value)
     assert "species_entry_id=" not in detail
     assert "id=" not in detail
-    # #158: the refusal declares a code of its own rather than relying on
+    # the refusal declares a code of its own rather than relying on
     # the envelope's generic ``validation_error``.
     assert excinfo.value.code == "statmech_source_calculation_owner_mismatch"
 

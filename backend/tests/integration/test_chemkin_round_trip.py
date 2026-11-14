@@ -104,7 +104,7 @@ def _canon(smiles: str) -> str:
 
 
 def _import_payloads():
-    """Stage 1-4 of the importer: CHEMKIN text -> TCKDB upload payload dicts."""
+    """The importer stages: CHEMKIN text -> TCKDB upload payload dicts."""
     mech = parse_mechanism(_read("mech.inp"), thermo_text=_read("therm.dat"))
     mech.transport = parse_transport_file(_read("tran.dat"))
     resolver = IdentityResolver(
@@ -213,7 +213,7 @@ def round_trip(db_session):
     blocking = [g for g in export.gaps if g.kind in ("thermo_nasa", "kinetics")]
     assert blocking == [], f"unexpected export gaps: {blocking}"
 
-    # Stage 1-3 of the importer, run again on the *exported* text. Identity is
+    # The importer's parse stages, run again on the *exported* text. Identity is
     # resolved purely from the `! SMILES=` traceability comments the exporter
     # writes on every SPECIES declaration (no external structure map needed).
     mech_out = parse_mechanism(export.files["chem.inp"], thermo_text=export.files["therm.dat"])
@@ -287,7 +287,7 @@ def test_species_set_preserved_by_structure(round_trip):
 def test_nasa_thermo_round_trips_in_the_same_intervals(round_trip):
     """Both 7-coefficient blocks and all three temperatures round-trip, and —
     critically — the HIGH-temperature block stays HIGH (a=LOW / b=HIGH is the
-    exact convention that was just fixed in both adapters)."""
+    exact convention both adapters use)."""
     orig = _thermo_by_smiles(round_trip["mech_in"], round_trip["resolved_in"])
     back = _thermo_by_smiles(round_trip["mech_out"], round_trip["resolved_out"])
 
@@ -462,8 +462,8 @@ def test_transport_round_trips(round_trip):
 # Regression guard: the NDJSON export path's NASA a/b labelling in
 # ``SelectedThermo.to_dict`` must follow the authoritative convention
 # (a=LOW, b=HIGH), consistent with the CHEMKIN serializer and the importer.
-# The round-trip test originally surfaced this path swapping the blocks; the
-# bug was fixed in export.py and this now guards against regression.
+# The round-trip test surfaces this path swapping the blocks, and
+# guards against that regression.
 # ---------------------------------------------------------------------------
 
 

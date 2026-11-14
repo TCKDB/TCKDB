@@ -82,7 +82,7 @@ class TestTheJudgement:
         assert evaluate_frequency_list_completeness(3, 3, location="x") == []
 
     def test_the_full_three_n_eigenvalue_set_is_silent(self):
-        """ADR 0012 asks for the six rigid-body eigenvalues as well."""
+        """The imaginary-mode protocol asks for the six rigid-body eigenvalues as well."""
         assert evaluate_frequency_list_completeness(9, 3, location="x") == []
 
     def test_one_short_of_the_floor_is_reported(self):
@@ -380,7 +380,7 @@ _TS_COMPLETE = [-1300.0, 500.0, 900.0, 1200.0, 1500.0, 3000.0]
 _TS_TRUNCATED = [-1300.0]
 
 #: Water, ``3N = 9``: the whole mass-weighted Hessian spectrum, the six
-#: near-zero rigid-body eigenvalues ADR 0012 asks for included. Sits
+#: near-zero rigid-body eigenvalues the imaginary-mode protocol asks for included. Sits
 #: exactly on the ceiling and must be accepted.
 _AT_CEILING = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 1595.0, 3657.0, 3756.0]
 #: One past it, which no harmonic analysis of three atoms can produce.
@@ -485,7 +485,7 @@ class TestEveryPublishedRequestModelAsksTheQuestion:
         """``3N`` exactly, through each seam, accepted and unflagged.
 
         The complement of the test above, and it is what keeps the
-        refusal from being one mode too eager on any one seam. ADR 0012
+        refusal from being one mode too eager on any one seam. The imaginary-mode protocol
         asks for the six translation/rotation eigenvalues alongside the
         spectrum, so this list -- the whole mass-weighted Hessian
         spectrum -- is the most complete record it describes.

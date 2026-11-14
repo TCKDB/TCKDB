@@ -5,32 +5,32 @@ our row ids, and they cannot get one without first querying this
 database — which is exactly the client we are not designing for. So a
 producer payload names things with local keys, scientific content and
 public refs, and the server resolves them (``.claude/rules/schema-rules.md``,
-DR-0029 Requirement 1).
+the no-FK-ids rule).
 
 That rule was already asserted — on **one** root. A walker over
 ``NetworkPDepUploadRequest`` lived in ``tests/workflows/`` and checked the
 pressure-dependent tree only, while ten other upload roots were checked
 by nobody. The consequence is on the record: ``literature_id`` was found
-by hand on the reaction bundle (#118), by hand again on the PDep route
-(#154), and by hand a third time on the conformer and transition-state
-routes (#194) — three separate discoveries of one field, over three
+by hand on the reaction bundle, by hand again on the PDep route,
+and by hand a third time on the conformer and transition-state
+routes — three separate discoveries of one field, over three
 weeks, because a guard pointed at one root out of eleven is not a guard.
 
 The first generalisation then repeated that mistake one level up. It
 walked the routes under ``/uploads``, ``/jobs`` and ``/bundles``, and so
 missed ``SubmissionSupersedeRequest.new_submission_id`` on
-``POST /submissions/{id}/supersede`` (#571), a producer route outside
+``POST /submissions/{id}/supersede``, a producer route outside
 those prefixes. A path-prefix list is a hand-written list with extra
 steps. This module now classifies every route of the live app by what it
 *is* — an authenticated, non-role-gated write that takes a body — which
 is the rule the producer contract generator uses (``classify_route`` in
-``backend/scripts/generate_producer_contract.py``, #570). A new producer
+``backend/scripts/generate_producer_contract.py``). A new producer
 route is covered the moment it is registered, wherever it is mounted.
 
 Two surfaces of each producer route are checked: the request body's whole
-model tree, and the route's own path and query parameters. The supersede
-route of #571 also took the *old* submission's row id in its path, and a
-body-only walker cannot see that.
+model tree, and the route's own path and query parameters. A route's path can
+carry a row id just as its body can -- the supersede route names the *old*
+submission there -- and a body-only walker cannot see that.
 
 Escape hatches exist, and all of them cost prose:
 
@@ -211,8 +211,8 @@ DEFERRED_LEAKS: dict[str, str] = {
 #: ``"METHOD path:param"`` -> why a producer route still takes a row id as a
 #: path or query parameter, and what has to happen to remove it.
 #:
-#: Empty. The two entries the parameter walk added for #571 (the rights-attestation
-#: and artifact-upload paths) were removed by #578: both routes now take the public
+#: Empty. The rights-attestation
+#: and artifact-upload paths take the public
 #: ref only. The dict stays so a future leak can be frozen with a reason, and
 #: ``test_allowlists_are_not_carrying_dead_entries`` keeps it honest.
 DEFERRED_PARAM_LEAKS: dict[str, str] = {}
@@ -326,7 +326,7 @@ def test_producer_routes_were_actually_discovered() -> None:
     assert unwalked == [], f"producer routes whose body was not walked: {unwalked}"
 
     for expected in (
-        # #571: outside every prefix the old guard walked.
+        # outside every path-prefix list.
         "POST /api/v1/submissions/{submission_ref}/supersede",
         "POST /api/v1/submissions/{submission_ref}/rights-attestations",
         "POST /api/v1/calculations/{calculation_ref}/artifacts",
@@ -408,7 +408,7 @@ def test_producer_route_params_expose_no_db_ids(label: str) -> None:
 def test_allowlists_are_not_carrying_dead_entries() -> None:
     """Every allowlisted field or parameter must still be reachable.
 
-    An entry that no longer matches anything is a fix nobody noticed — and
+    An entry that does not match anything is a fix nobody noticed — and
     it leaves a name in the file that would silence a *future* field of the
     same name. Removing it is the point at which the prose gets re-read.
     """

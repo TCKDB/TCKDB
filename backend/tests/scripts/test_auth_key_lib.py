@@ -1,6 +1,6 @@
 """A credential the server never issued must not reach an env file.
 
-``scripts/dev_login.sh`` used to mint the API key with
+``scripts/dev_login.sh`` must not mint the API key with
 
     API_KEY="$(jq -r '.key' <<<"$KEY_RESPONSE")"
 
@@ -10,7 +10,7 @@ wrote ``export TCKDB_API_KEY='null'`` into ``.tckdb_auth.env``, ``chmod 600``'d
 it, printed a masked value that looks exactly like a real key, and reported
 ``==> Done.`` Everything downstream got a 401, whose obvious reading is "the
 server rejected my key" rather than "there is no key" -- and the cost of that
-misreading is measured in hours, not minutes.
+misreading costs hours, not minutes.
 
 ``scripts/tckdb_auth.sh`` mints against the same endpoint and always refused
 correctly. The two implementations of "read the key out of the response" are

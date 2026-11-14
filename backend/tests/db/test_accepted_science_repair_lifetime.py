@@ -55,7 +55,7 @@ def committed_engine() -> Iterator:
         engine = create_engine(_database_url(db_name), pool_pre_ping=True)
         # Reproduce a database whose stored rows predate the canonical-element constraint.
         # ``ck_geometry_atom_element_canonical`` is in force, so ``CL``
-        # can no longer be written -- and the rows a repair exists for are
+        # cannot be written -- and the rows a repair exists for are
         # exactly the rows a later rule would refuse, because a repair is
         # needed when the data predates the constraint and never when it was
         # written under it. This module commits for real, which is the point of

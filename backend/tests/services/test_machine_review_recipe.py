@@ -48,7 +48,7 @@ _ACTIVE_RUBRICS = (
     COMPUTED_TRANSITION_STATE,
     # The owner-scoped rubric for transition-state-owned statmech.
     COMPUTED_TS_STATMECH,
-    # Phase C-E4: not a computed-trust rubric (checks=()), but it is part of
+    # Not a computed-trust rubric (checks=()), but it is part of
     # the machine-review recipe -- see the comment on _ACTIVE_RUBRICS in
     # app.services.machine_review.recipe.
     EXTERNAL_CP_COMPARISON,

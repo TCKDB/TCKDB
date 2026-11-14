@@ -255,7 +255,7 @@ def test_get_latest_row_returns_the_newest(db_session):
 
 
 # --------------------------------------------------------------------------- #
-# family / model: the reviewer vs scientific_check split (review round 3).
+# family / model: the reviewer vs scientific_check split.
 #
 # One record carries four rows: a NULL-provider reviewer row (the shape
 # every pre-existing reviewer-family row has), a "fake"-provider reviewer
@@ -294,7 +294,7 @@ def test_reviewer_family_returns_null_and_non_scientific_check_provider_rows_onl
     filter in ``list_record_machine_review_rows_for_record`` -- in SQL,
     ``NULL != 'tckdb.scientific_checks'`` evaluates to NULL (not true), so
     the NULL-provider row would silently vanish from this result. This is
-    the test that goes red under that mutation (see PR body).
+    the test that goes red under that mutation.
     """
     null_provider, fake_provider, check_a, check_b = _insert_family_fixture(db_session)
 

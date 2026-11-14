@@ -20,7 +20,7 @@ see ``tests/conftest.py``).
 
 The enforcement — the fixture that fails the individual test that commits
 rather than letting the damage surface as an inexplicable failure in whatever
-file happens to run next — used to live here. It now lives in
+file happens to run next — lives in
 ``tests/conftest.py`` (``_refuse_committed_rows``) and covers every tree, not
 just this one, because ~40 other files had the same habit. This module is kept
 for the history above; the tree needs no fixtures of its own.

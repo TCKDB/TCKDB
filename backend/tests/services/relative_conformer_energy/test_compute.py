@@ -1,6 +1,6 @@
 """The pure relative-energy computation. No database: normalised basins in, public refs out.
 
-Each test below is paired, in the PR description, with the wrong change it exists to catch.
+Each test below is paired with the wrong change it exists to catch.
 """
 
 from __future__ import annotations

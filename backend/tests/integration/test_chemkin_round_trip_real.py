@@ -811,7 +811,7 @@ def test_formic_import_reports_exactly_the_five_bad_flags(formic_round_trip):
         assert f"(lines {first}, {second})" in warning
         assert f"line(s) {first}, {second} carry no DUPLICATE" in warning
     assert f"line {_ORPHAN[0]}, DUPLICATE on line {_ORPHAN[1]}" in orphans[0]
-    # Nothing was changed to make the warnings go away: the model carries its
+    # Nothing is altered to make the warnings go away: the model carries its
     # 111 markers and 3002 rows as written.
     assert sum(1 for r in rt["mech_in"].reactions if r.duplicate) == 111
     assert len(rt["mech_in"].reactions) == 3002

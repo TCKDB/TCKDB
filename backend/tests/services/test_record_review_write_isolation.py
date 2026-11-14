@@ -5,7 +5,7 @@
 ``species_entry``, ``reaction_entry``, ``conformer_group`` — that resolution
 deliberately dedupes across uploads. So two contributors depositing against
 the same molecule concurrently both read ``None`` inside
-``ensure_record_review``, both INSERT, and on the pre-fix code the loser takes
+``ensure_record_review``, both INSERT, and without isolation the loser takes
 an ``IntegrityError`` that rolls back its entire upload: hundreds of science
 rows destroyed by a bookkeeping row describing something the winner had
 already recorded.
@@ -185,7 +185,7 @@ class TestConcurrentDepositAgainstOneIdentity:
     ) -> None:
         """The winner commits inside the loser's check-then-insert window.
 
-        On the pre-fix code the loser's INSERT violates
+        Without isolation the loser's INSERT violates
         ``uq_record_review_record``, the ``IntegrityError`` poisons its
         transaction, ``get_write_db`` rolls it back, and every scientific row
         the loser had written goes with it — while nothing was wrong with the

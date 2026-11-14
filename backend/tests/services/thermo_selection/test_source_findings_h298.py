@@ -1,6 +1,6 @@
 """H298 selection and a confirmed finding about the product's own source (the other half of the trust correction).
 
-The legacy trust badge no longer hard-fails on an automated geometry heuristic. What a *confirmed* invalidation does is
+The legacy trust badge does not hard-fail on an automated geometry heuristic. What a *confirmed* invalidation does is
 decided here, where the question is asked: the H298 assessor reads live, supported ``StructureEvidenceFinding`` rows for
 the record's source calculations in the roles it uses them for. Each case is a stored product with stored sources and
 findings, run through ``select_h298``.

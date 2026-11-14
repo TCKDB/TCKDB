@@ -150,7 +150,7 @@ def test_the_geometry_heuristic_alone_does_not_exclude_and_a_confirmed_geometry_
 
 
 def test_a_computed_record_names_the_evidence_rubric_version_that_produced_its_verdict(db_session, world):
-    """Structured as well in the manifest's ``assessment_semantics`` block; this is the per-record advisory (reviewer M6)."""
+    """Structured as well in the manifest's ``assessment_semantics`` block; this is the per-record advisory."""
     sources = Sources(db_session, world)
     calc, _, role = sources.energy()
     record(db_session, world, "d", sources, links=[(calc, role)])
@@ -167,8 +167,9 @@ def test_links_that_supply_no_structural_role_are_not_consulted(db_session, worl
 
 
 def test_k2_two_determinations_one_with_a_geometry_fail_now_compete_and_the_flagged_one_says_so(db_session, world):
-    """Reviewer case K2. Main: the flagged determination was excluded, leaving ``sole_eligible_candidate``. Now both are
-    eligible and TCKDB ranks none above another: ``incomparable_alternatives``, nothing selected, with the geometry warning disclosed on
+    """Two determinations, one with a geometry fail, compete: the flagged determination is not excluded, so
+    ``sole_eligible_candidate`` does not apply. Both are eligible and TCKDB ranks none above another:
+    ``incomparable_alternatives``, nothing selected, with the geometry warning disclosed on
     the flagged record's assessment."""
     from tests.services.kinetics_selection.test_selection import select
 

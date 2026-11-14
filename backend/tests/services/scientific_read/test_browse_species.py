@@ -70,7 +70,7 @@ def test_browse_does_not_raise_missing_identifier(db_session):
 
 
 def test_species_ref_and_entry_ref_are_bound_to_their_own_record(db_session):
-    """Regression for #275: ``species_ref``/``species_entry_ref`` must name
+    """Regression: ``species_ref``/``species_entry_ref`` must name
     the record that produced them, not a neighbour's and not a constant.
 
     A single-species fixture cannot tell "the right ref" from "a made-up
@@ -551,7 +551,7 @@ def test_composition_filter_pagination_is_stable_across_query_plans(db_session):
     ``_rank_and_slice_species`` -- if a future change moved composition
     filtering somewhere that bypassed the shared ordering machinery (e.g.
     filtering in Python after the page was already sliced), ties among
-    the filtered rows would no longer be broken deterministically and
+    the filtered rows would not be broken deterministically and
     this test would catch it as a row on two pages or on neither.
     """
     from sqlalchemy import text
@@ -648,20 +648,16 @@ def test_include_deprecated_surfaces_deprecated_entries(db_session):
     """``include_deprecated=True`` widens visibility so a species whose
     *only* entry is deprecated becomes visible again.
 
-    **Behaviour change, deliberate, made in the #277 follow-up below.**
-    Before that fix, the plain default call returned this species with
-    the deprecated entry merely absent from ``entries`` (``entries: []``
-    on the wire). That is precisely the shape #277 says is wrong: the
-    species has an entry, the entry is just not currently visible, and a
-    catalogue listing that fact as "this species has no entries" is the
-    same lie whether the invisibility comes from an explicit
-    ``min_review_status=``, a ``profile=curated`` floor, or (this case)
-    the endpoint's own default posture, which excludes deprecated/rejected
-    without the caller asking for anything. #277's fix does not
-    distinguish *why* an entry is invisible, so it does not carve out an
-    exception for "invisible because nobody asked to see more" -- doing
-    so would leave a fourth surviving instance of the exact bug class the
-    fix exists to close. The species now vanishes entirely from the
+    A species whose entries are all invisible is dropped from the listing
+    rather than listed with ``entries: []`` (the species has an entry, the
+    entry is just not currently visible, and a catalogue listing that fact as
+    "this species has no entries" is a lie). That holds whether the
+    invisibility comes from an explicit ``min_review_status=``, a
+    ``profile=curated`` floor, or (this case) the endpoint's own default
+    posture, which excludes deprecated/rejected without the caller asking for
+    anything. The rule does not distinguish *why* an entry is invisible, so it
+    does not carve out an exception for "invisible because nobody asked to
+    see more". The species vanishes entirely from the
     default listing (:func:`app.services.scientific_read.species._has_any_entry_expr`
     is what keeps a species with *zero* entries from suffering the same
     fate -- that case is still listed, always).
@@ -720,31 +716,31 @@ def test_min_review_status_approved_filters_to_approved(db_session):
 
 
 # ---------------------------------------------------------------------------
-# #277: a candidate species left with zero *visible* entries must be
+# A candidate species left with zero *visible* entries must be
 # dropped, not listed with ``entries: []`` and counted toward
 # ``pagination.total`` anyway.
 #
-# Measured on the deployed instance: 59 species / 60 entries, none
+# Observed on a real instance: 59 species / 60 entries, none
 # approved. ``?min_review_status=approved`` reported ``pagination.total:
 # 59`` (the unfiltered species count) while every record on the page
 # carried ``entries: []`` -- a curator asking "which species are
-# approved?" was told "all 59" when the true answer was none. Neither
-# review round on #276 caught this because every fixture had at least
-# one entry surviving whatever filter was applied; the fixtures below
+# approved?" was told "all 59" when the true answer was none. A fixture set in
+# which every fixture has at least one entry surviving whatever filter is applied
+# would miss this; the fixtures below
 # deliberately include a species where the filter matches *nothing* and
 # one where it matches *some but not all*, which is the only shape that
 # can tell "drops the empty ones" apart from "drops everything" or
 # "drops nothing".
 #
-# The first fix gated the drop on whether the caller had typed one of
-# five specific request fields (min_review_status / include_rejected /
-# include_deprecated / electronic_state_kind / species_entry_kind). That
-# missed the read-profile floor (``?profile=curated`` narrows visibility
-# to ``approved`` with no request field set at all -- see
+# The drop is not gated on whether the caller typed one of five specific request
+# fields (min_review_status / include_rejected / include_deprecated /
+# electronic_state_kind / species_entry_kind): that would miss the read-profile
+# floor (``?profile=curated`` narrows visibility to ``approved`` with no request
+# field set at all -- see
 # test_api_species_browse.py::test_profile_curated_drops_species_with_no_approved_entries)
-# and inverted itself for the two widening flags (see
+# and would invert itself for the two widening flags (see
 # test_widening_flag_does_not_shrink_the_result_set below). The rule is
-# now unconditional: species.py::_rank_and_slice_species always drops a
+# unconditional: species.py::_rank_and_slice_species always drops a
 # species that has *some* entries but none visible, on every browse call
 # -- and species.py::_has_any_entry_expr is the structural, filter-
 # independent check that keeps a species with *zero* entries at all
@@ -867,7 +863,7 @@ def test_electronic_state_kind_filter_drops_species_with_no_matching_entry(db_se
 
 
 def test_species_level_filter_alone_still_lists_entryless_species(db_session):
-    """Species-level filters must never trigger the #277 drop.
+    """Species-level filters must never trigger the drop.
 
     A species matching a species-level filter (``formula``) but with no
     ``species_entry`` rows *at all* is still a browse candidate with
@@ -921,7 +917,7 @@ def test_profile_curated_is_not_reachable_at_the_service_layer_by_default(db_ses
     ``async`` FastAPI dependency on ``scientific_router``
     (``app/api/routes/scientific/_profile.py``); outside a request it
     falls back to ``exploratory`` unconditionally (see
-    ``app/services/scientific_read/profile.py``). The #277-follow-up
+    ``app/services/scientific_read/profile.py``). The
     regression for ``profile=curated`` therefore has to run through the
     real HTTP dependency chain to mean anything -- see
     ``test_api_species_browse.py::test_profile_curated_drops_species_with_no_approved_entries``,
@@ -1011,14 +1007,9 @@ def test_review_summary_is_computed_before_paging(db_session):
 def test_pagination_is_stable_even_across_different_query_plans(db_session):
     """The tiebreak's real job: pagination must not depend on the plan.
 
-    (Supersedes an earlier version of this test that only compared two
-    page fetches under whatever single plan Postgres happened to pick --
-    which can look stable by accident, and did: dropping the ``id DESC``
-    tiebreak did not fail that version locally even though the guarantee
-    really was broken. See ``eb724909`` for the failure that motivated
-    the rewrite; keeping the weaker version alongside this one would
-    advertise a guarantee it does not provide, so it was removed rather
-    than kept as a second, redundant case.)
+    A comparison of two page fetches under one query plan can look stable by
+    accident: dropping the ``id DESC`` tiebreak does not fail it even though
+    the guarantee is broken. Forcing different plans is what exposes that.
 
     Two pages fetched under the *same* plan can look stable by accident --
     a repeated query against unchanged data tends to walk a hash table or

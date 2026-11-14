@@ -1,4 +1,4 @@
-"""Atom-resolved isotope identity (Stage 2 blocker B10).
+"""Atom-resolved isotope identity.
 
 Before this feature the only isotope-aware column in the schema was
 ``species_entry.isotopologue_label`` — a free-text ``VARCHAR(64)`` inside

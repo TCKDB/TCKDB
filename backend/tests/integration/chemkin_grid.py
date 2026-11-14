@@ -3,7 +3,7 @@
 Both mechanisms are loaded by the pinned Cantera (``ck2yaml`` then
 ``Solution``) and evaluated on one declared grid of temperatures, pressures
 and one composition. Per species the reduced thermo functions Cp/R, H/RT and
-S/R are compared under the Phase A printed-precision bound
+S/R are compared under the printed-precision bound
 (``tests/services/scientific_read/test_thermo_phase_a_numerical.py``); per
 reaction the forward rate constant and the forward rate of progress are
 compared under a bound derived from the printed precision of every rate
@@ -51,7 +51,7 @@ power of ten, which leaves the mantissa alone.
 For a falloff reaction the two Arrhenius channels enter through Cantera's
 falloff function, ``k = k_inf * Pr/(1+Pr) * F``. The first-order propagation
 is ``|d ln k| <= |w_inf| d_inf + |w_0| d_0`` with the sensitivities
-``w = d ln k / d ln k_channel`` measured on the original rate by a central
+``w = d ln k / d ln k_channel`` evaluated on the original rate by a central
 finite difference of relative step ``h = 1e-4`` (Cantera evaluates the
 perturbed ``TroeRate``; nothing is re-implemented). The step's own error
 and the second-order remainder are covered by adding ``h`` to each weight
@@ -63,7 +63,7 @@ the floating-point allowance alone.
 For a DUPLICATE sum ``k = sum_i k_i`` the absolute bound is the sum of the
 members' absolute bounds, i.e. relative bound
 ``sum_i k_i (exp(d ln k_i) - 1) / sum_i k_i``. Every relative bound gains the
-floating-point allowance ``1e-10`` (the Phase A value). The forward rate of
+floating-point allowance ``1e-10``. The forward rate of
 progress is compared under the same relative bound: at one state the
 concentration product and the effective third-body concentration are
 identical on both sides once the efficiencies have been checked equal.
@@ -102,7 +102,7 @@ GRID_PRESSURES_ATM: tuple[float, ...] = (0.1, 1.0, 10.0)
 COMPOSITION = "equimolar over every species of the mechanism"
 
 #: Floating-point allowance: relative on rate constants, absolute on the
-#: reduced thermo functions (the Phase A value).
+#: reduced thermo functions.
 IEEE_ALLOWANCE = 1e-10
 #: Two doubles printed from one stored value on the same grid are the same
 #: number; this is the allowance for the unit chain's last-bit noise.

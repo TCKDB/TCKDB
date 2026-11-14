@@ -4,14 +4,14 @@
 guarantee the database enforces but the document omits is worse than a missing
 file -- it is a confident wrong answer.
 
-Two different claims are made here, and only one of them used to be:
+Two different claims are made here, and only one of them is checked by the generator alone:
 
 * the generator *renders* correctly -- given a table with these constraints,
   does it emit the right lines;
 * the *committed file* matches the live models.
 
 Only the first was tested, and the first is satisfied by a file nobody ever
-reads. ``HessianDetectionContext.reclaim_restore`` was added to
+reads. ``HessianDetectionContext.reclaim_restore`` is in
 ``app/db/models/common.py`` and was missing from ``backend/schema.dbml`` for a
 full day with every test green, because nothing compared the two.
 """
@@ -44,7 +44,7 @@ def test_a_non_unique_index_does_not_suppress_a_unique_constraint() -> None:
     """A lookup index over the same columns is not the constraint.
 
     Regression: ``uq_record_review_record`` vanished from ``schema.dbml`` when
-    ``ix_record_review_record_lookup`` was added over the same
+    ``ix_record_review_record_lookup`` is over the same
     ``(record_type, record_id)`` pair. The constraint was untouched in the
     database, so the document silently under-reported what the schema
     guarantees. Matching on the column set alone cannot tell a uniqueness

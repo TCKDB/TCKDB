@@ -1,4 +1,4 @@
-"""Service-layer tests for search_species_calculations (Phase 7)."""
+"""Service-layer tests for search_species_calculations."""
 
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ def test_search_by_species_entry_id_handle(db_session):
 def test_species_entry_id_handle_binds_species_entry_ref_to_the_entry_looked_up(
     db_session,
 ):
-    """Regression for #275: ``species.species_entry_id`` was already
+    """Regression: ``species.species_entry_id`` was already
     asserted here, but the public ``species_entry_ref`` sibling never
     was. Two species entries, looked up one call at a time by internal
     id, each must come back with its *own* public ref -- not the other
@@ -748,7 +748,7 @@ def test_include_rejected_quality_opts_in(db_session):
 def test_the_explicit_rejected_quality_filter_still_needs_the_inspection_opt_in(db_session):
     """Deliberate behaviour change (plan section 9): naming ``calculation_quality=rejected`` is not an opt-in.
 
-    It used to return rejected calculations on its own; it now matches the generic calculation search, which answers
+    It does not return rejected calculations on its own; it matches the generic calculation search, which answers
     an empty page unless ``include_rejected_quality`` is also set. The other quality filters are unchanged.
     """
     _, entry = _entry(db_session, smiles="Q3")
@@ -865,7 +865,7 @@ def test_sort_is_deterministic_across_calls(db_session):
 def test_sp_calc_with_no_output_geometry_returns_empty_output_geometries(
     db_session,
 ):
-    """Phase 2 audit (thermo/geometry): an SP calc without an explicit
+    """Thermo/geometry: an SP calc without an explicit
     output geometry is **expected** to return ``output_geometries=[]``
     and ``primary_output_geometry_ref=None``.
 

@@ -37,9 +37,9 @@ _FIXTURE_BY_URL = {
     "https://cccbdb.nist.gov/goodlistx.asp": "property_hf_0_with_uncertainty.html",
     "https://cccbdb.nist.gov/diplistx.asp": "property_dipoles.html",
     "https://cccbdb.nist.gov/expdiatomicsx.asp": "property_diatomic_spectroscopic.html",
-    # Phase 5c: polarizability_iso added to the pilot.
+    # polarizability_iso is in the pilot.
     "https://cccbdb.nist.gov/pollistx.asp": "property_polarizability_iso.html",
-    # Phase 5e: quadrupole tensor (parsed-only, workflow_ready=False).
+    # quadrupole tensor (parsed-only, workflow_ready=False).
     "https://cccbdb.nist.gov/quadlistx.asp": "property_quadrupole.html",
 }
 
@@ -207,7 +207,7 @@ class TestPropertyOnlyDoesNotFetchMoleculePages:
 
 
 class TestPropertyTargetsAreValidatedUrls:
-    """Phase 3a's property URLs are empirically verified as flat-table
+    """The property URLs are empirically verified as flat-table
     single-fetch resources (WebFetch survey, May 2026). They should
     NOT be gated behind ``--allow-unverified-urls``."""
 

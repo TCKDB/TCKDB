@@ -1,4 +1,4 @@
-"""``t0_k``: the Arrhenius reference temperature, on both kinetics routes (#620).
+"""``t0_k``: the Arrhenius reference temperature, on both kinetics routes.
 
 ``k = A * (T / T0)**n * exp(-Ea / RT)``. Before this field existed a producer
 that fitted with T0 = 298 K had to fold ``A / T0**n`` into ``a`` and the T0 it

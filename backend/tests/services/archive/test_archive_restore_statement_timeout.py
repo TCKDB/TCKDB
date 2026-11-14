@@ -1,6 +1,6 @@
 """A restore's statements run under their own ceiling, not the API's 30 s.
 
-With the API's ``statement_timeout`` really applied to every checkout (#604),
+With the API's ``statement_timeout`` really applied to every checkout,
 a restore's statements would inherit it. ``restore_archive`` raises the limit
 for its own savepoint and puts it back afterwards. The ceiling covers the
 restore's statements, not its final ``COMMIT`` (PostgreSQL disarms the timer

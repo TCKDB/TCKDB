@@ -335,7 +335,7 @@ def test_the_target_list_does_not_shrink():
     This is the assertion that did not exist. Removing the wire package
     from ``DEFAULT_TARGETS`` would leave every other test in this file
     green while the check stopped reading the package that caused
-    2026-08-04's class of failure.
+    that class of failure.
     """
     assert REQUIRED_TARGETS <= set(checker.DEFAULT_TARGETS)
 
@@ -510,9 +510,9 @@ def test_ci_invokes_the_check_with_no_arguments():
 def test_ci_prints_the_coverage_account():
     """The gate has to say what it is *not* scanning, in the log.
 
-    The summary line added in #166 made an empty scan visible. ``--audit``
+    The summary line makes an empty scan visible. ``--audit``
     is the same idea one level up: it makes an unscanned *tree* visible,
-    which is the state all five of the 2026-08 encoding misses were in.
+    which is the state all five of the encoding misses were in.
     A gate that only runs the scan reports coverage it already has.
     """
     command = _ascii_lint_step()["run"]
@@ -613,8 +613,8 @@ def test_the_shipped_client_trees_are_clean(tree: Path):
 def test_the_mcp_integration_was_clean_before_it_was_covered():
     """Coverage, not repair -- said here so the diff is not misread.
 
-    ``tckdb_mcp`` had no violations on the day it was added to the target
-    list. Nothing in it was changed. It is on the list so the *next*
+    ``tckdb_mcp`` has no violations and is on the target
+    list so the *next*
     string written there is checked by the pull request that writes it,
     which is precisely what did not happen for the wire package or for
     the client builders.
@@ -628,7 +628,7 @@ def test_the_mcp_integration_was_clean_before_it_was_covered():
 def test_a_reintroduced_em_dash_in_a_client_diagnostic_is_caught():
     """The live rule against the live file.
 
-    Puts the em dash back into the ``message=`` literal it was removed
+    Puts the em dash into the ``message=`` literal it is absent
     from, in the real ``uploads.py``, and checks the modified source.
     The literal is a multi-line implicit concatenation nested inside a
     ``Diagnostic(...)`` call inside an ``out.append(...)`` -- the shape

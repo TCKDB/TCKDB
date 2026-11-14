@@ -1,9 +1,9 @@
-"""Shared AST walk for the two geometry-link guards (#680).
+"""Shared AST walk for the two geometry-link guards.
 
-Both guards used to ask, per *function*, "does it call the checker anywhere?".
-That is how IRC points stayed unchecked while the guard was green:
-``_persist_irc_result`` called both checks, but only inside the
-forward/reverse branch, and the TS-marker point's ``calc_irc_point`` row was
+Both guards ask per construction, not per *function* ("does it call the checker anywhere?").
+A per-function question leaves IRC points unchecked while the guard is green:
+``_persist_irc_result`` calls both checks, but only inside the
+forward/reverse branch, and the TS-marker point's ``calc_irc_point`` row is
 written outside it.
 
 The question asked here is per *construction site*: for every call that builds a

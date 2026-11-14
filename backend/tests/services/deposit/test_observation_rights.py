@@ -238,7 +238,7 @@ def test_an_identity_unresolved_observation_is_unreachable_by_scope(
 
 
 # ---------------------------------------------------------------------------
-# The gate is actually wired into write_deposit (review round 2, F1)
+# The gate is actually wired into write_deposit
 #
 # Every test above calls ``_assert_observations_have_rights_basis`` directly.
 # That alone cannot catch the wiring itself going missing: deleting the call
@@ -305,7 +305,7 @@ def test_write_deposit_builds_over_an_attested_in_scope_observation(
 
 
 # ---------------------------------------------------------------------------
-# licenses_match is basis-agnostic (review round 2, F3): a source_terms
+# licenses_match is basis-agnostic: a source_terms
 # attestation must pass the gate exactly like a depositor_agreement one.
 # Forcing ``basis is RightsBasisKind.depositor_agreement`` in the gate would
 # leave this test the only thing catching it.

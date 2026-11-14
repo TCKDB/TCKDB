@@ -293,7 +293,7 @@ def test_a_recorded_ungrouped_fit_list_that_the_inputs_do_not_give_is_refused(db
 
 
 def test_decision_replay_takes_no_assessments_of_its_own(scenario):
-    """Handing a decision replay forged assessments used to reproduce any winner; the parameter is gone."""
+    """Handing a decision replay forged assessments cannot reproduce a winner; the parameter does not exist."""
     _, manifest, _ = scenario
     with pytest.raises(TypeError):
         replay_network_decision(manifest, assessments=manifest["assessments"])  # type: ignore[call-arg]
@@ -369,7 +369,7 @@ def test_a_curated_manifest_may_only_have_approved_effective_statuses(db_session
 
 
 def test_the_recorded_linked_evidence_rule_must_be_the_one_the_read_profile_applies(db_session, world):
-    """ADR 0023: a manifest relabelled curated without the evidence rule curated applies (or the reverse) is refused, not
+    """A manifest relabelled ``curated`` that does not record the evidence rule ``curated`` applies (or the reverse) is refused, not
     read as the rule it does not record."""
     manifest = _with_unreviewed_solve(db_session, world)
     assert manifest["visibility"]["linked_evidence_withheld"] == []

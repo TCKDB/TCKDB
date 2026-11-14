@@ -240,7 +240,7 @@ def test_selected_thermo_is_empty_when_no_release_is_published(db_session):
 
 
 # ---------------------------------------------------------------------------
-# Phase C-E4 generators
+# Comparison generators
 # ---------------------------------------------------------------------------
 
 
@@ -261,7 +261,7 @@ def test_experimental_cp_comparison_reports_every_finding_field_with_no_ids(db_s
         db_session, species_entry=entry, scientific_origin=ScientificOriginKind.computed
     )
     # No reference_pressure_bar: heat-capacity applicability needs the gas
-    # phase only, never a reference pressure (decided 2026-09-23; Cp is
+    # phase only, never a reference pressure (Cp is
     # pressure-independent). See engine.gas_state_reason's quantity="cp".
     thermo.phase = PhaseKind.gas
     attach_thermo_nasa(db_session, thermo=thermo)
@@ -348,7 +348,7 @@ def test_thermoml_source_provenance_lists_custody_rows_with_counts(db_session):
     second = render_json(generators.thermoml_source_provenance(db_session))
     assert first == second
 
-    # MEDIUM finding, review round 2: test_no_generator_output_carries_a_
+    # test_no_generator_output_carries_a_
     # database_id_key (above) runs write_expected_outputs on an EMPTY
     # db_session, so every generator (this one included) produces an empty
     # collection and the scan finds nothing to scan -- a vacuous pass that

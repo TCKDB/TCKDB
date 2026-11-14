@@ -424,7 +424,7 @@ def test_an_unreadable_in_scope_constant_is_refused_not_skipped(tmp_path, monkey
     assert type(excinfo.value).__name__ == "Unfingerprintable"
 
 
-# --- the real code paths the reviewer showed passing ----------------------------------------------------------------
+# --- the real code paths ----------------------------------------------------------------
 
 
 def test_real_helper_code_the_guard_used_to_miss_is_now_followed() -> None:
@@ -451,7 +451,7 @@ def _recompiled(module_name: str, function_name: str, old: str, new: str):
 
 
 def test_a_rule_change_in_the_reproducibility_grading_moves_its_fingerprint(monkeypatch) -> None:
-    """The reviewer's slip: ``elif not level_passed(auditable)`` -> ``elif False`` was reported as up to date."""
+    """``elif not level_passed(auditable)`` -> ``elif False`` must not be reported as up to date."""
     from app.services import reproducibility_rubric as module
 
     before = rubric_pins.current_fingerprints()["tckdb_reproducibility"]
@@ -473,7 +473,7 @@ def test_every_computed_getattr_site_is_declared() -> None:
     assert rubric_pins.discover_dynamic_attribute_sites() == sorted(rubric_pins.DYNAMIC_ATTRIBUTE_READS)
 
 
-# --- round 2: imports inside a function body, enum columns, the statmech chooser, determinism --------------------------
+# --- imports inside a function body, enum columns, the statmech chooser, determinism --------------------------
 
 
 def _moved_by(monkeypatch, module_name: str, function_name: str, old: str, new: str) -> set[str]:
@@ -495,8 +495,8 @@ def test_status_hidden_under_profile_moves_the_transition_state_rubric(monkeypat
     """``>`` to ``>=`` in handles.py, reached by the transition-state rubric through ``ref_guard.classify_refs``, which imports
     it at module level (``ref_guard.py``), on the scoped assessment's path.
 
-    Since step 5 of ADR 0023 the trust evaluators read the evidence rule, not the record floor, so the kinetics rubric no
-    longer reaches this function. (A function-local import being followed is pinned by
+    The trust evaluators read the evidence rule, not the record floor, so the kinetics rubric does not
+    reach this function. (A function-local import being followed is pinned by
     ``test_a_local_import_is_followed_visible_statuses``.)
     """
     moved = _moved_by(
@@ -755,7 +755,7 @@ def test_fingerprints_do_not_depend_on_the_deployment_environment() -> None:
     assert outputs[0] == outputs[1]
 
 
-# --- round 3: declared environment constants, helpers that read the environment, error codes -----------------------------
+# --- declared environment constants, helpers that read the environment, error codes -----------------------------
 
 
 def test_declared_environment_constants_are_only_the_storage_configuration() -> None:

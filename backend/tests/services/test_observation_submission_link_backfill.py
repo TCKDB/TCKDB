@@ -1,4 +1,4 @@
-"""Tests for ``app.services.observation_submission_link_backfill`` (#514).
+"""Tests for ``app.services.observation_submission_link_backfill``.
 
 Uses the per-test transactional ``db_session`` fixture, so every test rolls
 back at teardown regardless of what the service itself commits/rolls back

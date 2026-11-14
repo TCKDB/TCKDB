@@ -1,6 +1,6 @@
 """``tckdb_deploy.sh`` joins the API to the networks it is told to, and no others.
 
-The compose file keeps SeaweedFS on its own ``storage`` network (#545), so a
+The compose file keeps SeaweedFS on its own ``storage`` network, so a
 containerised API that uses it must join that network too.
 ``TCKDB_EXTRA_NETWORKS`` is how. What is pinned here:
 

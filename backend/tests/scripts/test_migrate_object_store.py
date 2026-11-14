@@ -1,4 +1,4 @@
-"""Moving a deployment's stored objects to another S3 store (#541).
+"""Moving a deployment's stored objects to another S3 store.
 
 The tool's claim is "the destination now holds everything the database
 points at, byte for byte", and the way that claim fails in this repository
@@ -308,7 +308,7 @@ def test_a_copy_that_does_not_read_back_is_a_failure() -> None:
 
 
 def test_a_destination_404_on_read_back_is_a_copy_failure_not_a_vanished_source() -> None:
-    """Finding 3: only the source GET may classify a key as vanished."""
+    """Only the source GET may classify a key as vanished."""
     objects = _source_objects()
     key = next(iter(_referenced(objects)))
     source, dest = _stores()
@@ -342,12 +342,12 @@ def test_objects_are_streamed_in_chunks_never_read_whole(monkeypatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Direction: the digest decides which side is right (finding 1)
+# Direction: the digest decides which side is right
 # ---------------------------------------------------------------------------
 
 
 def test_a_rollback_never_overwrites_sound_bytes_with_a_damaged_source() -> None:
-    """The reviewer's reproduction: the store being copied FROM holds a
+    """The store being copied FROM holds a
     same-size corruption and a truncation; the store copied TO is sound."""
     good = _source_objects()
     same_size_key, truncated_key = list(_referenced(good))[:2]
@@ -442,7 +442,7 @@ def test_expectations_group_shared_digests_and_set_aside_non_references() -> Non
     assert ("calculation_artifact", content_addressed_key(b), 8) in by_key
     assert ("external_source_record", content_addressed_key("c" * 64), 3) in by_key
     assert scan.not_object_references == {"external_source_record": 1}
-    # Finding 7: an s3:// link into another bucket is a reference, not a
+    # An s3:// link into another bucket is a reference, not a
     # "not a reference", and is surfaced rather than folded in.
     assert scan.other_bucket_references == [f"s3://other-bucket/{content_addressed_key('e' * 64)}"]
     assert scan.uri_disagreements == ["s3://elsewhere/zz/nothing"]
@@ -511,7 +511,7 @@ def test_an_unreferenced_key_missing_from_the_destination_still_fails() -> None:
 
 
 def test_an_unreferenced_held_object_with_wrong_bytes_counts() -> None:
-    """Finding 7: a ``reclaimed/<digest>`` whose bytes contradict its name."""
+    """A ``reclaimed/<digest>`` whose bytes contradict its name."""
     objects = _source_objects()
     held = next(k for k in objects if k.startswith("reclaimed/"))
     broken = {**objects, held: _flip(objects[held])}
@@ -543,7 +543,7 @@ def test_a_break_the_source_already_had_is_reported_as_such_and_tolerated_only_o
 
 
 def test_a_destination_that_differs_from_a_defective_source_is_never_tolerated() -> None:
-    """Finding 4: both sides broken, but broken differently."""
+    """Both sides broken, but broken differently."""
     real = b"what the row says\n"
     source, dest = _stores(
         source_objects={_ca(real): _flip(real, 0)}, dest_objects={_ca(real): _flip(real, 1)}
@@ -609,7 +609,7 @@ def _wire(monkeypatch, clients: dict[str, FakeS3]) -> None:
 
 @pytest.mark.parametrize("mode", ["--commit", "--verify-only"])
 def test_one_store_under_two_names_is_refused(db_session, monkeypatch, mode) -> None:
-    """Finding 2: ``127.0.0.1`` and ``localhost`` are the same MinIO."""
+    """``127.0.0.1`` and ``localhost`` are the same MinIO."""
     objects = _source_objects()
     store = FakeS3({BUCKET: dict(objects)})
     _wire(monkeypatch, {"http://127.0.0.1:19546": store, "http://localhost:19546": store})
@@ -633,7 +633,7 @@ def test_distinct_stores_pass_the_probe_and_it_is_removed(monkeypatch) -> None:
 
 
 def test_verify_only_names_a_missing_destination_bucket(db_session, monkeypatch) -> None:
-    """Finding 7: not "a store did not answer (NoSuchBucket)"."""
+    """Not "a store did not answer (NoSuchBucket)"."""
     source, dest = _stores()
     _wire(monkeypatch, {"http://minio:9000": source, "http://seaweedfs:9000": dest})
     code, report = tool.run(

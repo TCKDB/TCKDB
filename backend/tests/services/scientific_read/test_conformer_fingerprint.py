@@ -157,7 +157,7 @@ def test_returns_none_when_bin_width_deg_missing():
 
 
 def test_returns_a_zero_rotor_fingerprint_not_none_when_rotor_keys_array_is_empty():
-    """The bug this test used to encode: an empty ``canonical_rotor_keys``
+    """The bug to avoid: an empty ``canonical_rotor_keys``
     was treated the same as no blob at all, both collapsing to ``None``.
     But ``TorsionFingerprint.to_dict()`` writes exactly this shape --
     real, well-formed, all four arrays empty, a real ``bin_width_deg`` --

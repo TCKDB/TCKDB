@@ -1,6 +1,6 @@
 """The corpus report, driven against a database this suite populates itself.
 
-Verify item 5 of the ADR 0020 conformance check brief: run the report
+Run the report
 script against fixtures, never against a real deployment. This suite never
 imports ``app.api.deps.SessionLocal`` against a live database -- it binds
 the script's ``SessionLocal`` to this test's own transactional
@@ -79,7 +79,7 @@ def _run_main(report_script, monkeypatch, db_session, argv):
 
 
 # ---------------------------------------------------------------------------
-# Fixture builder: one real dihedral scan series, in the shape ADR 0020
+# Fixture builder: one real dihedral scan series, in the shape the scan-coordinate conformance rule
 # describes as the corpus's actual defect -- stored values are a sweep
 # relative to the series' own start_value. Geometry placement
 # (``place_next_atom``) and hashing (``next_geom_hash``) are shared with
@@ -100,7 +100,7 @@ def _make_legacy_relative_sweep_scan(
     """A scan calculation shaped exactly like the 46 deposited series.
 
     Geometry at each point carries the true, absolute dihedral;
-    ``coordinate_value`` stores ADR 0019's sweep relative to
+    ``coordinate_value`` stores the sweep relative to
     ``start_value`` -- the row the check is supposed to flag.
     """
     species = make_species(session)
@@ -168,7 +168,7 @@ def _make_legacy_relative_sweep_scan(
 
 def _make_improper_only_scan(session, *, n_points: int = 4) -> Calculation:
     """A scan whose only coordinate is ``improper`` -- always
-    ``not_applicable`` at every point (ADR 0020: no recomputable
+    ``not_applicable`` at every point (no recomputable
     convention), so the series classifies ``insufficient_data``. Used to
     prove that ``insufficient_data`` is not counted as non-conforming.
     """
@@ -281,7 +281,7 @@ def test_insufficient_data_is_not_counted_as_nonconforming(
     db_session, report_script, monkeypatch, capsys
 ):
     """A series with no checkable points (an ``improper`` coordinate here)
-    is not evidence for or against ADR 0020 conformance -- it must not
+    is not evidence for or against scan-coordinate conformance -- it must not
     trip EXIT_NONCONFORMING on its own, and must be printed separately
     from the series that actually disagree with their own geometry.
     """

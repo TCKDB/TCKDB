@@ -1,4 +1,4 @@
-"""A stored machine-review recipe holds exactly one rubric, so an unrelated rubric never restales it (issue #553).
+"""A stored machine-review recipe holds exactly one rubric, so an unrelated rubric never restales it.
 
 Currency compares a review's stored ``rubric`` ref with the active one. Every consumer therefore stamps -- and later
 compares against -- the one rubric ref for its own check, never a set:
@@ -8,7 +8,7 @@ compares against -- the one rubric ref for its own check, never a set:
 * scientific-check family, per advisory check and runner: ``AdvisoryResult.rubric_ref``;
 * the external-Cp runner: ``cp.run_and_record`` / ``cp.cp_comparison_currency``.
 
-The rule used to be a convention about filtering a dict; it is now structural, because the recipe has a single ``rubric``
+The rule is structural, not a convention about filtering a dict, because the recipe has a single ``rubric``
 field. These tests keep it that way: they store each consumer's ref, register a rubric none of them owns (the shape of
 every later addition) and assert every stored ref still compares current, and that bumping only *one* rubric restales only
 the reviews made under that rubric.

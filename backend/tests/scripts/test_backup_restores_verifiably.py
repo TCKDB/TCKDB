@@ -4,7 +4,7 @@
 ``--create``, so whoever restored it made the target database by hand -- and a
 bare ``CREATE DATABASE`` inherits its encoding from ``template1``.  On that
 host ``template1`` was ``SQL_ASCII`` while the real database was ``UTF8``
-(measured 2026-08-12), so restoring a ``UTF8`` dump into a hand-made target
+, so restoring a ``UTF8`` dump into a hand-made target
 **exited 0, printed no error**, and silently mis-counted every multi-byte
 character.
 
@@ -120,7 +120,7 @@ def test_the_encoding_canary_can_actually_fail() -> None:
 
 
 def test_the_backup_script_pins_and_verifies_its_restore() -> None:
-    """The properties whose absence caused the 2026-08-12 drift must persist."""
+    """The properties whose absence cause drift must persist."""
     assert BACKUP_SCRIPT.is_file(), f"{BACKUP_SCRIPT} is missing"
     body = BACKUP_SCRIPT.read_text(encoding="utf-8")
 

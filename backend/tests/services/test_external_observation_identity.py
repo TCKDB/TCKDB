@@ -7,7 +7,7 @@ ground_state_minimum_entries_for_species` is the one definition of
 consequences: the automatic importer resolver (:func:`resolve_identity`,
 which requires *exactly one* match) and the curator-only attach service
 (``app.services.observation_identity_attach.attach_observation_identity``,
-which accepts *any* match). Phase C-E5 review round 3 (R3) found this
+which accepts *any* match). This is
 predicate had no test coverage of its own: dropping its
 ``kind == StationaryPointKind.minimum`` clause and dropping its
 ``species_id ==`` clause both survived the full suite (75+ tests). This

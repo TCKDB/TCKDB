@@ -170,7 +170,7 @@ def test_model_discovery_does_not_depend_on_what_else_was_imported() -> None:
     resolves them the first time something validates or builds a schema from the model,
     so a fresh process saw an unresolved annotation and dropped the three
     ``Scheme*ParamPayload`` models, while a process that had run ``test_public_refs``
-    first listed them (#717, #661). The probe runs in a subprocess so no earlier test
+    first listed them. The probe runs in a subprocess so no earlier test
     can have resolved them.
     """
     done = subprocess.run(
@@ -186,7 +186,7 @@ def test_model_discovery_does_not_depend_on_what_else_was_imported() -> None:
 
 
 def test_a_network_upload_channel_lists_its_forward_referenced_microreaction_model() -> None:
-    """``microreaction_paths: list["NetworkChannelMicroReactionIn"]`` is a forward reference too (#717)."""
+    """``microreaction_paths: list["NetworkChannelMicroReactionIn"]`` is a forward reference too."""
     code = _FRESH_PROCESS_PROBE.replace(
         "from tckdb_schemas.energy_correction import EnergyCorrectionSchemeRef",
         "from app.schemas.workflows.network_pdep_upload import NetworkChannelIn as EnergyCorrectionSchemeRef",
@@ -407,12 +407,12 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_codes: s
 #: whole. This is a ceiling to notice regrowth, not a target.
 #:
 #: History, each step a trim or a raise: 700_000 with codes on eight or more surfaces printed once
-#: (composite-scheme work, ADR 0021); 705_000 for #638 (every register check printed per function);
-#: 708_500 for the thermo target and protocol declarations (#671), after a first trim to a four-surface
+#: (composite-scheme work); 705_000 (every register check printed per function);
+#: 708_500 for the thermo target and protocol declarations, after a first trim to a four-surface
 #: threshold. Every one of them was a fight with a layout that printed a rule, a refusal code and a
 #: nested-model list once per upload surface.
 #:
-#: #681 ended that: anything two or more surfaces share (a check, a marked rule, a refusal code, a
+#: Anything two or more surfaces share (a check, a marked rule, a refusal code, a
 #: nested model) is printed once and linked, at any surface count. The file went from 708_183 to
 #: 677_741 bytes, 4.3 percent, with no change to what any surface lists (the equivalence tests below).
 #: The ceiling is that size plus about 3 percent, 700_000. The margin is deliberately not 10 percent:
@@ -424,7 +424,7 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_codes: s
 #: each release) and prints the newest few; the full changelog ships beside the contract. 696_926 to
 #: 634_736 bytes, with the ceiling left where it was.
 #:
-#: At 0.112.2 (2026-10-11) the refusal code reference (104 KB, a sixth of the file) moved out of it into
+#: The refusal code reference (104 KB, a sixth of the file) moved out of it into
 #: ``REFUSAL_CODES.md``, shipped beside the contract the way the changelog is, because the next
 #: statmech pull request would have brought it to 699_942 bytes and the one after would have crossed.
 #: Each surface keeps its own code table and its one-line meanings; only the long per-code entries moved.
@@ -442,7 +442,7 @@ def test_the_contract_stays_readable_in_pieces(committed_markdown: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Printed once, listed everywhere (#681)
+# Printed once, listed everywhere
 #
 # A rule, a refusal code or a nested model that several surfaces share is printed once and linked from
 # each of them. What each surface *says it has* must not change with that: the helpers below read the
@@ -536,7 +536,7 @@ def test_every_shared_group_is_carried_by_every_surface_it_names(builder) -> Non
 
 
 def _drop_first_line_matching(markdown: str, title: str, subsection: str, pattern: str) -> str:
-    """Delete one line of a surface's subsection, so the surface no longer lists one thing."""
+    """Delete one line of a surface's subsection, so the surface does not list one thing."""
     section = surface_section(markdown, title)
     block = _subsection(section, subsection)
     lines = block.split("\n")
@@ -601,13 +601,13 @@ def repeated_bodies(builder, markdown: str) -> list[str]:
 def test_a_shared_rule_body_is_printed_once(builder, committed_markdown: str) -> None:
     assert repeated_bodies(builder, committed_markdown) == []
     # Not vacuous: there are shared checks and shared marked rules to count, including the enthalpy
-    # rule that used to be printed in full on every thermo surface.
+    # rule that is not printed in full on every thermo surface.
     assert len(builder.shared_checks()) >= 10
     assert "tckdb_schemas.enthalpy_reference:enthalpy_reference_error" in builder.shared_producer_rules()
 
 
 def test_printing_a_shared_body_twice_is_caught(builder, committed_markdown: str) -> None:
-    """Mutation: a surface prints a shared body itself, as the generator did before #681; or the shared section does."""
+    """Mutation: a surface prints a shared body itself, as a generator without shared sections would; or the shared section does."""
     rule_key, (func, _titles) = next(iter(builder.shared_producer_rules().items()))
     rule_body = "\n".join(generator._indent_block(generator._own_doc(func) or ""))
     check_key, (func_checks, _t) = next(iter(builder.shared_checks().items()))
@@ -959,7 +959,7 @@ def test_a_function_that_enforces_several_checks_keeps_every_one(builder, commit
 
 
 # ---------------------------------------------------------------------------
-# Readability of the shared blocks (#686)
+# Readability of the shared blocks
 # ---------------------------------------------------------------------------
 
 

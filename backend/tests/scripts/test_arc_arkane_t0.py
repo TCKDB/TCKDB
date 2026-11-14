@@ -1,4 +1,4 @@
-"""Arkane's ``T0`` reaches the bundle as ``t0_k`` instead of being dropped (#620)."""
+"""Arkane's ``T0`` reaches the bundle as ``t0_k`` instead of being dropped."""
 
 import pytest
 

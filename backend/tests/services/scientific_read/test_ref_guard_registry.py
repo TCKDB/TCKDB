@@ -183,7 +183,7 @@ def _count(db_session, call):
 
 @pytest.mark.parametrize("status", list(RecordReviewStatus), ids=lambda s: s.value)
 def test_the_two_sets_answer_for_every_status_and_a_missing_row_is_not_reviewed(client, db_session, status):
-    """The record floor and the evidence set are different questions (ADR 0023).
+    """The record floor and the evidence set are different questions.
 
     Kills: reading a missing review row as visible; treating under_review as withheld; treating rejected/deprecated as
     shown evidence; the two sets collapsing into one.

@@ -362,7 +362,7 @@ def test_schema_allows_irc_additional():
 
 # Points along the H + H2 -> H2 + H path. Each is the whole three-atom
 # reacting system at a different path coordinate, because that is what a point
-# on an IRC or a NEB string is: the same nuclei, moved. These used to be
+# on an IRC or a NEB string is: the same nuclei, moved. These must not be
 # *single* hydrogen atoms — one atom on the reaction path of a three-atom
 # saddle point, which no calculation can produce — and nothing looked until
 # ``assert_calculation_geometry_composition`` compared them against the
@@ -671,7 +671,7 @@ def test_standalone_ts_upload_persists_irc_evidence(db_conn) -> None:
         assert linked.type == CalculationType.irc
         # The mapping's atom indices count into the saddle-point geometry, and
         # the row says so rather than leaving a reader to work out which of the
-        # entry's geometries was meant (ADR 0011, "indices relative to what").
+        # entry's geometries was meant ("indices relative to what").
         # That geometry is the primary opt's output -- the saddle point itself,
         # not the IRC's endpoints -- and it has exactly the atoms the two
         # mappings partition, so the indices land on real atoms of it.
@@ -752,17 +752,17 @@ def test_standalone_ts_upload_without_evidence_warns(db_conn) -> None:
 
 
 def test_standalone_ts_upload_reports_the_absent_atom_map(db_conn) -> None:
-    """ADR 0011's absence warning is a property of the record, not the route.
+    """The absence warning is a property of the record, not the route.
 
     The computed-reaction bundle reported it and the PDep bundle reported it;
     the standalone upload -- the third and last path that can carry a
     transition state -- did not, so the same unmapped saddle point was
     annotated or silent depending only on which endpoint deposited it. That is
-    exactly the split the ADR asks the warning to make visible.
+    exactly the split the warning is asked to make visible.
 
-    This path now carries a map, so the remedy names the fields one needs:
+    This path carries a map, so the remedy names the fields one needs:
     ``atom_map`` with ``geometry_key`` and a ``key`` and ``geometry`` on each
-    participant it maps. (It used to send the depositor to the computed-reaction
+    participant it maps. (It must not send the depositor to the computed-reaction
     upload, because this payload had nowhere to put one; the absence warning
     must name fields that exist.)
     """

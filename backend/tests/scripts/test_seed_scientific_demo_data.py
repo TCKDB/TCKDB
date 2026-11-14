@@ -3,8 +3,8 @@
 The script writes straight through the ORM, so every guard the schema has
 gained since it was written applies to it, and nothing else would notice
 when one starts refusing its rows. That happened: the enthalpy-reference
-trigger from #520 refused its undeclared ``h298_kj_mol`` and the script
-stopped working (#564), found only by hand while verifying something else.
+trigger refuses its undeclared ``h298_kj_mol`` and the script
+stopped working, found only by hand while verifying something else.
 No test ran it at all.
 
 So this test runs it the way a person does -- as a subprocess, with

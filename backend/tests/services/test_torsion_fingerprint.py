@@ -1,4 +1,4 @@
-"""Tests for the torsion fingerprint system (DR-0005).
+"""Tests for the torsion fingerprint system.
 
 Covers:
 - Circular difference calculation
@@ -757,7 +757,7 @@ class TestIsomorphismHardcoded:
         r = resolve_atom_mapping(self._CLCCN_SMILES, self._CLCCO_ORIGINAL)
         assert r.status == "no_match"
 
-    # -- Chloral (from DR-0005 example): CCl3 3-fold symmetry --
+    # -- Chloral (from the conformer-grouping example): CCl3 3-fold symmetry --
 
     _CHLORAL_SMILES = "O=CC(Cl)(Cl)Cl"
     _CHLORAL_ORIGINAL = (

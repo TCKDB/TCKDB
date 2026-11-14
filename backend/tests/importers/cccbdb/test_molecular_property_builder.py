@@ -5,7 +5,7 @@ atomization_energy), unit + uncertainty propagation, catalog
 identity-enrichment, ambiguous-match policy, raw-payload forensic
 fields, and the missing-value / missing-unit guards.
 
-All tests offline; no DB writes; uses Phase 1 fixtures.
+All tests offline; no DB writes; uses the hand-authored fixtures.
 """
 
 from __future__ import annotations
@@ -200,7 +200,7 @@ class TestRawPayloadForensics:
             for r in results
             if r.payload and r.payload.raw_payload_json["row_formula"] == "H2"
         )
-        # After the Phase 5e configured_column_names fix, the
+        # With configured_column_names, the
         # diatomic table uses stable ASCII column tokens (not the
         # Unicode "ωexe" / "De" that the old fixture's <th> row
         # supplied). The values still flow through unchanged.
@@ -372,7 +372,7 @@ class TestCatalogEnrichment:
         assert not any(c["is_unambiguous"] for c in candidates)
 
     def test_catalog_match_never_uses_raw_href(self, catalog):
-        """Phase 3b contract: raw catalog hrefs are audit only. The
+        """Contract: raw catalog hrefs are audit only. The
         builder must not embed them in any payload field."""
 
         # CH4 in the catalog has raw_href="exp1.asp?casno=64175".
@@ -432,7 +432,7 @@ class TestRealSchemaValidation:
                 continue
             # The builder returns Pydantic objects already, but
             # round-tripping through model_dump → model_validate
-            # catches encoder drift the same way Phase 2c does.
+            # catches encoder drift the same way the other builders' tests do.
             payload_dict = r.payload.model_dump()
             MolecularPropertyObservationCreate.model_validate(payload_dict)
 

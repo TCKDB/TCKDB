@@ -1,9 +1,9 @@
-"""Phase B regression tests: every scientific read endpoint exposes ``*_ref``
+"""Regression tests: every scientific read endpoint exposes ``*_ref``
 siblings for every ``*_id`` field, and the legacy id fields are preserved.
 
 The point of this file is not to re-exercise the per-endpoint behavior
 (that's covered by the other ``test_*.py`` modules) but to assert the
-Phase B public-identifier contract: every response now carries a public
+Public-identifier contract: every response carries a public
 ref alongside the integer id.
 """
 
@@ -218,7 +218,7 @@ def test_get_reaction_kinetics_exposes_refs(db_session):
     assert record.kinetics_id == kinetics.id
     assert record.kinetics_ref == kinetics.public_ref
     assert _looks_like_ref(record.kinetics_ref)
-    # Provenance keys must always be present per Phase 2.2; refs are nullable.
+    # Provenance keys must always be present; refs are nullable.
     assert hasattr(record.provenance, "transition_state_entry_ref")
     assert hasattr(record.provenance, "ts_opt_calculation_ref")
 

@@ -1,4 +1,4 @@
-"""Composite schemes, lazy catalogue rows and level-of-theory binding (ADR 0021, P2).
+"""Composite schemes, lazy catalogue rows and level-of-theory binding.
 
 What each group pins:
 

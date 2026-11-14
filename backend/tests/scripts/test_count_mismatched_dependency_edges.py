@@ -1,4 +1,4 @@
-"""The read-only measurement for DR-0028 edge/role mismatches (#581)."""
+"""The read-only measurement for edge/role mismatches."""
 
 from __future__ import annotations
 

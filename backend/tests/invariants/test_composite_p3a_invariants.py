@@ -1,4 +1,4 @@
-"""Structural guards for the composite calculation type (ADR 0021, P3a).
+"""Structural guards for the composite calculation type.
 
 Four "every place must do X" rules the phase adds. A rule that lives only in the
 call sites that existed when it was written is the house defect: the next call

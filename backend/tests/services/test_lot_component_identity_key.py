@@ -1,15 +1,15 @@
-"""Dispersion, solvent and solvent-model case is not identity (#602).
+"""Dispersion, solvent and solvent-model case is not identity.
 
 The spellings are what each producer writes. ARC lower-cases every level
 component (``arc/level.py``, ``Level.lower``): ``d3bj``, ``water``, ``smd``.
 Gaussian, ORCA and Molpro records carry the program's own case:
 ``EmpiricalDispersion=GD3BJ``, ``SCRF=(SMD,Solvent=Water)``, ORCA ``! D3BJ``,
-``! CPCM(Water)``, Molpro ``dispersion,d3``. Before #602 each pair was two
+``! CPCM(Water)``, Molpro ``dispersion,d3``. Without keying each pair would be two
 rows of ``level_of_theory``.
 
 Every case asserts the exact key. The negative table pins what stays apart:
 synonyms need a curated table and are out of scope (``h2o`` is not ``water``,
-``d3`` is not ``d3bj``). Dispersion synonyms are #630's, and tested there.
+``d3`` is not ``d3bj``). Dispersion synonyms are keyed separately and tested there.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def test_none_and_blank_have_no_key():
 #: Different components. Synonyms are an alias table's job, not a case rule's.
 DIFFERENT = [
     ("dispersion", "d3", "d3bj", "zero vs BJ damping"),
-    # Dispersion synonyms are joined by ``dispersion_identity_key`` (#630,
+    # Dispersion synonyms are joined by ``dispersion_identity_key`` (
     # ``tests/services/test_dispersion_identity_key.py``), not by this case rule.
     ("solvent", "water", "h2o", "synonym, not a case rule"),
     ("solvent", "water", "heavywater", "different solvent"),
@@ -150,7 +150,7 @@ def test_a_lower_case_component_hashes_as_it_always_did():
 
 
 def test_the_upload_path_resolves_case_variants_to_one_row(db_session):
-    """The #602 pairs: ``D3BJ`` / ``d3bj`` and ``Water`` / ``water``."""
+    """The pairs: ``D3BJ`` / ``d3bj`` and ``Water`` / ``water``."""
     stored = resolve_level_of_theory_ref(
         db_session,
         LevelOfTheoryRef(

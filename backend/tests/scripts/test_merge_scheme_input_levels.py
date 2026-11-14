@@ -1,4 +1,4 @@
-"""Merging an input level of a declared composite scheme must not fork the scheme (#658).
+"""Merging an input level of a declared composite scheme must not fork the scheme.
 
 A user scheme's ``definition_hash`` is taken over the ``lot_hash`` of each input
 level, merges followed. If an input level is merged into another *after* the
@@ -155,7 +155,7 @@ def test_a_fork_made_by_a_deposit_after_the_merge_is_reunited(merge, db_session)
         db_session.scalar(select(LevelOfTheoryMerge.into_lot_id).where(LevelOfTheoryMerge.merged_lot_id == declared.id))
         == forked.id
     )
-    # The stale scheme is no longer anyone's binding but is not deleted.
+    # The stale scheme is not anyone's binding but is not deleted.
     assert db_session.get(CompositeScheme, scheme.id) is not None
     assert db_session.scalar(
         select(LevelOfTheoryComposite.level_of_theory_id).where(LevelOfTheoryComposite.scheme_id == scheme.id)
@@ -216,7 +216,7 @@ def test_two_merged_inputs_derive_through_the_holder(merge, db_session):
     assert stored_scheme_definition_hash(db_session, scheme) != before
 
 
-# --- #737 follow-up: a stale level that cannot be merged is not reunited -------------------
+# --- a stale level that cannot be merged is not reunited -------------------
 
 
 def _approved_calculation_on(session, lot: LevelOfTheory):

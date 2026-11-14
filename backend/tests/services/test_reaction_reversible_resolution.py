@@ -1,4 +1,4 @@
-"""``inherit_reversible`` and ``reversible_twin``: the service half of #598, with no request schema in the way."""
+"""``inherit_reversible`` and ``reversible_twin``: the service half, with no request schema in the way."""
 
 from __future__ import annotations
 

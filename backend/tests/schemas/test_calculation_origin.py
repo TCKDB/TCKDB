@@ -5,7 +5,7 @@ and the ``tckdb_origin`` block is checked only when present. Absence
 is the common case (most calculations are independently executed and
 omit the block entirely).
 
-The convention is documented in DR-0026.
+The convention is documented with the calculation origin schema.
 """
 
 from __future__ import annotations

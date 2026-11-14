@@ -1,4 +1,4 @@
-"""Hold every warning any producer builds, in any test, to the rule that a message is TCKDB's sentence (#838).
+"""Hold every warning any producer builds, in any test, to the rule that a message is TCKDB's sentence.
 
 Why a runtime observer and not only a sweep
 -------------------------------------------

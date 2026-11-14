@@ -1,7 +1,7 @@
 """``levels_of_theory`` is deliberately absent from most evidence summaries.
 
 Recovers a guard lost when ``backend/app/api/landing.py`` and its test were
-deleted (dead-code removal, #283) — see issue #281. The landing page was the
+deleted. The landing page was the
 one consumer that rendered every scientific evidence-summary shape, and one
 of its tests asserted, straight off the Pydantic models, that only the two
 *basin-scoped* summaries (``ConformerGroupEvidenceSummary``,
@@ -9,7 +9,7 @@ of its tests asserted, straight off the Pydantic models, that only the two
 ``StatmechEvidenceSummary`` and ``TransportEvidenceSummary`` did not. That
 assertion never depended on rendering anything — it read
 ``model_fields`` directly — so it belongs here, beside the schemas, not in a
-frontend test for a page that no longer exists.
+frontend test for a page that is gone.
 
 ``ConformerGroupEvidenceSummary.levels_of_theory`` and
 ``TransitionStateEntryEvidenceSummary.levels_of_theory`` (see their
@@ -31,7 +31,7 @@ discovers every ``*EvidenceSummary`` Pydantic model under
 that could quietly find nothing — a typo'd suffix, a package that stopped
 being walkable, a rename of the ``reads`` package — and a `for` loop over an
 empty result would still let every assertion inside it "pass". The floor
-below exists so that failure mode is impossible: measured 2026-09-24, there
+below exists so that failure mode is impossible: there
 are 15 such schemas, so the floor is set well under that and well over
 "discovery silently found nothing".
 """
@@ -57,12 +57,12 @@ EXPECTED_WITH_LEVELS: Final[frozenset[str]] = frozenset(
     }
 )
 
-#: Named explicitly in issue #281 as the pair the original guard pinned as
+#: The pair the original guard pinned as
 #: deliberately field-less: Statmech and Transport sources are keyed by
 #: role, not calculation type, so there is no "at what level" to report.
 REQUIRED_WITHOUT_LEVELS: Final[frozenset[str]] = frozenset({"StatmechEvidenceSummary", "TransportEvidenceSummary"})
 
-#: Below the 15 measured 2026-09-24; see the module docstring's
+#: Below the 15 schemas discovered; see the module docstring's
 #: "Non-vacuity" section for why this floor exists at all.
 _MIN_DISCOVERED_EVIDENCE_SUMMARIES: Final[int] = 10
 

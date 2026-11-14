@@ -210,7 +210,7 @@ def test_ambiguous_uncited_sibling_warning_names_the_other_ref(db_conn) -> None:
     """Two schemes, same kind/lot/software, both uncited: the archive
     cannot tell them apart, and says so by name (plan §2.4).
 
-    The two siblings differ by ``name``. A ``version`` column no longer exists, and this is
+    The two siblings differ by ``name``. There is no ``version`` column, and this is
     the more realistic case anyway: two differently-named deposits of
     what may be the same library at one level of theory, with no
     citation to settle it, is exactly the ambiguity this warning exists
@@ -258,7 +258,7 @@ def test_differing_software_siblings_are_not_flagged_ambiguous(db_conn) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Release grain and units (correction-scheme-provenance plan v2, PR 1)
+# Release grain and units
 # ---------------------------------------------------------------------------
 
 

@@ -1,11 +1,11 @@
-"""Correction-scheme ``frequency_level_of_theory`` (composite-levels plan P6).
+"""Correction-scheme ``frequency_level_of_theory``.
 
 Arkane keys Petersson and Melius BAC (only those; atom energies are keyed on
 the energy level alone) on
 ``CompositeLevelOfTheory(freq=..., energy=...)``. A scheme held one level of
-theory, so the frequency half was lost: the same energy level with two
-different frequency levels was one scheme (identical tables) or a value
-conflict (different tables). The owner's decision (2026-10-01, decision 10):
+theory, so the frequency half would be lost: the same energy level with two
+different frequency levels would be one scheme (identical tables) or a value
+conflict (different tables). The rule:
 the frequency level joins scheme identity, as a nullable column under
 ``NULLS NOT DISTINCT``.
 
@@ -211,7 +211,7 @@ def test_a_scheme_without_a_frequency_level_keeps_the_ref_it_had(db_conn) -> Non
 
 
 def test_the_ref_of_a_revised_scheme_without_a_frequency_level_is_unchanged() -> None:
-    """The ``data_revision`` form (#633), pinned as a literal as well."""
+    """The ``data_revision`` form, pinned as a literal as well."""
     scheme = _transient(data_revision=_RMG_DB, level_of_theory_id=5, software_release_id=7)
     assert _canonical_energy_correction_scheme(scheme) == (
         "ecs:kind=bac_petersson;name=petersson bac (freq test);"
@@ -315,7 +315,7 @@ def test_a_frequency_level_is_refused_on_every_kind_but_the_bacs(kind: str) -> N
 
 
 def test_the_refusal_does_not_claim_every_other_kind_is_keyed_on_one_level() -> None:
-    """#649: Arkane's isodesmic reference data is keyed on the freq//energy pair, so the wording is "for now"."""
+    """Arkane's isodesmic reference data is keyed on the freq//energy pair, so the wording is "for now"."""
     with pytest.raises(ValidationError) as refused:
         EnergyCorrectionSchemeRef(
             kind="isodesmic",
@@ -332,7 +332,7 @@ def test_the_refusal_does_not_claim_every_other_kind_is_keyed_on_one_level() -> 
 
 
 def test_the_catalogue_note_does_not_claim_arkane_keys_only_the_bacs() -> None:
-    """#649: the catalogue note feeds PRODUCER_CONTRACT.md and must carry the "for now" wording too."""
+    """The catalogue note feeds PRODUCER_CONTRACT.md and must carry the "for now" wording too."""
     from app.api.code_catalogue import CATALOGUE
 
     entry = next(c for c in CATALOGUE if c.code == "energy_correction_scheme_frequency_level_not_applicable")

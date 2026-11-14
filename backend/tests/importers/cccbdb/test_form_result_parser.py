@@ -29,7 +29,7 @@ def _load(name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Atomization energy (the only supported target_kind in Phase 6)
+# Atomization energy (the only supported target_kind)
 # ---------------------------------------------------------------------------
 
 
@@ -132,7 +132,7 @@ class TestUnsupportedTarget:
 
 
 def test_supported_target_kinds_includes_only_atomization_energy():
-    """Phase 6 ships exactly one supported target_kind. New kinds
+    """The parser ships exactly one supported target_kind. New kinds
     should grow this tuple AND add a per-target parser branch."""
 
     assert "atomization_energy" in SUPPORTED_TARGET_KINDS

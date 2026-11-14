@@ -80,7 +80,7 @@ def test_psi4_passes_the_upload_signature_gate_it_is_detected_by() -> None:
 
 
 def test_psi4_marker_does_not_claim_other_programs() -> None:
-    """Adding Psi4 must not reclassify any previously-supported log.
+    """Adding Psi4 must not reclassify any supported log.
 
     ``detect_software_from_text`` is shared with the single-point-energy
     path, whose contract is that the two never disagree on the same bytes,
@@ -135,7 +135,7 @@ def test_detection_is_extension_independent() -> None:
 class TestOrcaMarkerIsAnchoredOnTheName:
     """Every ORCA alternative must name ORCA; none may be a generic phrase.
 
-    ``Program Version X.Y.Z`` was previously an accepted ORCA marker. It is not
+    ``Program Version X.Y.Z`` is not an accepted ORCA marker. It is not
     an ORCA fingerprint -- many programs print it -- and because ORCA is the
     last branch, any non-Gaussian, non-Molpro log containing that phrase in its
     first 8 kB was dispatched to the ORCA parser, which would then read charge,

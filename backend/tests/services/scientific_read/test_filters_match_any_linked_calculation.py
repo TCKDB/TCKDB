@@ -1,6 +1,6 @@
 """A level-of-theory or software filter keeps a record when ANY linked source calculation matches.
 
-It used to look at one "primary" calculation chosen by a hidden role priority (sp, then composite, then freq, then opt for
+It must not look at one "primary" calculation chosen by a hidden role priority (sp, then composite, then freq, then opt for
 thermo; ts_energy, then fit_source, then freq for kinetics), so a record whose frequency calculation ran at the requested
 level was dropped whenever an sp calculation at another level outranked it. Each test names what it kills.
 """

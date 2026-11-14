@@ -1,4 +1,4 @@
-"""Phase C unit tests for the handle-resolution helpers.
+"""Unit tests for the handle-resolution helpers.
 
 Covers:
 - ``parse_handle`` grammar (integer / ref / malformed)

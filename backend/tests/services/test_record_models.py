@@ -12,7 +12,7 @@ wrong record's row, and every consumer of
 reproducibility assessments recorded against the wrong table, and a curator
 task linking to some unrelated record's page.
 
-Measured 2026-09-14: swapping one entry (``kinetics`` -> ``Thermo``) passed all
+Swapping one entry (``kinetics`` -> ``Thermo``) passed all
 37 tests in ``test_record_refs.py`` and
 ``test_admin_machine_review_curator_tasks.py`` before this file existed.
 """

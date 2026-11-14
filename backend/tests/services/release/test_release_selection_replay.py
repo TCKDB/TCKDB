@@ -3,7 +3,7 @@ restore, and re-rendering from the restored ledger under the same policy
 reproduces it byte for byte.
 
 Selection in TCKDB is curator-driven (an append-only ledger under a registered
-policy, ADR 0007), so "re-running selection" means replaying that ledger: the
+policy), so "re-running selection" means replaying that ledger: the
 archive carries it, the restore puts it back, and the artifact renderer is
 deterministic over it. The test publishes and freezes a release, writes the
 recovery archive, empties the database, restores, re-renders, and compares

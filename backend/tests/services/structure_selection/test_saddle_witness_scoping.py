@@ -4,7 +4,7 @@ Neither "the latest frequency result decides" nor "every attached frequency resu
 sufficient. What a saddle claim rests on is the frequency or Hessian evidence of its *declared target and role bundle*:
 the geometry the determination evaluates, a usable source, and the owner's persisted treatment. These cases pair each
 scope question with its counter-case, through the task-aware structure assessor (the scoped consumer; the legacy trust
-badge no longer issues a frequency verdict because it cannot pin a target).
+badge does not issue a frequency verdict because it cannot pin a target).
 """
 
 from __future__ import annotations

@@ -257,7 +257,7 @@ def test_append_rejects_missing_polymorphic_target(db_session):
         _append(db_session, record_id=999999)
     # Names the record type, not the row id it was asked about. The id is
     # an implementation detail of one database instance and is logged
-    # rather than returned; this message used to carry it.
+    # rather than returned; this message does not carry it.
     assert "999999" not in str(caught.value)
 
 

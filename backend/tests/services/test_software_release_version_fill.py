@@ -1,4 +1,4 @@
-"""Filling a NULL ``software_release.version`` from artifact banners (issue #305, item 3).
+"""Filling a NULL ``software_release.version`` from artifact banners.
 
 Real output logs from ``tests/fixtures`` stand in for the stored artifacts;
 the store itself is replaced by a dict keyed by SHA-256, so this exercises
@@ -322,7 +322,7 @@ def test_plan_reports_stale_assessments_and_approved_products(db_session, script
 
 
 def test_gaussian_banner_fills_build_and_says_so(db_session, script, monkeypatch, capsys):
-    """Review finding F3, behaviour unchanged (DR-0008 ``enriched``): a
+    """The ``enriched`` case: a
     Gaussian banner also fills ``build``, so the target is a sibling of an
     existing build-less ``16``/``C.02`` release. The dry run says so."""
     store = _Store()

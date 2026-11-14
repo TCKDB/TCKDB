@@ -16,7 +16,7 @@ input half "a genuine open gap". Two deposits that succeeded on ``main``:
 Both are reproduced below as refusals.
 
 **The accepting half of this file is the point.** A blocking check that
-refuses correct science is worse than no check (ADR 0008), and the three
+refuses correct science is worse than no check, and the three
 shapes that had to survive the design are each pinned here as an *acceptance*:
 
 1. a transition state's geometry spans the whole reacting system and is
@@ -101,7 +101,7 @@ _XYZ_BENZENE = (
     "H  1.240 -2.147  0.000"
 )
 #: Fully deuterated methane, with the hydrogens written ``D`` -- a spelling a
-#: hand-written file uses, and one that declares deuterium (#672, ADR 0022).
+#: hand-written file uses, and one that declares deuterium.
 _XYZ_CD4 = (
     "5\nperdeuteromethane\n"
     "C  0.000  0.000  0.000\n"
@@ -405,7 +405,7 @@ def test_a_ts_calculation_may_not_borrow_a_reactants_geometry_by_key(
     ts_freq["input_geometries"] = []
     ts_freq["geometry_key"] = "r1_CH4_geom"  # a reactant. The TS is C2H5O.
 
-    # Since #635 the request schema refuses this earlier than the composition
+    # The request schema refuses this earlier than the composition
     # guard can: a transition state's calculation may not name a species
     # conformer's geometry at all (``transition_state_calculation_species_geometry``),
     # whatever its composition. The composition guard keeps the cases the schema
@@ -420,7 +420,7 @@ def test_a_ts_calculation_may_not_borrow_a_reactants_geometry_by_key(
 
 
 def test_the_refusal_carries_no_row_id(db_conn) -> None:
-    """DR-0028 Requirement 2: ``context`` names fields, never primary keys."""
+    """``context`` names fields, never primary keys."""
 
     with _isolated_session(db_conn) as session:
         with pytest.raises(CodedValueError) as excinfo:
@@ -490,11 +490,11 @@ def test_case_2_deuterium_in_the_element_column_is_hydrogen_but_not_protium(db_c
     A calculation geometry spelling its hydrogens ``D`` is CH4 *by element*, so
     the composition rule does not refuse it against a ``smiles: "C"`` identity
     (comparing raw symbols would read it as containing an element the SMILES
-    never mentions). Since #672 (ADR 0022) a ``D`` token also declares
-    deuterium, so the isotope rule (#666) refuses this CD4 geometry under a
-    protium CH4 with ``calculation_geometry_isotope_mismatch``. This test used
-    to assert acceptance; it now pins that the refusal is the isotope rule's
-    (the composition code must not fire: one owner per fact, ADR 0008 section 9).
+    never mentions). A ``D`` token also declares
+    deuterium, so the isotope rule refuses this CD4 geometry under a
+    protium CH4 with ``calculation_geometry_isotope_mismatch``. This test pins that the refusal
+    is the isotope rule's
+    (the composition code must not fire: one owner per fact).
     """
 
     with _isolated_session(db_conn) as session:
@@ -637,7 +637,7 @@ def test_a_charged_species_is_compared_on_atoms_only(db_conn) -> None:
     """Charge is owned elsewhere and is not re-derived here.
 
     ``canonical_species_identity`` blocks a SMILES/charge disagreement, so per
-    ADR 0008 section 9 this rule does not check charge — a second copy could
+    the one-owner-per-fact rule this rule does not check charge — a second copy could
     only disagree with the first. An ammonium deposit therefore passes on its
     atoms.
     """

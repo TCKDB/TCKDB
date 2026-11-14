@@ -135,7 +135,7 @@ def test_d4_1_point_identity_is_exact_and_flagged_within_float_precision(db_sess
     assert row["float_precision_bound_kj_mol"] == pytest.approx(16 * EPS * (150.0 + 50.0 + 100.0), rel=1e-12, abs=0)
     assert row["g_definition"] == G_DEFINITION == "formation_298k H(T) - T*S(T)"
     assert row["enthalpy_reference_kind"] == DECLARED
-    # The recorded pressure is null (no default since #529); it is shown and does not gate.
+    # The recorded pressure is null (no default); it is shown and does not gate.
     assert "reference_pressure_bar" in row and row["reference_pressure_bar"] is None
     assert row["phase"] == "gas"
 
@@ -376,7 +376,7 @@ def _set_nasa(column, value):
 def _stored_legacy_undeclared(thermo):
     """Clear the stored declaration in the database, not just in memory.
 
-    A point G is enthalpy content, so the upload path now refuses an
+    A point G is enthalpy content, so the upload path refuses an
     undeclared G deposit (``enthalpy_declaration_absent``). Undeclared rows
     carrying G exist only as legacy data from before that rule; this writes
     one. The DB guard permits it: it only requires a declaration when

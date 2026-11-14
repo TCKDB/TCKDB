@@ -1,6 +1,6 @@
-"""A thermo's provenance and evidence come only from what it links to (#645).
+"""A thermo's provenance and evidence come only from what it links to.
 
-Owner decision, 2026-10-01: never borrow. A thermo shows the statmech and the
+Never borrow. A thermo shows the statmech and the
 calculations it actually links to -- its own ``statmech_id`` and its own source
 calculations -- and nothing else. With neither, those fields are absent and the
 evidence checklist/score count nothing for them. There is no exception for
@@ -67,7 +67,7 @@ def _linked_and_unlinked(db_session):
 
 
 def test_unlinked_thermo_shows_no_statmech_or_calculations(db_session):
-    """Reproduces #645: the sibling statmech's ref, calcs and level showed here."""
+    """The sibling statmech's ref, calcs and level must not show here."""
     entry, _lot, _stat, _freq, _sp, _linked, unlinked = _linked_and_unlinked(db_session)
 
     prov = _records(db_session, entry)[unlinked.public_ref].provenance
@@ -120,7 +120,7 @@ def test_unlinked_thermo_evidence_counts_only_its_own_links(db_session):
 
 
 def test_the_first_record_in_display_order_ignores_the_evidence_score(db_session):
-    """#648: the unlinked record has a later ``created_at`` and the same review
+    """The unlinked record has a later ``created_at`` and the same review
     status, so it is first in display order even though the linked record scores
     higher. The checklist is displayed, not ranked."""
     entry, _lot, _stat, _freq, _sp, linked, unlinked = _linked_and_unlinked(db_session)

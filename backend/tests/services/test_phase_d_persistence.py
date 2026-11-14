@@ -248,9 +248,9 @@ def test_nonfinite_inputs_remain_hashable_and_unavailable_without_flushing(db_se
 
 
 # --------------------------------------------------------------------------- #
-# Review round 2, part E: the two new advisory checks (D1 thermo-consistency
+# The two advisory checks (D1 thermo-consistency
 # and D3 thermo-kinetics) must not restale a record's current reviewer-family
-# review, the exact defect that bit the external-Cp check in Phase C (see
+# review, the defect that bit the external-Cp check (see
 # test_external_cp_comparison.py::
 # test_recording_a_cp_comparison_does_not_restale_the_reviewer_familys_current_review).
 # Both new checks share the same append-only ``record_machine_review`` and
@@ -628,7 +628,7 @@ def test_the_requested_kirchhoff_grid_is_a_hashed_input(db_session):
 
 
 def test_d1_refuses_a_record_as_its_own_neighbour_through_the_service(db_session):
-    """#554, service path: refused before anything is staged."""
+    """Service path: refused before anything is staged."""
     thermo, _, _ = setup_records(db_session)
     before = count_reviews(db_session)
     with pytest.raises(ValueError, match="cannot be its own neighbour"):

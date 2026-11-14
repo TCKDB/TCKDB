@@ -1,6 +1,6 @@
 """Watch every error body the suite produces, and refuse an internal id.
 
-Two identifiers, one argument. DR-0028 Requirement 2: a user-facing error
+Two identifiers, one argument. A user-facing error
 body must never contain a database primary key. Row ids go to the log,
 where the operator is; the body names the field the depositor wrote,
 because that is the identifier they can act on. A row id is not secret,
@@ -9,8 +9,8 @@ database, it does not agree between the hosted deployment and a lab
 self-host, and no public surface is keyed on it. ``public_ref`` is.
 
 The second is a **raw database constraint name** -- ``uq_software_name``,
-``fk_species_entry_species_id_species`` -- and Calvin settled it on
-2026-08-18 on exactly the reasoning above: meaningless to a depositor,
+``fk_species_entry_species_id_species`` -- and it is refused on
+exactly the reasoning above: meaningless to a depositor,
 not stable across a migration that renames it, and a disclosure of schema
 layout. It reaches the operator through the handler's log line. The
 sanctioned route from an internal constraint name to a public contract is
@@ -41,15 +41,9 @@ half the envelope tells clients to read. It is assembled as a ``dict``
 and there is nothing for an AST text scan to match. A row id put there
 reaches every client and no check in the repository sees it.
 
-Until now that half was covered the way the error codes were before
-#185: per test, one body at a time, wherever an author remembered.
-Twenty-one test files cite DR-0028 Requirement 2 between them, in 36
-places; exactly one of them
-(``test_api_untested_refusals_tier_bc.py::_refusal``) wrapped the check
-in something reusable, and it is reused nowhere else. So this is the
-same answer #185 gave for codes -- a passive, total observer that
-inspects what the suite already produces, rather than a rule each new
-test must opt into.
+A passive, total observer inspects what the suite already produces,
+rather than a rule each new test must opt into: a check written per test,
+one body at a time, covers only the bodies an author remembered.
 
 Every 4xx/5xx JSON body is recorded as it is built, and the test that
 produced a leaking one fails -- attributing the leak to the request that
@@ -78,12 +72,12 @@ Three rules were considered. The measurement chose between them:
    future one is a real finding.
 2. **Value correlation** -- compare body integers against primary keys
    created in the same transaction. Precise in principle. The
-   measurement argues against it: when it was taken, the only id-shaped
+   measurement argues against it: the only id-shaped
    values in any body were ``detail[].input.existing_calculation_id``,
    Pydantic echoing back *the caller's own* programmatic-chaining field,
-   which a correlator would have flagged though it is no disclosure. The
-   422 handler has since dropped ``input`` from request-validation errors,
-   so that echo no longer appears; the argument against a correlator
+   which a correlator would flag though it is no disclosure. The
+   422 handler drops ``input`` from request-validation errors,
+   so that echo does not appear; the argument against a correlator
    (it cannot tell a caller's own number from a stored key) stands.
 3. **Allowlist the legitimate numeric keys, refuse the rest.** Inverting
    the burden is the shape that has worked repeatedly in this codebase,
@@ -108,15 +102,11 @@ this one *is* rule 3 -- refuse the shape, no enumeration, no allowlist --
 and it is applied to string **values** anywhere in ``context`` and to
 plain-string ``detail``. See :data:`CONSTRAINT_NAME`.
 
-Measured when it was added (2026-08-18). Exactly one body in the suite
-carried such a name -- the registered-constraint 409's
-``context["constraint"]`` -- and it was removed in the same change; with
-that gone, a full ``pytest backend/tests`` produces no match at all. So
-this rule lands green on a clean tree and every future match is a real
-finding rather than a backlog. Turning it off and putting the name back
-was run in both directions before it was believed: see the mutations
-recorded in the pull request, and the synthetic pair in
-``tests/api/test_error_body_id_gate.py``.
+The registered-constraint 409 does not put the name in
+``context["constraint"]``, so a full ``pytest backend/tests`` produces no match at
+all. So this rule lands green on a clean tree and every future match is a real
+finding rather than a backlog. The synthetic pair in
+``tests/api/test_error_body_id_gate.py`` exercises the rule in both directions.
 
 The id text rule, and why it is not the AST scan again
 --------------------------------------------------------

@@ -1,4 +1,4 @@
-"""A calculation's geometries must carry its subject's isotopes (#666).
+"""A calculation's geometries must carry its subject's isotopes.
 
 ``calculation_geometry_composition_mismatch`` counts elements and reads ``D``,
 ``T`` and ``[2H]`` as hydrogen, so on its own it let a deuterium energy be
@@ -13,7 +13,7 @@ Design, each pinned below:
   same core as the conformer rule). CH2D-OH vs CH3-OD is not distinguished.
 * **The reference is ``species_entry.isotope_key``**, not ``species.smiles``,
   which is isotope-blind by design.
-* **A ``D``/``T`` element spelling is an isotope declaration** (#672, ADR 0022):
+* **A ``D``/``T`` element spelling is an isotope declaration**:
   ``parse_xyz`` stores it as ``H`` + mass 2/3, so a ``D`` geometry under a
   protium species is refused, and a legacy row (``D``/``T`` with a NULL mass,
   unrewritable) is read by its own symbol.
@@ -280,7 +280,7 @@ def test_a_d_spelling_is_an_isotope_declaration(db_conn) -> None:
     """A ``D`` geometry on a protium species is refused; on a ``[2H]`` species it is accepted.
 
     This pinned the opposite (acceptance, "isotope-silent by design") before
-    #672 / ADR 0022: ``parse_xyz`` now stores ``D`` as ``H`` + mass 2, which this
+    ``parse_xyz`` stores ``D`` as ``H`` + mass 2, which this
     rule counts like any explicit ``isotopes`` entry.
     """
 
@@ -290,7 +290,7 @@ def test_a_d_spelling_is_an_isotope_declaration(db_conn) -> None:
 
 
 def _legacy_d_geometry_id(session: Session, symbol: str = "D") -> int:
-    """A geometry as deposited before #672: the symbol in the element column, no mass number."""
+    """A geometry stored with the legacy spelling: the symbol in the element column, no mass number."""
     geometry = Geometry(natoms=1, geom_hash=f"legacy-{symbol}-{id(session)}", xyz_text=f"1\n\n{symbol} 0 0 0")
     session.add(geometry)
     session.flush()
@@ -302,7 +302,7 @@ def _legacy_d_geometry_id(session: Session, symbol: str = "D") -> int:
 def test_a_legacy_d_row_with_a_null_mass_counts_as_deuterium(db_conn) -> None:
     """The read-time rule: ``mass = stored or implied_isotope_mass_number(element)``.
 
-    Called directly because no upload can produce the row any more. A legacy
+    Called directly because no upload can produce the row. A legacy
     ``D``/NULL geometry under a protium calculation is refused, under a ``[2H]``
     one it agrees, and a legacy ``T`` counts as 3 (so it disagrees with ``[2H]``).
     """

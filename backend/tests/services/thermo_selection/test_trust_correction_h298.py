@@ -1,9 +1,9 @@
 """H298 under the trust-contract correction: which live answers change, and which must not.
 
 The correction (computed rubrics at the next version): an automated geometry-validation ``fail`` is a curator-attention
-signal (see ``CalculationGeometryValidation``), not a hard failure. A record is no longer ``hard_failed`` because a source
+signal (see ``CalculationGeometryValidation``), not a hard failure. A record is not ``hard_failed`` because a source
 calculation's automated identity check said ``fail``, so the H298 assessor, which blocks on ``evidence.hard_fail_reason``,
-no longer excludes it for that reason alone. Rejected calculation quality, broken artifact custody and the other
+does not exclude it for that reason alone. Rejected calculation quality, broken artifact custody and the other
 structural hard fails still block exactly as before.
 
 Each scenario states the main-branch answer and the answer now. The H298 golden (``test_h298_golden.py``) is synthetic
@@ -117,10 +117,10 @@ def test_p6_the_geometry_fail_stays_visible_as_advisory_evidence(db_session, met
 
 
 def test_p7_two_g4_records_one_with_a_geometry_fail_now_compete_and_say_why_there_are_two(db_session, methane):
-    """Reviewer case X2. Main: the newer G4's geometry fail excluded it, so the older clean G4 was ``sole_eligible_candidate``
-    (a live answer). Now both are eligible and nothing ranks one over the other: ``incomparable_alternatives``, nothing
-    selected. A changed answer, kept honest: the flagged member's advisory shows the geometry warning, so a reader can see
-    why the second record is there, and nothing is selected that no rule supports."""
+    """Two G4 records, one with a geometry fail, compete: the newer G4's geometry fail does not exclude it, so the older
+    clean G4 is not ``sole_eligible_candidate``. Both are eligible and nothing ranks one over the other:
+    ``incomparable_alternatives``, nothing selected. The flagged member's advisory shows the geometry warning, so a
+    reader can see why the second record is there, and nothing is selected that no rule supports."""
     older_clean = make_thermo(db_session, methane, proto=protocol("g4"), age_days=300)
     newer_flagged = make_thermo(db_session, methane, proto=protocol("g4"), age_days=1)
     _source(db_session, methane, older_clean, geometry=ValidationStatus.passed)

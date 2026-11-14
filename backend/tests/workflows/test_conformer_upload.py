@@ -170,7 +170,7 @@ def test_persist_conformer_upload_creates_linked_statmech_record(db_conn) -> Non
         },
         # A freq job, because the statmech block below claims it as the
         # record's frequency basis. This said ``sp`` until statmech began
-        # enforcing DR-0028 Requirement 1: the subject of the test is that
+        # enforcing the no-FK-ids rule: the subject of the test is that
         # the statmech row is created and linked, not that a role may
         # contradict the type of the job it names.
         calculation={
@@ -681,7 +681,7 @@ def test_conformer_upload_rejects_irc_additional() -> None:
 # ---------------------------------------------------------------------------
 # Applied energy corrections: the source keys must name what they say
 #
-# Both keys used to be tested for ``is not None`` alone, so *any* string
+# Testing both keys for ``is not None`` alone would let *any* string
 # resolved to the primary observation/calculation. The test that matters is
 # therefore not the rejection but the acceptance: a correction naming the
 # additional freq calculation must land on that row, not on the primary.
@@ -799,10 +799,10 @@ def test_correction_conformer_key_links_the_observation_it_names(
 
 
 def test_correction_conformer_key_is_not_the_label(db_conn) -> None:
-    """``label`` was the namespace and is not one any more.
+    """``label`` is not a namespace.
 
     A label is a human tag that also drives conformer-group matching, so
-    a reference resolving through it broke whenever the label was changed
+    a reference resolving through it would break whenever the label changed
     for grouping reasons -- and a depositor with no label could not name
     their conformer at all. ``conformer_key`` answers only to references,
     which is the whole of its job.
@@ -821,7 +821,7 @@ def test_correction_conformer_key_is_not_the_label(db_conn) -> None:
 
 
 def test_correction_conformer_key_works_without_any_label(db_conn) -> None:
-    """The deposit that could not previously be expressed at all."""
+    """The deposit a label-keyed reference could not express."""
     with Session(db_conn) as session, session.begin():
         request = _correction_request(
             label="unused",

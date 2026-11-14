@@ -1,8 +1,8 @@
-"""The typed method qualifiers of a level of theory replace its free-text ``keywords`` (Stage 2).
+"""The typed method qualifiers of a level of theory replace its free-text ``keywords``.
 
 Held here:
 
-* a level that states no qualifier hashes as the pinned Stage 2 payload (the field adds no key when unset);
+* a level that states no qualifier hashes as the pinned payload (the field adds no key when unset);
 * each stated qualifier, and each of its values, is a different level of theory;
 * a payload that sends ``keywords`` is refused like any unknown field, on every path that carries a level;
 * the stored row and the read shape carry the qualifiers;

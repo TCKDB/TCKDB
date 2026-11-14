@@ -167,7 +167,7 @@ def test_build_context_from_trust_preserves_evidence_fields():
 def test_digest_is_unchanged_by_the_check_map_shape_move():
     """The reader-facing shape moved; the hashed context did not.
 
-    ``trust.evidence`` used to carry four arrays and now carries one
+    ``trust.evidence`` carries one array
     ``{name: outcome}`` map. The machine-review context is a *versioned
     digest contract*, not a readout, so it still carries the four sets — the
     adapter inverts the map back into them. If that inversion were not
@@ -386,7 +386,7 @@ def test_current_projection_classifies_current_against_matching_digest():
 
 
 def test_changed_digest_classifies_latest_review_stale():
-    """Evidence changes after the review -> the stored digest no longer matches."""
+    """Evidence changes after the review -> the stored digest does not match."""
     digest_old = build_machine_review_context_hash(_context())
     projection = _projection_for(digest_old)
 

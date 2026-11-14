@@ -1,4 +1,4 @@
-"""A job keeps the warnings that parsing the request earned (#670).
+"""A job keeps the warnings that parsing the request earned.
 
 What was wrong
 --------------
@@ -6,7 +6,7 @@ What was wrong
 parsed that stored payload again. A warning raised while parsing the *original*
 request survived only if parsing left the field alone. A banner-style software
 version such as ``"Gaussian 16, Revision C.01"`` is split on first parse into
-``version='16', revision='C.01'``, so the stored payload no longer looked like a
+``version='16', revision='C.01'``, so the stored payload does not look like a
 banner and the second parse had nothing to warn about: the direct route
 returned ``software_release_version_is_composite`` and the job did not.
 

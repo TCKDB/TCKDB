@@ -1,4 +1,4 @@
-"""Independent analytical fixtures for Phase D; no production evaluator oracle."""
+"""Independent analytical fixtures for the advisory checks; no production evaluator oracle."""
 
 import builtins
 import json
@@ -154,7 +154,7 @@ def test_neighbour_comparison_requires_exact_points_and_preserves_pressure():
 
 
 def test_neighbour_comparison_across_species_entries_is_unavailable():
-    """Review round 2, guard #2: ``different_species_entries`` had no test.
+    """``different_species_entries`` is tested.
 
     Two species entries (keys 1 and 2, distinct ``species_entry_id``) with
     matching exact points at the same temperature -- if this guard were
@@ -175,7 +175,7 @@ def test_neighbour_comparison_across_species_entries_is_unavailable():
 
 
 def test_temperature_outside_record_range_is_visible_even_within_fit_bounds():
-    """Review round 2, guard #4: the record's own tmin_k/tmax_k, independent
+    """The record's own tmin_k/tmax_k, independent
     of the NASA fit's own [t_low, t_high]. Here the fit bounds are [200,
     3000] but the record's tmin_k is narrowed to 500, and 300 K sits inside
     the fit's bounds -- so only the record-range guard, not the fit-range
@@ -189,7 +189,7 @@ def test_temperature_outside_record_range_is_visible_even_within_fit_bounds():
 
 
 def test_mismatched_cantera_version_is_a_configuration_error(monkeypatch):
-    """Review round 2, guard #5: no test exercised the runtime version pin."""
+    """The runtime version pin is exercised."""
     fake_cantera = types.SimpleNamespace(__version__="3.1.0")
     monkeypatch.setitem(sys.modules, "cantera", fake_cantera)
     with pytest.raises(engine.ConfigurationError, match="3.2.0"):
@@ -197,7 +197,7 @@ def test_mismatched_cantera_version_is_a_configuration_error(monkeypatch):
 
 
 def test_thermo_with_only_a_fit_and_no_points_or_s298_is_unavailable():
-    """Review round 2, guard #6: ``no_comparison_pairs_or_temperatures``.
+    """``no_comparison_pairs_or_temperatures``.
 
     A single NASA-7 fit and nothing else gives exactly one representation
     per quantity, so there is no pair to compare and no exact point/s298
@@ -214,8 +214,8 @@ def test_thermo_with_only_a_fit_and_no_points_or_s298_is_unavailable():
     # A phase never recorded (documented on Thermo.phase as unspecified,
     # never as non-gas -- backend/app/db/models/thermo.py) is a different
     # situation from a phase explicitly recorded as one this check does
-    # not support, and must not collapse to the same reason (decided
-    # 2026-09-23; see engine.gas_state_reason and engine.SUPPORTED_PHASES).
+    # not support, and must not collapse to the same reason (see
+    # engine.gas_state_reason and engine.SUPPORTED_PHASES).
     ("phase", None, "phase_not_recorded"),
     ("phase", "liquid", "non_gas_phase_unsupported"),
 ])
@@ -236,12 +236,12 @@ def test_thermo_missing_or_unsupported_phase_remains_visible(field, value, reaso
 def test_supported_phases_constant_is_what_the_check_consults(monkeypatch):
     """``gas_state_reason`` must read ``engine.SUPPORTED_PHASES`` rather than
     compare against a hardcoded phase value, so widening scope later is a
-    one-line change to the constant (decided 2026-09-23).
+    one-line change to the constant.
 
     Mutation: hardcode ``if thermo.phase != PhaseKind.gas`` in
     ``gas_state_reason`` instead of consulting the constant -- monkeypatching
-    ``SUPPORTED_PHASES`` then no longer changes the outcome, and the
-    previously-refused liquid-phase record stays unavailable instead of
+    ``SUPPORTED_PHASES`` then does not change the outcome, and the
+    refused liquid-phase record stays unavailable instead of
     becoming comparable, so this goes red.
     """
     thermo = _thermo()
@@ -258,12 +258,10 @@ def test_supported_phases_constant_is_what_the_check_consults(monkeypatch):
 
 
 def test_missing_reference_pressure_blocks_entropy_but_not_heat_capacity():
-    """Decision (2026-09-23): a missing ``reference_pressure_bar`` makes
+    """A missing ``reference_pressure_bar`` makes
     entropy unavailable (it fixes the standard-state pressure baked into
     the entropy coefficient) but must not block heat capacity, since
-    Cantera returns an identical Cp at any reference pressure. Was one
-    undifferentiated case in ``test_thermo_missing_state_remains_visible``
-    above until the D2/D1 pressure-applicability split (review round 2).
+    Cantera returns an identical Cp at any reference pressure.
     """
     thermo = _thermo()
     thermo.reference_pressure_bar = None
@@ -381,7 +379,7 @@ def test_incomplete_mapping_and_unbalanced_stoichiometry_are_visible():
 
 @pytest.mark.parametrize("degeneracy", [1.0, 2.0, 6.0])
 def test_not_applied_degeneracy_convention_scales_forward_rate_exactly(degeneracy):
-    """Review round 2, guard #1: ``record.degeneracy`` multiplying the rate
+    """``record.degeneracy`` multiplying the rate
     factor in ``kinetics._rate`` had no test. Compare against an
     "already_applied" baseline (no multiplier at all) built from the same
     fixture, so the ratio pins the multiplier exactly, not just "changed".
@@ -401,7 +399,7 @@ def test_not_applied_degeneracy_convention_scales_forward_rate_exactly(degenerac
 
 
 def test_not_applied_degeneracy_with_no_value_is_missing_or_invalid():
-    """Review round 2, guard #1 (second half): ``not_applied`` with no
+    """``not_applied`` with no
     supplied degeneracy must be a named unavailable reason, not a silent
     fall-through (e.g. treating a missing degeneracy as a no-op factor).
     """
@@ -415,7 +413,7 @@ def test_not_applied_degeneracy_with_no_value_is_missing_or_invalid():
 
 
 def test_unbalanced_charge_is_visible_even_when_elements_balance():
-    """Review round 2, guard #3: the charge term in the stoichiometric
+    """The charge term in the stoichiometric
     balance. H -> H+ has matching element counts (one H each side) but a
     net charge of +1 -- only the charge accumulator, not the per-element
     balance, can catch this.
@@ -457,8 +455,8 @@ def test_thermo_kinetics_domain_and_reference_pressure_mismatch_are_visible():
 def test_thermo_kinetics_declines_on_unrecorded_reference_pressure():
     """D3 (thermo-vs-kinetics equilibrium) consumes reference_pressure_bar
     at ``pressure = thermo_items[0][1].reference_pressure_bar * 100000.0``
-    (engine.py); since issue #529 a computed thermo record can carry
-    ``reference_pressure_bar=None`` (no longer defaulted to 1 bar), so this
+    (engine.py); a computed thermo record can carry
+    ``reference_pressure_bar=None`` (not defaulted to 1 bar), so this
     guards that the D3 comparison declines via
     ``engine.gas_state_reason`` before ever reaching that multiplication,
     rather than raising or silently treating the missing value as a number.
@@ -488,7 +486,7 @@ def test_unbalanced_isotope_conversion_is_unavailable():
     mapping[2].species_entry.species.smiles = "[2H]"
     rows = _details(compare_kinetics(forward, reverse, mapping, temperature_grid=[500]), "rate_units")
     assert len(rows) == 1
-    # Review round 2: name the expected reason. "reason is not None" alone does
+    # Name the expected reason. "reason is not None" alone does
     # not say which guard fired, and a future guard returning some other reason
     # would satisfy it silently. (element_counts_from_smiles does collapse
     # isotopes -- '[2H]' and '[H]' both count as one H -- so stoichiometry
@@ -514,7 +512,7 @@ def test_engine_load_failures_are_configuration_errors(monkeypatch, exception):
 
 
 def test_a_record_is_never_its_own_neighbour():
-    """#554: self-comparison gave residuals of exactly 0 and every representation pair twice."""
+    """Self-comparison would give residuals of exactly 0 and every representation pair twice."""
     thermo = _thermo(1)
     thermo.points = [ThermoPoint(temperature_k=500.0, cp_j_mol_k=3.5 * R, s_j_mol_k=R * (3.5 * log(500.0) + 2.0))]
     with pytest.raises(ValueError, match="cannot be its own neighbour"):

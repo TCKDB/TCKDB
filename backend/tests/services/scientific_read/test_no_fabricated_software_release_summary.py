@@ -7,10 +7,9 @@ projecting had no real release to point at:
 ``energy_correction_schemes.py``'s ``_build_software_release_summary``
 (``software_release_id=0, software_release_ref=""``),
 ``frequency_scale_factors.py``'s same-named function, and
-``statmech.py``'s ``_build_software_for_software_id``. Plan v2 PR 2
-(#459) replaced the first with a real ``software_release`` join; PR 6
-(the ``frequency_scale_factor`` sibling revision) replaces the other
-two. After PR 6 lands, no site in the codebase should construct that
+``statmech.py``'s ``_build_software_for_software_id``. A real
+``software_release`` join replaces the first; the ``frequency_scale_factor``
+sibling revision replaces the other two. No site in the codebase should construct that
 object with a sentinel id or an empty ref -- if one ever does again, a
 reader either double-counts a legitimate release with id 0 or renders a
 ref that can never resolve.

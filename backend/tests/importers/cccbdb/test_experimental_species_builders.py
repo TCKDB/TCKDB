@@ -146,7 +146,7 @@ class TestBenzeneTopLevel:
 
         result = _build(benzene_record)
         req = ThermoUploadRequest.model_validate(result.thermo_payload)
-        # Value already in kJ/mol from Phase 1. Builder must not re-convert.
+        # Value already in kJ/mol from the parser. Builder must not re-convert.
         assert req.h298_kj_mol == pytest.approx(19.820 * 4.184)
         assert req.h298_uncertainty_kj_mol == pytest.approx(0.120 * 4.184)
 

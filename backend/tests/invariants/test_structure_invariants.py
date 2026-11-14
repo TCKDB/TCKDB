@@ -121,7 +121,7 @@ def test_geometry_validation_flags_wrong_element_composition() -> None:
 # reaction-creation seam, including reactions used in network / PDep
 # workflows. Pseudo-species are the only first-pass exception. If this test
 # starts passing under a permissive policy, the backend has silently drifted
-# back to the old behavior — document the new policy explicitly before
+# back to the earlier behavior — document the new policy explicitly before
 # relaxing the rule.
 
 
@@ -233,8 +233,8 @@ def test_owner_guard_rejects_calculation_owned_by_other_ts_entry() -> None:
     """The same guard, for the transition-state half of the relationship.
 
     The bundle statmech path checks a transition-state entry rather than a
-    species entry, and before #162 that branch lived in its own inline
-    copy of the comparison. It is the same claim and now the same code.
+    species entry, and that branch shares the comparison rather than keeping its own inline
+    copy. It is the same claim and the same code.
     """
     calc = _FakeCalc(id=42, transition_state_entry_id=3)
 
@@ -275,10 +275,10 @@ def test_owner_guard_refuses_to_run_with_nothing_to_compare() -> None:
 
 
 def test_owner_guard_rejects_statmech_owned_by_another_subject() -> None:
-    """The statmech spelling of the same rule (#195).
+    """The statmech spelling of the same rule.
 
     A thermo record cites a statmech row by ``existing_statmech_id`` and a
-    kinetics interpretation cites one by ``statmech_ref``; both used to
+    kinetics interpretation cites one by ``statmech_ref``; both share the check and do not
     compare inline and raise a bare ``ValueError``. ``Statmech`` carries
     the same two owner columns a calculation does, so the comparison is
     shared and only the noun and the code differ -- which is what this
@@ -330,7 +330,7 @@ def test_owner_guard_refuses_a_vacuous_call_whatever_the_noun() -> None:
 
 
 def test_every_product_routes_its_owner_check_through_one_implementation() -> None:
-    """#162: the rule was written five times and pinned once.
+    """The rule was written five times and pinned once.
 
     Two of those copies had already drifted -- thermo's logged nothing
     where statmech's and transport's logged the row ids an operator needs
@@ -339,7 +339,7 @@ def test_every_product_routes_its_owner_check_through_one_implementation() -> No
     private owner-consistency comparison, and every module that needs one
     must reach the shared implementation.
 
-    ``app/workflows/kinetics.py`` joined the list in #195. It cites
+    ``app/workflows/kinetics.py`` is on the list. It cites
     statmech records and conformer selections rather than calculations, so
     it reaches the module by a different name -- which is why the check is
     on the *import* rather than on one function's name.
@@ -357,7 +357,7 @@ def test_every_product_routes_its_owner_check_through_one_implementation() -> No
     for relative in modules:
         source = (root / relative).read_text()
         assert "from app.services.calculation_ownership import" in source, relative
-        # The private per-product copies this consolidated (#162).
+        # The private per-product copies this consolidated.
         assert "def _assert_calculation_owned_by" not in source, relative
         assert "def assert_statmech_calculation_owned_by" not in source, relative
 
@@ -365,7 +365,7 @@ def test_every_product_routes_its_owner_check_through_one_implementation() -> No
 def _uncoded_owner_comparisons(source: str) -> list[tuple[int, str]]:
     """``(line, code)`` for every ``if x._entry_id != y:`` that bare-raises.
 
-    The shape all seven #195 sites had: compare an owner column, then
+    The shape all seven sites have: compare an owner column, then
     ``raise ValueError`` -- which reaches a depositor as
     ``validation_error`` and cannot be branched on. Detected structurally
     rather than by message, because the messages were all different and
@@ -426,7 +426,7 @@ def test_the_uncoded_comparison_detector_can_say_no() -> None:
 
 
 def test_no_module_refuses_an_owner_mismatch_without_a_code() -> None:
-    """#195: seven guards compared an owner column and bare-raised.
+    """Seven guards compared an owner column and bare-raised.
 
     Each reached a client as ``validation_error``, so a depositor could
     not tell "you cited another species' partition function" from a
@@ -493,7 +493,7 @@ def test_thermo_upload_schema_rejects_source_calc_key_with_no_declared_calc() ->
 def test_species_identity_key_excludes_molecule_kind() -> None:
     """``uq_species_identity`` and the content-derived public ref agree.
 
-    Species identity is ``(smiles, charge, multiplicity)`` — DR-0031 — and
+    Species identity is ``(smiles, charge, multiplicity)`` — and
     ``Species.kind`` is not part of it. ``_canonical_species`` is keyed on the
     same tuple (plus ``stereo_kind``, which that constraint makes functionally
     dependent on it), so the two cannot drift into a state where two rows
@@ -507,7 +507,7 @@ def test_species_identity_key_excludes_molecule_kind() -> None:
     from app.db.models.species import Species
     from app.services.public_refs import _canonical_species
 
-    # Since DR-0038 the key is a partial unique index over the live rows (a merged-away row is kept beside its survivor).
+    # The key is a partial unique index over the live rows (a merged-away row is kept beside its survivor).
     identity = {
         index.name: [column.name for column in index.columns]
         for index in Species.__table__.indexes

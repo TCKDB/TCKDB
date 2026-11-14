@@ -132,7 +132,7 @@ def test_it_satisfies_the_provider_protocol():
 def test_the_test_double_satisfies_the_transport_protocol():
     """Pins that the protocol is what these tests think it is.
 
-    If ``MachineReviewModelClient`` gains an argument, a stub that no longer
+    If ``MachineReviewModelClient`` gains an argument, a stub that does not
     matches it would otherwise keep passing -- ``Protocol`` is structural, and
     the provider calls ``complete`` by keyword either way.
     """

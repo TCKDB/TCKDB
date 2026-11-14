@@ -90,7 +90,7 @@ def _assert_schemas_package_is_this_checkout() -> None:
       other and both disagree with the branch.
 
     Both of those happened while building the correction-scheme release
-    grain (#458): three CI cycles were spent on a golden that had been
+    grain: three CI cycles were spent on a golden that had been
     "regenerated" twice, and six tests failed against a schema change that
     was in fact correct.
 
@@ -110,8 +110,7 @@ def _check_error_bodies(item) -> None:
     """Fail the test whose error body carried an internal identifier.
 
     Two failures, in the order they matter. The first is the rule -- no
-    internal identifier in a user-facing body: not a primary key
-    (DR-0028 Requirement 2), and since 2026-08-18 not a raw database
+    internal identifier in a user-facing body: not a primary key, and not a raw database
     constraint name either. Both go to the log. The
     second is the guard on the guard: a sweep that examines nothing
     passes trivially, so a test whose client *received* a JSON error
@@ -226,7 +225,7 @@ def _disable_anonymous_body_limit_by_default():
 
 @pytest.fixture(autouse=True)
 def _security_phase2_test_defaults():
-    """Relax Phase 2 production-only defaults for the test suite.
+    """Relax production-only defaults for the test suite.
 
     The hosted production posture requires a credential for the
     legacy ``/api/v1/{thermo,kinetics,...}`` routes and emits secure
@@ -338,11 +337,11 @@ def _resolve_test_db_name() -> str:
       per-test rollback exists to prevent.  Asking for a specific database
       name and for N workers is asking for N databases.
 
-    The run token is why ``DB_TEST_NAME`` can no longer be the whole name.
+    The run token is why ``DB_TEST_NAME`` is not the whole name.
     Before it, names were unique *within* a run and identical *across* runs:
     two pytest processes on one host — two agents in two worktrees, a
     developer alongside a self-hosted runner — shared eight databases and
-    dropped each other's schemas mid-run.  On 2026-08-10 that produced 2305
+    dropped each other's schemas mid-run.  That produced 2305
     errors on a tree that passed alone, and none of them said "another run is
     using your database"; they said ``terminating connection due to
     administrator command``.  Making the *default* unique would not have
@@ -420,8 +419,8 @@ def _validate_test_db_name(db_name: str) -> str:
 # that reaches for that factory during a test is therefore talking to a
 # different database than every fixture and every assertion.
 #
-# That is not hypothetical.  It was root cause 2 of the seed-independence work
-# (#64): five ``/status`` tests probed through ``health.SessionLocal``, passed
+# That is not hypothetical.  It was root cause 2 of the seed-independence work:
+# five ``/status`` tests probed through ``health.SessionLocal``, passed
 # in a dev shell and on the PR gate -- which runs ``alembic upgrade head``
 # against ``DB_NAME`` in an earlier step -- and failed only on the nightly,
 # which does not.  They were green for a reason unrelated to what they
@@ -614,7 +613,7 @@ def _refuse_foreign_test_database(connection, db_name: str) -> None:
 # the next failure mode had nothing left to name it.
 #
 # Four agents each running an 8-worker gate against one server with
-# ``max_connections = 100`` exhaust the pool.  Measured on this harness: one
+# ``max_connections = 100`` exhaust the pool.  On this harness one
 # 8-worker run peaks at about 35 client backends (~4 per worker plus the
 # admin connections), so three concurrent runs are already at the limit and
 # four are past it.  Two separate agents hit this within a day.  One measured
@@ -648,7 +647,7 @@ def _refuse_foreign_test_database(connection, db_name: str) -> None:
 #: Client backends one xdist worker is worth, measured rather than assumed:
 #: an 8-worker ``test-rest.sh`` run peaked at ~31 backends across its 8 test
 #: databases, and at 41 (one database at 15) once the API-key stamp engine
-#: (up to two more connections per process, #587) existed.  41 / 8 is 5.1, so
+#: (up to two more connections per process) existed.  41 / 8 is 5.1, so
 #: 6.  The admin/alembic connections are counted separately below.
 _BACKENDS_PER_WORKER = 6
 
@@ -956,7 +955,7 @@ def pytest_terminal_summary(terminalreporter) -> None:
 
 
 # ---------------------------------------------------------------------------
-# DR-0028 body sweep: the floor
+# Error-body sweep: the floor
 # ---------------------------------------------------------------------------
 # The per-test check in ``_check_error_bodies`` is the strong net and needs no
 # numbers. This is the coarse second one, and it exists for the blinding the
@@ -982,9 +981,7 @@ _FILTERING_OPTIONS = ("-k", "-m", "--deselect", "--lf", "--last-failed", "--ff")
 #: ``(bodies swept, body fields examined)`` each selection must reach.
 #:
 #: Measured at seed 424242 with 8 workers, then rounded down by ~10% so that
-#: adding or removing a handful of refusal tests does not fail a run. The
-#: three gates were measured at ``38766219``; the whole-suite row at
-#: ``6d614cb1``, two commits earlier, which is why it is the smaller number:
+#: adding or removing a handful of refusal tests does not fail a run:
 #:
 #:     whole suite   935 bodies / 1236 fields   (8,038 tests)
 #:     rest gate       1 body   /    1 field    (4,673 tests)
@@ -1008,7 +1005,7 @@ BODY_SWEEP_FLOORS: dict[tuple[str, ...], tuple[int, int]] = {
     # What CI actually runs for the API gate: ``tests/api`` less the subtree the scientific gate owns and the
     # OpenAPI snapshot, which the quick-checks job runs. Until this row existed that invocation matched no key
     # above, so the API gate -- where 96% of the suite's error bodies come from -- ran with no floor at all and
-    # said so only in a log line. Measured on CI 2026-10-24: 1,638 bodies / 3,334 fields unsharded on main
+    # said so only in a log line. On CI: 1,638 bodies / 3,334 fields unsharded on main
     # (run 40127869896) and 1,639 / 3,335 summed over the slices; rounded down ~10%.
     ("tests/api", "!tests/api/scientific", "!tests/api/test_openapi_snapshot.py"): (1_470, 3_000),
 }
@@ -1536,9 +1533,8 @@ def db_engine():
             text=True,
         )
         # Built the way the application builds its own engine, so the suite
-        # runs with the statement timeout really on (#604): before, this
-        # engine had none at all, and a statement the API would cancel could
-        # run for as long as it liked here.
+        # runs with the statement timeout really on: an engine without one lets a
+        # statement the API would cancel run for as long as it likes here.
         engine = api_deps.create_app_engine(_database_url(db_name), future=True, pool_pre_ping=False)
         # Everything that cannot be handed a request-scoped session -- the
         # commit-time upload audit, the artifact-integrity event writer, the
@@ -1608,7 +1604,7 @@ def db_conn(db_engine) -> Iterator[Connection]:
 
     That second property is what lets test bodies keep writing
     ``with Session(db_conn) as session, session.begin(): ...`` unchanged while
-    no longer committing anything to the shared database.
+    not committing anything to the shared database.
     """
     with db_engine.connect() as connection:
         transaction = connection.begin()
@@ -1632,7 +1628,7 @@ def db_conn(db_engine) -> Iterator[Connection]:
 # happens to schedule next.
 #
 # This fixture blames the test that commits instead.  It started life in
-# ``tests/workflows/conftest.py`` (PR #111) and now covers every tree: a
+# ``tests/workflows/conftest.py`` and now covers every tree: a
 # committing test is named wherever it lives.
 #
 # Tests that genuinely need two concurrent transactions (the ``*_isolation``

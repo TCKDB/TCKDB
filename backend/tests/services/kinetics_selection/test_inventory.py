@@ -168,7 +168,7 @@ def test_a_record_the_evidence_rubric_hard_fails_is_not_counted_as_qualifying(db
     assert delta(after, before, "determinations_with_a_qualifying_record") == 0
 
 
-# -- a confirmed finding about a record's own source calculation (#724) ------------------------------------------------
+# -- a confirmed finding about a record's own source calculation ------------------------------------------------
 
 
 def _two_sourced_records(db_session, world):

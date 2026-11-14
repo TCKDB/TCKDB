@@ -1,4 +1,4 @@
-"""Cartesian Hessian storage tests (DR-0030).
+"""Cartesian Hessian storage tests.
 
 Covers the HessianPayload validator (triangle-length invariant), the
 persistence path through ``resolve_and_persist_calculation_with_results``

@@ -108,7 +108,7 @@ def test_resolve_or_create_literature_reuses_existing_row(
 
 
 # ---------------------------------------------------------------------------
-# Depositor-vs-fetched-metadata mismatch warnings (#248)
+# Depositor-vs-fetched-metadata mismatch warnings
 # ---------------------------------------------------------------------------
 
 
@@ -371,7 +371,7 @@ def test_created_row_carries_the_source_and_a_later_match_never_rewrites_it(
 
 
 def test_crossref_returning_an_empty_title_list_is_treated_as_no_title(monkeypatch) -> None:
-    """Crossref can answer ``"title": []``; that used to raise IndexError. It
+    """Crossref can answer ``"title": []``; must not raise IndexError. It
     means "no title", so the typed one stands and is marked as typed."""
     import requests
 

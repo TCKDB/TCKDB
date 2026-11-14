@@ -7,14 +7,14 @@ Two reclaimers exist, and both only ever look at ``tckdb_test%``:
 * ``backend/scripts/dev/reclaim_leaked_test_databases.py``, the deliberate
   human-driven cleanup for everything the sweep cannot reason about.
 
-Several migration tests used to build their own scratch names —
+Migration tests must not build their own scratch names —
 ``tckdb_et_scope_migration_*``, ``tckdb_stage2_legacy_*``,
 ``tckdb_exec_env_migration_*``, ``tckdb_rpa_migration_*``. They matched
 neither reclaimer, so a run killed partway (a session limit, a Ctrl-C, an
 OOM) leaked them permanently; one was found and dropped by hand on
-2026-08-10.
+when two runs share a host.
 
-Renaming them fixed the ones that existed. This file is what stops the next
+This file stops the next
 one drifting back out silently: a new migration test that follows the
 convention is covered automatically, and one that does not is named here
 rather than discovered as a stray database months later.
@@ -180,7 +180,7 @@ def _nightly_workflow_source() -> str:
 def test_the_nightly_ambient_database_is_outside_the_reclaimable_namespace() -> None:
     """``tckdb_test%`` is the harness's namespace; nothing long-lived may sit in it.
 
-    The nightly job's ambient ``DB_NAME`` used to be ``tckdb_test_ci``, which
+    The nightly job's ambient ``DB_NAME`` must not be ``tckdb_test_ci``, which
     the reclaim script's pattern matches — so on a self-hosted runner ``plan``
     would list the running job's own database as a candidate. That was first
     fixed by naming it in ``PROTECTED``, which makes one name safe and leaves
@@ -214,7 +214,7 @@ def test_protected_holds_only_names_the_pattern_cannot_match() -> None:
     """``PROTECTED`` is belt-and-braces, not a place to park exceptions.
 
     An entry the pattern *can* match means some database is safe only because
-    someone remembered to write it down — the failure mode #96 came from. Such
+    someone remembered to write it down — a recurring failure mode. Such
     an entry is a signal to rename the database, not to lengthen this list.
     """
     source = (

@@ -266,7 +266,7 @@ class TestParameterDBStorage:
         db_session.flush()
 
         # Seed vocab entries for canonical keys that appear in parsed params.
-        # The initial migration now seeds the Phase 1 vocabulary, so skip
+        # The initial migration seeds the vocabulary, so skip
         # any keys that are already present to keep this test idempotent.
         canonical_keys_used = {
             p["canonical_key"]
