@@ -13,8 +13,11 @@ import { loadNetworkEntry } from "../api/networkEntryApi"
 import { Disclosure } from "../components/Disclosure"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { QuantityValue } from "../components/QuantityValue"
-import { NetworkDiagram } from "../components/NetworkDiagram"
-import { NetworkKtpChart } from "../components/NetworkKtpChart"
+import { Lede } from "../components/Lede"
+import { NetworkKtpHeatmap } from "../components/NetworkKtpHeatmap"
+import { NetworkMap } from "../components/NetworkMap"
+import { NetworkChannelsTable, NetworkStatesTable } from "../components/NetworkTables"
+import { ReviewChip } from "../components/ReviewChip"
 import { PageShell } from "../components/PageShell"
 import { RecordMap } from "../components/RelationshipMap"
 import { networkNodes } from "../domain/recordMapNodes"
@@ -24,15 +27,15 @@ import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDis
 import { ReviewNote } from "../components/ReviewNote"
 import { formatQuantity } from "../domain/quantityFormat"
 import { computeSpeciesEnergyCoverage, solveEnergySourceSentence, STATE_ENERGY_ORDER_NOTE } from "../domain/networkEnergyCoverage"
+import { networkLede, NETWORK_ENERGY_LEDE } from "../domain/networkLede"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 import { LiteratureCitation } from "../components/LiteratureCitation"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 /**
- * `/networks/:networkRef` -- identity, evidence (incl. the
- * live-computed energy-coverage fact), reactions, review, the
- * network diagram and the k(T,P) chart.
+ * `/networks/:networkRef` -- identity, the network map with its tables, the k(T,P) heat map, reactions, energies,
+ * evidence and review.
  */
 export default function NetworkEntryPage() {
     const { networkRef = "" } = useParams<{ networkRef: string }>()
@@ -103,13 +106,14 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                     <header className="basin-header">
                         <div className="record-identity-header">
                             <div className="record-identity-kicker-row">
-                                <span className="t-kicker record-identity-kicker">Pressure-dependent network · deposited scientific record</span>
-                                <span className={reviewPillClass(network.review.status)}>{statusLabel(network.review.status)}</span>
+                                <span className="t-kicker record-identity-kicker">Pressure-dependent network</span>
+                                <ReviewChip status={network.review.status} />
                             </div>
                             {/* `network.name` and `network.description` are depositor
                                 prose and are not printed (house rule): the heading is a
                                 TCKDB noun, the network is identified by its ref below. */}
                             <h1 className="t-display-2 record-identity-title">Pressure-dependent network</h1>
+                            <Lede>{networkLede({ states: record.evidence_summary.state_count, channels: record.evidence_summary.channel_count, rates: record.evidence_summary.kinetics_count })}</Lede>
                             <div className="record-identity-known">
                                 <dl className="kv-list record-identity-facts">
                                     <div>
@@ -147,8 +151,32 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                     </header>
                 )}
             >
+                <section className="ledger-section" aria-labelledby="map-heading">
+                    <SectionHeading id="map-heading">Network map</SectionHeading>
+                    <NetworkMap states={record.states} channels={record.channels} channelBarriers={record.channelBarriers} />
+                    <NetworkStatesTable states={record.states} />
+                    <NetworkChannelsTable channels={record.channels} states={record.states} />
+                </section>
+
+                <section className="ledger-section" aria-labelledby="ktp-heading">
+                    <SectionHeading id="ktp-heading">k(T,P)</SectionHeading>
+                    <NetworkKtpHeatmap networkRef={network.network_ref} network={network} channels={record.channels} states={record.states} />
+                </section>
+
+                <section className="ledger-section" aria-labelledby="reactions-heading">
+                    <SectionHeading id="reactions-heading">Reactions</SectionHeading>
+                    <ReactionsSection channels={record.channels} reactionEntries={record.reactionEntries} totalChannels={record.evidence_summary.channel_count} />
+                </section>
+
+                <section className="ledger-section" aria-labelledby="energy-heading">
+                    <SectionHeading id="energy-heading">Energies</SectionHeading>
+                    <p className="t-body section-intro">{NETWORK_ENERGY_LEDE}</p>
+                    <Disclosure summary="Energy coverage">
+                        <EnergyCoverageCard record={record} />
+                    </Disclosure>
+                </section>
+
                 <section className="ledger-section" aria-labelledby="evidence-heading">
-                    <p className="t-kicker section-kicker">What this network carries</p>
                     <SectionHeading id="evidence-heading">Evidence on this network</SectionHeading>
                     <EvidenceChecklist
                         heading="Evidence on this network"
@@ -171,42 +199,9 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                         ]}
                         note={`Counts reflect what this network's own record carries today, not an assumption about the underlying chemistry. "None deposited" describes the archive, not the chemistry.`}
                     />
-                    <EnergyCoverageCard record={record} />
-                </section>
-
-                <section className="ledger-section" aria-labelledby="diagram-heading">
-                    <p className="t-kicker section-kicker">States as energy levels, deposited barriers as saddle points</p>
-                    <SectionHeading id="diagram-heading">Potential-energy surface</SectionHeading>
-                    <p className="t-body section-intro">
-                        {`${record.evidence_summary.state_count} state${record.evidence_summary.state_count === 1 ? "" : "s"}, ${record.evidence_summary.channel_count} channel${record.evidence_summary.channel_count === 1 ? "" : "s"}. Energies here are electronic-only, referenced to the lowest state — see `}
-                        <a href="#energy-coverage">Energy coverage</a>
-                        {" above for what that means, and why it is not a thermal free-energy surface."}
-                    </p>
-                    <NetworkDiagram
-                        states={record.states}
-                        channels={record.channels}
-                        stateEnergies={record.stateEnergies}
-                        channelBarriers={record.channelBarriers}
-                    />
-                </section>
-
-                <section className="ledger-section" aria-labelledby="ktp-heading">
-                    <p className="t-kicker section-kicker">Evaluated, server-side, from the stored fits — never re-derived here</p>
-                    <SectionHeading id="ktp-heading">k(T,P)</SectionHeading>
-                    <p className="t-body section-intro">
-                        {`A channel carrying more than one fit — a Chebyshev and a PLOG parameterization of the same channel is the norm on this network, not an edge case — shows every one of them, never a single picked or averaged rate.`}
-                    </p>
-                    <NetworkKtpChart networkRef={network.network_ref} network={network} channels={record.channels} states={record.states} />
-                </section>
-
-                <section className="ledger-section" aria-labelledby="reactions-heading">
-                    <p className="t-kicker section-kicker">Elementary steps with a deposited reaction entry</p>
-                    <SectionHeading id="reactions-heading">Reactions</SectionHeading>
-                    <ReactionsSection channels={record.channels} reactionEntries={record.reactionEntries} totalChannels={record.evidence_summary.channel_count} />
                 </section>
 
                 <section className="ledger-section" aria-labelledby="review-heading">
-                    <p className="t-kicker section-kicker">Curation status</p>
                     <SectionHeading id="review-heading">Review</SectionHeading>
                     <EvidenceChecklist
                         heading="Network review"

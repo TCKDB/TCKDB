@@ -1,9 +1,10 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
+import { Announcer } from "../components/Announcer"
 import "../design-system.css"
 import NetworkEntryPage from "./NetworkEntryPage"
 import { channelHandle } from "../domain/publicText"
@@ -198,11 +199,11 @@ describe("NetworkEntryPage -- identity, evidence, reactions, review", () => {
         expect(await screen.findByText("NN <=> [H][H] + N=N")).toBeVisible()
     })
 
-    it("renders the potential-energy surface section and the k(T,P) section", async () => {
+    it("renders the network map section and the k(T,P) section", async () => {
         handleEverything()
         page()
         await screen.findByRole("heading", { name: "Pressure-dependent network" })
-        expect(screen.getByRole("heading", { name: "Potential-energy surface" })).toBeVisible()
+        expect(screen.getByRole("heading", { name: "Network map" })).toBeVisible()
         expect(await screen.findByRole("heading", { name: "k(T,P)" })).toBeVisible()
     })
 
@@ -301,7 +302,7 @@ describe("NetworkEntryPage -- energy coverage is computed live, never hardcoded"
     it("0 of 2 species entries have thermo -- worded from the served presence, not a literal string", async () => {
         handleEverything({ thermoCounts: { spe_well: 0, spe_h2: 0 } })
         page()
-        expect(await screen.findByText(/none of the 2 participant species entries carry a thermo/)).toBeVisible()
+        expect(await screen.findByText(/none of the 2 participant species entries carry a thermo/)).toBeInTheDocument()
     })
 
     // Mutation check: hardcode the energy-coverage figure instead of
@@ -312,7 +313,7 @@ describe("NetworkEntryPage -- energy coverage is computed live, never hardcoded"
     it("1 of 2 species entries have thermo -- the sentence changes to match, proving it is not a fixed string", async () => {
         handleEverything({ thermoCounts: { spe_well: 1, spe_h2: 0 } })
         page()
-        expect(await screen.findByText(/1 of the 2 participant species entries carry a thermo/)).toBeVisible()
+        expect(await screen.findByText(/1 of the 2 participant species entries carry a thermo/)).toBeInTheDocument()
         expect(screen.queryByText(/none of the 2 participant species entries carry a thermo/)).not.toBeInTheDocument()
     })
 
@@ -324,7 +325,7 @@ describe("NetworkEntryPage -- energy coverage is computed live, never hardcoded"
             ],
         })
         page()
-        expect(await screen.findByText(/for 2 of 2 states, and a forward\/reverse electronic barrier for 0 of 1 channels/)).toBeVisible()
+        expect(await screen.findByText(/for 2 of 2 states, and a forward\/reverse electronic barrier for 0 of 1 channels/)).toBeInTheDocument()
     })
 })
 
@@ -424,7 +425,7 @@ describe("NetworkEntryPage -- no depositor-typed text", () => {
         // The fixture reached the page: ref, equation, and the energy diagram all rendered.
         expect(await screen.findByText(NETWORK_REF)).toBeVisible()
         expect(await screen.findByText("NN <=> [H][H] + N=N")).toBeVisible()
-        await waitFor(() => expect(container.querySelectorAll(".net-pes-level-link").length).toBeGreaterThan(0))
+        await waitFor(() => expect(container.querySelectorAll(".net-map-link").length).toBeGreaterThan(0))
         await screen.findByRole("heading", { name: "k(T,P)" })
 
         expectNoDepositorText()
@@ -432,48 +433,44 @@ describe("NetworkEntryPage -- no depositor-typed text", () => {
     })
 })
 
-describe("NetworkEntryPage -- potential-energy surface", () => {
-    it("renders one level per state with a deposited energy, and one saddle point for the channel with a deposited barrier", async () => {
+describe("NetworkEntryPage -- network map", () => {
+    it("draws one circle and one hexagon for the two states, and a triangle for the channel with a deposited barrier", async () => {
         handleEverything({
-            stateEnergies: [
-                { state_composition_hash: "hash_well", energy_kj_mol: 0, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
-                { state_composition_hash: "hash_bim", energy_kj_mol: 50, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
-            ],
             channelBarriers: [
                 { channel_key: "channel_1", reaction_entry_ref: "rxe_test1", transition_state_entry_ref: "tse_test1", forward_barrier_kj_mol: 20, reverse_barrier_kj_mol: 70, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
             ],
         })
         const { container } = page()
         await screen.findByRole("heading", { name: "Pressure-dependent network" })
-        expect(container.querySelectorAll(".net-pes-level-link")).toHaveLength(2)
-        expect(container.querySelectorAll(".net-pes-saddle-link")).toHaveLength(1)
+        expect(container.querySelectorAll("svg.net-map-svg circle.net-map-node")).toHaveLength(1)
+        expect(container.querySelectorAll("svg.net-map-svg polygon.net-map-node--end")).toHaveLength(1)
+        expect(container.querySelectorAll("svg.net-map-svg .net-map-ts")).toHaveLength(1)
     })
 
-    it("renders every visible level label from composition.state_label, never the composition_hash", async () => {
-        handleEverything({
-            stateEnergies: [
-                { state_composition_hash: "hash_well", energy_kj_mol: 0, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
-                { state_composition_hash: "hash_bim", energy_kj_mol: 50, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
-            ],
-        })
+    it("labels every state from composition.state_label, never the composition_hash", async () => {
+        handleEverything()
         const { container } = page()
         await screen.findByRole("heading", { name: "Pressure-dependent network" })
-        const svgTexts = Array.from(container.querySelectorAll("svg text")).map((t) => t.textContent)
-        expect(svgTexts).toContain("NN")
-        // The raw hash legitimately appears in a `data-composition-hash`
-        // attribute (a programmatic join key, invisible to a reader) --
-        // this checks rendered TEXT, the same distinction the existing
-        // composition_hash guard above draws with `container.textContent`.
+        expect(Array.from(container.querySelectorAll("svg text")).map((t) => t.textContent)).toContain("NN")
         expect(container.textContent ?? "").not.toContain("hash_well")
         expect(container.textContent ?? "").not.toContain("hash_bim")
     })
 
-    it("the accessible states/channels tables always render, alongside the SVG", async () => {
+    it("renders the states and channels tables alongside the map", async () => {
         handleEverything()
         page()
         await screen.findByRole("heading", { name: "Pressure-dependent network" })
         expect(screen.getByRole("table", { name: "States in this network" })).toBeInTheDocument()
         expect(screen.getByRole("table", { name: "Channels in this network" })).toBeInTheDocument()
+    })
+
+    it("says the energies in one sentence and keeps the rest in a closed disclosure", async () => {
+        handleEverything()
+        page()
+        await screen.findByRole("heading", { name: "Energies" })
+        expect(screen.getByText("Energies are electronic only, relative to the lowest state; they are not free energies.")).toBeVisible()
+        const summary = screen.getByText("Energy coverage", { selector: "summary" })
+        expect(summary.closest("details")).not.toHaveAttribute("open")
     })
 })
 
@@ -614,67 +611,47 @@ describe("NetworkEntryPage — an unreadable solve degrades, it does not blank t
     })
 })
 
-describe("NetworkEntryPage -- k(T,P) chart", () => {
-    it("renders BOTH fits for the default channel -- a Chebyshev and a PLOG series, never collapsed to one", async () => {
+describe("NetworkEntryPage -- k(T,P) heat map", () => {
+    it("writes a value in every cell and offers each stored record by its own label", async () => {
         handleEverything()
         const { container } = page()
         await screen.findByRole("heading", { name: "k(T,P)" })
-        // `nk_cheb1` and `nk_plog1` are `defaultKtpFits`' two fits for
-        // `channel_1` -- both must render as their own line group.
-        await waitFor(() => {
-            expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0)
-            expect(container.querySelectorAll('[data-testid="ktp-line-nk_plog1"]').length).toBeGreaterThan(0)
-        })
-        // Distinguishable, not just present: a chebyshev and a plog series
-        // on the SAME channel must not share a stroke colour.
-        const chebyshevLine = container.querySelector('[data-testid="ktp-line-nk_cheb1"] polyline')
-        const plogLine = container.querySelector('[data-testid="ktp-line-nk_plog1"] polyline')
-        expect(chebyshevLine).not.toBeNull()
-        expect(plogLine).not.toBeNull()
-        expect(chebyshevLine!.getAttribute("stroke")).not.toBe(plogLine!.getAttribute("stroke"))
+        await waitFor(() => expect(container.querySelectorAll("svg.ktp-svg .ktp-value").length).toBeGreaterThan(0))
+        const cells = container.querySelectorAll("svg.ktp-svg .ktp-cell")
+        const values = container.querySelectorAll("svg.ktp-svg .ktp-value")
+        expect(values).toHaveLength(cells.length)
+        for (const value of Array.from(values)) expect(value.textContent).toMatch(/\d\.\de\d/)
+        const select = screen.getByLabelText("Rate record") as HTMLSelectElement
+        expect(Array.from(select.options).map((option) => option.textContent)).toEqual(["NN + [H][H] to NN, Chebyshev", "NN + [H][H] to NN, PLOG"])
     })
 
-    it("issues exactly ONE POST to the batch evaluate endpoint per page load -- not one per channel, not one per fit", async () => {
-        // TWO channels carrying kinetics, not one -- a per-channel-loop
-        // regression (call the endpoint once per channel instead of once
-        // for the whole page) is indistinguishable from the correct
-        // behaviour on a one-channel fixture, since both produce exactly
-        // one call. This is the fixture that actually exercises the
-        // distinction.
-        handleNetworkDetail(networkDetailFixture({
-            channels: [
-                {
-                    channel_key: "channel_1", kind: "isomerization", mechanism: "elementary",
-                    source_state_composition_hash: "hash_bim", sink_state_composition_hash: "hash_well", has_kinetics: true,
-                    microreactions: [{ reaction_entry_ref: "rxe_test1", transition_state_entry_ref: "tse_test1", path_kind: "saddle_point" }],
-                },
-                {
-                    channel_key: "channel_2", kind: "association", mechanism: "elementary",
-                    source_state_composition_hash: "hash_well", sink_state_composition_hash: "hash_bim", has_kinetics: true,
-                    microreactions: [],
-                },
-            ],
-        }))
+    it("asks the archive once, however the controls move", async () => {
+        handleNetworkDetail(networkDetailFixture())
         handleSolveDetail("nsolve_test1")
         handleThermo({ spe_well: 0, spe_h2: 0 })
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
-        const calls = handleKtpEvaluate()
-        const { container } = page()
-        await screen.findByRole("heading", { name: "k(T,P)" })
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0))
-        expect(calls.length).toBe(1)
-
-        // Client-side interaction -- toggling which channel is shown, and
-        // switching the shared pressure selector -- must never fire a
-        // second request. The batch endpoint already returned every
-        // channel's every fit in the one call above; selection is a pure
-        // client-side filter over that one response.
-        const pressureSelect = screen.getByLabelText("Pressure") as HTMLSelectElement
-        fireEvent.change(pressureSelect, { target: { value: pressureSelect.options[pressureSelect.options.length - 1].value } })
-        expect(calls.length).toBe(1)
+        const requests = handleKtpEvaluate()
+        page()
+        const pressure = await screen.findByRole("slider", { name: "Pressure" })
+        const user = userEvent.setup()
+        pressure.focus()
+        await user.keyboard("{ArrowRight}{ArrowRight}{ArrowLeft}")
+        await user.selectOptions(screen.getByLabelText("Rate record"), "nk_plog1")
+        expect(requests).toHaveLength(1)
+        expect(requests[0].temperature_k).toHaveLength(8)
+        expect(requests[0].pressure_bar).toHaveLength(5)
     })
 
-    it("a point outside a fit's own stated validity range renders dashed, never presented as interpolated", async () => {
+    it("shows only values the archive returned: a cell equals its served point", async () => {
+        handleEverything()
+        const { container } = page()
+        await waitFor(() => expect(container.querySelectorAll("svg.ktp-svg .ktp-value").length).toBeGreaterThan(0))
+        // First record: k = 2 * T, and T = 300 K is the first column, at every pressure.
+        const cell = container.querySelector('[data-testid="ktp-cell-0-4"]')!
+        expect(cell.parentElement!.querySelector(".ktp-value")!.textContent).toBe("6.0e2")
+    })
+
+    it("marks a point outside the record's stated range and never hides it", async () => {
         handleNetworkDetail(networkDetailFixture())
         handleSolveDetail("nsolve_test1")
         handleThermo({ spe_well: 0, spe_h2: 0 })
@@ -682,46 +659,47 @@ describe("NetworkEntryPage -- k(T,P) chart", () => {
         handleKtpEvaluate((temperaturesK, pressuresBar) => [
             ktpFitFixture({
                 network_kinetics_ref: "nk_cheb1",
-                model_kind: "chebyshev",
-                points: temperaturesK.flatMap((t, index) => pressuresBar.map((p) => ktpPoint(t, p, 2 * t, index < temperaturesK.length - 2))),
-            }),
-            ktpFitFixture({
-                network_kinetics_ref: "nk_plog1",
-                model_kind: "plog",
-                points: temperaturesK.flatMap((t) => pressuresBar.map((p) => ktpPoint(t, p, 3 * t))),
+                points: temperaturesK.flatMap((t, index) => pressuresBar.map((p) => ktpPoint(t, p, 2 * t, index < temperaturesK.length - 1))),
             }),
         ])
         const { container } = page()
-        await screen.findByRole("heading", { name: "k(T,P)" })
-        // Checks the ACTUAL rendered `stroke-dasharray`, not just the
-        // `data-in-range` bookkeeping attribute alongside it -- a mutation
-        // that stops applying the dasharray while leaving `data-in-range`
-        // untouched must still fail this test.
-        await waitFor(() => {
-            const dashed = container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"] polyline[stroke-dasharray="4 3"]')
-            expect(dashed.length).toBeGreaterThan(0)
-        })
-        const chebyshevSolid = container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"] polyline:not([stroke-dasharray])')
-        expect(chebyshevSolid.length).toBeGreaterThan(0)
-        const plogDashed = container.querySelectorAll('[data-testid="ktp-line-nk_plog1"] polyline[stroke-dasharray="4 3"]')
-        expect(plogDashed.length).toBe(0)
+        await waitFor(() => expect(container.querySelectorAll("svg.ktp-svg .ktp-value").length).toBeGreaterThan(0))
+        const marked = Array.from(container.querySelectorAll("svg.ktp-svg .ktp-value")).filter((value) => value.textContent?.endsWith("†"))
+        expect(marked).toHaveLength(5)
+        expect(screen.getByText(/† is outside the record's stated range/)).toBeInTheDocument()
     })
 
-    it("channel_key never appears as visible text in the k(T,P) section -- chemistry labels the channel instead", async () => {
+    it("keeps channel_key out of the visible text of the section", async () => {
         handleEverything()
         const { container } = page()
         const heading = await screen.findByRole("heading", { name: "k(T,P)" })
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0))
+        await waitFor(() => expect(container.querySelectorAll("svg.ktp-svg .ktp-value").length).toBeGreaterThan(0))
         const section = heading.closest("section")!
         expect(section.textContent ?? "").not.toContain("channel_1")
-        // Confirms the section actually rendered channel-scoped content
-        // (so the assertion above is not vacuously true on empty markup)
-        // -- `channel_key` is present as a `data-*` attribute, per
-        // invariant 4, just never as rendered text.
         expect(section.querySelector(`[data-channel-key="${channelHandle("channel_1")}"]`)).not.toBeNull()
     })
 
-    it("degrades honestly when no channel on this network carries kinetics -- no empty chart, no request fired", async () => {
+    it("links the value to the reaction entry that carries the channel", async () => {
+        handleEverything()
+        page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        const link = await waitFor(() => {
+            const found = document.querySelector(".ktp-readout a")
+            expect(found).not.toBeNull()
+            return found as HTMLAnchorElement
+        })
+        expect(link).toHaveAttribute("href", "/reaction-entries/rxe_test1")
+    })
+
+    it("has a table with the same values", async () => {
+        handleEverything()
+        page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        const table = await screen.findByRole("table", { name: "k at each pressure and temperature" })
+        expect(within(table).getAllByRole("row")).toHaveLength(6)
+    })
+
+    it("says so when no channel carries kinetics, and asks for nothing", async () => {
         handleNetworkDetail(networkDetailFixture({
             evidence_summary: {
                 species_count: 2, reaction_count: 1, state_count: 2, channel_count: 1, solve_count: 1,
@@ -735,16 +713,12 @@ describe("NetworkEntryPage -- k(T,P) chart", () => {
         }))
         handleSolveDetail("nsolve_test1")
         handleThermo({ spe_well: 0, spe_h2: 0 })
-        // Deliberately NOT calling handleKtpEvaluate() -- MSW's
-        // `onUnhandledRequest: "error"` fails this test if the component
-        // fires the batch request anyway when no channel has kinetics.
         page()
         const heading = await screen.findByRole("heading", { name: "k(T,P)" })
-        const section = heading.closest("section")!
-        await waitFor(() => expect(section.textContent ?? "").toContain("No k(T,P) fits are deposited on this network."))
+        await waitFor(() => expect(heading.closest("section")!.textContent ?? "").toContain("No rate records are deposited on this network."))
     })
 
-    it("degrades honestly when the solve carries no temperature/pressure range -- no request fired", async () => {
+    it("says so when the solve records no range, and asks for nothing", async () => {
         handleNetworkDetail(networkDetailFixture({
             network: {
                 network_ref: NETWORK_REF, name: "hydrazine", description: null,
@@ -755,386 +729,39 @@ describe("NetworkEntryPage -- k(T,P) chart", () => {
         handleSolveDetail("nsolve_test1")
         handleThermo({ spe_well: 0, spe_h2: 0 })
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
-        // Same "no unmocked request" guard as above.
         page()
         const heading = await screen.findByRole("heading", { name: "k(T,P)" })
-        const section = heading.closest("section")!
-        await waitFor(() => expect(section.textContent ?? "").toContain("does not record a temperature/pressure range"))
+        await waitFor(() => expect(heading.closest("section")!.textContent ?? "").toContain("records no temperature and pressure range"))
     })
 })
 
-// ---------------------------------------------------------------------------
-// k(T,P) x-axis mode (the Arrhenius chart has the same control). Mirrors
-// `ArrheniusChart.test.tsx`'s own "the x-axis mode control" describe block,
-// same fixture-independent assertions: default mode, switching re-projects
-// and reverses, switching back restores, and the axis title follows the
-// mode. `networkDetailFixture()`'s own solve range (300 K .. 2000 K) is the
-// grid `buildKtpRequestGrid` samples, so the plotted line's own first/last
-// points are exactly that range's endpoints (`evenTicks` samples inclusive
-// of both ends) -- pinned against directly, not assumed.
-// ---------------------------------------------------------------------------
-
-describe("NetworkEntryPage -- k(T,P) chart x-axis mode (temperature vs 1000/T)", () => {
-    it("defaults to Temperature (K) -- today's view, unchanged", async () => {
+describe("NetworkEntryPage -- keyboard path", () => {
+    it("Tab reaches the map's channel link, then the pressure control; arrow keys change it and the new value is announced", async () => {
         handleEverything()
-        const { container } = page()
-        await screen.findByRole("heading", { name: "k(T,P)" })
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0))
+        render(
+            <MemoryRouter initialEntries={[`/networks/${NETWORK_REF}`]}>
+                <Announcer />
+                <Routes>
+                    <Route path="/networks/:networkRef" element={<NetworkEntryPage />} />
+                </Routes>
+            </MemoryRouter>,
+        )
+        const user = userEvent.setup()
+        const channelLink = await screen.findByRole("link", { name: /^Channel 1, isomerization/ })
+        const pressure = await screen.findByRole("slider", { name: "Pressure" })
+        channelLink.focus()
+        for (let presses = 0; presses < 40 && document.activeElement !== pressure; presses += 1) await user.tab()
+        expect(pressure).toHaveFocus()
+        expect(pressure).toHaveAttribute("aria-valuetext", "1 bar")
 
-        const select = screen.getByRole("combobox", { name: "X-axis" }) as HTMLSelectElement
-        expect(select.value).toBe("temperature")
-        const title = container.querySelector(".arrhenius-chart-axis-title--x")
-        expect(title?.textContent).toBe("Temperature (K)")
-        const svg = screen.getByRole("img", { name: /k\(T,P\) evaluated/ })
-        expect(svg.getAttribute("aria-label")).toMatch(/versus temperature in kelvin/)
-    })
+        await user.keyboard("{ArrowRight}")
+        expect(pressure).toHaveAttribute("aria-valuetext", "10 bar")
+        const live = document.querySelector(".announcer")!
+        await waitFor(() => expect(live.textContent).toMatch(/^k at 1271 K and 10 bar: 2\.5429×10³ s⁻¹$/))
 
-    // MUTATION TARGET (required): x mapping stays linear in T while the
-    // mode says inverse -- pinned against hand-computed 1000/300 and
-    // 1000/2000, the fixture's own T range endpoints. Also covers the
-    // required "axis direction not reversed" target: the 2000 K point (last
-    // in temperature order) must land at a SMALLER pixel x than the 300 K
-    // point once the axis reverses.
-    it("switching to 1000/T re-projects every plotted point and reverses the axis, high temperature at the left", async () => {
-        handleEverything()
-        const { container } = page()
-        await screen.findByRole("heading", { name: "k(T,P)" })
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0))
-
-        const line = container.querySelector('[data-testid="ktp-line-nk_cheb1"] polyline:not([stroke-dasharray])')!
-        const pointsBefore = line.getAttribute("points")!.split(" ").map((pair) => pair.split(",").map(Number))
-        const [firstXBefore] = pointsBefore[0] // 300 K
-        const [lastXBefore] = pointsBefore[pointsBefore.length - 1] // 2000 K
-        expect(firstXBefore).toBeLessThan(lastXBefore) // today's view: low T on the left
-
-        fireEvent.change(screen.getByRole("combobox", { name: "X-axis" }), { target: { value: "inverse_temperature" } })
-
-        const title = container.querySelector(".arrhenius-chart-axis-title--x")
-        expect(title?.textContent).toBe("1000 / T (K⁻¹)")
-        const svg = screen.getByRole("img", { name: /k\(T,P\) evaluated/ })
-        expect(svg.getAttribute("aria-label")).toMatch(/1000 divided by temperature/)
-        expect(svg.getAttribute("aria-label")).toMatch(/high temperature at the left/)
-
-        const lineAfter = container.querySelector('[data-testid="ktp-line-nk_cheb1"] polyline:not([stroke-dasharray])')!
-        const pointsAfter = lineAfter.getAttribute("points")!.split(" ").map((pair) => pair.split(",").map(Number))
-        const [firstXAfter] = pointsAfter[0] // still 300 K, now plotted at 1000/300
-        const [lastXAfter] = pointsAfter[pointsAfter.length - 1] // still 2000 K, now plotted at 1000/2000
-
-        // The two x pixel positions actually changed -- proves the mapping
-        // is not still plain T (the required "x mapping stays linear"
-        // mutation target: a regression that keeps plotting raw T while
-        // merely relabeling the axis would leave these two values
-        // unchanged from `pointsBefore`).
-        expect(firstXAfter).not.toBeCloseTo(firstXBefore, 0)
-        expect(lastXAfter).not.toBeCloseTo(lastXBefore, 0)
-        // And the axis genuinely reversed: 2000 K (1000/2000, the SMALLER
-        // transformed value) is now on the left.
-        expect(lastXAfter).toBeLessThan(firstXAfter)
-    })
-
-    it("switching back to Temperature (K) restores the un-reversed axis", async () => {
-        handleEverything()
-        const { container } = page()
-        await screen.findByRole("heading", { name: "k(T,P)" })
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0))
-
-        const select = screen.getByRole("combobox", { name: "X-axis" })
-        fireEvent.change(select, { target: { value: "inverse_temperature" } })
-        fireEvent.change(select, { target: { value: "temperature" } })
-
-        const title = container.querySelector(".arrhenius-chart-axis-title--x")
-        expect(title?.textContent).toBe("Temperature (K)")
-        const line = container.querySelector('[data-testid="ktp-line-nk_cheb1"] polyline:not([stroke-dasharray])')!
-        const points = line.getAttribute("points")!.split(" ").map((pair) => pair.split(",").map(Number))
-        const [firstX] = points[0]
-        const [lastX] = points[points.length - 1]
-        expect(firstX).toBeLessThan(lastX) // 300 K back on the left
-    })
-
-    it("is ONE chart-wide control, not one per family panel", async () => {
-        handleNetworkDetail(stackedFamilyNetworkFixture())
-        handleSolveDetail("nsolve_test1")
-        handleThermo({ spe_well: 0, spe_h2: 0 })
-        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
-        handleKtpEvaluate(stackedFamilyKtpFits)
-        const { container } = page()
-        await screen.findByRole("heading", { name: "k(T,P)" })
-        // The channel fieldset only renders once the batch evaluate fetch
-        // resolves -- wait for the default channel's own line before
-        // selecting more (same ordering the stacked-family describe block
-        // below this one already relies on).
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
-
-        // Select the two extra channels so both unit families (per_s and
-        // cm3_mol_s) end up with at least one panel each.
-        selectChannel(container, "channel_2")
-        selectChannel(container, "channel_3")
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
-        await waitFor(() => expect(container.querySelectorAll('.arrhenius-chart-panel-wrap').length).toBeGreaterThan(1))
-
-        expect(screen.getAllByRole("combobox", { name: "X-axis" })).toHaveLength(1)
-
-        // The single control still governs every panel: switching it moves
-        // every panel's own axis title, not just one.
-        fireEvent.change(screen.getByRole("combobox", { name: "X-axis" }), { target: { value: "inverse_temperature" } })
-        const titles = container.querySelectorAll(".arrhenius-chart-axis-title--x")
-        expect(titles.length).toBeGreaterThan(1)
-        titles.forEach((title) => expect(title.textContent).toBe("1000 / T (K⁻¹)"))
-    })
-
-    // Invariant 8: the k(T) table behind the Disclosure must never disagree
-    // with the chart about what is plotted. `ArrheniusChart.tsx`'s own k(T)
-    // table always tabulates T in kelvin regardless of its x-axis mode --
-    // this table does the same, so switching the chart's axis must not
-    // change the table's own T column.
-    it("the k(T) table's T column stays in kelvin under 1000/T mode, matching the Arrhenius chart's own table", async () => {
-        handleEverything()
-        const { container } = page()
-        await screen.findByRole("heading", { name: "k(T,P)" })
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0))
-
-        // A closed `<details>` still renders its children into the DOM
-        // (only visibility is affected) -- `container.querySelector` reads
-        // them directly, same as `ArrheniusChart.test.tsx`'s own table
-        // assertions, no need to open the disclosure first.
-        const firstRowBefore = container.querySelector(".kinetics-k-table tbody tr td[data-label='T (K)']")?.textContent
-
-        fireEvent.change(screen.getByRole("combobox", { name: "X-axis" }), { target: { value: "inverse_temperature" } })
-        const firstRowAfter = container.querySelector(".kinetics-k-table tbody tr td[data-label='T (K)']")?.textContent
-
-        expect(firstRowBefore).toBe("300.00")
-        expect(firstRowAfter).toBe(firstRowBefore)
-    })
-})
-
-describe("NetworkEntryPage — the k(T,P) y-axis title sits in the grid track built for it", () => {
-    it("is a direct child of .arrhenius-chart-panel, not a sibling before it", async () => {
-        // `.arrhenius-chart-axis-title--y` is placed with `grid-column: 1`,
-        // so it only lands beside the axis when its parent is the grid.
-        // Shipped as a sibling BEFORE the panel, it fell into normal flow and
-        // rendered the rotated title as a vertical run of characters floating
-        // above the plot. jsdom computes no layout, so the structural parent
-        // relationship is the testable part of that defect.
-        handleEverything()
-        const { container } = page()
-        await screen.findByRole("heading", { name: "k(T,P)" })
-        const title = await waitFor(() => {
-            const el = container.querySelector(".arrhenius-chart-axis-title--y")
-            expect(el).not.toBeNull()
-            return el!
-        })
-        expect(title.parentElement).not.toBeNull()
-        // `classList.contains`, NOT `className.toContain`: the wrapper one
-        // level out is `arrhenius-chart-panel-wrap`, whose name CONTAINS
-        // "arrhenius-chart-panel" as a substring, so a substring assertion
-        // passes against the exact broken layout it is meant to catch.
-        expect(title.parentElement!.classList.contains("arrhenius-chart-panel")).toBe(true)
-    })
-})
-
-// ---------------------------------------------------------------------------
-// k(T,P) stacked-panel / unit-control behaviour.
-// A network with THREE channels across two families: `channel_1` isomerization/`per_s`, `channel_2`
-// association/`cm3_mol_s`, `channel_3` exchange/`cm3_mol_s` -- exercises
-// both "same family stacks" and "different families never mix" at once.
-// ---------------------------------------------------------------------------
-
-function stackedFamilyNetworkFixture() {
-    return networkDetailFixture({
-        channels: [
-            {
-                channel_key: "channel_1", kind: "isomerization", mechanism: "elementary",
-                source_state_composition_hash: "hash_bim", sink_state_composition_hash: "hash_well", has_kinetics: true, microreactions: [],
-            },
-            {
-                channel_key: "channel_2", kind: "association", mechanism: "elementary",
-                source_state_composition_hash: "hash_well", sink_state_composition_hash: "hash_bim", has_kinetics: true, microreactions: [],
-            },
-            {
-                channel_key: "channel_3", kind: "exchange", mechanism: "elementary",
-                source_state_composition_hash: "hash_bim", sink_state_composition_hash: "hash_well", has_kinetics: true, microreactions: [],
-            },
-        ],
-    })
-}
-
-function stackedFamilyKtpFits(temperaturesK: number[], pressuresBar: number[]) {
-    const gridPoints = (kAtOneKelvinOneBar: number) => temperaturesK.flatMap((t) => pressuresBar.map((p) => ktpPoint(t, p, kAtOneKelvinOneBar * t)))
-    return [
-        ktpFitFixture({
-            network_kinetics_ref: "nk_iso_cheb", channel_key: "channel_1", channel_kind: "isomerization",
-            model_kind: "chebyshev", k_units: "per_s", points: gridPoints(2),
-        }),
-        ktpFitFixture({
-            network_kinetics_ref: "nk_iso_plog", channel_key: "channel_1", channel_kind: "isomerization",
-            model_kind: "plog", k_units: "per_s", points: gridPoints(3),
-        }),
-        ktpFitFixture({
-            network_kinetics_ref: "nk_assoc_cheb", channel_key: "channel_2", channel_kind: "association",
-            model_kind: "chebyshev", k_units: "cm3_mol_s", points: gridPoints(5e12),
-        }),
-        ktpFitFixture({
-            network_kinetics_ref: "nk_assoc_plog", channel_key: "channel_2", channel_kind: "association",
-            model_kind: "plog", k_units: "cm3_mol_s", points: gridPoints(7e12),
-        }),
-        ktpFitFixture({
-            network_kinetics_ref: "nk_exch_cheb", channel_key: "channel_3", channel_kind: "exchange",
-            model_kind: "chebyshev", k_units: "cm3_mol_s", points: gridPoints(11e12),
-        }),
-        ktpFitFixture({
-            network_kinetics_ref: "nk_exch_plog", channel_key: "channel_3", channel_kind: "exchange",
-            model_kind: "plog", k_units: "cm3_mol_s", points: gridPoints(13e12),
-        }),
-    ]
-}
-
-/** Selects (checks) a channel's own checkbox in the multi-select fieldset --
- *  every checkbox's `<label>` carries `data-channel-key`, unchanged from PR
- *  4. */
-function selectChannel(container: HTMLElement, channelKey: string) {
-    const checkbox = container.querySelector(`.network-ktp-channel-option[data-channel-key="${channelHandle(channelKey)}"] input`) as HTMLInputElement
-    fireEvent.click(checkbox)
-}
-
-describe("NetworkEntryPage -- k(T,P) chart stacks selected channels by unit family, never mixing families", () => {
-    it("MUTATION TARGET: a per_s channel and a cm3_mol_s channel never share one panel -- two panels, not one", async () => {
-        handleNetworkDetail(stackedFamilyNetworkFixture())
-        handleSolveDetail("nsolve_test1")
-        handleThermo({ spe_well: 0, spe_h2: 0 })
-        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
-        handleKtpEvaluate(stackedFamilyKtpFits)
-        const { container } = page()
-        await screen.findByRole("heading", { name: "k(T,P)" })
-        // Only channel_1 selected by default -- one panel.
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
-        expect(container.querySelectorAll(".arrhenius-chart-panel-wrap")).toHaveLength(1)
-
-        selectChannel(container, "channel_2")
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_assoc_cheb"]').length).toBeGreaterThan(0))
-
-        const wraps = Array.from(container.querySelectorAll(".arrhenius-chart-panel-wrap"))
-        expect(wraps).toHaveLength(2)
-        // Every wrap holds exactly one of the two families' channel(s) --
-        // never both `channel_1` and `channel_2` inside the SAME wrap. A
-        // mutation that merges the two into one shared panel makes this
-        // assertion fail:
-        // one wrap would then carry both data-testids at once.
-        for (const wrap of wraps) {
-            const hasIso = wrap.querySelector('[data-testid="ktp-line-nk_iso_cheb"]') !== null
-            const hasAssoc = wrap.querySelector('[data-testid="ktp-line-nk_assoc_cheb"]') !== null
-            expect(hasIso && hasAssoc).toBe(false)
-        }
-    })
-
-    it("overlays TWO channels of the SAME family on one shared panel, both distinguishable by colour", async () => {
-        handleNetworkDetail(stackedFamilyNetworkFixture())
-        handleSolveDetail("nsolve_test1")
-        handleThermo({ spe_well: 0, spe_h2: 0 })
-        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
-        handleKtpEvaluate(stackedFamilyKtpFits)
-        const { container } = page()
-        await screen.findByRole("heading", { name: "k(T,P)" })
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
-
-        selectChannel(container, "channel_2")
-        selectChannel(container, "channel_3")
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_exch_cheb"]').length).toBeGreaterThan(0))
-
-        // channel_2 and channel_3 are BOTH cm3_mol_s (association/exchange)
-        // -- exactly one shared wrap holds both, not two separate ones.
-        const wraps = Array.from(container.querySelectorAll(".arrhenius-chart-panel-wrap"))
-        expect(wraps).toHaveLength(2) // channel_1's own per_s panel, plus the shared cm3_mol_s panel
-        const sharedWrap = wraps.find((wrap) => wrap.querySelector('[data-testid="ktp-line-nk_assoc_cheb"]') && wrap.querySelector('[data-testid="ktp-line-nk_exch_cheb"]'))
-        expect(sharedWrap).not.toBeUndefined()
-
-        // Distinguishable: channel_2's Chebyshev line and channel_3's
-        // Chebyshev line share a model kind (so tint/width are IDENTICAL
-        // between them) but must still carry different `stroke` colours --
-        // that difference is entirely channel-identity colour, proving
-        // colour actually varies per channel and not just per model kind.
-        const assocLine = sharedWrap!.querySelector('[data-testid="ktp-line-nk_assoc_cheb"] polyline')
-        const exchLine = sharedWrap!.querySelector('[data-testid="ktp-line-nk_exch_cheb"] polyline')
-        expect(assocLine).not.toBeNull()
-        expect(exchLine).not.toBeNull()
-        expect(assocLine!.getAttribute("stroke")).not.toBe(exchLine!.getAttribute("stroke"))
-    })
-
-    it("familyUnits(per_s) has no interchangeable sibling -- that panel renders NO Y-axis control", async () => {
-        handleNetworkDetail(stackedFamilyNetworkFixture())
-        handleSolveDetail("nsolve_test1")
-        handleThermo({ spe_well: 0, spe_h2: 0 })
-        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
-        handleKtpEvaluate(stackedFamilyKtpFits)
-        const { container } = page()
-        await screen.findByRole("heading", { name: "k(T,P)" })
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
-        // Only channel_1 (per_s) selected -- no Y-axis control anywhere on
-        // the page yet (per_s's own family has exactly one member).
-        expect(screen.queryByLabelText(/Y-axis/)).toBeNull()
-    })
-
-    it("MUTATION TARGET: selecting a different unit converts the PLOTTED VALUES and the axis title together, never one without the other", async () => {
-        handleNetworkDetail(stackedFamilyNetworkFixture())
-        handleSolveDetail("nsolve_test1")
-        handleThermo({ spe_well: 0, spe_h2: 0 })
-        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
-        handleKtpEvaluate(stackedFamilyKtpFits)
-        const { container } = page()
-        await screen.findByRole("heading", { name: "k(T,P)" })
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
-
-        selectChannel(container, "channel_2")
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_assoc_cheb"]').length).toBeGreaterThan(0))
-
-        // cm3_mol_s's own family (bimolecular) is the one with a real
-        // choice: cm3_mol_s / m3_mol_s / cm3_molecule_s.
-        const unitSelect = screen.getByLabelText("Y-axis (bimolecular)") as HTMLSelectElement
-        const assocWrap = container.querySelector('[data-testid="ktp-line-nk_assoc_cheb"]')!.closest(".arrhenius-chart-panel-wrap")!
-        const axisTitleBefore = assocWrap.querySelector(".arrhenius-chart-axis-title--y")!.textContent
-        const lineBefore = assocWrap.querySelector('[data-testid="ktp-line-nk_assoc_cheb"] polyline')!.getAttribute("points")
-        expect(axisTitleBefore).toBe("log₁₀ [k / cm³ mol⁻¹ s⁻¹]")
-
-        fireEvent.change(unitSelect, { target: { value: "m3_mol_s" } })
-
-        const axisTitleAfter = assocWrap.querySelector(".arrhenius-chart-axis-title--y")!.textContent
-        const lineAfter = assocWrap.querySelector('[data-testid="ktp-line-nk_assoc_cheb"] polyline')!.getAttribute("points")
-        // The axis title names the NEW unit -- a mutation that converts the
-        // plotted values but leaves the title reading the old unit fails this line.
-        expect(axisTitleAfter).toBe("log₁₀ [k / m³ mol⁻¹ s⁻¹]")
-        expect(axisTitleAfter).not.toBe(axisTitleBefore)
-        // The plotted line itself actually moved (m3_mol_s = cm3_mol_s *
-        // 1e-6, six full log10 decades down the y-axis) -- a mutation that
-        // relabels the axis WITHOUT touching the drawn points fails this
-        // line instead.
-        expect(lineAfter).not.toBe(lineBefore)
-
-        // The table behind the Disclosure must agree with the chart
-        // (invariant 8) -- its caption and the k(T) values it prints both
-        // follow the SAME unit selection, not a stale one.
-        const caption = assocWrap.querySelector(".kinetics-k-table caption")
-        expect(caption).not.toBeNull()
-        expect(caption!.textContent ?? "").toContain("m³ mol⁻¹ s⁻¹")
-        expect(caption!.textContent ?? "").not.toContain("cm³ mol⁻¹ s⁻¹")
-    })
-
-    it("does not collapse a channel's two fits even when overlaid with another channel -- both Chebyshev AND PLOG still render for every selected channel", async () => {
-        handleNetworkDetail(stackedFamilyNetworkFixture())
-        handleSolveDetail("nsolve_test1")
-        handleThermo({ spe_well: 0, spe_h2: 0 })
-        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
-        handleKtpEvaluate(stackedFamilyKtpFits)
-        const { container } = page()
-        await screen.findByRole("heading", { name: "k(T,P)" })
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
-
-        selectChannel(container, "channel_2")
-        selectChannel(container, "channel_3")
-        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_exch_plog"]').length).toBeGreaterThan(0))
-
-        // Every one of the six served fits still renders its own line group.
-        for (const ref of ["nk_iso_cheb", "nk_iso_plog", "nk_assoc_cheb", "nk_assoc_plog", "nk_exch_cheb", "nk_exch_plog"]) {
-            expect(container.querySelectorAll(`[data-testid="ktp-line-${ref}"]`).length).toBeGreaterThan(0)
-        }
+        await user.keyboard("{ArrowLeft}{ArrowLeft}")
+        expect(pressure).toHaveAttribute("aria-valuetext", "0.1 bar")
+        await waitFor(() => expect(live.textContent).toMatch(/^k at 1271 K and 0\.1 bar: /))
     })
 })
 
@@ -1173,7 +800,7 @@ describe("NetworkEntryPage -- which solve the energies came from, and the order 
         const make = (ref: string) => ({ network_solve_ref: ref, kind: "computed", me_method: "modified strong collision", interpolation_model: "chebyshev", tmin_k: 300, tmax_k: 2000, pmin_bar: 0.01, pmax_bar: 100, review: { status: "not_reviewed" } })
         handleEverything({ stateEnergies, record: { solves: [make("nsolve_test1"), make("nsolve_test2")] } })
         page()
-        expect(await screen.findByText(/The first of this network's 2 deposited solves \(nsolve_test1; the others are not read here, and it is not preferred over them\) separately carries/)).toBeVisible()
+        expect(await screen.findByText(/The first of this network's 2 deposited solves \(nsolve_test1; the others are not read here, and it is not preferred over them\) separately carries/)).toBeInTheDocument()
         expect(screen.queryByText(/This network's own solve separately carries/)).not.toBeInTheDocument()
         fireEvent.click(screen.getByText(/^References/))
         expect(screen.getByText("nsolve_test1")).toBeInTheDocument()
@@ -1184,7 +811,7 @@ describe("NetworkEntryPage -- which solve the energies came from, and the order 
     it("with one solve the sentence stays as it was", async () => {
         handleEverything({ stateEnergies })
         page()
-        expect(await screen.findByText(/This network's own solve separately carries/)).toBeVisible()
+        expect(await screen.findByText(/This network's own solve separately carries/)).toBeInTheDocument()
     })
 
     it("states the master-equation method per solve when several are deposited, not the first solve's alone", async () => {

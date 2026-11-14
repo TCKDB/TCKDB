@@ -1,0 +1,111 @@
+/* Network map: circles, hexagons, lines and triangles, with the tables beside it as the full record. */
+.net-map {
+    margin: var(--s-4) 0;
+}
+
+.net-map-box {
+    overflow-x: auto;
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+
+.net-map-box:focus-visible,
+.net-map-link:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.net-map-svg {
+    display: block;
+    max-width: none;
+}
+
+.net-map--compact .net-map-svg {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+}
+
+.net-map-edge {
+    stroke: var(--muted);
+    stroke-width: 1.6;
+}
+
+.net-map-edge--dashed {
+    stroke-dasharray: 5 4;
+}
+
+.net-map-edge--here {
+    stroke: var(--accent);
+    stroke-width: 3;
+}
+
+.net-map-hit {
+    stroke: transparent;
+    stroke-width: 14;
+}
+
+.net-map-link:hover .net-map-edge,
+.net-map-link:focus-visible .net-map-edge {
+    stroke: var(--accent);
+    stroke-width: 3;
+}
+
+.net-map-node {
+    fill: var(--surface);
+    stroke: var(--ink);
+    stroke-width: 2;
+}
+
+.net-map-node--end {
+    fill: var(--accent-50);
+}
+
+.net-map-ts {
+    fill: var(--ink);
+    stroke: var(--surface);
+    stroke-width: 1.5;
+}
+
+.net-map-label {
+    fill: var(--ink);
+    font-size: 13px;
+}
+
+.net-map-link:hover .net-map-label {
+    fill: var(--accent);
+    text-decoration: underline;
+}
+
+.net-map-caption {
+    margin-top: var(--s-2);
+    color: var(--ink-2);
+    font: var(--type-body-font);
+}
+
+.net-map-hint {
+    margin: var(--s-1) 0 0;
+    color: var(--muted);
+    font: var(--type-ui-font);
+}
+
+.net-map-legend {
+    display: grid;
+    gap: var(--s-1);
+    margin: var(--s-3) 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--ink-2);
+    font: var(--type-ui-font);
+}
+
+.net-map-legend li {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+}
+
+.net-map-legend svg {
+    flex: none;
+}
