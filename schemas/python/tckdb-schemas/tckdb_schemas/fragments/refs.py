@@ -51,7 +51,7 @@ W_SOFTWARE_RELEASE_VERSION_IS_COMPOSITE = "software_release_version_is_composite
 W_SOFTWARE_RELEASE_NAME_LOOKS_WRONG = "software_release_name_looks_wrong"
 
 #: ``LevelOfTheoryRef.method`` contains ``//``: an ``energy//geometry`` pair
-#: written as one method name (ARC's ``level_of_theory: "x//y"`` shorthand).
+#: written as one method name (the ``level_of_theory: "x//y"`` shorthand some producers use).
 #: That is two ordinary levels of theory, not one method, and a
 #: single row named by both would be a level no program ran. Refused.
 LEVEL_OF_THEORY_METHOD_IS_COMPOUND = "level_of_theory_method_is_compound"
@@ -240,16 +240,16 @@ class SoftwareReleaseRef(SchemaBase):
 
         1. If ``version`` has no internal whitespace, it is not a banner
            shape at all -- return silently. This also deliberately leaves
-           the unrelated literal string ``"None"`` alone (86 rows on the
-           ARC fixtures; a different defect -- something serialised
-           Python's ``None`` through ``str()`` upstream -- with no comma,
-           space, or structure a version/revision split could act on).
+           the unrelated literal string ``"None"`` alone (a different defect --
+           something serialised Python's ``None`` through ``str()`` upstream --
+           with no comma, space, or structure a version/revision split could
+           act on).
 
         2. Split off the leading whitespace-delimited token. If it does
            **not** case-insensitively match the declared ``name``, this
            is the mismatch case: the version is the observed fact (it
            came from parsing a real ESS banner) and the name is the
-           inherited one (ARC's own default/previous value bleeding into
+           inherited one (a producer's own default/previous value bleeding into
            a per-calculation software_release). Leave both fields
            completely untouched and warn
            ``W_SOFTWARE_RELEASE_NAME_LOOKS_WRONG`` -- stripping here would
@@ -800,7 +800,7 @@ class FreqScaleFactorRef(SchemaBase):
     :param source_literature: Structured literature provenance, when
         available. Mutually informative with ``workflow_tool_release``;
         either, both, or neither may be supplied.
-    :param workflow_tool_release: Workflow tool (e.g. ARC) whose data
+    :param workflow_tool_release: Workflow tool (e.g. ARC or Arkane) whose data
         file was the proximate source, when the factor was looked up
         from a tool table rather than directly from a paper.
     :param note: Optional descriptive note. Never used for dedupe.

@@ -704,8 +704,8 @@ class CalculationInputGeometrySource(str, Enum):
     :mod:`app.services.input_geometry_extraction` re-derives a coarse
     ``opt`` calculation's true starting geometry from its own ``input``/
     ``output_log`` artifacts, for calculations where the depositor never
-    stated one (or stated the converged output as a stand-in for it — an
-    ARC deposit artifact, not a second geometry). This value is what lets
+    stated one (or stated the converged output as a stand-in for it — a
+    quirk of how the deposit was built, not a second geometry). This value is what lets
     a reader tell "the depositor said so" from "TCKDB worked it out
     afterwards" without re-deriving it themselves.
     """

@@ -612,7 +612,7 @@ def extract_input_geometry(
     rather than falling through to another program's parser. Molpro and
     Psi4 are recognised by :mod:`app.services.ess_software_detection` but
     have no input-geometry parser wired here (Gaussian and ORCA cover coarse
-    ``opt`` passes from ARC).
+    ``opt`` passes from workflow tools).
     """
     if artifact_kind == ArtifactKind.input:
         if software == "gaussian":
@@ -693,7 +693,7 @@ def _resolve_software_for_extraction(
     artifact virtually always sniffs cleanly. A raw ``input`` deck (``.gjf``/
     ``.inp``) carries no program banner at all -- Gaussian's and ORCA's
     banners are things the *program* prints when it runs, not text a human
-    or ARC writes into a deck -- so the calculation's own declared
+    or a workflow tool writes into a deck -- so the calculation's own declared
     ``software_release`` is the fallback there. ``None`` when neither is
     available; the caller records that as ``not_determinable`` rather than
     guessing.

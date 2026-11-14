@@ -4,7 +4,7 @@ An isolated atom's entropy and free energy depend on its electronic partition
 function, ``q_el = sum g_i exp(-E_i / kT)``. For an S-term atom (H, N, P, ...)
 the spin multiplicity is the whole answer. For any other ground term (B, C, O,
 F, Al, Si, S, Cl, Br, I) it is not: the fine-structure J-levels are populated
-at 298 K. The real ARC oxygen atom, deposited with spin multiplicity alone, has
+at 298 K. An oxygen atom deposited with spin multiplicity alone has
 S(298 K) = 152.44 J/mol/K against the NIST-JANAF 161.06 (about 8.5 low, or about
 2.5 kJ/mol in G).
 

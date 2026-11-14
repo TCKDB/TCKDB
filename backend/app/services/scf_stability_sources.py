@@ -1,8 +1,8 @@
 """Link an SCF stability verdict to the job that measured it, by local key.
 
 A bundle's ``scf_stability`` block hangs off one calculation. When that
-verdict was measured by a *different* job (ARC's stability analysis is its
-own job, run on the optimisation's wavefunction), the block names that job
+verdict was measured by a *different* job (for example a stability analysis run as its
+own job on the optimisation's wavefunction), the block names that job
 with ``source_calculation_key``. The database column it lands in,
 ``calc_scf_stability.source_calculation_id``, has always existed and the
 read API already returns it as ``source_calculation_ref``; what was missing

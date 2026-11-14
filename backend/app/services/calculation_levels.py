@@ -6,7 +6,7 @@ both need to answer the same questions from those links. A depositor may legitim
 optimisation and the single point at two different levels of theory, and
 TCKDB must both *display* that split honestly and *catch* the deposit that
 forgets half of it -- on every upload shape, including the multi-conformer
-ensemble bundles an ARC-style client actually sends, not only the
+ensemble bundles a workflow-tool client sends, not only the
 standalone one-evidence-chain upload.
 
 Rules, kept in one module so statmech and thermo cannot answer them
@@ -884,8 +884,7 @@ def collect_composite_link_warnings(links: list[RoleLink], *, subject: str) -> l
 
     * ``composite_role_on_non_composite_calculation`` -- a calculation whose type is
       not ``composite`` is linked under the role ``composite``. The legacy
-      shape: stored as sent; will be refused once the ARC adapter ships the
-      composite shape.
+      shape: stored as sent, with this warning.
     * ``composite_frequency_level_differs_from_recipe`` -- a linked ``freq``
       calculation is at a level other than the frequency level of the
       composite scheme the record's composite is bound to. The recipe's scaled

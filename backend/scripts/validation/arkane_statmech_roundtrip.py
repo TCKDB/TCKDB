@@ -58,7 +58,7 @@ surface (``GET /scientific/calculations/{ref}?include=freq_modes``,
 ``app/schemas/reads/scientific_statmech.py``). What remains true and is
 not fixed here:
 
-* ``statmech.optical_isomers`` is NULL for the ARC corpus, so the replay
+* ``statmech.optical_isomers`` is NULL for the recorded corpus, so the replay
   derives it from the stored ``point_group`` (C1/Cn/Dn/T/O/I are chiral,
   2; anything with an improper element, 1) and records which it used.
   For a chiral species the naive default of 1 costs exactly ``R ln 2``

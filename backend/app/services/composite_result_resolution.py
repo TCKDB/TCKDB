@@ -294,7 +294,7 @@ def collect_named_composite_deposit_warnings(
     or ``sp`` it is a calculation that was not what ran, and it is invisible to
     the composite level rules. The deposit is kept exactly as sent.
 
-    **Warns, never refuses.** The ARC adapter
+    **Warns, never refuses.** Existing producer adapters
     cannot yet send the ``composite`` shape, so refusing now would block every
     real deposit.
 
