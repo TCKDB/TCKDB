@@ -1,4 +1,4 @@
-"""HTTP tests for the bulk-export endpoints (M2/M3).
+"""HTTP tests for the bulk-export endpoints.
 
 Cover auth gating, NDJSON streaming shape, and the CHEMKIN zip response.
 """

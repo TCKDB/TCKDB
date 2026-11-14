@@ -212,7 +212,7 @@ def test_the_scan_actually_reaches_the_code_it_claims_to() -> None:
 
 
 def test_the_detector_recognises_the_shape_it_exists_to_catch() -> None:
-    """The detector must fail on the mistake and pass on the fix.
+    """The detector must fail on the mistake and pass on the correct form.
 
     Without this, a refactor that quietly stopped matching anything would
     leave every assertion above passing on an empty sweep -- the failure

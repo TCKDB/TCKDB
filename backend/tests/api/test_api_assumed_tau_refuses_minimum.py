@@ -1,5 +1,5 @@
-"""Owner decision 2026-10-31: a minimum's unrecorded Hessian method resolves
-through the assumed program default (ADR 0012, 2026-09-04 table) at validation.
+"""A minimum's unrecorded Hessian method resolves
+through the assumed program default at validation.
 """
 
 from __future__ import annotations

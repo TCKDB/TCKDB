@@ -1,4 +1,4 @@
-"""Tests for F7 — integer path-handle probe oracle.
+"""Tests for the integer path-handle probe oracle.
 
 Refs remain the documented public form. Integer compatibility
 handles continue to work, but the 404 response shape for unknown
@@ -106,7 +106,7 @@ def test_a_wrong_prefix_names_both_prefixes_in_context(client):
     ``handle_type_mismatch`` asserts that the prefix on the supplied ref and
     the prefix the route expects are not the same one, and the code names
     neither -- the case ``Shape.relationship`` in ``app.api.code_catalogue``
-    is about. Until #210 the only place the two lived was the sentence,
+    is about. The only place the two live is the sentence,
     which the error contract tells clients not to parse.
 
     Asserted on the ``(status, code)`` pair *and* the individual keys. "the
@@ -128,13 +128,13 @@ def test_a_wrong_prefix_names_both_prefixes_in_context(client):
     assert context["expected_prefix"] == "rxe", context
     assert context["supplied_prefix"] == "spe", context
 
-    # The published prose did not move: the code is now declared on the
+    # The published prose did not move: the code is declared on the
     # exception instead of promoted out of the sentence, and the sentence is
     # byte-for-byte what it was.
     assert body["detail"].startswith("handle_type_mismatch: expected a "), body
 
     # A prefix is a schema-level constant and the supplied one is the
-    # caller's own input, so no row id is disclosed (DR-0028 Requirement 2).
+    # caller's own input, so no row id is disclosed.
     assert not any(
         key.endswith("_id") or key == "id" for key in context
     ), context

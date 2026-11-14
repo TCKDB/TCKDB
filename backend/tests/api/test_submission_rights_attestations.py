@@ -37,7 +37,7 @@ def _url(submission_id: int) -> str:
 
 
 def _post_url(client, submission_id: int) -> str:
-    """The write URL: ``POST`` takes the ``sub_`` ref only (#578)."""
+    """The write URL: ``POST`` takes the ``sub_`` ref only."""
     session = client.app.dependency_overrides[get_db]()
     submission = session.get(Submission, submission_id)
     assert submission is not None, f"no submission with row id {submission_id}"

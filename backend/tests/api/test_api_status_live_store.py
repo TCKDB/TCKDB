@@ -5,17 +5,16 @@ answer, which is right for pinning TCKDB's side of each condition and says
 nothing about whether a real server gives those answers. These tests ask
 the store the suite is actually configured for -- on CI, the SeaweedFS
 service container that replaced MinIO as the default store TCKDB ships
-(#541).
 
-What was measured against SeaweedFS 4.47 before these were written:
+What SeaweedFS 4.47 does, which these tests pin:
 
 * The MinIO admin paths the headroom probe uses
   (``/minio/admin/v3/info``, ``/minio/admin/v3/get-bucket-quota``) answer
   **404 NoSuchBucket**: SeaweedFS reads ``minio`` as a bucket name. The
   probe's contract turns every HTTP error into "no opinion". That is the
   correct answer and the one asserted here: a store TCKDB cannot ask about
-  capacity must read as silent, never as low and never as broken. Since
-  #545 SeaweedFS is asked in its own terms instead, through
+  capacity must read as silent, never as low and never as broken.
+  SeaweedFS is asked in its own terms instead, through
   ``S3_SEAWEEDFS_MASTER_URL``; the last tests here read that signal from
   the real store and prove the store's internal ports are locked down.
 * ``HeadBucket`` answers 200 on an existing bucket, so the storage
@@ -102,7 +101,7 @@ def test_status_reports_the_configured_store_healthy(client, live_store) -> None
 def test_the_store_refuses_an_unsigned_request(live_store) -> None:
     """Authentication is actually on, not merely configured.
 
-    Measured against SeaweedFS 4.47: started without
+    SeaweedFS 4.47: started without
     ``AWS_ACCESS_KEY_ID``/``AWS_SECRET_ACCESS_KEY`` it accepts every
     request, signed with any key or not signed at all. Every other test
     here signs its requests, so all of them pass against such an open
@@ -161,12 +160,12 @@ def test_seaweedfs_gives_the_minio_admin_probes_no_opinion(live_store) -> None:
 
 
 # ---------------------------------------------------------------------------
-# SeaweedFS: the capacity signal, and the side door that must stay shut (#545)
+# SeaweedFS: the capacity signal, and the side door that must stay shut
 # ---------------------------------------------------------------------------
 #
 # ``weed mini`` also runs a filer (8888), a master (9333) and a volume server
-# (9340). Measured on 4.47 with the pre-#545 configuration, all three
-# answered anyone on the network with no credentials: objects were read and
+# (9340). Without credentials configured, all three
+# answer anyone on the network with no credentials: objects are read and
 # written through the filer, needles through the volume server, and the
 # master grew volumes and would delete collections on request. The fix is
 # configuration -- JWT signing on the filer and volume server, and a guard
@@ -235,7 +234,7 @@ def test_the_seaweedfs_capacity_signal_is_readable(seaweedfs_master) -> None:
 
 
 def test_the_filer_refuses_unauthenticated_reads_and_writes(seaweedfs_master) -> None:
-    """Requirement (a), filer half. Before #545 these answered 201 and 200."""
+    """Requirement (a), filer half. A 201 and a 200 would be wrong."""
     filer = _sibling(seaweedfs_master, 8888)
     bucket = artifact_storage.S3_BUCKET
 
@@ -284,7 +283,7 @@ def _s3_url(path: str) -> str:
 def test_the_seaweedfs_quota_endpoints_answer_signed_reads_in_the_measured_shape(
     seaweedfs_master,
 ) -> None:
-    """Pins both quota reads against the image CI pins (#545).
+    """Pins both quota reads against the image CI pins.
 
     ``report_quota`` classifies an enforced quota from two signed S3 reads.
     This one reads the configured (shared) bucket, which has no quota unless
@@ -344,10 +343,10 @@ def _signed_put(url: str, body: bytes) -> int:
 
 
 def test_an_enabled_seaweedfs_quota_reads_in_the_measured_shape(seaweedfs_master) -> None:
-    """The enabled shapes, live, on a bucket of this test's own (#545).
+    """The enabled shapes, live, on a bucket of this test's own.
 
     A signed ``PUT /{bucket}?seaweedfs-quota`` sets a quota with the same
-    credentials (204, measured on 4.47), so the enabled answers can be pinned
+    credentials (204 on 4.47), so the enabled answers can be pinned
     against the image CI pins. It is a bucket of its own because 4.47 enforces
     quotas on a 60 s sweep, and a quota on the shared bucket could turn it
     read-only under the other tests. The quota is removed and the bucket

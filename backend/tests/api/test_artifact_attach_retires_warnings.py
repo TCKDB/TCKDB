@@ -91,11 +91,11 @@ def _attach(client, calc_id: int, **artifact) -> dict:
 def test_two_phase_deposit_retires_the_warning_once_the_file_arrives(client, db_session):
     calc_id = _deposit_opt(client, energy=-40.45, smiles_tag="a")
 
-    # Phase 1: energy, no file -> the rule's own condition is not yet met.
+    # Step 1: energy, no file -> the rule's own condition is not yet met.
     (item,) = _current(client, db_session, calc_id)
     assert item["context"] == {"has_energy": True, "has_artifact": False}
 
-    # Phase 2: the output log.
+    # Step 2: the output log.
     body = _attach(client, calc_id)
     assert CODE not in [w["code"] for w in body["warnings"]]
 
@@ -125,7 +125,7 @@ def test_a_deposit_with_no_file_keeps_its_warning(client, db_session):
 
 
 def test_a_file_that_does_not_supply_the_missing_energy_supersedes_rather_than_clears(client, db_session):
-    """No energy on the opt: the file arrives but the rule is still unmet, and it now says so truthfully."""
+    """No energy on the opt: the file arrives but the rule is still unmet, and it says so truthfully."""
     calc_id = _deposit_opt(client, energy=None, smiles_tag="d")
     (item,) = _current(client, db_session, calc_id)
     assert item["context"] == {"has_energy": False, "has_artifact": False}

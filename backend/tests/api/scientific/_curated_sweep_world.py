@@ -5,8 +5,8 @@ by every later family PR: add a link here, not a new world.
 
 Conventions
 -----------
-* ``*_v`` is visible under ``profile=curated`` (approved); ``*_h`` is hidden. A hidden record is in one of two states
-  (ADR 0023), and :meth:`SweepWorld.withhold_hidden` moves the whole world from the first to the second:
+* ``*_v`` is visible under ``profile=curated`` (approved); ``*_h`` is hidden. A hidden record is in one of two states,
+and :meth:`SweepWorld.withhold_hidden` moves the whole world from the first to the second:
 
   - **unlisted** (as built): ``not_reviewed`` with no review row, or ``under_review``. Below the approved record floor, so
     never a subject (``record`` / ``records[*]`` / a candidate), but it may be named nested, with its badge. Both statuses
@@ -261,7 +261,7 @@ def _build_unlisted_world(session) -> SweepWorld:
     attach_statmech_source_calculation(session, statmech=sm_v, calculation=calc_vsp, role=StatmechCalculationRole.sp)
     attach_statmech_source_calculation(session, statmech=sm_v2, calculation=calc_vf, role=StatmechCalculationRole.freq)
     # sm_v also links the visible freq sibling, behind the thermo's own hidden freq link: a hide that filters the links before
-    # picking falls through to calc_vf (the #767 bug class); the guard must leave that slot empty instead.
+    # picking falls through to calc_vf; the guard must leave that slot empty instead.
     attach_statmech_source_calculation(session, statmech=sm_v, calculation=calc_vf, role=StatmechCalculationRole.freq)
     attach_statmech_torsion(session, statmech=sm_v, source_scan_calculation=calc_h)
     vis["sm_v"], vis["sm_v2"] = sm_v, sm_v2
@@ -318,7 +318,7 @@ def _build_unlisted_world(session) -> SweepWorld:
     calc_ts_v = make_calculation(session, type=CalculationType.opt, transition_state_entry_id=tse_v2.id, lot_id=lot.id)
     # A visible freq calculation at its own level of theory, for the visible same-role sibling shapes (a second TS statmech,
     # a second kinetics record). It is owned by the species entry, not by a TS entry of the reaction: a visible freq on the
-    # reaction's entries would make the kinetics checklist (``has_ts_freq_evidence``) true under curated and defeat the D5
+    # reaction's entries would make the kinetics checklist (``has_ts_freq_evidence``) true under curated and defeat the count
     # tests that rest on the reaction having only hidden freq calculations.
     lot_tsvf = make_lot(session, method="sweeptsfreq", basis="def2svp")
     calc_ts_vf = make_calculation(session, type=CalculationType.freq, species_entry_id=sa.id, lot_id=lot_tsvf.id)
@@ -402,7 +402,7 @@ def _build_unlisted_world(session) -> SweepWorld:
     vis["nsolve_v"], vis["nkin_v"] = nsolve_v, nkin_v
     hid["nsolve_h"], hid["nkin_h"] = nsolve_h, nkin_h
 
-    # ---- shapes that need their own hidden-record link (PR-2a review) -----------------------------------------------
+    # ---- shapes that need their own hidden-record link -----------------------------------------------
     # A visible calculation whose dependency PARENT is hidden: names it through ``supporting_calculations``.
     calc_vdep = make_calculation(session, type=CalculationType.sp, species_entry_id=sa.id, lot_id=lot.id)
     attach_dependency(session, parent=calc_h, child=calc_vdep, role=CalculationDependencyRole.single_point_on)
@@ -522,7 +522,7 @@ def _build_unlisted_world(session) -> SweepWorld:
     vis["calc_scan"], vis["calc_irc"], vis["calc_ps"] = calc_scan, calc_irc, calc_ps
     ext["scan_calc"], ext["irc_calc"], ext["path_search_calc"] = calc_scan, calc_irc, calc_ps
 
-    # ---- PR-2b: the transition-state and reaction families --------------------------------------------------------
+    # ---- the transition-state and reaction families --------------------------------------------------------
     _extend_for_ts_and_reaction_family(
         session,
         w,
@@ -546,13 +546,13 @@ def _build_unlisted_world(session) -> SweepWorld:
         geom_ts=geom_ts,
     )
 
-    # ---- PR-2c: the network, literature, level-of-theory, correction and analytics families -------------------------
+    # ---- the network, literature, level-of-theory, correction and analytics families -------------------------
     _extend_for_network_and_provenance_family(session, w, lot=lot, lit=lit, sa=sa, rxe=rxe)
 
-    # ---- PR-4: the export streams ---------------------------------------------------------------------------------------
+    # ---- the export streams ---------------------------------------------------------------------------------------
     _extend_for_export_family(session, w, lot=lot, rxe=rxe, r1=r1, r2=r2, tse_v2=tse_v2)
 
-    # ---- guard PR-3: the selection documents (thermo, kinetics, network, structure, statmech, relative energies) ------
+    # ---- the selection documents (thermo, kinetics, network, structure, statmech, relative energies) ------
     ext["session"] = session
     extend_for_selection_documents(session, w, lot=lot, lit=lit, sa=sa)
 
@@ -599,9 +599,9 @@ def _build_unlisted_world(session) -> SweepWorld:
         _approve(session, kind_to_type[kind], row)
 
     # Legacy supersession: an approved predecessor whose successor is hidden. The write path deprecates the
-    # predecessor, and since #769 refuses to re-approve a superseded record. Rows approved before that guard are the
+    # predecessor, and refuses to re-approve a superseded record. Rows approved before that guard are the
     # state being reproduced (a curated-visible record names a hidden successor in its supersession notice), so the
-    # predecessor is put back to approved with a direct write, as #769's own legacy-row test does.
+    # predecessor is put back to approved with a direct write.
     curator = AppUser(username="sweep-world-curator", role=AppUserRole.curator)
     session.add(curator)
     session.flush()
@@ -645,7 +645,7 @@ def _build_unlisted_world(session) -> SweepWorld:
     session.expire_all()
     set_record_review_status(session, record_type=R.kinetics, record_id=kin_h.id, status=UNDER_REVIEW, actor=curator)
 
-    # The same legacy edge for statmech (guard PR-3): an approved predecessor whose supersession notice names a hidden
+    # The same legacy edge for statmech: an approved predecessor whose supersession notice names a hidden
     # successor, so a statmech selection candidate carries that ref in its notice.
     sm_vsup, sm_hsucc = vis["sm_vsup"], hid["sm_hsucc"]
     for row in (sm_vsup, sm_hsucc):
@@ -773,8 +773,8 @@ def _extend_for_ts_and_reaction_family(
 ) -> None:
     """Every response shape of the transition-state, reaction-entry, reaction and kinetics routes.
 
-    PR-2a's review found seven blocks that failed closed under curated because the world never built them, and every
-    route "answered 200" on a world without the shape. So the world holds, for this family, a hidden record in each
+    A block the world never builds fails closed under curated, and every
+    route "answers 200" on a world without the shape. So the world holds, for this family, a hidden record in each
     place a visible one can name it:
 
     * a hidden TS with a visible entry (``ts_h`` / ``tse_v``), a hidden entry under a visible TS (``tse_h`` under
@@ -803,7 +803,7 @@ def _extend_for_ts_and_reaction_family(
     # -- hidden calculations on the visible entry tse_v2, each with a visible sibling ---------------------------------
     def calc_on_tse_v2(type_, *, hidden=False):
         # The hidden ones carry no level of theory: their shape here is the entry's evidence, and a hidden calculation
-        # with a level would add the same ``used_by`` leaks the level-of-theory family (PR-2c) already lists.
+        # with a level would add the same ``used_by`` leaks the level-of-theory family already lists.
         return make_calculation(
             session, type=type_, transition_state_entry_id=tse_v2.id, lot_id=None if hidden else lot.id
         )
@@ -1063,7 +1063,7 @@ def _extend_for_ts_and_reaction_family(
     # pa1 is the only one of these approved (below, with the world's scoping approvals).
     ext["scoping_approved_extra"] = [(R.reaction_entry, rxe_a), (R.species_entry, pa1)]
 
-    # -- counts and flags (D5): records whose every child is hidden -------------------------------------------------------
+    # -- counts and flags: records whose every child is hidden -------------------------------------------------------
     # A visible TS (ts_vw) with a visible entry (tse_vw) whose ONLY calculations and evidence are hidden, and a hidden
     # sibling entry (tse_hw2). Under curated nothing about those children may be counted or flagged.
     ts_vw = make_transition_state(session, reaction_entry=rxe, label="visible-ts-hidden-children")
@@ -1108,7 +1108,7 @@ def _extend_for_ts_and_reaction_family(
     ext["scoping_approved_extra"].append((R.reaction_entry, rxe_w))
 
     # -- a reaction with a visible same-role sibling for every single-slot pick of its TS entry -----------------------------
-    # Its own reaction, so the D5 tests that rest on ``rxe`` having ONLY hidden freq calculations keep their premise. The
+    # Its own reaction, so the count tests that rest on ``rxe`` having ONLY hidden freq calculations keep their premise. The
     # visible freq calculation is created first and the hidden one second, so the hidden one is the entry's most recent
     # freq (what the ``/full`` ``ts_freq`` slot picks, and what kinetics provenance's first freq resolves to): a hide that
     # falls through to the sibling names ``calc_s_vf`` where exploratory names ``calc_h_tsfq``.
@@ -1154,10 +1154,10 @@ _BENT_XYZ = "3\n\nO 0.0 0.0 0.0\nH 0.76 0.59 0.0\nH -0.76 0.59 0.0\n"
 
 
 def _extend_for_export_family(session, w: SweepWorld, *, lot, rxe, r1, r2, tse_v2) -> None:
-    """A hidden record in every position the four export streams can name one (PR-4).
+    """A hidden record in every position the four export streams can name one.
 
-    Before this the exports met the hidden records of the older families only, and the one hidden transition state
-    they named came from a reaction whose every record was hidden. Now:
+    The exports must meet more than the hidden records of the older families, and the hidden transition state
+    they name must not come only from a reaction whose every record is hidden. So the world holds:
 
     * ``sx``: a hidden calculation that is the only linearity witness of a visible transport (its input geometry is
       collinear), that carries an energy, a frequency block and a Hessian beside a visible calculation of the same
@@ -1205,8 +1205,8 @@ def _extend_for_export_family(session, w: SweepWorld, *, lot, rxe, r1, r2, tse_v
     hid["calc_h_xlin"], hid["calc_h_xsp"] = calc_h_xlin, calc_h_xsp
     vis["calc_xv"], vis["trn_xv"] = calc_xv, trx_v
 
-    # -- sa: a visible calculation (calc_vsp) on a HIDDEN observation (co_h) in a VISIBLE group (cg_v). Until now it had no
-    # geometry, so the ML species export never made a record of it and never met the shape: a group named through a
+    # -- sa: a visible calculation (calc_vsp) on a HIDDEN observation (co_h) in a VISIBLE group (cg_v). It has a
+    # geometry, so the ML species export makes a record of it and meets the shape: a group named through a
     # hidden observation (the group ref beside an empty observation list).
     g_vsp = geometry(_BENT_XYZ, ["O", "H", "H"], [[0, 0, 0], [0.8, 0.6, 0], [-0.8, 0.6, 0]])
     attach_input_geometry(session, calculation=vis["calc_vsp"], geometry=g_vsp)
@@ -1276,15 +1276,15 @@ def _extend_for_export_family(session, w: SweepWorld, *, lot, rxe, r1, r2, tse_v
 
 
 def _extend_for_network_and_provenance_family(session, w: SweepWorld, *, lot, lit, sa, rxe) -> None:
-    """Every response shape of the network, literature, level-of-theory, correction and analytics routes (PR-2c).
+    """Every response shape of the network, literature, level-of-theory, correction and analytics routes.
 
-    Before this the world held one hidden solve under a visible network, one visible solve under a hidden network and
-    one fit on each, and every one of the family's routes "answered 200" without ever meeting the shapes the guard has
-    to place. So the world now holds, for this family:
+    A world with only one hidden solve under a visible network, one visible solve under a hidden network and
+    one fit on each would let every one of the family's routes "answer 200" without ever meeting the shapes the guard has
+    to place. So the world holds, for this family:
 
     * a hidden solve on a visible network, a visible solve on a hidden network, and a hidden solve whose fits are the
       only ones of their kind (a PLOG fit) and whose temperature/pressure envelope reaches past every visible solve;
-      a fit is reviewed through its solve, so a hidden fit on a VISIBLE solve cannot exist (the brief's shape list
+      a fit is reviewed through its solve, so a hidden fit on a VISIBLE solve cannot exist (the shape list
       has one, the data model does not);
     * channels whose microreactions and solve barriers cite a hidden transition-state entry beside a visible one and a
       barrierless path, and a state energy whose sources are hidden calculations (the per-participant rows, the
@@ -1461,7 +1461,7 @@ def _extend_for_network_and_provenance_family(session, w: SweepWorld, *, lot, li
     session.flush()
 
     # An elementary channel whose ONLY microreaction cites the hidden entry: upload cannot produce a channel with a
-    # microreaction-less elementary mechanism, curated serves one (owner decision D1: the record stays, its link goes).
+    # microreaction-less elementary mechanism, curated serves one.
     session.add(
         NetworkChannelMicroReaction(
             channel_id=make_network_channel(

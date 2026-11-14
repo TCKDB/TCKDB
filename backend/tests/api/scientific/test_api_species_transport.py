@@ -88,9 +88,9 @@ def test_empty_when_entry_has_no_transport(client, db_session):
 
 
 def test_rejects_a_limit_above_the_service_cap(client, db_session, monkeypatch):
-    """Two bounds, and only one of them used to be tested.
+    """Two bounds exist, and both are tested.
 
-    ``?limit=999`` -- what this test used to send -- is refused by
+    ``?limit=999`` is refused by
     ``Query(le=200)`` before the service runs, so the pagination code the
     test was named after could never appear. Both bounds are asserted
     here; see ``test_api_species_statmech.py`` for the full account.

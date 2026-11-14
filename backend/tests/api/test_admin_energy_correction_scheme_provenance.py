@@ -2,7 +2,7 @@
 
 ``PATCH /api/v1/admin/energy-correction-schemes/{ref}/provenance`` is the
 only path that can add a citation or software identity to a scheme
-deposited before it had one (correction-scheme-provenance plan §4.3).
+deposited before it had one.
 Append-only per field: it fills a null, it never overwrites a value
 already recorded. See ``app/api/routes/admin.py``.
 
@@ -110,10 +110,9 @@ def test_attach_software_to_uncited_software_less_scheme(
     assert scheme.software_release.software.name == "Gaussian"
 
     # Follow the ref to a real record rather than asserting it is merely
-    # non-empty. This field used to carry a ``software`` ref and now
-    # carries a ``software_release`` one; a non-emptiness
-    # check could not tell those apart, which is how the change went
-    # unnoticed until review of #458.
+    # non-empty. This field carries a ``software_release`` ref, not a
+    # ``software`` one; a non-emptiness
+    # check could not tell those apart.
     assert body["software_release_ref"] == scheme.software_release.public_ref
     assert body["software_release_ref"].startswith("srel_")
 
@@ -250,9 +249,7 @@ def test_attach_software_release_sets_exact_release(
     client, db_session, login_as, _api_admin_user
 ):
     """A PATCH carrying ``version``/``revision`` sets exactly that release,
-    not the version-less row for the program (correction-scheme-provenance
-    plan §5.2, PR 3: ``software`` widens from ``SoftwareRef`` to
-    ``SoftwareReleaseRef``)."""
+    not the version-less row for the program."""
     scheme = make_energy_correction_scheme(db_session)
     assert scheme.software_release_id is None
     login_as(_api_admin_user)
@@ -279,8 +276,8 @@ def test_attach_software_release_sets_exact_release(
     # path: the exact release, not the version-less one, was set.
     assert scheme.software_release.version == "16"
     assert scheme.software_release.revision == "C.02"
-    # `build` is forwarded by resolve_software_release_ref too, and was
-    # unpinned until review of #461: setting `build=None` in that helper
+    # `build` is forwarded by resolve_software_release_ref too, and must be
+    # pinned: setting `build=None` in that helper
     # left all 13 tests green. Five fields are forwarded; assert the ones
     # an admin can actually set.
     assert scheme.software_release.build == "EM64L"
@@ -322,8 +319,8 @@ def test_attach_software_release_collision_writes_nothing(
 ):
     """Filling ``software`` such that the resulting 8-column identity tuple
     collides with another existing scheme is refused with 409 and writes
-    nothing. The widened identity now includes ``units`` and
-    ``software_release_id`` (correction-scheme-provenance plan §4/§5.2);
+    nothing. The widened identity includes ``units`` and
+    ``software_release_id``;
     build the fixture so the two rows differ *only* by
     ``software_release_id`` before the PATCH."""
     lot = make_lot(db_session)
@@ -387,7 +384,7 @@ def test_composite_version_is_normalised_and_the_admin_is_told(
     purpose is *correcting* provenance is not: an admin who cannot see
     that their input was reshaped cannot tell whether it was reshaped
     correctly. The upload path has surfaced this since it gained the
-    validator; this route now gives the same answer to the same input.
+    validator; this route gives the same answer to the same input.
 
     *Mutation*: stop populating ``warnings`` in the response -- the
     warning assertions must fail while the split assertions still pass,
@@ -453,7 +450,7 @@ def test_name_not_matching_version_is_recorded_verbatim_and_flagged(
 def test_attach_literature_title_mismatch_is_recorded_and_flagged(
     client, db_session, login_as, _api_admin_user, monkeypatch
 ):
-    """#248: this route resolves literature through the same
+    """This route resolves literature through the same
     ``resolve_or_create_literature`` service the upload path uses, so a
     DOI/title disagreement here gets the same treatment: the DOI's title
     is stored (append-only provenance-fill is otherwise untouched) and a
@@ -515,14 +512,12 @@ def test_clean_input_carries_no_warnings(
 def test_attach_provenance_refuses_to_overwrite_existing_workflow_tool_release(
     client, db_session, login_as, _api_admin_user
 ):
-    """The third fill-only guard, which had no test at all.
+    """The third fill-only guard.
 
-    Review of #461 removed this guard and all 13 tests stayed green:
-    ``energy_correction_scheme_workflow_tool_release_already_set`` was
-    registered in the code catalogue and pinned nowhere. The plan claims
-    all three guards are unchanged; two of the three could prove it.
-    Pre-existing gap, closed here because this PR is what makes the
-    claim.
+    Removing this guard leaves all 13 other tests green:
+    ``energy_correction_scheme_workflow_tool_release_already_set`` is
+    registered in the code catalogue and pinned nowhere else. All three
+    fill-only guards are pinned by tests in this file.
 
     *Mutation*: remove the ``workflow_tool_release_id is not None`` guard
     in ``admin.py`` -- this must fail.

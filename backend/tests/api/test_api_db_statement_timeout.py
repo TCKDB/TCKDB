@@ -1,13 +1,12 @@
-"""Tests for F13 -- the PostgreSQL ``statement_timeout`` on application engines.
+"""Tests for the PostgreSQL ``statement_timeout`` on application engines.
 
 The timeout must hold for the whole life of a pooled connection, not only its
-first checkout (#604). Before, it was a ``SET`` in a ``connect`` listener,
-issued inside psycopg's implicit transaction and undone by the pool's
-rollback-on-return: measured on a deployed instance as ``['30s', '0', '0']``
-over three checkouts, so the guard covered the first query per connection and
-nothing after it. Every check here therefore looks at a *later* checkout of a
-connection it has proved is the same one, and cancels a real ``pg_sleep``
-rather than only reading the setting back.
+first checkout. A ``SET`` in a ``connect`` listener is issued inside psycopg's
+implicit transaction and undone by the pool's rollback-on-return (reading
+``['30s', '0', '0']`` over three checkouts), so the guard would cover the first
+query per connection and nothing after it. Every check here therefore looks at
+a *later* checkout of a connection it has proved is the same one, and cancels a
+real ``pg_sleep`` rather than only reading the setting back.
 
 Also here: the :class:`OperationalError` handler maps SQLSTATE 57014
 (``query_canceled``) to a sanitized 503 ``query_timeout`` response without
@@ -192,7 +191,7 @@ def test_caller_supplied_startup_options_are_kept(db_engine):
 
 
 def test_the_harness_engine_runs_with_the_configured_timeout(db_engine):
-    """The suite itself now runs with the timeout on, on every checkout."""
+    """The suite itself runs with the timeout on, on every checkout."""
     if not settings.db_statement_timeout_ms:
         pytest.skip("DB_STATEMENT_TIMEOUT_MS is disabled in this environment")
     shown = []

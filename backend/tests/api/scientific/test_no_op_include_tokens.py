@@ -1,6 +1,6 @@
-"""Three legal include tokens that were accepted and produced nothing.
+"""Three legal include tokens that must each change the response when requested.
 
-Measured against the hosted instance, each was a `200` that changed no key
+A no-op token would be a `200` that changes no key
 in the response:
 
 - ``entries`` on ``GET /transition-states/search`` — accepted, and then
@@ -92,7 +92,7 @@ def _make_ts_with_entries(db_session, *, n_entries: int = 3):
 def test_entries_on_ts_search_is_echoed_rather_than_discarded(
     client, db_session
 ):
-    """The token used to vanish from the resolved set before anything read it.
+    """The token must not vanish from the resolved set before anything reads it.
 
     That is worse than producing no field: the echo is what makes an absent
     key interpretable under the omission contract, and an echo that silently
@@ -218,8 +218,8 @@ def test_validation_evidence_on_ts_concept_is_keyed_by_entry(
     A concept is a collection of entries computed at different levels of
     theory. An OR across their evidence would report "validated" for a
     concept whose entries disagree and would not say which entry carried the
-    evidence — the aggregation error ``0a6271c8`` removed from
-    conformer-group evidence summaries. So the block names the entry.
+    evidence — the same aggregation error conformer-group evidence
+    summaries avoid. So the block names the entry.
     """
     ts, entries = _make_ts_with_entries(db_session, n_entries=2)
     validated, unvalidated = entries
@@ -331,7 +331,7 @@ def test_observations_on_an_observation_returns_the_basins_observations(
     )
     assert refs == expected_refs
     # Each sibling is a lean ref+review projection
-    # (``ConformerObservationSiblingSummary``, issue #269), not a nested
+    # (``ConformerObservationSiblingSummary``), not a nested
     # copy of the full record -- so there is no ``observations`` key on a
     # sibling to recurse into at all. That is what terminates the
     # recursion here (the TS entries block's own guard, by contrast, is
@@ -354,16 +354,16 @@ def test_observations_is_absent_on_an_observation_when_not_requested(
 def test_the_group_surface_still_returns_its_observations_without_nesting(
     client, db_session
 ):
-    """The group's own default ``include=observations`` shape (issue #537).
+    """The group's own default ``include=observations`` shape.
 
-    As of issue #537, a bare ``include=observations`` on the group surface
-    no longer embeds a full ``ScientificConformerObservationRecord`` per
-    observation — that cascaded every other requested token onto every
+    A bare ``include=observations`` on the group surface
+    does not embed a full ``ScientificConformerObservationRecord`` per
+    observation — that would cascade every other requested token onto every
     embedded observation, multiplying with basin size (see
     ``ConformerObservationGroupSummary``'s own docstring). The default is
-    now a lean ref+review+origin+note summary, the same terminating shape
+    a lean ref+review+origin+note summary, the same terminating shape
     ``ConformerObservationSiblingSummary`` established for the sibling
-    case (issue #269/PR #535) — so there is no ``observations`` key on an
+    case — so there is no ``observations`` key on an
     embedded entry to recurse into at all, which is what stops the
     recursion here.
     """
@@ -382,8 +382,8 @@ def test_the_group_surface_still_returns_its_observations_without_nesting(
 def test_the_group_surface_nests_full_records_only_with_observation_details(
     client, db_session
 ):
-    """``include=observations,observation_details`` restores the full,
-    pre-#537 embedded-record shape — deliberately, only when the caller
+    """``include=observations,observation_details`` returns the full,
+    embedded-record shape — deliberately, only when the caller
     names ``observation_details`` explicitly — and that full shape still
     does not grow its OWN sibling list: the nested set stripped before
     building each embedded record removes ``observations`` (and

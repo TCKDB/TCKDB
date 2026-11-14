@@ -96,9 +96,8 @@ def test_every_constraint_rejection_is_in_the_conflict_set() -> None:
     database needs the code to be *in* it. Two codes -- the atom map's
     element conservation and its bijectivity -- are enforced both at the
     wire boundary and by a check constraint, and a catalogue that listed
-    each of them once, at 422, dropped both from this set without
-    changing any code's value. Nothing noticed until a 409 was observed
-    arriving in a real response.
+    each of them once, at 422, would drop both from this set without
+    changing any code's value.
     """
     published = GENERATED.read_text()
     conflict_block = published.split("CONFLICT_REJECTION_CODES")[-1]
@@ -115,7 +114,7 @@ def test_every_constraint_rejection_is_in_the_conflict_set() -> None:
 
 
 def test_every_client_facing_catalogue_code_is_exported() -> None:
-    """The same read, against the source the enum is now generated from.
+    """The same read, against the source the enum is generated from.
 
     Without this the test above would be the only independent check, and
     it only covers the scientific subset -- so the generator could drop
@@ -143,10 +142,10 @@ def test_every_never_retryable_code_reaches_the_client_deny_list() -> None:
     ``NON_RETRYABLE_CODES`` is the only route by which a 5xx code reaches a
     client at all, and it exists because the enum cannot carry one:
     ``is_client_facing`` requires a 4xx, on the correct grounds that a 5xx
-    refuses nothing the caller did. The consequence, until #234, was that
-    ``artifact_object_missing`` was honest server-side and unusable
+    refuses nothing the caller did. Without the deny list,
+    ``artifact_object_missing`` would be honest server-side and unusable
     client-side — 502 is in ``tckdb_client``'s default retry set, so the
-    client replayed a custody break on a backoff schedule forever.
+    client would replay a custody break on a backoff schedule forever.
 
     Checked against the block rather than the whole file, because the
     codes also appear in the header prose: a substring search over the
@@ -195,11 +194,11 @@ def test_every_never_retryable_code_reaches_the_client_deny_list() -> None:
 
 
 def test_the_generated_file_carries_no_anchor_that_moves_for_free() -> None:
-    """Nothing derived from where a check lives, for the reason #119 established.
+    """Nothing derived from where a check lives, because that moves for free.
 
     A gate keyed on something that moves cosmetically gets regenerated
     reflexively without anyone reading the diff, which is how a real
-    drift eventually lands unnoticed. #119's case was a line number: a
+    drift eventually lands unnoticed. A line number is the example: a
     comment added to a service module shifted a check from 120 to 121 and
     turned the tier red on main.
 

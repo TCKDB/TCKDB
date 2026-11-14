@@ -1,7 +1,7 @@
-"""PR-4: the four export streams withhold hidden refs under ``?profile=curated``.
+"""The four export streams withhold hidden refs under ``?profile=curated``.
 
 The exports (``/export/ndjson``, ``/export/ml/species.ndjson``, ``/export/ml/reactions.ndjson``,
-``/export/chemkin``) stream and so bypass the response boundary the other routes return through. They now reach the
+``/export/chemkin``) stream and so bypass the response boundary the other routes return through. They reach the
 guard through the document seam, one visibility statement per batch of :data:`EXPORT_BATCH_SIZE` records. What this
 pins, beyond the all-routes sweep:
 
@@ -153,15 +153,15 @@ def test_native_ndjson_names_no_hidden_record_and_keeps_the_visible_ones(client,
     sa = w.extra["species_entry"].public_ref
     every = _lines(_get(client, "/export/ndjson", "curated", _query(w)))
     shown_thermos = {t["thermo_ref"] for t in _by(every, "species_entry_ref", sa)["thermos"]}
-    visible_thermos = {w.visible[k].public_ref for k in ("thm_v", "thm_v2", "thm_vg")}  # thm_vg: guard PR-3's world
+    visible_thermos = {w.visible[k].public_ref for k in ("thm_v", "thm_v2", "thm_vg")}  # thm_vg: the selection world
     assert shown_thermos and shown_thermos <= visible_thermos
 
 
 def test_ml_species_leaves_out_the_hidden_calculations_and_drops_hidden_conformer_refs(client, db_session, world):
     """Kills: no withhold on the ML species stream; a hidden calculation's energy, frequencies or Hessian kept; a
-    withheld conformer group kept in ``conformer_group_refs``; an unlisted one dropped (ADR 0023).
+    withheld conformer group kept in ``conformer_group_refs``; an unlisted one dropped.
 
-    A calculation below the floor keeps the record floor in the ML export (owner Q7): its energies, frequencies and Hessian
+    A calculation below the floor keeps the record floor in the ML export: its energies, frequencies and Hessian
     are left out whatever its status. A conformer group and observation are linked evidence: named while unlisted, dropped
     once rejected or deprecated.
     """
@@ -208,7 +208,7 @@ def test_ml_species_leaves_out_the_hidden_calculations_and_drops_hidden_conforme
     assert len(ex_sx) == 2 and len(cu_sx) == 1
     assert [e["calculation_ref"] for e in cu_sx[0]["energies"]] == [w.visible["calc_xv"].public_ref]
     assert cu_sx[0]["frequency_results"] == [] and cu_sx[0]["hessians"] == []
-    # The conformer group arrives as a list of strings: the withheld one is dropped (the list stays, now empty) and the
+    # The conformer group arrives as a list of strings: the withheld one is dropped (the list stays, empty) and the
     # visible observation beside it stays.
     cu_sa = [r for r in _lines(curated) if r.get("species_entry_ref") == sa]
     assert hidden["cg_h"] in groups(ex_sa)
@@ -219,7 +219,6 @@ def test_ml_species_leaves_out_the_hidden_calculations_and_drops_hidden_conforme
 def test_ml_reactions_barrier_comes_from_shown_energies_and_a_hidden_owner_is_null(client, db_session, world):
     """Kills: no withhold on the ML reactions stream; a hidden calculation setting the barrier; a hidden TS entry
     picked or named; the owner ref of a visible entry of a withheld transition state kept; an unlisted owner dropped
-    (ADR 0023: an entry's parent transition state is context, shown badged).
     """
     w = world
     hidden = _hidden(w)
@@ -232,7 +231,7 @@ def test_ml_reactions_barrier_comes_from_shown_energies_and_a_hidden_owner_is_nu
     assert unlisted_entry["transition_state_ref"] == hidden["ts_h_x"]  # the unlisted parent is named
     for key, ref in hidden.items():
         if key.startswith("calc"):
-            assert ref not in unlisted, f"curated names the unlisted calculation {key}"  # Q7: calculations stay floored
+            assert ref not in unlisted, f"curated names the unlisted calculation {key}"  # calculations stay floored
 
     w.withhold_hidden(db_session)
     curated = _get(client, "/export/ml/reactions.ndjson", "curated", _query(w))
@@ -327,7 +326,7 @@ def test_the_linearity_witness_leaves_out_hidden_records(db_session, world):
 
 
 def test_the_linearity_witness_uses_unreviewed_records(db_session, world):
-    """ADR 0023, step 3: the transport's own calculation, or the statmech that cites it, is linked evidence. Merely unreviewed,
+    """The transport's own calculation, or the statmech that cites it, is linked evidence. Merely unreviewed,
     it is still the witness (the line then names it, with its badge); only a withheld one is left out (the test above).
 
     Kills: leaving the witness population on the record floor (an unreviewed calculation read as no witness).
@@ -446,7 +445,7 @@ def _consume_after_the_context_is_gone(open_stream):
 def test_a_stream_consumed_after_the_request_context_is_gone_keeps_its_profile(db_session, world):
     """Kills: reading the profile from the context variable inside a generator (it is the exploratory default there)."""
     w = world
-    w.withhold_hidden(db_session)  # a withheld ref is what the stream must not name (unlisted ones are named: ADR 0023)
+    w.withhold_hidden(db_session)  # a withheld ref is what the stream must not name (unlisted ones are named)
     hidden = _hidden(w)
     species = [w.extra[k].public_ref for k in ("species_entry", "species_entry_export", "species_entry_conflict")]
     filters = ml_dataset.MLFilters(min_review_status=NOT_REVIEWED, include_hessian=True)
@@ -527,7 +526,7 @@ def test_gap_and_skip_counts_follow_the_floor(client, world):
 
 
 def test_an_unlisted_ref_in_a_document_is_kept_and_a_withheld_one_is_not(db_session, world):
-    """ADR 0023: only a rejected or deprecated record is withheld from an export document. Kills: the earlier rule, where a
+    """Only a rejected or deprecated record is withheld from an export document. Kills: the earlier rule, where a
     not-reviewed record's ref was blanked."""
     w = world
     unlisted = w.hidden["calc_h"].public_ref
@@ -778,7 +777,7 @@ def test_every_stream_issues_at_most_one_visibility_statement_per_batch(client, 
 
 
 def test_ml_energy_rows_are_the_named_approved_only_exception_to_the_evidence_rule(client, db_session, world, monkeypatch):
-    """Owner decision Q7 (ADR 0023): the ML export's energy rows keep their calculations approved-only under ``curated``.
+    """The ML export's energy rows keep their calculations approved-only under ``curated``.
 
     The world's calculations are unlisted (not reviewed or under review), not withheld. Every other nested piece of an ML
     record (the conformer group and observation refs) is shown while unlisted, so the only thing keeping the calculations
@@ -800,7 +799,7 @@ def test_ml_energy_rows_are_the_named_approved_only_exception_to_the_evidence_ru
     shown_in_exploratory = {key for key, ref in hidden.items() if ref in exploratory}
     assert shown_in_exploratory  # the exploratory export names some of them
     curated = _get(client, "/export/ml/species.ndjson", "curated", query)
-    assert not {key for key, ref in hidden.items() if ref in curated}  # Q7: none is a row under curated
+    assert not {key for key, ref in hidden.items() if ref in curated}  # none is a row under curated
     # The exception is one function: under the evidence rule instead, the unlisted calculations come back.
     monkeypatch.setattr(
         ml_dataset,

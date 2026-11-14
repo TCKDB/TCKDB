@@ -261,7 +261,7 @@ class TestHappyPath:
         assert a["created_by"] is not None
         assert a["note"] is None
         # A depositor must be able to learn the citable ref from the upload
-        # response itself -- it used to be missing from this schema entirely.
+        # response itself -- the schema must carry it.
         assert re.fullmatch(r"art_[a-z2-7]{26}", a["public_ref"])
         assert _artifact_count_for(db_session, calc_id) == 1
 
@@ -1177,9 +1177,9 @@ class TestConformerUploadResultShape:
 # Submission trail: artifacts deposited after their calculation
 # ---------------------------------------------------------------------------
 #
-# ``POST /calculations/{id}/artifacts`` used to write no
-# ``submission_record_link`` (the link was only made by ``apply_review_policy``
-# at the end of an upload workflow), so evidence added afterwards belonged to no
+# ``POST /calculations/{id}/artifacts`` writes a
+# ``submission_record_link`` (``apply_review_policy`` makes the link only
+# at the end of an upload workflow); without it, evidence added afterwards belongs to no
 # submission. The ingestion spec ("Artifact links") says artifacts are linked to
 # the submission as evidence with ``role="artifact"``.
 #

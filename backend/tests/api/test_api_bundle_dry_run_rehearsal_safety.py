@@ -1,22 +1,20 @@
 """A dry run's rehearsal must not hurt real writers, and must keep nothing.
 
 ``/bundles/dry-run`` rehearses ``/bundles/submit`` inside a rolled-back
-savepoint (#577). The independent review of that change found four ways the
-rehearsal could still reach outside itself, each reproduced here before it
-was fixed:
+savepoint. Four ways a rehearsal could reach outside itself, each pinned here:
 
-* **F1** -- its inserts take the locks a submit's do. A dry run and a real
-  submit inserting the same species in opposite orders deadlocked, and the
-  *submit* was the victim (503 ``database_unavailable``).
-* **F2** -- ``authenticate_api_key`` leaves ``api_key.last_used_at``
-  unflushed in the dry run's session; the first query flushed it, and the
-  row lock it took was held for the whole rehearsal, so two dry runs on one
-  key ran one after the other.
-* **F4** -- the commit guard watched only ``Session.commit``;
+* its inserts take the locks a submit's do; otherwise a dry run and a real
+  submit inserting the same species in opposite orders could deadlock with
+  the *submit* as the victim (503 ``database_unavailable``).
+* ``authenticate_api_key`` leaves ``api_key.last_used_at`` unflushed in the
+  dry run's session; if the first query flushed it, the row lock would be
+  held for the whole rehearsal and two dry runs on one key would run one
+  after the other.
+* the commit guard must cover more than ``Session.commit``:
   ``session.connection().commit()`` and ``session.execute(text("COMMIT"))``
-  both persisted the whole rehearsed import.
-* **F3** -- every dry run of a bundle citing a new DOI refetched it from
-  Crossref, while holding the rehearsal's locks.
+  would otherwise persist the whole rehearsed import.
+* a dry run of a bundle citing a new DOI must not refetch it from Crossref
+  while holding the rehearsal's locks.
 
 These tests run in the production topology -- a fresh session per request
 on its own pooled connection, never committed -- because the shared
@@ -198,7 +196,7 @@ def prod_client(db_engine, _api_test_user) -> Iterator[TestClient]:
 
 
 # ---------------------------------------------------------------------------
-# F1 -- a dry run gives way to a real submit
+# A dry run gives way to a real submit
 # ---------------------------------------------------------------------------
 
 
@@ -303,7 +301,7 @@ def test_a_dry_run_that_closes_a_deadlock_is_its_victim(
     submit.start()
     _wait_until_blocked(db_engine, submit_pid)  # submit waits for Y
     time.sleep(0.8)
-    go_on.set()  # rehearsal now asks for X: the cycle closes
+    go_on.set()  # rehearsal asks for X: the cycle closes
     _end_the_dry_run_request(dry, dry_session)
 
     assert isinstance(dry.result, RehearsalContended), dry.result
@@ -331,7 +329,7 @@ def test_a_contended_dry_run_is_a_coded_retryable_503(prod_client, monkeypatch) 
 
 
 # ---------------------------------------------------------------------------
-# F2 -- two dry runs on one API key run side by side
+# Two dry runs on one API key run side by side
 # ---------------------------------------------------------------------------
 
 
@@ -367,7 +365,7 @@ def test_two_dry_runs_on_one_key_do_not_queue(prod_client, monkeypatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# F4 -- every guarded way of publishing the rehearsal is refused
+# Every guarded way of publishing the rehearsal is refused
 # ---------------------------------------------------------------------------
 
 
@@ -408,7 +406,7 @@ def _sql_commit_behind_an_escape_string(session: Session) -> None:
 
 
 def _raw_dbapi_commit(session: Session) -> None:
-    """The driver's own connection, under SQLAlchemy (#592 item 2)."""
+    """The driver's own connection, under SQLAlchemy."""
     session.connection().connection.dbapi_connection.commit()
 
 
@@ -450,7 +448,7 @@ def test_a_rehearsal_cannot_publish_its_writes(
 
 
 # ---------------------------------------------------------------------------
-# F3 -- literature metadata is fetched once, and before the rehearsal
+# Literature metadata is fetched once, and before the rehearsal
 # ---------------------------------------------------------------------------
 
 
@@ -528,7 +526,7 @@ def test_the_metadata_cache_is_bounded_and_ages_out(monkeypatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# #592 item 1 -- a savepoint name is not an identity
+# A savepoint name is not an identity
 # ---------------------------------------------------------------------------
 
 
@@ -537,8 +535,8 @@ def _listener_count(connection) -> int:
 
 
 def test_reusing_the_rehearsals_savepoint_name_cannot_release_it(sessions) -> None:
-    """``SAVEPOINT <ours>`` then ``RELEASE <ours>`` twice used to count the
-    name as inner, so the second RELEASE dropped the rehearsal's own
+    """``SAVEPOINT <ours>`` then ``RELEASE <ours>`` twice must not count the
+    name as inner, or the second RELEASE drops the rehearsal's own
     savepoint. PostgreSQL releases the *most recent* savepoint of a name, so
     the guard must too."""
     session = sessions()
@@ -602,13 +600,13 @@ def test_a_release_below_the_rehearsal_is_refused_after_a_rollback_to(sessions) 
                 session.execute(text("SAVEPOINT a"))
                 session.execute(text(f"SAVEPOINT {ours}"))  # duplicate of ours, after a
                 session.execute(text("ROLLBACK TO SAVEPOINT a"))  # discards the duplicate
-                session.execute(text(f"RELEASE {ours}"))  # now names the rehearsal's own
+                session.execute(text(f"RELEASE {ours}"))  # names the rehearsal's own
     finally:
         event.remove(connection, "before_cursor_execute", _record)
 
 
 # ---------------------------------------------------------------------------
-# #592 item 4 -- a failed lookup is not repeated under the rehearsal's locks,
+# A failed lookup is not repeated under the rehearsal's locks,
 # and is remembered by nobody else
 # ---------------------------------------------------------------------------
 
@@ -732,8 +730,8 @@ def test_a_slow_failure_is_still_not_repeated_within_the_scope(monkeypatch) -> N
 
 
 def test_guards_are_removed_even_when_the_final_rollback_raises(sessions, monkeypatch) -> None:
-    """A raise from the rehearsal's own rollback used to skip every
-    ``event.remove`` after it (#592 item 1). Force one, and count."""
+    """A raise from the rehearsal's own rollback must not skip every
+    ``event.remove`` after it. Force one, and count."""
     from sqlalchemy.orm import SessionTransaction
 
     session = sessions()
@@ -839,4 +837,4 @@ def test_a_quoted_rollback_to_with_no_space_discards_later_savepoints(own_savepo
             session.execute(text('SAVEPOINT"a"'))
             session.execute(text(f"SAVEPOINT {ours}"))  # duplicate of ours, after a
             session.execute(text('ROLLBACK TO"a"'))  # discards the duplicate
-            session.execute(text(f"RELEASE {ours}"))  # now the rehearsal's own
+            session.execute(text(f"RELEASE {ours}"))  # the rehearsal's own

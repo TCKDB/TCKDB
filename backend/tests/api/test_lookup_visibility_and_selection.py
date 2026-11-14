@@ -1,7 +1,7 @@
 """``/api/v1/lookup/*``: the scientific reads' visibility, profile and display order; selection modes that say what they did.
 
-Before this change the lookup routes were public, applied no review filter and no read profile, listed in id order, and
-``selection=lowest_energy`` across mixed levels of theory added a warning and returned a winner. Now:
+The lookup routes apply a review filter and a read profile, list in a stated order, and refuse
+``selection=lowest_energy`` across mixed levels of theory rather than warning and returning a winner:
 
 * rejected and deprecated records are hidden by default (counted in ``hidden_by_default``); ``?profile=curated``
   withholds everything below the approved floor and counts none of it;
@@ -173,7 +173,7 @@ def _calc_ids(body):
 
 
 def test_lowest_energy_across_levels_of_theory_is_refused_and_names_the_levels(client, db_session):
-    """Kills: warning and returning a winner (the old behaviour)."""
+    """Kills: warning and returning a winner."""
     _species, entry = _entry(db_session)
     lot_a = make_lot(db_session, method="b3lyp", basis="6-31g")
     lot_b = make_lot(db_session, method="wb97xd", basis="def2tzvp")

@@ -1,7 +1,7 @@
-"""A state energy names every participant's source, and equals their sum (#678).
+"""A state energy names every participant's source, and equals their sum.
 
-#675 made ``state_energies[].source_calculation_key`` accept the calculation of any one participant,
-which left a bimolecular state's stored source as one summand of several. The rule, the
+``state_energies[].source_calculation_key`` accepts the calculation of any one participant,
+which leaves a bimolecular state's stored source as one summand of several. The rule, the
 conventions that have a defined sum, and the tolerance are in ``app.services.network_energy_sources``.
 
 The payload is the parallel-path network of ``test_network_pdep_upload`` with every state energy
@@ -222,7 +222,7 @@ _ROUNDED_OR_CONVERTED = {
 
 @pytest.mark.parametrize("name", sorted(_ROUNDED_OR_CONVERTED))
 def test_a_correctly_rounded_or_converted_energy_is_not_refused(client, db_session, name: str) -> None:
-    """The reviewer's five: each is a right number written with less precision than the sum."""
+    """Each is a right number written with less precision than the sum."""
     stated = _ROUNDED_OR_CONVERTED[name](_entrance_kj())
     payload = _payload()
     payload["solve"]["state_energies"][0]["energy_kj_mol"] = stated
@@ -335,7 +335,7 @@ def test_a_source_from_a_species_outside_the_state_is_refused_at_its_slot(client
 
 
 def test_a_source_from_the_other_participant_of_the_state_is_refused(client) -> None:
-    """Both species are in the state, so #675 would accept it; the slot names the species."""
+    """Both species are in the state, so a participant-only rule would accept it; the slot names the species."""
     payload = _payload()
     keys = payload["solve"]["state_energies"][2]["source_calculation_keys"]
     keys[0]["calculation_key"], keys[1]["calculation_key"] = keys[1]["calculation_key"], keys[0]["calculation_key"]

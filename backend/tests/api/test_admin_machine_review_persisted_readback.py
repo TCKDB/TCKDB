@@ -225,8 +225,8 @@ def test_persisted_v2_warning_provider_result_inspects_and_creates_task(
     assert record["record_type"] == "kinetics"
     assert record["record_id"] == 9001
     # The finding's own ``record_ref`` asserted above is the machine-review
-    # contract and is unchanged. The inspection *response* no longer carries
-    # one: it was a row id under a name meaning "public ref".
+    # contract and is unchanged. The inspection *response* does not carry
+    # one: that would be a row id under a name meaning "public ref".
     assert "record_ref" not in record
     # No kinetics row behind the fabricated id, so nothing to name.
     assert record["record_public_ref"] is None

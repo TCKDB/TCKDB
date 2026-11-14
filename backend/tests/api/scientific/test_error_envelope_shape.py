@@ -1,6 +1,6 @@
-"""Lock the Phase D error-envelope shape for the scientific read API.
+"""Lock the error-envelope shape for the scientific read API.
 
-The Phase D scientific read API intentionally follows the existing
+The scientific read API intentionally follows the existing
 FastAPI-style error envelope used by the wider backend (write paths,
 lookup paths, admin paths). The spec at
 ``docs/specs/browse_order.md`` §Error model documents this shape.
@@ -23,7 +23,7 @@ def test_unknown_include_token_uses_detail_string_envelope(client, db_session):
 
     assert resp.status_code == 422
     body = resp.json()
-    # Phase D envelope: flat `detail`, no nested `error` block.
+    # Envelope: flat `detail`, no nested `error` block.
     assert "detail" in body
     assert "error" not in body
     # Stable code is the prefix of `detail` up to the first ": ".

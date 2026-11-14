@@ -23,7 +23,7 @@ from app.db.models.species import Species, SpeciesEntry, SpeciesEntryReview
 def as_curator(client, db_session) -> AppUser:
     """Default the TestClient's auth user to the ``curator`` role.
 
-    The session-scoped fixture user is role=``user``; review creation now
+    The session-scoped fixture user is role=``user``; review creation
     requires curator/admin, so tests that post reviews must opt into a
     curation role. Tests that specifically verify the 403 path flip the role
     back to ``user`` via :func:`as_regular_user`.

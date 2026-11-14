@@ -1,6 +1,6 @@
-"""Phase C API tests: refs accepted as path handles and query/body filters.
+"""API tests: refs accepted as path handles and query/body filters.
 
-Covers the acceptance criteria from the Phase C prompt:
+Covers:
 
 - Path detail routes accept integer IDs **and** public refs.
 - Search endpoints accept ``*_ref`` filters where ``*_id`` filters are
@@ -47,9 +47,9 @@ def test_species_thermo_path_accepts_integer_id(client, db_session):
     resp = client.get(
         f"/api/v1/scientific/species-entries/{entry.id}/thermo"
     )
-    # The integer path handle still works (Phase C contract). The
-    # response identifies the entry via its public ref (Phase D
-    # hides integer IDs unless include=internal_ids is allowed).
+    # The integer path handle still works. The
+    # response identifies the entry via its public ref (integer
+    # IDs are hidden unless include=internal_ids is allowed).
     assert resp.status_code == 200
     assert resp.json()["species_entry_ref"] == entry.public_ref
 
@@ -124,7 +124,7 @@ def test_reaction_kinetics_path_accepts_public_ref(client, db_session):
     )
     assert resp.status_code == 200
     body = resp.json()
-    # Phase D: integer reaction_entry_id is hidden in the default
+    # Integer reaction_entry_id is hidden in the default
     # response. The ref handle round-trips into reaction_entry_ref.
     assert body["reaction_entry_ref"] == re.public_ref
 
@@ -143,7 +143,7 @@ def test_reaction_full_path_accepts_public_ref(client, db_session):
     )
     assert resp.status_code == 200
     body = resp.json()
-    # Phase D: reaction_entry.id is hidden in the default response;
+    # reaction_entry.id is hidden in the default response;
     # callers identify the row by its public ref.
     assert body["reaction_entry"]["reaction_entry_ref"] == re.public_ref
 

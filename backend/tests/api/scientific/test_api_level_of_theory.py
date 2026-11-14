@@ -10,7 +10,7 @@ payload walk) plus two invariants specific to this surface:
   in search (usage-derived, not a registry dump).
 - ``include=correction_schemes`` joins on ``level_of_theory_id`` (the
   FK), never on method/basis text -- two LOTs can share a method/basis
-  pair and differ only in ``spin_treatment`` (DR-0034).
+  pair and differ only in ``spin_treatment``.
 """
 
 from __future__ import annotations
@@ -204,7 +204,7 @@ def test_lot_detail_include_all_expands_to_public_tokens(client, db_session):
     assert "correction_schemes" in echo
     assert "frequency_scale_factors" in echo
     assert "used_by" in echo
-    # ``software`` (methods-surface plan §5.3) is now a legal public token
+    # ``software`` is a legal public token
     # and expands under ``all`` like every other non-internal section.
     assert "software" in echo
 
@@ -212,7 +212,7 @@ def test_lot_detail_include_all_expands_to_public_tokens(client, db_session):
 def test_lot_detail_include_software_unknown_token_still_rejects_typos(
     client, db_session
 ):
-    """``software`` is legal now; a near-miss token must still 422."""
+    """``software`` is legal; a near-miss token must still 422."""
     lot = make_lot(db_session, method="b3lyp", basis="def2tzvp")
     resp = client.get(_detail_url(lot.public_ref, include="softwares"))
     assert resp.status_code == 422
@@ -237,7 +237,7 @@ def test_lot_detail_include_correction_schemes_join_on_fk_not_text(
     """Mutation target (a): join correction schemes on method/basis text.
 
     Two LOTs share the exact same method/basis pair and differ only in
-    ``spin_treatment`` (DR-0034's own example -- UB3LYP vs ROB3LYP). Only
+    ``spin_treatment``. Only
     one carries an energy-correction scheme. A join on
     ``level_of_theory_id`` (correct) must return the scheme for its own
     LOT and nothing for the sibling; a join on method/basis text (the
@@ -433,7 +433,6 @@ def test_lot_detail_distinct_software_count(client, db_session):
 
 # ===========================================================================
 # include=software -- LOT-scoped software/workflow-tool usage aggregation
-# (methods-surface plan §5.3)
 # ===========================================================================
 
 
@@ -469,7 +468,7 @@ def test_lot_detail_include_software_excludes_zero_calculation_package(
     ``orca`` is registered (a ``SoftwareRelease`` row exists) but never
     cited by any calculation at ``lot`` -- only ``gaussian`` is. If the
     join were ever loosened from ``INNER`` to ``OUTER`` (mirroring the
-    2026-08 vocabulary-dropdown defect this repo already fixed once,
+    vocabulary-dropdown defect,
     where 110 of 125 families could never return a result), ``orca``
     would leak back in with ``calculation_count: 0``.
     """
@@ -573,7 +572,7 @@ def test_lot_detail_include_software_carries_workflow_tool_breakdown(
 def test_lot_detail_evidence_distinct_software_count_matches_software_breakdown(
     client, db_session
 ):
-    """PR 1's ``distinct_software_count`` scalar and ``include=software``'s
+    """The ``distinct_software_count`` scalar and ``include=software``'s
     breakdown are built from the same query (see
     ``build_level_of_theory_record`` in
     ``app/services/scientific_read/level_of_theory.py``) and must always
@@ -629,8 +628,8 @@ def test_lot_detail_available_sections_has_software(client, db_session):
 
 
 def test_lot_detail_include_software_live_shaped_fixture(client, db_session):
-    """The archive-shaped fixture the methods-surface plan names directly
-    (§5.3's PR 2 paragraph): 4 levels of theory, 3 distinct software
+    """The archive-shaped fixture:
+    4 levels of theory, 3 distinct software
     packages, one 1:1:1 LOT-to-package mapping, plus the one workflow
     tool (ARC) alongside the b3lyp/def2tzvp package. Counts are scaled
     down from the live 416/78/39/39 for test speed; the *shape* --
@@ -745,7 +744,7 @@ def test_lot_detail_include_software_statement_count_is_flat_per_package(
     # Measured baseline is 6 statements (handle resolution, core row,
     # calc-usage, has_schemes, has_fsf, and the bulk software/workflow-tool
     # aggregation). A per-package loop over 6 distinct packages adds 6 more
-    # (measured: 12 with the loop reintroduced). The ceiling sits well
+    # (12 with the loop in place). The ceiling sits well
     # above the real baseline for headroom, and well below what a
     # per-package loop over 6 packages would produce -- what matters is
     # that six distinct packages did not add six statements.

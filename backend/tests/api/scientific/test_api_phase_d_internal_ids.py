@@ -1,4 +1,4 @@
-"""Phase D acceptance tests: scientific responses hide internal IDs by default.
+"""Acceptance tests: scientific responses hide internal IDs by default.
 
 Verifies the visibility contract defined in
 ``docs/specs/internal_ids_visibility_policy.md``:
@@ -47,7 +47,7 @@ def _collect_keys(payload, *, into=None, skip_request=True):
     """Walk a nested dict/list structure and collect every dict key seen.
 
     Skips the top-level ``request`` block — request echoes mirror
-    caller input and are deliberately preserved (Phase D contract).
+    caller input and are deliberately preserved.
     """
     keys = set() if into is None else into
     if isinstance(payload, dict):
@@ -279,7 +279,7 @@ def test_include_internal_ids_restores_ids_when_allowed(
     )
     assert resp.status_code == 200
     body = resp.json()
-    # The token is now in the resolved include echo.
+    # The token is in the resolved include echo.
     assert "internal_ids" in body["request"]["include"]
     rec = body["records"][0]
     # Integer ids restored; refs still present.
@@ -380,7 +380,7 @@ def test_full_audit_array_omits_record_id_by_default(client, db_session):
     body = resp.json()
     assert body["review_records"] is not None
     for entry in body["review_records"]:
-        # record_id is an internal PK with no ref sibling; Phase D hides it.
+        # record_id is an internal PK with no ref sibling; it is hidden.
         assert "record_id" not in entry
 
 
@@ -464,7 +464,7 @@ def test_caller_supplied_id_filter_is_echoed_back(client, db_session):
 
 
 def test_integer_path_handle_still_works_after_phase_d(client, db_session):
-    """Phase D hides response IDs, but route inputs remain unchanged."""
+    """Response IDs are hidden, but route inputs remain unchanged."""
     species = make_species(
         db_session, smiles="C#CCONOCC", inchi_key=next_inchi_key("PD_IP")
     )

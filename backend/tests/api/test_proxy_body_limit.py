@@ -3,7 +3,7 @@
 ``frontend/nginx.conf`` carries the JSON by hand (nginx cannot call Python), so this pins the text in the config to
 ``app.api.proxy_body_limit.proxy_refusal_body`` and checks the wiring: each ``/api/`` location with a
 ``client_max_body_size`` names an ``error_page 413`` whose named location returns that cap's body as JSON.
-The live behaviour (a real nginx container answering ``application/json``) is checked by hand in the PR; this is the
+The live behaviour (a real nginx container answering ``application/json``) is checked by hand; this is the
 static guard that keeps the config and the envelope from drifting.
 """
 

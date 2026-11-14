@@ -1,12 +1,10 @@
 """API tests for GET /api/v1/scientific/transition-states/search's
 ``family`` / ``participant_smiles`` findability filters.
 
-The service layer (``transition_states_search.py``) has applied both
-filters since the browse-findability change landed -- they were already in
-``TransitionStatesSearchRequest`` and ``_MEANINGFUL_FILTER_FIELDS``. What
-was missing, and is what this file pins, is the GET route itself: it never
-declared the two as ``Query(...)`` parameters, so FastAPI silently dropped
-them from every request. Measured before this fix:
+The service layer (``transition_states_search.py``) applies both filters; they are
+in ``TransitionStatesSearchRequest`` and ``_MEANINGFUL_FILTER_FIELDS``. This file pins
+the GET route itself: it must declare the two as ``Query(...)`` parameters, or FastAPI
+silently drops them from every request, giving:
 
 - ``GET /transition-states/search?family=H_Abstraction`` -> 422
   ``missing_filter`` (the message LISTS ``family``/``participant_smiles``
@@ -53,9 +51,9 @@ def _search_url(**params) -> str:
 
 
 def test_family_alone_satisfies_the_meaningful_filter_check(client, db_session):
-    """The exact 422 this bug produced: ``family`` alone used to still
-    422 with ``missing_filter`` because the route dropped the query
-    param before it ever reached ``TransitionStatesSearchRequest``.
+    """``family`` alone satisfies the check; a route that dropped the query
+    param before it reached ``TransitionStatesSearchRequest`` would 422 with
+    ``missing_filter``.
     """
     _make_reaction_with_species(
         db_session,
@@ -185,7 +183,7 @@ def test_family_and_reaction_family_row_created_get_or_reused(client, db_session
 def test_blank_participant_smiles_alone_does_not_satisfy_the_meaningful_filter_check(client, db_session):
     """``?participant_smiles=`` is no filter: the route must 422 with
     ``missing_filter`` exactly as a bare request does, not serve the whole
-    corpus while echoing an empty-string filter (review of #356)."""
+    corpus while echoing an empty-string filter."""
     resp = client.get(_search_url(participant_smiles=""))
     assert resp.status_code == 422, resp.text
     assert resp.json()["code"] == "missing_filter"

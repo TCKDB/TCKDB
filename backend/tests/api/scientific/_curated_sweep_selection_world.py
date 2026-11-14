@@ -1,8 +1,8 @@
-"""Guard PR-3: the part of the sweep world that the selection documents are built from.
+"""The part of the sweep world that the selection documents are built from.
 
 A selection engine is pure over the facts its loader captured, so the refs that matter are the ones nested in those
 facts. The world holds one of each on a visible parent, so no curated crawl is green by looking at a world without the
-shape (the lesson of #774):
+shape:
 
 * thermo: a visible record that targets a HIDDEN conformer group (``target_group_ref``), beside the one that cites a
   hidden calculation in its protocol (already in the world);

@@ -1,9 +1,9 @@
-"""A write route must be committed before the client is told it succeeded (#616).
+"""A write route must be committed before the client is told it succeeded.
 
-``get_write_db`` used to commit in the teardown of a request-scoped yield
-dependency. FastAPI runs that teardown *after* it has sent the response, so a
+``get_write_db`` must not commit in the teardown of a request-scoped yield
+dependency: FastAPI runs that teardown *after* it has sent the response, so a
 client could receive its 201 and read straight back before the rows existed,
-and a commit that failed did so after the 201 had gone out.
+and a commit that failed would do so after the 201 had gone out.
 
 ``TestClient`` cannot show this. The shared ``client`` fixture overrides
 ``get_write_db`` with a session that is never committed, and even a
@@ -117,7 +117,7 @@ def commit_delay(scratch_engine) -> Iterator[dict]:
     factory = api_deps.SessionLocal
     # Rebinds the module ``engine``, ``SessionLocal`` *and* the stamp engine
     # behind ``StampSessionLocal``; binding the factory alone left the other
-    # two on the pytest database (#628).
+    # two on the pytest database.
     previous = api_deps.bind_ambient_session_factory(scratch_engine)
     state = {"s": 0.0}
 
@@ -176,8 +176,8 @@ def _register(base_url: str) -> str:
 def test_the_fixture_points_every_ambient_factory_at_the_scratch_database(
     commit_delay, scratch_engine
 ) -> None:
-    """``commit_delay`` used to rebind ``SessionLocal`` only, leaving the module
-    ``engine`` and the stamp factory on the pytest database (#628)."""
+    """``commit_delay`` must point the module ``engine`` and the stamp factory
+    at the scratch database too, not only ``SessionLocal``."""
 
     def _database(bind) -> str:
         with bind.connect() as connection:
@@ -269,7 +269,7 @@ class TestReadAfterWrite:
         )
 
     def test_login_then_key_mint_is_authorised(self, base_url, commit_delay) -> None:
-        """The exact sequence from the issue: ``/auth/login`` then ``/auth/api-keys``."""
+        """The exact sequence: ``/auth/login`` then ``/auth/api-keys``."""
         name = f"wcbr_{uuid.uuid4().hex[:12]}"
         password = "correct horse battery staple"
         first = httpx.post(

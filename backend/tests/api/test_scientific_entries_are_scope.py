@@ -49,7 +49,7 @@ def _profiles():
 def test_thermo_search_returns_an_approved_record_on_an_unreviewed_or_rejected_entry(
     entry_status, profile, client, db_session
 ):
-    """Kills: discovering entries through the entry visibility (the search used to return 0 records)."""
+    """Kills: discovering entries through the entry visibility (the search would return 0 records)."""
     entry, thermo, _calc, _lot = _species_world(db_session, entry_status)
     for query in (f"species_entry_ref={entry.public_ref}", "smiles=C=O"):
         body = client.get(f"{API}/thermo/search?{query}&profile={profile}").json()
@@ -94,7 +94,7 @@ def test_kinetics_search_returns_an_approved_record_on_an_unreviewed_or_rejected
 
 
 def test_the_species_search_entry_listing_still_follows_the_entry_visibility(client, db_session):
-    """It is a list of entries, so the owner rule is unchanged: a rejected entry is not listed by default."""
+    """It is a list of entries, so the entry visibility rule applies: a rejected entry is not listed by default."""
     entry, *_ = _species_world(db_session, S.rejected)
     body = client.get(f"{API}/species/search?smiles=C=O").json()
     entries = [e for r in body["records"] for e in r["entries"]]

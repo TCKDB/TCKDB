@@ -1,8 +1,8 @@
-"""The trust checks do not ask a single atom for an optimisation it cannot have (#610).
+"""The trust checks do not ask a single atom for an optimisation it cannot have.
 
 Three optional evidence checks grade a missing ``opt`` as ``missing``:
 ``calculation_dependencies_present_when_expected`` on an ``sp``, and
-``opt_source_present`` on thermo and on statmech. A relabelled ``opt`` used to
+``opt_source_present`` on thermo and on statmech. A relabelled ``opt`` would
 satisfy the last two by accident. With an honest ``sp`` primary they would
 grade the atom down for the absence of something that cannot exist, so each
 is ``not_applicable`` when every calculation involved is a one-atom

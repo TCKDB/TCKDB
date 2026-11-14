@@ -1,7 +1,7 @@
 """A reaction participant serves the computed identity facets of its species entry, not only a joined label.
 
 ``species_entry_label`` joins the stereo descriptor, the state kind, the typed ``electronic_state_label``, the typed
-``term_symbol`` and the isotope key into one string, so a client cannot tell which part is which. The participant now
+``term_symbol`` and the isotope key into one string, so a client cannot tell which part is which. The participant
 also serves the computed parts as separate fields (named as the species surface names them). The typed
 ``electronic_state_label`` / ``term_symbol`` are served too, but only when they satisfy the write-time grammar, in
 their canonical spelling; a legacy value outside it reads ``None``.

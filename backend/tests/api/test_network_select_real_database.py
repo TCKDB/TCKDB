@@ -160,7 +160,7 @@ def test_export_selected_answers_200_over_committed_rows_from_a_downloaded_manif
         json={
             "manifest": manifest, "node_ref": committed.determination,
             "representation_refs": [committed.fit], "format": fmt,
-            "include_reported": True,  # the committed solve is a reported one (ADR 0010)
+            "include_reported": True,  # the committed solve is a reported one
         },
     )
     assert response.status_code == 200, response.text

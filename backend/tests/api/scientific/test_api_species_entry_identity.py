@@ -17,9 +17,8 @@ from a list of two identical rows and had even odds of citing the isomer they
 did not want -- and nothing on the wire hinted that anything had been
 withheld. That is a wrong scientific answer, not a missing feature.
 
-The fixtures below rebuild that shape from scratch rather than querying the
-deployed database, so the guarantee does not evaporate the day the hydrazine
-network is re-seeded.
+The fixtures below rebuild that shape from scratch, so the guarantee does not
+depend on any seeded data.
 
 What each test pins:
 
@@ -273,7 +272,7 @@ def test_statmech_search_says_which_diazene_each_record_is_for(
 ):
     """The harm, end to end: eight statmech records all reading ``N=N``.
 
-    This is the scenario the fix exists for, not an analogue of it. A
+    This is the scenario the guarantee is for, not an analogue of it. A
     reader asks for diazene statmech, gets records for both entries, and
     every one of them reports ``canonical_smiles: "N=N"`` -- the *species'*
     graph identity, shared by both. Without the entry label they cannot
@@ -418,11 +417,11 @@ def test_derivation_covers_the_whole_unique_constraint():
     from app.db.models.species import SpeciesEntry
     from app.services.scientific_read.species_identity import IDENTITY_COLUMNS
 
-    # Since DR-0038 the key is a partial unique index over the live rows, not a table constraint.
+    # The key is a partial unique index over the live rows, not a table constraint.
     constraint = next(
         i for i in SpeciesEntry.__table__.indexes if i.name == "uq_species_entry_species_id"
     )
-    # ``stereo_label`` is the injective display text of the key column ``stereo_descriptor`` (DR-0038).
+    # ``stereo_label`` is the injective display text of the key column ``stereo_descriptor``.
     columns = {"stereo_label" if c.name == "stereo_descriptor" else c.name for c in constraint.columns} - {
         "species_id"
     }

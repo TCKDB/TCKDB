@@ -179,7 +179,7 @@ def test_a_thermo_citing_another_species_statmech_is_coded(client, db_session) -
     assert body["context"]["field"] == "thermo existing_statmech_id", body
     assert body["context"]["owner_kind"] == "species_entry", body
     # The id the depositor supplied is theirs; the id of the entry that
-    # owns it is not (DR-0028 Requirement 2).
+    # owns it is not.
     assert not id_in_text(other.id, str(body.get("detail", ""))), body
 
 
@@ -377,7 +377,7 @@ def test_no_statmech_citation_refusal_discloses_a_row_id(client, db_session) -> 
 
     Without them, a mutation that stops a guard firing leaves a 201 whose
     body contains no ids either and this passes while checking nothing --
-    the failure shape #192 was opened for.
+    the vacuous-pass failure shape.
     """
     entries, statmechs = _seed_participants(db_session)
     attach_conformer_selection(

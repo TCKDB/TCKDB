@@ -1,9 +1,9 @@
-"""ADR 0023, step 3: counts, flags and derived levels of a returned record follow the evidence rule under ``curated``.
+"""Counts, flags and derived levels of a returned record follow the evidence rule under ``curated``.
 
 The record floor decides which records come back; the linked evidence of a returned record is shown with its badge, and
-only ``rejected`` and ``deprecated`` evidence is withheld. Before this step a count, a flag or a level beside a named
-unreviewed calculation left that calculation out (transition states, networks, levels of theory) or counted a rejected
-one (conformers, statmech, thermo).
+only ``rejected`` and ``deprecated`` evidence is withheld. A count, a flag or a level beside a named
+unreviewed calculation must not leave that calculation out (transition states, networks, levels of theory) or count a
+rejected one (conformers, statmech, thermo).
 
 Every family has two kinds of test:
 
@@ -122,9 +122,9 @@ def _ts_world(db_session, *, irc_status=None, irc_validates=False):
 
 
 def test_ts_entry_counts_flags_and_levels_include_an_unreviewed_calculation(client, db_session):
-    """Kills: flooring linked evidence for the entry's counts, flags and levels (the old rule).
+    """Kills: flooring linked evidence for the entry's counts, flags and levels.
 
-    The unreviewed irc is named by the entry's own calculation list (step 2); the count, the flag, the coverage and the
+    The unreviewed irc is named by the entry's own calculation list; the count, the flag, the coverage and the
     level beside it must include it, so a curated response agrees with the exploratory one about what the entry rests on.
     """
     _, tse, _, irc = _ts_world(db_session)
@@ -702,7 +702,7 @@ def test_state_energy_sources_keep_an_unreviewed_calculation_and_stay_complete(c
     [(None, True), (RecordReviewStatus.under_review, True), (RecordReviewStatus.rejected, False), (RecordReviewStatus.deprecated, False)],
 )
 def test_a_validation_reference_solve_is_known_unless_it_is_withheld(db_session, status, known):
-    """A reference solve is evidence of the entry citing it (read side, ADR 0023): known unless rejected or deprecated. The
+    """A reference solve is evidence of the entry citing it (read side, the evidence rule): known unless rejected or deprecated. The
     default (upload, selection loader) keeps the record floor.
 
     Kills: ``as_evidence`` applying the record floor, or ignoring the withheld statuses.
@@ -777,7 +777,7 @@ def test_thermo_checklist_leaves_out_a_withheld_statmech_source_calculation(clie
 
 
 # ---------------------------------------------------------------------------
-# Review round: no substitution across links, withheld statmech, floored TS entries, untested sites
+# No substitution across links, withheld statmech, floored TS entries, untested sites
 # ---------------------------------------------------------------------------
 
 
@@ -936,7 +936,7 @@ def test_kinetics_checklist_counts_an_unreviewed_calculation_under_an_approved_e
 
 
 def test_kinetics_checklist_does_not_count_an_entry_below_the_record_floor(client, db_session):
-    """Kills: counting a transition-state ENTRY (a record, ADR 0023 Q3) that does not clear the floor, or its calculations."""
+    """Kills: counting a transition-state ENTRY (a record) that does not clear the floor, or its calculations."""
     rxe, k, freq, tse = _entry_floor_world(db_session)
     checklist = _kinetics(client, rxe, "curated")["evidence_completeness"]["checklist"]
     assert checklist["has_transition_state_entry"] is False and checklist["has_ts_freq_evidence"] is False

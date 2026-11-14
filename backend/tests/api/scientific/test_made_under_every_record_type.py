@@ -1,4 +1,4 @@
-"""A curated read compares a stamp's inputs exactly as an exploratory one does, for every record type that offers it (ADR 0023, step 6).
+"""A curated read compares a stamp's inputs exactly as an exploratory one does, for every record type that offers it.
 
 Each record is stamped over five inputs whose review rows are stated here: approved, no row at all, ``not_reviewed``,
 ``rejected`` and ``deprecated``. Five cases per type: nothing changed, then only the level of theory of one of the four

@@ -1,6 +1,6 @@
-"""A monatomic species may be deposited with an ``sp`` primary on the PDep route (#615).
+"""A monatomic species may be deposited with an ``sp`` primary on the PDep route.
 
-#610 (PR #613) let a single atom be deposited with an ``sp`` primary on
+A single atom can be deposited with an ``sp`` primary on
 ``/uploads/computed-species`` and ``/uploads/computed-reaction``. The
 pressure-dependent network route still required an ``opt`` primary, so the H
 atom of a hydrazine-style network could not be sent honestly. These tests build
@@ -14,7 +14,7 @@ alone (no optimisation, no second copy of the same energy) and pin:
 * a primary that is an ``sp`` on two or more atoms, or a one-atom
   ``freq``/``scan``, is still refused;
 * the fabricated-opt shape producers send today keeps working;
-* the duplicate-single-point rule of #610 holds on this route, for an atom and
+* the duplicate-single-point rule holds on this route, for an atom and
   for a species with no linked opt: the route links a geometry as a
   calculation's final output only, and the rule reads that link too.
 """
@@ -347,7 +347,7 @@ def test_network_read_back_names_the_atoms_single_point(client, db_session):
 
 
 def test_two_same_level_sps_linked_on_an_atom_are_refused(client):
-    """The #610 duplicate rule, on this route: one geometry, two sps, no opt."""
+    """The duplicate rule, on this route: one geometry, two sps, no opt."""
     payload = _payload()
     species = _h_species(payload)
     second = _h_sp("H_sp2", energy=-0.4999)

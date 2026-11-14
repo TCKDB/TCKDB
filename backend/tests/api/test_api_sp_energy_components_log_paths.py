@@ -1,12 +1,12 @@
-"""Energy components cannot slip past their checks through the log-fill paths (ADR 0021, P4).
+"""Energy components cannot slip past their checks through the log-fill paths.
 
-Reproduction on the first version of #653: a single point with no energy,
-``reference=-40.0``, ``correlation=-0.1`` and a Molpro CH4 log returned 201 on
+Reproduction without the rule: a single point with no energy,
+``reference=-40.0``, ``correlation=-0.1`` and a Molpro CH4 log returns 201 on
 both ``POST /uploads/computed-species`` (inline log) and
-``POST /calculations/{id}/artifacts``. The write-time check saw no energy and
-passed; the log then filled -40.457886 and the stored parts summed to -40.1.
+``POST /calculations/{id}/artifacts``. The write-time check sees no energy and
+passes; the log then fills -40.457886 and the stored parts sum to -40.1.
 
-The rule now: components arrive only with the energy they are parts of
+The rule: components arrive only with the energy they are parts of
 (``sp_energy_components_require_energy``), so a log can only ever confirm or
 disagree with a value that was already checked. The artifacts route does not
 accept components at all, so it cannot attach them later.

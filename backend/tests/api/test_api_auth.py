@@ -77,7 +77,7 @@ class TestSessionAuthFlow:
         body = resp.json()
         assert body["username"] == "alice"
         assert body["role"] == "user"
-        # Registration sets the session cookie — /me should now work.
+        # Registration sets the session cookie — /me should work.
         assert SESSION_COOKIE_NAME in raw_client.cookies
 
         me_resp = raw_client.get("/api/v1/auth/me")
@@ -285,7 +285,7 @@ class TestAdminUserListEndpoint:
         assert body["skip"] == 0
 
     def test_the_list_never_serves_email_addresses(self, raw_client, db_session):
-        """Decided with the owner: no emails on this surface.
+        """The list must not serve email addresses.
 
         Registered WITH an email on purpose. Asserting the key is absent
         from a payload whose subject never had one would pass no matter
@@ -620,9 +620,9 @@ class TestRoleBasedSessionTtl:
         assert row.revoked_at is not None
 
     def test_logout_tells_the_browser_to_forget_the_cookie(self, raw_client):
-        """The route clears the cookie on the response it returns (#628).
+        """The route clears the cookie on the response it returns.
 
-        It used to clear it on the injected ``response`` stub and then return a
+        It must not clear it on the injected ``response`` stub and then return a
         fresh ``Response(204)``; FastAPI merges the stub's headers only when
         the route returns a non-Response value, so no ``Set-Cookie`` was sent
         and the client kept a stale cookie (the server-side session was
@@ -986,12 +986,12 @@ class TestRegistrationConflictCodes:
         assert body["code"] == "username_taken", body
         assert body["code"] != "email_taken"
         # The sentence stays useful to a human reading a traceback, and
-        # now says which field -- the old one could not. The ``"code: "``
+        # says which field -- a bare token could not. The ``"code: "``
         # prefix stays in ``detail`` as well; that is the convention
         # every other message_prefix refusal follows, not an oversight.
         assert "username" in body["detail"].lower()
         assert body["detail"] != auth_routes.REGISTRATION_CONFLICT_FALLBACK
-        # No row id reaches the client (DR-0028 Requirement 2), and there
+        # No row id reaches the client, and there
         # is nothing structured to carry here beyond the code.
         assert body["context"] == {}
 

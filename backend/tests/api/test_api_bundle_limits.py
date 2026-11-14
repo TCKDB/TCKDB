@@ -1,6 +1,6 @@
-"""Caps and a rate bucket for the bundle routes (#586).
+"""Caps and a rate bucket for the bundle routes.
 
-``/bundles/dry-run`` rehearses a full submit (#584), so an unbounded bundle,
+``/bundles/dry-run`` rehearses a full submit, so an unbounded bundle,
 or unlimited dry runs, would let one credential make the server do a full
 import's work over and over. These tests pin:
 

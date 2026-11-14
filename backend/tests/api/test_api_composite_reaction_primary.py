@@ -1,4 +1,4 @@
-"""A composite conformer primary on the computed-reaction route (ADR 0021, P3a).
+"""A composite conformer primary on the computed-reaction route.
 
 The computed-species bundle and the conformer upload are covered in
 ``test_api_composite_program_run.py``. The reaction route has its own

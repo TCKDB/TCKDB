@@ -1,11 +1,10 @@
 """API-boundary coverage for the composite ``software_release.version`` guard.
 
-Issue #305 originally refused a ``version`` that embedded a parsed ESS
-banner. Refusing broke real ARC ingestion: five real payloads carry
+A ``version`` that embeds a parsed ESS banner is warned about and normalised,
+never refused: refusing would break real ARC ingestion, because five real payloads carry
 ``name='gaussian', version='ORCA 6.0.0'`` (see
 ``test_api_arc_run_fixtures.py::test_arc_run_payload_uploads_cleanly``),
-and the guard 422'd every one of them. The owner's call: warn and
-normalise, never refuse.
+and the guard would 422 every one of them.
 
 The normalisation itself lives on ``tckdb_schemas.fragments.refs.
 SoftwareReleaseRef`` (a request body model) and is unit-tested precisely
@@ -143,11 +142,9 @@ def test_a_clean_version_uploads_with_no_software_release_warning(client):
     """A clean ``version`` must stay completely silent -- no warning at all
     for this field.
 
-    This used to pin the live 329x ``ARC``/``"1.1.0"`` pair as an accepted
-    calculation software. ARC is a workflow tool and is now refused as a
-    calculation's software (owner decision on #305, 2026-09-29; see
-    ``test_api_calculation_software_is_workflow_tool``), so the clean case
-    is carried by a real electronic-structure release instead."""
+    ARC is a workflow tool and is refused as a calculation's software (see
+    ``test_api_calculation_software_is_workflow_tool``), so the clean case is
+    carried by a real electronic-structure release instead."""
     payload = _hydrogen_conformer_payload(
         software_release={"name": "ORCA", "version": "6.1.0"}
     )
@@ -209,15 +206,15 @@ def test_a_legitimate_version_uploads_cleanly_through_the_same_route(client):
 def test_the_live_gaussian_16_c02_banner_lands_on_the_clean_16_c02_release(
     client, db_session
 ):
-    """Issue #305 item 2, the exact string that reached the deployed archive.
+    """The exact producer string that must land on the clean release.
 
     ARC declared ``version="Gaussian 16, Revision C.02"`` -- a *producer*
     banner, not anything TCKDB's own parser wrote (the Gaussian parser only
     ever emits the digit group, ``"16"``; see
-    ``tests/parsers/test_software_version_banners.py``). Before #315 it was
-    persisted verbatim as a second release beside the clean ``16``/``C.02``
+    ``tests/parsers/test_software_version_banners.py``). Persisted verbatim it would be
+    a second release beside the clean ``16``/``C.02``
     one. This pins that the same
-    string deposited today resolves to the *same* release row as a clean
+    string deposited resolves to the *same* release row as a clean
     ``16``/``C.02`` deposit, so the split cannot reopen.
     """
     clean = client.post(

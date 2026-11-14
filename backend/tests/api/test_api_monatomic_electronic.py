@@ -1,18 +1,18 @@
-"""Single atoms on the upload routes: what is an atom (#608), and what an atom owes (#609).
+"""Single atoms on the upload routes: what is an atom, and what an atom owes.
 
-Two defects, both measured on the real ARC run fixtures under
+Two defects, checked on the real ARC run fixtures under
 ``tests/fixtures/arc_runs``:
 
-* #608 -- ``statmech_has_rotational_structure`` called a statmech block an
-  atom when it carried no rotational constants and no torsions. 26 of the 45
+* ``statmech_has_rotational_structure`` must not call a statmech block an
+  atom when it carries no rotational constants and no torsions. 26 of the 45
   polyatomic blocks in the fixtures carry neither, so a polyatomic with no
-  ``freq`` source (rotor_scan_7's ``C[C](S)O``, opt only) drew no
+  ``freq`` source (rotor_scan_7's ``C[C](S)O``, opt only) must draw
   ``missing_statmech_frequency_source``.
-* #609 -- the real ARC O atom (rotor_scan_10, scan_1) deposits S(298 K) =
+* The real ARC O atom (rotor_scan_10, scan_1) deposits S(298 K) =
   152.44 J/mol/K, translation plus R ln 3: spin multiplicity only. With the
   3P fine structure (J = 2, 1, 0 at 0, 158.265, 226.977 cm^-1) it is 161.06.
-  Nothing on the route said so, and the bundle statmech blocks refused
-  ``electronic_levels`` outright.
+  The route must say so, and the bundle statmech blocks must accept
+  ``electronic_levels``.
 
 Every test posts a real fixture payload, edited only where the test says so,
 through the real route, and asserts on ``(field, code)`` of the response.
@@ -57,7 +57,7 @@ O_SOC_HARTREE = -77.97 / 219474.63
 
 def _load(scenario: str) -> dict:
     # Five real payloads carry a false zero TS bac_total and are refused on
-    # purpose (task #264, see test_api_arc_run_fixtures). Where a trimmed copy
+    # purpose. Where a trimmed copy
     # exists it is the same run with only that entry removed; the species are
     # untouched, and they are the subject here.
     trimmed = ARC / scenario / "tckdb_payloads_trimmed_264" / "computed_reaction"
@@ -96,7 +96,7 @@ def _soc_correction(template: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# #609: an O atom with no electronic information warns
+# an O atom with no electronic information warns
 # ---------------------------------------------------------------------------
 
 
@@ -158,7 +158,7 @@ def test_ionic_or_excited_atom_is_not_judged_against_the_neutral_ground_term(cli
 
 
 # ---------------------------------------------------------------------------
-# #609: term symbol against multiplicity, degeneracy against term
+# term symbol against multiplicity, degeneracy against term
 # ---------------------------------------------------------------------------
 
 
@@ -208,7 +208,7 @@ def test_same_multiplicity_wrong_term_for_the_element_is_flagged(client):
     o = _species(payload, "[O]")
     o["species_entry"]["term_symbol"] = "3S"
     pairs = _pairs(_post(client, payload))
-    # Not the multiplicity code: the multiplicity is right, the L is not (#631).
+    # Not the multiplicity code: the multiplicity is right, the L is not.
     assert (f"species['{o['key']}'].species_entry.term_symbol", GROUND_TERM_CODE) in pairs
     assert (f"species['{o['key']}'].species_entry.term_symbol", TERM_CODE) not in pairs
 
@@ -236,7 +236,7 @@ def test_legitimate_ground_degeneracies_are_not_flagged(client, g):
 
 
 # ---------------------------------------------------------------------------
-# #609: electronic_levels through both bundles
+# electronic_levels through both bundles
 # ---------------------------------------------------------------------------
 
 
@@ -313,7 +313,7 @@ def _atom_species_bundle(smiles: str, multiplicity: int, levels, term: str | Non
 
 
 def test_species_bundle_hydrogen_with_its_two_fold_ground_level_is_silent(client):
-    """The reviewer's probe: H 2S, g = 2, on the species-bundle route says nothing (#631)."""
+    """H 2S, g = 2, on the species-bundle route says nothing."""
     bundle = _atom_species_bundle("[H]", 2, [{"level_index": 1, "energy_cm1": 0.0, "degeneracy": 2}], term="2S")
     resp = client.post("/api/v1/uploads/computed-species", json=bundle)
     assert resp.status_code == 201, resp.text[:1200]
@@ -322,7 +322,7 @@ def test_species_bundle_hydrogen_with_its_two_fold_ground_level_is_silent(client
 
 
 def test_species_bundle_oxygen_with_carbons_ordering_warns(client):
-    """The reviewer's probe: O with J = 0 lowest (carbon's order) on the species-bundle route."""
+    """O with J = 0 lowest (carbon's order) on the species-bundle route."""
     carbon_order = [
         {"level_index": 1, "energy_cm1": 0.0, "degeneracy": 1},
         {"level_index": 2, "energy_cm1": 158.265, "degeneracy": 3},
@@ -384,7 +384,7 @@ def test_standalone_statmech_for_an_atom_warns_without_levels_and_not_with(clien
 
 
 # ---------------------------------------------------------------------------
-# #608: what is an atom
+# what is an atom
 # ---------------------------------------------------------------------------
 
 
@@ -425,7 +425,7 @@ def test_declared_atom_geometry_outranks_an_absent_constant_heuristic(client):
 
 
 # ---------------------------------------------------------------------------
-# Review round: J-less terms with correct levels, energy order, parity forms
+# J-less terms with correct levels, energy order, parity forms
 # ---------------------------------------------------------------------------
 
 
@@ -516,7 +516,7 @@ def test_molecular_terms_on_an_atom_that_agree_on_multiplicity_stay_silent(clien
 
 @pytest.mark.parametrize("term", ["X2Pi", "2Π", "X 1A1"])
 def test_molecular_terms_on_an_atom_that_state_another_multiplicity_are_flagged(client, term):
-    """The grammar is strict now, so a state letter no longer hides the multiplicity: a doublet on a triplet is read."""
+    """The grammar is strict, so a state letter does not hide the multiplicity: a doublet on a triplet is read."""
     assert TERM_CODE in _standalone(client, "[O]", 3, term, _levels((0.0, 5)))
 
 
@@ -545,7 +545,7 @@ def test_spin_orbit_message_carries_the_magnitude(client):
         if w["code"] == SOC_CODE and w["field"].startswith(f"species['{o['key']}']")
     ]
     # The shift is how far the ground level lies below the spin-orbit-free value, said as such: a
-    # bare "(-0.93 kJ/mol)" read as if that were the energy (#631).
+    # bare "(-0.93 kJ/mol)" read as if that were the energy.
     assert "0.93 kJ/mol above the ground level" in msg
     assert "-0.93" not in msg
 

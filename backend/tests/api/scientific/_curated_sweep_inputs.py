@@ -72,7 +72,7 @@ ROUTE_PATH_PARAM_PROVIDERS: dict[tuple[str, str], dict[str, Callable[[SweepWorld
     ("GET", f"{BASE}/calculations/{{calculation_ref_or_id}}/path-search"): {
         "calculation_ref_or_id": lambda w: _refs(w, "calc_ps", "calc_ps_v")
     },
-    # PR-2b: reaction entries whose scoping parents are unreviewed (never hidden, never 404), crawled beside the
+    # Reaction entries whose scoping parents are unreviewed (never hidden, never 404), crawled beside the
     # reviewed one on the two reads that list a reaction entry's participants and records.
     **{
         ("GET", f"{BASE}/reaction-entries/{{reaction_entry_id}}/{suffix}"): {
@@ -132,7 +132,7 @@ _SEARCHES: dict[str, list[Callable[[SweepWorld], dict[str, Any]]]] = {
     ],
     "kinetics": [
         lambda w: {"reaction_entry_ref": _rxe(w)},
-        # PR-2b: every include token (``trust`` and ``assessments`` are not part of ``all``) and the superseded records.
+        # Every include token (``trust`` and ``assessments`` are not part of ``all``) and the superseded records.
         lambda w: {
             "reaction_entry_ref": _rxe(w),
             "include": ["all", "trust", "assessments"],
@@ -144,7 +144,7 @@ _SEARCHES: dict[str, list[Callable[[SweepWorld], dict[str, Any]]]] = {
         lambda w: {"method": "wb97xd", "include": ["all"]},
         lambda w: {"method": "hiddenonly", "include": ["all"]},
     ],
-    # PR-2c: the PLOG filters match only the hidden solve's fit; the Chebyshev ones match visible and hidden fits.
+    # The PLOG filters match only the hidden solve's fit; the Chebyshev ones match visible and hidden fits.
     "network-kinetics": [
         lambda w: {"has_chebyshev": True, "include": ["all"]},
         lambda w: {"has_plog": True, "include": ["all"]},
@@ -171,7 +171,7 @@ _SEARCHES: dict[str, list[Callable[[SweepWorld], dict[str, Any]]]] = {
     "thermo": [lambda w: {"species_entry_ref": _sa(w)}],
     "transition-states": [
         lambda w: {"has_calculations": True},
-        # PR-2b: ``trust`` and ``entries`` are not part of ``all`` on the search surface.
+        # ``trust`` and ``entries`` are not part of ``all`` on the search surface.
         lambda w: {"reaction_entry_ref": _rxe(w), "include": ["all", "trust", "entries"]},
     ],
     "transport": [lambda w: {"has_lj_parameters": True}],
@@ -337,7 +337,7 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
         for m in ("GET", "POST")
     },
     ("GET", f"{BASE}/species/name-search"): _variants({"q": "water", "limit": 20}, {"q": "wat", "match": "prefix", "limit": 20}),
-    # PR-2b: the family's detail reads with every include token, the opt-in ones (``trust``, ``assessments``) included.
+    # The family's detail reads with every include token, the opt-in ones (``trust``, ``assessments``) included.
     ("GET", f"{BASE}/reaction-entries/{{reaction_entry_id}}/full"): _variants(
         {},
         {"include": ["all", "trust"]},
@@ -352,7 +352,7 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
     ),
     ("GET", f"{BASE}/transition-states/{{transition_state_ref_or_id}}"): _variants({}, {"include": _ALL_TS_TOKENS}),
     ("GET", f"{BASE}/transition-states/browse"): _variants({}, {"include": _ALL_TS_TOKENS}),
-    # PR-2c: ``points`` is not part of ``all`` on a fit's detail.
+    # ``points`` is not part of ``all`` on a fit's detail.
     ("GET", f"{BASE}/network-kinetics/{{network_kinetics_ref_or_id}}"): _variants(
         {}, {"include": ["all", "points"]}
     ),
@@ -417,6 +417,6 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
     },
 }
 
-#: ``(method, route template)`` -> reason this route cannot be crawled yet. Empty since guard PR-3: the selection routes
+#: ``(method, route template)`` -> reason this route cannot be crawled yet. Empty: the selection routes
 #: (network select, statmech select, export-selected) are crawled over the selection world.
 CRAWL_UNSUPPORTED: dict[tuple[str, str], str] = {}

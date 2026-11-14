@@ -1,14 +1,10 @@
 """Frequency results on ``/scientific/species-calculations/search``.
 
-Before this surface projected them, a ``freq`` record carried exactly one
-result key -- ``energy: null`` -- and the (since-deleted) public landing
-page rendered a card titled "frequencies" whose only line read
-*Electronic energy — not recorded*. The numbers were stored the whole
-time: measured on the
-deployed database, species entry ``spe_bcbdjwkip75yoziblpntwzblzu``
-(``[CH3]``) has four frequency calculations, each with ``n_imag = 0``,
-``zpe_hartree ~ 0.029723`` and six ``calc_freq_mode`` rows -- ``3N-6``
-for four atoms, non-linear. Nothing read them back out.
+A ``freq`` record carries its frequency results, not only ``energy: null``.
+A client that reads just ``energy`` shows *Electronic energy — not recorded*
+although the numbers are stored: a species entry for ``[CH3]`` with four
+frequency calculations stores ``n_imag = 0``, ``zpe_hartree ~ 0.029723`` and
+six ``calc_freq_mode`` rows each -- ``3N-6`` for four atoms, non-linear.
 
 The contract asserted here is the one ``energy`` already had, mirrored:
 
@@ -122,7 +118,7 @@ def test_a_freq_record_carries_its_frequency_result(client, methyl):
     assert frequency["n_imag"] == 0
     assert frequency["zpe_hartree"] == pytest.approx(_CH3_ZPE_HARTREE)
     assert frequency["imag_freq_cm1"] is None
-    # ADR 0012's stored judgement travels with ``n_imag`` rather than
+    # The imaginary-mode protocol's stored judgement travels with ``n_imag`` rather than
     # behind an include, on this surface as on /calculations/*.
     assert frequency["imaginary_mode_tau_cm1"] == pytest.approx(50.0)
     assert frequency["imaginary_mode_tau_basis"] == "analytic_default"
@@ -146,7 +142,7 @@ def test_the_two_transition_state_fields_are_null_on_a_species_minimum(
 
     assert frequency["reaction_coordinate_mode_index"] is None
     assert frequency["imaginary_mode_structural_flag"] is None
-    # The other two ADR 0012 columns are *not* transition-state business:
+    # The other two columns of the imaginary-mode protocol are *not* transition-state business:
     # tau is recorded for every frequency upload, minima included.
     assert frequency["imaginary_mode_tau_cm1"] is not None
     assert frequency["imaginary_mode_tau_basis"] is not None
@@ -196,7 +192,7 @@ def test_a_freq_record_with_no_stored_result_keeps_the_block(client, methyl):
 
 
 def test_an_imaginary_mode_on_a_claimed_minimum_is_visible(client, db_session):
-    """The count above tau is the reason the ADR 0012 fields are kept here.
+    """The count above tau is the reason the imaginary-mode protocol fields are kept here.
 
     A species entry is filed as a ``minimum``. If its frequency
     calculation carries an imaginary mode above the protocol's noise

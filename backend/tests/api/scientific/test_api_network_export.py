@@ -213,7 +213,7 @@ def test_a_self_consistent_document_that_the_server_does_not_hold_is_stale(clien
     forged["solves"][0]["fits"][0]["tmax_k"] = 3000.0  # claims a wider support than the server's stored fit has
     reseal(forged)
     response = export(client, world, forged, det, [fit])
-    # Replay may already refuse it (the assessment recorded no longer matches); if the forger also rewrote that,
+    # Replay may already refuse it (the recorded assessment does not match); if the forger also rewrote that,
     # the comparison with the server's own content does.
     assert code(response) in ("network_export_manifest_invalid", "network_export_manifest_stale")
 
@@ -467,7 +467,7 @@ def _approve_network(session, world) -> None:
     )
 
 
-# -- review round: bounds, reported rates, direction, units, pinned numbers, provenance ----------------------------
+# -- bounds, reported rates, direction, units, pinned numbers, provenance ----------------------------
 
 
 @pytest.mark.parametrize("limits", [{"solves": 0}, {"solves": 10**12, "snapshot_bytes": 10**12}])
@@ -500,7 +500,7 @@ def _reported_world(db_session, world):
 
 
 def test_a_reported_solve_reaches_chemkin_only_when_asked_for_and_then_with_its_literature(client, db_session, world):
-    """ADR 0010: a transcribed rate must not enter a mechanism file undisclosed."""
+    """A transcribed rate must not enter a mechanism file undisclosed."""
     solve, det, fit = _reported_world(db_session, world)
     manifest = manifest_of(client, world)
     refused = export(client, world, manifest, det, [fit], format="chemkin")

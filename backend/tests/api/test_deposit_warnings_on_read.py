@@ -1,6 +1,6 @@
 """Deposit-time warnings are stored with the record they are about and shown when it is read.
 
-The upload response has always carried the ``warn`` tier. Before this change no scientific read did, so a reader
+The upload response carries the ``warn`` tier, and every scientific read must too: otherwise a reader
 deciding whether to trust a value could not learn that it tripped an expectation. These tests deposit through the
 real endpoints and read back through the real reads.
 """
@@ -326,7 +326,7 @@ def test_a_sub_tolerance_mode_on_a_minimum_is_stored_on_the_frequency_calculatio
 
 
 # ---------------------------------------------------------------------------
-# Review round: reads, artifacts without a submission, isolation, the curated guard
+# Reads, artifacts without a submission, isolation, the curated guard
 # ---------------------------------------------------------------------------
 
 

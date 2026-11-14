@@ -119,12 +119,12 @@ def test_species_calculation_entry_ref_does_not_bypass_inchi_rejection(
 
 
 def test_frequency_scale_factor_deferred_filters_fail_closed(client):
-    """``software_version`` is no longer deferred here.
+    """``software_version`` is not deferred here.
 
     It was, because ``frequency_scale_factor`` keyed on a program and had
     no version to filter on. It keys on a software release, so the filter is real and answering it is not a
-    deferral any more -- the same lift #459 made for correction schemes
-    once they gained the release grain.
+    deferral -- as for correction schemes
+    which have the release grain.
 
     ``model_kind`` stays deferred and stays asserted, which is what keeps
     this test meaningful: the endpoint must still fail closed on a filter
@@ -139,8 +139,8 @@ def test_frequency_scale_factor_deferred_filters_fail_closed(client):
 
 def test_energy_correction_scheme_deferred_filters_fail_closed(client):
     """``software`` and ``software_version`` are both backed by the
-    ``software_release`` join (correction-scheme-provenance plan v2, PR 2)
-    and are no longer deferred -- only ``used_by_thermo`` still fails
+    ``software_release`` join
+    and are not deferred -- only ``used_by_thermo`` still fails
     closed."""
     response = client.post(
         "/api/v1/scientific/energy-correction-schemes/search",

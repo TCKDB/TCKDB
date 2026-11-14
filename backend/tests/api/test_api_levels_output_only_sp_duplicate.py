@@ -1,12 +1,12 @@
-"""Standalone /statmech and /thermo refuse duplicate sps that declare output-only geometry (#615).
+"""Standalone /statmech and /thermo refuse duplicate sps that declare output-only geometry.
 
-The no-optimisation duplicate rule of #610 keyed each linked ``sp`` by its
-input geometry. The pressure-dependent network route links a geometry as a
-calculation's final output only, so its sps were never compared. The shared
-rule now keys an sp by its input geometry, else its output geometry; the
+The no-optimisation duplicate rule keys each linked ``sp`` by its input
+geometry. The pressure-dependent network route links a geometry as a
+calculation's final output only, so its sps must still be compared. The shared
+rule keys an sp by its input geometry, else its output geometry; the
 standalone uploads share that code, so an sp that declares only an output
-geometry on the same geometry as an input-linked sp is now a duplicate here
-too, as it already was for two input-linked sps.
+geometry on the same geometry as an input-linked sp is a duplicate here
+too, as it is for two input-linked sps.
 """
 
 from __future__ import annotations

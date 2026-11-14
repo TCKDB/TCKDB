@@ -1,6 +1,6 @@
 """API tests for GET /api/v1/scientific/species-entries/{id}/observations.
 
-Phase C-E5: the first public read of ``molecular_property_observation``.
+The first public read of ``molecular_property_observation``.
 Mirrors ``test_api_species_transport.py`` for handle resolution, pagination,
 review filtering, and the internal-id policy; this record type carries no
 ``collapse`` / ``selection_policy`` / ``trust`` (see the schema's module
@@ -67,7 +67,7 @@ def test_returns_200_for_valid_species_entry_id(client, db_session):
 def test_identity_basis_distinguishes_importer_from_curator_attach(
     client, db_session, _api_curator_user
 ):
-    """F8: importer-resolved rows read ``external_identifier_match``;
+    """Importer-resolved rows read ``external_identifier_match``;
     rows a curator attached through ``observation_identity_attach.py``
     read ``curator_attached`` -- derived from the
     ``observation_identity_attached`` SubmissionAuditEvent, no extra

@@ -1,11 +1,10 @@
 """API tests for the applied energy correction on the public read surface.
 
-Before this shipped, TCKDB served an energy-correction scheme's *recipe*
-— all 45 per-bond parameters of a Petersson BAC, addressable at
-``/scientific/energy-correction-schemes/{ref}?include=corrections`` — and
-served an index saying which species the scheme had been applied to, and
-never served **the number that was added**. These tests pin the two
-surfaces that now carry it and the facts that make it readable:
+The read surface serves an energy-correction scheme's *recipe* (all 45
+per-bond parameters of a Petersson BAC, addressable at
+``/scientific/energy-correction-schemes/{ref}?include=corrections``), an
+index of which species the scheme was applied to, and also **the number
+that was added**. These tests pin the two surfaces that carry it and the facts that make it readable:
 
 * the energy the correction accompanies is the **uncorrected** one, so
   the correction is an addend and not an adjustment already folded in;
@@ -48,8 +47,8 @@ from tests.services.scientific_read._factories import (
 # read as chemistry rather than as arithmetic on 1.0.
 RAW_SP_ENERGY_HARTREE = -78.62375631
 
-# A Petersson BAC total taken from the hosted instance's own data, in the
-# unit it is stored in there.
+# A Petersson BAC total as stored, in the
+# unit it is stored in.
 BAC_KCAL_MOL = -1.4083247988699648
 BAC_HARTREE = -0.0022443084241441243
 
@@ -255,7 +254,7 @@ def test_served_energy_is_the_uncorrected_one(client, db_session):
     assert served_energy != pytest.approx(
         RAW_SP_ENERGY_HARTREE + BAC_HARTREE, abs=1e-12
     )
-    # And the corrected energy is a sum the consumer can now take, in one
+    # And the corrected energy is a sum the consumer can take, in one
     # unit, without a conversion factor of their own.
     assert served_energy + correction["applied_value_hartree"] == pytest.approx(
         RAW_SP_ENERGY_HARTREE + BAC_HARTREE, rel=1e-12
@@ -609,7 +608,7 @@ def test_internal_id_restored_on_opt_in(
 
 
 def test_used_by_carries_the_applied_value(client, db_session):
-    """``include=used_by`` no longer serves a bare pointer."""
+    """``include=used_by`` serves the applied value, not a bare pointer."""
     entry, calc = _sp_calc_with_energy(db_session, "AECUSB")
     scheme, _ = _bac_applied(
         db_session, entry=entry, calc=calc, scheme_name="usedby-bac"
@@ -709,7 +708,7 @@ def test_served_components_sum_to_the_served_total(client, db_session):
     Both are read off stored rows and neither is recomputed, so this is an
     identity over a complete set rather than a coincidence of one fixture.
     It is the property that makes the breakdown usable as a reconciliation
-    check: measured on all 164 applied corrections on the hosted instance,
+    check: it holds for every applied correction:
     ``sum(contribution_value) == value`` exactly.
 
     The fixture mirrors a real Petersson BAC: several bond types, mixed
@@ -764,7 +763,7 @@ def test_served_components_sum_to_the_served_total(client, db_session):
 def test_a_truncated_breakdown_says_so_and_its_sum_is_short(
     client, db_session
 ):
-    """Past the cap the flag fires, and the served rows no longer sum.
+    """Past the cap the flag fires, and the served rows do not sum to the value.
 
     The point of the flag: a partial set of full-precision contributions
     is exactly the shape a reader would mistake for a complete one, and

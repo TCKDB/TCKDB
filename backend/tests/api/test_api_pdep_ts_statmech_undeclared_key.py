@@ -14,7 +14,7 @@ declared left the route as an unhandled ``KeyError``:
     app/workflows/computed_species.py:998: KeyError
 
 That is a 500 whose body says nothing about which key was wrong, for a
-mistake whose whole repair is spelling. It is now a 422 carrying
+mistake whose whole repair is spelling. It is a 422 carrying
 ``calculation_key_undeclared``, the offending field, the key, and the
 keys that *are* declared.
 
@@ -94,7 +94,7 @@ def test_ts_statmech_source_key_naming_nothing_is_a_coded_422(client) -> None:
     # The alternatives are the point: a refusal that names them turns a
     # typo into a mechanical fix rather than a guess.
     assert "ts_elim_freq" in body["context"]["declared_keys"], body
-    # DR-0028 Requirement 2 -- the map's *values* are row ids and they
+    # The map's *values* are row ids and they
     # stay there.
     assert set(body["context"]) == {"field", "key", "declared_keys"}, body
 

@@ -1,13 +1,12 @@
 """The legacy entity lists obey the read profile and the default visibility, and say what they did.
 
 ``GET /api/v1/{thermo,kinetics,statmech,transport,calculations,transition-states,conformer-groups,networks}`` are the
-raw entity layer: ``id`` ascending, internal ids. They used to show every record whatever its review status, and
-ignored ``profile``, so ``?profile=curated`` did not bypass anything only because it did nothing. Now:
+raw entity layer: ``id`` ascending, internal ids. They obey ``profile`` and the default visibility:
 
 * rejected and deprecated records are hidden unless included, and the response counts what it hid (exploratory);
 * ``?profile=curated`` shows approved records only in the list and its total, and says nothing about the records below the
   floor; the record's own detail route serves anything but a rejected or deprecated record, which answers exactly as an id
-  that names nothing (ADR 0023 step 7);
+  that names nothing;
 * every list echoes its order (``id`` ascending, administrative) and the profile it answered under.
 """
 
@@ -137,7 +136,7 @@ def test_a_legacy_list_echoes_its_administrative_id_order(case, client, db_sessi
 
 @pytest.mark.parametrize("case", sorted(CASES))
 def test_the_curated_profile_shows_approved_records_only_and_counts_nothing_else(case, client, db_session):
-    """Kills: a legacy list that ignores ``profile`` (before this change it returned all five rows), and a count of
+    """Kills: a legacy list that ignores ``profile``, and a count of
     the records below the floor in the total or the disclosure block."""
     seeded, url = _seed(case, db_session)
     body = client.get(
@@ -154,7 +153,7 @@ def test_the_curated_profile_shows_approved_records_only_and_counts_nothing_else
 
 @pytest.mark.parametrize("case", sorted(CASES))
 def test_a_withheld_record_answers_its_detail_route_as_an_unknown_id_does(case, client, db_session):
-    """ADR 0023 step 7: a rejected or deprecated record answers 404 exactly as an id that names nothing; one that is merely
+    """A rejected or deprecated record answers 404 exactly as an id that names nothing; one that is merely
     below the floor is served, with its review status in ``X-TCKDB-Review-Status``."""
     seeded, url = _seed(case, db_session)
     unknown = client.get(f"{url}/999999999", params={"profile": "curated"})
@@ -175,7 +174,7 @@ def test_a_withheld_record_answers_its_detail_route_as_an_unknown_id_does(case, 
 
 def test_a_curated_thermo_names_unreviewed_calculations_and_not_rejected_ones(client, db_session):
     """An approved thermo cites an approved, an unreviewed and a rejected calculation. The curated read shows the first two
-    (the unreviewed one is linked evidence, ADR 0023) and is silent about the rejected one, in the list and on the detail
+    (the unreviewed one is linked evidence, the evidence rule) and is silent about the rejected one, in the list and on the detail
     route."""
     species = make_species(db_session, smiles="C=O", inchi_key=next_inchi_key("LNK"))
     entry = make_species_entry(db_session, species)
@@ -266,7 +265,7 @@ def _count_statements(db_session, call):
 
 
 def test_the_disclosure_costs_one_statement_per_list_and_none_under_curated(client, db_session):
-    """Before this change a legacy list issued 2 statements (count, page). The visibility joins go into those two; the
+    """A legacy list issues 2 statements (count, page); the visibility joins go into those two, and the
     disclosure is the one added aggregate. Curated issues no aggregate: it must not count what it withholds."""
     seeded, url = _seed("thermo", db_session)
     client.get(url)  # warm one-time lookups

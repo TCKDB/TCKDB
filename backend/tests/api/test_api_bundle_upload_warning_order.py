@@ -1,4 +1,4 @@
-"""The order of upload warnings, and bundles with more than one upload (#647).
+"""The order of upload warnings, and bundles with more than one upload.
 
 ``test_api_bundle_upload_warnings.py`` compares a bundle with the direct route,
 so it cannot notice both reordering the same way. These tests pin the direct

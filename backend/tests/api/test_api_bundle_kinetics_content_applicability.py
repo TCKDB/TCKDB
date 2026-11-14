@@ -11,7 +11,7 @@ a payload whose ``SchemaBase`` is ``extra="forbid"``. Following the advice
 yields a 422.
 
 The fix is the sentinel ``provenance_warnings.NOT_APPLICABLE``, the same
-device PR #155 used for ``energy_level_of_theory``: ``None`` means *there
+device used for ``energy_level_of_theory``: ``None`` means *there
 is a field and it is empty*, ``NOT_APPLICABLE`` means *there is no field
 here*, and only the first is judged.
 
@@ -21,11 +21,10 @@ Two levels of test, because they are different claims:
   that matters to them, and the thing a unit test on the collector cannot
   establish.
 * The unit level asserts the sentinel is **doing the work**. Without it,
-  the route test would also pass on ``main`` (where the collector is
-  simply never called on this route), so it would prove nothing about
-  this change.
+  the route test would also pass where the collector is simply never
+  called on this route, so it would prove nothing about the sentinel.
 
-#620 added the three fields to ``BundleKineticsIn``. The reaction route still
+The three fields are on ``BundleKineticsIn``. The reaction route
 does not call the collector, so a bundle is not told about a missing
 interpretation set: the advice would ask for a ref to a record the same
 request cannot have created yet. The sentinel remains the way a payload
@@ -145,11 +144,11 @@ def test_a_bundle_declaring_tunneling_is_not_told_to_fill_a_missing_field(
 def test_the_bundle_route_now_validates_a_tunneling_application_block(
     client: TestClient,
 ):
-    """``tunneling_application`` is a real bundle field since #620.
+    """``tunneling_application`` is a real bundle field.
 
-    Until then it was rejected as an unknown key (``SchemaBase`` is
-    ``extra="forbid"``), which is why the collector was told the field did not
-    exist. Now the block is parsed and held to the standalone route's rules:
+    It must not be rejected as an unknown key (``SchemaBase`` is
+    ``extra="forbid"``), or the collector would be told the field does not
+    exist. The block is parsed and held to the standalone route's rules:
     an Eckart block with no barriers is refused for *that* reason, not as an
     unknown field.
     """

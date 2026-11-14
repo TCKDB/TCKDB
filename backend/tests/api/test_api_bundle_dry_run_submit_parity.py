@@ -1,6 +1,6 @@
 """``/bundles/dry-run`` must refuse exactly what ``/bundles/submit`` refuses.
 
-What was wrong (#577)
+What was wrong
 ---------------------
 A dry run exists to answer one question: will this bundle submit? It
 answered it from a read-only *preview* -- identity and provenance lookups
@@ -13,7 +13,7 @@ passed a dry run and was then refused on submit.
 
 The fix does not copy those checks into the preview, because a copy is a
 second place for the two routes to disagree and is how this drifted. The
-dry run now *rehearses* ``submit_contribution_bundle`` -- the same function
+dry run *rehearses* ``submit_contribution_bundle`` -- the same function
 the submit route calls -- inside a SAVEPOINT that is always rolled back,
 and reports the refusal submit would give, rendered by the same exception
 handler.
@@ -166,19 +166,19 @@ def _wigner(ts_ref: str) -> dict:
 
 #: Bundles submit refuses. Each is ``(bundle builder, submit's status,
 #: submit's code)``; a builder receives the test session so it can seed the
-#: rows a reference needs. Every one of them passed ``/bundles/dry-run``
-#: before #577 except ``preview_blocking_smiles``, whose refusal the preview
+#: rows a reference needs. Every one of them would pass ``/bundles/dry-run``
+#: without the parity check, except ``preview_blocking_smiles``, whose refusal the preview
 #: already saw but reported without submit's code.
 REFUSED: dict[str, tuple[Callable[[Session], dict], int, str]] = {
     # app/workflows/reaction.py reversible_or_inherited: an unstated reaction.reversible with no single
-    # stored reaction to inherit it from is refused, never defaulted (#598).
+    # stored reaction to inherit it from is refused, never defaulted.
     "kinetics_reaction_reversible_required": (
         _kinetics_without_reversible,
         422,
         "reaction_reversible_required",
     ),
     # app/workflows/thermo.py assert_enthalpy_reference, called first in
-    # persist_thermo_upload -- the gap #577 was filed for.
+    # persist_thermo_upload -- the gap this parity check covers.
     "thermo_enthalpy_declaration_absent": (
         lambda _s: _thermo(enthalpy_reference_kind=None),
         422,
@@ -272,7 +272,7 @@ REFUSED: dict[str, tuple[Callable[[Session], dict], int, str]] = {
         "reaction_mass_balance_failed",
     ),
     # The preview's own refusal. Submit's gate turns it into a
-    # ``domain_error``; the dry run used to show the item error but never
+    # ``domain_error``; the dry run must show the item error and
     # the code a submit would carry.
     "preview_blocking_smiles": (
         lambda _s: _thermo(
@@ -294,7 +294,7 @@ def _thermo_rich(_session: Session) -> dict:
     """Every optional block a thermo record can carry that reaches a check:
     literature, provenance releases, inline calculations, source links and
     an applied correction. The two example bundles reach none of them, so a
-    check behind any of them was invisible to the trace test (review F5)."""
+    check behind any of them was invisible to the trace test."""
     bundle = _example("thermo-bundle.json")
     record = bundle["records"]["thermo_uploads"][0]
     record.update(
@@ -707,12 +707,12 @@ def test_dry_run_runs_every_step_submit_runs(client, case: str) -> None:
         lambda: client.post(SUBMIT, json=copy.deepcopy(bundle)).raise_for_status()
     )
 
-    # Not vacuous: submit's own workflow, and the rule #577 was filed for
-    # on the thermo path, are in what was traced.
+    # Not vacuous: submit's own workflow, and the thermo-path rule
+    # are in what was traced.
     assert "app.workflows.contribution_bundle_submit.submit_contribution_bundle" in submit_calls
     if case.startswith("thermo"):
         assert "tckdb_schemas.enthalpy_reference.enthalpy_reference_error" in submit_calls
-    # And the rich bundles reach the checks the examples cannot (review F5).
+    # And the rich bundles reach the checks the examples cannot.
     for reached in _RICH_REACHES.get(case, ()):
         assert reached in submit_calls, f"{case} no longer reaches {reached}"
 
@@ -731,7 +731,7 @@ def test_dry_run_runs_every_step_submit_runs(client, case: str) -> None:
 #: in rehearsed code would let the dry run take a branch submit does not --
 #: the review showed it by skipping ``assert_bac_total_has_required_components``
 #: behind ``if not session.in_nested_transaction()`` with every other test
-#: green (F5).
+#: green.
 _REHEARSAL_TELLS = re.compile(
     r"in_nested_transaction|get_nested_transaction|_nested_transaction\b"
     r"|\bRehearsal(?:CommitRefused|Contended)\b"
@@ -767,7 +767,7 @@ def test_no_code_under_rehearsal_can_tell_it_is_rehearsed() -> None:
 
 
 #: The ways to reach a raw DBAPI connection or cursor, from which ``COMMIT``
-#: can be sent past every guard the rehearsal has (#592). The goal is to catch
+#: can be sent past every guard the rehearsal has. The goal is to catch
 #: an accidental one in TCKDB's own code, not to defeat a determined author.
 _RAW_DRIVER_ATTRIBUTES = {"dbapi_connection", "driver_connection", "raw_connection", "pgconn", "cursor"}
 #: ``<x>.connection`` read as a value (``fairy = s.connection().connection``) is
@@ -872,7 +872,7 @@ def test_the_raw_driver_scan_sees_a_use() -> None:
 @pytest.mark.parametrize(
     "source",
     [
-        # Aliasing the pooled-connection proxy, then using it (#606 A).
+        # Aliasing the pooled-connection proxy, then using it.
         "fairy = s.connection().connection\nfairy.cursor().execute('COMMIT')\n",
         "fairy = s.connection().connection\nfairy.execute('COMMIT')\n",
         "fairy = s.connection().connection\n",

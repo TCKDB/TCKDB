@@ -1,4 +1,4 @@
-"""A composite calculation with an attached Gaussian log, end to end (ADR 0021, P3b).
+"""A composite calculation with an attached Gaussian log, end to end.
 
 Both ways an output log reaches a calculation: the artifacts route
 (``POST /calculations/{id}/artifacts``) and inline on a computed-species bundle

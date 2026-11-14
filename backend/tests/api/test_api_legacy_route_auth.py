@@ -1,4 +1,4 @@
-"""Tests for the legacy entity-read auth gate (F14).
+"""Tests for the legacy entity-read auth gate.
 
 When ``LEGACY_READS_REQUIRE_AUTH=true`` the legacy
 ``/api/v1/{thermo,kinetics,...}`` routes return 401 to anonymous

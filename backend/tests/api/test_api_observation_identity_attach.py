@@ -8,11 +8,9 @@ provenance.py``): the ``client`` fixture's default actor is role=user (the
 403 path), ``login_as`` swaps roles, and ``anon_client`` exercises the
 anonymous 401 path.
 
-Review round 2: the target rule relaxed (any ground-state minimum entry is
-a legal target, not only the unique one -- F4) and the curation fact moved
-from ``raw_payload_json`` to a ``SubmissionAuditEvent`` (F5), which also
-means every successful-attach test now has to link its observation to a
-submission first, the way a real deposit does.
+Any ground-state minimum entry is a legal target, not only the unique one, and
+the curation fact is stored as a ``SubmissionAuditEvent``, so every successful-attach
+test has to link its observation to a submission first, the way a real deposit does.
 """
 
 from __future__ import annotations
@@ -190,11 +188,10 @@ def test_second_attach_refuses_already_set(
 def test_curator_may_choose_among_ambiguous_entries(
     client, db_session, login_as, _api_curator_user
 ):
-    """Review round 2 (F4): the original ambiguity rule refused precisely
-    the isomer-ambiguity case this tool exists for. A species with two
-    ground-state minimum entries (a cis/trans pair) is now a legal target
-    for either one -- the curator's choice of which entry IS the
-    disambiguation a machine resolver could not make.
+    """A species with two ground-state minimum entries (a cis/trans pair) is a
+    legal target for either one -- the curator's choice of which entry IS the
+    disambiguation a machine resolver could not make. Refusing it would refuse
+    the isomer-ambiguity case this tool exists for.
     """
     species, entry_a = _entry(db_session, prefix="SEAMBIG")
     entry_b = make_species_entry(
@@ -227,16 +224,14 @@ def test_curator_may_choose_among_ambiguous_entries(
 def test_non_ground_state_target_refuses(
     client, db_session, login_as, _api_curator_user
 ):
-    """Review round 3 (R5): the observation is now linked to a submission
-    before the attach attempt, so the only guard standing between this
-    request and a 200 is the target-validity rule -- previously, with no
-    submission linked, a mutation that neutralized the target rule would
-    still redden this test via the unrelated ``observation_identity_
-    attach_requires_submission`` guard (which happens to run right after
-    the target check), making the assertion's redness a coincidence rather
-    than proof the target rule fired. With the submission linked, that
-    mutation now lets the request actually succeed (200), which the
-    assertions below catch directly.
+    """The observation is linked to a submission before the attach attempt, so
+    the only guard standing between this request and a 200 is the
+    target-validity rule. Without a linked submission, a mutation that
+    neutralized the target rule would still redden this test via the unrelated
+    ``observation_identity_attach_requires_submission`` guard (which runs right
+    after the target check), making the redness a coincidence rather than proof
+    the target rule fired. With the submission linked, that mutation lets the
+    request succeed (200), which the assertions below catch directly.
     """
     species, ground_entry = _entry(db_session, prefix="SEEXCITED")
     excited_entry = make_species_entry(
@@ -260,17 +255,16 @@ def test_non_ground_state_target_refuses(
 def test_single_excited_state_entry_species_refuses(
     client, db_session, login_as, _api_curator_user
 ):
-    """F7: a species with exactly one entry, and that entry excited-state,
-    used to slip past the old (pre-F4) ambiguity guard's deleted-clause
-    mutation because every other fixture species had two entries. This
-    pins the target-validity check on a single-entry species directly.
+    """A species with exactly one entry, and that entry excited-state, is
+    refused. Fixture species with two entries would let an ambiguity guard's
+    deleted-clause mutation slip past; this pins the target-validity check on a
+    single-entry species directly.
 
-    Review round 3 (R5): the observation is now linked to a submission
-    first, for the same reason as ``test_non_ground_state_target_refuses``
-    above -- without it, this test's redness under the
-    ``electronic_state_kind == ground`` mutation came from the unrelated
-    ``observation_identity_attach_requires_submission`` guard, not from the
-    target rule itself.
+    The observation is linked to a submission first, for the same reason as
+    ``test_non_ground_state_target_refuses`` above -- without it, this test's
+    redness under the ``electronic_state_kind == ground`` mutation would come
+    from the unrelated ``observation_identity_attach_requires_submission``
+    guard, not from the target rule itself.
     """
     species = make_species(
         db_session, smiles="CC=O", inchi_key=next_inchi_key("SESINGLEEXC")
@@ -296,7 +290,7 @@ def test_single_excited_state_entry_species_refuses(
 def test_attach_refuses_an_observation_linked_to_no_submission(
     client, db_session, login_as, _api_curator_user
 ):
-    """F5: no submission link means nowhere honest to record the curation
+    """No submission link means nowhere honest to record the curation
     fact, so the attach is refused rather than silently proceeding without
     an audit trail.
     """
@@ -315,7 +309,7 @@ def test_attach_refuses_an_observation_linked_to_no_submission(
 
 
 # ---------------------------------------------------------------------------
-# Identity-hint conflict (Probe C, Phase C-E5 review round 3)
+# Identity-hint conflict (probe C)
 # ---------------------------------------------------------------------------
 
 

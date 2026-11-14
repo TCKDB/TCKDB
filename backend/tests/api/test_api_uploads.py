@@ -85,11 +85,10 @@ def _transition_state_payload(
         "charge": 0,
         "multiplicity": 2,
         "geometry": {
-            # H + CH4 -> H2 + CH3, so the saddle point is CH5. This block was
-            # a three-atom stub (H, C, H) until
-            # ``validate_transition_state_composition`` started refusing a
-            # saddle point that is not made of its own reaction's atoms; the
-            # coordinates stay schematic, the composition does not.
+            # H + CH4 -> H2 + CH3, so the saddle point is CH5.
+            # ``validate_transition_state_composition`` refuses a saddle point that
+            # is not made of its own reaction's atoms, so the composition is real;
+            # the coordinates stay schematic.
             "xyz_text": (
                 "6\nH...H-CH3 abstraction TS\n"
                 "C  0.000  0.000  0.000\n"
@@ -117,7 +116,7 @@ def _transition_state_payload(
     return payload
 
 
-#: ADR 0012's motivating record, in the shape a producer deposits it: the
+#: The imaginary-mode protocol's motivating record, in the shape a producer deposits it: the
 #: complete signed frequency list, the designated reaction coordinate, and
 #: a declared disposition for each other imaginary mode.
 _MOTIVATING_FREQUENCIES = [-1300.0, -42.0, -13.0, 800.0, 1400.0]
@@ -182,13 +181,13 @@ class TestConformerUpload:
 
 
 # ---------------------------------------------------------------------------
-# Imaginary-frequency validation tiers (ADR 0008)
+# Imaginary-frequency validation tiers
 #
 # minimum + n_imag >= 1     -> block   (definition)
 # vdw_complex + n_imag >= 1 -> warn    (expectation: Hessian grid noise)
 # TS + n_imag == 0          -> block   (no reaction coordinate)
-# TS + extras undesignated  -> block   (contract, ADR 0012)
-# TS + extras declared      -> warn    (judged against tau, ADR 0012)
+# TS + extras undesignated  -> block   (contract)
+# TS + extras declared      -> warn    (judged against tau)
 # TS + |imag| < threshold   -> warn    (expectation: flat/variational)
 # ---------------------------------------------------------------------------
 
@@ -220,7 +219,7 @@ class TestMinimumImaginaryModeBlocks:
 
     def test_minimum_with_a_stiff_imaginary_mode_returns_422(self, client):
         """A mode at or above the protocol's tau is real curvature, so a
-        declared minimum carrying one is refused (ADR 0012 note, 2026-10-29;
+        declared minimum carrying one is refused (the imaginary-mode protocol;
         a mode below tau is accepted with a warning, see
         ``test_api_minimum_imaginary_tau.py``)."""
         payload = _hydrogen_conformer_payload(label="conf-stiff-imag")
@@ -282,7 +281,7 @@ class TestVdwComplexImaginaryModeWarns:
         that a frequency list is deposited beside the scalar and shows
         one imaginary mode rather than three. The test above is accepted
         because absence is incompleteness; this one is refused because
-        the record now answers the same question two ways, and no re-run
+        the record answers the same question two ways, and no re-run
         can decide which answer was meant.
 
         Written as a pair on purpose. A rule phrased "mode rows must
@@ -315,7 +314,7 @@ class TestVdwComplexImaginaryModeWarns:
         single atom has ``3N = 3`` degrees of freedom in total and this
         test deposits *four* frequencies, a combination no harmonic
         analysis produces and
-        ``freq_list_exceeds_geometry_degrees_of_freedom`` now refuses.
+        ``freq_list_exceeds_geometry_degrees_of_freedom`` refuses.
         Two atoms have six, which hold the list. The same fixture defect
         was found and fixed once already, on ``_TS_XYZ`` in
         ``tests/schemas/test_stationary_point_validation_tiers.py``; this
@@ -363,7 +362,7 @@ class TestTransitionStateImaginaryModeTiers:
         assert "transition_state_imaginary_frequency_too_small" not in codes
 
     def test_zero_imaginary_modes_returns_422(self, client):
-        """Unchanged in tier by ADR 0012, renamed in code: no imaginary
+        """Unchanged in tier by the imaginary-mode protocol, renamed in code: no imaginary
         mode means no reaction coordinate at all."""
         resp = client.post(
             "/api/v1/uploads/transition-states",
@@ -388,8 +387,8 @@ class TestTransitionStateImaginaryModeTiers:
         assert "transition_state_reaction_coordinate_not_designated" in resp.text
 
     def test_the_motivating_record_uploads_with_a_warning(self, client):
-        """-1300 / -42 / -13 cm⁻¹ over HTTP. Refused outright before ADR
-        0012; accepted and annotated now."""
+        """-1300 / -42 / -13 cm⁻¹ over HTTP. Accepted with a warning,
+        not refused outright."""
         resp = client.post(
             "/api/v1/uploads/transition-states",
             json=_motivating_transition_state_payload(label="ts-adr0012"),
@@ -522,7 +521,7 @@ class TestThermoUpload:
     def _seed_calc(self, client, *, calc_type: str = "sp") -> tuple[int, int]:
         """Insert a Calculation directly into the test session and return
         (species_entry_id, calculation_id). Mirrors the conformer-upload
-        pre-state that DR-0028's existing_calculation_id path consumes."""
+        pre-state that the existing_calculation_id path consumes."""
         from app.db.models.calculation import Calculation
         from app.db.models.common import CalculationType
         from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
@@ -544,7 +543,7 @@ class TestThermoUpload:
         return entry.id, calc.id
 
     def test_existing_calculation_id_links_thermo_to_existing_row(self, client):
-        """DR-0028: existing_calculation_id wired through the API produces a
+        """Existing_calculation_id wired through the API produces a
         201, with the thermo attached to the same species entry."""
         species_entry_id, calc_id = self._seed_calc(client, calc_type="sp")
         payload = {"enthalpy_reference_kind": "formation_298k",
@@ -561,11 +560,9 @@ class TestThermoUpload:
         assert data["species_entry_id"] == species_entry_id
 
     def test_existing_calculation_id_not_found_returns_404(self, client):
-        """The status is unchanged; the code and context are new in #230.
+        """The status is 404, and the code and context name the missing reference.
 
-        This used to assert a substring of ``detail``, which was all there
-        was to assert while the refusal carried the generic
-        ``resource_not_found`` with an empty ``context``.
+        The code and context are asserted, not a substring of ``detail``.
         """
         payload = {"enthalpy_reference_kind": "formation_298k",
             "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
@@ -588,12 +585,11 @@ class TestThermoUpload:
     def test_existing_calc_wrong_species_entry_returns_422(self, client):
         """A cross-owner chained citation is refused, under a real code.
 
-        This is the response #161 was about. The refusal used to be a bare
-        ``ValueError`` phrased ``f"{context}: …"`` where ``context`` ended
-        in ``existing_calculation_id``, and the envelope scraped that field
-        name out of the sentence and advertised it as ``code``. A client
-        could branch on a string that was never a contract and that moved
-        with any rewording. The code is now declared by the refusal.
+        A bare ``ValueError`` phrased ``f"{context}: …"`` where ``context`` ends
+        in ``existing_calculation_id`` would have the envelope scrape that field
+        name out of the sentence and advertise it as ``code``; a client could
+        branch on a string that is not a contract and that moves with any
+        rewording. The code is declared by the refusal.
         """
         # Seed a calc owned by a CC species, then upload thermo for a
         # different species (H) that references it.

@@ -1,8 +1,6 @@
-"""Tests for ``GET /calculations/{calculation_id}/hessian`` (C-Q2).
+"""Tests for ``GET /calculations/{calculation_id}/hessian``.
 
-Before this route existed there was no public read for a stored Hessian
-at all -- ``grep -rn "CalculationHessian" backend/app/api/`` returned
-nothing. Mirrors the sibling Tier-B reads (``sp-result``, ``opt-result``,
+Public read of a stored Hessian. Mirrors the sibling Tier-B reads (``sp-result``, ``opt-result``,
 ``freq-result``): 404 on a missing row, exact field-for-field body when a
 row exists. No re-derivation -- the packed lower triangle comes back
 exactly as stored.

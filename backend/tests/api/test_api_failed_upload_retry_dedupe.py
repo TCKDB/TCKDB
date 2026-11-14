@@ -1,8 +1,8 @@
 """A refused retry under one ``Idempotency-Key`` is one failed submission.
 
-Before this, ``record_failed_upload`` opened a fresh ``failed`` submission (plus
-two audit events) for every refused attempt, ignoring the idempotency key, so a
-producer retrying a refused deposit grew the table by three rows per retry.
+``record_failed_upload`` must not open a fresh ``failed`` submission (plus
+two audit events) for every refused attempt, ignoring the idempotency key: a
+producer retrying a refused deposit would grow the table by three rows per retry.
 
 The rule under test:
 

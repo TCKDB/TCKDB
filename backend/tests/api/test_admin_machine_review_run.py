@@ -15,7 +15,7 @@ What these tests hold down:
   asking and journalling the answer, and "the reviewer could not review" is an
   answer a curator needs, not an error to retry past. A 5xx would also throw
   away the audit event the failure just wrote;
-* **no internal row ids in the body** (DR-0028 Requirement 2) -- in particular
+* **no internal row ids in the body** -- in particular
   not the id of the event it wrote;
 * **nothing but that event is written**: no status change, no moderation.
 
@@ -177,7 +177,7 @@ def test_missing_submission_is_404_with_the_contracted_detail(
     body = resp.json()
     assert body["detail"] == "Submission not found."
     assert body["code"] == "http_404", body
-    # DR-0028 Req. 2: 999999 is the caller's own path parameter; nothing
+    # 999999 is the caller's own path parameter; nothing
     # server-side is echoed back alongside it.
     assert body["context"] == {}, body
 
@@ -272,7 +272,7 @@ def test_successful_run_does_not_mutate_submission_status(
 def test_response_carries_no_internal_row_id(
     client, db_session, login_as, _api_admin_user, monkeypatch
 ):
-    """DR-0028 Requirement 2: the audit event's id stays server-side.
+    """The audit event's id stays server-side.
 
     ``audit_event_recorded`` is the actionable fact; which row it landed in is
     not, and a body that named it would invite a client to address it.

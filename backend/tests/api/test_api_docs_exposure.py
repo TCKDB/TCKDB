@@ -1,4 +1,4 @@
-"""Tests for the OpenAPI/Swagger/ReDoc exposure gate (F8).
+"""Tests for the OpenAPI/Swagger/ReDoc exposure gate.
 
 ``settings.expose_api_docs`` defaults to True (local/dev). Hosted
 production sets it to False. When False, FastAPI must not register
@@ -50,8 +50,8 @@ def test_reference_only_exposes_redoc_but_not_swagger(_client_factory, monkeypat
     branch nothing exercised: both other tests in this module pin
     ``expose_api_reference`` to its default (unset here, so it never
     hits this line) rather than True. A dropped or renamed
-    ``REDOC_PATH`` therefore raised nothing in the suite until this
-    test was added.
+    ``REDOC_PATH`` would otherwise raise nothing in the suite without this
+    test.
     """
     monkeypatch.setattr(settings, "expose_api_docs", False)
     monkeypatch.setattr(settings, "expose_api_reference", True)

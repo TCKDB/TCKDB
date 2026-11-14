@@ -94,7 +94,7 @@ def test_an_ambiguous_structure_query_names_the_fields_it_got(
 
     ``multiple_structure_queries`` is a relationship code in the sense
     ``Shape.relationship`` means it -- an *ambiguity* asserted about two or
-    more things, naming none of them. ``context['supplied']`` now names
+    more things, naming none of them. ``context['supplied']`` names
     them. The query values are deliberately not echoed: the field names are
     the whole repair.
 
@@ -589,7 +589,7 @@ def test_payload_does_not_leak_forbidden_keys(client, db_session):
 
 
 # ---------------------------------------------------------------------------
-# Stored-mol-column / GiST index path (audit P1-3)
+# Stored-mol-column / GiST index path
 #
 # Substructure and similarity SQL builders must read from the stored
 # ``species_entry.mol`` cartridge column so the GiST index

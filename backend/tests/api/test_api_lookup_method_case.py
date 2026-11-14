@@ -1,4 +1,4 @@
-"""Lookup routes compare method and basis by identity key (#585).
+"""Lookup routes compare method and basis by identity key.
 
 ``/lookup/calculations`` and ``/lookup/species-calculation`` compared the
 stored spelling with the *lower-cased* request, which only ever matched a row
@@ -33,8 +33,8 @@ CASES = [
     ("wB97XD", "Def2TZVP", "wb97xd", "def2-tzvp"),
     ("wb97xd", "def2tzvp", "WB97XD", "Def2-TZVP"),
     ("CCSD(T)", "cc-pVTZ", "ccsd(t)", "cc-pvtz"),
-    ("wb97xd", "def2tzvp", "wB97X-D", "def2-tzvp"),  # #618
-    ("M062X", "def2tzvp", "m06-2x", "def2-tzvp"),  # #618
+    ("wb97xd", "def2tzvp", "wB97X-D", "def2-tzvp"),
+    ("M062X", "def2tzvp", "m06-2x", "def2-tzvp"),
 ]
 
 
@@ -77,7 +77,7 @@ def test_calculations_lookup_matches_another_spelling(
 
 
 def test_an_alias_match_says_it_matched_by_identity_key_not_exactly(client):
-    """The code is unchanged for clients; the message no longer claims the spelling matched."""
+    """The code is stable for clients; the message does not claim the spelling matched."""
     resp = client.post("/api/v1/uploads/conformers", json=_payload("wb97xd", "def2tzvp"))
     assert resp.status_code in (200, 201), resp.text
     base = {"smiles": "[H][H]", "charge": 0, "multiplicity": 1, "type": "opt", "basis": "def2tzvp"}
@@ -94,7 +94,7 @@ def test_an_alias_match_says_it_matched_by_identity_key_not_exactly(client):
 
 
 def test_a_different_method_still_misses(client):
-    """Gaussian wB97XD is not ORCA wB97X-D3 (#618)."""
+    """Gaussian wB97XD is not ORCA wB97X-D3."""
     _different_method(client)
 
 
@@ -154,7 +154,7 @@ def _lookup(client, method: str) -> dict:
 def test_plain_method_request_is_told_the_stored_level_has_a_dispersion(
     client, stored_method, stored_dispersion
 ):
-    """#630: a request for plain ``b3lyp`` must not silently get B3LYP-D3BJ as
+    """A request for plain ``b3lyp`` must not silently get B3LYP-D3BJ as
     an unqualified exact match, whether the dispersion is folded in the method
     or in the column."""
     resp = client.post(

@@ -17,14 +17,14 @@ provoked through the HTTP route rather than by calling
 :mod:`app.services.release.curation` directly. Several of these already had
 service-level tests; a service-level test says the function raises, and says
 nothing about the status the depositor is handed or the code they branch on.
-Both were wrong for two sibling codes on this same router until #170, which
+Both can be wrong for sibling codes on this same router, which
 is the concrete reason the assertion has to be made where the client stands.
 
 Two Tier B rows are not here, on purpose
 ----------------------------------------
 ``release_tag_taken`` and ``curation_policy_version_conflict`` are the two
 codes the triage document lists as catalogued at 422 while arriving at 409.
-That was true when it was written and was fixed in #170: the catalogue records
+The catalogue records
 both at 409, and ``test_api_dataset_releases.py`` provokes both on the wire.
 Re-verified before writing this file; nothing here duplicates them.
 
@@ -42,26 +42,24 @@ What each test asserts, and why in that shape
   the dependency-overridden test session does not), it is, and the comment
   says so.
 
-Six expected statuses changed in #211, and none of them was relaxed
+Six expected statuses are asserted at 409, and none of them is relaxed
 ----------------------------------------------------------------------
 ``release_not_draft`` (twice), ``release_not_published`` (twice),
 ``selection_already_stands`` and ``selection_already_superseded`` were
-asserted here at **422** and are now asserted at **409**. That is not a
-test bending to fit the code: it is this file recording a decision made
-about the contract — 409 for a state conflict, 404 for a missing thing,
+asserted here at **409**, not 422. That is not a
+test bending to fit the code: it records the contract:
+409 for a state conflict, 404 for a missing thing,
 422 only for a malformed payload. Every one of the six refuses a request
 whose body is correct, and no corrected body makes it succeed, so 422 was
 telling a client to resend something that could never be accepted.
 
-The assertion is *stronger* after the change, not weaker: the pair is
+The assertion is *strong*, not weak: the pair is
 still exact, and the same tests still require the neighbouring valid
-request to be accepted. ``release_tag_taken`` and
-``curation_policy_version_conflict`` had already been settled at 409 in
-#170, so this removed an inconsistency inside one router rather than
-creating one.
+``release_tag_taken`` and ``curation_policy_version_conflict`` are likewise
+at 409, so the router is consistent.
 
 Fixtures live in this file rather than in a conftest deliberately: they are
-one round old and shared by nothing else yet.
+shared by nothing else.
 """
 
 from __future__ import annotations
@@ -201,7 +199,7 @@ def _refusal(response, *, status: int, code: str) -> dict:
     refusal message quotes the caller's own input back, so a substring check
     can pass against a request that was wrongly accepted.
 
-    ``context`` is checked for database primary keys (DR-0028 Req 2). Every
+    ``context`` is checked for database primary keys. Every
     code in this file is a ``message_prefix`` code and carries no structured
     context today, so the check is forward-looking: a row id is an
     implementation detail of one database instance — it does not survive a

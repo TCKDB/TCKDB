@@ -1,4 +1,4 @@
-"""Guard PR-3: the selection documents withhold hidden refs at the loader to engine seam, and prove it.
+"""The selection documents withhold hidden refs at the loader to engine seam, and prove it.
 
 A selection engine is a pure function of the facts its loader captured. Under ``?profile=curated`` every hidden gated
 ref in those facts becomes a placeholder token (``withheld:<n>``) BEFORE anything is assessed, decided or hashed, so
@@ -243,13 +243,13 @@ def test_every_nested_position_holds_a_token_and_the_real_ref_is_nowhere(client,
 
 
 def test_unlisted_evidence_is_named_in_a_selection_document_and_holds_no_token(client, db_session, login_as):
-    """ADR 0023: a record that is merely below the floor (not reviewed, under review) is linked evidence, not withheld
+    """A record that is merely below the floor (not reviewed, under review) is linked evidence, not withheld
     evidence. Its ref stands in the curated document as it does in the exploratory one, and no position holds a token.
 
-    This is the flip of the pin above (which now runs over rejected / deprecated records): the same world, with its hidden
+    This is the flip of the pin above (which runs over rejected / deprecated records): the same world, with its hidden
     records left unlisted. Thermo, kinetics, statmech and the network name the records the positions held tokens for. The
     structure and relative-energy documents name none of their ``hidden`` keys because those are conformer GROUPS, which are
-    records there (Q4) and which the floor still holds out; the calculations and observations inside a group are evidence and
+    records there and which the floor still holds out; the calculations and observations inside a group are evidence and
     are named (see the next test). No document holds a token.
 
     Kills: the earlier rule (a token or a gap for every record below the floor); a token for an unlisted record.
@@ -267,7 +267,7 @@ def test_unlisted_evidence_is_named_in_a_selection_document_and_holds_no_token(c
                 assert hidden_refs[key] in text, f"{route.name}: the unlisted {key} is not named"
 
 
-#: Per route, the unlisted EVIDENCE the loader's own population reads (ADR 0023 step 5), by world key.
+#: Per route, the unlisted EVIDENCE the loader's own population reads, by world key.
 LOADER_EVIDENCE = {
     "structure": ("calc_h",),
     "statmech": ("calc_h", "co_h"),
@@ -276,7 +276,7 @@ LOADER_EVIDENCE = {
 
 
 def test_the_loaders_own_populations_use_unreviewed_evidence_and_drop_rejected(client, db_session, login_as):
-    """Step 5 of ADR 0023: the calculations and observations a selection reads are evidence of the record it returns.
+    """The calculations and observations a selection reads are evidence of the record it returns.
 
     In the world as built (hidden records unlisted: not reviewed or under review) the structure, statmech and
     relative-energy documents name the unlisted calculation (and the statmech document the unlisted observation) under
@@ -402,7 +402,7 @@ def test_a_curated_manifest_replays_and_reproduces_its_decision_byte_for_byte(cl
 
 @pytest.mark.parametrize("name", ["thermo", "kinetics", "network", "structure", "statmech", "relative_energy"])
 def test_a_curated_manifest_over_unlisted_evidence_replays_byte_for_byte(client, db_session, login_as, name):
-    """ADR 0023: a curated manifest that names records which are merely below the floor (as evidence) still replays and
+    """A curated manifest that names records which are merely below the floor (as evidence) still replays and
     reproduces its decision. Kills: a replay consistency check that holds the captured evidence to the record floor."""
     unlisted = build_sweep_world(db_session)
     login_as(unlisted.extra["curator"].id)
@@ -482,11 +482,11 @@ def test_the_current_format_version_of_every_engine_is_written(client, world):
         for engine in ("thermo", "kinetics", "network", "structure", "statmech", "relative_energy")
         for previous in (1, 3)
     ]
-    # Format 4 is retired for the two engines whose recorded inputs now carry a basin's group and observation statuses apart.
+    # Format 4 is retired for the two engines whose recorded inputs carry a basin's group and observation statuses apart.
     + [("structure", 4), ("relative_energy", 4)],
 )
 def test_a_manifest_of_another_format_version_is_refused(client, world, name, previous):
-    """Kills: another format version added to an engine's registry. Format 3 is the one ADR 0023 retired: a manifest
+    """Kills: another format version added to an engine's registry. Format 3 is the one the evidence rule retired: a manifest
     recorded before the evidence rule is refused, not read as the rule that came after it.
 
     Rewritten with the other version (and nothing else), then resealed where the engine checks a digest, so the
@@ -534,7 +534,7 @@ def test_a_comparison_manifest_of_a_retired_relative_energy_version_is_refused(c
 
 
 def test_a_format_3_relative_energy_manifest_and_comparison_are_refused(client, world):
-    """ADR 0023: the single manifest and the comparison, each recorded before the evidence rule (format 3), are refused on
+    """The single manifest and the comparison, each recorded before the evidence rule (format 3), are refused on
     replay, not read as format 4. Kills: format 3 left registered for either document."""
     routes = {r.name: r for r in _routes(world)}
     single = _post(client, routes["relative_energy"].path, routes["relative_energy"].body, "exploratory")

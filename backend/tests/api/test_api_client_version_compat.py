@@ -59,7 +59,7 @@ ARTIFACT_BODY = {"artifacts": [{"kind": "ancillary", "filename": "n.txt", "conte
 
 
 def test_the_default_minimum_is_the_first_client_that_sends_calc_refs():
-    """#578: 0.97.0 is the first tckdb-client that addresses a calculation by its ref.
+    """0.97.0 is the first tckdb-client that addresses a calculation by its ref.
 
     The artifact route takes the ref only, so a client below this would send an
     integer the server refuses; the version gate turns that into a 426 up front.

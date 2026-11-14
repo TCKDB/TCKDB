@@ -2,10 +2,10 @@
 
 The sibling file ``test_api_scientific_rejection_codes.py`` does this for
 refusals raised in Python. This one does it for the population that is
-harder to reach and, until now, told a client the least: the positions
+harder to reach and tells a client the least: the positions
 PostgreSQL holds. Those are the *strongest* guarantees TCKDB makes --
 no write path, no bulk loader and no future service can get around a
-check constraint -- and every one of them used to arrive as the same
+check constraint -- and every one of them would arrive as the same
 generic ``409 state_conflict``, so a client could not tell "an atom
 changed element on the way across this reaction" from "some consistency
 rule fired somewhere".
@@ -31,19 +31,13 @@ they are proved separately:
    somewhere in the prose. The assertion has to be on the field, because
    matching the message is exactly what passes on the broken system.
 
-   The second half of that sentence is a **contract change made on
-   2026-08-18**, and this file is where it bites hardest. Until then this
-   test asserted ``body["context"]["constraint"] == name``: the register
-   path published the raw constraint name, on the argument that it is the
-   key into ``docs/guides/scientific_check_register.md``. Calvin ruled
-   the other way, and the ruling is about what an identifier *is* rather
-   than about how useful it would be -- a constraint name is internal,
-   meaningless to a depositor, unstable across a rename, and a disclosure
-   of schema layout, which is the same reasoning that keeps row ids out
-   of bodies under DR-0028 Requirement 2. What a registered constraint
-   earns is therefore a code and a sentence of its own, which is a public
-   contract; the name goes to the log, and the assertion below is now
-   that it is **absent**.
+   A registered constraint earns a code and a sentence of its own, which is a
+   public contract; the raw constraint name goes to the log and is **absent**
+   from the body. This file is where that bites hardest: a constraint name is
+   internal, meaningless to a depositor, unstable across a rename, and a
+   disclosure of schema layout, which is the same reasoning that keeps row ids
+   out of bodies under the no-row-ids rule. The assertion below is that the
+   name is absent.
 
    An absence assertion is worthless on its own -- it passes against a
    handler that returns nothing at all -- so each one here sits beside
@@ -112,7 +106,7 @@ PROVOCATIONS: dict[str, tuple[str, dict[str, object], dict[str, object] | None]]
     #
     # ``element``/``ts_element`` are overridden on all four rows because
     # ``_dummy`` fills a ``character(2)`` with ``'x'``, which
-    # ``ck_reaction_atom_map_pair_element_canonical`` now
+    # ``ck_reaction_atom_map_pair_element_canonical``
     # refuses: an element symbol capitalises its first letter. Without the
     # override the canonicality CHECK would fire first and these provocations
     # would prove something about the wrong constraint.
@@ -264,11 +258,10 @@ def test_the_response_body_names_the_scientific_rule(name, db_session, envelope_
 def test_the_response_body_does_not_disclose_the_constraint_name(
     name, db_session, envelope_client
 ):
-    """Fact 3, and a contract change: the name stays on this side.
+    """Fact 3: the name stays on this side.
 
-    Until 2026-08-18 this file asserted the opposite -- ``body["context"]
-    ["constraint"] == name`` -- and it was one of three positions the
-    repository held at once. See the module docstring for the ruling.
+    The body must not carry ``context["constraint"]``. See the module
+    docstring for why.
 
     The positives are asserted first and deliberately: an assertion that
     a string is missing from a body passes just as well against a handler
@@ -285,7 +278,7 @@ def test_the_response_body_does_not_disclose_the_constraint_name(
     assert body["code"] == expected_code
     assert body["detail"] == expected_detail
     assert isinstance(body["detail"], str) and body["detail"].strip()
-    # And now the absence, over the whole rendered body rather than one
+    # And the absence, over the whole rendered body rather than one
     # field, because a name moved to a differently-named key would still
     # be a disclosure.
     assert name not in response.text, (

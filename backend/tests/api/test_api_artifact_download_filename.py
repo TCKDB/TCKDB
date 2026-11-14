@@ -7,9 +7,8 @@ path segment and saved every artifact as a file called ``download``.
 wget's ``--content-disposition`` does understand ``filename*``, so the
 two clients disagreed -- which is what made it look like curl's fault.
 
-Measured on the hosted instance 2026-09-14:
-``curl --fail -OJ .../artifacts/9a21f943.../download`` fetched the right
-459 bytes (digest verified) and wrote them to ``./download``.
+With ``curl --fail -OJ .../artifacts/<sha>/download`` the right bytes are
+fetched (digest verified) but written to ``./download``.
 
 These test the pure helper rather than the route. The route needs a
 stored object in the artifact store to reach the header at all, and the
@@ -77,12 +76,11 @@ class TestTheAsciiFallbackCannotBreakTheHeader:
 def test_the_header_is_the_one_the_route_sends():
     """No reassembly here.
 
-    An earlier version of this file built the header itself from the
-    helper's two return values and asserted against that -- so it tested
-    its own string, and a mutation removing the `filename=` half from the
-    ROUTE passed all eleven tests. The helper now returns the whole
-    header and the route uses it verbatim, which is what makes these
-    assertions bite.
+    The helper returns the whole header and the route uses it verbatim.
+    Reassembling it here from two return values would test its own string,
+    and a mutation removing the `filename=` half from the ROUTE would pass
+    every test; asserting on the whole header is what makes these assertions
+    bite.
     """
     header = content_disposition_for("input.gjf")
     assert header == (

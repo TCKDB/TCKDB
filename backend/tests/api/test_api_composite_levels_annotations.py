@@ -1,14 +1,14 @@
-"""The composite annotations on every product read: ``notation``, ``composite_energy_verification``, ``legacy_composite_shape`` (ADR 0021, P7a).
+"""The composite annotations on every product read: ``notation``, ``composite_energy_verification``, ``legacy_composite_shape``.
 
-On ``main`` (fea447ec) ``levels`` had none of the three. Held here over HTTP, for thermo,
+``levels`` carries all three. Held here over HTTP, for thermo,
 statmech and kinetics:
 
 * **notation** for every shape: all equal, ``x//y``, a composite on its recipe's own
   geometry, a composite on an external optimisation, an assembled composite, and absent
   levels (no notation, never a fabricated one);
 * **verification** reaches the product read whenever the energy source is a composite, and only then;
-* **legacy shapes** are annotated and *never re-read*: ``MAIN_LEVELS`` below is what ``main``'s own code
-  returned for the same deposits (captured by running ``origin/main`` fea447ec, not derived), and the
+* **legacy shapes** are annotated and *never re-read*: ``MAIN_LEVELS`` below is the levels the legacy read
+  returns for the same deposits (recorded, not derived), and the
   derived levels here are compared to it exactly;
 * no database id appears in any of the new fields.
 """
@@ -39,8 +39,8 @@ from tests.api.test_api_composite_program_run import (
     _statmech,
 )
 
-# What main returned (energy_source, energy, geometry_source, geometry, frequency_source, frequency, provenance level),
-# each level as (method, basis, composite scheme name). Captured by running origin/main fea447ec on these deposits.
+# The levels returned (energy_source, energy, geometry_source, geometry, frequency_source, frequency, provenance level),
+# each level as (method, basis, composite scheme name). Recorded, not derived.
 MAIN_LEVELS = {
     "legacy_composite_role_alone": {
         "energy_source": "composite",
@@ -404,7 +404,7 @@ def test_the_kinetics_levels_of_an_sp_energy_are_not_composite(client, db_sessio
     assert levels["energy_source"] == "sp"
     assert levels["composite_energy_verification"] is None
     assert levels["legacy_composite_shape"] is None
-    # rotor_scan_1 is the plan's case (d): a DLPNO-CCSD(T)-F12 single point on a wB97X-D geometry.
+    # rotor_scan_1 is a DLPNO-CCSD(T)-F12 single point on a wB97X-D geometry.
     assert levels["geometry"] is not None
     # The notation writes the whole level: the F12 single point states its auxiliary and CABS basis sets.
     energy, geometry = levels["energy"], levels["geometry"]

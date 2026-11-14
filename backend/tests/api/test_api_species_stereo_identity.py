@@ -1,4 +1,4 @@
-"""Species key is the constitution; stereo lives on the entry (DR-0038), end to end.
+"""Species key is the constitution; stereo lives on the entry, end to end.
 
 Through the production resolution service and ``POST /uploads/computed-species``: every 2-butene
 input is one species whose entries are exactly ``{E, Z, ?}``; every contradiction is a 422

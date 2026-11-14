@@ -345,7 +345,7 @@ class TestReject:
 
 
 class TestSupersede:
-    """Supersede names both submissions by public ref, never by row id (#571).
+    """Supersede names both submissions by public ref, never by row id.
 
     It is the one write on this router open to any authenticated caller,
     which makes it a producer surface, and producer surfaces do not take
@@ -975,7 +975,7 @@ class TestAIReviewSummary:
         """Kills: the card reading a ``label`` key that no current event carries (it was always null).
 
         The recorded event carries the reviewer's verdict as ``status``. An event that has only the retired ``label``
-        key yields no label: nothing is translated from the old vocabulary."""
+        key yields no label: nothing is translated from the retired vocabulary."""
         sub = _seed_submission(db_session, created_by=_api_test_user)
         record_machine_review_audit_event(
             db_session,

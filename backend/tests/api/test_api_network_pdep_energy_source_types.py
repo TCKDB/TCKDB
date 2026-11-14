@@ -1,7 +1,7 @@
-"""A network solve's energy sources are typed (#642).
+"""A network solve's energy sources are typed.
 
 ``state_energies[].source_calculation_key``, ``channel_barriers[].source_calculation_key``
-and the ``well_energy`` / ``barrier_energy`` roles of ``source_calculations`` used to
+and the ``well_energy`` / ``barrier_energy`` roles of ``source_calculations`` must not
 accept a calculation of any type, so a well's energy could be cited to an IRC point or
 a rotor scan. The rule, and why an E0-style energy is held only to a floor, is in
 ``app.services.network_energy_sources``.
@@ -60,7 +60,7 @@ _KEY_BY_TYPE = {
 _ALL_TYPES = tuple(_KEY_BY_TYPE)
 
 # The same matrix on the saddle point: a barrier (and a ``barrier_energy`` link) must cite
-# a calculation of the transition state itself (#668), so its type matrix is the TS's own.
+# a calculation of the transition state itself, so its type matrix is the TS's own.
 _TS_KEY_BY_TYPE = {
     "sp": "ts_elim_sp",
     "opt": "ts_elim_opt",
@@ -283,7 +283,7 @@ def test_a_scan_in_a_later_source_link_is_refused(client) -> None:
 @pytest.mark.parametrize("calc_type", _ALL_TYPES)
 @pytest.mark.parametrize("role", ["well_freq", "barrier_freq"])
 def test_frequency_role_takes_a_freq_and_nothing_else(client, db_session, role: str, calc_type: str) -> None:
-    """The master equation reads modes; a composite stores only a ZPE (#669).
+    """The master equation reads modes; a composite stores only a ZPE.
 
     Mutation: drop ``_FREQUENCY_ROLES`` from ``assert_network_source_role_type``; every
     non-freq type is then accepted.
@@ -317,7 +317,7 @@ def test_roles_that_are_not_energy_roles_are_not_constrained(client) -> None:
 
 
 def test_composite_is_accepted_for_electronic_and_e0(client, db_session) -> None:
-    """A composite carries both an electronic energy and an E0 (ADR 0021)."""
+    """A composite carries both an electronic energy and an E0."""
     for correction in ("electronic_only", "electronic_plus_zpe"):
         payload = _payload()
         _set_state_energy(payload, "ethyl_comp", correction)

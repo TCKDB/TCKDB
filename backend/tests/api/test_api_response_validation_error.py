@@ -6,8 +6,8 @@ Two sources, one answer (500 ``server_response_invalid``, fixed text):
   ``response_model``. Before: a ``text/plain`` "Internal Server Error".
 * a pydantic ``ValidationError`` escaping an endpoint -- a read model built from
   a row that does not fit it, whether by ``Model.model_validate(row)`` or by
-  ``Model(field=row.field, ...)``. It is a ``ValueError``, so it used to be a
-  422 that blamed the caller and echoed an ORM object repr.
+  ``Model(field=row.field, ...)``. It is a ``ValueError``, so it would be a
+  422 that blames the caller and echoes an ORM object repr.
   ``ServerFaultRoute`` (on every router) turns it into a 500.
 
 Endpoint code that validates *caller* input itself goes through
@@ -254,7 +254,7 @@ def test_a_name_that_is_also_a_response_model_stays_a_422_through_caller_input()
 
 
 # ---------------------------------------------------------------------------
-# Caller input that must stay a 422 (it was a 422 before this change)
+# Caller input that must stay a 422
 # ---------------------------------------------------------------------------
 
 _LOOKUP_CASES = [

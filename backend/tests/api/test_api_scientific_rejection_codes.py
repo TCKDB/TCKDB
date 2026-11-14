@@ -46,8 +46,8 @@ def _assert_code(response, expected: str) -> dict:
     """The response names *expected* in its ``code`` field, not in its prose.
 
     A helper rather than a bare assert so the failure message can say what
-    was actually reported — which, before this branch, was
-    ``validation_error`` for every single one of these.
+    was actually reported — which, for an unpromoted refusal, would be
+    ``validation_error``.
     """
     body = _envelope(response)
     assert body["code"] == expected, (
@@ -242,7 +242,7 @@ class TestAStructureAgainstItsOwnLabel:
     def test_a_d_geometry_under_a_protium_species_names_the_isotope_check(
         self, client
     ):
-        """``D`` declares deuterium (#672): heavy water cannot be filed under ``O``."""
+        """``D`` declares deuterium: heavy water cannot be filed under ``O``."""
         response = client.post(
             "/api/v1/uploads/conformers",
             json=_conformer_payload(species_entry=_WATER, xyz_text=_D2O_XYZ),
@@ -478,7 +478,7 @@ class TestStationaryPoints:
 # potential energy surface. It says only that the scalar the ESS printed
 # and the mode rows deposited beside it must answer the same question the
 # same way -- a contract between two fields of one record, which is the
-# narrow thing ADR 0008 reserves the blocking tier for.
+# narrow thing the blocking tier is reserved for.
 
 
 class TestAFrequencyResultAgainstItsOwnModes:
@@ -552,7 +552,7 @@ class TestAFrequencyResultAgainstItsOwnModes:
     def test_a_frequency_list_that_agrees_is_deposited(self, client):
         """The same three imaginary modes, declared, are accepted.
 
-        ADR 0012's own motivating record -- a reaction coordinate at
+        The imaginary-mode protocol's own motivating record -- a reaction coordinate at
         -1300 with -42 and -13 beside it -- with the scalar agreeing with
         the list, the barrier designated and the two extras declared. The
         blocking tier above has to let this through or it is the
@@ -645,11 +645,11 @@ class TestAFrequencyListAgainstItsGeometry:
     ):
         """Nine modes on water: the whole mass-weighted Hessian spectrum.
 
-        ADR 0012 §"What a record must carry" asks for the six
+        The imaginary-mode protocol §"What a record must carry" asks for the six
         translation/rotation eigenvalues *as well as* the spectrum, "so
         contamination is directly assessable". That record sits exactly on
         the ceiling, so a strict comparison would refuse the most complete
-        deposit the ADR describes. This is the assertion that keeps the
+        deposit the rule describes. This is the assertion that keeps the
         refusal above narrow.
         """
         response = client.post(
@@ -700,7 +700,7 @@ class TestAFrequencyListAgainstItsGeometry:
         participant all produce fewer modes and are honest records of what
         was computed, TCKDB carries no field saying which, and
         ``modes = null`` is accepted -- so a block here would pay a
-        depositor to delete the list, which ADR 0012 §"Why not refuse,
+        depositor to delete the list, which the imaginary-mode protocol §"Why not refuse,
         when refusing is cheaper" calls worse than no rule. Asserted
         beside the refusal above because a promotion applied one bound too
         widely is invisible from the blocking side.
@@ -781,10 +781,10 @@ class TestRateCoefficients:
         directly; every sibling A-factor (a ``multi_arrhenius`` term, a PLOG
         entry, a falloff k0) goes through ``_validate_a_units_named``, which
         prefixes the field so the client learns *which* term failed. That
-        wrapper used to re-raise a plain ``ValueError``, and because
-        ``CodedValueError`` is a ``ValueError`` the declared code was
+        wrapper must not re-raise a plain ``ValueError``: because
+        ``CodedValueError`` is a ``ValueError``, the declared code would be
         destroyed at the raise site -- before any promotion rule could see
-        it. The same chemistry error therefore arrived under two different
+        it. The same chemistry error would then arrive under two different
         contracts depending on where in the payload it was written.
 
         The main line here is deliberately *correct* (``per_s`` for one
@@ -823,8 +823,8 @@ class TestRateCoefficients:
         assert "plog_entries[1].a_units: " in detail
         assert "is incompatible with" in detail
         # And the field name did not become the code. That would be the
-        # #159 fabrication -- a leading token published as though a client
-        # could branch on it -- reintroduced by the fix for this one.
+        # fabrication -- a leading token published as though a client
+        # could branch on it.
         assert body["code"] != "plog_entries[1].a_units"
         assert body["code"] != "a_units"
         # The structured facts survive the re-raise, and name the term.
@@ -1002,7 +1002,7 @@ def _map(source: str = "declared", **overrides) -> dict:
 
 class TestAtomMapping:
     def test_an_element_that_changes_across_the_map(self, client):
-        # Ammonia in the methyl's slot: the map's reactant end is now N
+        # Ammonia in the methyl's slot: the map's reactant end is N
         # where its saddle-point end is C.
         species = [
             _bundle_species("ch3", "[NH3]", 2, _XYZ_NH3),
@@ -1054,7 +1054,7 @@ class TestAtomMapping:
         _assert_code(response, "atom_map_atoms_unaccounted_for")
 
     def test_two_legs_that_do_not_cover_the_same_atoms(self, client):
-        # Same six-atom saddle point, but now methane's fifth hydrogen
+        # Same six-atom saddle point, but methane's fifth hydrogen
         # lands on the spare atom: each leg is a bijection and the two
         # disagree about which saddle-point atoms the reaction is made of.
         participants = _map()["participants"]
@@ -1077,7 +1077,7 @@ class TestAtomMapping:
         """``context`` is the half of the contract that is not prose.
 
         A wire-schema refusal is reported as a Pydantic error list, so its
-        structured facts used to be reachable only by parsing the sentence
+        structured facts would be reachable only by parsing the sentence
         that named them. They are lifted to the envelope's own ``context``,
         which is where a service-raised refusal has always put them — so a
         client reads one place regardless of which side of the boundary
@@ -1166,8 +1166,8 @@ class TestTheAtomMapAgainstTheIrcPartition:
 
         # The two compositions that disagree, and the two things they belong
         # to. A ``*_mismatch`` names neither side by construction
-        # (``Shape.relationship`` in ``app.api.code_catalogue``), so before
-        # #210 the only machine-readable fact here was that *something* did
+        # (``Shape.relationship`` in ``app.api.code_catalogue``), so
+        # the only machine-readable fact here would be that *something* did
         # not match. Asserted key by key, not as "context is non-empty" --
         # that would pass against a handler stuffing in a constant.
         context = body["context"]
@@ -1182,7 +1182,7 @@ class TestTheAtomMapAgainstTheIrcPartition:
         assert context["declared_smiles"] == "[CH3]", context
         assert context["field"] == "transition_state.validation_evidence", context
 
-        # No row ids reach a client (DR-0028 Requirement 2): every fact here
+        # No row ids reach a client: every fact here
         # is either the depositor's own payload coordinate or an element
         # count.
         assert not any(
@@ -1191,7 +1191,7 @@ class TestTheAtomMapAgainstTheIrcPartition:
 
 
 # ---------------------------------------------------------------------------
-# Transition-state energy ordering against the stored energies (#638)
+# Transition-state energy ordering against the stored energies
 # ---------------------------------------------------------------------------
 
 
@@ -1221,7 +1221,7 @@ class TestStatedEnergyAgainstStoredEnergy:
 
 
 # ---------------------------------------------------------------------------
-# The type of calculation an energy is cited to (#637, #642, #669)
+# The type of calculation an energy is cited to
 # ---------------------------------------------------------------------------
 
 
@@ -1254,7 +1254,7 @@ class TestEnergySourceType:
 
 
 # ---------------------------------------------------------------------------
-# A network state energy against the sum of its per-participant sources (#678)
+# A network state energy against the sum of its per-participant sources
 # ---------------------------------------------------------------------------
 
 

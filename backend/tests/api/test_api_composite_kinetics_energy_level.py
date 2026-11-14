@@ -1,8 +1,8 @@
-"""Kinetics energy-level auto-resolution finds composites (ADR 0021, decision 4).
+"""Kinetics energy-level auto-resolution finds composites.
 
 ``energy_level_of_theory`` on a kinetics upload names the level the reactants'
 and products' energies were computed at, and the server links the calculation
-found there to the rate. It used to find only an ``sp``; a level bound to a
+found there to the rate. It must find a ``composite`` as well as an ``sp``: a level bound to a
 composite scheme (``CBS-QB3``) carries ``composite`` calculations, so a
 CBS-QB3 rate could not be deposited at all. The priority is R1's: a composite at
 the level wins, and only when there is none is the single point looked for.

@@ -1,16 +1,16 @@
-"""PR-2b: the transition-state and reaction route families withhold hidden refs under ``?profile=curated``.
+"""The transition-state and reaction route families withhold hidden refs under ``?profile=curated``.
 
-What this pins, beyond the all-routes sweep (``test_curated_ref_sweep.py``, which is enforce-only since PR-5 and covers
+What this pins, beyond the all-routes sweep (``test_curated_ref_sweep.py``, which is enforce-only and covers
 every route):
 
 * **Leaks.** Every route of the family, crawled under ``curated`` with and without ``internal_ids`` and with every
   include token (``trust`` and ``assessments`` are not part of ``all``), names no hidden record by ref, by integer id,
   by URL or in free text, and answers 200.
 * **No substitution.** Curated is a withholding of exploratory on those routes.
-* **D1.** A visible transition-state entry whose transition state is hidden stays visible with ``transition_state``
+* **No cascading hide.** A visible transition-state entry whose transition state is hidden stays visible with ``transition_state``
   null; there is no cascading hide. Widening the field alone is not enough: the owner block is also a pointer.
-* **D4.** A hidden ref the guard cannot place still fails closed.
-* **D5.** Counts and flags that would expose a hidden record follow the floor.
+* **Fail closed.** A hidden ref the guard cannot place still fails closed.
+* **Counts follow the floor.** Counts and flags that would expose a hidden record follow the floor.
 * **Scoping parents.** An unreviewed reaction entry or species entry is not a gated record: nothing about it is hidden.
 """
 
@@ -48,7 +48,7 @@ BASE = "/api/v1/scientific"
 
 def _is_selection_document(path: str) -> bool:
     """Hashed, replayable documents (``.../select`` and ``/manifest``). They never pass the boundary hook (they stamp
-    the profile and return) and get their own seam in PR-3."""
+    the profile and return) and get their own seam."""
     return path.endswith(("/select", "/select/manifest"))
 
 
@@ -68,7 +68,7 @@ def _request_text(spec, world, label, *, ids):
 
 
 def test_ts_and_reaction_routes_name_no_hidden_record_under_curated(client, db_session, login_as, monkeypatch):
-    """The crawl that finds the family's leaks on ``main`` finds none, on a world that holds every response shape.
+    """The crawl finds none of the family's leaks, on a world that holds every response shape.
 
     Also: no route of the family is left unplaceable (a 500 from ``RefGuardUnplaceable``), every request answers 200,
     and curated is only ever a withholding of exploratory (no sibling is substituted into a gap).
@@ -86,7 +86,7 @@ def test_ts_and_reaction_routes_name_no_hidden_record_under_curated(client, db_s
     hidden = world.hidden_refs()
 
     exploratory = run_pass(client, db_session, specs, world, spy, profile="exploratory")
-    world.withhold_hidden(db_session)  # the crawl above saw the records unlisted; from here they are withheld (ADR 0023)
+    world.withhold_hidden(db_session)  # the crawl above saw the records unlisted; from here they are withheld
     curated = run_pass(client, db_session, specs, world, spy, profile="curated")
     monkeypatch.setattr(settings, "allow_public_internal_ids", True)
     curated_ids = run_pass(client, db_session, specs, world, spy, profile="curated", with_ids=True)
@@ -150,14 +150,14 @@ def _walk(node):
 
 
 # ---------------------------------------------------------------------------
-# D1 and D4: the owner block of a transition-state entry
+# No cascading hide, and fail closed: the owner block of a transition-state entry
 # ---------------------------------------------------------------------------
 
 
 def test_a_visible_entry_of_a_hidden_transition_state_stays_visible_with_the_owner_blanked(
     client, db_session, login_as
 ):
-    """D1: no cascading hide. The entry, its reaction context and review are kept; only the owner block goes.
+    """No cascading hide. The entry, its reaction context and review are kept; only the owner block goes.
 
     Kills: hiding the child (404 or dropped from the browse); leaving the owner named; blanking an owner that is
     visible; touching exploratory.
@@ -199,10 +199,10 @@ def test_a_visible_entry_of_a_hidden_transition_state_stays_visible_with_the_own
 
 
 def test_widening_the_owner_field_alone_still_fails_closed(client, db_session, login_as, monkeypatch):
-    """D4 and the #770-review correction: without the owner block registered as a pointer the guard has nowhere to put
+    """Without the owner block registered as a pointer the guard has nowhere to put
     a hidden transition-state ref, so the request fails instead of leaking.
 
-    Kills: treating the nullable field as enough; dropping the D1 registration.
+    Kills: treating the nullable field as enough; dropping the no-cascading-hide registration.
     """
     world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
@@ -241,7 +241,7 @@ def _shapes(world):
         (tsr.TransitionStateEntryStatmech, concept_all),
         (tsr.TransitionStateEntryValidationEvidence, concept_all),
         (tsr.ScientificTransitionStateEntryRecord, entry_all),
-        # TransitionStateSaddlePointEvidence is deliberately not here (#723): the block is now built from the calculations
+        # TransitionStateSaddlePointEvidence is deliberately not here: the block is built from the calculations
         # the profile shows (hidden == absent at the source), so unregistering it changes no answer. It stays registered as
         # the second line of defence; ``test_the_saddle_point_block_stays_registered_behind_the_source_filter`` pins that.
         (tsr.TransitionStateValidationEvidenceSummary, entry_all),
@@ -271,7 +271,7 @@ def test_every_block_the_family_registers_is_reached_and_matters(client, db_sess
     """Each pointer registered for this family is built by the world, answers 200 with it, and changes the answer
     (a different body, or a request that fails closed) when it is unregistered.
 
-    The PR-2a review found seven blocks that failed closed under curated because the world never built them. A block
+    A block the world never builds fails closed under curated. A block
     unregistered here that leaves the response unchanged is a registration nothing exercises.
 
     Kills: removing any one registration; a world that stops building a shape.
@@ -341,7 +341,7 @@ def test_a_determination_aimed_at_a_hidden_record_is_not_served(client, db_sessi
 
 
 # ---------------------------------------------------------------------------
-# D5: counts and flags follow the floor
+# Counts and flags follow the floor
 # ---------------------------------------------------------------------------
 
 
@@ -483,7 +483,7 @@ def test_unreviewed_scoping_parents_are_not_hidden(client, db_session, login_as)
             assert cur.status_code == 200, (key, suffix, cur.text)
     ref = world.extra["reaction_entry_hidden_participant"].public_ref
     cur = _get(client, f"/reaction-entries/{ref}/full", "curated")
-    # The /full participant list is an embedded record of a served detail (ADR 0023 step 7, Q9): the unreviewed entry is
+    # The /full participant list is an embedded record of a served detail: the unreviewed entry is
     # listed with its badge, as under exploratory, not left out by the record floor.
     exp = _get(client, f"/reaction-entries/{ref}/full", "exploratory")
     assert [p["species_entry_ref"] for p in exp.json()["species"]["reactants"]] == [unreviewed_entry]
@@ -562,7 +562,7 @@ def test_levels_of_theory_name_only_the_calculation_types_the_profile_shows(clie
     assert exp_k["levels"]["frequency"] is not None and exp_k["levels"]["frequency_source"] == "freq"
     assert cur_k["levels"]["frequency"] is None and cur_k["levels"]["frequency_source"] is None
     # The checklist counts the calculation types under the transition-state ENTRIES that clear the record floor (entries are
-    # records, ADR 0023 Q3), minus the calculations the evidence rule withholds: ``kin_vn`` cites nothing and reaches a freq
+    # records), minus the calculations the evidence rule withholds: ``kin_vn`` cites nothing and reaches a freq
     # only through the reaction's hidden entry, so it counts none. (A freq under a SHOWN entry counts even unreviewed: see
     # test_curated_evidence_counts_and_levels.py.)
     ref = world.visible["kin_vn"].public_ref
@@ -574,7 +574,7 @@ def test_levels_of_theory_name_only_the_calculation_types_the_profile_shows(clie
 
 def _extra_hidden_calculation_world(db_session, world, status=RecordReviewStatus.rejected):
     """A level of theory used ONLY by calculations in ``status``: one on a visible TS entry, one on a visible species
-    entry. ``None`` leaves them never reviewed. Under the evidence rule (ADR 0023) a rejected calculation is withheld
+    entry. ``None`` leaves them never reviewed. Under the evidence rule a rejected calculation is withheld
     from a match and a not-reviewed one is not."""
     lot = make_lot(db_session, method="zzhidden", basis="zzbasis")
     entry = make_transition_state_entry(db_session, transition_state=world.visible["ts_v"], multiplicity=8)
@@ -596,7 +596,7 @@ def test_search_filters_agree_with_the_flags_the_records_serve(client, db_sessio
     the transition-state routes or on the species browse.
 
     Kills: leaving any one filter on the unfiltered calculation set. (A not-reviewed calculation DOES match, see the
-    twin below; the served flags follow in step 3 of ADR 0023.)
+    twin below; the served flags follow the evidence rule.)
     """
     world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
@@ -645,7 +645,7 @@ def test_search_filters_agree_with_the_flags_the_records_serve(client, db_sessio
 
 def test_a_not_reviewed_calculation_matches_a_curated_method_filter(client, db_session, login_as):
     """The twin of the test above: a calculation nobody has reviewed is evidence, so a curated method/basis filter finds
-    its level on the transition-state routes and on the species browse (ADR 0023, step 4).
+    its level on the transition-state routes and on the species browse.
 
     Kills: matching only through approved calculations (the earlier rule).
     """

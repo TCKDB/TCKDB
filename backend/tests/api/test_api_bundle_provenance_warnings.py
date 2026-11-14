@@ -8,7 +8,7 @@ uses — omitting ``workflow_tool_release``, ``software_release``,
 ``literature`` or a frequency scale factor produced no warning of any
 kind, while the identical omission field-by-field was reported.
 
-ADR 0011 and ADR 0008 both rest on the same principle: absence is
+The atom-map rule and the blocking-tier rule both rest on the same principle: absence is
 incompleteness, and incompleteness is *annotated* rather than refused. A
 bundle depositor got neither the refusal nor the annotation, so their
 record was silently less complete than a field-by-field one and nothing
@@ -234,7 +234,7 @@ def test_a_species_bundle_with_no_products_gets_no_product_warnings(
 ):
     """A conformer-only deposit claims no thermo and no statmech.
 
-    Guards the shape of the fix rather than its content: warning about
+    Guards the shape rather than the content: warning about
     absent provenance on a record that does not exist would make the
     conformer-only upload path noisy for no reason.
     """
@@ -577,15 +577,14 @@ def test_reaction_bundle_reports_untraceable_statmech_like_the_species_route(
 def test_rotational_constants_make_the_frequency_source_gap_visible(
     client: TestClient,
 ):
-    """#142 and #113 meet here, which is why they are one PR.
+    """The rotational-structure warning and the widened statmech fields meet here.
 
     ``statmech_has_rotational_structure`` reads the rotational constants
     to decide whether a species has vibrational modes worth tracing. On
-    this route those constants did not exist as a field until #142, so
-    the check could only ever see torsions and a polyatomic deposited in
-    the ordinary ARC shape — constants, no torsions — looked monatomic
-    to it. Warning before the fields existed would have been the wrong
-    order.
+    this route those constants are a field of the statmech block, so
+    the check sees a polyatomic deposited in the ordinary ARC shape --
+    constants, no torsions -- as polyatomic, not monatomic. Warning
+    without the fields would be the wrong order.
     """
     bundle = _reaction_bundle()
     bundle["species"][1]["statmech"] = {
@@ -606,12 +605,12 @@ def test_rotational_constants_make_the_frequency_source_gap_visible(
 
 
 # ---------------------------------------------------------------------------
-# #142: the widened statmech, through the route
+# the widened statmech, through the route
 # ---------------------------------------------------------------------------
 
 
 def test_reaction_bundle_statmech_persists_its_widened_fields(client, db_session):
-    """#142's fields must reach the row, not merely validate.
+    """The widened fields must reach the row, not merely validate.
 
     A schema that accepts a field and a workflow that stores it are
     different claims, and the six fields added here had DB columns
@@ -649,8 +648,8 @@ def test_reaction_bundle_statmech_persists_its_widened_fields(client, db_session
 def test_statmech_provenance_override_beats_the_bundle_default(client, db_session):
     """The override must win, and the fallback must still work.
 
-    Before #142 the reaction route had no per-species statmech provenance
-    at all: every statmech row took the bundle-level analysis software.
+    A reaction-route statmech block can carry its own provenance;
+    without it, the row takes the bundle-level analysis software.
     That is the ordinary-case failure — one participant taken from a
     paper, the rest computed here — so the precedence is worth pinning.
     """

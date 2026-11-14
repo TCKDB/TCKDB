@@ -1,7 +1,6 @@
 """The body sweep must catch the shapes it exists to catch.
 
-Two of them since 2026-08-18: a database primary key (DR-0028
-Requirement 2) and a raw database constraint name. Both are internal
+Two of them: a database primary key and a raw database constraint name. Both are internal
 identifiers a depositor cannot act on, both go to the log instead, and
 the second is here because the repository had been asserting it one test
 at a time and had ended up holding three different positions at once.
@@ -113,7 +112,7 @@ def test_prose_that_announces_an_id_and_then_gives_one_is_a_leak(detail) -> None
 @pytest.mark.parametrize(
     "context",
     [
-        # The refusal named in DR-0028's own discussion. It must keep
+        # The refusal named in the no-row-ids rule's own discussion. It must keep
         # publishing both of these.
         {"duplicate_mode_indices": [1], "mode_count": 2},
         {"n_imag": 2, "imaginary_mode_count": 2},
@@ -168,7 +167,7 @@ def test_prose_that_merely_contains_a_number_is_not_a_leak() -> None:
 @pytest.mark.parametrize(
     "body, where",
     [
-        # The disclosure the 2026-08-18 ruling removed: the registered
+        # A disclosure: the registered
         # constraint path published its own key.
         (
             {
@@ -188,8 +187,7 @@ def test_prose_that_merely_contains_a_number_is_not_a_leak() -> None:
             },
             "context.rule",
         ),
-        # The foreign-key class, which had no assertion in either
-        # direction until this ruling.
+        # The foreign-key class.
         (
             {
                 "code": "reference_conflict",
@@ -221,9 +219,9 @@ def test_prose_that_merely_contains_a_number_is_not_a_leak() -> None:
     ],
 )
 def test_a_database_constraint_name_in_a_body_is_a_leak(body, where) -> None:
-    """Calvin's ruling of 2026-08-18, as a shape the extractor refuses.
+    """A database constraint name in a body, as a shape the extractor refuses.
 
-    A raw constraint name is an internal identifier on exactly the DR-0028
+    A raw constraint name is an internal identifier on exactly the
     reasoning: meaningless to a depositor, not stable across a migration
     that renames it, and a disclosure of schema layout. The register is
     the sanctioned route from such a name to a public contract -- the

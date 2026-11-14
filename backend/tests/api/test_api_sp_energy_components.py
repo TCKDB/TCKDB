@@ -1,8 +1,7 @@
-"""Single-point energy components, end to end through the upload API (ADR 0021, P4).
+"""Single-point energy components, end to end through the upload API.
 
-``main`` (d22f2918) could not carry the parts of a single point's electronic
-energy: ``sp_energy_components`` was an unknown field and was refused as an
-extra input, so an SCF/correlation split had nowhere to go.
+A single point's electronic energy can carry its parts: ``sp_energy_components``
+is a field, so an SCF/correlation split has somewhere to go.
 
 Rules held here, each over HTTP so the code and context reach the client:
 

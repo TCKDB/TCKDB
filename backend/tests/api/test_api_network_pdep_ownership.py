@@ -27,11 +27,9 @@ species-owned calculation, or a TS torsion that names a species-owned
 rotor scan, reaches the guard and is refused with a code.
 
 That is a real refusal a depositor can provoke and a client can branch
-on, and until this file existed nothing in the suite produced either one
-on the wire — which is why the runtime observer, whose whole job is to
-hold the catalogue to what a consumer receives, had never recorded them.
-Both are now provoked through the route, so the ``(status, code)`` pair
-is measured rather than declared.
+on. Both are provoked through the route, so the ``(status, code)`` pair
+is measured rather than declared, and the runtime observer -- whose whole
+job is to hold the catalogue to what a consumer receives -- records them.
 
 What these tests are *not*
 --------------------------
@@ -130,18 +128,18 @@ def test_ts_statmech_citing_a_species_calculation_is_refused(client) -> None:
         _SOURCE_OWNER_MISMATCH,
     )
     # The context names the field the way the depositor wrote it and the
-    # kind of owner that disagreed -- never a row id (DR-0028 Req. 2).
+    # kind of owner that disagreed -- never a row id.
     assert body["context"]["owner_kind"] == "transition_state_entry", body
     assert "ethyl_freq" in body["context"]["field"], body
     assert "id" not in body["context"], body
 
 
 def test_ts_torsion_citing_a_species_scan_is_refused(client) -> None:
-    """The code the triage recorded as unreachable, measured on the wire.
+    """The code is reachable on the wire.
 
     It carries its own code rather than the statmech source-link one
     because the repair differs: the depositor picked the wrong rotor
-    scan, not the wrong supporting job (#158/#162).
+    scan, not the wrong supporting job.
     """
     body = _assert_code(
         client.post(_PDEP_URL, json=_payload_with_ts_torsion_citing_a_species_scan()),

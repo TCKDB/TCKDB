@@ -1,8 +1,7 @@
-"""Chunk 6.3: curvature witnesses beside the preserved frequency pointer.
+"""Curvature witnesses beside the preserved frequency pointer.
 
-Design: ``statmech_chunk6_design_2026-10-12.md`` (PR 6.3). Each test names the
-mutation it kills. Before this PR a source calculation that carries a frequency
-result or a Hessian under any role other than ``freq`` was invisible on
+Each test names the mutation it kills. A source calculation that carries a frequency
+result or a Hessian under any role other than ``freq`` must be visible on
 ``include=frequencies``.
 """
 
@@ -209,8 +208,8 @@ def _read_profile(client, sm, profile):
 
 
 def test_curated_profile_lists_an_unreviewed_calculation_as_evidence(client, db_session):
-    """ADR 0023: a not-reviewed source calculation is linked evidence of the approved statmech, so its curvature witness is
-    listed under curated as it is under exploratory. Its own detail route serves it (step 7)."""
+    """A not-reviewed source calculation is linked evidence of the approved statmech, so its curvature witness is
+    listed under curated as it is under exploratory. Its own detail route serves it."""
     sm, unreviewed = _curated_world(db_session, calc_status=None)  # not_reviewed
     assert client.get(f"/api/v1/scientific/calculations/{unreviewed.public_ref}", params={"profile": "curated"}).status_code == 200
     (w,) = _read_profile(client, sm, "curated")

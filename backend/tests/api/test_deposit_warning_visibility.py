@@ -241,7 +241,7 @@ def test_a_curators_artifact_warning_text_is_the_curators_not_the_depositors(cli
     calc = db_session.get(Calculation, calc_id)
     depositor = db_session.scalars(select(AppUser).where(AppUser.username == "testuser")).one()
     _, depositor_key = _user(db_session, "dw-art-unused")  # a signed-in user who owns nothing
-    # ``testuser`` deposited it; a curator now attaches an artifact to that deposit.
+    # ``testuser`` deposited it; a curator attaches an artifact to that deposit.
     curator, curator_key = _user(db_session, "dw-art-curator", AppUserRole.curator)
     owner_key = create_api_key(db_session, depositor)[1]
     login_as(curator.id)

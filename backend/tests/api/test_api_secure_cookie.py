@@ -1,4 +1,4 @@
-"""Tests for the session cookie security flags (F16)."""
+"""Tests for the session cookie security flags."""
 
 from __future__ import annotations
 

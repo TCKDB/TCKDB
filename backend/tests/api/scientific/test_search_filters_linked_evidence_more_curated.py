@@ -1,4 +1,4 @@
-"""More matching sites under the evidence rule (ADR 0023, step 4): ref-named far ends, networks, correction schemes.
+"""More matching sites under the evidence rule: ref-named far ends, networks, correction schemes.
 
 Same shape as ``test_search_filters_hidden_linked_records_curated``: an approved record, one approved link and one link
 whose review state the test sets. A rejected or deprecated link never matches under curated; a not-reviewed or

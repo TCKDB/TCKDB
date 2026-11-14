@@ -319,7 +319,7 @@ class TestFailureNotStored:
         assert resp.status_code == 422
         assert _idempotency_count(db_session) == before
 
-        # The same key may now be reused with a valid payload.
+        # The same key may be reused with a valid payload.
         good = client.post(
             CONFORMER_ENDPOINT,
             json=_hydrogen_conformer_payload(label="recovered-conf"),

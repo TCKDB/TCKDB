@@ -1,4 +1,4 @@
-"""A filter matches through linked evidence unless the evidence rule withholds it (ADR 0023, step 4).
+"""A filter matches through linked evidence unless the evidence rule withholds it.
 
 The thermo and kinetics level-of-theory and software filters match when ANY linked source calculation matches. Under the
 ``curated`` profile a REJECTED or DEPRECATED calculation is not a candidate for that match: a record whose only level-B

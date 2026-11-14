@@ -1,9 +1,9 @@
 """``api_key.last_used_at`` is recorded on every route, without locking.
 
-#587: ``authenticate_api_key`` used to set ``last_used_at`` on the session
-``get_current_user`` authenticates in. On a write route that session never
-commits, so the stamp was lost; on a route that flushes it, the UPDATE's row
-lock was held for the whole request, queueing requests on one key.
+``authenticate_api_key`` must not set ``last_used_at`` on the session
+``get_current_user`` authenticates in: on a write route that session never
+commits, so the stamp would be lost; on a route that flushes it, the UPDATE's row
+lock would be held for the whole request, queueing requests on one key.
 
 These tests run in the production topology -- authentication on a session of
 its own that is never committed, the stamp on another -- against the
@@ -203,9 +203,9 @@ def test_a_locked_key_row_is_skipped_not_waited_for(db_engine, factory) -> None:
 
 def test_two_requests_on_one_key_do_not_block_each_other(factory) -> None:
     """Request 1 authenticates, queries, and stays in flight. Request 2 on the
-    same key must complete meanwhile. Before the fix, request 1's flushed
-    ``last_used_at`` UPDATE held the row for its whole life, and request 2's
-    own authentication queued behind it."""
+    same key must complete meanwhile. If request 1's flushed
+    ``last_used_at`` UPDATE held the row for its whole life, request 2's
+    own authentication would queue behind it."""
     in_flight = threading.Event()
     release = threading.Event()
     app = FastAPI()
@@ -273,7 +273,7 @@ def test_a_failed_stamp_never_fails_the_request(
 
 
 # ---------------------------------------------------------------------------
-# #597 review: the stamp must never wait for a connection, and must not fire
+# The stamp must never wait for a connection, and must not fire
 # when it cannot matter.
 # ---------------------------------------------------------------------------
 
@@ -308,7 +308,7 @@ def test_a_saturated_request_pool_does_not_stall_or_lose_the_stamp(
     db_engine, factory, monkeypatch
 ) -> None:
     """The request's pool holds one connection and the request has it, so the
-    pool is full. The stamp used to draw a second connection from that same
+    pool is full. The stamp must not draw a second connection from that same
     pool, stalling the whole ``pool_timeout`` and then losing the stamp."""
     main, main_engine = _small_factory(db_engine, size=1, timeout=6)
     monkeypatch.setattr(api_deps, "SessionLocal", main)  # as in production

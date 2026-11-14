@@ -1,4 +1,4 @@
-"""A stated core treatment reaches every ``LevelOfTheorySummary`` builder (ADR 0021, P4).
+"""A stated core treatment reaches every ``LevelOfTheorySummary`` builder.
 
 Five of the summary builders do not hold a ``LevelOfTheory`` row: they select
 columns and build the summary from positional tuples or small carriers (the

@@ -14,7 +14,7 @@ def _bind_health_probe_to_test_database(db_engine, monkeypatch):
     """Run direct health-probe sessions against the migrated pytest database.
 
     Since ``tests/conftest.py`` rebinds ``app.api.deps.SessionLocal`` to the
-    per-worker database, this is no longer what *makes* these tests correct —
+    per-worker database, this is not what *makes* these tests correct —
     they pass without it, including with ``DB_NAME`` naming a database that
     has never been created. It stays because the tests below monkeypatch
     ``health_route.SessionLocal`` in their own bodies to force a specific

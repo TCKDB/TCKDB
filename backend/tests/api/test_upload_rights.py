@@ -147,7 +147,7 @@ def test_the_model_list_is_derived_and_not_empty():
     assert {"ThermoUploadRequest", "ConformerUploadRequest", "ComputedReactionUploadRequest"} <= names
 
 
-#: Phase C-E6's one deliberate exception: ``rights`` is *required* on
+#: The one deliberate exception: ``rights`` is *required* on
 #: ``ThermoMLUploadRequest``, not optional. Every other upload route can
 #: fall back on "attested later, at release time" because the underlying
 #: science already exists in TCKDB under someone's authority; this route's

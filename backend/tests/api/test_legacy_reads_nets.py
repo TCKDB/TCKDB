@@ -3,7 +3,7 @@
 Nothing here lists a route by hand. Routes come from the application's own route table; what is exempt is a registry
 with a reason per entry; the gated path parameters come from the routers' own ``legacy_gates``; the id fields come from
 the response models the routes actually return. Each net also runs against a deliberately broken target
-(``test_legacy_reads_hardening.py`` and the mutations in the PR record).
+(``test_legacy_reads_hardening.py``).
 """
 
 from __future__ import annotations
@@ -268,7 +268,7 @@ def test_the_entry_detail_routes_are_ungated_on_purpose(routes, client, db_sessi
 
 
 def _hidden_world(db_session, withheld=False):
-    """A world of approved records beside hidden ones: never reviewed, or with ``withheld`` rejected (ADR 0023)."""
+    """A world of approved records beside hidden ones: never reviewed, or with ``withheld`` rejected."""
     w = _world(db_session, withheld)
     hidden_thermo = make_thermo_scalar(db_session, species_entry=w["entry"], h298_kj_mol=-99.0)
     hidden_calc = make_calculation(db_session, species_entry_id=w["entry"].id)
@@ -328,7 +328,7 @@ def _gates_of(route) -> dict:
 def test_every_gated_detail_route_answers_a_hidden_record_as_an_unknown_id(routes, client, db_session):
     """Cases come from the routers' own gates: every GET whose path has a gated parameter, called with a withheld record
     (rejected) and with a missing id under the curated profile, answers identically. Kills: a gated parameter that stops
-    gating. A record that is merely unreviewed is served since step 7 of ADR 0023 (``test_curated_detail_by_ref.py``)."""
+    gating. A record that is merely unreviewed is served under the evidence rule (``test_curated_detail_by_ref.py``)."""
     w, hidden, network = _hidden_world(db_session, withheld=True)
     tested = 0
     gated_kinds = set()
@@ -366,7 +366,7 @@ def test_every_id_typed_filter_naming_a_hidden_record_answers_as_a_missing_one(r
     """For every GET route and every query parameter that is a pointer at a gated kind: a hidden id and a missing id
     give the same answer under the curated profile. Kills: a filter that reveals a withheld record by what it returns.
     The world's hidden records are rejected: a filter naming one that is only unreviewed is kept (a filter is not a
-    subject, ADR 0023; the hardening tests pin that half)."""
+    subject, the evidence rule; the hardening tests pin that half)."""
     w, hidden, network = _hidden_world(db_session, withheld=True)
     hidden_ids = _hidden_sets(w, hidden)
     tested = 0
@@ -404,7 +404,7 @@ def test_no_legacy_payload_names_a_record_below_the_floor(routes, client, db_ses
     """Calls every legacy list and every detail/sub-list it can fill with the visible records of the world, under the
     curated profile, and walks each JSON body against the INDEPENDENT tables: a pointer column of a gated kind never
     carries the id of a hidden record of that kind (including an approved child of a hidden parent), and no list
-    embedded under ``entries`` / ``observations`` / ``groups`` holds one. The world's hidden records are rejected (ADR 0023:
+    embedded under ``entries`` / ``observations`` / ``groups`` holds one. The world's hidden records are rejected (the evidence rule:
     a pointer to an unreviewed record is named, one to a rejected record is not)."""
     w, hidden, network = _hidden_world(db_session, withheld=True)
     hidden_ids = _hidden_sets(w, hidden)

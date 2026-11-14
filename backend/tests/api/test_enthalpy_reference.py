@@ -64,7 +64,7 @@ def test_deposit_enthalpy_contract(client, db_session, route, content, reference
         record = public.json()["records"][0]
         assert record["enthalpy_reference_kind"] == reference
         assert record["phase"] == "gas"
-        # reference_pressure_bar is never defaulted (issue #529).
+        # reference_pressure_bar is never defaulted.
         assert record["reference_pressure_bar"] is None
 
 

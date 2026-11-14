@@ -3,13 +3,11 @@
 Two contracts, both about the same failure mode: an upload naming
 provenance it does not have, and getting away with it.
 
-* **A declared role must match the calculation's type.** Thermo has
-  enforced this since DR-0028 Requirement 1
-  (``app.workflows.thermo.assert_thermo_role_matches_calculation_type``).
-  Statmech did not, on any of its three write paths, so
-  ``{"calculation_key": "my_sp_job", "role": "freq"}`` persisted happily
-  and the statmech record then claimed a frequency calculation it never
-  had.
+* **A declared role must match the calculation's type.** Thermo enforces
+  this (``app.workflows.thermo.assert_thermo_role_matches_calculation_type``)
+  and statmech must too, on all three of its write paths: otherwise
+  ``{"calculation_key": "my_sp_job", "role": "freq"}`` would persist and the
+  statmech record would claim a frequency calculation it never had.
 
 * **With exactly one exception: an ``opt`` may serve the ``sp`` role.**
   A depositor who ran no separate single point has not lost the number —
@@ -339,11 +337,10 @@ class TestConformerCorrectionSourceKeys:
 class TestTheConformerNamespaceIsNotTheLabel:
     """A reference key answers to references; a label does not.
 
-    ``source_conformer_key`` used to resolve against ``request.label``,
-    because a label was the only string a conformer upload attached to
-    its conformer. That conflated two jobs. ``label`` is a human tag that
+    ``source_conformer_key`` must not resolve against ``request.label``: that
+    would conflate two jobs. ``label`` is a human tag that
     also feeds conformer-group matching, so renaming it for grouping
-    reasons silently broke a correction reference; and a depositor who
+    reasons would silently break a correction reference; and a depositor who
     set no label could not name their own conformer at all — the exact
     shape of "a field that cannot be right".
 
@@ -352,7 +349,7 @@ class TestTheConformerNamespaceIsNotTheLabel:
     """
 
     def test_a_label_is_no_longer_a_reference(self, client):
-        """The old spelling now refuses instead of resolving."""
+        """The old spelling refuses instead of resolving."""
         payload = _conformer_payload(
             "conf-label-not-key",
             applied_energy_corrections=[
@@ -381,7 +378,7 @@ class TestTheConformerNamespaceIsNotTheLabel:
     def test_a_conformer_with_no_label_can_still_be_named(
         self, client, db_session
     ):
-        """The case that was previously impossible to express."""
+        """A conformer with no label is named by its ``conformer_key``."""
         payload = _conformer_payload(
             None,
             conformer_key="unlabelled-conformer",
@@ -401,7 +398,7 @@ class TestTheConformerNamespaceIsNotTheLabel:
 
 
 # ---------------------------------------------------------------------------
-# Thermo's copy of the rule, and the code it now carries
+# Thermo's copy of the rule, and the code it carries
 # ---------------------------------------------------------------------------
 
 
@@ -418,8 +415,8 @@ def _thermo_payload(smiles: str, **overrides) -> dict:
 class TestThermoRoleMismatchIsMachineReadable:
     """The same claim, refused by thermo, must name itself to a client.
 
-    Statmech's refusal has carried a code since #152; thermo's raised a
-    bare ``ValueError``, so the identical depositor mistake arrived as
+    Statmech's refusal carries a code; thermo's must not raise a
+    bare ``ValueError``, or the identical depositor mistake arrives as
     ``validation_error`` — a code no client can branch on and one that
     never appears in the generated ``RejectionCode`` constants. The two
     codes are deliberately different strings: same rule, different
@@ -443,7 +440,7 @@ class TestThermoRoleMismatchIsMachineReadable:
         assert body["context"]["expected_calculation_type"] == "freq"
         assert body["context"]["actual_calculation_type"] == "sp"
         # The offending link is named by the depositor's own key, and no
-        # row id is disclosed anywhere in the body (DR-0028 Req 2).
+        # row id is disclosed anywhere in the body.
         assert "my_sp_job" in body["context"]["field"]
         assert "calculation_id" not in resp.text
 
@@ -816,7 +813,7 @@ class TestChainedCitationPassesEveryCheckALocalOneDoes:
     def test_the_opt_serves_sp_exception_reaches_the_chained_path(
         self, client
     ):
-        """PR #156 made ``sp`` accept a tuple of types. A chained citation
+        """``sp`` accepts a tuple of types. A chained citation
         must inherit that, not a stale single-type copy of the rule."""
         species = {"smiles": "[H]", "charge": 0, "multiplicity": 2}
         a = _deposit_calculations(client, label="chain-optsp", species=species)
@@ -853,7 +850,7 @@ class TestChainedCitationPassesEveryCheckALocalOneDoes:
     def test_an_id_that_does_not_exist_is_a_clean_404(self, client):
         """Not a 500, and not a foreign-key error leaking out of psycopg.
 
-        The status has not moved. What moved (#230) is the code: this used
+        The status has not moved. What moved is the code: this used
         to answer the generic ``resource_not_found`` with an empty
         ``context``, so a depositor learned that *something* was missing
         and had to read English prose to find out which citation named it.
@@ -885,16 +882,14 @@ class TestChainedCitationPassesEveryCheckALocalOneDoes:
         """A chained id can name *any* row, so owner-consistency stops
         being defensive here and becomes the real check.
 
-        The refusal declares ``statmech_source_calculation_owner_mismatch``
-        (#158). It used to be a bare ``ValueError``, and it was phrased
-        without the house-style colon on purpose: an uncoded ``ValueError``
-        had its code scraped out of the message by
+        The refusal declares ``statmech_source_calculation_owner_mismatch``, so
+        the sentence does not have to be written around the parser: an uncoded
+        ``ValueError`` had its code scraped out of the message by
         ``validation_detail_code``, which promoted any ``snake_case_token:
         `` — so ``f"{context}: …"`` with a field path ending in
         ``existing_calculation_id`` made *that field name* the advertised
-        code. #161 fixed the envelope (only a token in the code position is
-        promoted) and #158 gave this refusal a real code, so the sentence
-        no longer has to be written around the parser.
+        code. Only a token in the code position is promoted, and this refusal
+        has a real code.
         """
         other = {"smiles": "[H]", "charge": 0, "multiplicity": 2}
         a = _deposit_calculations(client, label="chain-owner", species=other)
@@ -911,7 +906,7 @@ class TestChainedCitationPassesEveryCheckALocalOneDoes:
         assert resp.status_code == 422, resp.text
         body = resp.json()
         assert body["code"] == "statmech_source_calculation_owner_mismatch", body
-        # Never the field name the old scraper would have promoted.
+        # Never the field name a scraper would promote.
         assert body["code"] != "existing_calculation_id", body
         detail = body["detail"]
         assert "another species entry" in detail
@@ -1226,7 +1221,7 @@ class TestReactionBundleConformerSourceKeys:
     targeting one species entry resolves only against that species's own
     ``conformers[*].key``, which makes ownership true by construction
     rather than by a second check that can be forgotten — and it is why
-    the request model now requires those keys to be unique within a
+    the request model requires those keys to be unique within a
     species, which nothing enforced before.
     """
 
@@ -1322,7 +1317,7 @@ class TestReactionBundleConformerSourceKeys:
 
 
 # ---------------------------------------------------------------------------
-# ADR 0017: the same mistake gets the same answer from either layer
+# the same mistake gets the same answer from either layer
 # ---------------------------------------------------------------------------
 
 
@@ -1343,7 +1338,7 @@ def _rxn_freq_with_geometry_key(key: str, geometry_key: str) -> dict:
 
 
 class TestALayerBoundaryIsNotAContract:
-    """The A/B that made #219 a task, run as a test so it stays fixed.
+    """The A/B on the validator layer boundary, run as a test so it stays fixed.
 
     One route, one namespace, one repair, two spellings of the mistake:
 
@@ -1353,12 +1348,12 @@ class TestALayerBoundaryIsNotAContract:
       and reaches ``resolve_applied_correction_source_key``, a *workflow
       seam*.
 
-    Before this change the first answered ``request_validation_error``
-    with ``context == {}`` and the second answered a specific code with
-    the field, the key and the declared alternatives. Same route, same
-    repair, two contracts -- decided by which layer happened to run
-    first, which is a published contract nobody declared and a refactor
-    can move.
+    If the first answered ``request_validation_error`` with
+    ``context == {}`` while the second answered a specific code with the
+    field, the key and the declared alternatives, the same route and the
+    same repair would have two contracts -- decided by which layer
+    happened to run first, which is a published contract nobody declared
+    and a refactor can move.
 
     These tests do not assert the two codes are *equal*. They are not,
     and should not be: an applied correction's source key spans
@@ -1470,16 +1465,16 @@ class TestALayerBoundaryIsNotAContract:
 class TestTwoUndeclaredKeysInOnePayload:
     """What a client sees when a payload gets it wrong more than once.
 
-    Worth pinning deliberately rather than discovering later, because
-    #219 moves a lot of refusals onto ``model_validator(mode="after")``
-    and makes multi-failure bodies less rare than they were.
+    Worth pinning deliberately, because
+    many refusals sit on ``model_validator(mode="after")``
+    and multi-failure bodies are therefore not rare.
 
-    #236 settled what happens: ``validation_detail_code`` refuses to
+    ``validation_detail_code`` refuses to
     promote a code when the detail list holds more than one failure --
     naming one would hide that the request failed in more than one place
-    -- and ``validation_detail_context`` now *calls* that function rather
+    -- and ``validation_detail_context`` *calls* that function rather
     than repeating its test, so the context empties with it. A generic
-    code beside a specific context was the lie that fix removed.
+    code beside a specific context would be a lie.
 
     So: one failure gets a code and facts; several get the generic code
     and no facts, with every failure still spelled out in ``detail``.
@@ -1497,13 +1492,13 @@ class TestTwoUndeclaredKeysInOnePayload:
         assert body["context"]["key"] == "typo_a"
 
     def test_two_typos_in_one_model_still_report_only_the_first(self, client):
-        """Measured, not assumed: one model raises once and stops.
+        """One model raises once and stops.
 
         Every bundle's key-reference checks are ``model_validator(mode=
         "after")`` on the *request* model, and Pydantic stops that chain
         at the first raise. So "two mis-typed keys in one payload" is
         usually still a single failure with a single code -- which is why
-        the multi-failure envelope is rarer than #219's brief expected.
+        the multi-failure envelope is rarer than it might seem.
         The genuinely plural case is the next test.
         """
         payload = _conformer_payload(
@@ -1532,7 +1527,7 @@ class TestTwoUndeclaredKeysInOnePayload:
 
         ``SpeciesIn`` validates its own calculations' ``geometry_key``, so
         two sibling species produce two independent failures carrying the
-        *same* code. This is the combination #236 fixed: the envelope must
+        *same* code. This is the combination to guard: the envelope must
         report the generic code **and an empty context**, because facts
         about one of two offending keys, under a code the envelope has
         just declined to name, describe nothing a client can act on.
@@ -1594,8 +1589,7 @@ class TestTwoUndeclaredKeysInOnePayload:
     def test_ts_evidence_naming_a_foreign_calculation_says_so(self, client):
         """The nested TS model's own namespace: its *own* calculations.
 
-        Same reason as the test above — the sweep found this branch
-        unreached. The key here is refused even though it is spelled
+        Same reason as the test above: this branch needs a test of its own. The key here is refused even though it is spelled
         correctly somewhere else in the bundle, because a transition
         state's IRC evidence must come from that transition state's own
         job.

@@ -1,8 +1,8 @@
-"""The reaction bundle takes kinetics evidence exactly as ``/uploads/kinetics`` does (#620).
+"""The reaction bundle takes kinetics evidence exactly as ``/uploads/kinetics`` does.
 
-``BundleKineticsIn`` used to lack ``interpretation_assignments``,
+``BundleKineticsIn`` carries ``interpretation_assignments``,
 ``tunneling_application`` and ``network_kinetics_ref``, so the majority route
-recorded less than the standalone one. They are now the same models, checked by
+records as much as the standalone one. They are the same models, checked by
 the same validators and written by the same persistence helpers. This file
 drives one evidence fragment through both routes and asserts the *same refusal*
 (status, code, the ref that failed) and the *same stored rows*.

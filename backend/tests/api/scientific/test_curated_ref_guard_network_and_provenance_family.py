@@ -1,17 +1,17 @@
-"""PR-2c: the network, literature, analytics and provenance-vocabulary route families withhold hidden refs under
+"""The network, literature, analytics and provenance-vocabulary route families withhold hidden refs under
 ``?profile=curated``.
 
 The families are the networks, network solves and fits, literature, analytics, levels of theory, frequency scale
 factors, energy-correction schemes and composite schemes. What this pins, beyond the all-routes sweep
-(``test_curated_ref_sweep.py``, which is enforce-only since PR-5 and covers every route):
+(``test_curated_ref_sweep.py``, which is enforce-only and covers every route):
 
 * **Leaks.** Every route of the families, crawled under ``curated`` with and without ``internal_ids`` and with every
   include token, names no hidden record by ref, integer id, URL or free text, and answers 200.
 * **No substitution.** Curated is a withholding of exploratory on those routes.
-* **D1.** A visible solve (or fit) of a hidden network stays visible with ``network`` null; no cascading hide. Widening
+* **No cascading hide.** A visible solve (or fit) of a hidden network stays visible with ``network`` null; no cascading hide. Widening
   the field alone is not enough: the owner block is also a pointer.
-* **D4.** A hidden ref the guard cannot place still fails closed.
-* **D5.** Every count, flag and filter of the families agrees with what the same profile serves. The sweep comparator
+* **Fail closed.** A hidden ref the guard cannot place still fails closed.
+* **Counts follow the floor.** Every count, flag and filter of the families agrees with what the same profile serves. The sweep comparator
   ignores population keys, so each is pinned here, against the list or block the count describes.
 * **Population.** The batch evaluate of a network evaluates the fits of the solves the profile shows and counts nothing
   else against its grid cap: a fit of a hidden solve was an existence oracle (404 naming the fit, and a cap message that
@@ -45,7 +45,7 @@ CURATED = ResolvedReadProfile(profile=ReadProfile.curated, recommendation=Profil
 
 
 def _is_selection_document(path: str) -> bool:
-    """Hashed, replayable documents (``.../select``, ``/manifest``, ``/export-selected``): their own seam in PR-3."""
+    """Hashed, replayable documents (``.../select``, ``/manifest``, ``/export-selected``): their own seam."""
     return path.endswith(("/select", "/select/manifest", "/export-selected"))
 
 
@@ -82,7 +82,7 @@ def _text(model) -> str:
 
 
 def test_network_and_provenance_routes_name_no_hidden_record_under_curated(client, db_session, login_as, monkeypatch):
-    """The crawl that finds the families' leaks on ``main`` finds none, on a world that holds every response shape.
+    """The crawl finds none of the families' leaks, on a world that holds every response shape.
 
     Also: no route is left unplaceable (a 500 from ``RefGuardUnplaceable``), every request answers 200, and curated is
     only ever a withholding of exploratory (no sibling is substituted into a gap).
@@ -100,7 +100,7 @@ def test_network_and_provenance_routes_name_no_hidden_record_under_curated(clien
     hidden = world.hidden_refs()
 
     exploratory = run_pass(client, db_session, specs, world, spy, profile="exploratory")
-    world.withhold_hidden(db_session)  # the crawl above saw the records unlisted; from here they are withheld (ADR 0023)
+    world.withhold_hidden(db_session)  # the crawl above saw the records unlisted; from here they are withheld
     curated = run_pass(client, db_session, specs, world, spy, profile="curated")
     monkeypatch.setattr(settings, "allow_public_internal_ids", True)
     curated_ids = run_pass(client, db_session, specs, world, spy, profile="curated", with_ids=True)
@@ -154,12 +154,12 @@ def test_both_evaluate_routes_reach_the_boundary(client, db_session, login_as, m
 
 
 # ---------------------------------------------------------------------------
-# D1 and D4: the owner blocks of a solve and of a fit
+# No cascading hide, and fail closed: the owner blocks of a solve and of a fit
 # ---------------------------------------------------------------------------
 
 
 def test_a_visible_solve_or_fit_of_a_hidden_network_stays_visible_with_the_owner_blanked(client, db_session, login_as):
-    """D1: no cascading hide. The solve, its evidence and review are kept, and so is the fit; only the owner goes.
+    """No cascading hide. The solve, its evidence and review are kept, and so is the fit; only the owner goes.
 
     Kills: hiding the child (404 or dropped from search); leaving the owner named; blanking an owner that is visible;
     touching exploratory.
@@ -208,10 +208,10 @@ def test_a_visible_solve_or_fit_of_a_hidden_network_stays_visible_with_the_owner
 def test_widening_the_owner_field_alone_still_fails_closed(
     client, db_session, login_as, monkeypatch, owner_model, route, key
 ):
-    """D4 and the #770-review correction: without the owner block registered as a pointer the guard has nowhere to put
+    """Without the owner block registered as a pointer the guard has nowhere to put
     a hidden network ref, so the request fails instead of leaking.
 
-    Kills: treating the nullable field as enough; dropping a D1 registration.
+    Kills: treating the nullable field as enough; dropping a no-cascading-hide registration.
     """
     world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
@@ -270,7 +270,7 @@ def test_every_block_the_families_register_is_placed_by_the_guard(db_session, mo
     registrations are the backstop. Each is exercised on an unfiltered payload: with the block registered the hidden
     element is deleted whole; without it the guard either fails closed or places the ref differently.
 
-    Kills: removing any one of these registrations; a block the world no longer builds.
+    Kills: removing any one of these registrations; a block the world does not build.
     """
     world = build_sweep_world(db_session, withheld=True)
     hidden = set(world.hidden_refs().values())
@@ -307,8 +307,8 @@ def test_every_block_the_families_register_is_placed_by_the_guard(db_session, mo
 
 
 def test_the_batch_evaluate_evaluates_only_the_fits_of_visible_solves(client, db_session, login_as, monkeypatch):
-    """A fit is reviewed through its solve. The batch evaluate used to list every fit of the network, evaluate each
-    through the handle gate (404 naming a hidden fit) and count them against the grid cap (so the cap message gave the
+    """A fit is reviewed through its solve. The batch evaluate must not list every fit of the network, evaluate each
+    through the handle gate (404 naming a hidden fit) and count them against the grid cap (so the cap message would give the
     number of fits, hidden ones included). Under curated the population is the fits of the solves the profile shows.
 
     The cap is lowered so that all four fits break it and the two visible ones do not.
@@ -342,7 +342,7 @@ def test_the_batch_evaluate_evaluates_only_the_fits_of_visible_solves(client, db
 
 
 # ---------------------------------------------------------------------------
-# D5: networks, solves and fits
+# Counts follow the floor: networks, solves and fits
 # ---------------------------------------------------------------------------
 
 
@@ -399,7 +399,7 @@ def test_solve_counts_flags_and_blocks_agree_with_what_is_served(client, db_sess
     and a hidden source calculation is not counted, named or used to fill a state energy's source.
 
     Kills: counting the hidden barrier or source calculation; serving a state-energy source whose calculation (or
-    zero-point calculation) is hidden; the older single slot naming a hidden calculation; a stale ``partial_sources``.
+    zero-point calculation) is hidden; the single slot naming a hidden calculation; a stale ``partial_sources``.
     """
     world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
@@ -459,7 +459,7 @@ def test_solve_counts_flags_and_blocks_agree_with_what_is_served(client, db_sess
 
 
 def test_a_channel_whose_only_microreaction_is_hidden_keeps_its_mechanism_and_serves_none(client, db_session, login_as):
-    """Owner decision D1 again: a visible record stays visible and its links to hidden records are dropped, even when
+    """A visible record stays visible and its links to hidden records are dropped, even when
     the result is a shape no upload produces. An ``elementary`` channel whose only microreaction cites a hidden
     transition-state entry is served as ``mechanism: elementary, microreactions: []``; nothing else is invented
     (no mechanism change, no placeholder path, no dropped channel).
@@ -670,7 +670,7 @@ def test_network_searches_do_not_find_a_network_by_what_only_a_hidden_record_has
 
 
 # ---------------------------------------------------------------------------
-# D5: levels of theory, corrections, scale factors, literature
+# Counts follow the floor: levels of theory, corrections, scale factors, literature
 # ---------------------------------------------------------------------------
 
 
@@ -885,7 +885,7 @@ def test_a_solve_listed_under_literature_keeps_its_row_with_the_hidden_network_b
 
 
 # ---------------------------------------------------------------------------
-# D5: analytics
+# Counts follow the floor: analytics
 # ---------------------------------------------------------------------------
 
 

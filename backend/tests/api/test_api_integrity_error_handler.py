@@ -9,7 +9,7 @@ Two things a generic 409 owes, and they are asserted together
 It owes a **sentence a depositor can act on** -- which kind of rule
 refused, and what would make a second attempt succeed -- and it owes the
 **absence of the constraint name**, which is an internal identifier
-(Calvin, 2026-08-18; the same reasoning as DR-0028 Requirement 2 for row
+(the same reasoning as the no-row-ids rule for row
 ids). They are asserted together, in :func:`_assert_generic_conflict`,
 because an absence assertion on its own passes against a handler that
 returned nothing at all, and this repository has shipped that mistake
@@ -122,13 +122,9 @@ def _assert_generic_conflict(body: dict, code: str, constraint: str | None) -> N
     empty body. Asserting only that a name is missing is the vacuous-pass
     shape this repository has produced more than once.
 
-    The third is Calvin's ruling of 2026-08-18: a raw database constraint
-    name never appears in a user-facing body. Before it, this file made
-    that assertion for unique and check violations, ``TestReferenceConflict``
-    made no assertion in either direction, and
-    ``test_api_database_constraint_codes.py`` asserted the opposite for
-    registered constraints. Three positions; now one, and the same one is
-    enforced for every body in the suite by ``tests/error_body_observer.py``.
+    The third: a raw database constraint name never appears in a user-facing
+    body. The same rule is enforced for every body in the suite by
+    ``tests/error_body_observer.py``.
     """
     assert body["code"] == code
     detail = body["detail"]
@@ -179,11 +175,9 @@ class TestCheckConflict:
 class TestReferenceConflict:
     """SQLSTATE 23503 -> reference_conflict.
 
-    The gap this class used to be. It asserted the code and the absence
-    of driver text, and said nothing about the constraint name in either
-    direction -- so a foreign-key name could have been published without
-    a single test noticing, while the sibling classes forbade it. Closed
-    2026-08-18.
+    Asserts the code, the absence of driver text and the absence of the
+    constraint name, so a foreign-key name cannot be published without a
+    test noticing.
     """
 
     def test_sanitized_envelope(self, handler_client):

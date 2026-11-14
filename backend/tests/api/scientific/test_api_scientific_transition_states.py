@@ -324,7 +324,7 @@ def test_ts_detail_evidence_summary_counts(client, db_session):
 
 
 def test_ts_detail_evidence_coverage_partial_across_entries(client, db_session):
-    """The case the boolean could not express, and the reason for the PR.
+    """The case a single boolean cannot express.
 
     Two entries under one TS; one has an ``sp`` calculation and one does
     not. The retired ``has_sp`` OR-ed across entries and reported
@@ -352,7 +352,7 @@ def test_ts_detail_evidence_coverage_partial_across_entries(client, db_session):
     # Both entries were optimised; only one has a single point.
     assert coverage["opt"] == 2
     assert coverage["sp"] == 1
-    # ``count > 0`` is what the old boolean said. It is still true here,
+    # ``count > 0`` is what a boolean would say. It is true here,
     # and still says almost nothing on its own — which is the point.
     assert coverage["sp"] > 0
     assert coverage["sp"] < ev["entry_count"]
@@ -378,7 +378,7 @@ def test_ts_detail_evidence_coverage_all_entries_covered(client, db_session):
 
 
 def test_ts_detail_evidence_coverage_no_entries_covered(client, db_session):
-    """No evidence anywhere reads as ``0`` — as strong as the old ``false``."""
+    """No evidence anywhere reads as ``0`` — as strong as a ``false``."""
     _, _, ts, _entries = _make_reaction_with_ts(
         db_session,
         n_entries=2,
@@ -512,8 +512,8 @@ def test_ts_detail_available_sections_present(client, db_session):
 
 
 # ---------------------------------------------------------------------------
-# available_sections audit (issue #534 — same tautology/mismatch class #268
-# and #533 fixed on the conformer surfaces, audited here on both TS
+# available_sections audit (the tautology/mismatch class checked on the conformer
+# surfaces, here on both TS
 # surfaces)
 # ---------------------------------------------------------------------------
 
@@ -535,7 +535,7 @@ def test_ts_detail_available_sections_has_entries_false_when_no_entries(
 def test_ts_detail_available_sections_has_review_false_despite_entry_review(
     client, db_session
 ):
-    """The bug this closes (#534): the concept-grain flag used to count
+    """The bug this closes: the concept-grain flag must not count
     reviews of ``transition_state_entry`` rows, while ``include=review``'s
     body on this surface only ever returns reviews of the TS concept
     itself (``_build_review_history(..., transition_state, ts.id)``). A
@@ -558,9 +558,9 @@ def test_ts_detail_available_sections_has_review_true_matches_body(
 ):
     """Same request shape as the false case above, but the review is on
     the TS concept itself rather than an entry — the flag must flip to
-    True and agree with the now non-empty body. Under the old (buggy)
-    code this flag stayed False here, because it never looked at
-    ``transition_state``-scoped reviews at all."""
+    True and agree with the non-empty body. A flag that ignores
+    ``transition_state``-scoped reviews would stay False here.
+    """
     _, _, ts, entries = _make_reaction_with_ts(db_session)
     set_review(
         db_session,
@@ -911,7 +911,7 @@ def test_tse_detail_includes_structured_irc_validation_evidence(
     # told which one rather than having to pick among the entry's geometries.
     assert evidence[0]["transition_state_geometry_ref"] == ts_geometry.public_ref
     # The producer's displacement verdict is a field of an ``imaginary_mode``
-    # record (#621), and it is null on every other kind. What is still not a
+    # record, and it is null on every other kind. What is still not a
     # TCKDB record is the per-atom displacement vectors themselves: no such
     # field survives.
     assert evidence[0]["mode_displacement_agrees"] is None
@@ -1000,14 +1000,14 @@ def test_tse_detail_include_review(client, db_session):
 
 
 # ---------------------------------------------------------------------------
-# available_sections audit (issue #534 — entry-grain has_entries tautology)
+# available_sections audit
 # ---------------------------------------------------------------------------
 
 
 def test_tse_detail_available_sections_has_entries_false_for_sole_entry(
     client, db_session
 ):
-    """The identical tautology #268/#533 fixed on the conformer-observation
+    """The identical tautology guarded on the conformer-observation
     surface: ``include=entries`` on this surface always returns a
     non-empty list — this record's own entry is a member of its own TS by
     construction — so "is the raw list non-empty" can never be False.
@@ -1611,7 +1611,7 @@ def test_search_no_forbidden_payload_keys(client, db_session):
 
 # ---------------------------------------------------------------------------
 # Regression: explicit False boolean filters must count as meaningful
-# (was: 422 missing_filter — fixed by treating None vs False distinctly)
+# (None and False are treated distinctly, not as a 422 missing_filter)
 # ---------------------------------------------------------------------------
 
 
@@ -2159,18 +2159,16 @@ def test_ts_search_accepts_trust_token_and_keeps_it_out_of_all(
 ):
     """Search accepts ``trust``; ``include=all`` still does not reach it.
 
-    This test used to assert the opposite — a 422 — and the reversal is the
-    decision rather than a relaxation of it. The search response carried a
-    ``trust`` field at the record root on every record while refusing the
-    only token that could fill it, so the field was permanently ``null``:
-    a slot advertised and never fillable.
+    Refusing ``trust`` here would leave the ``trust`` field at the record
+    root on every record permanently ``null``: a slot advertised and never
+    fillable. So search accepts the token.
 
     What survives unchanged is the half that costs. The evaluator walks a
     23-entry eager-load chain here — the largest of the five search
     surfaces, and the only four-hop one — so ``trust`` stays
     internal-tokenized and a caller has to name it. An ``include=all`` that
     bought that chain per page would break nothing until it met a real page
-    size on the hosted instance.
+    size.
     """
     _, _, _, entries = _make_reaction_with_ts(db_session)
     _attach_calc(db_session, tse=entries[0], calc_type=CalculationType.opt)

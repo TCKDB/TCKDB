@@ -5,18 +5,18 @@ The fix for that lives in :mod:`app.services.scientific_read.ref_guard`; this is
 visible parent (:mod:`_curated_sweep_world`), and looks for the hidden refs in the raw response bodies.
 
 The sweep is **enforce-only**: it demands zero hidden refs, zero hidden ids and zero substitutions on every route.
-There is no baseline and no report mode (both were deleted by guard PR-5, together with the rollout allowlist).
+There is no baseline, no report mode and no rollout allowlist.
 
-Why the test cannot pass by looking at nothing (each guard is mutation-tested; see the PR body)
+Why the test cannot pass by looking at nothing (each guard is mutation-tested)
 -----------------------------------------------------------------------------------------------
 * a **positive control**: under the exploratory profile every hidden record must be named where the inventory says it
   is, otherwise the world is not exercising that path and every curated green means nothing;
 * the **world** must really be hidden/visible as labelled, judged by the guard's own predicate, with one hidden
   instance of every gated type;
 * every route is **enumerated** from the app and cross-checked against OpenAPI; none is skipped silently;
-* a **spy** proves each route reached the guard (or is listed as bypassing it, with the PR that fixes it);
+* a **spy** proves each route reached the guard (or is listed as bypassing it, with the reason);
 * curated must be a **withholding of** exploratory, which is what catches a hide that quietly substitutes a visible
-  sibling (the #767 bug class);
+  sibling;
 * a curated crawl that returned nothing would pass "no hidden ref anywhere", so every visible record must still show up.
 """
 
@@ -47,8 +47,8 @@ from tests.api.scientific._curated_sweep_world import GATED_KINDS, build_sweep_w
 
 BASE = "/api/v1/scientific"
 
-#: Routes in the sweep that reach neither the response boundary nor a document seam, each with the PR that gives it one.
-#: Empty since guard PR-3 (the selection documents) and PR-4 (the export streams). A route that starts reaching the guard
+#: Routes in the sweep that reach neither the response boundary nor a document seam, each with the reason.
+#: Empty: the selection documents and the export streams reach the guard. A route that starts reaching the guard
 #: while listed here fails the test (delete the entry); one that stops reaching it without being listed fails too.
 KNOWN_UNGUARDED: dict[tuple[str, str], str] = {}
 
@@ -106,10 +106,9 @@ RELATIVE_ENERGY_COMPARE_POPULATION_PATHS = frozenset(
     for name in ("absent", "requested_members")
 )
 
-#: Routes that answer something other than 200 to a visible subject under the curated profile, and why. Empty since
-#: PR-2c: the network batch evaluate used to evaluate every fit of the network, including those of a hidden solve, and
-#: then 404 naming the hidden fit (design 2.8, an existence oracle); it now evaluates only the fits of the solves the
-#: profile shows.
+#: Routes that answer something other than 200 to a visible subject under the curated profile, and why. Empty:
+#: the network batch evaluate evaluates only the fits of the solves the profile shows, so it never 404s naming
+#: a hidden fit (an existence oracle).
 EXPECTED_CURATED_STATUS: dict[tuple[str, str], tuple[int, str]] = {}
 
 _LIT = f"{BASE}/literature/{{literature_ref_or_id}}/records"
@@ -141,14 +140,14 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
         f"{BASE}/level-of-theories/{{level_of_theory_ref_or_id}}",
         f"{BASE}/transport/{{transport_ref_or_id}}",
     },
-    # A hidden calculation with an output geometry on a visible observation (PR-2a review).
+    # A hidden calculation with an output geometry on a visible observation.
     "calc_hgeo": {
         f"{BASE}/conformer-groups/{{conformer_group_ref_or_id}}",
         f"{BASE}/conformer-observations/{{conformer_observation_ref_or_id}}",
         f"{BASE}/level-of-theories/{{level_of_theory_ref_or_id}}",
     },
     "calc_h_ts": {f"{BASE}/statmech/{{statmech_ref_or_id}}", _TSE, _TS, _FULL, _KIN, _KSEARCH},
-    # PR-2b: hidden calculations of every kind a visible TS entry holds, named by the entry's reads and by the visible
+    # Hidden calculations of every kind a visible TS entry holds, named by the entry's reads and by the visible
     # kinetics that cite them.
     "calc_h_tssp": {_TSE, _TS, _TSBROWSE, _FULL, _KIN, _KSEARCH},
     "calc_h_irc": {_TSE, _TS, _TSBROWSE, _FULL, _KIN, _KSEARCH},
@@ -159,7 +158,7 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     # A hidden freq calculation that is the most recent freq of a visible TS entry, beside a visible freq of the same
     # entry: the reaction whose single-slot picks a fall-through would move to the sibling.
     "calc_h_tsfq": {_FULL, _KIN},
-    # D5 world: children of a visible entry and a reaction entry with only hidden records.
+    # Count world: children of a visible entry and a reaction entry with only hidden records.
     "tse_hw2": {_TS, _TSBROWSE},
     "calc_h_w1": {_TSE, _TS, _TSBROWSE},
     "calc_h_w2": {_TSE, _TS, _TSBROWSE},
@@ -168,7 +167,7 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     "calc_h_psw": {_TSBROWSE},
     "kin_hw": {_KIN, _X_ND, _X_MLR},
     "calc_h_psp": {_TSE, _TS, _TSBROWSE, _FULL},
-    # PR-4: hidden records in every position the four export streams can name one.
+    # Hidden records in every position the four export streams can name one.
     "calc_h_xlin": {_X_ND, _X_CK, _X_MLS, f"{BASE}/transport/search"},
     "calc_h_xsp": {_X_MLS},
     "sm_h_y": {_X_ND, _X_CK},
@@ -206,7 +205,7 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     "kin_h_new": {f"{BASE}/analytics/kinetics", f"{BASE}/kinetics/search"},
     "calc_h_p2": {f"{BASE}/network-solves/{{network_solve_ref_or_id}}"},
     "sm_h2": {f"{BASE}/frequency-scale-factors/{{frequency_scale_factor_ref_or_id}}"},
-    # PR-2c: a hidden solve's PLOG fit (the only one of its kind), and the hidden calculations of a level of theory,
+    # A hidden solve's PLOG fit (the only one of its kind), and the hidden calculations of a level of theory,
     # a composite-scheme binding and a literature record that nothing visible uses.
     "nkin_h_plog": {f"{_NET}/kinetics/evaluate", f"{BASE}/network-kinetics/search"},
     "calc_h_lot": {
@@ -220,7 +219,7 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     "thm_h_g": {_X_ND},
     "kin_h": {f"{BASE}/reaction-entries/{{reaction_entry_id}}/kinetics", _FULL, _LIT, _X_MLR, _X_ND},
     "mpo_h": {f"{_SPE}/observations"},
-    # The selection world (guard PR-3): the hidden solve a visible solve cites as its model-fidelity reference, and the
+    # The selection world: the hidden solve a visible solve cites as its model-fidelity reference, and the
     # hidden successor a visible statmech's supersession notice names.
     "nsolve_hsel": {
         f"{BASE}/network-kinetics/search",
@@ -240,8 +239,8 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
 }
 
 
-#: Why a route still leaves out an unlisted record that exploratory names (ADR 0023): it is a list, a search, a browse or a
-#: population (an export, a comparison), and the record floor decides which records those return. Since step 7 no detail
+#: Why a route still leaves out an unlisted record that exploratory names: it is a list, a search, a browse or a
+#: population (an export, a comparison), and the record floor decides which records those return. no detail
 #: read is here: a served detail shows what it embeds unless rejected or deprecated.
 SERVICE_FLOOR = (
     "a search service applies the record floor to a RECORD it lists or counts (a network solve, a kinetics record, "
@@ -275,7 +274,7 @@ COMPARED_RECORDS = (
 #: evidence and curated still leaves out, with the reason. Every other route, and every other kind on a listed route, must
 #: show everything exploratory shows, so a guard that blanks evidence again fails the sweep wherever it was already moved.
 #: What a returned ROW that is itself below the floor holds is not evidence (the floor drops the whole row) and is excluded
-#: by the row's actual status. A kind that is now shown is stale and fails: the list can only shrink.
+#: by the row's actual status. A kind that is shown is stale and fails: the list can only shrink.
 KEEPS_THE_RECORD_FLOOR: dict[tuple[str, str], tuple[set[str], str]] = {
     ("GET", "/api/v1/scientific/energy-correction-schemes/search"): ({'calc', 'tse'}, DERIVED),
     ("GET", "/api/v1/scientific/export/ml/reactions.ndjson"): ({'calc', 'kin', 'ts', 'tse'}, ML_ENERGY_ROWS),
@@ -387,11 +386,11 @@ def _approved_floor_only():
 
 
 def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypatch):
-    """The sweep proper, in two states of the same world (ADR 0023).
+    """The sweep proper, in two states of the same world.
 
     **Unlisted** (the world as built: not_reviewed / under_review): a record below the approved floor may be named NESTED
     with its badge, but is never a LISTED answer: not a row of ``records``, not a candidate (the record floor). The ``record`` of
-    a detail read is served, badged (step 7). Curated must still be a withholding of exploratory (no substitution).
+    a detail read is served, badged. Curated must still be a withholding of exploratory (no substitution).
 
     **Withheld** (the same records turned rejected / deprecated): linked evidence at these statuses is withheld, so under
     curated they appear NOWHERE, by ref or by id, and curated is still a withholding of the exploratory crawl taken
@@ -415,14 +414,14 @@ def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypa
     exploratory_ids = run_pass(client, db_session, specs, world, spy, profile="exploratory", with_ids=True)
     monkeypatch.setattr(settings, "allow_public_internal_ids", False)
 
-    # Which returned rows are below the floor, by their status now (before the world is flipped to withheld).
+    # Which returned rows are below the floor, by their status (before the world is flipped to withheld).
     floored_rows: dict[tuple[tuple[str, str], str], set[str]] = {}
     for (route, label), e in exploratory.items():
         refs = {ref for ref, _ in subject_rows(e.text, identities.get(route)) if ref}
         statuses = ref_guard._review_statuses(db_session, refs) if refs else {}
         floored_rows[(route, label)] = {ref for ref, status in statuses.items() if status.value != "approved"}
 
-    # The same world, its hidden records now rejected / deprecated.
+    # The same world, its hidden records rejected / deprecated.
     world.withhold_hidden(db_session)
     withheld = run_pass(client, db_session, specs, world, spy, profile="curated")
     monkeypatch.setattr(settings, "allow_public_internal_ids", True)

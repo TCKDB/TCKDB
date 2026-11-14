@@ -5,17 +5,17 @@ computed-reaction bundle and the network-PDep upload — accepted
 ``literature_id: int``. A depositor cannot know that number. Supplying it
 requires having already queried this database for the row, which is the
 definition of a field only an insider can use, and it is the exact defect
-#118 removed from the standalone statmech route
+removed from the standalone statmech route
 (``tests/workflows/test_statmech_upload.TestStatmechUploadRejectsRawFKs``).
 
 The species bundle never had it: ``CalculationInBundle.literature`` has
 always taken an inline ``LiteratureUploadRequest`` that the workflow
-resolves. The reaction bundle now takes the same fragment, so the two
+resolves. The reaction bundle takes the same fragment, so the two
 roots agree and ``.claude/rules/schema-rules.md``'s "No FK IDs in upload
 schemas" holds without an exemption.
 
-This is a **breaking** wire change: ``literature_id`` no longer
-validates. ``SchemaBase`` is ``extra="forbid"``, so an old payload gets a
+This is a **breaking** wire change: ``literature_id`` does not
+validate. ``SchemaBase`` is ``extra="forbid"``, so an old payload gets a
 422 naming the field rather than being accepted and silently ignored —
 the failure mode worth having, since silently ignoring it would drop the
 citation.
@@ -211,15 +211,7 @@ def test_the_shared_calculation_model_no_longer_declares_literature_id():
 def test_the_adapter_carries_the_citation_through_without_resolving_it():
     """The seam that could otherwise lose a citation silently.
 
-    This test used to assert a *guard*: the adapter took a resolved
-    ``literature_id`` keyword and raised if handed a fragment without one,
-    because the shared payload it produced carried a raw ``literature_id``
-    and only the caller had a session to resolve with. Three workflows
-    each did that resolution, and the shared payload's raw id was itself
-    reachable from five other upload roots — which is how #194 found the
-    same FK leak on ``/uploads/conformers`` and friends.
-
-    The shared payload now carries the inline fragment too, so the adapter
+    The shared payload carries the inline fragment, so the adapter
     forwards it untouched and one seam
     (``resolve_and_persist_calculation_with_results``) resolves it. The
     assertion is correspondingly stronger: not "it refuses to lose the

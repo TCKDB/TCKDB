@@ -17,8 +17,7 @@ without an upload fixture. Each test issues the request a depositor or
 curator would issue, and asserts the ``(status, code)`` pair a client
 receives — not the service function's exception. A code only a service
 call can produce is not a code a client can branch on, which is the
-distinction that made ``invalid_pagination`` wrong for four tests before
-#170.
+distinction between a code a service raises and a code the client receives.
 
 What the assertions are, and are not
 ------------------------------------
@@ -27,7 +26,7 @@ where the refusal carries any. Never on substrings of ``detail``:
 Pydantic echoes rejected input back into its error string, so a
 substring check can pass on a field that was wrongly *accepted*. The
 one place ``detail`` is read is to prove a **negative** — that no
-database primary key leaked into it (DR-0028 Req. 2).
+database primary key leaked into it.
 
 Every refusal that has a valid neighbour is paired with one, and the
 pairing is the point. A test asserting only "a 422 arrived" passes
@@ -374,8 +373,8 @@ def test_composed_search_refuses_a_malformed_page_window(
 ) -> None:
     """A negative offset or a sub-one limit is a caller bug, and says so.
 
-    ``invalid_pagination`` is deliberately narrower than it once was:
-    since #170 the two *cap* violations carry their own codes
+    ``invalid_pagination`` is deliberately narrow:
+    the two *cap* violations carry their own codes
     (``limit_too_large``, ``offset_too_large``) because those are hosting
     policy and are recoverable by resending a smaller page. These two are
     not recoverable — there is no page number below zero — so they keep
@@ -516,8 +515,8 @@ def test_assigning_an_unknown_curator_task_is_a_coded_404(admin) -> None:
         f"{_CURATOR_TASKS}/99999999/assign", json={"assignee_id": None}
     )
     body = _assert_refusal(refused, status=404, code="curator_task_not_found")
-    # The looked-up row id is logged for the operator, never returned
-    # (DR-0028 Req. 2). 99999999 is the caller's own path parameter, so
+    # The looked-up row id is logged for the operator, never returned:
+    # 99999999 is the caller's own path parameter, so
     # what must be absent is any *other* id.
     assert body.get("context") == {}, body
 
@@ -568,7 +567,7 @@ def test_selecting_a_record_ref_that_names_nothing_is_refused(
     The sibling ``record_ref_not_selectable`` covers a *wrong prefix*;
     this is the right prefix and no row.
 
-    404 since #211, and asserted here at the new status deliberately. The
+    The status is 404, asserted deliberately. The
     body is well formed and the prefix is selectable — the only thing
     wrong is that nothing answers to the ref, which is the definition of
     a 404. It was the fourth ``unknown_*`` on this router and the only one
@@ -624,9 +623,9 @@ def test_selecting_a_statmech_owned_by_a_transition_state_is_accepted(
 
     ``statmech`` has exactly one subject and it may be either a species
     entry or a transition-state entry (``statmech_exactly_one_subject``).
-    The release layer used to map statmech to ``species_entry_id`` alone, so
-    a TS-owned record resolved to a real row with no subject and was refused
-    ``record_has_no_subject``. PR 6.5 gave statmech both owners: the subject
+    The release layer must map statmech to both owners, not ``species_entry_id``
+    alone; otherwise a TS-owned record would resolve to a real row with no
+    subject and be refused ``record_has_no_subject``. The subject
     is derived from whichever owner key is set. ``record_has_no_subject``
     remains as an unreachable backstop (unit-tested on a transient row in
     ``tests/services/release/test_release_statmech_ts_owner.py``).

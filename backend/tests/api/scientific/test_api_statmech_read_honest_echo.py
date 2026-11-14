@@ -1,9 +1,7 @@
-"""Chunk 6.1: the species statmech read and statmech search tell the truth.
+"""The species statmech read and statmech search tell the truth.
 
-Design: ``statmech_chunk6_design_2026-10-12.md`` (PR 6.1). Each test names the
-mutation it kills. The actual orders are unchanged by this PR; what is new is
-that the response *reports* the order, the review exclusions and whether the
-selection policy applied.
+Each test names the mutation it kills. The response *reports* the order, the
+review exclusions and whether the selection policy applied.
 """
 
 from __future__ import annotations
@@ -113,7 +111,7 @@ def test_the_species_read_lists_every_record_in_the_echoed_order_and_picks_none(
 
 
 def test_collapse_and_selection_policy_are_refused_and_point_at_the_select_endpoint(client, db_session):
-    """Kills: ``?collapse=first`` quietly ignored (it used to pick one record)."""
+    """Kills: ``?collapse=first`` quietly ignored (it would pick one record)."""
     entry, _older, _newer = _older_approved_newer_unreviewed(db_session)
     for params in ({"collapse": "first"}, {"selection_policy": "latest"}, {"collapse": "all"}):
         resp = client.get(_species_url(entry, **params))
@@ -160,7 +158,7 @@ def test_default_visibility_excludes_rejected_and_deprecated(client, db_session)
 
 
 def test_empty_responses_carry_the_full_echo(client, db_session):
-    """Kills: ``_empty_response`` paths left on the old echo."""
+    """Kills: ``_empty_response`` paths that keep a partial echo."""
     entry = _entry(db_session)
     empty_entry = client.get(_species_url(entry)).json()
     # Candidates exist but none are visible.

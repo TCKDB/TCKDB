@@ -3,7 +3,7 @@
 Routes under ``/api/v1/admin/machine-review/curator-tasks`` are an admin
 workflow surface over ``machine_review_curator_task``: list, get, explicit
 build-for-submission, assign, start-review, resolve, reopen. They are
-**admin-only** (curators get 403 in this slice) and must never expose public
+**admin-only** (curators get 403) and must never expose public
 ``trust.machine_review`` or mutate ``submission.status`` / ``RecordReviewStatus``
 / scientific state.
 
@@ -259,7 +259,7 @@ def test_get_task_404(client, login_as, _api_admin_user):
     assert resp.status_code == 404, resp.text
     body = resp.json()
     assert body["code"] == "curator_task_not_found", body
-    # DR-0028 Req. 2: the looked-up row id goes to the operator's log, never
+    # The looked-up row id goes to the operator's log, never
     # into the body. 999999 is the caller's own path parameter.
     assert body["context"] == {}, body
 
@@ -269,12 +269,11 @@ def test_every_curator_task_route_names_a_missing_task_the_same_way(
 ):
     """One condition, one code, on all five routes that can meet it.
 
-    ``GET`` used to answer ``http_404`` because ``api/routes/admin.py``
-    kept a private ``_get_curator_task_or_404`` raising its own
-    ``HTTPException`` rather than calling the service helper the four
-    write routes call. An admin UI that branches on
-    ``curator_task_not_found`` to drop a vanished task from its queue got
-    the branch on assign and not on read.
+    ``GET`` must answer ``curator_task_not_found``, not ``http_404``: the
+    route calls the service helper the four write routes call, rather than
+    raising its own ``HTTPException``. An admin UI that branches on
+    ``curator_task_not_found`` to drop a vanished task from its queue needs
+    the branch on read as well as on assign.
 
     Asserting the *set* rather than five separate equalities is the
     point: a sixth route added later that reaches for the bare
@@ -681,8 +680,8 @@ def test_a_task_whose_record_is_gone_reports_null_not_an_error(
 
     ``machine_review_curator_task.record_id`` is a plain column, not a foreign
     key, so nothing stops a record being removed while its task stays open. The
-    curator still needs to see the task -- and to be told plainly that it can
-    no longer be followed to a record.
+    curator still needs to see the task -- and to be told plainly that it cannot
+    be followed to a record.
     """
     submission = _new_submission(db_session, _api_admin_user)
     task = _make_task(
@@ -743,17 +742,17 @@ def test_the_write_routes_carry_the_ref_too(
 
 
 # --------------------------------------------------------------------------- #
-# Containers (task #267)
+# Containers
 # --------------------------------------------------------------------------- #
 #
 # Six of the eighteen ``SubmissionRecordType`` members name a table with no
-# page of its own -- ``thermo`` is one. Before this slice a task against a
-# thermo row carried nothing that let a client find it: ``record_public_ref``
-# addresses no route (thermo has no page), and the response had no
+# page of its own -- ``thermo`` is one. Without a container ref, a task against a
+# thermo row would carry nothing that lets a client find it: ``record_public_ref``
+# addresses no route (thermo has no page), and the response would have no
 # ``container_type`` / ``container_ref`` field at all. That is the same
-# defect PR #488 fixed on ``/api/v1/record-reviews``; these tests pin its
-# repair on this route, resolved by the same
-# ``app.services.record_containers`` this route now reuses rather than a
+# gap as on ``/api/v1/record-reviews``; these tests pin the container
+# fields on this route, resolved by the same
+# ``app.services.record_containers`` this route reuses rather than a
 # second mapping.
 
 
@@ -765,7 +764,7 @@ def test_get_task_carries_a_container_for_a_containerless_record_type(
     ``thermo`` has its own ``public_ref`` (``thm_...``), but no page of its
     own -- the frontend has no route for it (``recordRoute`` in
     ``domain/recordRoute.ts`` does not know ``thermo``), because it is
-    rendered only as a tab on its species entry. Before the fix this
+    rendered only as a tab on its species entry. Without the field this
     assertion fails with a ``KeyError``: the response body carries no
     ``container_type`` / ``container_ref`` keys at all, so a client had no
     way to route to the one page that actually shows this record.
@@ -924,12 +923,12 @@ def test_the_write_routes_carry_the_container_too(
 def test_a_longer_page_of_distinct_containers_does_not_cost_more_queries(
     client, db_session, login_as, _api_admin_user
 ):
-    """The bulk container resolve, measured at the route, on DISTINCT parents.
+    """The bulk container resolve, at the route, on DISTINCT parents.
 
     Every row in this page sits on its OWN species entry -- not one shared
     parent. A page whose rows all share a parent cannot tell a grouped
     resolver from a per-parent loop, because with one distinct container
-    they cost the same (this is the pin #488 got wrong first time; see
+    they cost the same (see
     ``app/services/record_containers.py``). So the fixture asserts the
     parents really are distinct before measuring, and the query count must
     not move between a 2-row and a 10-row page.

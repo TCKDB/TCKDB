@@ -1,13 +1,12 @@
 """The object store is probed at boot, and says so where operators look.
 
-On 2026-08-05 a containerised deployment ran for hours with
-``S3_ENDPOINT_URL`` pointing at the container's own loopback. Every
-artifact-bearing upload returned 503; nothing in the boot log mentioned
-it, because nothing looked. The misconfiguration was fully detectable
-from the first second of the process's life.
+A containerised deployment can run for hours with ``S3_ENDPOINT_URL`` pointing
+at the container's own loopback: every artifact-bearing upload returns 503, and
+without a probe nothing in the boot log mentions it. The misconfiguration is
+fully detectable from the first second of the process's life.
 
 These tests pin the three properties that make the probe worth having,
-and each one is a way the previous version got it wrong: it runs by
+and each one is a way a probe can go wrong: it runs by
 default, it names what it tried to reach, and it never takes the process
 down with it.
 """
@@ -174,8 +173,8 @@ def test_a_non_utf8_cluster_is_an_error_at_boot(monkeypatch, caplog):
 
     A SQL_ASCII cluster works perfectly until the first non-ASCII byte
     arrives, which may be months after the volume was created. One em
-    dash in a warning message rolled back an entire upload on
-    2026-08-04, and nothing anywhere said "your database is SQL_ASCII".
+    dash in a warning message rolls back an entire upload,
+    and nothing anywhere says "your database is SQL_ASCII".
     """
     _patch_encoding(monkeypatch, "SQL_ASCII")
     with caplog.at_level(logging.INFO, logger="app.api.startup_checks"):

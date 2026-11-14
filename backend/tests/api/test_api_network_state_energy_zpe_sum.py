@@ -1,8 +1,8 @@
-"""An ``electronic_plus_zpe`` state energy is held against sp + scaled freq ZPE (#693).
+"""An ``electronic_plus_zpe`` state energy is held against sp + scaled freq ZPE.
 
-#678 compared ``electronic_plus_zpe`` only when every source was a composite storing an E0. The
+``electronic_plus_zpe`` is checked for more than a composite storing an E0: the
 common case is an sp electronic energy plus a frequency calculation's zero-point energy scaled by
-a stated factor, so a participant may now cite its freq as ``zpe_calculation_key`` and the state
+a stated factor, so a participant may cite its freq as ``zpe_calculation_key`` and the state
 states ``zpe_scale_factor``. The sum is ``sum(nu * (E_sp + s * ZPE))``.
 
 Hand-written numbers, from the fixture's hartree values: the entrance state is ethyl + O2, with

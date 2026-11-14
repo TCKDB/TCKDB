@@ -283,7 +283,7 @@ def test_scan_response_includes_owner_summary(client, db_session):
     owner = body["owner"]
     assert owner["kind"] == "species_entry"
     assert "species_entry" in owner
-    # Phase D default: integer ids stripped from owner block.
+    # Default: integer ids stripped from owner block.
     assert "species_entry_id" not in owner["species_entry"]
 
 
@@ -450,7 +450,7 @@ def test_scan_point_with_geometry_exposes_geometry_ref_by_default(
     p1 = body["points"][0]
     p2 = body["points"][1]
     assert p1["geometry_ref"] == geom.public_ref
-    # Phase D default: integer geometry_id stripped.
+    # Default: integer geometry_id stripped.
     assert "geometry_id" not in p1
     # Second point seeded without a geometry.
     assert p2["geometry_ref"] is None
@@ -461,7 +461,7 @@ def test_scan_point_with_geometry_exposes_geometry_ref_by_default(
 def test_scan_geometry_id_restored_when_internal_ids_allowed(
     client, db_session, allow_internal_ids
 ):
-    """Phase D: ``include=internal_ids`` must be passed explicitly to
+    """``include=internal_ids`` must be passed explicitly to
     restore integer ids. Without it, ids stay stripped even when the
     deployment policy permits them."""
     calc, geom, _ = _seed_one_dim_scan(db_session, n_points=1)
@@ -509,7 +509,7 @@ def test_scan_include_geometries_true_returns_lightweight_link(
     assert link["geometry_ref"] == geom.public_ref
     assert link["natoms"] == geom.natoms
     assert link["geom_hash"] == geom.geom_hash
-    # Phase D default: geometry_id on the link is also stripped.
+    # Default: geometry_id on the link is also stripped.
     assert "geometry_id" not in link
     # Defense-in-depth: no XYZ inlining even with include_geometries=true.
     for forbidden in ("xyz_text", "atoms", "coords", "symbols"):

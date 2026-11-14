@@ -1,4 +1,4 @@
-"""A merged-away row is kept, but no list, search, lookup, count or export shows it as a live record (DR-0038).
+"""A merged-away row is kept, but no list, search, lookup, count or export shows it as a live record.
 
 The fixture is the REAL post-migration shape (:mod:`tests.api._merged_world`): the kept rows keep their old marked
 SMILES, InChIKey, label and stoichiometry hash. Every read path that enumerates or looks up species, entries or

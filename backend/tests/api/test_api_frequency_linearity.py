@@ -136,7 +136,7 @@ def _conformer_payload(
 
 
 def test_bent_water_depositing_the_linear_count_is_flagged(client: TestClient):
-    """The residue PR #162 left open, closed and visible on the response.
+    """A bent molecule with the linear mode count is flagged on the response.
 
     Four modes clears the ``3N - 6`` floor of three and sits far below
     the ``3N`` ceiling of nine, so nothing said anything before this.
@@ -194,7 +194,7 @@ def test_water_depositing_its_own_three_modes_is_not_flagged(client: TestClient)
 
 
 def test_the_warning_never_refuses_the_deposit(client: TestClient):
-    """ADR 0008: this asserts an expectation, so it may only annotate.
+    """This asserts an expectation, so it may only annotate.
 
     The boundary between linear and bent is a tolerance, and a rule whose
     answer moves when a constant moves cannot block. The record is
@@ -390,7 +390,7 @@ def test_the_short_list_collects_no_second_warning(client: TestClient):
 
 
 def test_the_short_list_warning_never_refuses_the_deposit(client: TestClient):
-    """ADR 0008 again: an expectation may annotate, never block.
+    """The blocking-tier rule again: an expectation may annotate, never block.
 
     A partial or frozen-atom Hessian on a linear molecule produces this
     same count honestly, so there is a correct deposit this would refuse

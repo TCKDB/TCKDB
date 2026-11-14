@@ -1,10 +1,9 @@
 """A declared minimum is judged by magnitude against the protocol's tolerance.
 
-ADR 0012's note of 2026-10-29. Before it, a species entry declared a minimum
-was refused for *any* imaginary mode, so a correct, published calculation with
-a -15 cm-1 integration-grid artefact could not be deposited, while a
-transition state's extra modes were already judged against tau. These tests
-hold the one rule over HTTP, and the persisted half of it:
+A species entry declared a minimum is not refused for *any* imaginary mode: a
+correct, published calculation with a -15 cm-1 integration-grid artefact can be
+deposited, and a transition state's extra modes are judged against tau the same
+way. These tests hold the one rule over HTTP, and the persisted half of it:
 
 * every imaginary mode below tau: accepted, with
   ``minimum_imaginary_modes_below_tau``, and the tau that decided it stored on
@@ -102,7 +101,7 @@ def test_a_soft_mode_on_a_minimum_is_accepted_warned_and_its_tau_stored(client, 
     # Judged and not flagged -- false, not NULL.
     assert stored.imaginary_mode_structural_flag is False
     # No Hessian method recorded: Gaussian DFT resolves to its assumed
-    # analytic default at validation (owner decision 2026-10-31).
+    # analytic default at validation.
     assert stored.imaginary_mode_tau_cm1 == 30.0
     assert stored.imaginary_mode_tau_basis == "assumed_analytic_default"
 
@@ -187,8 +186,8 @@ def _freq(n_imag: int, imag_freq_cm1: float | None = None, **extra) -> dict:
 
 
 def test_a_soft_mode_on_a_second_frequency_calculation_is_judged_and_located(client):
-    """Only the first frequency calculation used to be judged, so a soft mode on
-    a later one was accepted with no warning at all."""
+    """Every frequency calculation is judged: a soft mode on
+    a later one must not be accepted with no warning at all."""
     payload = _payload(imag_freq_cm1=-15.0, label="min-two-freq")
     payload["additional_calculations"] = [_freq(0), _freq(1, -15.0)]
     resp = client.post("/api/v1/uploads/conformers", json=payload)

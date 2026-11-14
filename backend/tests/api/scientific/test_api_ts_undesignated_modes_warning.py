@@ -1,4 +1,4 @@
-"""The undesignated-imaginary-modes warning (#729) on the transition-state read surfaces.
+"""The undesignated-imaginary-modes warning on the transition-state read surfaces.
 
 ``no_frequency_result_has_undesignated_imaginary_modes`` is a zero-weight advisory check: it appears in
 ``trust.evidence.checks`` when an attached frequency result reports several imaginary modes without designating the
@@ -95,7 +95,7 @@ def test_full_and_detail_carry_the_same_warning(client, db_session):
 
 
 def test_curated_reads_an_unreviewed_result_with_several_modes(client, db_session):
-    """ADR 0023 (Q6, step 5): the checklist reads the entry's linked calculations by the evidence rule, so an unreviewed
+    """The checklist reads the entry's linked calculations by the evidence rule, so an unreviewed
     result is read and its undesignated modes warn, as they do under exploratory.
 
     Kills: the checklist keeping the record floor (the warning absent, as for a result that does not exist).

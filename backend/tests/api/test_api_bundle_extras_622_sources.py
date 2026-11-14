@@ -1,4 +1,4 @@
-"""Source-calculation rules for the #622 bundle blocks, through the real API.
+"""Source-calculation rules for the bundle blocks, through the real API.
 
 Companion to ``test_api_bundle_extras_622.py``. That file proves the blocks
 are stored; this one proves what may be cited as their source: which job may
@@ -218,7 +218,7 @@ def test_stability_source_at_another_level_of_theory_is_kept_with_a_warning(
 ):
     """A different level is worth saying, not worth losing the record over.
 
-    ADR 0008: definitions block, expectations warn. The verdict is stored and
+    Definitions block, expectations warn. The verdict is stored and
     the response carries ``scf_stability_source_level_mismatch``; the same
     bundle at one level carries none.
 
@@ -443,7 +443,7 @@ _UNVERIFIED = "scf_stability_source_conformer_unverified"
 
 
 def test_reaction_stability_between_two_unanchored_jobs_is_kept_with_a_warning(client):
-    """Both tied to no conformer: the rule cannot be checked, which is an absence (ADR 0008).
+    """Both tied to no conformer: the rule cannot be checked, which is an absence.
 
     The same on a one-conformer and a two-conformer species. Paired: the same link between two
     anchored jobs warns nothing.
@@ -618,7 +618,7 @@ def test_reaction_bundle_transport_enters_review_and_is_named_by_ref(client, db_
 
 
 def test_the_pdep_contract_does_not_advertise_the_stability_source_key():
-    """The contract is rendered from the model, so a field the route refuses must not be on it (#635)."""
+    """The contract is rendered from the model, so a field the route refuses must not be on it."""
     from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
 
     schema = NetworkPDepUploadRequest.model_json_schema()

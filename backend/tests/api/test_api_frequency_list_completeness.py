@@ -1,19 +1,16 @@
 """The proof that a frequency list is checked against its own geometry.
 
-`ADR 0012 <../../../docs/adr/0012-imaginary-modes-are-judged-by-magnitude-not-counted.md>`_
-§"What a record must carry" requires "the complete signed unrounded
-frequency list, never filtered", and until this branch nothing asked.
-A depositor could send three modes, all imaginary, with ``n_imag = 3``
-and pass every check TCKDB had, ``freq_n_imag_disagrees_with_modes``
-included — that rule compares the imaginary count against ``n_imag``,
-and a list of nothing but imaginary modes satisfies it exactly.
+The imaginary-mode protocol requires "the complete signed unrounded
+frequency list, never filtered". A depositor could send three modes, all
+imaginary, with ``n_imag = 3`` and pass every check TCKDB has,
+``freq_n_imag_disagrees_with_modes`` included -- that rule compares the
+imaginary count against ``n_imag``, and a list of nothing but imaginary
+modes satisfies it exactly.
 
-Why it matters beyond tidiness: `paper/18__TCKDB/3_results.tex` reports
-recovering a harmonic spectrum from a stored Hessian and comparing it
-against the independently stored frequency lists, agreeing to within
-0.045 cm-1. A subset agrees on every mode it contains and is silent
-about the ones it omits, which reads as agreement. The completeness of
-the stored list is load-bearing for that claim.
+Why it matters beyond tidiness: recovering a harmonic spectrum from a stored
+Hessian and comparing it against the independently stored frequency lists is
+only meaningful if each list is complete. A subset agrees on every mode it
+contains and is silent about the ones it omits, which reads as agreement.
 
 Two bounds, two tiers, and the split is the design rather than an
 accident of when each was written.
@@ -31,7 +28,7 @@ included, so no harmonic analysis of that geometry produces more at any
 level of theory, on any grid, in any coordinate system: there is no
 correct deposit to refuse, and no filtering that produces *extra* modes,
 so neither of the floor's arguments reaches it. It warned in 0.29.0
-pending a scientific-check register entry and now has one
+pending a scientific-check register entry and has one
 (``CHECK_FREQ_LIST_WITHIN_GEOMETRY_DEGREES_OF_FREEDOM``).
 
 So the tests below assert ``201`` and read a warning out of the body for
@@ -163,13 +160,13 @@ class TestACompleteListIsAccepted:
         assert _completeness_warnings(body) == []
 
     def test_water_depositing_all_nine_eigenvalues_is_also_complete(self, client):
-        """ADR 0012 asks for the six translation/rotation eigenvalues too.
+        """The imaginary-mode protocol asks for the six translation/rotation eigenvalues too.
 
-        "the six translation/rotation eigenvalues must be present so
-        contamination is directly assessable". A record carrying all
-        ``3N`` is the most complete record the ADR describes, so the
+        The protocol says "the six translation/rotation eigenvalues must be
+        present so contamination is directly assessable". A record carrying all
+        ``3N`` is the most complete record the protocol describes, so the
         upper bound is ``3N`` and not ``3N - 6`` — a rule that refused
-        this would refuse exactly what the ADR asks for.
+        this would refuse exactly what the protocol asks for.
         """
         body = _post(
             client,
@@ -213,7 +210,7 @@ class TestATruncatedListSaysSo:
 
         The record ``freq_n_imag_disagrees_with_modes`` cannot see: the
         count and the list agree, because everything in the list is
-        imaginary, so PR #160's rule is satisfied byte for byte. It is
+        imaginary, so the rule is satisfied byte for byte. It is
         deposited against a van der Waals complex because that is the
         one declared kind whose imaginary modes are accepted rather than
         refused — which is exactly the corner where a subset could hide.
@@ -466,10 +463,10 @@ def _transition_state_payload(frequencies: list[float], *, label: str) -> dict:
 
 
 class TestTheTransitionStateADR0012WasWrittenAbout:
-    """ADR 0012's motivating record, whole and truncated.
+    """The imaginary-mode protocol's motivating record, whole and truncated.
 
     -1300, -42, -13 on a six-atom saddle point. Accepted either way, and
-    ADR 0012's extra-imaginary-mode warning fires either way; what
+    the imaginary-mode protocol's extra-imaginary-mode warning fires either way; what
     changes is whether the record also says its frequency list is not
     the spectrum.
     """
@@ -484,7 +481,7 @@ class TestTheTransitionStateADR0012WasWrittenAbout:
         assert resp.status_code == 201, resp.text
         body = resp.json()
         assert _completeness_warnings(body) == []
-        # The ADR 0012 judgement is unchanged and still present.
+        # The imaginary-mode protocol judgement is still present.
         assert any(
             w["code"] == "transition_state_extra_imaginary_mode_above_tau"
             for w in body["warnings"]
@@ -519,8 +516,8 @@ class TestSpeciesWithNoAtomsAndSpeciesWithUnknownAtoms:
         """``ATOMLESS_MOLECULE_KINDS`` closes the door before this rule.
 
         ``raise_for_atomless_structure`` refuses a geometry deposited
-        against ``molecule_kind: electron`` — definitional, blocking, and
-        older than this branch. So an electron reaches the completeness
+        against ``molecule_kind: electron`` — definitional and
+        blocking. So an electron reaches the completeness
         check with no geometry to count, and the check is unreachable for
         it rather than wrong about it. Asserted on the status and the
         code rather than on prose, because the word "electron" appears in

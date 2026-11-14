@@ -1,9 +1,9 @@
-"""Wire guards on ``level_of_theory.method`` (ADR 0021).
+"""Wire guards on ``level_of_theory.method``.
 
 * ``energy//geometry`` in ``method`` is refused with
   ``level_of_theory_method_is_compound``: it is two levels of theory, not one
-  method. Reproduction on ``main`` (f22d3a80): the same payloads returned 201
-  and stored a level named ``ccsd(t)-f12/cc-pvtz-f12//b3lyp/def2tzvp``.
+  method. Without the guard the same payloads return 201
+  and store a level named ``ccsd(t)-f12/cc-pvtz-f12//b3lyp/def2tzvp``.
 * A named composite method followed by a correction-table label
   (``cbs-qb3-paraskevas``) or a year (``cbsqb32023``) is accepted with a
   ``level_of_theory_method_names_correction_table`` warning, stored as sent and

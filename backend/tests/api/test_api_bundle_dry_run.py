@@ -185,7 +185,7 @@ def test_invalid_bundle_returns_validation_error(client) -> None:
     """Structurally invalid bundles must fail through normal validation —
     not be wrapped in a 200 dry-run result."""
     bundle = _load_bundle_dict("thermo-bundle.json")
-    # Drop the bundle_kind so the bundle no longer satisfies the schema.
+    # Drop the bundle_kind so the bundle does not satisfy the schema.
     del bundle["bundle_kind"]
 
     resp = client.post(ENDPOINT, json=bundle)

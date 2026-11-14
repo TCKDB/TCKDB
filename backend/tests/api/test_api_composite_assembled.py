@@ -1,8 +1,7 @@
-"""Assembled composites, end to end through the upload API (ADR 0021, P5).
+"""Assembled composites, end to end through the upload API.
 
-``main`` (7404d9b5) refused ``assembly: "assembled"`` with
-``composite_assembled_not_accepted`` and had no ``composite_scheme`` on
-``LevelOfTheoryRef`` (it was an extra input). Held here, over HTTP so code and
+``assembly: "assembled"`` is accepted and ``LevelOfTheoryRef`` carries a
+``composite_scheme``. Held here, over HTTP so code and
 context reach the client:
 
 * worked payload (b), CCSD(T)/CBS from a TZ/QZ pair, and (c), a focal-point
@@ -265,7 +264,7 @@ def test_a_missing_component_warns(client):
 
 
 def test_an_assembled_composite_must_deposit_its_total(client):
-    """Owner decision 5: the total is deposited and only checked; there is no unverifiable-by-absence."""
+    """The total is deposited and only checked; there is no unverifiable-by-absence."""
     _refused(client, f.bundle_b(total=None), "composite_total_required")
 
 
@@ -374,9 +373,9 @@ def test_an_input_that_is_another_species_calculation_is_refused(client):
 
 
 def test_an_sp_declaring_another_geometry_than_its_conformer_is_refused_first(client):
-    """The upload refuses an input sp whose declared geometry is not its conformer's (#635).
+    """The upload refuses an input sp whose declared geometry is not its conformer's.
 
-    This case used to reach ``composite_input_geometry_mismatch``; the sp now
+    This case does not reach ``composite_input_geometry_mismatch``: the sp
     contradicts its own conformer, which is refused before the composite is
     assembled (``calculation_input_geometry_mismatch``).
     """

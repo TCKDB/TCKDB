@@ -14,13 +14,13 @@ repair is to deposit it first (see
 What they did *not* do was say anything else. The body carried the generic
 ``resource_not_found`` and an **empty** ``context``, so a depositor whose
 payload cited a statmech and three calculations learned only that one of
-the four was missing. Since #230 each refusal carries the same code its
+the four was missing. Each refusal carries the same code its
 public-ref counterpart on ``/uploads/kinetics`` carries, plus a ``context``
 naming the field and the kind of row.
 
 Why the same code and not a new one
 ------------------------------------
-#195 landed because the *status* used to depend on how a caller spelled
+The *status* must not depend on how a caller spelled
 the name — 404 for a row id, 422 for a public ref, for one condition — and
 "which spelling did you use" is not a distinction a depositor can act on.
 Minting ``unknown_statmech_id`` alongside ``unknown_statmech_ref`` would
@@ -34,7 +34,7 @@ below, so neither can drift without the other failing.
 The one thing the two spellings do not share
 ---------------------------------------------
 Disclosure. A public ref is echoed into ``context['ref']``; a row id is
-**not** echoed anywhere (DR-0028 Requirement 2 — a row id is an
+**not** echoed anywhere (the no-row-ids rule — a row id is an
 implementation detail of one database instance, no public surface is keyed
 on it, and a client that learns to read one builds against something TCKDB
 never promised to keep stable). It goes to the log instead.

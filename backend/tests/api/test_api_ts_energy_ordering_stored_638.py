@@ -1,4 +1,4 @@
-"""What an energy-ordering record says about the stored energies, over HTTP (#638).
+"""What an energy-ordering record says about the stored energies, over HTTP.
 
 The comparison itself is pinned at the persistence seam in
 ``tests/services/test_ts_energy_ordering_stored_energies.py``. This is the round

@@ -1,4 +1,4 @@
-"""Every part of a level's identity that the notation writes reaches every ``LevelOfTheorySummary`` builder (ADR 0021, P7a).
+"""Every part of a level's identity that the notation writes reaches every ``LevelOfTheorySummary`` builder.
 
 The notation of a record's levels and the ML export's label write the auxiliary and CABS basis, the solvent model,
 and the spin and core treatment, so the summaries they are built from must carry them. Five builders do not hold a

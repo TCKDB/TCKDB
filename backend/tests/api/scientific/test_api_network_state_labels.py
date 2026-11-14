@@ -1,4 +1,4 @@
-"""Three hydrazine channels that used to render as two strings and a self-loop.
+"""Three hydrazine channels render as three distinct strings, not two strings and a self-loop.
 
 The shape is taken from the deployed hydrazine pressure-dependent network, not
 invented: two ``species_entry`` rows for diazene sit under **one** ``species``
@@ -80,8 +80,8 @@ def _hydrazine_network(db_session) -> dict:
     """One species with two entries, three states, three channels.
 
     ``N2H4 -> E-diazene + H2``, ``N2H4 -> Z-diazene + H2`` and the
-    ``E -> Z`` isomerisation between the two product states. Under the old
-    renderer the first two collided and the third read as a self-loop.
+    ``E -> Z`` isomerisation between the two product states. The first two must not collide,
+    and the third must not read as a self-loop.
     """
     network = make_network(db_session, name=f"hydrazine-{next_inchi_key('NET')}")
 
@@ -225,7 +225,7 @@ def test_three_colliding_channels_render_distinguishably(client, db_session):
         ]
     )
 
-    # And the isomerisation no longer reads as a channel to itself.
+    # And the isomerisation does not read as a channel to itself.
     isomerisation = next(label for label in labels if label.startswith("N=N"))
     source, _, sink = isomerisation.partition(" -> ")
     assert source != sink

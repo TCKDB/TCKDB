@@ -1,6 +1,6 @@
 """The settings behind a level belong to a calculation that SUPPLIED that level, under every review profile.
 
-Each test names the mutation it kills. The curated profile hides rejected and deprecated calculations (ADR 0023): a level
+Each test names the mutation it kills. The curated profile hides rejected and deprecated calculations: a level
 is nulled only when all its suppliers are hidden, and the settings must then follow the same suppliers, not whichever
 calculation of the role happens to be first.
 """

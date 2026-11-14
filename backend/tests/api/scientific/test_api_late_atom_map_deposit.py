@@ -1,6 +1,6 @@
 """What happens to a reaction deposited before its atom map existed.
 
-ADR 0011 says an absent map warns rather than blocks, so a depositor who has
+The atom-map rule says an absent map warns rather than blocks, so a depositor who has
 no map is told to deposit anyway. This file pins what that depositor can and
 cannot do afterwards, because the answer is not obvious and every part of it
 is a deliberate rule working as designed:
@@ -185,7 +185,7 @@ def _ts_entry_id(db_session, reaction_entry_id: int) -> int:
 
 
 def test_depositing_without_a_map_warns_rather_than_blocks(client):
-    """ADR 0011's premise: the honest partial deposit is accepted."""
+    """The atom-map rule's premise: the honest partial deposit is accepted."""
     result = _upload(client, None)
     codes = {warning["code"] for warning in result["warnings"]}
     assert "reaction_atom_map_absent" in codes

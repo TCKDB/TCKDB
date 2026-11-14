@@ -1,7 +1,7 @@
-"""``GET /scientific/composite-schemes/{ref}`` reports the linear coefficients of a scheme (ADR 0021, P7a).
+"""``GET /scientific/composite-schemes/{ref}`` reports the linear coefficients of a scheme.
 
-On ``main`` (fea447ec) the scheme read had terms and inputs and nothing about how the energies
-combine. Now each term says whether it is a fixed linear combination of its inputs' energies
+Besides terms and inputs, the scheme read says how the energies
+combine: each term says whether it is a fixed linear combination of its inputs' energies
 (``linearity``) and, when it is, each input carries its ``coefficient``: ``+1`` for a value or base
 input, ``+1`` / ``-1`` for the high / low input of a difference, and the closed-form weights for a
 two-point extrapolation. ``exponential_three_point`` is not linear, so it says so and gives none.
@@ -172,7 +172,7 @@ def test_karton_martin_scf_uses_its_own_basis_function(client, db_session):
 
 
 def test_exponential_sqrt_reproduces_the_orca_manual_scf_energy_through_the_whole_upload(client, db_session):
-    """#659: ORCA 6.1 prints -76.066687152 for the cc-pV{T,Q}Z SCF extrapolation (alpha = 5.46) of water.
+    """ORCA 6.1 prints -76.066687152 for the cc-pV{T,Q}Z SCF extrapolation (alpha = 5.46) of water.
 
     The server accepts the total only if its own arithmetic gets the printed number back from the two SCF
     energies, and the read reports the closed-form weights written out here from exp(-alpha sqrt n).

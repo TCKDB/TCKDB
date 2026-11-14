@@ -741,7 +741,7 @@ DISSOCIATION = {
     ],
 )
 def test_the_declared_order_is_the_order_of_the_side_the_direction_names(client, db_session, direction, order, accepted):
-    # The A units follow the same side the order does (#695): H2 -> 2 H is first order forward, second order reverse.
+    # The A units follow the same side the order does: H2 -> 2 H is first order forward, second order reverse.
     units = "cm3_mol_s" if direction == "reverse" else "per_s"
     body = _standalone(direction=direction, a_units=units, applicability=_applicability(reaction_order=order))
     body["reaction"] = DISSOCIATION

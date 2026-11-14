@@ -1,8 +1,8 @@
-"""A warning's message is TCKDB's sentence for its code, built from the code and the context (#838).
+"""A warning's message is TCKDB's sentence for its code, built from the code and the context.
 
-The owner rule: no depositor free text presented as TCKDB's words, on any client. A deposit-time warning used to build
-its ``message`` from an f-string that quoted a transition-state label, a local payload key, a conformer label or a file
-name, so the upload response and the job result said the depositor's words in TCKDB's voice. Every producer now builds
+No depositor free text is presented as TCKDB's words, on any client. A deposit-time warning must not build
+its ``message`` from an f-string that quotes a transition-state label, a local payload key, a conformer label or a file
+name, or the upload response and the job result would say the depositor's words in TCKDB's voice. Every producer builds
 its warning with ``UploadWarning.from_code``, whose message is :func:`render_message` of the code and the context: the
 same call a public read makes on the stored row.
 

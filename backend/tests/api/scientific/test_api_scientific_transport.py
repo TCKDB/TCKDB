@@ -396,7 +396,7 @@ def test_detail_include_trust_no_property_hard_fail(client, db_session):
 
 
 def test_detail_include_trust_source_calc_geometry_fail_is_not_a_hard_fail(client, db_session):
-    """Rubric v2: a source calculation's automated geometry fail no longer hard-fails the record."""
+    """A source calculation's automated geometry fail does not hard-fail the record."""
     _, entry, tr = _make_transport(db_session)
     calc = _attach_supported_source(db_session, tr, species_entry=entry)
     calc.geometry_validation.validation_status = ValidationStatus.fail
@@ -1023,13 +1023,13 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
 
 @pytest.mark.parametrize("assessed_version", [0, 7])
 def test_assessment_under_another_rubric_version_is_stale_by_rubric_version(client, db_session, assessed_version):
-    """Version 0 (stamped before the 2026-10 versioning reset) and a version that is not the current one are stale."""
+    """Version 0 and a version that is not the current one are stale."""
     _, _, tr = _make_transport(db_session)
     current_row = evaluate_and_append_reproducibility(
         db_session, record_type=SubmissionRecordType.transport, record_id=tr.id
     )
     if assessed_version == 0:
-        # The append service refuses 0 (nothing new is written at 0); a row stamped by the 2026-10 reset holds it.
+        # The append service refuses 0 (nothing new is written at 0); a row written directly can hold it.
         db_session.add(
             RecordReproducibilityAssessment(
                 record_type=SubmissionRecordType.transport,

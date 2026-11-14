@@ -1,4 +1,4 @@
-"""API tests for GET /api/v1/scientific/meta/* (Phase 7 vocabulary reads).
+"""API tests for GET /api/v1/scientific/meta/* (vocabulary reads).
 
 ``/meta/software`` and ``/meta/workflow-tools`` are derived from
 *calculations that actually cite them*, not from the ``software`` /
@@ -169,9 +169,9 @@ def test_software_record_kind_scopes_species_and_transition_state(client, db_ses
 
 
 def test_software_vocabulary_is_exactly_the_observed_releases(client, db_session):
-    """Issue #305, the playground's own shape, asserted as whole lists.
+    """The playground's own shape, asserted as whole lists.
 
-    Seeded to mirror what the deployed instance held on 2026-09-27: a
+    Seeded with a
     Gaussian ``16``/``C.02`` release cited by a calculation, an orphan
     Gaussian release with a NULL version, an orphan ``09``, an ORCA
     release cited by a calculation but with a NULL version, and an

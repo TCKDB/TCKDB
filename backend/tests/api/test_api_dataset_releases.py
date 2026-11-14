@@ -1,4 +1,4 @@
-"""The Stage 3 exit criterion, end to end over HTTP.
+"""The dataset-release flow, end to end over HTTP.
 
     "A user can cite and reproduce the exact selected dataset while still
      retrieving all underlying candidates and review history."
@@ -71,7 +71,7 @@ def corpus(db_session, _api_curator_user):
             status=RecordReviewStatus.approved,
             actor=curator,
         )
-    # A release refuses a record nobody agreed to license (B1): deposit
+    # A release refuses a record nobody agreed to license: deposit
     # both candidates under the release's license, as an upload would.
     attest_thermo(db_session, depositor=curator, rows=[chosen, other])
     db_session.flush()
@@ -490,7 +490,7 @@ def test_doi_is_recorded_not_minted(client, login_as, _api_curator_user, corpus)
     assert attached.status_code == 200, attached.text
     assert attached.json()["doi"] == "10.5281/zenodo.1"
 
-    # 409 since #211, not 422: the body is well formed and the release
+    # 409, not 422: the body is well formed and the release
     # already cites a DOI. No corrected payload repoints a citation, so a
     # client must not be told to fix and resend.
     repointed = client.post(
@@ -535,9 +535,8 @@ def test_a_non_selectable_record_ref_is_refused(
 # Licensing: what a release carries when the curator did not say
 # ---------------------------------------------------------------------------
 #
-# ``data_license`` is required and non-blank at the column, so a caller has
-# always had to send *something*; what it should be was never decided, because
-# no release had been cut. It is now CC BY 4.0 for the corpus and MIT for the
+# ``data_license`` is required and non-blank at the column, so a caller must
+# send *something*. It is CC BY 4.0 for the corpus and MIT for the
 # code (``LICENSE-DATA`` and ``LICENSE``), and both are request-body defaults.
 # The tests below hold the two halves that have to be true at once: omitting
 # the field yields the house license, and supplying one yields *that* license.
@@ -612,19 +611,12 @@ def test_a_blank_license_is_refused_rather_than_defaulted(
 # The two refusals that arrive at 409, and why the status is the assertion
 # ---------------------------------------------------------------------------
 #
-# Both used to raise a bare ``ReleaseCurationError``, which subclasses
-# ``ValueError`` -- so reading the raise site said 422, and the catalogue
-# recorded 422 for both, while the routes that reach them wrapped the error
-# in ``HTTPException(409)``. Since #211 they raise ``ReleaseStateConflict``
-# and the route reads the status off the class, so the raise site and the
-# wire can no longer disagree: in both cases the tag or the policy version
-# *already exists*, and the caller is colliding with state rather than
-# sending a malformed payload. Nothing in the suite emitted either code, so
-# the runtime observer had never seen the disagreement, and it was comparing
-# codes rather than ``(status, code)`` pairs and could not have reported it
-# even if it had. These two tests are what make that guard load-bearing:
-# after them, a status regression on either code fails here *and* in the
-# observer's teardown hook.
+# Both raise ``ReleaseStateConflict`` and the route reads the status off the
+# class, so the raise site and the wire cannot disagree: in both cases the tag
+# or the policy version *already exists*, and the caller is colliding with state
+# rather than sending a malformed payload. These two tests make that guard
+# load-bearing: a status regression on either code fails here *and* in the
+# observer's teardown hook, which compares ``(status, code)`` pairs.
 
 
 def test_a_repeated_release_tag_is_a_409(client, login_as, _api_curator_user):
@@ -679,10 +671,10 @@ def _download_all(client, manifest) -> dict[str, bytes]:
 def test_ordinary_upload_after_publication_does_not_break_the_citation(
     client, login_as, _api_curator_user, corpus, db_session
 ):
-    """The blocking finding, reproduced over HTTP and then fixed.
+    """One ordinary write must not break a published release, over HTTP.
 
     Publish, verify clean, then perform ONE ordinary write — a third thermo for
-    a released species — and nothing else. Previously:
+    a released species — and nothing else. Without the fix:
     ``candidate_records.ndjson`` → 409 ``release_artifact_drift``,
     ``review_history.ndjson`` → 409, manifest → ``verified: false``. The citable
     window was the interval between publishing and the next write anywhere near
@@ -725,7 +717,7 @@ def test_ordinary_upload_after_publication_does_not_break_the_citation(
 def test_review_progressing_after_publication_does_not_break_the_citation(
     client, login_as, _api_curator_user, corpus, db_session
 ):
-    """The other everyday write that used to un-cite a release."""
+    """The other everyday write that must not un-cite a release."""
     entry, _chosen, _other = corpus
     _as_curator(client, login_as, _api_curator_user)
     _publish(client, corpus)
@@ -752,7 +744,7 @@ def test_review_progressing_after_publication_does_not_break_the_citation(
 def test_attaching_the_doi_does_not_break_the_digest(
     client, login_as, _api_curator_user, corpus
 ):
-    """The runbook's own final step used to break verification permanently.
+    """The runbook's own final step must not break verification permanently.
 
     Every genuinely cited release has a DOI, so the steady state of every real
     release was ``verified: false``.
@@ -858,13 +850,13 @@ def test_selected_record_line_is_interpretable_offline(
 def test_a_release_is_not_capped_at_one_page_of_selections(
     client, login_as, _api_curator_user, db_session
 ):
-    """The 201st selection used to 500 and roll itself back.
+    """The 201st selection must not 500 and roll itself back.
 
     The write path read the new row back by paging the ledger at ``limit=200``
     and scanning, so a curator simply could not build a larger release — while
     the read service's own comments assume thousands of selections. This uses a
     small page-size-crossing count rather than 201 real records to stay fast,
-    but exercises the same lookup: the read-back is now a direct query.
+    but exercises the same lookup: the read-back is a direct query.
     """
     from app.services.scientific_read.releases import get_release_selection
 
@@ -911,7 +903,7 @@ def test_a_release_is_not_capped_at_one_page_of_selections(
 def test_superseding_through_the_wrong_release_is_a_404(
     client, login_as, _api_curator_user, corpus, db_session
 ):
-    """Selection sub-routes used to ignore the release in the URL entirely.
+    """Selection sub-routes must not ignore the release in the URL entirely.
 
     Superseding via the wrong tag resolved the selection globally and appended
     the replacement to the *other* release — silently editing a release the
@@ -962,8 +954,8 @@ def test_release_reads_refuse_deep_offsets(
 ):
     """Deep paging is refused here with the same code as everywhere else.
 
-    These two reads used to materialise every row into Python and slice it,
-    so ``offset=10001`` returned a cheerful empty 200 while every other read
+    These two reads must not materialise every row into Python and slice it,
+    so ``offset=10001`` would return a cheerful empty 200 while every other read
     surface refused it. Nothing was ever incorrect -- ``limit`` is bounded by
     the route, so no unbounded body was ever returned -- but one family of
     reads answered a question the hosted abuse-control policy says is not
@@ -993,7 +985,7 @@ def test_ledger_page_resolves_a_supersession_outside_the_page(
 
     A page is not self-contained: the row a selection supersedes is by
     construction *older*, so on any page but the first it lives behind the
-    offset. The ledger used to have the whole release in memory and could not
+    offset. An in-memory ledger could not
     get this wrong; paging in SQL is exactly what makes it possible to.
     """
     _entry, chosen, other = corpus

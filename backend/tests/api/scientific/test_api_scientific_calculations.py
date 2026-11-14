@@ -80,12 +80,8 @@ from tests.services.scientific_read._factories import (
 # no consumer knows how to read.
 LEGAL_OUTCOMES = {"passed", "missing", "warning", "not_applicable"}
 
-# All heavy include tokens have shipped a summary loader. The only
-# include token still rejected is ``all``, which is policy-deferred
-# until a separate PR explicitly enables it (see the
-# ``include=all`` tests below). Per-implemented-include canary tests
-# that previously combined an implemented token with a still-
-# unimplemented one have been retired.
+# All heavy include tokens have a summary loader, and ``include=all`` expands to
+# every public heavy include (see the ``include=all`` tests below).
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +181,7 @@ def test_detail_by_calculation_ref_returns_record(client, db_session):
     assert body["record"]["calculation"]["calculation_ref"] == calc.public_ref
     assert body["record"]["calculation"]["type"] == "opt"
     assert body["record"]["calculation"]["quality"] == "raw"
-    # Phase D default: integer calculation_id stripped.
+    # Default: integer calculation_id stripped.
     assert "calculation_id" not in body["record"]["calculation"]
 
 
@@ -247,7 +243,7 @@ def test_detail_default_response_carries_summaries_and_review(
     assert record["provenance"]["result_applicable"] is True
     assert record["provenance"]["geometry_validation_applicable"] is True
     assert record["provenance"]["convergence_applicable"] is True
-    # Phase D default: integer submission_id is stripped. submission_ref
+    # Default: integer submission_id is stripped. submission_ref
     # is gated separately, on authentication rather than on internal-id
     # policy: this default ``client`` call carries no ``X-API-Key``/
     # session credential, so the anonymous caller does not receive the
@@ -281,7 +277,7 @@ def test_detail_species_owned_calculation_owner_block(client, db_session):
     assert se["multiplicity"] == 1
     assert se["species_entry_kind"] == "minimum"
     assert se["electronic_state_kind"] == "ground"
-    # Phase D default: ids stripped from the owner block.
+    # Default: ids stripped from the owner block.
     assert "species_id" not in se
     assert "species_entry_id" not in se
 
@@ -474,7 +470,7 @@ def test_detail_include_trust_returns_fragment(client, db_session):
     assert "evidence_completeness" in evidence
     assert evidence["checks"], "the calculation rubric ran, so checks cannot be empty"
     assert set(evidence["checks"].values()) <= LEGAL_OUTCOMES
-    # Phase D default internal-ID policy still applies inside trust evidence.
+    # The default internal-ID policy still applies inside trust evidence.
     assert "record_id" not in evidence
 
 
@@ -649,7 +645,7 @@ def test_detail_include_trust_does_not_mutate_calculation(client, db_session):
 
 
 # ---------------------------------------------------------------------------
-# Phase D internal-ID visibility
+# Internal-ID visibility
 # ---------------------------------------------------------------------------
 
 
@@ -702,7 +698,7 @@ def test_detail_include_all_does_not_restore_ids(client, db_session):
     # ``all`` was resolved into the legal heavy tokens; ``internal_ids``
     # is intentionally absent from the resolved include set.
     assert "internal_ids" not in body["request"]["include"]
-    # Phase D default: integer calculation_id stripped.
+    # Default: integer calculation_id stripped.
     assert "calculation_id" not in body["record"]["calculation"]
 
 
@@ -1217,7 +1213,7 @@ def test_detail_include_dependencies_parent_direction(client, db_session):
     assert edge["role"] == "freq_on"
     assert edge["parent_calculation_ref"] == parent_calc.public_ref
     assert edge["child_calculation_ref"] == child_calc.public_ref
-    # Phase D default: integer ids stripped.
+    # Default: integer ids stripped.
     assert "parent_calculation_id" not in edge
     assert "child_calculation_id" not in edge
 
@@ -1515,7 +1511,7 @@ def test_detail_include_artifacts_returns_metadata_rows(client, db_session):
     assert row["created_at"] is not None
     assert row["artifact_ref"] == art.public_ref
     assert re.fullmatch(r"art_[a-z2-7]{26}", row["artifact_ref"])
-    # Phase D default: integer artifact_id stripped.
+    # Default: integer artifact_id stripped.
     assert "artifact_id" not in row
     # No body-content fields leak through.
     for forbidden in ("body", "content", "data", "presigned_url", "download_url"):
@@ -1747,7 +1743,7 @@ def test_detail_include_input_geometries_returns_link_summaries(
     # Cheap metadata: natoms + geom_hash exposed; no XYZ.
     assert link["natoms"] == 5
     assert link["geom_hash"] == geom.geom_hash
-    # Phase D default: integer geometry_id stripped.
+    # Default: integer geometry_id stripped.
     assert "geometry_id" not in link
 
 
@@ -2053,7 +2049,7 @@ def test_detail_include_geometry_validation_returns_summary(
     assert summary["rmsd_warning_threshold"] == 0.5
     assert summary["input_geometry_ref"] == geom_in.public_ref
     assert summary["output_geometry_ref"] == geom_out.public_ref
-    # Phase D default: integer ids stripped.
+    # Default: integer ids stripped.
     assert "input_geometry_id" not in summary
     assert "output_geometry_id" not in summary
     # MVP: atom_mapping is intentionally not exposed.
@@ -2282,7 +2278,7 @@ def test_detail_include_freq_modes_reports_the_declared_disposition(
 ):
     """The verdict comes back beside the evidence it was passed on.
 
-    ADR 0012 accepts a transition state with several imaginary modes only
+    The imaginary-mode protocol accepts a transition state with several imaginary modes only
     because the depositor said which one is the reaction coordinate and
     what each of the others *is*. The declarations were stored from the
     day the column existed and this projection dropped them, so a
@@ -2291,7 +2287,7 @@ def test_detail_include_freq_modes_reports_the_declared_disposition(
     written to remove: it could see which mode was designated and not
     what the other two had been declared to be.
 
-    The frequency list is ADR 0012's own motivating record — a clean
+    The frequency list is the imaginary-mode protocol's own motivating record — a clean
     reaction coordinate at -1300 with -42 and -13 beside it — with the
     two extras declared a torsion and projection residue.
     """
@@ -2416,7 +2412,7 @@ def test_detail_imaginary_mode_projections_no_hessian_still_carries_the_tau_judg
 ):
     """Not determinable, and not a shrug.
 
-    ADR 0012 judged this record's imaginary modes by magnitude at upload,
+    The imaginary-mode protocol judged this record's imaginary modes by magnitude at upload,
     against a tau resolved from the protocol that produced them, and
     persisted the tau, its basis and the structural flag on
     ``calc_freq_result``. Where the projection cannot run, that judgement
@@ -2425,7 +2421,7 @@ def test_detail_imaginary_mode_projections_no_hessian_still_carries_the_tau_judg
 
     The corpus does not yet contain a record that reaches this shape with
     an extra imaginary mode: ``n_imag`` is only ever 0 or 1 live, so the
-    -1300 / -42 / -13 record ADR 0012 opens with is constructed here.
+    -1300 / -42 / -13 record the imaginary-mode protocol opens with is constructed here.
     """
     _, _, calc = _make_species_owned_calc(db_session, calc_type=CalculationType.freq)
     attach_freq_result(
@@ -2487,7 +2483,7 @@ def test_detail_imaginary_mode_projections_with_a_hessian_carries_no_tau_context
 ):
     """A determined projection is unchanged by the tau block.
 
-    ADR 0012 says a determination beats a threshold wherever one is
+    The imaginary-mode protocol says a determination beats a threshold wherever one is
     available, so where the projection ran, the threshold stands down
     rather than sitting beside it inviting a reader to average the two.
     """
@@ -2594,7 +2590,7 @@ def test_detail_include_scf_stability_returns_summary(client, db_session):
     # No source links set; refs are null.
     assert summary["source_calculation_ref"] is None
     assert summary["source_artifact_ref"] is None
-    # Phase D default: integer ids stripped.
+    # Default: integer ids stripped.
     assert "source_calculation_id" not in summary
     assert "source_artifact_id" not in summary
 
@@ -2868,7 +2864,7 @@ def test_detail_include_parameters_returns_summaries(client, db_session):
     assert row["canonical_value"] == "1e-8"
     assert row["section"] == "scf"
     assert row["parameter_index"] == 1
-    # Phase D default: integer parameter_id stripped.
+    # Default: integer parameter_id stripped.
     assert "parameter_id" not in row
 
 
@@ -3128,7 +3124,7 @@ def test_detail_include_constraints_returns_summaries(client, db_session):
     assert row["atom4_index"] is None
     assert row["atom_indices"] == [1, 2]
     assert row["target_value"] == 1.42
-    # Phase D default: integer calculation_id stripped.
+    # Default: integer calculation_id stripped.
     assert "calculation_id" not in row
 
 
@@ -3148,7 +3144,7 @@ def test_detail_constraints_constraint_index_visible_when_ids_disabled(
     client, db_session
 ):
     """``constraint_index`` is order metadata, not a DB id; it must
-    survive Phase D ID stripping."""
+    survive ID stripping."""
     _, _, calc = _make_species_owned_calc(db_session)
     _attach_calc_constraint(
         db_session,
@@ -3164,7 +3160,7 @@ def test_detail_constraints_constraint_index_visible_when_ids_disabled(
     ).json()
     row = body["record"]["constraints"][0]
     assert row["constraint_index"] == 7
-    # Phase D default: calculation_id absent, but constraint_index stays.
+    # Default: calculation_id absent, but constraint_index stays.
     assert "calculation_id" not in row
 
 
@@ -3435,14 +3431,14 @@ def test_detail_include_review_returns_entry(client, db_session):
     # ``submission_ref`` names "which upload does this review action tie
     # to" -- the same class of fact as ``provenance.submission_ref`` above,
     # so it is gated by the same authentication check rather than by the
-    # Phase D internal-id policy. This anonymous ``client`` call omits the
+    # Internal-id policy. This anonymous ``client`` call omits the
     # key entirely (see ``app.services.scientific_read.auth_visibility``);
     # ``test_api_calculation_submission_ref_auth.py`` covers the
     # authenticated branch for ``record.provenance``, and
     # ``test_detail_include_review_authenticated_caller_sees_submission_ref``
     # below covers it for this nested block specifically.
     assert "submission_ref" not in entry
-    # Phase D default: integer ids stripped.
+    # Default: integer ids stripped.
     assert "review_id" not in entry
     assert "reviewer_id" not in entry
     assert "submission_id" not in entry

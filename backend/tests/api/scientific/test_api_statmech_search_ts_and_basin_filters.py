@@ -1,9 +1,8 @@
-"""Chunk 6.2: statmech search filters by transition-state entry and by declared basin.
+"""Statmech search filters by transition-state entry and by declared basin.
 
-Design: ``statmech_chunk6_design_2026-10-12.md`` (PR 6.2), owner decision D3.
-Each test names the mutation it kills. Before this PR ``transition_state_entry_ref``
-was silently dropped (a plain ``BaseModel`` ignores unknown fields; an unknown GET
-query parameter is ignored), so a caller got unfiltered results.
+Each test names the mutation it kills. ``transition_state_entry_ref`` must not be
+silently dropped (a plain ``BaseModel`` ignores unknown fields; an unknown GET
+query parameter is ignored), which would give a caller unfiltered results.
 """
 
 from __future__ import annotations
@@ -169,7 +168,7 @@ def test_declared_filter_is_exact_and_legacy_filter_is_unchanged(client, db_sess
 
 
 def test_ensemble_member_in_a_basin_does_not_match_the_declared_filter(client, db_session):
-    """Kills: widening to member assignment without an owner decision (D3)."""
+    """Kills: widening to member assignment."""
     entry, a, b, sm_a, sm_b, undeclared = _basins(db_session)
     ensemble = make_statmech(db_session, species_entry=entry)
     decl = _declare(db_session, ensemble, scope=StatmechModelScopeKind.explicit_equilibrium_ensemble)
@@ -242,7 +241,7 @@ def test_curated_hidden_basin_is_indistinguishable_from_an_unknown_ref(client, d
 def test_curated_approved_statmech_under_a_not_approved_ts_entry_is_returned(client, db_session):
     """Kills: gating the filter subject (the TS entry's review) instead of the returned record's own floor.
 
-    ADR 0023: the statmech is the record; the transition-state entry it hangs on is context, shown with its badge while it
+    The statmech is the record; the transition-state entry it hangs on is context, shown with its badge while it
     is merely not reviewed."""
     ts = _ts_entry(db_session)
     sm = _ts_statmech(db_session, ts)

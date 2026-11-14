@@ -1,6 +1,6 @@
 """An electronic-state label and a term symbol must match the strict grammar, on every upload route.
 
-Owner decision 2026-11-03: free text there let a typed ``R`` on a ground-state entry read as
+Free text there would let a typed ``R`` on a ground-state entry read as
 "R enantiomer" on the website, and let anything at all onto a public page. The grammar lives in
 ``tckdb_schemas.electronic_state``; this file proves the routes enforce it, with a coded 422 that
 names the field and never echoes what was sent, and that nothing is stored on a refusal.
@@ -38,7 +38,7 @@ CODES = {
     "electronic_state_label": "electronic_state_label_invalid",
     "term_symbol": "term_symbol_invalid",
 }
-#: One valid and one invalid value per field. ``R`` is the reviewer's case: a stereo-looking state label.
+#: One valid and one invalid value per field. ``R`` is a stereo-looking state label.
 VALID = {"electronic_state_label": "T1", "term_symbol": "X 2S"}
 INVALID = {"electronic_state_label": "R", "term_symbol": "ground state"}
 
@@ -125,7 +125,7 @@ def test_an_over_long_value_gets_the_same_coded_refusal(client, field) -> None:
 
 @pytest.mark.parametrize("token", ["R", "S", "Z", "r", "s", "M", "P", "Ra", "Sa", "?", "-"])
 def test_a_stereo_looking_state_label_is_refused_end_to_end(client, token) -> None:
-    """The reviewer's case: a typed state label ``R`` on a ground-state entry."""
+    """A typed state label ``R`` on a ground-state entry is refused."""
     response = _post(client, "thermo", "electronic_state_label", token)
     assert response.status_code == 422
     assert response.json()["code"] == "electronic_state_label_invalid"

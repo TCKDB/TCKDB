@@ -278,8 +278,8 @@ def test_the_marker_registry_only_names_declared_sections():
     # ScientificReactionFullResponse's entry here, via fields_by_token()),
     # and ScientificLevelOfTheoryRecord added three of its own
     # (correction_schemes, frequency_scale_factors, used_by). 105 after
-    # ``include=software`` (methods-surface plan §5.3) added a fourth.
-    # 107 after ``include=statmech`` on the transition-state records (#621),
+    # ``include=software`` added a fourth.
+    # 107 after ``include=statmech`` on the transition-state records,
     # 108 after ``effective_settings`` joined the ``parameters`` token of CALCULATION_RECORD_SECTIONS,
     # which marks the field on both the entry record and the concept record.
     # 110 after ``calculation_settings`` on the thermo and statmech records.
@@ -304,7 +304,7 @@ def test_the_hosted_document_marks_the_gated_properties(client):
     # 104 since ``networks`` joined REACTION_FULL_SECTIONS, and
     # ScientificLevelOfTheoryRecord added three of its own. 105 after
     # ``include=software`` added a fourth. 107 after ``include=statmech`` on the
-    # two transition-state records (#621).
+    # two transition-state records.
     # 110 after ``calculation_settings`` on the thermo and statmech records.
     assert checked == 110, f"the hosted document carries {checked} markers"
 

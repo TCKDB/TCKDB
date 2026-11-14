@@ -1,16 +1,16 @@
-"""The scoped structure assessment inside the transition-state trust fragment (#723, rubric v5).
+"""The scoped structure assessment inside the transition-state trust fragment.
 
-What this pins, and the mutation each group kills (the mutation table is in the PR):
+What this pins, and the mutation each group kills:
 
-* **Detail versus list (owner decision O3).** A single transition-state-entry detail read runs the assessment; every
+* **Detail versus list.** A single transition-state-entry detail read runs the assessment; every
   surface that lists entries carries the coded status ``not_assessed_on_lists`` and issues no statement for it, so the
   same entry renders the same on every list page.
-* **Agreement (O1).** The block equals what ``POST .../evidence/select`` answers to the echoed question.
-* **The representative frequency result (O2).** The frequency-presence checks read the result a declaration pins; an
+* **Agreement.** The block equals what ``POST .../evidence/select`` answers to the echoed question.
+* **The representative frequency result.** The frequency-presence checks read the result a declaration pins; an
   entry with no declaration keeps reading the newest attached result.
 * **Owner conditions.** Label, completeness, counts and ``is_certified`` never move because of the assessment; the new
   warning has zero weight; an unresolved target is not a pass.
-* **Curated (D6).** The assessment runs under the request's profile; a target resting on a hidden calculation is
+* **Curated.** The assessment runs under the request's profile; a target resting on a hidden calculation is
   unresolved and warns; nothing is cached.
 """
 
@@ -216,7 +216,7 @@ def test_a_list_costs_the_same_statements_whether_or_not_the_entry_declares_a_ta
 
 
 def test_the_assessment_costs_a_bounded_number_of_statements_on_a_detail_read(client, db_session):
-    """One declared target costs a fixed number of statements on its own page (measured: 46 over the same graph), and nothing on a list."""
+    """One declared target costs a fixed number of statements on its own page (46 over the same graph), and nothing on a list."""
     declared, plain = make_ts_world(db_session), make_ts_world(db_session)
     _same_graph(declared, declare=True)
     _same_graph(plain, declare=False)
@@ -661,7 +661,7 @@ def test_without_a_declaration_the_saddle_point_block_describes_the_newest_attac
 
 
 # ---------------------------------------------------------------------------
-# Curated (D6)
+# Curated
 # ---------------------------------------------------------------------------
 
 
@@ -672,7 +672,7 @@ def test_a_target_resting_on_a_hidden_calculation_is_unresolved_under_curated_an
     world.settle()
     exploratory = detail(client, world.entry)  # read while the witness is merely unreviewed: the control
     set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=f.id, status=RecordReviewStatus.rejected)
-    curated = detail(client, world.entry, profile="curated")  # now withheld as evidence
+    curated = detail(client, world.entry, profile="curated")  # withheld as evidence
     assert exploratory["structure_assessment"]["outcome"] == "qualified_evidence"
     assert WARNING not in exploratory["evidence"]["checks"]
     block = curated["structure_assessment"]
@@ -713,7 +713,7 @@ def _box(client, entry, *, profile=None):
 def test_under_curated_a_hidden_pinned_result_is_absent_for_the_box_and_the_check_alike(client, db_session):
     """A WITHHELD pinned result is absent: the box and the trust check both read the newest shown result, and say nothing of it.
 
-    The pinned witness is REJECTED (ADR 0023, step 3: the box follows the evidence rule, which withholds rejected and
+    The pinned witness is REJECTED (the box follows the evidence rule, which withholds rejected and
     deprecated evidence; an unreviewed pinned witness is shown, see the next test). The expected answer is what exploratory
     gives on a world where the withheld calculation does not exist.
     Kills: the box going blank, or still describing/naming the withheld pinned result.
@@ -758,10 +758,10 @@ def test_under_curated_a_hidden_pinned_result_is_absent_for_the_box_and_the_chec
 
 
 def test_under_curated_an_unreviewed_pinned_result_is_the_one_the_box_describes(client, db_session):
-    """Step 3 of ADR 0023: the box describes the declared (pinned) frequency result when it is merely unreviewed, as the
+    """The box describes the declared (pinned) frequency result when it is merely unreviewed, as the
     entry's calculation list names it, instead of falling back to the newest other result.
 
-    Since step 5 the trust check's own population reads the same pin (the assessment and the checklist follow the
+    The trust check's own population reads the same pin (the assessment and the checklist follow the
     evidence rule too), so the box and the check agree for an unreviewed pin: both read the pin, not the newest other result.
     Kills: the box keeping the record floor and describing the newest other result (``latest_direct_frequency``); the
     checklist or the scoped assessment keeping the record floor and reading the other (undesignated) result.
@@ -773,7 +773,7 @@ def test_under_curated_an_unreviewed_pinned_result_is_the_one_the_box_describes(
     box = _box(client, world.entry, profile="curated")
     assert box["basis"] == "declared_curvature_witness" and box["calculation_ref"] == f.public_ref
     assert _box(client, world.entry)["calculation_ref"] == f.public_ref  # exploratory: the same pin
-    # The check reads the same population as the box (step 5): the unreviewed pin is read, so the designation check
+    # The check reads the same population as the box: the unreviewed pin is read, so the designation check
     # passes exactly as it does under exploratory, and the scoped assessment is not left unresolved by the unreviewed pin.
     curated_detail, exploratory_detail = detail(client, world.entry, profile="curated"), detail(client, world.entry)
     key = "reaction_coordinate_designated_for_ts"

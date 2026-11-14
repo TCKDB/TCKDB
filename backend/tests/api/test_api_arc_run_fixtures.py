@@ -9,7 +9,7 @@ the minimal upstream artifacts from a real ARC run:
         tckdb_payloads/
             <kind>/<name>.payload.json   what we POST
             <kind>/<name>.meta.json      endpoint + recorded response
-        tckdb_payloads_trimmed_264/      see NOTE.md inside; task #264 only
+        tckdb_payloads_trimmed_264/      see NOTE.md inside
 
 Tests POST every ``.payload.json`` under ``tckdb_payloads/`` to the endpoint
 recorded in its sibling ``.meta.json``. The intent is that genuine ARC data
@@ -18,7 +18,7 @@ reason: when the upload schema evolves and a fixture starts failing for any
 other reason, that failure is the signal to regenerate the fixtures from the
 original ARC run directories (kept outside the repo).
 
-Five payloads are a documented exception (task #264): they carry a
+Five payloads are a documented exception: they carry a
 ``transition_state``-side ``bac_total`` of value ``0.0`` with no
 components, which is exactly the false shape
 ``assert_bac_total_has_required_components`` exists to refuse. The
@@ -40,7 +40,7 @@ import pytest
 
 ARC_RUNS_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "arc_runs"
 
-#: Task #264. Real ARC payloads that carry a componentless, zero-valued
+#: Real ARC payloads that carry a componentless, zero-valued
 #: transition-state ``bac_total`` and are therefore refused on purpose,
 #: mapped to the ``bac_total.applied_energy_corrections`` index the
 #: refusal names. Keyed on the same ``case_id`` shape
@@ -116,8 +116,8 @@ def test_arc_run_payload_uploads_cleanly(
     """Real ARC payloads must upsert cleanly, or be refused on purpose.
 
     Every case is one of two claims: it upserts against the current
-    schema (the general rule), or it is one of the five documented task
-    #264 exceptions and is refused with exactly the code the false shape
+    schema (the general rule), or it is one of the five documented
+    exceptions and is refused with exactly the code the false shape
     it carries earns. Nothing here is expected to fail for any other
     reason.
     """
@@ -198,7 +198,7 @@ def test_arc_runs_aggregate_conformer_consolidation(client, db_session) -> None:
     scenarios each in the curated fixture set, so each must end up with at
     least four observations under a single group.
 
-    Consolidation is not what task #264's five documented refusals are
+    Consolidation is not what the five documented refusals are
     about, so this test uploads the trimmed copy for those five cases
     (see ``_trimmed_payload_path`` and each's ``NOTE.md``) and the
     original, untouched payload for everything else -- every upload here

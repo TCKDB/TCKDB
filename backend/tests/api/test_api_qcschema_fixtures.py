@@ -1,4 +1,4 @@
-"""Backend acceptance test for the QCSchema adapter's corpus (C-Q2).
+"""Backend acceptance test for the QCSchema adapter's corpus.
 
 ``backend/tests/fixtures/qcschema/<case>/`` holds the eight route-outcome
 payloads (energy/gradient/hessian/optimization x QCSchema families v1/v2,
@@ -32,7 +32,7 @@ Per case:
 4. Replay both POSTs with the identical key + body; assert the same
    response body and zero new rows.
 
-This is the corpus test named throughout the Phase C plan: it must fail
+This is the corpus test: it must fail
 loudly on an empty corpus (``test_corpus_is_not_empty``), never collect
 zero cases and report a hollow green.
 """
@@ -136,7 +136,7 @@ def test_corpus_is_not_empty() -> None:
         "clients/python/adapters/qcschema/scripts/emit_backend_corpus.py "
         "(conda env tckdb_qcschema_psi4)."
     )
-    # Exactly the eight route cases named in the plan: energy/gradient/
+    # Exactly the eight route cases: energy/gradient/
     # hessian/optimization x QCSchema families v1/v2. Not "at least 8" --
     # an accidental ninth case here would be a case this test was never
     # written to check.
@@ -215,8 +215,7 @@ def test_qcschema_corpus_case_accepted_and_persisted(
             pins["hessian_first_value"], abs=1e-15
         ), f"{case}: hessian first packed value pin mismatch"
         # No freq_result / calc_freq_mode rows: the mapper stores an
-        # uploaded matrix, never a derived spectrum -- see the plan's
-        # "Why a Hessian becomes a freq record with no spectrum".
+        # uploaded matrix, never a derived spectrum.
         # The mapper emits no ``freq_result`` at all for a Hessian document,
         # so the row must be absent; a row with a null ``n_imag`` would mean
         # something started minting one.
@@ -324,13 +323,13 @@ def test_no_duplicate_software_rows_across_the_whole_corpus(client, db_session: 
     Every one of the 8 corpus documents names its ESS as ``"Psi4"``
     (``provenance.creator``, or ``trajectory[-1].provenance.creator`` for
     the two optimization cases) and its optimizer as ``"geomeTRIC"`` --
-    spelled identically by the real tools that produced them (measured:
-    grep every fixture). Neither name is in
+    spelled identically by the real tools that produced them (every
+    fixture agrees). Neither name is in
     ``tckdb_schemas.software._SOFTWARE_NAME_ALIASES``, so
     ``normalize_software_name`` returns each unchanged; ``resolve_software``
     dedupes on exact ``Software.name`` equality. Uploading all 8 cases into
-    one transaction and counting rows is the empirical check the plan
-    calls for -- not merely reasoning about the alias table -- because a
+    one transaction and counting rows is the empirical check
+    -- not merely reasoning about the alias table -- because a
     per-case parametrized test (the one above) never shares a session
     across cases and so could never observe a fragmentation bug.
     """

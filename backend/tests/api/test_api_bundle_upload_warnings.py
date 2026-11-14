@@ -1,4 +1,4 @@
-"""``/bundles/submit`` and ``/bundles/dry-run`` must report the upload warnings (#647).
+"""``/bundles/submit`` and ``/bundles/dry-run`` must report the upload warnings.
 
 What was wrong
 --------------
@@ -147,7 +147,7 @@ def test_bundle_submit_reports_the_warnings_the_direct_route_reports(client, kin
     body = resp.json()
 
     assert _bundle_warnings(body["messages"], case["local_ref"]) == expected
-    # The context rides with the message: the depositor-typed text that helps find the problem lives only there (#838).
+    # The context rides with the message: the depositor-typed text that helps find the problem lives only there.
     carried = {code: json.loads(context) for code, _m, _f, context in expected}
     if kind == "kinetics":
         assert carried["literature_title_mismatch"]["depositor_supplied"] == {

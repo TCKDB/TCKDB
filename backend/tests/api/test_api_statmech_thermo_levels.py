@@ -1,6 +1,6 @@
 """R1-R6: geometry/frequency/energy levels of theory, upload validation and reads.
 
-Owner decision, 2026-09 ("statmech-level-roles"): a depositor may run the
+A depositor may run the
 optimisation and the single point at two different levels of theory, and
 TCKDB must both *display* that split honestly and *catch* the deposit that
 forgets half of it -- on every upload shape, including the multi-conformer
@@ -445,7 +445,7 @@ def test_statmech_energy_level_requires_sp(client, db_session):
     )
     resp = client.post("/api/v1/uploads/statmech", json=payload)
     body = _assert_code(resp, _REQUIRES_SP_STATMECH)
-    # The owner's exact phrasing: "energy level of theory X differs from
+    # The message names both levels: "energy level of theory X differs from
     # the optimisation level Y but no single-point calculation at X is
     # linked" -- both LoT strings must be present.
     assert "wB97X-D/def2-TZVP" in body["detail"]
@@ -516,7 +516,7 @@ def test_statmech_opt_only_valid_with_no_declared_level(client):
 
 def test_statmech_opt_sp_different_levels_valid(client):
     """Opt and sp at two different levels of theory is exactly the shape
-    the owner asked TCKDB to display honestly: ``energy_source == 'sp'``,
+    TCKDB must display honestly: ``energy_source == 'sp'``,
     and the energy level differs from the geometry level."""
     payload = _standalone_statmech_payload(
         species_entry={"smiles": "CCCCCCCCCCCCC", "charge": 0, "multiplicity": 1},
@@ -1125,7 +1125,7 @@ def _computed_species_bundle_payload(
 def test_computed_species_statmech_forgot_sp_is_refused(client):
     """Two conformers; only one has a covering sp. Coverage fires with no
     declared energy level at all -- this is the 'forgot the SP for one
-    conformer' shape the owner named directly."""
+    conformer' shape."""
     payload = _computed_species_bundle_payload(
         conformers=[
             _bundle_conformer(0, opt_lot=_LOT_A, xyz_z=0.0, sp_lot=_LOT_A),
@@ -1153,7 +1153,7 @@ def test_computed_species_statmech_sp_on_other_geometry_is_refused(client):
     """One conformer; its sp explicitly declares a different input
     geometry than the opt it is supposed to support -- R3'.
 
-    Since #635 the upload itself refuses this first: a calculation inside a
+    The upload itself refuses this first: a calculation inside a
     conformer states the conformer's geometry as the one it ran on, so an sp
     whose explicit ``input_geometries`` omit it contradicts itself
     (``calculation_input_geometry_mismatch``). The statmech rule

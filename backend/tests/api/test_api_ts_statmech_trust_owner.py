@@ -1,11 +1,11 @@
 """A transition-state-owned statmech is graded by its own owner-scoped rubric.
 
-Before this change every TS-owned statmech read ``hard_failed`` / ``species_entry_missing`` on
+A TS-owned statmech must not read ``hard_failed`` / ``species_entry_missing`` on
 ``include=assessments`` and ``include=trust``: the shared species rubric asks for a species entry
-first, and a TS-owned record has none. The record is internally consistent and validly owned; the
-badge was a defect, not a verdict.
+first, and a TS-owned record has none. The record is internally consistent and validly owned, so
+such a badge would be a defect, not a verdict.
 
-The records here are made through the real reaction bundle (``transition_state.statmech``, #621), so
+The records here are made through the real reaction bundle (``transition_state.statmech``), so
 the read path under test is the public one.
 """
 

@@ -1,9 +1,7 @@
-"""Frozen-core versus all-electron as part of a level of theory, end to end (ADR 0021, P4).
+"""Frozen-core versus all-electron as part of a level of theory, end to end.
 
-Reproduction on ``main`` (d22f2918): a frozen-core and an all-electron
-CCSD(T)/cc-pCVTZ deposit were one level of theory, because nothing in the
-payload could tell them apart, and ``core_treatment`` itself was refused as an
-extra input. A focal-point scheme's core-valence term is the difference between
+A frozen-core and an all-electron CCSD(T)/cc-pCVTZ deposit must not be one
+level of theory, so the payload carries ``core_treatment`` to tell them apart. A focal-point scheme's core-valence term is the difference between
 exactly those two, so they must be two rows.
 
 Held here:

@@ -1,10 +1,10 @@
-"""Linked evidence is shown WITH its review badge (ADR 0023, step 2): ``review_status_by_ref``.
+"""Linked evidence is shown WITH its review badge: ``review_status_by_ref``.
 
 Most nested pointers are bare refs with no badge field of their own, so every scientific response envelope carries a map
 from each gated ref it names to that record's review status. This module pins it on every route of the sweep:
 
 * **Coverage.** Under curated, every gated ref a response names as a whole value (the request echo and the map itself
-  excepted) has an entry. That includes the unlisted records the evidence rule now lets through.
+  excepted) has an entry. That includes the unlisted records the evidence rule lets through.
 * **Nothing withheld leaks through it.** With the hidden records rejected or deprecated, no hidden ref is a key of any map.
 * **Exploratory is untouched.** The field is null and no review lookup is made for it.
 * **No extra statement.** The map is filled from statuses the guard's one lookup already fetched.

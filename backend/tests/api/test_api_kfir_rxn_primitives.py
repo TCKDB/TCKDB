@@ -312,7 +312,7 @@ class TestKfirRxn2Primitives:
         fwd_kin = client.get(f"/api/v1/kinetics/{kinetics_ids[2]}").json()
         assert fwd_kin["n"] == pytest.approx(4.75152)
         assert fwd_kin["ea_kj_mol"] == pytest.approx(16.6648, abs=0.01)
-        # DR-0032: tunneling_model normalized to canonical enum token.
+        # tunneling_model normalized to canonical enum token.
         assert fwd_kin["tunneling_model"] == "eckart"
 
         # NH3 thermo NASA coefficients survived

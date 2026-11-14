@@ -1,4 +1,4 @@
-"""The custody record, readable without a psql prompt (ADR 0014).
+"""The custody record, readable without a psql prompt.
 
 ``hard_fail_reason`` already reaches clients, so a consumer learns a
 calculation is untrustworthy. These tests are about the other half: a
@@ -355,7 +355,7 @@ def test_client_sort_is_rejected_like_every_other_scientific_read(
 
     This asserted the token appeared anywhere in ``response.text``, and
     it did — inside ``detail``. The ``code`` field said ``http_422``, for
-    two independent reasons the sweep behind #209/#212 separated: the
+    two independent reasons: the
     route wrapped the service's ``ValueError`` in a bare
     ``HTTPException(422)``, and the service raised the bare token
     ``"client_sort_not_supported"`` instead of the house

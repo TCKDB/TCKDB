@@ -1,9 +1,9 @@
 """A kinetics record's declared ``energy_level_of_theory`` is stored and read back.
 
-It used to be a resolution hint on ``/uploads/kinetics`` (used to find source single points,
-then thrown away) and did not exist on the bundle's kinetics. It is now persisted as
+It is a resolution hint on ``/uploads/kinetics`` (used to find source single points)
+and exists on the bundle's kinetics too. It is persisted as
 ``kinetics.energy_level_of_theory_id`` and read as ``levels.declared_energy``, the same shape
-thermo and statmech took in #619 (#671/#683).
+as thermo and statmech.
 
 Each assertion below is paired with the mutation it kills (stored level dropped, bundle field
 ignored, read filled from a linked calculation, mismatch check skipped, export omitting it).
@@ -79,7 +79,7 @@ def _link_h_sp(bundle: dict) -> dict:
 
 
 def test_standalone_declared_level_is_stored_and_read(client, db_session):
-    """Kills: stored level dropped (the resolution hint used to be thrown away)."""
+    """Kills: stored level dropped (the resolution hint is thrown away)."""
     for species in (_METHYL, _H_ATOM, _METHANE):
         _deposit(client, species, primary=_sp_calc(_OTHER))
     resp = _kinetics(client, energy_level=_OTHER)
@@ -309,8 +309,8 @@ def test_only_a_missing_or_ambiguous_lookup_is_forgiven_on_bundle_import(client,
 def test_h_plus_h_without_a_declared_level_links_the_shared_single_point_once(client, db_session):
     """The legacy fallback names the hydrogen key twice; the (calculation, role) link is added once.
 
-    Before the fix the second row collided on ``pk_kinetics_source_calculation`` at the next flush,
-    whether or not a level was declared, so main fails here too.
+    The second row must not collide on ``pk_kinetics_source_calculation`` at the next flush,
+    whether or not a level is declared.
     """
     from app.db.models.kinetics import KineticsSourceCalculation
 

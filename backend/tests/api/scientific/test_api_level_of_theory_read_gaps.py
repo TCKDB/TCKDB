@@ -1,12 +1,10 @@
-"""Read gaps the composite phases left open on the level-of-theory surfaces (ADR 0021, P7a).
+"""Reads of the level-of-theory surfaces must expose a level's whole identity:
 
-On ``main`` (fea447ec):
-
-* ``GET /levels-of-theory`` (``LevelOfTheoryRead``) returned neither ``core_treatment`` (P4) nor
-  ``spin_treatment`` (DR-0034), though both are part of a level's identity;
-* the ML-dataset export's level-of-theory block carried ``spin_treatment`` and not ``core_treatment``;
-* level-of-theory search could not filter on ``core_treatment``;
-* a correction scheme's frequency level (P6) was on the scheme read; the level-of-theory detail's
+* ``GET /levels-of-theory`` (``LevelOfTheoryRead``) returns ``core_treatment`` and
+  ``spin_treatment``, both part of a level's identity;
+* the ML-dataset export's level-of-theory block carries ``core_treatment`` as well as ``spin_treatment``;
+* level-of-theory search filters on ``core_treatment``;
+* a correction scheme's frequency level is on the scheme read; the level-of-theory detail's
   ``include=correction_schemes`` is checked here to show it too.
 
 ``core_treatment`` filters match only levels that *state* it. A level whose producer did not say is
